@@ -1,4 +1,4 @@
-{ config, lib, pkgs, settings, ... }:
+{ config, lib, pkgs, settings, ylib, ... }:
 let
   home-manager = builtins.fetchTarball {
     url = "https://github.com/nix-community/home-manager/archive/release-23.11.tar.gz";
@@ -23,7 +23,7 @@ in
   security.polkit.enable = true;
   home-manager.useUserPackages = true;
   home-manager.useGlobalPkgs = true;
-  home-manager.extraSpecialArgs = { inherit settings; };
+  home-manager.extraSpecialArgs = { inherit settings; inherit ylib; };
 
   # ==========
   #   Common
@@ -44,6 +44,56 @@ in
     LC_TELEPHONE = settings.system.defaultLocale;
     LC_TIME = settings.system.defaultLocale;
   };
+
+  # Some basics
+  nixpkgs.config.allowUnfree = true;
+  environment.systemPackages = with pkgs; [
+    # Basics
+    neovim
+    vim
+    wget
+    curl
+    neofetch
+    bat
+    htop
+    nvtop
+    unzip
+    git
+    fzf
+    ripgrep
+  ];
+
+  environment.shellAliases = {
+    n = "nvim";
+    nn = "nvim --headless '+SessionDelete' +qa > /dev/null 2>&1 && nvim";
+    bat = "bat --theme Coldark-Dark";
+    cat = "bat --pager=never -p";
+    nix-boot-clean = "find '/boot/loader/entries' -type f | head -n -4 | xargs -I {} rm {}; nix-collect-garbage -d; nixos-rebuild boot; echo; df";
+
+    # general unix
+    date_compact = "date +'%Y%m%d'";
+    date_short = "date +'%Y-%m-%d'";
+    ls = "ls --color -Ga";
+    ll = "ls --color -Gal";
+    lss = "du --max-depth=0 -h * 2>/dev/null";
+    psg = "ps aux | head -n 1 && ps aux | grep -v 'grep' | grep";
+    cl = "clear";
+
+    # git
+    stash = "git stash";
+    pop = "git stash pop";
+    branch = "git checkout -b";
+    status = "git status";
+    diff = "git diff";
+    branches = "git branch -a";
+    gcam = "git commit -a -m";
+    stashes = "git stash list";
+
+    # ripgrep
+    rg="rg --no-ignore";
+    rgf="rg --files 2>/dev/null | rg";
+  };
+  environment.shellInit = builtins.readFile ./shellInit.sh;
 
   system.stateVersion = "23.11";
 }

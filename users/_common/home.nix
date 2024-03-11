@@ -1,8 +1,9 @@
-{ pkgs, settings, ... }: {
+{ settings, ylib, ... } @ args: {
   home.stateVersion = "23.11";
+  programs.home-manager.enable = true;
 
   home.username = settings.user.username;
   home.homeDirectory = "/home/${settings.user.username}";
 
-  programs.home-manager.enable = true;
+  imports = ylib.umport { paths = [ ./programs ]; recursive = true; };
 }

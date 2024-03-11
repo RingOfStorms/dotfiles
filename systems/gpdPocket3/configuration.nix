@@ -96,7 +96,10 @@ in
     shell = pkgs.zsh;
   };
   # TODO how to do this from home manager file instead
-  environment.pathsToLink = [ "/share/fish" ];
+  environment.pathsToLink = [ "/share/zsh" ];
+  programs.zsh = {
+    enable = true;
+  };
   home-manager.users.${settings.user.username} = homeManagerUser;
 
   services.xserver.enable = true;
@@ -108,17 +111,6 @@ in
   # $ nix search wget
   nixpkgs.config.allowUnfree = true;
   environment.systemPackages = with pkgs; [
-    # Basics
-    neovim
-    vim
-    wget
-    curl
-    neofetch
-    bat
-    htop
-    nvtop
-    unzip
-    git
     # [Laptop] Battery status
     acpi
     # extras, more for my neovim setup TODO move these into a more isolated place for nvim setup? Should be its own flake probably
@@ -126,23 +118,13 @@ in
     rustc
     nodejs_21
     python313
-    ripgrep
+    # ripgrep # now in common
     nodePackages.cspell
-    #
-    fzf
   ];
-
-  programs.zsh = {
-    enable = true;
-  };
 
   # does for all shells. Can use `programs.zsh.shellAliases` for specific ones
   environment.shellAliases = {
-    n = "nvim";
     battery = "acpi";
     wifi = "nmtui";
-    bat = "bat --theme Coldark-Dark";
-    cat = "bat --pager=never -p";
-    nix-boot-clean = "find '/boot/loader/entries' -type f | head -n -4 | xargs -I {} rm {}; nix-collect-garbage -d; nixos-rebuild boot; echo; df";
   };
 }
