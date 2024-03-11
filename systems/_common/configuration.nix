@@ -11,7 +11,7 @@ in
     [
       # Include the results of the hardware scan.
       # Note we need to be in the /etc/nixos directory with this entire config repo for this relative path to work
-      ../../hardware-configuration.nix
+      ../${settings.hostname}/hardware-configuration.nix
       # home manager import
       (import "${home-manager}/nixos")
     ];

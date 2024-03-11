@@ -1,2 +1,4 @@
-hardware-configuration.nix
+# if in /etc/nixos don't grab defaults
+./hardware-configuration.nix
+./configuration.nix
 
