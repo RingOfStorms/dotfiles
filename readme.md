@@ -1,5 +1,6 @@
 # First Install
 
+- Before anything else, ensure the generated hardware-configuration is copied over into the desired hostname target in systems directory.
 - //todo add experimental whatevers `nixos-rebuild switch --flake /etc/nixos#gpdPocket3`
 
 # Later updates
