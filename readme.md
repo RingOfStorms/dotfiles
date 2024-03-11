@@ -23,6 +23,8 @@ I used the existing windows 100MB boot partition and it fills up constantly. Hav
 
 
 # TODO
+- Secret management?
+    - ssh keys for github/etc
 - Use top level split out home manager configurations instead of the one built into the system config...
 - Make a flake for neovim and move out some system packages required for that into that flake, re-use for root and user rather than cloning each place?
 - EDITOR env var set to neovim
