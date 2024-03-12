@@ -1,4 +1,4 @@
-{ config, lib, pkgs, settings, ylib, ... }:
+{ config, lib, pkgs, settings, ylib, ragenixPkg, ... }:
 let
   home-manager = builtins.fetchTarball {
     url = "https://github.com/nix-community/home-manager/archive/release-23.11.tar.gz";
@@ -61,6 +61,9 @@ in
     git
     fzf
     ripgrep
+
+    # nix secrets
+    ragenixPkg
   ];
 
   environment.shellAliases = {
@@ -90,8 +93,8 @@ in
     stashes = "git stash list";
 
     # ripgrep
-    rg="rg --no-ignore";
-    rgf="rg --files 2>/dev/null | rg";
+    rg = "rg --no-ignore";
+    rgf = "rg --files 2>/dev/null | rg";
   };
   environment.shellInit = builtins.readFile ./shellInit.sh;
 

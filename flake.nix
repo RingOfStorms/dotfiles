@@ -4,7 +4,13 @@
   inputs = {
     # Nix utility methods
     nypkgs = {
-      url = "github:yunfachi/nypkgs/master";
+      url = "github:yunfachi/nypkgs";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # Secrets management for nix
+    ragenix = {
+      url = "github:yaxitech/ragenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -15,7 +21,7 @@
     # home-manager = { };
   };
 
-  outputs = { self, nypkgs, nixpkgs, ... } @ args:
+  outputs = { self, nypkgs, nixpkgs, ragenix, ... } @ args:
     let
       nixosSystem = nixpkgs.lib.nixosSystem;
       mkMerge = nixpkgs.lib.mkMerge;
@@ -41,12 +47,13 @@
 
       ypkgs = nypkgs.legacyPackages.${settings.system.architecture};
       ylib = ypkgs.lib;
+      ragenixPkg = ragenix.packages.${settings.system.architecture}.default;
     in
     {
       nixosConfigurations.${settings.system.hostname} = nixosSystem {
         system = settings.system.architecture;
         modules = [ ./systems/_common/configuration.nix ./systems/${settings.system.hostname}/configuration.nix ];
-        specialArgs = args // { inherit settings; inherit ylib; };
+        specialArgs = args // { inherit settings; inherit ylib; inherit ragenixPkg; };
       };
       # homeConfigurations = { };
     };

@@ -6,6 +6,8 @@
 # from authority
 # `nix run github:yaxitech/ragenix/ -- -i ~/.ssh/ragenix_authority --rules /etc/nixos/secrets/secrets.nix` <-r(eykey)|-e(edit) <File>>
 
+# Creating a new secret: 
+
 let
   authority = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBdG4tG18VeuEr/g4GM7HWUzHuUVcR9k6oS3TPBs4JRF ragenix authority key";
   gpd3_josh_2024_march_11 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMhgYzACsd0GPuF8bl9SFB5y9KDwv+pU9UihoInzhRok josh@gpdPocket3";

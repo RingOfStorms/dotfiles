@@ -2,6 +2,8 @@
 
 - Before anything else, ensure the generated hardware-configuration is copied over into the desired hostname target in systems directory.
 - //todo add experimental whatevers `nixos-rebuild switch --flake /etc/nixos#gpdPocket3`
+- copy oover this systems ssh public key pairs into the ./secrets/secrets.nix file    - push those up, using another computer re-key all the secrets, push up again
+    - pull new secrets down with new added keys
 
 # Later updates
 
