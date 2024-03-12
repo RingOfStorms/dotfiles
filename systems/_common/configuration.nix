@@ -1,4 +1,4 @@
-{ config, lib, pkgs, settings, ylib, ragenixPkg, ... }:
+{ config, lib, pkgs, settings, ylib, ... } @ args:
 let
   home-manager = builtins.fetchTarball {
     url = "https://github.com/nix-community/home-manager/archive/release-23.11.tar.gz";
@@ -14,6 +14,7 @@ in
       (/${settings.systemsDir}/${settings.system.hostname}/hardware-configuration.nix)
       # home manager import
       (import "${home-manager}/nixos")
+      # ./ragenix.nix
     ];
 
   # Enable flakes
@@ -23,7 +24,7 @@ in
   security.polkit.enable = true;
   home-manager.useUserPackages = true;
   home-manager.useGlobalPkgs = true;
-  home-manager.extraSpecialArgs = { inherit settings; inherit ylib; };
+  home-manager.extraSpecialArgs = args;
 
   # ==========
   #   Common
@@ -61,9 +62,6 @@ in
     git
     fzf
     ripgrep
-
-    # nix secrets
-    ragenixPkg
   ];
 
   environment.shellAliases = {
