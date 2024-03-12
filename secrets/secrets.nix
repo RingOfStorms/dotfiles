@@ -14,5 +14,5 @@ let
   ];
 in
 {
-  "test1.age" = { inherit publicKeys; };
+  "nix2github.age" = { inherit publicKeys; };
 }
