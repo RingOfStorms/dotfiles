@@ -14,7 +14,7 @@ in
       (/${settings.systemsDir}/${settings.system.hostname}/hardware-configuration.nix)
       # home manager import
       (import "${home-manager}/nixos")
-      # ./ragenix.nix
+      ./ragenix.nix
     ];
 
   # Enable flakes
@@ -24,7 +24,7 @@ in
   security.polkit.enable = true;
   home-manager.useUserPackages = true;
   home-manager.useGlobalPkgs = true;
-  home-manager.extraSpecialArgs = args;
+  home-manager.extraSpecialArgs = { inherit settings; inherit ylib; inherit (args) ragenix; };
 
   # ==========
   #   Common

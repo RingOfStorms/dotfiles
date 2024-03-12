@@ -8,6 +8,5 @@
   imports = ylib.umport {
     paths = [ ./programs ];
     recursive = true;
-    exclude = [ ./programs/ssh/generate_ssh_key.nix ];
   };
 }

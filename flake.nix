@@ -41,6 +41,7 @@
           };
         };
         flakeDir = ./.;
+        publicsDir = ./publics;
         secretsDir = ./secrets;
         systemsDir = ./systems;
         usersDir = ./users;
