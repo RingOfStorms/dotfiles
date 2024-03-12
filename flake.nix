@@ -21,10 +21,11 @@
     # home-manager = { };
   };
 
-  outputs = { self, nypkgs, nixpkgs, ragenix, ... } @ args:
+  outputs = { self, nypkgs, nixpkgs, ... } @ inputs:
     let
       nixosSystem = nixpkgs.lib.nixosSystem;
       mkMerge = nixpkgs.lib.mkMerge;
+
       settings = {
         system = {
           hostname = "gpdPocket3";
@@ -39,21 +40,20 @@
             name = "RingOfStorms (Joshua Bell)";
           };
         };
-        usersDir = ./users;
-        systemsDir = ./systems;
-        commonDir = ./_common;
         flakeDir = ./.;
+        secretsDir = ./secrets;
+        systemsDir = ./systems;
+        usersDir = ./users;
       };
 
       ypkgs = nypkgs.legacyPackages.${settings.system.architecture};
       ylib = ypkgs.lib;
-      ragenixPkg = ragenix.packages.${settings.system.architecture}.default;
     in
     {
       nixosConfigurations.${settings.system.hostname} = nixosSystem {
         system = settings.system.architecture;
         modules = [ ./systems/_common/configuration.nix ./systems/${settings.system.hostname}/configuration.nix ];
-        specialArgs = args // { inherit settings; inherit ylib; inherit ragenixPkg; };
+        specialArgs = inputs // { inherit settings; inherit ylib; };
       };
       # homeConfigurations = { };
     };

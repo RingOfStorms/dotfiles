@@ -1,4 +1,4 @@
-{ settings, ylib, ... } @ _args:
+{ settings, ylib, ... }:
 {
   imports =
     # Common settings all users share
