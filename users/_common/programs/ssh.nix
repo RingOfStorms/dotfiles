@@ -19,8 +19,7 @@
   programs.ssh = {
     enable = true;
     matchBlocks = {
-      github = {
-        hostname = "github.com";
+      "github.com" = {
         identityFile = age.secrets.nix2github.path;
       };
     };
