@@ -15,4 +15,5 @@ let
 in
 {
   "nix2github.age" = { inherit publicKeys; };
+  "nix2bitbucket.age" = { inherit publicKeys; };
 }
