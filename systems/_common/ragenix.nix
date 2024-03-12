@@ -20,8 +20,8 @@ in
       #     (import secretsFile)
       # else { };
       {
-        test1 = {
-          file = /${settings.secretsDir}/test1.age;
+        nix2github = {
+          file = /${settings.secretsDir}/nix2github.age;
           owner = settings.user.username;
         };
       };

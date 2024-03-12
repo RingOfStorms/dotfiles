@@ -1,4 +1,4 @@
-{ config, lib, pkgs, settings, ylib, ... } @ args:
+{ config, lib, pkgs, settings, ylib, ... } @ inputs:
 let
   home-manager = builtins.fetchTarball {
     url = "https://github.com/nix-community/home-manager/archive/release-23.11.tar.gz";
@@ -24,7 +24,7 @@ in
   security.polkit.enable = true;
   home-manager.useUserPackages = true;
   home-manager.useGlobalPkgs = true;
-  home-manager.extraSpecialArgs = { inherit settings; inherit ylib; inherit (args) ragenix; };
+  home-manager.extraSpecialArgs = { inherit settings; inherit ylib; inherit (inputs) ragenix; inherit (config) age; };
 
   # ==========
   #   Common

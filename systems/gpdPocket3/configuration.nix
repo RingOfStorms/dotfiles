@@ -1,12 +1,11 @@
 { config, lib, pkgs, settings, ... } @ args:
-let
-  homeManagerUser = import "${settings.usersDir}/${settings.user.username}/home.nix";
-in
 {
   imports =
     [
       # Our custom stuff
       ./stupid-keyboard.nix
+      (settings.usersDir + "/root/configuration.nix")
+      (settings.usersDir + "/josh/configuration.nix")
     ];
 
   # Use the systemd-boot EFI boot loader.
@@ -87,20 +86,6 @@ in
   fonts.packages = with pkgs; [
     (nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
   ];
-
-  users.users.root.initialPassword = "password1";
-  users.users.${settings.user.username} = {
-    initialPassword = "password1";
-    isNormalUser = true;
-    extraGroups = [ "wheel" "networkmanager" "video" "input" ];
-    shell = pkgs.zsh;
-  };
-  # TODO how to do this from home manager file instead
-  environment.pathsToLink = [ "/share/zsh" ];
-  programs.zsh = {
-    enable = true;
-  };
-  home-manager.users.${settings.user.username} = homeManagerUser;
 
   services.xserver.enable = true;
   services.xserver.displayManager.gdm.enable = true;

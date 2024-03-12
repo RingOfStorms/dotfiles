@@ -1,4 +1,4 @@
-{ lib, ... } @ args:
+{ lib, settings, age, pkgs, ... } @ args:
 {
   # We always want a standard ssh key-pair used for secret management, create it if not there.
   home.activation.generateSshKey = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
@@ -21,7 +21,7 @@
     matchBlocks = {
       github = {
         hostname = "github.com";
-        identityFile = age.secrets.test1.file;
+        identityFile = age.secrets.nix2github.path;
       };
     };
   };
