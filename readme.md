@@ -40,4 +40,4 @@ gif () {
   ffmpeg -i $1 -filter_complex "fps=7,scale=iw:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=32[p];[s1][p]paletteuse=dither=bayer" $1".gif"
 }
 ```
-- 
+- Ensure my neovim undohistory/auto saves don't save `.age` files as they can be sensitive.
