@@ -3,7 +3,5 @@
   users.users.root = {
     initialPassword = "password1";
   };
-
-  ## TODO github ssh key... etc
 }
 
