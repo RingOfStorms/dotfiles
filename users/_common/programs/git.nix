@@ -50,6 +50,9 @@
       "Network Trash Folder"
       "Temporary Items"
       ".apdisk"
+
+      # direnv things
+      "/.direnv"
     ];
   };
 }

@@ -73,5 +73,10 @@ in
       }
     ];
   };
+
+  home.shellAliases = {
+    t = "tmux";
+    tat = "tmux ls 2>/dev/null && tmux attach-session -t \"$(tmux ls | head -n1 | cut -d: -f1)\" || tmux new-session";
+  };
 }
 

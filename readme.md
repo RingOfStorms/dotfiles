@@ -2,8 +2,8 @@
 
 - Before anything else, ensure the generated hardware-configuration is copied over into the desired hostname target in systems directory.
 - //todo add experimental whatevers `nixos-rebuild switch --flake /etc/nixos#gpdPocket3`
-- copy oover this systems ssh public key pairs into the ./secrets/secrets.nix file    - push those up, using another computer re-key all the secrets, push up again
-    - pull new secrets down with new added keys
+- copy oover this systems ssh public key pairs into the ./secrets/secrets.nix file - push those up, using another computer re-key all the secrets, push up again
+  - pull new secrets down with new added keys
 
 # Later updates
 
@@ -23,14 +23,15 @@ I used the existing windows 100MB boot partition and it fills up constantly. Hav
 - home manager: https://nix-community.github.io/home-manager/options.xhtml
   TODO make an offline version of this, does someone else have this already?
 
-
 # TODO
+
 - Secret management?
-    - ssh keys for github/etc
+  - ssh keys for github/etc
 - Use top level split out home manager configurations instead of the one built into the system config...
 - Make a flake for neovim and move out some system packages required for that into that flake, re-use for root and user rather than cloning each place?
 - EDITOR env var set to neovim
 - gif command from video
+
 ```sh
 gif () {
   if [[ -z $1 ]]; then
@@ -40,4 +41,7 @@ gif () {
   ffmpeg -i $1 -filter_complex "fps=7,scale=iw:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=32[p];[s1][p]paletteuse=dither=bayer" $1".gif"
 }
 ```
+
 - Ensure my neovim undohistory/auto saves don't save `.age` files as they can be sensitive.
+- make sure all my aliases are accounted for, still missing things like rust etc: https://github.com/RingOfStorms/setup
+- add in copy paste support with xclip or nix equivalent
