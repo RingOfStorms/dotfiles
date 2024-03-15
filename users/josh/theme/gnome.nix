@@ -12,8 +12,9 @@
     settings = {
       "org/gnome/shell" = {
         favorite-apps = [
-          "vivaldi-stable.desktop"
+          # "vivaldi-stable.desktop"
           "org.wezfurlong.wezterm.desktop"
+          "firefox.desktop"
           "org.gnome.Nautilus.desktop"
         ];
         enabled-extensions = with pkgs.gnomeExtensions; [
