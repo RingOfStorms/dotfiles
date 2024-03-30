@@ -14,7 +14,7 @@
 
 I used the existing windows 100MB boot partition and it fills up constantly. Have to purge old stuff a lot this is how:
 
-- `find '/boot/loader/entries' -type f | head -n -4 | xargs -I {} rm {}; nix-collect-garbage -d; nixos-rebuild boot; echo; df`
+- `find '/boot/loader/entries' -type f ! -name 'windows.conf' | head -n -4 | xargs -I {} rm {}; nix-collect-garbage -d; nixos-rebuild boot; echo; df`
 
 # Settings references:
 

@@ -69,7 +69,7 @@ in
     nn = "nvim --headless '+SessionDelete' +qa > /dev/null 2>&1 && nvim";
     bat = "bat --theme Coldark-Dark";
     cat = "bat --pager=never -p";
-    nix-boot-clean = "find '/boot/loader/entries' -type f | head -n -4 | xargs -I {} rm {}; nix-collect-garbage -d; nixos-rebuild boot; echo; df";
+    nix-boot-clean = "find '/boot/loader/entries' -type f ! -name 'windows.conf' | head -n -4 | xargs -I {} rm {}; nix-collect-garbage -d; nixos-rebuild boot; echo; df";
 
     # general unix
     date_compact = "date +'%Y%m%d'";
