@@ -49,6 +49,11 @@
     intel-vaapi-driver
   ];
   hardware.enableAllFirmware = true;
+  # Stuff from https://github.com/NixOS/nixos-hardware/blob/9a763a7acc4cfbb8603bb0231fec3eda864f81c0/gpd/pocket-3/default.nix
+  services.fstrim.enable = true;
+  services.xserver.libinput.enable = true;
+  services.tlp.enable = lib.mkDefault ((lib.versionOlder (lib.versions.majorMinor lib.version) "21.05")
+    || !config.services.power-profiles-daemon.enable);
 
   # [Laptop] screens with brightness settings
   programs.light.enable = true;
@@ -63,15 +68,14 @@
     useXkbConfig = true; # use xkb.options in tty. (caps -> escape)
   };
 
-  # Attempting to get fingerprint scanner to work... having issues though
-  #services.fwupd.enable = true;
-  #services.fprintd = {
-  #  enable = true;
-  #  package = pkgs.fprintd-tod;
-  #  tod.enable = true;
-  #  tod.driver = pkgs.libfprint-2-tod1-vfs0090;
-  #  #tod.driver = pkgs.libfprint-2-tod1-goodix;
-  #};
+  # Attempting to get fingerprint scanner to work... having issues though, no device detected with all methods
+  # services.fprintd = {
+  #   enable = true;
+  #   tod = {
+  #     enable = true;
+  #     driver = pkgs.libfprint-2-tod1-elan;
+  #   };
+  # };
 
   # Enable the OpenSSH daemon.
   services.openssh.enable = true;
