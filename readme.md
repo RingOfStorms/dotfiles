@@ -1,8 +1,11 @@
 # First Install
 
-- Before anything else, ensure the generated hardware-configuration is copied over into the desired hostname target in systems directory.
-- //todo add experimental whatevers `nixos-rebuild switch --flake /etc/nixos#gpdPocket3`
-- copy oover this systems ssh public key pairs into the ./secrets/secrets.nix file - push those up, using another computer re-key all the secrets, push up again
+- First follow nixos installation guide: https://nixos.wiki/wiki/NixOS_Installation_Guide
+- Checkout this repo into /etc/nixos
+- Before anything else, ensure the generated hardware-configuration is copied over into the desired HOSTNAME target in systems directory.
+- switch into flake mode `nixos-rebuild switch --flake /etc/nixos#HOSTNAME`
+
+- copy over this systems ssh public key pairs into the ./secrets/secrets.nix file - push those up, using another computer re-key all the secrets, push up again
   - pull new secrets down with new added keys
 
 # Later updates
