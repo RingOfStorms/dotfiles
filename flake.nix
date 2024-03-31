@@ -15,7 +15,7 @@
     };
 
     # Pinned nix version
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-23.11-small";
+    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-23.11";
 
     # TODO
     # home-manager = { };

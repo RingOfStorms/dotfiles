@@ -3,7 +3,7 @@ let
   home-manager = builtins.fetchTarball {
     url = "https://github.com/nix-community/home-manager/archive/release-23.11.tar.gz";
     # to get hash run `nix-prefetch-url --unpack "https://github.com/nix-community/home-manager/archive/release-23.11.tar.gz"`
-    sha256 = "0562y8awclss9k4wk3l4akw0bymns14sfy2q9n23j27m68ywpdkh";
+    sha256 = "0g51f2hz13dk953i501fmc6935difhz60741nypaqwz127hy5ldk";
   };
 in
 {
@@ -62,6 +62,9 @@ in
     git
     fzf
     ripgrep
+
+    # TODO keep in common or move to specifics?
+    ffmpeg_5-full
   ];
 
   environment.shellAliases = {
