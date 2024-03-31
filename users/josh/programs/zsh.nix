@@ -6,7 +6,16 @@
 
     shellAliases = { };
 
+    defaultKeymap = "emacs";
+
     profileExtra = ''
+      # Make home/end and ctrl + left/right nav how I expect them to like in bash
+      bindkey "\e[1~" beginning-of-line
+      bindkey "\e[4~" end-of-line
+      bindkey '^[[1;5D' emacs-backward-word
+      bindkey '^[[1;5C' emacs-forward-word
+
+      # Auto completion/suggestions/and case insensitivity
       autoload -Uz compinit && compinit
       setopt correct
       setopt extendedglob
