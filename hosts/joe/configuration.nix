@@ -3,14 +3,14 @@
   imports =
     [
       # TODO revisit
-      (settings.systemsDir + "/_common/components/todo_neovim.nix")
+      (settings.hostsDir + "/_common/components/todo_neovim.nix")
       # Common components this machine uses
-      (settings.systemsDir + "/_common/components/systemd_boot.nix")
-      (settings.systemsDir + "/_common/components/ssh.nix")
-      (settings.systemsDir + "/_common/components/caps_to_escape_in_tty.nix")
-      (settings.systemsDir + "/_common/components/font_jetbrainsmono.nix")
-      (settings.systemsDir + "/_common/components/home_manager.nix")
-      (settings.systemsDir + "/_common/components/gnome_xorg.nix")
+      (settings.hostsDir + "/_common/components/systemd_boot.nix")
+      (settings.hostsDir + "/_common/components/ssh.nix")
+      (settings.hostsDir + "/_common/components/caps_to_escape_in_tty.nix")
+      (settings.hostsDir + "/_common/components/font_jetbrainsmono.nix")
+      (settings.hostsDir + "/_common/components/home_manager.nix")
+      (settings.hostsDir + "/_common/components/gnome_xorg.nix")
       # Users this machine has
       (settings.usersDir + "/root/configuration.nix")
       (settings.usersDir + "/josh/configuration.nix")
