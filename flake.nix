@@ -23,63 +23,97 @@
 
   outputs = { self, nypkgs, nixpkgs, ... } @ inputs:
     let
-      nixosSystem = nixpkgs.lib.nixosSystem;
-      mkMerge = nixpkgs.lib.mkMerge;
-
-      sett = {
-        user = {
-          username = "josh";
-          git = {
-            email = "ringofstorms@gmail.com";
-            name = "RingOfStorms (Joshua Bell)";
+      nixConfigs = [
+        {
+          name = "gpdPocket3";
+          opts = {
+            system = "x86_64-linux";
           };
-        };
+          settings = {
+            user = {
+              username = "josh";
+              git = {
+                email = "ringofstorms@gmail.com";
+                name = "RingOfStorms (Joshua Bell)";
+              };
+            };
+          };
+        }
+        {
+          name = "joe";
+          opts = {
+            system = "x86_64-linux";
+          };
+          settings = {
+            user = {
+              username = "josh";
+              git = {
+                email = "ringofstorms@gmail.com";
+                name = "RingOfStorms (Joshua Bell)";
+              };
+            };
+          };
+        }
+      ];
+
+      directories = {
         flakeDir = ./.;
         publicsDir = ./publics;
         secretsDir = ./secrets;
         systemsDir = ./systems;
         usersDir = ./users;
       };
-
-      ypkgs = nypkgs.legacyPackages.x86_64-linux;
-      ylib = ypkgs.lib;
     in
     {
-      nixosConfigurations = {
-        gpdPocket3 = nixosSystem {
-          system = "x86_64-linux";
-          modules = [ ./systems/_common/configuration.nix ./systems/gpdPocket3/configuration.nix ];
-          specialArgs = inputs // {
-            inherit ylib;
-            settings = sett // {
-              system = {
-                # TODO remove these probably not needed anymore with per machine specified here
-                hostname = "gpdPocket3";
-                architecture = "x86_64-linux";
-                timeZone = "America/Chicago"; # TODO roaming?
-                defaultLocale = "en_US.UTF-8";
-              };
-            };
-          };
-        };
-        joe = nixosSystem {
-          system = "x86_64-linux";
-          modules = [ ./systems/_common/configuration.nix ./systems/joe/configuration.nix ];
-          specialArgs = inputs // {
-            inherit ylib;
-            settings = sett // {
-              system = {
-                # TODO remove these probably not needed anymore with per machine specified here
-                hostname = "joe";
-                architecture = "x86_64-linux";
-                # TODO remove?
-                timeZone = "America/Chicago";
-                defaultLocale = "en_US.UTF-8";
-              };
-            };
-          };
-        };
-      };
+      nixosConfigurations = builtins.foldl'
+        (acc: nixConfig:
+          acc // {
+            "${nixConfig.name}" = nixpkgs.lib.nixosSystem
+              {
+                modules = [ ./systems/_common/configuration.nix ./systems/${nixConfig.name}/configuration.nix ];
+                specialArgs = inputs // {
+                  ylib = nypkgs.legacyPackages.${nixConfig.opts.system}.lib;
+                  settings = directories // nixConfig.settings // {
+                    system = nixConfig.opts // {
+                      hostname = nixConfig.name;
+                    };
+                  };
+                };
+              } // nixConfig.opts;
+          })
+        { }
+        nixConfigs;
+
+      # nixosConfigurations = {
+      #   gpdPocket3 = nixosSystem {
+      #     system = "x86_64-linux";
+      #     modules = [ ./systems/_common/configuration.nix ./systems/gpdPocket3/configuration.nix ];
+      #     specialArgs = inputs // {
+      #       inherit ylib;
+      #       settings = directories // {
+      #         system = {
+      #           # TODO remove these probably not needed anymore with per machine specified here
+      #           hostname = "gpdPocket3";
+      #           architecture = "x86_64-linux";
+      #         };
+      #       };
+      #     };
+      #   };
+      #   joe = nixosSystem {
+      #     system = "x86_64-linux";
+      #     modules = [ ./systems/_common/configuration.nix ./systems/joe/configuration.nix ];
+      #     specialArgs = inputs // {
+      #       inherit ylib;
+      #       settings = directories // {
+      #         system = {
+      #           # TODO remove these probably not needed anymore with per machine specified here
+      #           hostname = "joe";
+      #           architecture = "x86_64-linux";
+      #         };
+      #       };
+      #     };
+      #   };
+      # };
       # homeConfigurations = { };
     };
 }

@@ -1,48 +1,40 @@
 { config, lib, pkgs, settings, ylib, ... } @ inputs:
 let
-  home-manager = builtins.fetchTarball {
-    url = "https://github.com/nix-community/home-manager/archive/release-23.11.tar.gz";
-    # to get hash run `nix-prefetch-url --unpack "https://github.com/nix-community/home-manager/archive/release-23.11.tar.gz"`
-    sha256 = "0g51f2hz13dk953i501fmc6935difhz60741nypaqwz127hy5ldk";
-  };
+  defaultLocal = "en_US.UTF-8";
 in
 {
   imports =
     [
+      # Secrets management
+      ./ragenix.nix
       # Include the results of the hardware scan.
       (/${settings.systemsDir}/${settings.system.hostname}/hardware-configuration.nix)
-      # home manager import
-      (import "${home-manager}/nixos")
-      ./ragenix.nix
+      # Include the specific machine's config.
+      (/${settings.systemsDir}/${settings.system.hostname}/configuration.nix)
     ];
 
   # Enable flakes
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
-  # Home manager options
-  security.polkit.enable = true;
-  home-manager.useUserPackages = true;
-  home-manager.useGlobalPkgs = true;
-  home-manager.extraSpecialArgs = { inherit settings; inherit ylib; inherit (inputs) ragenix; inherit (config) age; };
-
   # ==========
   #   Common
   # ==========
   networking.hostName = settings.system.hostname;
-  time.timeZone = settings.system.timeZone;
+  # TODO do I want this dynamic at all? Roaming?
+  time.timeZone = "America/Chicago";
 
-  # Select internationalisation properties.
-  i18n.defaultLocale = settings.system.defaultLocale;
+  # Select internationalization properties.
+  i18n.defaultLocale = defaultLocal;
   i18n.extraLocaleSettings = {
-    LC_ADDRESS = settings.system.defaultLocale;
-    LC_IDENTIFICATION = settings.system.defaultLocale;
-    LC_MEASUREMENT = settings.system.defaultLocale;
-    LC_MONETARY = settings.system.defaultLocale;
-    LC_NAME = settings.system.defaultLocale;
-    LC_NUMERIC = settings.system.defaultLocale;
-    LC_PAPER = settings.system.defaultLocale;
-    LC_TELEPHONE = settings.system.defaultLocale;
-    LC_TIME = settings.system.defaultLocale;
+    LC_ADDRESS = defaultLocal;
+    LC_IDENTIFICATION = defaultLocal;
+    LC_MEASUREMENT = defaultLocal;
+    LC_MONETARY = defaultLocal;
+    LC_NAME = defaultLocal;
+    LC_NUMERIC = defaultLocal;
+    LC_PAPER = defaultLocal;
+    LC_TELEPHONE = defaultLocal;
+    LC_TIME = defaultLocal;
   };
 
   # Some basics
