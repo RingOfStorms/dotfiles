@@ -5,7 +5,7 @@ let
 in
 {
   imports = [ ragenix.nixosModules.age ];
-  environment.systemPackages = [ ragenix.packages.${settings.system.architecture}.default ];
+  environment.systemPackages = [ ragenix.packages.${settings.system.system}.default ];
 
   age = {
     secrets =

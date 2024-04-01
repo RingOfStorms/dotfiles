@@ -2,86 +2,36 @@
 {
   imports =
     [
+      # TODO revisit
+      (settings.systemsDir + "/_common/components/todo_neovim.nix")
+      # Common components this machine uses
+      (settings.systemsDir + "/_common/components/systemd_boot.nix")
+      (settings.systemsDir + "/_common/components/ssh.nix")
+      (settings.systemsDir + "/_common/components/caps_to_escape_in_tty.nix")
+      (settings.systemsDir + "/_common/components/font_jetbrainsmono.nix")
+      (settings.systemsDir + "/_common/components/home_manager.nix")
+      (settings.systemsDir + "/_common/components/gnome_wayland.nix")
+      # Users this machine has
       (settings.usersDir + "/root/configuration.nix")
       (settings.usersDir + "/josh/configuration.nix")
     ];
 
-  # Use the systemd-boot EFI boot loader.
-  boot.loader = {
-    systemd-boot = {
-      enable = true;
-      consoleMode = "keep";
-    };
-    timeout = 5;
-    efi = {
-      canTouchEfiVariables = true;
-    };
-  };
-
-  # We want connectivity
+  # Machine specific configuration
+  hardware.enableAllFirmware = true;
+  # Connectivity
   networking.networkmanager.enable = true;
   hardware.bluetooth.enable = true;
-
+  environment.shellAliases = {
+    wifi = "nmtui";
+  };
   # Enable sound.
   sound.enable = true;
   hardware.pulseaudio.enable = true;
   hardware.pulseaudio.package = pkgs.pulseaudioFull;
 
-  hardware.enableAllFirmware = true;
+  # environment.systemPackages = with pkgs; [ ];
 
-  # I want this globally even for root so doing it outside of home manager
-  services.xserver.xkbOptions = "caps:escape";
-  console = {
-    earlySetup = true;
-    packages = with pkgs; [ terminus_font ];
-    # We want to be able to read the screen so use a 32 sized font...
-    # font = "${pkgs.terminus_font}/share/consolefonts/ter-132n.psf.gz";
-    useXkbConfig = true; # use xkb.options in tty. (caps -> escape)
-  };
-
-  # Enable the OpenSSH daemon.
-  services.openssh.enable = true;
-  services.openssh.settings.PermitRootLogin = "yes";
-
-  # Open ports in the firewall.
-  networking.firewall.allowedTCPPorts = [
-    22 # sshd
-  ];
-  # networking.firewall.allowedUDPPorts = [ ... ];
-
-  fonts.packages = with pkgs; [
-    (nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
-  ];
-
-  services.xserver.enable = true;
-  services.xserver.displayManager.gdm = {
-    enable = true;
-    autoSuspend = false;
-    wayland = true;
-  };
-  services.xserver.desktopManager.gnome.enable = true;
-  services.gnome.core-utilities.enable = false;
-
-  # List packages installed in system profile. To search, run:
-  # $ nix search wget
-  nixpkgs.config.allowUnfree = true;
-  environment.systemPackages = with pkgs; [
-    # extras, more for my neovim setup TODO move these into a more isolated place for nvim setup? Should be its own flake probably
-    cargo
-    rustc
-    nodejs_21
-    python313
-    # ripgrep # now in common
-    nodePackages.cspell
-  ];
-
-  # does for all shells. Can use `programs.zsh.shellAliases` for specific ones
-  environment.shellAliases = {
-    wifi = "nmtui";
-  };
-
-
-  # nvidia gfx
+  # nvidia gfx https://nixos.wiki/wiki/Nvidia
   # =========
   # Enable OpenGL
   hardware.opengl = {
@@ -91,9 +41,8 @@
   };
 
   # Load nvidia driver for Xorg and Wayland
-  services.xserver.videoDrivers = ["nvidia"];
+  services.xserver.videoDrivers = [ "nvidia" ];
   hardware.nvidia = {
-
     # Modesetting is required.
     modesetting.enable = true;
 
@@ -117,7 +66,7 @@
     open = false;
 
     # Enable the Nvidia settings menu,
-   	# accessible via `nvidia-settings`.
+    # accessible via `nvidia-settings`.
     nvidiaSettings = true;
 
     # Optionally, you may need to select the appropriate driver version for your specific GPU.
