@@ -9,8 +9,12 @@
 let
   publicKeys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBdG4tG18VeuEr/g4GM7HWUzHuUVcR9k6oS3TPBs4JRF ragenix authority key"
+    # gpdPocket3
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMhgYzACsd0GPuF8bl9SFB5y9KDwv+pU9UihoInzhRok josh@gpdPocket3"
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJnV4aVyKStFH1KySfnuqBq+DLvyvJhRfKtMs7PCKlIq root@nixos"
+    # joe
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG4PwrrOuZJWRjlc2dKBUKKE4ybqifJeVOn7x9J5IxIS josh@joe"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP+GYfPPKxR/18RdD736G7IQhImX/CYU3A+Gifud3CHg root@joe"
   ];
 in
 {

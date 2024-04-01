@@ -26,13 +26,7 @@
       nixosSystem = nixpkgs.lib.nixosSystem;
       mkMerge = nixpkgs.lib.mkMerge;
 
-      settings = {
-        system = {
-          hostname = "gpdPocket3";
-          architecture = "x86_64-linux";
-          timeZone = "America/Chicago";
-          defaultLocale = "en_US.UTF-8";
-        };
+      sett = {
         user = {
           username = "josh";
           git = {
@@ -51,10 +45,38 @@
       ylib = ypkgs.lib;
     in
     {
-      nixosConfigurations.${settings.system.hostname} = nixosSystem {
-        system = settings.system.architecture;
-        modules = [ ./systems/_common/configuration.nix ./systems/${settings.system.hostname}/configuration.nix ];
-        specialArgs = inputs // { inherit settings; inherit ylib; };
+      nixosConfigurations = {
+      	gpdPocket3 = nixosSystem {
+	  system = "x86_64-linux";
+          modules = [ ./systems/_common/configuration.nix ./systems/gpdPocket3/configuration.nix ];
+          specialArgs = inputs // { inherit ylib; 
+	    settings = sett // {
+	    system = {
+	     # TODO remove these probably not needed anymore with per machine specified here
+	      hostname = "gpdPocket3";
+	      architecture = "x86_64-linux";
+              timeZone = "America/Chicago"; # TODO roaming?
+              defaultLocale = "en_US.UTF-8";
+	      };
+	    };
+	  };
+	};
+	joe = nixosSystem {
+ 	  system = "x86_64-linux";
+          modules = [ ./systems/_common/configuration.nix ./systems/joe/configuration.nix ];
+          specialArgs = inputs // { inherit ylib; 
+	    settings = sett // {
+	    system = {
+	     # TODO remove these probably not needed anymore with per machine specified here
+	      hostname = "joe";
+	      architecture = "x86_64-linux";
+	      # TODO remove?
+              timeZone = "America/Chicago";
+              defaultLocale = "en_US.UTF-8";
+	      };
+	    };
+	  };
+	};
       };
       # homeConfigurations = { };
     };
