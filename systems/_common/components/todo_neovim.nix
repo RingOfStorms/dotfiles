@@ -2,6 +2,7 @@
 {
   environment.systemPackages = with pkgs; [
     # extras, more for my neovim setup TODO move these into a more isolated place for nvim setup? Should be its own flake probably
+    neovim
     cargo
     rustc
     nodejs_21
