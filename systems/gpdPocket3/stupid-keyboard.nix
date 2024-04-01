@@ -4,8 +4,7 @@
 # Keyboard in question: https://www.walmart.com/ip/R-Go-Split-Ergonomic-Keyboard-QWERTY-US-Black-Wired-USB-Keyboard-Spilt-Wired-Windows-Linux/452297950
 # R-Go Split Break Keyboard (maybe the walmart one is a fake since their real site does not have the same layout)
 #    https://www.r-go-tools.com/ergonomic-keyboard/r-go-split-break/
-{ config, lib, pkgs, ... }:
-
+{ ... }:
 let
   rgo_keyboard_vid = "0911";
   rgo_keyboard_pid = "2188";

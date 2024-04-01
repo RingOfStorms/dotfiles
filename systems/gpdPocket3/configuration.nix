@@ -2,34 +2,59 @@
 {
   imports =
     [
-      # Our custom stuff
-      ./stupid-keyboard.nix
+      # TODO revisit
+      (settings.systemsDir + "/_common/components/todo_neovim.nix")
+      # Common components this machine uses
+      (settings.systemsDir + "/_common/components/systemd_boot.nix")
+      (settings.systemsDir + "/_common/components/ssh.nix")
+      (settings.systemsDir + "/_common/components/caps_to_escape_in_tty.nix")
+      (settings.systemsDir + "/_common/components/font_jetbrainsmono.nix")
+      (settings.systemsDir + "/_common/components/home_manager.nix")
+      (settings.systemsDir + "/_common/components/gnome_wayland.nix")
+      # Users this machine has
       (settings.usersDir + "/root/configuration.nix")
       (settings.usersDir + "/josh/configuration.nix")
+      # Our custom stuff
+      ./stupid-keyboard.nix
     ];
 
-  # Use the systemd-boot EFI boot loader.
-  boot.loader = {
-    systemd-boot = {
-      enable = true;
-      consoleMode = "keep";
-    };
-    timeout = 5;
-    efi = {
-      canTouchEfiVariables = true;
-    };
-  };
-
-  # We want connectivity
+  # machine specific configuration
+  # ==============================
+  hardware.enableAllFirmware = true;
+  # Connectivity
   networking.networkmanager.enable = true;
   hardware.bluetooth.enable = true;
-
+  environment.shellAliases = {
+    wifi = "nmtui";
+  };
   # Enable sound.
   sound.enable = true;
   hardware.pulseaudio.enable = true;
   hardware.pulseaudio.package = pkgs.pulseaudioFull;
 
-  # TODO evaluate if any of this kernal/hardware sutff is actually needed for our pocket. This is a hodge podge of shit from online
+  environment.systemPackages = with pkgs; [
+    # [Laptop] Battery status
+    acpi
+  ];
+  environment.shellAliases = {
+    battery = "acpi";
+  };
+  # [Laptop] screens with brightness settings
+  programs.light.enable = true;
+
+  # ========
+
+  # FINGERPRINTS for the sensor on GPD P3 do not work on linux yet: todo find the source of this again online for tracking...
+  # Attempting to get fingerprint scanner to work... having issues though, no device detected with all methods
+  # services.fprintd = {
+  #   enable = true;
+  #   tod = {
+  #     enable = true;
+  #     driver = pkgs.libfprint-2-tod1-elan;
+  #   };
+  # };
+
+  # TODO evaluate if any of this kernal/hardware stuff is actually needed for our pocket. This is a hodge podge of shit from online
   # The GPD Pocket3 uses a tablet OLED display, that is mounted rotated 90° counter-clockwise.
   # This requires cusotm kernal params.
   boot.kernelParams = [
@@ -48,75 +73,9 @@
     intel-media-driver
     intel-vaapi-driver
   ];
-  hardware.enableAllFirmware = true;
   # Stuff from https://github.com/NixOS/nixos-hardware/blob/9a763a7acc4cfbb8603bb0231fec3eda864f81c0/gpd/pocket-3/default.nix
   services.fstrim.enable = true;
   services.xserver.libinput.enable = true;
   services.tlp.enable = lib.mkDefault ((lib.versionOlder (lib.versions.majorMinor lib.version) "21.05")
     || !config.services.power-profiles-daemon.enable);
-
-  # [Laptop] screens with brightness settings
-  programs.light.enable = true;
-
-  # I want this globally even for root so doing it outside of home manager
-  services.xserver.xkbOptions = "caps:escape";
-  console = {
-    earlySetup = true;
-    packages = with pkgs; [ terminus_font ];
-    # We want to be able to read the screen so use a 32 sized font...
-    font = "${pkgs.terminus_font}/share/consolefonts/ter-132n.psf.gz";
-    useXkbConfig = true; # use xkb.options in tty. (caps -> escape)
-  };
-
-  # Attempting to get fingerprint scanner to work... having issues though, no device detected with all methods
-  # services.fprintd = {
-  #   enable = true;
-  #   tod = {
-  #     enable = true;
-  #     driver = pkgs.libfprint-2-tod1-elan;
-  #   };
-  # };
-
-  # Enable the OpenSSH daemon.
-  services.openssh.enable = true;
-  services.openssh.settings.PermitRootLogin = "yes";
-
-  # Open ports in the firewall.
-  networking.firewall.allowedTCPPorts = [
-    22 # sshd
-  ];
-  # networking.firewall.allowedUDPPorts = [ ... ];
-
-  fonts.packages = with pkgs; [
-    (nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
-  ];
-
-  services.xserver.enable = true;
-  services.xserver.displayManager.gdm = {
-    enable = true;
-    autoSuspend = false;
-  };
-  services.xserver.desktopManager.gnome.enable = true;
-  services.gnome.core-utilities.enable = false;
-
-  # List packages installed in system profile. To search, run:
-  # $ nix search wget
-  nixpkgs.config.allowUnfree = true;
-  environment.systemPackages = with pkgs; [
-    # [Laptop] Battery status
-    acpi
-    # extras, more for my neovim setup TODO move these into a more isolated place for nvim setup? Should be its own flake probably
-    cargo
-    rustc
-    nodejs_21
-    python313
-    # ripgrep # now in common
-    nodePackages.cspell
-  ];
-
-  # does for all shells. Can use `programs.zsh.shellAliases` for specific ones
-  environment.shellAliases = {
-    battery = "acpi";
-    wifi = "nmtui";
-  };
 }
