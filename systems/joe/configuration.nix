@@ -10,7 +10,7 @@
       (settings.systemsDir + "/_common/components/caps_to_escape_in_tty.nix")
       (settings.systemsDir + "/_common/components/font_jetbrainsmono.nix")
       (settings.systemsDir + "/_common/components/home_manager.nix")
-      (settings.systemsDir + "/_common/components/gnome_wayland.nix")
+      (settings.systemsDir + "/_common/components/gnome_xorg.nix")
       # Users this machine has
       (settings.usersDir + "/root/configuration.nix")
       (settings.usersDir + "/josh/configuration.nix")
