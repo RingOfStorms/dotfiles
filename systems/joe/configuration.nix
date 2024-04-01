@@ -16,7 +16,8 @@
       (settings.usersDir + "/josh/configuration.nix")
     ];
 
-  # Machine specific configuration
+  # machine specific configuration
+  # ==============================
   hardware.enableAllFirmware = true;
   # Connectivity
   networking.networkmanager.enable = true;

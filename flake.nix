@@ -64,7 +64,7 @@
         usersDir = ./users;
       };
     in
-    {
+   {
       nixosConfigurations = builtins.foldl'
         (acc: nixConfig:
           acc // {
@@ -84,36 +84,6 @@
         { }
         nixConfigs;
 
-      # nixosConfigurations = {
-      #   gpdPocket3 = nixosSystem {
-      #     system = "x86_64-linux";
-      #     modules = [ ./systems/_common/configuration.nix ./systems/gpdPocket3/configuration.nix ];
-      #     specialArgs = inputs // {
-      #       inherit ylib;
-      #       settings = directories // {
-      #         system = {
-      #           # TODO remove these probably not needed anymore with per machine specified here
-      #           hostname = "gpdPocket3";
-      #           architecture = "x86_64-linux";
-      #         };
-      #       };
-      #     };
-      #   };
-      #   joe = nixosSystem {
-      #     system = "x86_64-linux";
-      #     modules = [ ./systems/_common/configuration.nix ./systems/joe/configuration.nix ];
-      #     specialArgs = inputs // {
-      #       inherit ylib;
-      #       settings = directories // {
-      #         system = {
-      #           # TODO remove these probably not needed anymore with per machine specified here
-      #           hostname = "joe";
-      #           architecture = "x86_64-linux";
-      #         };
-      #       };
-      #     };
-      #   };
-      # };
       # homeConfigurations = { };
     };
 }

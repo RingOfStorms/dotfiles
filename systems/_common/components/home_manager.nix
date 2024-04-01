@@ -1,4 +1,4 @@
-{ config, lib, pkgs, settings, ylib, ... } @ inputs:
+{ config, pkgs, settings, ylib, ... } @ inputs:
 let
   home-manager = builtins.fetchTarball {
     url = "https://github.com/nix-community/home-manager/archive/release-23.11.tar.gz";
