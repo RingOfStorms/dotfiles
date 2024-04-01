@@ -30,6 +30,8 @@
 - copy over this systems ssh public key ( /etc/shh/*ed25519* ) into the ./secrets/secrets.nix file - push those up, using another computer re-key all the secrets, push up again
   - pull new secrets down with new added keys and rebuild
 
+- clone neovim setup...
+
 # Later updates
 
 - `nix flake update /etc/nixos`

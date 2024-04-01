@@ -12,8 +12,9 @@ in
     # Revisit this later, permission denied to make anything in `/run` as my user...
     secureSocket = false;
 
-    shortcut = "a";
-    prefix = "C-a";
+    # default is B switch to space for easier dual hand use
+    shortcut = "Space";
+    prefix = "C-Space";
     baseIndex = 1;
     mouse = true;
     keyMode = "vi";
@@ -23,24 +24,15 @@ in
     aggressiveResize = true;
 
     plugins = [
-      {
-        plugin = tmux.sessionist;
-        extraConfig = ''
-          set -g @sessionist-join-pane "j"
-          set -g @sessionist-goto "o"
-
-          set -g @default_key_bindings_new "UNSET"
-        '';
-      }
       tmux.yank
-      tmux.tmux-thumbs
-      {
-        plugin = tmux.fzf-tmux-url;
-        extraConfig = ''
-          set -g @fzf-url-fzf-options '-p 60%,30% --prompt = "   " - -border-label=" Open URL "'
-          set -g @fzf-url-history-limit '2000'
-        '';
-      }
+      # tmux.tmux-thumbs
+      # {
+      #   plugin = tmux.fzf-tmux-url;
+      #   extraConfig = ''
+      #     set -g @fzf-url-fzf-options '-p 60%,30% --prompt = "   " - -border-label=" Open URL "'
+      #     set -g @fzf-url-history-limit '2000'
+      #   '';
+      # }
       {
         plugin = tmux.catppuccin.overrideAttrs (_: {
           src = pkgs.fetchFromGitHub {

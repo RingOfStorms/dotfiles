@@ -106,6 +106,8 @@ if isMac then
   config.font_size = 16
   config.window_decorations = "RESIZE"
 elseif isNix then
+  config.enable_wayland = true
+
   config.window_decorations = "NONE"
 
   -- Fix for cursor disappearing in gnome

@@ -48,6 +48,8 @@ in
   # Some basics
   nixpkgs.config.allowUnfree = true;
   environment.systemPackages = with pkgs; [
+    # wayland clipboard in terminal
+    wl-clipboard
     # Basics
     neovim
     vim
