@@ -19,12 +19,12 @@
       [ (settings.usersDir + "/_common/home.nix") ]
       # Programs
       ++ ylib.umport {
-        paths = [ ./programs ];
+        path =  ./programs;
         recursive = true;
       }
       # Programs by host
       ++ ylib.umport {
-        paths = [ ./by_hosts/${settings.system.hostname} ];
+        path = lib.fileset.maybeMissing ./by_hosts/${settings.system.hostname};
         recursive = true;
       };
   };
