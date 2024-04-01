@@ -40,10 +40,8 @@ in
   # Some basics
   nixpkgs.config.allowUnfree = true;
   environment.systemPackages = with pkgs; [
-    # wayland clipboard in terminal
-    wl-clipboard
     # Basics
-    neovim
+    # neovim in TODO nix file in common, to split out into its own flake eventually
     vim
     wget
     curl
@@ -56,7 +54,7 @@ in
     fzf
     ripgrep
 
-    # TODO keep in common or move to specifics?
+    # TODO keep in common or move to specific machines, I want this for my pocket 3 video KDM module but I use ffmpeg on most machines anyways?
     ffmpeg_5-full
   ];
 
