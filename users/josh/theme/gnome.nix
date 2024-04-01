@@ -15,7 +15,8 @@
       "org/gnome/shell" = {
         favorite-apps = [
           # "vivaldi-stable.desktop"
-          "org.wezfurlong.wezterm.desktop"
+          "Alacritty.desktop"
+          # "org.wezfurlong.wezterm.desktop"
           "firefox.desktop"
           "org.gnome.Nautilus.desktop"
         ];
@@ -37,6 +38,13 @@
       "org/gnome/settings-daemon/plugins/media-keys" = {
         # Disable the lock screen shortcut
         screensaver = [ "" ];
+        custom-keybindings = {
+          custom0 = {
+            binding = "<Super>Return";
+            command = "alacritty";
+            name = "launch terminal";
+          };
+        };
       };
       "org/gnome/desktop/wm/keybindings" = {
         minimize = [ "" ];
@@ -74,6 +82,9 @@
       "org/gnome/desktop/screensaver" = {
         lock-enabled = false;
         idle-activation-enabled = false;
+      };
+      "org/gnome/desktop/applications/terminal" = {
+        exec = "alacritty";
       };
       "org/gnome/settings-daemon/plugins/color" = {
         night-light-enabled = false;
