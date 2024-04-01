@@ -42,6 +42,11 @@
   # [Laptop] screens with brightness settings
   programs.light.enable = true;
 
+  console = {
+    # We want to be able to read the screen so use a 32 sized font on this tiny panel
+    font = "${pkgs.terminus_font}/share/consolefonts/ter-132n.psf.gz";
+  };
+
   # ========
 
   # FINGERPRINTS for the sensor on GPD P3 do not work on linux yet: todo find the source of this again online for tracking...
