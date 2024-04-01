@@ -60,7 +60,7 @@
         flakeDir = ./.;
         publicsDir = ./publics;
         secretsDir = ./secrets;
-        systemsDir = ./systems;
+        hostsDir = ./hosts;
         usersDir = ./users;
       };
     in
@@ -70,7 +70,7 @@
           acc // {
             "${nixConfig.name}" = nixpkgs.lib.nixosSystem
               {
-                modules = [ ./systems/_common/configuration.nix ./systems/${nixConfig.name}/configuration.nix ];
+                modules = [ ./hosts/_common/configuration.nix ./hosts/${nixConfig.name}/configuration.nix ];
                 specialArgs = inputs // {
                   ylib = nypkgs.legacyPackages.${nixConfig.opts.system}.lib;
                   settings = directories // nixConfig.settings // {

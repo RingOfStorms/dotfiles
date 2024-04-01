@@ -18,7 +18,7 @@
 
 - `cp -r /etc/nixos ~/nixos_bak` Backup configuration
 - Checkout this repo into /etc/nixos: `rm -rf /etc/nixos` `git clone https://github.com/ringofstorms/dotfiles /etc/nixos`
-- Copy hardware-configuration into the new /etc/nixos/systems/HOSTNAME/hardware-configuration.nix `mkdir /etc/nixos/systems/HOSTNAM && cp ~/hardware-configuration.nix /etx/nixos/systems/HOSTNAME`
+- Copy hardware-configuration into the new /etc/nixos/hosts/HOSTNAME/hardware-configuration.nix `mkdir /etc/nixos/hosts/HOSTNAM && cp ~/hardware-configuration.nix /etx/nixos/hosts/HOSTNAME`
 - copy the existing configuration/other configuration nix of an existing system and edit it to desires state. [[ TODO make this step cleaner/easier... ]]
 - switch into flake mode `nixos-rebuild switch --flake /etc/nixos[#HOSTNAME]` and switch to new system
 - copy system ssh public key and create a key for user and copy those into the nixos secrets.nix file
@@ -27,7 +27,7 @@
 - Push changes to remote using temp user password
 - rekey secrets with any other onboarded system
     - TODO
-- copy over this systems ssh public key ( /etc/shh/*ed25519* ) into the ./secrets/secrets.nix file - push those up, using another computer re-key all the secrets, push up again
+- copy over this host's ssh public key ( /etc/shh/*ed25519* ) into the ./secrets/secrets.nix file - push those up, using another computer re-key all the secrets, push up again
   - pull new secrets down with new added keys and rebuild
 
 - clone neovim setup...

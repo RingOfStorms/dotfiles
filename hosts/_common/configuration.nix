@@ -8,9 +8,9 @@ in
       # Secrets management
       ./ragenix.nix
       # Include the results of the hardware scan.
-      (/${settings.systemsDir}/${settings.system.hostname}/hardware-configuration.nix)
+      (/${settings.hostsDir}/${settings.system.hostname}/hardware-configuration.nix)
       # Include the specific machine's config.
-      (/${settings.systemsDir}/${settings.system.hostname}/configuration.nix)
+      (/${settings.hostsDir}/${settings.system.hostname}/configuration.nix)
     ];
 
   # Enable flakes

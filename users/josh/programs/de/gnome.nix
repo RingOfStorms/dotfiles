@@ -54,10 +54,10 @@
         move-to-workspace-3 = [ "" ];
         move-to-workspace-4 = [ "" ];
         move-to-workspace-last = [ "" ];
-        move-to-workspace-down = [ "<Control><Super>Down" ];
-        move-to-workspace-up = [ "<Control><Super>Up" ];
-        move-to-workspace-left = [ "<Control><Super>Left" ];
-        move-to-workspace-right = [ "<Control><Super>Right" ];
+        move-to-workspace-down = [ "<Control><Super>j" ];
+        move-to-workspace-up = [ "<Control><Super>k" ];
+        move-to-workspace-left = [ "<Control><Super>h" ];
+        move-to-workspace-right = [ "<Control><Super>l" ];
 
         switch-to-workspace-1 = [ "<Super>1" ];
         switch-to-workspace0 = [ "<Super>2" ];

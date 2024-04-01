@@ -17,14 +17,14 @@
     imports =
       # Common settings all users share
       [ (settings.usersDir + "/_common/home.nix") ]
-      # User programs
+      # Programs
       ++ ylib.umport {
         paths = [ ./programs ];
         recursive = true;
       }
-      # User theme
+      # Programs by host
       ++ ylib.umport {
-        paths = [ ./theme ];
+        paths = [ ./by_hosts/${settings.system.hostname} ];
         recursive = true;
       };
   };
