@@ -16,14 +16,11 @@
 
     # Pinned nix version
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-23.11";
-
-    # TODO
-    # home-manager = { };
   };
 
   outputs = { self, nypkgs, nixpkgs, ... } @ inputs:
     let
-      nixConfigs = [
+      myHosts = [
         {
           name = "gpdPocket3";
           opts = {
@@ -64,7 +61,8 @@
         usersDir = ./users;
       };
     in
-   {
+    {
+      # foldl' is "reduce" where { } is the accumulator and myHosts is the array to reduce on.
       nixosConfigurations = builtins.foldl'
         (acc: nixConfig:
           acc // {
@@ -82,8 +80,6 @@
               } // nixConfig.opts;
           })
         { }
-        nixConfigs;
-
-      # homeConfigurations = { };
+        myHosts;
     };
 }
