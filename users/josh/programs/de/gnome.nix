@@ -1,9 +1,11 @@
-{ pkgs, ... }:
+{ pkgs, lib, ... }:
+with lib.hm.gvariant;
 {
   home.packages = with pkgs; [
     # use `dconf dump /` before and after and diff the files for easy editing of dconf below
     # > `dconf dump / > /tmp/dconf_dump_start && watch -n0.5 'dconf dump / > /tmp/dconf_dump_current && diff --color /tmp/dconf_dump_start /tmp/dconf_dump_current -U12'`
     # OR (Must be logged into user directly, no SU to user will work): `dconf watch /`
+    # OR get the exact converted config from `dconf dump / | dconf2nix | less` and search with forward slash
     # gnome.dconf-editor
     # gnomeExtensions.workspace-switch-wraparound
     #gnomeExtensions.forge # probably don't need on this on tiny laptop but may explore this instead of sway for my desktop
@@ -12,6 +14,9 @@
   dconf = {
     enable = true;
     settings = {
+      "org/gnome/desktop/session" = {
+        idle-delay = mkUint32 0;
+      };
       "org/gnome/shell" = {
         favorite-apps = [
           # "vivaldi-stable.desktop"
@@ -105,7 +110,9 @@
         toggle-quick-settings = [ "" ];
         toggle-application-view = [ "<Super>space" ];
       };
+      "org/gtk/gtk4/settings/file-chooser" = {
+        show-hidden = true;
+      };
     };
   };
 }
-
