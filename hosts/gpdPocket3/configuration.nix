@@ -83,4 +83,11 @@
   services.xserver.libinput.enable = true;
   services.tlp.enable = lib.mkDefault ((lib.versionOlder (lib.versions.majorMinor lib.version) "21.05")
     || !config.services.power-profiles-daemon.enable);
+
+
+  # KVM module video
+
+  environment.shellAliases = {
+    kvm = "ffplay -i /dev/video2";
+  };
 }
