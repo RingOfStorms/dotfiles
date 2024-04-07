@@ -13,18 +13,23 @@
     enable = true;
   };
 
+  imports = ylib.umport {
+    path = lib.fileset.maybeMissing ./by_hosts/${settings.system.hostname}/nix_modules;
+    recursive = true;
+  };
+
   home-manager.users.${settings.user.username} = {
     imports =
       # Common settings all users share
       [ (settings.usersDir + "/_common/home.nix") ]
       # Programs
       ++ ylib.umport {
-        path =  ./programs;
+        path = ./home_manager;
         recursive = true;
       }
       # Programs by host
       ++ ylib.umport {
-        path = lib.fileset.maybeMissing ./by_hosts/${settings.system.hostname};
+        path = lib.fileset.maybeMissing ./by_hosts/${settings.system.hostname}/home_manager;
         recursive = true;
       };
   };
