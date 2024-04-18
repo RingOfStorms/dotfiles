@@ -17,9 +17,10 @@
 
 - `cp -r /etc/nixos ~/nixos_bak` Backup configuration
 - Checkout this repo into /etc/nixos: `rm -rf /etc/nixos` `git clone https://github.com/ringofstorms/dotfiles /etc/nixos`
-- Copy hardware-configuration into the new /etc/nixos/hosts/HOSTNAME/hardware-configuration.nix `mkdir /etc/nixos/hosts/HOSTNAM && cp ~/hardware-configuration.nix /etx/nixos/hosts/HOSTNAME`
+- Copy the backup into the new /etc/nixos/hosts/HOSTNAME dir `mkdir /etc/nixos/hosts/HOSTNAME && cp -r ~/nixos_bak/* /etx/nixos/hosts/HOSTNAME`
 - copy the existing configuration/other configuration nix of an existing system and edit it to desires state. [[ TODO make this step cleaner/easier... ]]
 - switch into flake mode `nixos-rebuild switch --flake /etc/nixos[#HOSTNAME]` and switch to new system
+- Add this host to the top level `flake.nix` myHosts section
 - copy system ssh public key and create a key for user and copy those into the nixos secrets.nix file
     - `cat /etc/ssh/ssh_host_ed25519_key.pub`
     - `cat ~/.ssh/id_ed25519.pub`
