@@ -7,7 +7,6 @@
 - in configuration.nix
     - set networking.hostname to HOSTNAME
     - enable networkmanager
-    - add in `users.users.root.initialPassword = 'password1';` [[ TODO this may not be necessary at all, it seems to prompt for this regardless at end of install ]]
     - uncomment systemPackages and add: git curl
     - add `nix.settings.experimental-features = [ "nix-command" "flakes" ];`
 - Install nixos: `cd /mnt` `sudo nixos-install`
