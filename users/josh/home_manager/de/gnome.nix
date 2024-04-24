@@ -41,6 +41,7 @@ with lib.hm.gvariant;
         audible-bell = false;
         wrap-around = true;
       };
+      "" = { };
       "org/gnome/settings-daemon/plugins/media-keys" = {
         # Disable the lock screen shortcut
         screensaver = [ "" ];
@@ -53,7 +54,6 @@ with lib.hm.gvariant;
       };
       "org/gnome/desktop/wm/keybindings" = {
         minimize = [ "" ];
-
         move-to-workspace-1 = [ "" ];
         move-to-workspace-2 = [ "" ];
         move-to-workspace-3 = [ "" ];
@@ -63,7 +63,8 @@ with lib.hm.gvariant;
         move-to-workspace-up = [ "<Control><Super>k" ];
         move-to-workspace-left = [ "<Control><Super>h" ];
         move-to-workspace-right = [ "<Control><Super>l" ];
-
+        switch-input-source = [ ];
+        switch-input-source-backward = [ ];
         switch-to-workspace-1 = [ "<Super>1" ];
         switch-to-workspace-2 = [ "<Super>2" ];
         switch-to-workspace-3 = [ "<Super>3" ];
