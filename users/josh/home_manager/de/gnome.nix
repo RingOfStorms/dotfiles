@@ -21,10 +21,10 @@ with lib.hm.gvariant;
         favorite-apps = [
           # "vivaldi-stable.desktop"
           "Alacritty.desktop"
-          # Wezterm is not playing nice with me on gnome wayland :(
-          # "org.wezfurlong.wezterm.desktop"
-          "firefox.desktop"
           "org.gnome.Nautilus.desktop"
+          "firefox-esr.desktop"
+          "spotify.desktop"
+          "discord.desktop"
         ];
         enabled-extensions = with pkgs.gnomeExtensions; [
           workspace-switch-wraparound.extensionUuid
@@ -65,7 +65,7 @@ with lib.hm.gvariant;
         move-to-workspace-right = [ "<Control><Super>l" ];
 
         switch-to-workspace-1 = [ "<Super>1" ];
-        switch-to-workspace0 = [ "<Super>2" ];
+        switch-to-workspace-2 = [ "<Super>2" ];
         switch-to-workspace-3 = [ "<Super>3" ];
         switch-to-workspace-4 = [ "<Super>4" ];
         switch-to-workspace-down = [ "" ];
