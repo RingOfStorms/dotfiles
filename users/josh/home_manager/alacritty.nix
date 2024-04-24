@@ -14,8 +14,6 @@
         primary = {
           foreground = "#e0e0e0";
           background = "#262626";
-          cursor = "#171717";
-          vi_mode_cursor = "#636363";
         };
         normal = {
           # Catppuccin Coal
