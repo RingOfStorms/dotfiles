@@ -48,7 +48,6 @@ in
     neofetch
     bat
     htop
-    nvtop
     unzip
     git
     fzf
