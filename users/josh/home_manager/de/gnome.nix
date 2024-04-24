@@ -41,7 +41,6 @@ with lib.hm.gvariant;
         audible-bell = false;
         wrap-around = true;
       };
-      "" = { };
       "org/gnome/settings-daemon/plugins/media-keys" = {
         # Disable the lock screen shortcut
         screensaver = [ "" ];
