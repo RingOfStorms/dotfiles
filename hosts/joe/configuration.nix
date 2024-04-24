@@ -30,7 +30,7 @@
   hardware.pulseaudio.enable = true;
   hardware.pulseaudio.package = pkgs.pulseaudioFull;
 
-  # environment.systemPackages = with pkgs; [ ];
+  environment.systemPackages = with pkgs; [ nvtopPackages.full ];
 
   # nvidia gfx https://nixos.wiki/wiki/Nvidia
   # =========

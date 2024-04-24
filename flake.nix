@@ -14,11 +14,16 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Pinned nix version
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-23.11";
+    home-manager = {
+      url = "github:nix-community/home-manager/master";
+      inputs.nixpkgs.follows =
+        "nixpkgs"; # Use system packages list where available
+    };
+
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
   };
 
-  outputs = { self, nypkgs, nixpkgs, ... } @ inputs:
+  outputs = { self, nypkgs, nixpkgs, home-manager, ... } @ inputs:
     let
       myHosts = [
         {
@@ -68,7 +73,7 @@
           acc // {
             "${nixConfig.name}" = nixpkgs.lib.nixosSystem
               {
-                modules = [ ./hosts/_common/configuration.nix ./hosts/${nixConfig.name}/configuration.nix ];
+                modules = [./hosts/_common/configuration.nix ./hosts/${nixConfig.name}/configuration.nix ];
                 specialArgs = inputs // {
                   ylib = nypkgs.legacyPackages.${nixConfig.opts.system}.lib;
                   settings = directories // nixConfig.settings // {

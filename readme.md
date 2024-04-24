@@ -15,6 +15,9 @@
 
 -- TODO come up with a way to pregen keys so onboarding is less stupid with secrets?
 
+- add home home-manager
+    - `sudo nix-channel --add https://github.com/nix-community/home-manager/archive/release-23.11.tar.gz home-manager`
+    - `sudo nix-channel --update`
 - `cp -r /etc/nixos ~/nixos_bak` Backup configuration
 - Checkout this repo into /etc/nixos: `rm -rf /etc/nixos` `git clone https://github.com/ringofstorms/dotfiles /etc/nixos`
 - Copy the backup into the new /etc/nixos/hosts/HOSTNAME dir `mkdir /etc/nixos/hosts/HOSTNAME && cp -r ~/nixos_bak/* /etx/nixos/hosts/HOSTNAME`

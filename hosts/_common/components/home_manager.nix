@@ -1,16 +1,13 @@
-{ config, pkgs, settings, ylib, ... } @ inputs:
-let
-  home-manager = builtins.fetchTarball {
-    url = "https://github.com/nix-community/home-manager/archive/release-23.11.tar.gz";
-    # to get hash run `nix-prefetch-url --unpack "https://github.com/nix-community/home-manager/archive/release-23.11.tar.gz"`
-    sha256 = "0g51f2hz13dk953i501fmc6935difhz60741nypaqwz127hy5ldk";
-  };
-in
+{ config, pkgs, home-manager, settings, ylib, ... } @ inputs:
+# Note that we must have the channel added for the import to work below
+# `sudo nix-channel --add https://github.com/nix-community/home-manager/archive/release-23.11.tar.gz home-manager`
+# `sudo nix-channel --update`
 {
   imports =
     [
       # home manager import
-      (import "${home-manager}/nixos")
+      home-manager.nixosModules.home-manager
+      # home-manager
     ];
   # Home manager options
   security.polkit.enable = true;

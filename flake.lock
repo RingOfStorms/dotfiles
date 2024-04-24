@@ -3,7 +3,7 @@
     "agenix": {
       "inputs": {
         "darwin": "darwin",
-        "home-manager": "home-manager",
+        "home-manager": "home-manager_2",
         "nixpkgs": [
           "ragenix",
           "nixpkgs"
@@ -89,6 +89,27 @@
     "home-manager": {
       "inputs": {
         "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1713906585,
+        "narHash": "sha256-fv84DCOkBtjF6wMATt0rfovu7e95L8rdEkSfNbwKR3U=",
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "rev": "bfa7c06436771e3a0c666ccc6ee01e815d4c33aa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "ref": "master",
+        "repo": "home-manager",
+        "type": "github"
+      }
+    },
+    "home-manager_2": {
+      "inputs": {
+        "nixpkgs": [
           "ragenix",
           "agenix",
           "nixpkgs"
@@ -110,16 +131,16 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1711668574,
-        "narHash": "sha256-u1dfs0ASQIEr1icTVrsKwg2xToIpn7ZXxW3RHfHxshg=",
+        "lastModified": 1713714899,
+        "narHash": "sha256-+z/XjO3QJs5rLE5UOf015gdVauVRQd2vZtsFkaXBq2Y=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "219951b495fc2eac67b1456824cc1ec1fd2ee659",
+        "rev": "6143fc5eeb9c4f00163267708e26191d1e918932",
         "type": "github"
       },
       "original": {
         "owner": "nixos",
-        "ref": "nixos-23.11",
+        "ref": "nixos-unstable",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -131,11 +152,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1711646165,
-        "narHash": "sha256-Df/834E2M5Qc+jKb/LqraoPjjz1k1oCoL5PQB/1aT44=",
+        "lastModified": 1713095112,
+        "narHash": "sha256-Q+6nVJqyKnEeXKq9h1glCZ+HeML4ZdnPBfmg8U99d54=",
         "owner": "yunfachi",
         "repo": "nypkgs",
-        "rev": "a99e5f398dc27ee06a3a57c88b65a6869f426795",
+        "rev": "4afb31c3ea03c83d37e0182015cf80a5cb487be4",
         "type": "github"
       },
       "original": {
@@ -170,6 +191,7 @@
     },
     "root": {
       "inputs": {
+        "home-manager": "home-manager",
         "nixpkgs": "nixpkgs",
         "nypkgs": "nypkgs",
         "ragenix": "ragenix"
