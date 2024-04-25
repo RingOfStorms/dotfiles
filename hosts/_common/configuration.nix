@@ -22,6 +22,12 @@ in
   networking.hostName = settings.system.hostname;
   # TODO do I want this dynamic at all? Roaming?
   time.timeZone = "America/Chicago";
+  programs.nh = {
+    enable = true;
+    clean.enable = true;
+    clean.extraArgs = "--keep 3";
+    flake = "/etc/nixos";
+  };
 
   # Select internationalization properties.
   i18n.defaultLocale = defaultLocal;
@@ -87,7 +93,7 @@ in
     rg = "rg --no-ignore";
     rgf = "rg --files 2>/dev/null | rg";
 
-    # Nix related
+    # Nix deprecations
     nix-hash = "echo 'The functionality of nix-hash may be covered by various subcommands or options in the new `nix` command.'";
     nix-build = "echo 'Use `nix build` instead.'";
     nix-info = "echo 'Use `nix flake info` or other `nix` subcommands to obtain system and Nix information.'";
