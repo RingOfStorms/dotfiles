@@ -28,7 +28,8 @@ in
     enable = true;
     clean.enable = true;
     clean.extraArgs = "--keep 3";
-    flake = "/etc/nixos";
+    # TODO this may need to be defined higher up if it is ever different for a machine...
+    flake = "/home/${settings.user.username}/.config/nixos-config";
   };
 
   # Select internationalization properties.

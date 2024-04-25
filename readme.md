@@ -1,3 +1,44 @@
+## TODO working on changes to this now
+
+# First Install on new Machine
+
+## NixOS
+export HOSTNAME=desired_hostname_for_this_machine (___)
+export USERNAME=desired_username_for_admin_on_this_machine (josh)
+- Follow nixos installation guide: https://nixos.wiki/wiki/NixOS_Installation_Guide
+    - Follow until the config is generated
+- in hardware-configuration change to use by-labels
+```sh
+# TODO command to do this in one line
+```
+- in configuration.nix
+    - set networking.hostname to HOSTNAME
+    - enable networkmanager
+    - uncomment systemPackages and add: `git` `curl`
+    - add `nix.settings.experimental-features = [ "nix-command" "flakes" ];`
+    - add `users.users.USERNAME = { ... todo, just enough to get to git clone the real nixos config into its home .config folder }
+    - TODO add whatever is needed for default pubkeys for onboarding later
+- Install nixos: `cd /mnt` `sudo nixos-install`
+    - `passwd` to change root password (if not already prompted to do so)
+- `reboot`
+- login to USERNAME and git clone nixos-config `git clone __ ~/.config/nixos-config`
+- TODO ONBOARD NEW MACHINE CONFIGS, secrets, etc
+    - use hostname to make new folders in the repo, copy hardware config, and create config from template. Update flake.nix with top level info needed for this system with ARCH detected.
+    - Copy public keys into secrets.nix file
+    - push changes
+    - rekey system with another onboarded device... (make this offlinable?), push there, pull here
+- `sudo nixos-rebuild switch --flake ~/.config/nixos-config`
+- reboot? done
+
+
+
+## Darwin
+- TODO
+
+###
+###
+
+
 # First Install on new Machine
 
 - First follow nixos installation guide: https://nixos.wiki/wiki/NixOS_Installation_Guide
@@ -15,9 +56,6 @@
 
 -- TODO come up with a way to pregen keys so onboarding is less stupid with secrets?
 
-- add home home-manager
-    - `sudo nix-channel --add https://github.com/nix-community/home-manager/archive/release-23.11.tar.gz home-manager`
-    - `sudo nix-channel --update`
 - `cp -r /etc/nixos ~/nixos_bak` Backup configuration
 - Checkout this repo into /etc/nixos: `rm -rf /etc/nixos` `git clone https://github.com/ringofstorms/dotfiles /etc/nixos`
 - Copy the backup into the new /etc/nixos/hosts/HOSTNAME dir `mkdir /etc/nixos/hosts/HOSTNAME && cp -r ~/nixos_bak/* /etx/nixos/hosts/HOSTNAME`
@@ -41,6 +79,8 @@
 - `nixos-rebuild switch --flake /etc/nixos`
 
 # Cleanup boot
+
+> TODO remove, no longer needed `nh` handles this
 
 I used the existing windows 100MB boot partition and it fills up constantly. Have to purge old stuff a lot this is how:
 
