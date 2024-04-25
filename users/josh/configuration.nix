@@ -1,33 +1,37 @@
-{ config, lib, ylib, pkgs, settings, ... } @ args:
+{ lib, ylib, settings, ... }:
 {
-  users.users.${settings.user.username} = {
-    initialPassword = "password1";
-    isNormalUser = true;
-    extraGroups = [ "wheel" "networkmanager" "video" "input" ];
-    shell = pkgs.zsh;
-  };
-
-  # TODO how to do this from home manager file instead
-  environment.pathsToLink = [ "/share/zsh" ];
-  programs.zsh = {
-    enable = true;
-  };
-
-  imports = ylib.umport {
-    path = lib.fileset.maybeMissing ./by_hosts/${settings.system.hostname}/nix_modules;
-    recursive = true;
-  };
+  imports =
+    [ ]
+    ## Common nix modules
+    ++ ylib.umport {
+      path = lib.fileset.maybeMissing (settings.usersDir + "/_common/nix_modules");
+      recursive = true;
+    }
+    # Nix modules for this user
+    ++ ylib.umport {
+      path = lib.fileset.maybeMissing ./nix_modules;
+      recursive = true;
+    }
+    # Nix modules by host for this user
+    ++ ylib.umport {
+      path = lib.fileset.maybeMissing ./by_hosts/${settings.system.hostname}/nix_modules;
+      recursive = true;
+    };
 
   home-manager.users.${settings.user.username} = {
     imports =
-      # Common settings all users share
-      [ (settings.usersDir + "/_common/home.nix") ]
-      # Programs
+      [ ]
+      # Common home manager
       ++ ylib.umport {
-        path = ./home_manager;
+        path = lib.fileset.maybeMissing (settings.usersDir + "/_common/home_manager");
         recursive = true;
       }
-      # Programs by host
+      # Home manger for this user
+      ++ ylib.umport {
+        path = lib.fileset.maybeMissing ./home_manager;
+        recursive = true;
+      }
+      # Home manager by host for this user
       ++ ylib.umport {
         path = lib.fileset.maybeMissing ./by_hosts/${settings.system.hostname}/home_manager;
         recursive = true;

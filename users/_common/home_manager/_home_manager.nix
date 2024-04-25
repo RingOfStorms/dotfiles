@@ -4,9 +4,4 @@
 
   home.username = settings.user.username;
   home.homeDirectory = "/home/${settings.user.username}";
-
-  imports = ylib.umport {
-    paths = [ ./programs ];
-    recursive = true;
-  };
 }
