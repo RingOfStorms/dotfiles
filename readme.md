@@ -17,6 +17,13 @@ export USERNAME=desired_username_for_admin_on_this_machine (josh)
     - uncomment systemPackages and add: `git` `curl`
     - add `nix.settings.experimental-features = [ "nix-command" "flakes" ];`
     - add `users.users.USERNAME = { ... todo, just enough to get to git clone the real nixos config into its home .config folder }
+```
+users.users.josh = {
+    initialPassword = "password1";
+    isNormalUser = true;
+    extraGroups = [ "wheel" "networkmanager" "video" "input" ];
+};
+```
     - TODO add whatever is needed for default pubkeys for onboarding later
 - Install nixos: `cd /mnt` `sudo nixos-install`
     - `passwd` to change root password (if not already prompted to do so)

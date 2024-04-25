@@ -18,6 +18,7 @@ let
   ];
 in
 {
+  # TODO come up with a rotate method/encrypt the device keys bette. This isn't very secure feeling to me the way I am doing this now. If anyone gains access to any one of my devices, then my secrets are no longer secret. This is not a good model.
   "nix2github.age" = { inherit publicKeys; };
   "nix2bitbucket.age" = { inherit publicKeys; };
 }
