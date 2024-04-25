@@ -25,6 +25,14 @@
 
   outputs = { self, nypkgs, nixpkgs, home-manager, ... } @ inputs:
     let
+      user = {
+        username = "josh";
+        git = {
+
+          email = "ringofstorms@gmail.com";
+          name = "RingOfStorms (Joshua Bell)";
+        };
+      };
       myHosts = [
         {
           name = "gpdPocket3";
@@ -32,13 +40,7 @@
             system = "x86_64-linux";
           };
           settings = {
-            user = {
-              username = "josh";
-              git = {
-                email = "ringofstorms@gmail.com";
-                name = "RingOfStorms (Joshua Bell)";
-              };
-            };
+            inherit user;
           };
         }
         {
@@ -47,13 +49,7 @@
             system = "x86_64-linux";
           };
           settings = {
-            user = {
-              username = "josh";
-              git = {
-                email = "ringofstorms@gmail.com";
-                name = "RingOfStorms (Joshua Bell)";
-              };
-            };
+            inherit user;
           };
         }
       ];
@@ -73,7 +69,8 @@
           acc // {
             "${nixConfig.name}" = nixpkgs.lib.nixosSystem
               {
-                modules = [./hosts/_common/configuration.nix ./hosts/${nixConfig.name}/configuration.nix ];
+                # module = nixConfig.overrides.modules or [...]
+                modules = [ ./hosts/_common/configuration.nix ];
                 specialArgs = inputs // {
                   ylib = nypkgs.legacyPackages.${nixConfig.opts.system}.lib;
                   settings = directories // nixConfig.settings // {

@@ -22,6 +22,8 @@ in
   networking.hostName = settings.system.hostname;
   # TODO do I want this dynamic at all? Roaming?
   time.timeZone = "America/Chicago";
+
+  # nix helper
   programs.nh = {
     enable = true;
     clean.enable = true;
