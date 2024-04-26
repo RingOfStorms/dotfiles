@@ -4,15 +4,13 @@
 # System key: `cat /etc/ssh/ssh_host_ed25519_key.pub`
 #
 # from authority
-# `nix run github:yaxitech/ragenix/ -- -i ~/.ssh/ragenix_authority --rules /etc/nixos/secrets/secrets.nix` <-r(eykey)|-e(edit) <File>>
+# `nix run github:yaxitech/ragenix -- -i ~/.ssh/ragenix_authority --rules ~/.config/nixos-config/secrets/secrets.nix` <-r(eykey)|-e(edit) <File>>
 
 let
   publicKeys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBdG4tG18VeuEr/g4GM7HWUzHuUVcR9k6oS3TPBs4JRF ragenix authority key"
-    # gpdPocket3
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMhgYzACsd0GPuF8bl9SFB5y9KDwv+pU9UihoInzhRok josh@gpdPocket3"
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJnV4aVyKStFH1KySfnuqBq+DLvyvJhRfKtMs7PCKlIq root@nixos"
-    # joe
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFzAQ2Dzl8EvQtYLjEZS5K0bQeNop8QRkwrfxMkBagW2 root@gpdPocket3"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIr/aS0qyn5hCLR6wH1P2GhH3hGOqniewMkIseGZ23HB josh@gpdPocket3"
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG4PwrrOuZJWRjlc2dKBUKKE4ybqifJeVOn7x9J5IxIS josh@joe"
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP+GYfPPKxR/18RdD736G7IQhImX/CYU3A+Gifud3CHg root@joe"
   ];
