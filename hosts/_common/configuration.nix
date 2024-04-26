@@ -71,6 +71,7 @@ in
     nn = "nvim --headless '+SessionDelete' +qa > /dev/null 2>&1 && nvim";
     bat = "bat --theme Coldark-Dark";
     cat = "bat --pager=never -p";
+    # TODO this may not be needed now that I am using `nh` clean mode (see /hosts/_common/configuration.nix#programs.nh)
     nix-boot-clean = "find '/boot/loader/entries' -type f ! -name 'windows.conf' | head -n -4 | xargs -I {} rm {}; nix store gc; nixos-rebuild boot; echo; df";
 
     # general unix
