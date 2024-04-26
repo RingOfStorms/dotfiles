@@ -12,10 +12,13 @@ export USERNAME=desired_username_for_admin_on_this_machine (josh)
 - log into USERNAME with `password1`, use `passwd` to change the password
 
 
-- Copy public keys into secrets.nix file
-    - `cat /etc/ssh/ssh_host_ed25519_key.pub ~/.ssh/id_ed25519.pub`
+- `cat /etc/ssh/ssh_host_ed25519_key.pub ~/.ssh/id_ed25519.pub`
+    - On an already onboarded computer copy these and add them to secrets/secrets.nix file
+    - Rekey secrets: `nix run github:yaxitech/ragenix -- --rules ~/.config/nixos-config/secrets/secrets.nix -r`
 - git clone nixos-config `git clone https://github.com/RingOfStorms/dotfiles.git ~/.config/nixos-config`
 - `sudo nixos-rebuild switch --flake ~/.config/nixos-config`
+- Update remote, ssh should work now: `cd ~/.config/nixos-config && git remote remove origin && git remote add origin "git@github.com:RingOfStorms/dotfiles.git" && git pull origin master`
+
 - TODO ONBOARD NEW MACHINE CONFIGS, secrets, etc
     - use hostname to make new folders in the repo, copy hardware config, and create config from template. Update flake.nix with top level info needed for this system with ARCH detected.
     - Copy public keys into secrets.nix file

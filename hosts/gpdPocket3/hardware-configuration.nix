@@ -14,20 +14,16 @@
   boot.extraModulePackages = [ ];
 
   fileSystems."/boot" =
-    { device = "/dev/disk/by-uuid/3A6C-BF60";
+    { device = "/dev/disk/by-label/NIXBOOT";
       fsType = "vfat";
-      # umask=0077 ensures that only the owner (root) can read, write, or execute files on the EFI partition, while all other users are denied all permissions
-      options = [ "umask=0077" ];
     };
 
   fileSystems."/" =
-    { device = "/dev/disk/by-uuid/e740e27d-13bf-468c-a5c6-fa06fe4ac3cd";
+    { device = "/dev/disk/by-label/NIXROOT";
       fsType = "ext4";
     };
 
-  swapDevices =
-    [ { device = "/dev/disk/by-uuid/91682eed-a01c-482d-8000-bd1222d4952a"; }
-    ];
+  swapDevices = [ ];
 
   # Enables DHCP on each ethernet and wireless interface. In case of scripted networking
   # (the default) this is the recommended approach. When using systemd-networkd it's
