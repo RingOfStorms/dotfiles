@@ -21,8 +21,8 @@ with lib.hm.gvariant;
         favorite-apps = [
           # "vivaldi-stable.desktop"
           "Alacritty.desktop"
-          "org.gnome.Nautilus.desktop"
           "firefox-esr.desktop"
+          "org.gnome.Nautilus.desktop"
           "spotify.desktop"
           "discord.desktop"
         ];
