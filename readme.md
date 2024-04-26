@@ -7,32 +7,21 @@ export HOSTNAME=desired_hostname_for_this_machine (___)
 export USERNAME=desired_username_for_admin_on_this_machine (josh)
 - Follow nixos installation guide: https://nixos.wiki/wiki/NixOS_Installation_Guide
     - Follow until the config is generated
-- in hardware-configuration change to use by-labels
-```sh
-# TODO command to do this in one line
-```
-- in configuration.nix
-    - set networking.hostname to HOSTNAME
-    - enable networkmanager
-    - uncomment systemPackages and add: `git` `curl`
-    - add `nix.settings.experimental-features = [ "nix-command" "flakes" ];`
-    - add `users.users.USERNAME = { ... todo, just enough to get to git clone the real nixos config into its home .config folder }
-```
-users.users.josh = {
-    initialPassword = "password1";
-    isNormalUser = true;
-    extraGroups = [ "wheel" "networkmanager" "video" "input" ];
-};
-```
-    - TODO add whatever is needed for default pubkeys for onboarding later
-- Install nixos: `cd /mnt` `sudo nixos-install`
-    - `passwd` to change root password (if not already prompted to do so)
+- `curl -O https://share.joshuabell.link/nix/onboard.sh && chmod +x onboard.sh && ./onboard.sh`
 - `reboot`
-- login to USERNAME and git clone nixos-config `git clone __ ~/.config/nixos-config`
+- log into USERNAME with `password1`, use `passwd` to change the password
+
+
+- Copy public keys into secrets.nix file
+    - `cat /etc/ssh/ssh_host_ed25519_key.pub ~/.ssh/id_ed25519.pub`
+- git clone nixos-config `git clone https://github.com/RingOfStorms/dotfiles.git ~/.config/nixos-config`
+- `sudo nixos-rebuild switch --flake ~/.config/nixos-config`
 - TODO ONBOARD NEW MACHINE CONFIGS, secrets, etc
     - use hostname to make new folders in the repo, copy hardware config, and create config from template. Update flake.nix with top level info needed for this system with ARCH detected.
     - Copy public keys into secrets.nix file
-    - push changes
+        - `cat /etc/ssh/ssh_host_ed25519_key.pub ~/.ssh/id_ed25519.pub`
+    - `git commit -a  --author="Bot <bot@joshuabell.dev>" --email="bot@joshuabell.dev" -m "secrets update"`
+        
     - rekey system with another onboarded device... (make this offlinable?), push there, pull here
 - `sudo nixos-rebuild switch --flake ~/.config/nixos-config`
 - reboot? done
@@ -42,6 +31,9 @@ users.users.josh = {
 ## Darwin
 - TODO
 
+###
+###
+###
 ###
 ###
 
