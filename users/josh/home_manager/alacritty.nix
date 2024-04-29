@@ -1,13 +1,12 @@
 { ... }:
 {
   # More of an experiment to try out since wezterm is being weird on wayland...
-  #
-  #
   programs.alacritty = {
     enable = true;
     settings = {
       window = {
-        decorations = "None";
+        # TODO revisit, I still want some border shadow but no top bar but that is not an option
+        # decorations = "None";
         dynamic_title = false;
       };
       colors = {
@@ -33,6 +32,7 @@
         ## TODO use 16 on macos ...
       };
       # TODO revisit... none of this is working.
+      # NOTE: I probably wont need these anymore, I've since entirely remade and relearned my tmux shortcuts to not be based on these
       keyboard.bindings = [
         # { key = "m"; mods = "Command"; chars = "test"; }
         # { key = "t"; mods = "Control"; action = { SendString = "\\x01t"; }; }

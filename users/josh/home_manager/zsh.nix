@@ -8,7 +8,7 @@
 
     defaultKeymap = "emacs";
 
-    profileExtra = ''
+    envExtra = ''
       # Make home/end and ctrl + left/right nav how I expect them to like in bash
       bindkey "\e[1~" beginning-of-line
       bindkey "\e[4~" end-of-line
