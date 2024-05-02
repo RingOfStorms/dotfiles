@@ -68,14 +68,25 @@ with lib.hm.gvariant;
         switch-to-workspace-2 = [ "<Super>2" ];
         switch-to-workspace-3 = [ "<Super>3" ];
         switch-to-workspace-4 = [ "<Super>4" ];
-        switch-to-workspace-down = [ "" ];
         switch-to-workspace-last = [ "" ];
+        switch-to-workspace-down = [ "<Super>j" ];
+        switch-to-workspace-up = [ "<Super>k" ];
         switch-to-workspace-left = [ "<Super>h" ];
         switch-to-workspace-right = [ "<Super>l" ];
+        move-to-monitor-down = [ "<Control><Super><Shift>j" ];
+        move-to-monitor-up = [ "<Control><Super><Shift>k" ];
+        move-to-monitor-left = [ "<Control><Super><Shift>h" ];
+        move-to-monitor-right = [ "<Control><Super><Shift>l" ];
+        unmaximize = [ "<Super><Shift>j" ];
+        maximize = [ "<Super><Shift>k" ];
       };
       "org/gnome/mutter" = {
         edge-tiling = true;
         workspaces-only-on-primary = true;
+      };
+      "org/gnome/mutter/keybindings" = {
+        toggle-tiled-right = ["<Super><Shift>l"];
+        toggle-tiled-left = ["<Super><Shift>h"];
       };
       "org/gnome/settings-daemon/plugins/power" = {
         power-button-action = "nothing";
