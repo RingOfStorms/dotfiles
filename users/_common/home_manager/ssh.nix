@@ -9,7 +9,29 @@
       "bitbucket.org" = {
         identityFile = age.secrets.nix2bitbucket.path;
       };
+      "h001" = {
+        identityFile = age.secrets.nix2h001.path;
+        # TODO come back to these 10.12.14.## addrs and change them to intranet IP's instead of local network.
+        hostname = "10.12.14.2";
+        user = "root";
+      };
+      "t" = {
+        identityFile = age.secrets.nix2t.path;
+        hostname = "10.12.14.103";
+        user = "joshua.bell";
+        localForwards = [
+          {
+            bind.port = 3000;
+            host.port = 3000;
+            host.address = "localhost";
+          }
+          {
+            bind.port = 3002;
+            host.port = 3002;
+            host.address = "localhost";
+          }
+        ];
+      };
     };
   };
 }
-
