@@ -230,11 +230,11 @@
         "nvim_plugin-declancm/cinnamon.nvim": "nvim_plugin-declancm/cinnamon.nvim"
       },
       "locked": {
-        "lastModified": 1714780617,
-        "narHash": "sha256-63lH3uFa7Mdq6z8oKQPTDH+hXC57bIr3XG7rRz+2x4U=",
+        "lastModified": 1715021116,
+        "narHash": "sha256-90rB0FN9XodUTSw8fHJSGm8qbqkQOOryQUHt7v53KPQ=",
         "owner": "RingOfStorms",
         "repo": "nvim",
-        "rev": "eb7f522795c3a2b597acb576c80b23214ff9eedb",
+        "rev": "d3212044572caeaaf969c06c66f779de96ef37ce",
         "type": "github"
       },
       "original": {
