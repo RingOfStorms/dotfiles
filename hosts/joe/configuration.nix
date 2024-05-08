@@ -2,7 +2,6 @@
 {
   imports =
     [
-      # TODO revisit
       (settings.hostsDir + "/_common/components/neovim.nix")
       # Common components this machine uses
       (settings.hostsDir + "/_common/components/systemd_boot.nix")
@@ -11,6 +10,7 @@
       (settings.hostsDir + "/_common/components/font_jetbrainsmono.nix")
       (settings.hostsDir + "/_common/components/home_manager.nix")
       (settings.hostsDir + "/_common/components/gnome_xorg.nix")
+      (settings.hostsDir + "/_common/components/docker.nix")
       # Users this machine has
       (settings.usersDir + "/root/configuration.nix")
       (settings.usersDir + "/josh/configuration.nix")

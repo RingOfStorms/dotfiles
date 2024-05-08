@@ -53,6 +53,9 @@
 
       # direnv things
       "/.direnv"
+
+      # local only files
+      "*.local"
     ];
   };
 }
