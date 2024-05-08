@@ -161,22 +161,6 @@
         "type": "github"
       }
     },
-    "nvim_plugin-declancm/cinnamon.nvim": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1714107684,
-        "narHash": "sha256-cMP9WRZzevxaWgpILyDh1JwNukm3Jl3JKJYPT2HnFns=",
-        "owner": "declancm",
-        "repo": "cinnamon.nvim",
-        "rev": "a011e84b624cd7b609ea928237505d31b987748a",
-        "type": "github"
-      },
-      "original": {
-        "owner": "declancm",
-        "repo": "cinnamon.nvim",
-        "type": "github"
-      }
-    },
     "nypkgs": {
       "inputs": {
         "nixpkgs": [
@@ -226,15 +210,14 @@
         "nixpkgs": [
           "nixpkgs"
         ],
-        "nvim_plugin-chrisgrieser/nvim-early-retirement": "nvim_plugin-chrisgrieser/nvim-early-retirement",
-        "nvim_plugin-declancm/cinnamon.nvim": "nvim_plugin-declancm/cinnamon.nvim"
+        "nvim_plugin-chrisgrieser/nvim-early-retirement": "nvim_plugin-chrisgrieser/nvim-early-retirement"
       },
       "locked": {
-        "lastModified": 1715117107,
-        "narHash": "sha256-HQMygE6TtrS4w2YPSyRrRcBpGoCwdniXerh4c415Twk=",
+        "lastModified": 1715144933,
+        "narHash": "sha256-SWiw7Xl6vnr0rjWT3udjSGtT4PHkwg3offCMUqhLFAU=",
         "owner": "RingOfStorms",
         "repo": "nvim",
-        "rev": "dd1d3dba564adaa1cdfd1d4b29f933a971a2b70e",
+        "rev": "ecdf25794562cd47ef7ca143af93c4f6b7d4ae9e",
         "type": "github"
       },
       "original": {
