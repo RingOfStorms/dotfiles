@@ -18,21 +18,12 @@ in
     baseIndex = 1;
     mouse = true;
     keyMode = "vi";
-    newSession = true;
     shell = "${pkgs.zsh}/bin/zsh";
     terminal = "screen-256color";
     aggressiveResize = true;
+    sensibleOnTop = false;
 
     plugins = [
-      tmux.yank
-      # tmux.tmux-thumbs
-      # {
-      #   plugin = tmux.fzf-tmux-url;
-      #   extraConfig = ''
-      #     set -g @fzf-url-fzf-options '-p 60%,30% --prompt = "   " - -border-label=" Open URL "'
-      #     set -g @fzf-url-history-limit '2000'
-      #   '';
-      # }
       {
         plugin = tmux.catppuccin.overrideAttrs (_: {
           src = pkgs.fetchFromGitHub {
