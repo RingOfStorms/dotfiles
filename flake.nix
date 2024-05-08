@@ -33,7 +33,6 @@
       user = {
         username = "josh";
         git = {
-
           email = "ringofstorms@gmail.com";
           name = "RingOfStorms (Joshua Bell)";
         };
