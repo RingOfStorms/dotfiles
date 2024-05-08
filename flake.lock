@@ -213,11 +213,11 @@
         "nvim_plugin-chrisgrieser/nvim-early-retirement": "nvim_plugin-chrisgrieser/nvim-early-retirement"
       },
       "locked": {
-        "lastModified": 1715144933,
-        "narHash": "sha256-SWiw7Xl6vnr0rjWT3udjSGtT4PHkwg3offCMUqhLFAU=",
+        "lastModified": 1715145530,
+        "narHash": "sha256-CnBbrXDNvYsXj8+TB+W28xX9e91qltvLq6ZoY4QVxrQ=",
         "owner": "RingOfStorms",
         "repo": "nvim",
-        "rev": "ecdf25794562cd47ef7ca143af93c4f6b7d4ae9e",
+        "rev": "6ed90eafb4b4d009d58dd11987021dab7e5b75d6",
         "type": "github"
       },
       "original": {
