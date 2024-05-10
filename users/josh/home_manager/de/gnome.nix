@@ -26,9 +26,7 @@ with lib.hm.gvariant;
           "spotify.desktop"
           "discord.desktop"
         ];
-        enabled-extensions = with pkgs.gnomeExtensions; [
-          workspace-switch-wraparound.extensionUuid
-        ];
+        enabled-extensions = with pkgs.gnomeExtensions; [ workspace-switch-wraparound.extensionUuid ];
       };
       "org/gnome/desktop/interface" = {
         color-scheme = "prefer-dark";
@@ -44,12 +42,20 @@ with lib.hm.gvariant;
       "org/gnome/settings-daemon/plugins/media-keys" = {
         # Disable the lock screen shortcut
         screensaver = [ "" ];
-        custom-keybindings = [ "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/" ];
+        custom-keybindings = [
+          "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
+          "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/"
+        ];
       };
       "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0" = {
         binding = "<Super>Return";
         command = "alacritty";
         name = "Launch terminal";
+      };
+      "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1" = {
+        binding = "<Super>Space";
+        command = "rofi -show";
+        name = "Launcher";
       };
       "org/gnome/desktop/wm/keybindings" = {
         minimize = [ "" ];
@@ -85,8 +91,8 @@ with lib.hm.gvariant;
         workspaces-only-on-primary = true;
       };
       "org/gnome/mutter/keybindings" = {
-        toggle-tiled-right = ["<Super><Shift>l"];
-        toggle-tiled-left = ["<Super><Shift>h"];
+        toggle-tiled-right = [ "<Super><Shift>l" ];
+        toggle-tiled-left = [ "<Super><Shift>h" ];
       };
       "org/gnome/settings-daemon/plugins/power" = {
         power-button-action = "nothing";
@@ -119,7 +125,7 @@ with lib.hm.gvariant;
         switch-to-application-8 = [ "" ];
         switch-to-application-9 = [ "" ];
         toggle-quick-settings = [ "" ];
-        toggle-application-view = [ "<Super>space" ];
+        toggle-application-view = [ "" ];
       };
       "org/gtk/gtk4/settings/file-chooser" = {
         show-hidden = true;
