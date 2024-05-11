@@ -38,6 +38,10 @@ in
           file = /${settings.secretsDir}/nix2t.age;
           owner = settings.user.username;
         };
+        nix2l001 = {
+          file = /${settings.secretsDir}/nix2l001.age;
+          owner = settings.user.username;
+        };
       };
   };
 }

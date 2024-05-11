@@ -12,6 +12,7 @@
       "h001" = {
         identityFile = age.secrets.nix2h001.path;
         # TODO come back to these 10.12.14.## addrs and change them to intranet IP's instead of local network.
+        # LOCAL HOME NETWORK ONLY
         hostname = "10.12.14.2";
         user = "root";
       };
@@ -31,6 +32,11 @@
             host.address = "localhost";
           }
         ];
+      };
+      "l001" = {
+        identityFile = age.secrets.nix2l001.path;
+        hostname = "172.105.22.34";
+        user = "root";
       };
     };
   };
