@@ -7,10 +7,8 @@
     shell = pkgs.zsh;
   };
 
-  # TODO how to do this from home manager file instead
   environment.pathsToLink = [ "/share/zsh" ];
   programs.zsh = {
     enable = true;
   };
 }
-
