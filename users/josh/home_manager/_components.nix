@@ -1,4 +1,4 @@
-{ lib, ylib, settings, ... }:
+{ settings, ... }:
 {
   imports = [
     (settings.usersDir + "/_common/components/home_manager/tmux/tmux.nix")
