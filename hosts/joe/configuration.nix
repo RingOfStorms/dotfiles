@@ -1,21 +1,26 @@
-{ config, lib, pkgs, settings, ... } @ args:
 {
-  imports =
-    [
-      (settings.hostsDir + "/_common/components/neovim.nix")
-      # Common components this machine uses
-      (settings.hostsDir + "/_common/components/systemd_boot.nix")
-      (settings.hostsDir + "/_common/components/ssh.nix")
-      (settings.hostsDir + "/_common/components/caps_to_escape_in_tty.nix")
-      (settings.hostsDir + "/_common/components/font_jetbrainsmono.nix")
-      (settings.hostsDir + "/_common/components/home_manager.nix")
-      (settings.hostsDir + "/_common/components/gnome_xorg.nix")
-      (settings.hostsDir + "/_common/components/docker.nix")
-      (settings.hostsDir + "/_common/components/nebula.nix")
-      # Users this machine has
-      (settings.usersDir + "/root/configuration.nix")
-      (settings.usersDir + "/josh/configuration.nix")
-    ];
+  config,
+  lib,
+  pkgs,
+  settings,
+  ...
+}@args:
+{
+  imports = [
+    # Common components this machine uses
+    (settings.hostsDir + "/_common/components/neovim.nix")
+    (settings.hostsDir + "/_common/components/systemd_boot.nix")
+    (settings.hostsDir + "/_common/components/ssh.nix")
+    (settings.hostsDir + "/_common/components/caps_to_escape_in_tty.nix")
+    (settings.hostsDir + "/_common/components/font_jetbrainsmono.nix")
+    (settings.hostsDir + "/_common/components/home_manager.nix")
+    (settings.hostsDir + "/_common/components/gnome_xorg.nix")
+    (settings.hostsDir + "/_common/components/docker.nix")
+    (settings.hostsDir + "/_common/components/nebula.nix")
+    # Users this machine has
+    (settings.usersDir + "/root/configuration.nix")
+    (settings.usersDir + "/josh/configuration.nix")
+  ];
 
   # machine specific configuration
   # ==============================
