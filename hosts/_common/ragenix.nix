@@ -34,6 +34,10 @@ in
           file = /${settings.secretsDir}/nix2h001.age;
           owner = settings.user.username;
         };
+        nix2h002 = {
+          file = /${settings.secretsDir}/nix2h002.age;
+          owner = settings.user.username;
+        };
         nix2t = {
           file = /${settings.secretsDir}/nix2t.age;
           owner = settings.user.username;
