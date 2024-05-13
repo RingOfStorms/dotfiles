@@ -18,7 +18,7 @@
       };
       "t" = {
         identityFile = age.secrets.nix2t.path;
-        hostname = "10.12.14.103";
+        hostname = "10.20.40.4"; # TODO get these from flake.nix hosts?
         user = "joshua.bell";
         localForwards = [
           {

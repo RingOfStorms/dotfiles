@@ -232,11 +232,11 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1715576186,
-        "narHash": "sha256-taN5/bY6xDXA7+z0GJE0q24Lt/2zEJIetKfvrkpgHAo=",
+        "lastModified": 1715614284,
+        "narHash": "sha256-L62xtqhJiFCcCKRIH+4j83vrgI2AcjQdHYDgEBrqLx8=",
         "owner": "RingOfStorms",
         "repo": "nvim",
-        "rev": "20633579746615fa55c6c6b8dfdf45899095aca0",
+        "rev": "9bce2b0d423168b24bc4e855f55a9bd490f6fb79",
         "type": "github"
       },
       "original": {
