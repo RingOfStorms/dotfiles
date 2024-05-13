@@ -36,6 +36,12 @@ in
   "nix2h002.age" = {
     inherit publicKeys;
   };
+  "nix2joe.age" = {
+    inherit publicKeys;
+  };
+  "nix2gpdPocket3.age" = {
+    inherit publicKeys;
+  };
   "nix2t.age" = {
     inherit publicKeys;
   };
