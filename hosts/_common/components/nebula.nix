@@ -19,7 +19,7 @@
       Type = "notify";
       Restart = "always";
       RestartSec = 1;
-      ExecStart = "${pkgs.nebula}/bin/nebula -config /etc/nebula";
+      ExecStart = "${pkgs.nebula}/bin/nebula -config /etc/nebula/config.yml";
       UMask = "0027";
       CapabilityBoundingSet = "CAP_NET_ADMIN";
       AmbientCapabilities = "CAP_NET_ADMIN";

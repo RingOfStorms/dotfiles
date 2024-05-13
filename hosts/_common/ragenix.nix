@@ -2,6 +2,7 @@
 {
   settings,
   lib,
+  pkgs,
   ragenix,
   ...
 }:
@@ -11,7 +12,7 @@ in
 # secretsFile = (settings.secretsDir + /secrets.nix);
 {
   imports = [ ragenix.nixosModules.age ];
-  environment.systemPackages = [ ragenix.packages.${settings.system.system}.default ];
+  environment.systemPackages = [ ragenix.packages.${settings.system.system}.default pkgs.rage ];
 
   age = {
     secrets =
