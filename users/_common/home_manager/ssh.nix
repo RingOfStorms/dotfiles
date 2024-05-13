@@ -21,6 +21,16 @@
         hostname = "10.20.40.12";
         user = "luser";
       };
+      "joe" = {
+        identityFile = age.secrets.nix2joe.path;
+        hostname = "10.20.40.2";
+        user = "josh";
+      };
+      "gpdPocket3" = {
+        identityFile = age.secrets.nix2gpdPocket3.path;
+        hostname = "10.20.40.22"; # TODO onboard ot nebula network
+        user = "josh";
+      };
       "t" = {
         identityFile = age.secrets.nix2t.path;
         hostname = "10.20.40.4"; # TODO get these from flake.nix hosts?
