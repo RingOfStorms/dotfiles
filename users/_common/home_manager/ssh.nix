@@ -16,6 +16,11 @@
         hostname = "10.12.14.2";
         user = "root";
       };
+      "h002" = {
+        identityFile = age.secrets.nix2h002.path;
+        hostname = "10.20.40.12";
+        user = "root";
+      };
       "t" = {
         identityFile = age.secrets.nix2t.path;
         hostname = "10.20.40.4"; # TODO get these from flake.nix hosts?

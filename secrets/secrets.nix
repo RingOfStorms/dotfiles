@@ -33,6 +33,9 @@ in
   "nix2h001.age" = {
     inherit publicKeys;
   };
+  "nix2h002.age" = {
+    inherit publicKeys;
+  };
   "nix2t.age" = {
     inherit publicKeys;
   };
