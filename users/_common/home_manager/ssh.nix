@@ -19,7 +19,7 @@
       "h002" = {
         identityFile = age.secrets.nix2h002.path;
         hostname = "10.20.40.12";
-        user = "root";
+        user = "luser";
       };
       "t" = {
         identityFile = age.secrets.nix2t.path;
