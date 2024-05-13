@@ -1,4 +1,9 @@
-{ lib, ylib, settings, ... }:
+{
+  lib,
+  ylib,
+  settings,
+  ...
+}:
 {
   imports =
     [ ]
@@ -20,7 +25,13 @@
 
   home-manager.users.${settings.user.username} = {
     imports =
-      [ ]
+      [
+        (settings.usersDir + "/_common/components/home_manager/tmux/tmux.nix")
+        (settings.usersDir + "/_common/components/home_manager/atuin.nix")
+        (settings.usersDir + "/_common/components/home_manager/starship.nix")
+        (settings.usersDir + "/_common/components/home_manager/zoxide.nix")
+        (settings.usersDir + "/_common/components/home_manager/zsh.nix")
+      ]
       # Common home manager
       ++ ylib.umport {
         path = lib.fileset.maybeMissing (settings.usersDir + "/_common/home_manager");
@@ -37,5 +48,4 @@
         recursive = true;
       };
   };
-} 
-
+}

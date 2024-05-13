@@ -1,20 +1,29 @@
-{ config, lib, pkgs, settings, ylib, ... } @ inputs:
+{
+  config,
+  lib,
+  pkgs,
+  settings,
+  ylib,
+  ...
+}@inputs:
 let
   defaultLocal = "en_US.UTF-8";
 in
 {
-  imports =
-    [
-      # Secrets management
-      ./ragenix.nix
-      # Include the results of the hardware scan.
-      (/${settings.hostsDir}/${settings.system.hostname}/hardware-configuration.nix)
-      # Include the specific machine's config.
-      (/${settings.hostsDir}/${settings.system.hostname}/configuration.nix)
-    ];
+  imports = [
+    # Secrets management
+    ./ragenix.nix
+    # Include the results of the hardware scan.
+    (/${settings.hostsDir}/${settings.system.hostname}/hardware-configuration.nix)
+    # Include the specific machine's config.
+    (/${settings.hostsDir}/${settings.system.hostname}/configuration.nix)
+  ];
 
   # Enable flakes
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  nix.settings.experimental-features = [
+    "nix-command"
+    "flakes"
+  ];
 
   # ==========
   #   Common
@@ -54,7 +63,7 @@ in
     vim
     wget
     curl
-    neofetch
+    fastfetch
     bat
     htop
     unzip
@@ -96,6 +105,9 @@ in
     # ripgrep
     rg = "rg --no-ignore";
     rgf = "rg --files 2>/dev/null | rg";
+
+    # Neofetch is dead
+    neo = "fastfetch";
 
     # Nix deprecations
     nix-hash = "echo 'The functionality of nix-hash may be covered by various subcommands or options in the new `nix` command.'";

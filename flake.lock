@@ -86,6 +86,24 @@
         "type": "github"
       }
     },
+    "flake-utils_2": {
+      "inputs": {
+        "systems": "systems_3"
+      },
+      "locked": {
+        "lastModified": 1705309234,
+        "narHash": "sha256-uNRRNRKmJyCRC/8y1RqBkqWBLM034y4qN7EprSdmgyA=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "1ef2e671c3b0c19053962c07dbda38332dcebf26",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -210,14 +228,15 @@
         "nixpkgs": [
           "nixpkgs"
         ],
-        "nvim_plugin-chrisgrieser/nvim-early-retirement": "nvim_plugin-chrisgrieser/nvim-early-retirement"
+        "nvim_plugin-chrisgrieser/nvim-early-retirement": "nvim_plugin-chrisgrieser/nvim-early-retirement",
+        "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1715363339,
-        "narHash": "sha256-xnj/A1soOLbZ2ilb2+6yvTnNFWBNl3UuVff0fFyMXww=",
+        "lastModified": 1715576186,
+        "narHash": "sha256-taN5/bY6xDXA7+z0GJE0q24Lt/2zEJIetKfvrkpgHAo=",
         "owner": "RingOfStorms",
         "repo": "nvim",
-        "rev": "d92d753a6101733748c59f26fc7b1517678e4e59",
+        "rev": "20633579746615fa55c6c6b8dfdf45899095aca0",
         "type": "github"
       },
       "original": {
@@ -261,6 +280,28 @@
         "type": "github"
       }
     },
+    "rust-overlay_2": {
+      "inputs": {
+        "flake-utils": "flake-utils_2",
+        "nixpkgs": [
+          "ringofstorms-nvim",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1715566659,
+        "narHash": "sha256-OpI0TnN+uE0vvxjPStlTzf5RTohIXVSMwrP9NEgMtaY=",
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "6c465248316cd31502c82f81f1a3acf2d621b01c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
     "systems": {
       "locked": {
         "lastModified": 1681028828,
@@ -277,6 +318,21 @@
       }
     },
     "systems_2": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
+      }
+    },
+    "systems_3": {
       "locked": {
         "lastModified": 1681028828,
         "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
