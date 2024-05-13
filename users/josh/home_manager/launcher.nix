@@ -1,12 +1,22 @@
 { settings, pkgs, ... }:
 {
-  programs.rofi = {
-    enable = true;
-    plugins = with pkgs; [ rofi-calc ];
-    extraConfig = {
-      modi = "drun,run,ssh,window,calc";
-      terminal = "alacritty";
+  home.packages = [ pkgs.ulauncher];
+
+  systemd.user.services.ulauncher = {
+    Unit = {
+      Description = "ulauncher application launcher service";
+      Documentation = "https://ulauncher.io";
+      PartOf = [ "graphical-session.target" ];
     };
-    theme = "glue_pro_blue";
+
+    Service = {
+      Type = "simple";
+      ExecStart = "${pkgs.ulauncher}/bin/ulauncher --hide-window";
+      Restart = "on-failure";
+    };
+
+    Install.WantedBy = [ "graphical-session.target" ];
   };
 }
+
+
