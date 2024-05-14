@@ -232,16 +232,15 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1715614284,
-        "narHash": "sha256-L62xtqhJiFCcCKRIH+4j83vrgI2AcjQdHYDgEBrqLx8=",
+        "lastModified": 1715726079,
+        "narHash": "sha256-+9zbpzvEqUI9Df9J455Y4GpOSXYnRUbZjj/Xz3d/igs=",
         "owner": "RingOfStorms",
         "repo": "nvim",
-        "rev": "9bce2b0d423168b24bc4e855f55a9bd490f6fb79",
+        "rev": "6e4bfa21e24ae2e1054bad158288e55aa28c46e6",
         "type": "github"
       },
       "original": {
         "owner": "RingOfStorms",
-        "ref": "nix-flake",
         "repo": "nvim",
         "type": "github"
       }

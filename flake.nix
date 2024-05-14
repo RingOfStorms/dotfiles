@@ -22,7 +22,7 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     ringofstorms-nvim = {
-      url = "github:RingOfStorms/nvim/nix-flake";
+      url = "github:RingOfStorms/nvim";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
