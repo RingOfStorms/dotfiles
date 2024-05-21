@@ -179,6 +179,38 @@
         "type": "github"
       }
     },
+    "nvim_plugin-j-hui/fidget.nvim": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1712242924,
+        "narHash": "sha256-fZhK5opGXRRryhNpdaEPLpBq4tTibZREelXmasMLHzw=",
+        "owner": "j-hui",
+        "repo": "fidget.nvim",
+        "rev": "1ba38e4cbb24683973e00c2e36f53ae64da38ef5",
+        "type": "github"
+      },
+      "original": {
+        "owner": "j-hui",
+        "repo": "fidget.nvim",
+        "type": "github"
+      }
+    },
+    "nvim_plugin-nvim-telescope/telescope-file-browser.nvim": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1713833296,
+        "narHash": "sha256-P6WR6AohLALn4aU4vPnoBO7QDoRcfcAj51E0K1ldtwU=",
+        "owner": "nvim-telescope",
+        "repo": "telescope-file-browser.nvim",
+        "rev": "4d5fd21bae12ee6e9a79232e1c377f43c419d0c5",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nvim-telescope",
+        "repo": "telescope-file-browser.nvim",
+        "type": "github"
+      }
+    },
     "nypkgs": {
       "inputs": {
         "nixpkgs": [
@@ -229,14 +261,16 @@
           "nixpkgs"
         ],
         "nvim_plugin-chrisgrieser/nvim-early-retirement": "nvim_plugin-chrisgrieser/nvim-early-retirement",
+        "nvim_plugin-j-hui/fidget.nvim": "nvim_plugin-j-hui/fidget.nvim",
+        "nvim_plugin-nvim-telescope/telescope-file-browser.nvim": "nvim_plugin-nvim-telescope/telescope-file-browser.nvim",
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1715726079,
-        "narHash": "sha256-+9zbpzvEqUI9Df9J455Y4GpOSXYnRUbZjj/Xz3d/igs=",
+        "lastModified": 1716232070,
+        "narHash": "sha256-AP4OY2tZJ90/Gj3D1W5G1xUHd4T6dRh73aF83KViuaM=",
         "owner": "RingOfStorms",
         "repo": "nvim",
-        "rev": "6e4bfa21e24ae2e1054bad158288e55aa28c46e6",
+        "rev": "de9f8b74b90c47ee45f8718509fe37ccbe22822c",
         "type": "github"
       },
       "original": {
