@@ -2,5 +2,3 @@
 {
   home.packages = [ pkgs.prusa-slicer ];
 }
-
-
