@@ -2,28 +2,39 @@
   description = "My systems flake";
 
   inputs = {
+    nixpkgs_unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+
+    nixpkgs_joe.url = "github:nixos/nixpkgs/nixos-unstable";
+    home-manager_joe = {
+      url = "github:nix-community/home-manager/release-24.05";
+      inputs.nixpkgs.follows = "nixpkgs_joe";
+    };
+    nixpkgs_h002.url = "github:nixos/nixpkgs/nixos-unstable";
+    home-manager_h002 = {
+      url = "github:nix-community/home-manager/release-24.05";
+      inputs.nixpkgs.follows = "nixpkgs_h002";
+    };
+    nixpkgs_gpdPocket3.url = "github:nixos/nixpkgs/nixos-24.05";
+    home-manager_gdpPocket3 = {
+      url = "github:nix-community/home-manager/release-24.05";
+      inputs.nixpkgs.follows = "nixpkgs_gpdPocket3";
+    };
+
     # Nix utility methods
     nypkgs = {
       url = "github:yunfachi/nypkgs";
-      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs.follows = "nixpkgs_unstable";
     };
 
     # Secrets management for nix
     ragenix = {
       url = "github:yaxitech/ragenix";
-      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs.follows = "nixpkgs_unstable";
     };
-
-    home-manager = {
-      url = "github:nix-community/home-manager/master";
-      inputs.nixpkgs.follows = "nixpkgs"; # Use system packages list where available
-    };
-
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     ringofstorms-nvim = {
       url = "github:RingOfStorms/nvim";
-      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs.follows = "nixpkgs_unstable";
     };
   };
 
@@ -31,8 +42,13 @@
     {
       self,
       nypkgs,
-      nixpkgs,
-      home-manager,
+      nixpkgs_unstable,
+      nixpkgs_joe,
+      home-manager_joe,
+      nixpkgs_gpdPocket3,
+      home-manager_gdpPocket3,
+      nixpkgs_h002,
+      home-manager_h002,
       ...
     }@inputs:
     let
@@ -45,21 +61,25 @@
       };
       myHosts = [
         {
-          name = "gpdPocket3";
-          opts = {
-            system = "x86_64-linux";
-          };
-          settings = {
-            inherit user;
-          };
-        }
-        {
           name = "joe";
           opts = {
             system = "x86_64-linux";
           };
           settings = {
             inherit user;
+            nixpkgs = nixpkgs_joe;
+            home-manager = home-manager_joe;
+          };
+        }
+        {
+          name = "gpdPocket3";
+          opts = {
+            system = "x86_64-linux";
+          };
+          settings = {
+            inherit user;
+            nixpkgs = nixpkgs_gpdPocket3;
+            home-manager = home-manager_gdpPocket3;
           };
         }
         {
@@ -75,6 +95,8 @@
                 name = "RingOfStorms (Joshua Bell)";
               };
             };
+            nixpkgs = nixpkgs_h002;
+            home-manager = home-manager_h002;
           };
         }
       ];
@@ -94,7 +116,7 @@
         acc
         // {
           "${nixConfig.name}" =
-            nixpkgs.lib.nixosSystem {
+            nixConfig.settings.nixpkgs.lib.nixosSystem {
               # module = nixConfig.overrides.modules or [...]
               modules = [ ./hosts/_common/configuration.nix ];
               specialArgs = inputs // {
