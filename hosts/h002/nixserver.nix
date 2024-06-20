@@ -18,7 +18,10 @@
     after = [ "network.target" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
-      Environment = "PATH=/run/wrappers/bin:/home/luser/.nix-profile/bin:/nix/profile/bin:/home/luser/.local/state/nix/profile/bin:/etc/profiles/per-user/luser/bin:/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin";
+      Environment = [
+        "PATH=/run/wrappers/bin:/home/luser/.nix-profile/bin:/nix/profile/bin:/home/luser/.local/state/nix/profile/bin:/etc/profiles/per-user/luser/bin:/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin"
+        "NIX_PATH=nixpkgs=flake:nixpkgs:/nix/var/nix/profiles/per-user/root/channels"
+      ];
       ExecStart = "/usr/local/bin/nixserver agent run";
       Restart = "always";
       User = "luser";
