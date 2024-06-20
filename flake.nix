@@ -2,16 +2,17 @@
   description = "My systems flake";
 
   inputs = {
-    nixpkgs_unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs_unstable.url = "github:nixos/nixpkgs/master";
+    nixpkgs_stable.url = "github:nixos/nixpkgs/nixos-24.05";
 
     nixpkgs_joe.url = "github:nixos/nixpkgs/nixos-unstable";
     home-manager_joe = {
-      url = "github:nix-community/home-manager/release-24.05";
+      url = "github:nix-community/home-manager/master";
       inputs.nixpkgs.follows = "nixpkgs_joe";
     };
     nixpkgs_h002.url = "github:nixos/nixpkgs/nixos-unstable";
     home-manager_h002 = {
-      url = "github:nix-community/home-manager/release-24.05";
+      url = "github:nix-community/home-manager/master";
       inputs.nixpkgs.follows = "nixpkgs_h002";
     };
     nixpkgs_gpdPocket3.url = "github:nixos/nixpkgs/nixos-24.05";
@@ -23,13 +24,13 @@
     # Nix utility methods
     nypkgs = {
       url = "github:yunfachi/nypkgs";
-      inputs.nixpkgs.follows = "nixpkgs_unstable";
+      inputs.nixpkgs.follows = "nixpkgs_stable";
     };
 
     # Secrets management for nix
     ragenix = {
       url = "github:yaxitech/ragenix";
-      inputs.nixpkgs.follows = "nixpkgs_unstable";
+      inputs.nixpkgs.follows = "nixpkgs_stable";
     };
 
     ringofstorms-nvim = {
@@ -42,7 +43,6 @@
     {
       self,
       nypkgs,
-      nixpkgs_unstable,
       nixpkgs_joe,
       home-manager_joe,
       nixpkgs_gpdPocket3,
