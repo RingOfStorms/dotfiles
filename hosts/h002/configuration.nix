@@ -18,7 +18,7 @@
     (settings.usersDir + "/root/configuration.nix")
     (settings.usersDir + "/luser/configuration.nix")
 
-(settings.hostsDir + "/h002/nixserver.nix")
+    # (settings.hostsDir + "/h002/nixserver.nix")
   ];
 
   boot.loader.grub = {
