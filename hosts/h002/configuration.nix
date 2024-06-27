@@ -11,6 +11,7 @@
     (settings.hostsDir + "/_common/components/neovim.nix")
     (settings.hostsDir + "/_common/components/ssh.nix")
     (settings.hostsDir + "/_common/components/caps_to_escape_in_tty.nix")
+    (settings.hostsDir + "/_common/components/audio.nix")
     (settings.hostsDir + "/_common/components/home_manager.nix")
     (settings.hostsDir + "/_common/components/docker.nix")
     (settings.hostsDir + "/_common/components/nebula.nix")
@@ -35,10 +36,6 @@
   environment.shellAliases = {
     wifi = "nmtui";
   };
-  # Enable sound.
-  sound.enable = true;
-  hardware.pulseaudio.enable = true;
-  hardware.pulseaudio.package = pkgs.pulseaudioFull;
 
   environment.systemPackages = with pkgs; [ nvtopPackages.full ];
 
