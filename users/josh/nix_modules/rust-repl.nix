@@ -1,6 +1,6 @@
 { pkgs, ... }:
 {
-  environment.systemPackages = [ pkgs.evcxr ];
+  environment.systemPackages = with pkgs; [ evcxr rustc ];
   environment.shellAliases = {
     rust = "evcxr";
   };
