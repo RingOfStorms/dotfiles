@@ -107,7 +107,7 @@ in
     rgf = "rg --files 2>/dev/null | rg";
 
     # Neofetch is dead
-    neo = "fastfetch";
+    neofetch = "fastfetch";
 
     # Nix deprecations
     nix-hash = "echo 'The functionality of nix-hash may be covered by various subcommands or options in the new `nix` command.'";
