@@ -28,7 +28,17 @@ in
   # ==========
   #   Common
   # ==========
-  networking.hostName = settings.system.hostname;
+  networking = {
+    hostName = settings.system.hostname;
+    extraHosts = ''
+      127.0.0.1 local.belljm.com
+      127.0.0.1 n0.local.belljm.com
+      127.0.0.1 n1.local.belljm.com
+      127.0.0.1 n2.local.belljm.com
+      127.0.0.1 n3.local.belljm.com
+      127.0.0.1 n4.local.belljm.com
+    '';
+  };
   # TODO do I want this dynamic at all? Roaming?
   time.timeZone = "America/Chicago";
 
