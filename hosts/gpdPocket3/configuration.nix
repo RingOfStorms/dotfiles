@@ -18,6 +18,7 @@
     (settings.hostsDir + "/_common/components/gnome_wayland.nix")
     (settings.hostsDir + "/_common/components/docker.nix")
     (settings.hostsDir + "/_common/components/nebula.nix")
+    (settings.hostsDir + "/_common/components/yggdrasil.nix")
     # Users this machine has
     (settings.usersDir + "/root/configuration.nix")
     (settings.usersDir + "/josh/configuration.nix")
