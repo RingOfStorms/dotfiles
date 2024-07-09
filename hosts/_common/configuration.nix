@@ -1,11 +1,4 @@
-{
-  config,
-  lib,
-  pkgs,
-  settings,
-  ylib,
-  ...
-}@inputs:
+{ pkgs, settings, ... }:
 let
   defaultLocal = "en_US.UTF-8";
 in
