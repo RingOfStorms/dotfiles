@@ -31,6 +31,9 @@ in
       127.0.0.1 n3.local.belljm.com
       127.0.0.1 n4.local.belljm.com
     '';
+    # Use nftables not iptables
+    nftables.enable = true;
+    firewall.enable = true;
   };
   # TODO do I want this dynamic at all? Roaming?
   time.timeZone = "America/Chicago";
