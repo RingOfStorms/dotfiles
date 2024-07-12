@@ -24,14 +24,15 @@ with lib.hm.gvariant;
       };
       "org/gnome/shell" = {
         favorite-apps = [
-          # "vivaldi-stable.desktop"
           "Alacritty.desktop"
           "firefox-esr.desktop"
           "org.gnome.Nautilus.desktop"
           "spotify.desktop"
           "discord.desktop"
         ];
-        enabled-extensions = with pkgs.gnomeExtensions; [ workspace-switch-wraparound.extensionUuid ];
+        # enabled-extensions = with pkgs.gnomeExtensions; [
+        #   workspace-switch-wraparound.extensionUuid 
+        # ];
       };
       "org/gnome/desktop/interface" = {
         color-scheme = "prefer-dark";

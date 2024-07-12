@@ -12,7 +12,6 @@
   services.gnome.core-utilities.enable = false;
   environment.systemPackages = with pkgs; [
     gnome.dconf-editor
-    gnomeExtensions.workspace-switch-wraparound
     xclip
   ];
 }
