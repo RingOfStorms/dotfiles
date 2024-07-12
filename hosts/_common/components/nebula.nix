@@ -2,6 +2,7 @@
 {
   environment.systemPackages = with pkgs; [
     nebula
+    traceroute # for debugging
   ];
 
   networking.firewall.allowedUDPPorts = [ 4242 ];
