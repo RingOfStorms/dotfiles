@@ -1,6 +1,6 @@
-{ pkgs, settings, ringofstorms-nvim, ... }:
+{ settings, ringofstorms-nvim, ... }:
 {
-  environment.systemPackages = with pkgs; [
+  environment.systemPackages = [
     ringofstorms-nvim.packages.${settings.system.system}.neovim
   ];
 }
