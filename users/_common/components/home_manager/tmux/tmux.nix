@@ -1,7 +1,4 @@
-{ settings, lib, pkgs, ... } @ args:
-let
-  tmux = pkgs.tmuxPlugins;
-in
+{ lib, pkgs, ... }:
 {
   # home manager doesn't give us an option to add tmux extra config at the top so we do it ourselves here.
   xdg.configFile."tmux/tmux.conf".text = lib.mkBefore (builtins.readFile ./tmux-reset.conf);
@@ -23,9 +20,9 @@ in
     aggressiveResize = true;
     sensibleOnTop = false;
 
-    plugins = [
+    plugins = with pkgs.tmuxPlugins; [
       {
-        plugin = tmux.catppuccin.overrideAttrs (_: {
+        plugin = catppuccin.overrideAttrs (_: {
           src = pkgs.fetchFromGitHub {
             owner = "ringofstorms";
             repo = "tmux-catppuccin-coal";
@@ -54,6 +51,20 @@ in
           set -g @catppuccin_date_time_text "%H:%M"
         '';
       }
+      {
+        plugin = resurrect;
+        extraConfig = ''
+          set -g @resurrect-strategy-nvim 'session'
+          set -g @resurrect-capture-pane-contents 'on'
+        '';
+      }
+      {
+        plugin = continuum;
+        extraConfig = ''
+          set -g @continuum-restore 'on'
+          # set -g @continuum-save-interval '60' # minutes
+        '';
+      }
     ];
   };
 
@@ -62,5 +73,3 @@ in
     tat = "tmux ls 2>/dev/null && tmux attach-session -t \"$(tmux ls | head -n1 | cut -d: -f1)\" || tmux new-session";
   };
 }
-
-
