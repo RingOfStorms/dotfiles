@@ -45,6 +45,10 @@
   };
 
   # Load nvidia driver for Xorg and Wayland
+  virtualisation.docker.enableNvidia = true;
+  virtualisation.docker = {
+    extraOptions = "--experimental";
+  };
   services.xserver.videoDrivers = [ "nvidia" ];
   hardware.nvidia = {
     # Modesetting is required.
