@@ -35,7 +35,7 @@
 
     ringofstorms-nvim = {
       url = "github:RingOfStorms/nvim";
-      inputs.nixpkgs.follows = "nixpkgs_unstable";
+      # inputs.nixpkgs.follows = "nixpkgs_unstable";
     };
   };
 
