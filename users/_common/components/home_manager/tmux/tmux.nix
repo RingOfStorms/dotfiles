@@ -56,13 +56,15 @@
         extraConfig = ''
           set -g @resurrect-strategy-nvim 'session'
           set -g @resurrect-capture-pane-contents 'on'
+          # Hook to save tmux-resurrect state when a pane is closed
+          set-hook -g pane-died "run-shell 'tmux-resurrect save'"
         '';
       }
       {
         plugin = continuum;
         extraConfig = ''
           set -g @continuum-restore 'on'
-          # set -g @continuum-save-interval '60' # minutes
+          set -g @continuum-save-interval '5' # minutes
         '';
       }
     ];
