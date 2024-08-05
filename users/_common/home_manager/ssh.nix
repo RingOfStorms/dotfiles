@@ -47,6 +47,9 @@
             host.address = "localhost";
           }
         ];
+        setEnv = {
+          TERM = "vt100";
+        };
       };
       "l001" = {
         identityFile = age.secrets.nix2l001.path;

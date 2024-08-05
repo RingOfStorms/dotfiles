@@ -1,10 +1,9 @@
 {
   config,
-  lib,
   pkgs,
   settings,
   ...
-}@args:
+}:
 {
   imports = [
     # Common components this machine uses
@@ -21,6 +20,12 @@
     # Users this machine has
     (settings.usersDir + "/root/configuration.nix")
     (settings.usersDir + "/josh/configuration.nix")
+  ];
+
+# test
+
+  networking.firewall.allowedTCPPorts = [
+    34733 # sshd
   ];
 
   # machine specific configuration
@@ -45,10 +50,23 @@
   };
 
   # Load nvidia driver for Xorg and Wayland
-  virtualisation.docker.enableNvidia = true;
   virtualisation.docker = {
-    extraOptions = "--experimental";
+    enableNvidia = true;
+    extraOptions = ''
+      --experimental
+      --add-runtime=nvidia=${pkgs.nvidia-docker}/bin/nvidia-container-runtime
+    '';
   };
+  environment.etc."docker/daemon.json".text = ''
+    {
+      "runtimes": {
+        "nvidia": {
+          "path": "${pkgs.nvidia-docker}/bin/nvidia-container-runtime",
+          "runtimeArgs": []
+        }
+      }
+    }
+  '';
   services.xserver.videoDrivers = [ "nvidia" ];
   hardware.nvidia = {
     # Modesetting is required.
