@@ -11,7 +11,7 @@
   };
   services.gnome.core-utilities.enable = false;
   environment.systemPackages = with pkgs; [
-    gnome.dconf-editor
+    dconf-editor
     # wayland clipboard in terminal
     wl-clipboard
   ];
