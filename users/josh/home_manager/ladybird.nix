@@ -1,5 +1,6 @@
 { pkgs, ... }:
 {
-  home.packages = [ pkgs.ladybird ];
+  # disabled for now
+  # home.packages = [ pkgs.ladybird ];
 }
 
