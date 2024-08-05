@@ -5,20 +5,20 @@
     nixpkgs_unstable.url = "github:nixos/nixpkgs/master";
     nixpkgs_stable.url = "github:nixos/nixpkgs/nixos-24.05";
 
-    nixpkgs_joe.url = "github:nixos/nixpkgs/nixos-unstable";
-    home-manager_joe = {
+    joe_nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    joe_home-manager= {
       url = "github:nix-community/home-manager/master";
-      inputs.nixpkgs.follows = "nixpkgs_joe";
+      inputs.nixpkgs.follows = "joe_nixpkgs";
     };
-    nixpkgs_h002.url = "github:nixos/nixpkgs/nixos-unstable";
-    home-manager_h002 = {
+    h002_nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    h002_home-manager= {
       url = "github:nix-community/home-manager/master";
-      inputs.nixpkgs.follows = "nixpkgs_h002";
+      inputs.nixpkgs.follows = "h002_nixpkgs";
     };
-    nixpkgs_gpdPocket3.url = "github:nixos/nixpkgs/nixos-24.05";
-    home-manager_gdpPocket3 = {
+    gpdPocket3_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
+    gpdPocket3_home-manager= {
       url = "github:nix-community/home-manager/release-24.05";
-      inputs.nixpkgs.follows = "nixpkgs_gpdPocket3";
+      inputs.nixpkgs.follows = "gpdPocket3_nixpkgs";
     };
 
     # Nix utility methods
@@ -43,12 +43,12 @@
     {
       self,
       nypkgs,
-      nixpkgs_joe,
-      home-manager_joe,
-      nixpkgs_gpdPocket3,
-      home-manager_gdpPocket3,
-      nixpkgs_h002,
-      home-manager_h002,
+      joe_nixpkgs,
+      joe_home-manager,
+      gpdPocket3_nixpkgs,
+      gpdPocket3_home-manager,
+      h002_nixpkgs,
+      h002_home-manager,
       ...
     }@inputs:
     let
@@ -67,8 +67,8 @@
           };
           settings = {
             inherit user;
-            nixpkgs = nixpkgs_joe;
-            home-manager = home-manager_joe;
+            nixpkgs = joe_nixpkgs;
+            home-manager = joe_home-manager;
           };
         }
         {
@@ -78,8 +78,8 @@
           };
           settings = {
             inherit user;
-            nixpkgs = nixpkgs_gpdPocket3;
-            home-manager = home-manager_gdpPocket3;
+            nixpkgs = gpdPocket3_nixpkgs;
+            home-manager = gpdPocket3_home-manager;
           };
         }
         {
@@ -95,8 +95,8 @@
                 name = "RingOfStorms (Joshua Bell)";
               };
             };
-            nixpkgs = nixpkgs_h002;
-            home-manager = home-manager_h002;
+            nixpkgs = h002_nixpkgs;
+            home-manager = h002_home-manager;
           };
         }
       ];

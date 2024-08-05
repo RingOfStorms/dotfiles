@@ -13,7 +13,9 @@
   # Enable the OpenSSH daemon.
   services.openssh = {
     enable = true;
-    logLevel = "VERBOSE";
-    settings.PermitRootLogin = "yes";
+    settings = {
+      LogLevel = "VERBOSE";
+      PermitRootLogin = "yes";
+    };
   };
 }

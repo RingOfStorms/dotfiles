@@ -22,7 +22,7 @@
     (settings.usersDir + "/josh/configuration.nix")
   ];
 
-# test
+  # test
 
   networking.firewall.allowedTCPPorts = [
     34733 # sshd
@@ -43,31 +43,11 @@
   # nvidia gfx https://nixos.wiki/wiki/Nvidia
   # =========
   # Enable OpenGL
-  hardware.opengl = {
-    enable = true;
-    # driSupport = true;
-    driSupport32Bit = true;
-  };
+  hardware.opengl.driSupport32Bit = true;
+  hardware.graphics.enable = true;
 
-  # Load nvidia driver for Xorg and Wayland
-  virtualisation.docker = {
-    enableNvidia = true;
-    extraOptions = ''
-      --experimental
-      --add-runtime=nvidia=${pkgs.nvidia-docker}/bin/nvidia-container-runtime
-    '';
-  };
-  environment.etc."docker/daemon.json".text = ''
-    {
-      "runtimes": {
-        "nvidia": {
-          "path": "${pkgs.nvidia-docker}/bin/nvidia-container-runtime",
-          "runtimeArgs": []
-        }
-      }
-    }
-  '';
   services.xserver.videoDrivers = [ "nvidia" ];
+  hardware.nvidia-container-toolkit.enable = true;
   hardware.nvidia = {
     # Modesetting is required.
     modesetting.enable = true;

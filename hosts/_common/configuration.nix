@@ -78,7 +78,7 @@ in
     lsof
 
     # TODO keep in common or move to specific machines, I want this for my pocket 3 video KDM module but I use ffmpeg on most machines anyways?
-    ffmpeg_5-full
+    ffmpeg-full
   ];
 
   environment.shellAliases = {
