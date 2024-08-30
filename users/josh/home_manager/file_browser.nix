@@ -1,4 +1,4 @@
 { pkgs, ... }:
 {
-  home.packages = with pkgs; [ nautilus qimgv ];
+  home.packages = with pkgs; [ gnome.nautilus qimgv ];
 }

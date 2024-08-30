@@ -43,8 +43,13 @@
   # nvidia gfx https://nixos.wiki/wiki/Nvidia
   # =========
   # Enable OpenGL
-  hardware.opengl.driSupport32Bit = true;
-  hardware.graphics.enable = true;
+  hardware.opengl = {
+    enable = true;
+    # driSupport = true;
+    driSupport32Bit = true;
+  };
+  # hardware.opengl.driSupport32Bit = true;
+  # hardware.graphics.enable = true;
 
   services.xserver.videoDrivers = [ "nvidia" ];
   hardware.nvidia-container-toolkit.enable = true;

@@ -2,31 +2,36 @@
   description = "My systems flake";
 
   inputs = {
-    nixpkgs_unstable.url = "github:nixos/nixpkgs/master";
-    nixpkgs_stable.url = "github:nixos/nixpkgs/nixos-24.05";
-
-    joe_nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    # TODO_nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    # TODO_home-manager= {
+    #   url = "github:nix-community/home-manager/master";
+    #   inputs.nixpkgs.follows = "TODO_nixpkgs";
+    # };
+    # Host flake pinning
+    joe_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
     joe_home-manager= {
-      url = "github:nix-community/home-manager/master";
+      url = "github:nix-community/home-manager/release-24.05";
       inputs.nixpkgs.follows = "joe_nixpkgs";
     };
-    h002_nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+    h002_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
     h002_home-manager= {
-      url = "github:nix-community/home-manager/master";
+      url = "github:nix-community/home-manager/release-24.05";
       inputs.nixpkgs.follows = "h002_nixpkgs";
     };
+
     gpdPocket3_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
     gpdPocket3_home-manager= {
       url = "github:nix-community/home-manager/release-24.05";
       inputs.nixpkgs.follows = "gpdPocket3_nixpkgs";
     };
 
+    nixpkgs_stable.url = "github:nixos/nixpkgs/nixos-24.05";
     # Nix utility methods
     nypkgs = {
       url = "github:yunfachi/nypkgs";
       inputs.nixpkgs.follows = "nixpkgs_stable";
     };
-
     # Secrets management for nix
     ragenix = {
       url = "github:yaxitech/ragenix";
@@ -35,7 +40,6 @@
 
     ringofstorms-nvim = {
       url = "github:RingOfStorms/nvim";
-      # inputs.nixpkgs.follows = "nixpkgs_unstable";
     };
   };
 

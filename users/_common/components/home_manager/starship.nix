@@ -36,6 +36,9 @@
         mantle = "#1f1f1f";
         crust = "#171717";
       };
+      nix_shell = {
+        heuristic = true;
+      };
     };
   };
 }

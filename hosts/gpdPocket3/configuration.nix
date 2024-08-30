@@ -79,8 +79,12 @@
     "thunderbolt"
   ];
   services.xserver.videoDrivers = [ "intel" ];
-  hardware.opengl.driSupport32Bit = true;
-  hardware.graphics.enable = true;
+  hardware.opengl = {
+    enable = true;
+    driSupport = true;
+  };
+  # hardware.opengl.driSupport32Bit = true;
+  # hardware.graphics.enable = true;
 
   hardware.opengl.extraPackages = with pkgs; [
     intel-media-driver
