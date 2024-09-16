@@ -1,6 +1,6 @@
 { pkgs, ... }:
 {
   # disabled for now
-  # home.packages = [ pkgs.ladybird ];
+  home.packages = [ pkgs.ladybird ];
 }
 
