@@ -56,6 +56,11 @@
         hostname = "172.105.22.34";
         user = "root";
       };
+      "l002" = {
+        identityFile = age.secrets.nix2l002.path;
+        hostname = "172.233.221.107";
+        user = "root";
+      };
     };
   };
 }
