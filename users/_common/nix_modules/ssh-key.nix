@@ -1,4 +1,4 @@
-{ settings, pkgs, ... }:
+{ settings, ... }:
 {
   # Ensure SSH key pair generation for non-root users
   systemd.services.generate_ssh_key = {

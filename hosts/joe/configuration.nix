@@ -16,6 +16,7 @@
     (settings.hostsDir + "/_common/components/home_manager.nix")
     (settings.hostsDir + "/_common/components/gnome_xorg.nix")
     (settings.hostsDir + "/_common/components/docker.nix")
+    # (settings.hostsDir + "/_common/components/stormd.nix") TODO figure out why this is failing
     (settings.hostsDir + "/_common/components/nebula.nix")
     # Users this machine has
     (settings.usersDir + "/root/configuration.nix")
