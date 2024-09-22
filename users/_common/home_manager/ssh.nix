@@ -58,8 +58,8 @@
       };
       "l002" = {
         identityFile = age.secrets.nix2l002.path;
-        hostname = "172.233.221.107";
-        user = "root";
+        hostname = "172.232.4.54";
+        user = "luser";
       };
     };
   };
