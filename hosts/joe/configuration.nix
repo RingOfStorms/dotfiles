@@ -26,7 +26,7 @@
   # test
 
   networking.firewall.allowedTCPPorts = [
-    34733 # sshd
+    5173 # test
   ];
 
   # machine specific configuration

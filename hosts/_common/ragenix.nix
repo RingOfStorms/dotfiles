@@ -31,6 +31,10 @@ in
           file = /${settings.secretsDir}/nix2bitbucket.age;
           owner = settings.user.username;
         };
+        nix2gitjosh = {
+          file = /${settings.secretsDir}/nix2gitjosh.age;
+          owner = settings.user.username;
+        };
         nix2h001 = {
           file = /${settings.secretsDir}/nix2h001.age;
           owner = settings.user.username;

@@ -11,6 +11,10 @@
       "bitbucket.org" = {
         identityFile = age.secrets.nix2bitbucket.path;
       };
+      "git.joshuabell.xyz" = {
+        identityFile = age.secrets.nix2gitjosh.path;
+        port = 3032;
+      };
       # PERSONAL DEVICES
       "joe" = {
         identityFile = age.secrets.nix2joe.path;
