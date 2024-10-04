@@ -111,6 +111,7 @@ from_master () {
 
 
 # nix
+alias nixpkgs=nixpkg
 nixpkg () {
   if [ $# -eq 0 ]; then
     echo "Error: No arguments provided. Please specify at least one package."
