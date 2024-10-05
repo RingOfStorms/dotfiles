@@ -1,4 +1,9 @@
-{ pkgs, settings, ... }:
+{
+  lib,
+  pkgs,
+  settings,
+  ...
+}:
 let
   defaultLocal = "en_US.UTF-8";
 in
@@ -17,6 +22,23 @@ in
     "nix-command"
     "flakes"
   ];
+
+  # allow mounting ntfs filesystems
+  boot.supportedFilesystems = [ "ntfs" ];
+
+  # Fallback quickly if substituters are not available.
+  nix.settings.connect-timeout = 5;
+  nix.settings.download-attempts = 3;
+  # The default at 10 is rarely enough.
+  nix.settings.log-lines = 50;
+  # Avoid disk full issues
+  nix.settings.max-free = (3000 * 1024 * 1024);
+  nix.settings.min-free = (1000 * 1024 * 1024);
+  # Avoid copying unnecessary stuff over SSH
+  nix.settings.builders-use-substitutes = true;
+  # Slower but mroe robust during crash TODO enable once we upgrade nix
+  # nix.settings.fsync-store-paths = true;
+  # nix.settings.fsync-metadata = true;
 
   # ==========
   #   Common
@@ -77,6 +99,8 @@ in
     ripgrep
     lsof
     killall
+    hdparm
+    speedtest-cli
 
     # TODO keep in common or move to specific machines, I want this for my pocket 3 video KDM module but I use ffmpeg on most machines anyways?
     ffmpeg-full

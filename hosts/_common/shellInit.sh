@@ -35,6 +35,22 @@ mail_clear() {
   : > /var/mail/$USER
 }
 
+speedtest_fs () {
+  dir=$(pwd)
+  drive=$(df -h ${dir} | awk 'NR==2 {print $1}')
+  echo Testing read speeds on drive ${drive}
+  sudo hdparm -Tt ${drive}
+  test_file=$(date +%u%m%d)
+  test_file="${dir}/speedtest_fs_${test_file}"
+  echo
+  echo Testing write speeds into test file: ${test_file}
+  dd if=/dev/zero of=${test_file} bs=8k count=10k; rm -f ${test_file}
+}
+
+speedtest_internet () {
+  speedtest-cli
+}
+
 # git
 getdefault () {
   git remote show origin | grep "HEAD branch" | sed 's/.*: //'
