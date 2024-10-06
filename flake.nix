@@ -39,7 +39,7 @@
     };
 
     ringofstorms-nvim = {
-      url = "git+ssh://git.joshuabell.xyz:3032/nvim";
+      url = "git+https://git.joshuabell.xyz/nvim";
     };
   };
 
