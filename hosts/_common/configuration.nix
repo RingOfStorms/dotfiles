@@ -39,6 +39,7 @@ in
   # Slower but mroe robust during crash TODO enable once we upgrade nix
   # nix.settings.fsync-store-paths = true;
   # nix.settings.fsync-metadata = true;
+  nix.settings.auto-optimise-store = true;
 
   # ==========
   #   Common
