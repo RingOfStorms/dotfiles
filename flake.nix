@@ -9,19 +9,19 @@
     # };
     # Host flake pinning
     joe_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
-    joe_home-manager= {
+    joe_home-manager = {
       url = "github:nix-community/home-manager/release-24.05";
       inputs.nixpkgs.follows = "joe_nixpkgs";
     };
 
     h002_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
-    h002_home-manager= {
+    h002_home-manager = {
       url = "github:nix-community/home-manager/release-24.05";
       inputs.nixpkgs.follows = "h002_nixpkgs";
     };
 
     gpdPocket3_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
-    gpdPocket3_home-manager= {
+    gpdPocket3_home-manager = {
       url = "github:nix-community/home-manager/release-24.05";
       inputs.nixpkgs.follows = "gpdPocket3_nixpkgs";
     };
@@ -40,6 +40,12 @@
 
     ringofstorms-nvim = {
       url = "git+https://git.joshuabell.xyz/nvim";
+    };
+
+    # COSMIC
+    nixos-cosmic = {
+      url = "github:lilyinstarlight/nixos-cosmic";
+      inputs.nixpkgs.follows = "nixos-cosmic/nixpkgs";
     };
   };
 
