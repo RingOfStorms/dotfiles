@@ -23,10 +23,9 @@
     plugins = with pkgs.tmuxPlugins; [
       {
         plugin = catppuccin.overrideAttrs (_: {
-          src = pkgs.fetchFromGitHub {
-            owner = "ringofstorms";
-            repo = "tmux-catppuccin-coal";
-            rev = "e6d7c658e2d11798912ca1ed4e3626e3e1fad3fc";
+          src = pkgs.fetchgit {
+            url = "https://git.joshuabell.xyz/tmux-catppuccin-coal.git";
+            rev = "d078123cd81c0dbb3f780e8575a9d38fe2023e1b";
             sha256 = "sha256-M1XAeCz/lqgjZ7CnWCykJxZCDk+WVoawwHrR9SEO9ns=";
           };
         });

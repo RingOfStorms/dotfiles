@@ -15,8 +15,8 @@
     (settings.hostsDir + "/_common/components/font_jetbrainsmono.nix")
     (settings.hostsDir + "/_common/components/audio.nix")
     (settings.hostsDir + "/_common/components/home_manager.nix")
-    # (settings.hostsDir + "/_common/components/gnome_wayland.nix")
-    (settings.hostsDir + "/_common/components/cosmic.nix")
+    (settings.hostsDir + "/_common/components/gnome_wayland.nix")
+    # (settings.hostsDir + "/_common/components/cosmic.nix")
     (settings.hostsDir + "/_common/components/docker.nix")
     (settings.hostsDir + "/_common/components/nebula.nix")
     # Users this machine has

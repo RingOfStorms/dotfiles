@@ -45,7 +45,7 @@
     # COSMIC
     nixos-cosmic = {
       url = "github:lilyinstarlight/nixos-cosmic";
-      inputs.nixpkgs.follows = "nixos-cosmic/nixpkgs";
+      # inputs.nixpkgs.follows = "nixos-cosmic/nixpkgs";
     };
   };
 
