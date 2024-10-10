@@ -26,7 +26,7 @@
           src = pkgs.fetchgit {
             url = "https://git.joshuabell.xyz/tmux-catppuccin-coal.git";
             rev = "d078123cd81c0dbb3f780e8575a9d38fe2023e1b";
-            sha256 = "sha256-M1XAeCz/lqgjZ7CnWCykJxZCDk+WVoawwHrR9SEO9ns=";
+            sha256 = "sha256-qPY/dovDyut5WoUkZ26F2w3fJVmw4gcC+6l2ugsA65Y=";
           };
         });
         extraConfig = ''

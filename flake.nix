@@ -128,7 +128,16 @@
           "${nixConfig.name}" =
             nixConfig.settings.nixpkgs.lib.nixosSystem {
               # module = nixConfig.overrides.modules or [...]
-              modules = [ ./hosts/_common/configuration.nix ];
+              modules = [
+                # {
+                #   nix.settings = {
+                #     substituters = [ "https://cosmic.cachix.org/" ];
+                #     trusted-public-keys = [ "cosmic.cachix.org-1:Dya9IyXD4xdBehWjrkPv6rtxpmMdRel02smYzA85dPE=" ];
+                #   };
+                # }
+                # inputs.nixos-cosmic.nixosModules.default
+                ./hosts/_common/configuration.nix
+              ];
               specialArgs = inputs // {
                 ylib = nypkgs.legacyPackages.${nixConfig.opts.system}.lib;
                 settings =
