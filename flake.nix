@@ -79,6 +79,7 @@
             inherit user;
             nixpkgs = joe_nixpkgs;
             home-manager = joe_home-manager;
+            allowUnfree = true;
           };
         }
         {
@@ -90,6 +91,7 @@
             inherit user;
             nixpkgs = gpdPocket3_nixpkgs;
             home-manager = gpdPocket3_home-manager;
+            allowUnfree = true;
           };
         }
         {
@@ -107,6 +109,7 @@
             };
             nixpkgs = h002_nixpkgs;
             home-manager = h002_home-manager;
+            allowUnfree = true;
           };
         }
       ];
@@ -127,14 +130,15 @@
         // {
           "${nixConfig.name}" =
             let
-              lib = nixConfig.settings.nixpkgs.lib;
+              settings = nixConfig.settings;
+              lib = settings.nixpkgs.lib;
               ylib = nypkgs.legacyPackages.${nixConfig.opts.system}.lib;
             in
             (lib.nixosSystem {
               modules =
                 [
-                  ./hosts/_common/configuration.nix
                   cosmic.nixosModules.default
+                  ./hosts/configuration.nix
                 ]
                 ++ ylib.umport {
                   path = lib.fileset.maybeMissing ./modules;
@@ -144,7 +148,7 @@
                 inherit ylib;
                 settings =
                   directories
-                  // nixConfig.settings
+                  // settings
                   // {
                     system = nixConfig.opts // {
                       hostname = nixConfig.name;

@@ -6,24 +6,25 @@
 }:
 {
   imports = [
-    # Common components this machine uses
-    (settings.hostsDir + "/_common/components/neovim.nix")
-    (settings.hostsDir + "/_common/components/systemd_boot.nix")
-    (settings.hostsDir + "/_common/components/ssh.nix")
-    (settings.hostsDir + "/_common/components/caps_to_escape_in_tty.nix")
-    (settings.hostsDir + "/_common/components/font_jetbrainsmono.nix")
-    (settings.hostsDir + "/_common/components/audio.nix")
-    (settings.hostsDir + "/_common/components/home_manager.nix")
-    (settings.hostsDir + "/_common/components/gnome_xorg.nix")
-    (settings.hostsDir + "/_common/components/docker.nix")
-    # (settings.hostsDir + "/_common/components/stormd.nix") TODO figure out why this is failing
-    (settings.hostsDir + "/_common/components/nebula.nix")
     # Users this machine has
     (settings.usersDir + "/root/configuration.nix")
     (settings.usersDir + "/josh/configuration.nix")
   ];
 
-  # test
+  # My custom modules
+  mods = {
+    boot_systemd.enable = true;
+    shell_common.enable = true;
+    de_gnome_xorg.enable = true;
+    audio_pulse.enable = true;
+    neovim.enable = true;
+    tty_caps_esc.enable = true;
+    docker.enable = true;
+    fonts.enable = true;
+    nebula.enable = true;
+    ssh.enable = true;
+    # storage.enable = true; # TODO figure out why this is failing
+  };
 
   networking.firewall.allowedTCPPorts = [
     5173 # test

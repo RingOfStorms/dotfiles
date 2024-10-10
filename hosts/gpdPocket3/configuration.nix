@@ -7,18 +7,6 @@
 }:
 {
   imports = [
-    # Common components this machine uses
-    (settings.hostsDir + "/_common/components/neovim.nix")
-    (settings.hostsDir + "/_common/components/systemd_boot.nix")
-    (settings.hostsDir + "/_common/components/ssh.nix")
-    (settings.hostsDir + "/_common/components/caps_to_escape_in_tty.nix")
-    (settings.hostsDir + "/_common/components/font_jetbrainsmono.nix")
-    # (settings.hostsDir + "/_common/components/audio.nix")
-    (settings.hostsDir + "/_common/components/home_manager.nix")
-    # (settings.hostsDir + "/_common/components/gnome_wayland.nix")
-    # (settings.hostsDir + "/_common/components/cosmic.nix")
-    (settings.hostsDir + "/_common/components/docker.nix")
-    (settings.hostsDir + "/_common/components/nebula.nix")
     # Users this machine has
     (settings.usersDir + "/root/configuration.nix")
     (settings.usersDir + "/josh/configuration.nix")
@@ -27,7 +15,18 @@
     # ./stupid-keyboard-2.nix
   ];
 
-  mods.de_cosmic.enable = true;
+  # My custom modules
+  mods = {
+    boot_systemd.enable = true;
+    shell_common.enable = true;
+    de_cosmic.enable = true;
+    neovim.enable = true;
+    tty_caps_esc.enable = true;
+    docker.enable = true;
+    fonts.enable = true;
+    nebula.enable = true;
+    ssh.enable = true;
+  };
 
   # machine specific configuration
   # ==============================

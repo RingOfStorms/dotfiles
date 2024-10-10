@@ -6,8 +6,6 @@
   ragenix,
   ...
 }:
-let
-in
 # TODO auto import secret files here
 # secretsFile = (settings.secretsDir + /secrets.nix);
 {
