@@ -51,6 +51,7 @@
     {
       self,
       nypkgs,
+      cosmic,
       joe_nixpkgs,
       joe_home-manager,
       gpdPocket3_nixpkgs,
@@ -89,9 +90,6 @@
             inherit user;
             nixpkgs = gpdPocket3_nixpkgs;
             home-manager = gpdPocket3_home-manager;
-            # There is no way to support top level conditional imports in modules using that module's options...
-            # so for now I have this hack until I want to make this more broad
-            uses_cosmic = true;
           };
         }
         {
@@ -136,6 +134,7 @@
               modules =
                 [
                   ./hosts/_common/configuration.nix
+                  cosmic.nixosModules.default
                 ]
                 ++ ylib.umport {
                   path = lib.fileset.maybeMissing ./modules;

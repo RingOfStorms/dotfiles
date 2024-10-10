@@ -27,7 +27,7 @@
     # ./stupid-keyboard-2.nix
   ];
 
-  my_modules.de_cosmic.enable = true;
+  mods.de_cosmic.enable = true;
 
   # machine specific configuration
   # ==============================
