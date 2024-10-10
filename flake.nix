@@ -20,15 +20,10 @@
       inputs.nixpkgs.follows = "h002_nixpkgs";
     };
 
-    # COSMIC
-    nixos-cosmic = {
-      url = "github:lilyinstarlight/nixos-cosmic";
-      # inputs.nixpkgs.follows = "nixos-cosmic/nixpkgs";
-    };
-    gpdPocket3_nixpkgs.follows = "nixos-cosmic/nixpkgs-stable";
+    gpdPocket3_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
     gpdPocket3_home-manager = {
       url = "github:nix-community/home-manager/release-24.05";
-      inputs.nixpkgs.follows = "nixos-cosmic/nixpkgs-stable";
+      inputs.nixpkgs.follows = "gpdPocket3_nixpkgs";
     };
 
     nixpkgs_stable.url = "github:nixos/nixpkgs/nixos-24.05";
@@ -47,6 +42,9 @@
       url = "git+https://git.joshuabell.xyz/nvim";
     };
 
+    cosmic = {
+      url = "github:lilyinstarlight/nixos-cosmic";
+    };
   };
 
   outputs =
@@ -91,6 +89,9 @@
             inherit user;
             nixpkgs = gpdPocket3_nixpkgs;
             home-manager = gpdPocket3_home-manager;
+            # There is no way to support top level conditional imports in modules using that module's options...
+            # so for now I have this hack until I want to make this more broad
+            uses_cosmic = true;
           };
         }
         {
@@ -127,12 +128,21 @@
         acc
         // {
           "${nixConfig.name}" =
-            nixConfig.settings.nixpkgs.lib.nixosSystem {
-              modules = [
-                ./hosts/_common/configuration.nix
-              ];
+            let
+              lib = nixConfig.settings.nixpkgs.lib;
+              ylib = nypkgs.legacyPackages.${nixConfig.opts.system}.lib;
+            in
+            (lib.nixosSystem {
+              modules =
+                [
+                  ./hosts/_common/configuration.nix
+                ]
+                ++ ylib.umport {
+                  path = lib.fileset.maybeMissing ./modules;
+                  recursive = true;
+                };
               specialArgs = inputs // {
-                ylib = nypkgs.legacyPackages.${nixConfig.opts.system}.lib;
+                inherit ylib;
                 settings =
                   directories
                   // nixConfig.settings
@@ -142,7 +152,7 @@
                     };
                   };
               };
-            }
+            })
             // nixConfig.opts;
         }
       ) { } myHosts;

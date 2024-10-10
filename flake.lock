@@ -24,6 +24,27 @@
         "type": "github"
       }
     },
+    "cosmic": {
+      "inputs": {
+        "flake-compat": "flake-compat",
+        "nixpkgs": "nixpkgs",
+        "nixpkgs-stable": "nixpkgs-stable",
+        "rust-overlay": "rust-overlay"
+      },
+      "locked": {
+        "lastModified": 1728530651,
+        "narHash": "sha256-b3icYsSiWvjeunpgoRmvmCxh1ak+oXpWEqHuzNgC7wM=",
+        "owner": "lilyinstarlight",
+        "repo": "nixos-cosmic",
+        "rev": "9bdf58ccc52095d846186cb3549122205b36991a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "lilyinstarlight",
+        "repo": "nixos-cosmic",
+        "type": "github"
+      }
+    },
     "crane": {
       "locked": {
         "lastModified": 1725409566,
@@ -99,8 +120,7 @@
     "gpdPocket3_home-manager": {
       "inputs": {
         "nixpkgs": [
-          "nixos-cosmic",
-          "nixpkgs-stable"
+          "gpdPocket3_nixpkgs"
         ]
       },
       "locked": {
@@ -115,6 +135,22 @@
         "owner": "nix-community",
         "ref": "release-24.05",
         "repo": "home-manager",
+        "type": "github"
+      }
+    },
+    "gpdPocket3_nixpkgs": {
+      "locked": {
+        "lastModified": 1728500571,
+        "narHash": "sha256-dOymOQ3AfNI4Z337yEwHGohrVQb4yPODCW9MDUyAc4w=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "d51c28603def282a24fa034bcb007e2bcb5b5dd0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-24.05",
+        "repo": "nixpkgs",
         "type": "github"
       }
     },
@@ -211,27 +247,6 @@
         "owner": "nixos",
         "ref": "nixos-24.05",
         "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixos-cosmic": {
-      "inputs": {
-        "flake-compat": "flake-compat",
-        "nixpkgs": "nixpkgs",
-        "nixpkgs-stable": "nixpkgs-stable",
-        "rust-overlay": "rust-overlay"
-      },
-      "locked": {
-        "lastModified": 1728530651,
-        "narHash": "sha256-b3icYsSiWvjeunpgoRmvmCxh1ak+oXpWEqHuzNgC7wM=",
-        "owner": "lilyinstarlight",
-        "repo": "nixos-cosmic",
-        "rev": "9bdf58ccc52095d846186cb3549122205b36991a",
-        "type": "github"
-      },
-      "original": {
-        "owner": "lilyinstarlight",
-        "repo": "nixos-cosmic",
         "type": "github"
       }
     },
@@ -1146,16 +1161,13 @@
     },
     "root": {
       "inputs": {
+        "cosmic": "cosmic",
         "gpdPocket3_home-manager": "gpdPocket3_home-manager",
-        "gpdPocket3_nixpkgs": [
-          "nixos-cosmic",
-          "nixpkgs-stable"
-        ],
+        "gpdPocket3_nixpkgs": "gpdPocket3_nixpkgs",
         "h002_home-manager": "h002_home-manager",
         "h002_nixpkgs": "h002_nixpkgs",
         "joe_home-manager": "joe_home-manager",
         "joe_nixpkgs": "joe_nixpkgs",
-        "nixos-cosmic": "nixos-cosmic",
         "nixpkgs_stable": "nixpkgs_stable",
         "nypkgs": "nypkgs",
         "ragenix": "ragenix",
@@ -1165,7 +1177,7 @@
     "rust-overlay": {
       "inputs": {
         "nixpkgs": [
-          "nixos-cosmic",
+          "cosmic",
           "nixpkgs"
         ]
       },
