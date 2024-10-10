@@ -26,6 +26,13 @@ in
   options = {
     mods.${name} = {
       enable = mkEnableOption (lib.mdDoc "Enable COSMIC desktop environment");
+      nvidiaExtraDisplayFix = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Enable extra display fix for nvidia cards.
+        '';
+      };
     };
   };
 
@@ -45,11 +52,15 @@ in
       cosmic-store
     ];
 
+    boot.kernelParams = mkIf cfg.nvidiaExtraDisplayFix [
+      "nvidia_drm.fbdev=1"
+    ];
+
     # Config
-    home-manager.backupFileExtension = "bak";
-    home-manager.users.${settings.user.username} = {
-      xdg.configFile = cosmicConfigFilesAttrs;
-    };
+    # home-manager.backupFileExtension = "bak";
+    # home-manager.users.${settings.user.username} = {
+    #   xdg.configFile = cosmicConfigFilesAttrs;
+    # };
   };
 
 }
