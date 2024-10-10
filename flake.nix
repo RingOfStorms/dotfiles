@@ -136,13 +136,12 @@
             in
             (lib.nixosSystem {
               modules =
-                [ cosmic.nixosModules.default ]
+                [
+                  cosmic.nixosModules.default
+                  settings.home-manager.nixosModules.home-manager
+                ]
                 ++ ylib.umport {
                   path = lib.fileset.maybeMissing ./modules;
-                  recursive = true;
-                }
-                ++ ylib.umport {
-                  path = lib.fileset.maybeMissing ./modules_post;
                   recursive = true;
                 }
                 ++ [
