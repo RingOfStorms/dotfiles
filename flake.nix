@@ -136,14 +136,18 @@
             in
             (lib.nixosSystem {
               modules =
-                [
-                  cosmic.nixosModules.default
-                  ./hosts/configuration.nix
-                ]
+                [ cosmic.nixosModules.default ]
                 ++ ylib.umport {
                   path = lib.fileset.maybeMissing ./modules;
                   recursive = true;
-                };
+                }
+                ++ ylib.umport {
+                  path = lib.fileset.maybeMissing ./modules_post;
+                  recursive = true;
+                }
+                ++ [
+                  ./hosts/configuration.nix
+                ];
               specialArgs = inputs // {
                 inherit ylib;
                 settings =

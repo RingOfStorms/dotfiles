@@ -15,6 +15,7 @@ in
   home-manager.useUserPackages = true;
   home-manager.useGlobalPkgs = true;
   home-manager.extraSpecialArgs = {
+    nixConfig = config;
     inherit settings;
     inherit ylib;
     inherit (inputs) ragenix;

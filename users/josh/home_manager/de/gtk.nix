@@ -1,6 +1,6 @@
-{ pkgs, ... }:
+{ pkgs, lib, nixConfig, ... }:
 {
-  gtk = {
+  gtk =  lib.mkIf (!nixConfig.mods.de_cosmic.enable) {
     enable = true;
 
     cursorTheme = {
