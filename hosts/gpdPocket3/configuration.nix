@@ -27,6 +27,31 @@
     # ./stupid-keyboard-2.nix
   ];
 
+  nixpkgs.overlays = [
+    (final: prev: {
+      cosmic-comp = prev.cosmic-comp.overrideAttrs (prevAttrs: {
+        patches = (prevAttrs.patches or [ ]) ++ [
+          (final.writeText "cosmic-comp-disable-direct-scanout.patch" ''
+            diff --git a/src/backend/kms/surface/mod.rs b/src/backend/kms/surface/mod.rs
+            index d0cfb8d..32aaf4a 100644
+            --- a/src/backend/kms/surface/mod.rs
+            +++ b/src/backend/kms/surface/mod.rs
+            @@ -624,7 +624,8 @@ impl SurfaceThreadState {
+                         cursor_size,
+                         Some(gbm),
+                     ) {
+            -            Ok(compositor) => {
+            +            Ok(mut compositor) => {
+            +                compositor.use_direct_scanout(false);
+                             self.active.store(true, Ordering::SeqCst);
+                             self.compositor = Some(compositor);
+                             Ok(())
+          '')
+        ];
+      });
+    })
+  ];
+
   # machine specific configuration
   # ==============================
   hardware.enableAllFirmware = true;

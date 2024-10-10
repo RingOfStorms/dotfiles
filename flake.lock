@@ -99,7 +99,8 @@
     "gpdPocket3_home-manager": {
       "inputs": {
         "nixpkgs": [
-          "gpdPocket3_nixpkgs"
+          "nixos-cosmic",
+          "nixpkgs-stable"
         ]
       },
       "locked": {
@@ -114,22 +115,6 @@
         "owner": "nix-community",
         "ref": "release-24.05",
         "repo": "home-manager",
-        "type": "github"
-      }
-    },
-    "gpdPocket3_nixpkgs": {
-      "locked": {
-        "lastModified": 1728328465,
-        "narHash": "sha256-a0a0M1TmXMK34y3M0cugsmpJ4FJPT/xsblhpiiX1CXo=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "1bfbbbe5bbf888d675397c66bfdb275d0b99361c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-24.05",
-        "repo": "nixpkgs",
         "type": "github"
       }
     },
@@ -237,11 +222,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1728443929,
-        "narHash": "sha256-WFy8+K/bUTXwT9nMPT/Y23dPbW5I2rLEjgTuPC8y3lA=",
+        "lastModified": 1728530651,
+        "narHash": "sha256-b3icYsSiWvjeunpgoRmvmCxh1ak+oXpWEqHuzNgC7wM=",
         "owner": "lilyinstarlight",
         "repo": "nixos-cosmic",
-        "rev": "a8960f9c66a0c4f2c24ae029da0886df4a68af33",
+        "rev": "9bdf58ccc52095d846186cb3549122205b36991a",
         "type": "github"
       },
       "original": {
@@ -1162,7 +1147,10 @@
     "root": {
       "inputs": {
         "gpdPocket3_home-manager": "gpdPocket3_home-manager",
-        "gpdPocket3_nixpkgs": "gpdPocket3_nixpkgs",
+        "gpdPocket3_nixpkgs": [
+          "nixos-cosmic",
+          "nixpkgs-stable"
+        ],
         "h002_home-manager": "h002_home-manager",
         "h002_nixpkgs": "h002_nixpkgs",
         "joe_home-manager": "joe_home-manager",
@@ -1182,11 +1170,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1728354625,
-        "narHash": "sha256-r+Sa1NRRT7LXKzCaVaq75l1GdZcegODtF06uaxVVVbI=",
+        "lastModified": 1728461096,
+        "narHash": "sha256-cd0cXB85B3kGpm+iumP9xCnqFErspXL9Z/2X59kQ6c4=",
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "d216ade5a0091ce60076bf1f8bc816433a1fc5da",
+        "rev": "e310b9bd71fa6c6a9fec0a8cf5af43ce798a0ad6",
         "type": "github"
       },
       "original": {

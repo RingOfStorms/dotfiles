@@ -20,10 +20,15 @@
       inputs.nixpkgs.follows = "h002_nixpkgs";
     };
 
-    gpdPocket3_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
+    # COSMIC
+    nixos-cosmic = {
+      url = "github:lilyinstarlight/nixos-cosmic";
+      # inputs.nixpkgs.follows = "nixos-cosmic/nixpkgs";
+    };
+    gpdPocket3_nixpkgs.follows = "nixos-cosmic/nixpkgs-stable";
     gpdPocket3_home-manager = {
       url = "github:nix-community/home-manager/release-24.05";
-      inputs.nixpkgs.follows = "gpdPocket3_nixpkgs";
+      inputs.nixpkgs.follows = "nixos-cosmic/nixpkgs-stable";
     };
 
     nixpkgs_stable.url = "github:nixos/nixpkgs/nixos-24.05";
@@ -42,11 +47,6 @@
       url = "git+https://git.joshuabell.xyz/nvim";
     };
 
-    # COSMIC
-    nixos-cosmic = {
-      url = "github:lilyinstarlight/nixos-cosmic";
-      # inputs.nixpkgs.follows = "nixos-cosmic/nixpkgs";
-    };
   };
 
   outputs =
@@ -69,6 +69,7 @@
           name = "RingOfStorms (Joshua Bell)";
         };
       };
+
       myHosts = [
         {
           name = "joe";
@@ -127,15 +128,7 @@
         // {
           "${nixConfig.name}" =
             nixConfig.settings.nixpkgs.lib.nixosSystem {
-              # module = nixConfig.overrides.modules or [...]
               modules = [
-                # {
-                #   nix.settings = {
-                #     substituters = [ "https://cosmic.cachix.org/" ];
-                #     trusted-public-keys = [ "cosmic.cachix.org-1:Dya9IyXD4xdBehWjrkPv6rtxpmMdRel02smYzA85dPE=" ];
-                #   };
-                # }
-                # inputs.nixos-cosmic.nixosModules.default
                 ./hosts/_common/configuration.nix
               ];
               specialArgs = inputs // {
