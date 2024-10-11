@@ -1,4 +1,4 @@
-// https://github.com/pop-os/cosmic-settings/blob/master/cosmic-settings/src/pages/input/keyboard/shortcuts/nav.rs#L76
+// https://github.com/pop-os/cosmic-settings/blob/master/cosmic-settings/src/pages/input/keyboard/shortcuts/mod.rs#L460-L550
 // For action types
 {
     (
