@@ -7,26 +7,26 @@ htop_pid () {
   htop -p $(ps -ef | awk -v proc=$1 '$3 == proc { cnt++;if (cnt == 1) { printf "%s",$2 } else { printf ",%s",$2 } }')
 }
 
-kill_psg() {
+psg_kill() {
   PIDS=$(ps aux | grep -v "grep" | grep ${1} | awk '{print $2}')
-  echo Killing ${PIDS}
   for pid in ${PIDS}; do
+    echo "killing ${pid}"
     kill -9 ${pid} &> /dev/null
   done
 }
 
-term_psg() {
+psg_terminate() {
   PIDS=$(ps aux | grep -v "grep" | grep ${1} | awk '{print $2}')
-  echo Terminating ${PIDS}
   for pid in ${PIDS}; do
+    echo " ${pid}"
     kill -15 ${pid} &> /dev/null
   done
 }
 
-skill_psg() {
+psg_skill() {
   PIDS=$(ps aux | grep -v "grep" | grep ${1} | awk '{print $2}')
-  echo Quitting ${PIDS}
   for pid in ${PIDS}; do
+    echo "killing ${pid}"
     sudo kill -9 ${pid} &> /dev/null
   done;
 }
