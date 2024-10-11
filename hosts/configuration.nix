@@ -39,6 +39,9 @@ in
   # nix.settings.fsync-metadata = true;
   nix.settings.auto-optimise-store = true;
 
+  # TODO should I have this set for my user...
+  nix.settings.trusted-users = [ "root" "${settings.user.username}" ];
+
   # nix helper
   programs.nh = {
     enable = true;
