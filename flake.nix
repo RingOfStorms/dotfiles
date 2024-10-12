@@ -2,12 +2,13 @@
   description = "My systems flake";
 
   inputs = {
-    # TODO_nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    # TODO_home-manager= {
-    #   url = "github:nix-community/home-manager/master";
-    #   inputs.nixpkgs.follows = "TODO_nixpkgs";
-    # };
     # Host flake pinning
+    lio_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
+    lio_home-manager = {
+      url = "github:nix-community/home-manager/release-24.05";
+      inputs.nixpkgs.follows = "lio_nixpkgs";
+    };
+
     joe_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
     joe_home-manager = {
       url = "github:nix-community/home-manager/release-24.05";
@@ -52,6 +53,8 @@
       self,
       nypkgs,
       cosmic,
+      lio_nixpkgs,
+      lio_home-manager,
       joe_nixpkgs,
       joe_home-manager,
       gpdPocket3_nixpkgs,
@@ -70,6 +73,18 @@
       };
 
       myHosts = [
+        {
+          name = "lio";
+          opts = {
+            system = "x86_64-linux";
+          };
+          settings = {
+            inherit user;
+            nixpkgs = lio_nixpkgs;
+            home-manager = lio_home-manager;
+            allowUnfree = true;
+          };
+        }
         {
           name = "joe";
           opts = {

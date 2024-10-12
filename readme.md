@@ -3,50 +3,81 @@
 # First Install on new Machine
 
 ## NixOS
-export HOSTNAME=desired_hostname_for_this_machine (___)
-export USERNAME=desired_username_for_admin_on_this_machine (josh)
-- Follow nixos installation guide: https://nixos.wiki/wiki/NixOS_Installation_Guide
-    - Follow until the config is generated
-- `curl -O https://share.joshuabell.link/nix/onboard.sh && chmod +x onboard.sh && ./onboard.sh`
-- `reboot`
+
+1. Install nix minimal:
+
+- Partitions
+  - <https://nixos.org/manual/nixos/stable/#sec-installation>
+  - <https://nixos.wiki/wiki/NixOS_Installation_Guide#Swap_file>
+  - `parted /dev/DEVICE -- mklabel gpt` - make GPT partition table
+  - `parted /dev/DEVICE -- mkpart NIXROOT ext4 2GB 100%` - make root partition (2GB offset for boot)
+  - `parted /dev/DEVICE -- mkpart ESP fat32 1MB 2GB` - make boot partition (2GB)
+  - `parted /dev/DEVICE -- set 2 esp on` - make boot bootable
+- Formatting
+  - `mkfs.ext4 -L NIXROOT /dev/DEVICE_1` - root ext4
+  - `mkfs.fat -F 32 -n NIXBOOT /dev/DEVICE_2` - boot FAT
+- Mount + swapfile
+  - `mount /dev/disk/by-label/NIXROOT /mnt`
+  - `mkdir -p /mnt/boot`
+  - `mount -o umask=077 /dev/disk/by-label/NIXBOOT /mnt/boot`
+
+# TODO swap may nto be needed anymore, this can just be added to hardware config and nixos will make it itself... <https://discourse.nixos.org/t/how-to-add-a-swap-after-nixos-installation/41742/2>
+
+- `dd if=/dev/zero of=/mnt/.swapfile bs=1024 count=2097152` (2GiB size, 2.14..GB) - make swap, count=62500000 (64GB)
+- `chmod 600 /mnt/.swapfile`
+- `mkswap /mnt/.swapfile`
+- `swapon /mnt/.swapfile`
+- nixos config and hardware config
+  - `export HOSTNAME=desired_hostname_for_this_machine`
+  - `export USERNAME=desired_username_for_admin_on_this_machine` (josh)
+  - `nixos-generate-config --root /mnt`
+  - `cd /mnt/etc/nixos`
+  - `curl -O https://share.joshuabell.link/nix/onboard.sh`
+  - `chmod +x onboard.sh && ./onboard.sh`
+  - CHECK HARDWARE LABELS # TODO update onboard to look for label names since we switched to boot/root instead of NIXBOOT/NIXROOT
+  - `reboot`
 - log into USERNAME with `password1`, use `passwd` to change the password
 
+> Easiest to ssh into the machine for these steps so you can copy paste...
 
 - `cat /etc/ssh/ssh_host_ed25519_key.pub ~/.ssh/id_ed25519.pub`
-    - On an already onboarded computer copy these and add them to secrets/secrets.nix file
-    - Rekey secrets: `nix run github:yaxitech/ragenix -- --rules ~/.config/nixos-config/secrets/secrets.nix -r`
-    - Maybe copy hardware/configs over and setup, otehrwise do it on the client machine
+  - On an already onboarded computer copy these and add them to secrets/secrets.nix file
+  - Rekey secrets: `nix run github:yaxitech/ragenix -- --rules ~/.config/nixos-config/secrets/secrets.nix -r`
+  - Maybe copy hardware/configs over and setup, otehrwise do it on the client machine
 - git clone nixos-config `git clone https://github.com/RingOfStorms/dotfiles.git ~/.config/nixos-config`
 - Setup config as needed
-    - top level flake.nix additions
-    - add hosts dir and files needed
-- `sudo nixos-rebuild switch --flake ~/.config/nixos-config`
+  - top level flake.nix additions
+  - add hosts dir and files needed
+- `nixos-rebuild switch --flake ~/.config/nixos-config`
 - Update remote, ssh should work now: `cd ~/.config/nixos-config && git remote remove origin && git remote add origin "git@github.com:RingOfStorms/dotfiles.git" && git pull origin master`
 
 ## Darwin
-- TODO
 
+- TODO
 
 ### Notes
 
 Dual booting windows?
+
 - If there is a new boot partition being used than the old windows one, copy over the /boot/EFI/Microsoft folder into the new boot partition, same place
 - If the above auto probing for windows does not work, you can also manually add in a windows.conf in the loader entries: /boot/loader/entries/windows.conf:
+
 ```
 title Windows 11
 efi   /EFI/Microsoft/Boot/bootmgfw.efi
 ```
 
 ###
+
 ###
 
 - clone neovim setup...
 
-# Settings references:
+# Settings references
 
-- Flake docs: https://nixos.wiki/wiki/Flakes
-- nixos: https://search.nixos.org/options
-- home manager: https://nix-community.github.io/home-manager/options.xhtml
+- Flake docs: <https://nixos.wiki/wiki/Flakes>
+- nixos: <https://search.nixos.org/options>
+- home manager: <https://nix-community.github.io/home-manager/options.xhtml>
   TODO make an offline version of this, does someone else have this already?
 
 # TODO
@@ -67,5 +98,5 @@ gif () {
 ```
 
 - Ensure my neovim undohistory/auto saves don't save `.age` files as they can be sensitive.
-- make sure all my aliases are accounted for, still missing things like rust etc: https://github.com/RingOfStorms/setup
+- make sure all my aliases are accounted for, still missing things like rust etc: <https://github.com/RingOfStorms/setup>
 - add in copy paste support with xclip or nix equivalent

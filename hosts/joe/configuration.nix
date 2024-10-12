@@ -16,15 +16,13 @@
     boot_systemd.enable = true;
     shell_common.enable = true;
     de_cosmic.enable = true;
-    # de_gnome_xorg.enable = true;
-    # audio_pulse.enable = true;
     neovim.enable = true;
     tty_caps_esc.enable = true;
     docker.enable = true;
     fonts.enable = true;
     nebula.enable = true;
     ssh.enable = true;
-    # storage.enable = true; # TODO figure out why this is failing
+    # stormd.enable = true; # TODO figure out why this is failing
   };
 
   networking.firewall.allowedTCPPorts = [
