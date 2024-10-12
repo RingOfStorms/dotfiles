@@ -250,6 +250,43 @@
         "type": "github"
       }
     },
+    "lio_home-manager": {
+      "inputs": {
+        "nixpkgs": [
+          "lio_nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1726989464,
+        "narHash": "sha256-Vl+WVTJwutXkimwGprnEtXc/s/s8sMuXzqXaspIGlwM=",
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "rev": "2f23fa308a7c067e52dfcc30a0758f47043ec176",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "ref": "release-24.05",
+        "repo": "home-manager",
+        "type": "github"
+      }
+    },
+    "lio_nixpkgs": {
+      "locked": {
+        "lastModified": 1728500571,
+        "narHash": "sha256-dOymOQ3AfNI4Z337yEwHGohrVQb4yPODCW9MDUyAc4w=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "d51c28603def282a24fa034bcb007e2bcb5b5dd0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-24.05",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1728241625,
@@ -1185,6 +1222,8 @@
         "h002_nixpkgs": "h002_nixpkgs",
         "joe_home-manager": "joe_home-manager",
         "joe_nixpkgs": "joe_nixpkgs",
+        "lio_home-manager": "lio_home-manager",
+        "lio_nixpkgs": "lio_nixpkgs",
         "nixpkgs_stable": "nixpkgs_stable",
         "nypkgs": "nypkgs",
         "ragenix": "ragenix",

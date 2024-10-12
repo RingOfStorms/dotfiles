@@ -18,7 +18,7 @@
     tty_caps_esc.enable = true;
     docker.enable = true;
     fonts.enable = true;
-    nebula.enable = true;
+  #  nebula.enable = true;
     ssh.enable = true;
     # stormd.enable = true; # TODO figure out why this is failing
   };
