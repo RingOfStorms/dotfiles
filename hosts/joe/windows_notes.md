@@ -1,0 +1,5 @@
+- [Start menu sanity](http://startisback.com) (license in password manager)
+- [Alt Drag](https://stefansundin.github.io/altdrag/)
+  - Change to win key in config
+- Power Toys
+  - Remap caps lock to esc
