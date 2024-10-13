@@ -8,27 +8,30 @@ htop_pid () {
 }
 
 psg_kill() {
-  PIDS=$(ps aux | grep -v "grep" | grep ${1} | awk '{print $2}')
-  for pid in ${PIDS}; do
-    echo "killing ${pid}"
-    kill -9 ${pid} &> /dev/null
+  ps aux | grep -v "grep" | grep "${1}" | awk '{print $2}' | while read -r pid; do
+    if [ -n "${pid}" ]; then
+      echo "killing ${pid}"
+      kill -9 "${pid}" &> /dev/null
+    fi
   done
 }
 
 psg_terminate() {
-  PIDS=$(ps aux | grep -v "grep" | grep ${1} | awk '{print $2}')
-  for pid in ${PIDS}; do
-    echo " ${pid}"
-    kill -15 ${pid} &> /dev/null
+  ps aux | grep -v "grep" | grep "${1}" | awk '{print $2}' | while read -r pid; do
+    if [ -n "${pid}" ]; then
+      echo "Terminating ${pid}"
+      kill -15 "${pid}" &> /dev/null
+    fi
   done
 }
 
 psg_skill() {
-  PIDS=$(ps aux | grep -v "grep" | grep ${1} | awk '{print $2}')
-  for pid in ${PIDS}; do
-    echo "killing ${pid}"
-    sudo kill -9 ${pid} &> /dev/null
-  done;
+  ps aux | grep -v "grep" | grep "${1}" | awk '{print $2}' | while read -r pid; do
+    if [ -n "${pid}" ]; then
+      echo "Killing ${pid}"
+      sudo kill -9 "${pid}" &> /dev/null
+    fi
+  done
 }
 
 mail_clear() {

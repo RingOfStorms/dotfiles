@@ -51,6 +51,10 @@
 - `nixos-rebuild switch --flake ~/.config/nixos-config`
 - Update remote, ssh should work now: `cd ~/.config/nixos-config && git remote remove origin && git remote add origin "git@github.com:RingOfStorms/dotfiles.git" && git pull origin master`
 
+- atuin setup
+  - if atuin is on enable that mod in configuration.nix, make sure to `atuin login` get key from existing device
+  - TODO move key into secrets and mount it to atuin local share
+
 ## Darwin
 
 - TODO
