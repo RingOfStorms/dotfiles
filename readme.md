@@ -44,12 +44,12 @@
   - On an already onboarded computer copy these and add them to secrets/secrets.nix file
   - Rekey secrets: `nix run github:yaxitech/ragenix -- --rules ~/.config/nixos-config/secrets/secrets.nix -r`
   - Maybe copy hardware/configs over and setup, otehrwise do it on the client machine
-- git clone nixos-config `git clone https://github.com/RingOfStorms/dotfiles.git ~/.config/nixos-config`
+- git clone nixos-config `git clone https://git.joshuabell.xyz/dotfiles ~/.config/nixos-config`
 - Setup config as needed
   - top level flake.nix additions
   - add hosts dir and files needed
 - `nixos-rebuild switch --flake ~/.config/nixos-config`
-- Update remote, ssh should work now: `cd ~/.config/nixos-config && git remote remove origin && git remote add origin "git@github.com:RingOfStorms/dotfiles.git" && git pull origin master`
+- Update remote, ssh should work now: `cd ~/.config/nixos-config && git remote remove origin && git remote add origin "ssh://git.joshuabell.xyz:3032/dotfiles" && git pull origin master`
 
 - atuin setup
   - if atuin is on enable that mod in configuration.nix, make sure to `atuin login` get key from existing device
