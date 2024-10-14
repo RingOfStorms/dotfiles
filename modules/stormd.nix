@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ringofstorms-stormd,
   settings,
   ...
@@ -20,7 +21,10 @@ in
   imports = [ ringofstorms-stormd.nixosModules.${settings.system.system} ];
 
   config = mkIf cfg.enable {
-    users.users.root.packages = [ ringofstorms-stormd.packages.${settings.system.system}.stormd ];
-    services.stormd.enable = true;
+    services.stormd = {
+      enable = true;
+      nebulaPackage = pkgs.nebula;
+      extraOptions = [ "-v" ];
+    };
   };
 }

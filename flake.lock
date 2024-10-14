@@ -1251,11 +1251,11 @@
         "rust-overlay": "rust-overlay_4"
       },
       "locked": {
-        "lastModified": 1728889741,
-        "narHash": "sha256-EbgfN3lQc8nkg2SrVL/HkuNZjXlJ5HSsCejvBNFIisI=",
+        "lastModified": 1728895723,
+        "narHash": "sha256-4fnIovUKtPdzb0FxTTxPa2XY/OyHmh2O30LaoWpm7OQ=",
         "ref": "refs/heads/master",
-        "rev": "613a70c6f514c463f456cf7a4d750f9895bb0dee",
-        "revCount": 34,
+        "rev": "14cc763f75a3cd3af2a5efbf4cf98ba8a407cd8f",
+        "revCount": 39,
         "type": "git",
         "url": "ssh://git.joshuabell.xyz:3032/stormd"
       },

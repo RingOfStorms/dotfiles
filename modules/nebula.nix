@@ -13,6 +13,13 @@ in
   options = {
     mods.${name} = {
       enable = mkEnableOption (lib.mdDoc "Enable ${name}");
+      preflight = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Does not enable the service since we're in preflight mode.
+        '';
+      };
     };
   };
 
@@ -24,7 +31,7 @@ in
 
     networking.firewall.allowedUDPPorts = [ 4242 ];
 
-    systemd.services."nebula" = {
+    systemd.services."nebula" =  mkIf (!cfg.preflight) {
       description = "Nebula VPN service";
       wants = [ "basic.target" ];
       after = [
