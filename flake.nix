@@ -42,6 +42,9 @@
     ringofstorms-nvim = {
       url = "git+https://git.joshuabell.xyz/nvim";
     };
+    ringofstorms-stormd = {
+      url = "git+ssh://git.joshuabell.xyz:3032/stormd";
+    };
 
     cosmic = {
       url = "github:lilyinstarlight/nixos-cosmic";

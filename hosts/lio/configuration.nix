@@ -22,7 +22,7 @@
     fonts.enable = true;
   #  nebula.enable = true;
     ssh.enable = true;
-    # stormd.enable = true; # TODO figure out why this is failing
+    stormd.enable = true; # TODO figure out why this is failing
   };
 
   # machine specific configuration

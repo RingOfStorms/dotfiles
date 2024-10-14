@@ -287,6 +287,21 @@
         "type": "github"
       }
     },
+    "nix-filter": {
+      "locked": {
+        "lastModified": 1710156097,
+        "narHash": "sha256-1Wvk8UP7PXdf8bCCaEoMnOT1qe5/Duqgj+rL8sRQsSM=",
+        "owner": "numtide",
+        "repo": "nix-filter",
+        "rev": "3342559a24e85fc164b295c3444e8a139924675b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "nix-filter",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1728241625,
@@ -347,6 +362,22 @@
       "original": {
         "owner": "nixos",
         "ref": "master",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_3": {
+      "locked": {
+        "lastModified": 1724819573,
+        "narHash": "sha256-GnR7/ibgIH1vhoy8cYdmXE6iyZqKqFxQSVkFgosBh6w=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "71e91c409d1e654808b2621f28a327acfdad8dc2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -1213,6 +1244,26 @@
         "url": "https://git.joshuabell.xyz/nvim"
       }
     },
+    "ringofstorms-stormd": {
+      "inputs": {
+        "nix-filter": "nix-filter",
+        "nixpkgs": "nixpkgs_3",
+        "rust-overlay": "rust-overlay_4"
+      },
+      "locked": {
+        "lastModified": 1728889741,
+        "narHash": "sha256-EbgfN3lQc8nkg2SrVL/HkuNZjXlJ5HSsCejvBNFIisI=",
+        "ref": "refs/heads/master",
+        "rev": "613a70c6f514c463f456cf7a4d750f9895bb0dee",
+        "revCount": 34,
+        "type": "git",
+        "url": "ssh://git.joshuabell.xyz:3032/stormd"
+      },
+      "original": {
+        "type": "git",
+        "url": "ssh://git.joshuabell.xyz:3032/stormd"
+      }
+    },
     "root": {
       "inputs": {
         "cosmic": "cosmic",
@@ -1227,7 +1278,8 @@
         "nixpkgs_stable": "nixpkgs_stable",
         "nypkgs": "nypkgs",
         "ragenix": "ragenix",
-        "ringofstorms-nvim": "ringofstorms-nvim"
+        "ringofstorms-nvim": "ringofstorms-nvim",
+        "ringofstorms-stormd": "ringofstorms-stormd"
       }
     },
     "rust-overlay": {
@@ -1285,6 +1337,27 @@
         "owner": "oxalica",
         "repo": "rust-overlay",
         "rev": "c2099c6c7599ea1980151b8b6247a8f93e1806ee",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "rust-overlay_4": {
+      "inputs": {
+        "nixpkgs": [
+          "ringofstorms-stormd",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1718849885,
+        "narHash": "sha256-Qfc5HKpQvGhWXox0WJVzLqrAcFm3uy6xtWRvVmrkLYc=",
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "bc1a236757cd5f6622f73838e551fb2035afa44a",
         "type": "github"
       },
       "original": {

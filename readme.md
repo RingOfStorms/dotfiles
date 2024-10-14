@@ -2,7 +2,7 @@
 
 # First Install on new Machine
 
-## NixOS
+## NixOS install
 
 1. Install nix minimal:
 
@@ -34,7 +34,6 @@
   - `cd /mnt/etc/nixos`
   - `curl -O https://share.joshuabell.link/nix/onboard.sh`
   - `chmod +x onboard.sh && ./onboard.sh`
-  - CHECK HARDWARE LABELS # TODO update onboard to look for label names since we switched to boot/root instead of NIXBOOT/NIXROOT
   - `reboot`
 - log into USERNAME with `password1`, use `passwd` to change the password
 
@@ -51,6 +50,11 @@
 - `nixos-rebuild switch --flake ~/.config/nixos-config`
 - Update remote, ssh should work now: `cd ~/.config/nixos-config && git remote remove origin && git remote add origin "ssh://git.joshuabell.xyz:3032/dotfiles" && git pull origin master`
 
+## Local tooling
+
+- stormd
+  - get stormd and build locally, copy release build to /etc/stormd
+  - enable stormd mod TODO LEFT OFF HERE... get this working on lio
 - atuin setup
   - if atuin is on enable that mod in configuration.nix, make sure to `atuin login` get key from existing device
   - TODO move key into secrets and mount it to atuin local share
