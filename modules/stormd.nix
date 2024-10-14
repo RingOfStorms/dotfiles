@@ -24,7 +24,7 @@ in
     services.stormd = {
       enable = true;
       nebulaPackage = pkgs.nebula;
-      extraOptions = [ "-v" ];
+      # extraOptions = [ "-v" ];
     };
   };
 }
