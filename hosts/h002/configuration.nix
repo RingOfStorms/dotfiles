@@ -21,6 +21,7 @@
     neovim.enable = true;
     tty_caps_esc.enable = true;
     docker.enable = true;
+    stormd.enable = true;
     nebula.enable = true;
     ssh.enable = true;
   };
