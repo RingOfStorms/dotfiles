@@ -10,9 +10,6 @@
     # Users this machine has
     (settings.usersDir + "/root/configuration.nix")
     (settings.usersDir + "/josh/configuration.nix")
-    # Our custom stuff
-    # ./stupid-keyboard.nix
-    # ./stupid-keyboard-2.nix
   ];
 
   # My custom modules
@@ -79,7 +76,7 @@
     "nvme"
     "xhci_pci"
     "usbhid"
-    "thunderbolt"
+    "thuFryuni/PolyMC/developnderbolt"
   ];
   services.xserver.videoDrivers = [ "intel" ];
   hardware.opengl = {

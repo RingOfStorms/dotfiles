@@ -142,3 +142,16 @@ nixpkg () {
   done
   eval $cmd
 }
+
+gintent() {
+    for file in "$@"; do
+        if [ -f "$file" ]; then
+            git add --intent-to-add "$file"
+            git update-index --assume-unchanged "$file"
+            echo "Intent added for $file"
+        else
+            echo "File not found: $file"
+        fi
+    done
+}
+
