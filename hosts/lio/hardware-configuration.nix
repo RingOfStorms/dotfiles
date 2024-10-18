@@ -40,10 +40,15 @@
     ];
   };
 
+  fileSystems."/mnt/nvme1tb" = {
+    device = "/dev/disk/by-uuid/7ddb48bd-160c-4049-a4fa-a5ac2b6a5402";
+    fsType = "ext4";
+  };
+
   swapDevices = [
     {
       device = "/.swapfile";
-      size = 64 * 1024; # 16GB
+      size = 64 * 1024; # 64GB
     }
   ];
 
