@@ -61,7 +61,13 @@ with lib.hm.gvariant;
       };
       "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1" = {
         binding = "<Super>Space";
-        command = "rofi -show";
+        command =
+          if nixConfig.mods.de_gnome_xorg.enable then
+            "rofi -show"
+          else if nixConfig.mods.de_gnome_wayland.enable then
+            "wofi --show drun"
+          else
+            ""; # fallback in case neither is enabled
         name = "Launcher";
       };
       "org/gnome/desktop/wm/keybindings" = {
