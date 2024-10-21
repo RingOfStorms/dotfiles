@@ -26,6 +26,11 @@
     nebula.enable = true;
   };
 
+  # opening this port for dev purposes
+  networking.firewall.allowedTCPPorts = [
+    5173 # Vite
+  ];
+
   # machine specific configuration
   # ==============================
   hardware.enableAllFirmware = true;
