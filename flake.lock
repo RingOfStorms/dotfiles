@@ -510,6 +510,22 @@
         "type": "github"
       }
     },
+    "nvim_plugin-aznhe21/actions-preview.nvim": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1718540350,
+        "narHash": "sha256-lYjsv8y1fMuTGpBF/iG7cm/a7tLdh748vJhVsSp/Iz8=",
+        "owner": "aznhe21",
+        "repo": "actions-preview.nvim",
+        "rev": "9f52a01c374318e91337697ebed51c6fae57f8a4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "aznhe21",
+        "repo": "actions-preview.nvim",
+        "type": "github"
+      }
+    },
     "nvim_plugin-b0o/schemastore.nvim": {
       "flake": false,
       "locked": {
@@ -1285,6 +1301,7 @@
         "nvim_plugin-MunifTanjim/nui.nvim": "nvim_plugin-MunifTanjim/nui.nvim",
         "nvim_plugin-RRethy/vim-illuminate": "nvim_plugin-RRethy/vim-illuminate",
         "nvim_plugin-Saecki/crates.nvim": "nvim_plugin-Saecki/crates.nvim",
+        "nvim_plugin-aznhe21/actions-preview.nvim": "nvim_plugin-aznhe21/actions-preview.nvim",
         "nvim_plugin-b0o/schemastore.nvim": "nvim_plugin-b0o/schemastore.nvim",
         "nvim_plugin-catppuccin/nvim": "nvim_plugin-catppuccin/nvim",
         "nvim_plugin-chrisgrieser/nvim-early-retirement": "nvim_plugin-chrisgrieser/nvim-early-retirement",
@@ -1333,11 +1350,11 @@
         "rust-overlay": "rust-overlay_3"
       },
       "locked": {
-        "lastModified": 1729471758,
-        "narHash": "sha256-yK3PUHl8buO5lMphaeKTYQ/wPDaJ0+7OR0KM8extu14=",
+        "lastModified": 1729555214,
+        "narHash": "sha256-z58uNzWmrJw8UmDzsGR9BzCnKpr48FNoN4sqhLAUcfg=",
         "ref": "refs/heads/master",
-        "rev": "99f5ed48b816d174ba872846f0e70b79b2a74491",
-        "revCount": 216,
+        "rev": "215778e9c430d8fae9171719f80a3a6d63a59e55",
+        "revCount": 218,
         "type": "git",
         "url": "https://git.joshuabell.xyz/nvim"
       },
