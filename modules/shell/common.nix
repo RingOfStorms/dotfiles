@@ -51,6 +51,7 @@ in
       hdparm
       speedtest-cli
       ffmpeg-full
+      appimage-run
     ];
 
     environment.shellAliases = {
@@ -64,9 +65,9 @@ in
       # general unix
       date_compact = "date +'%Y%m%d'";
       date_short = "date +'%Y-%m-%d'";
-      ls = "ls --color -Ga";
-      ll = "ls --color -Gal";
-      lss = "du --max-depth=0 -h * 2>/dev/null";
+      ls = "ls --color -Gah";
+      ll = "ls --color -Galh";
+      lss = "du --max-depth=0 -h * 2>/dev/null | sort -hr";
       psg = "ps aux | head -n 1 && ps aux | grep -v 'grep' | grep";
       cl = "clear";
 

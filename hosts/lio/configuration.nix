@@ -15,6 +15,7 @@
     shell_common.enable = true;
     # de_cosmic.enable = true;
     de_gnome_xorg.enable = true;
+    # de_gnome_wayland.enable = true;
     audio_pulse.enable = true;
     neovim.enable = true;
     tty_caps_esc.enable = true;
@@ -24,6 +25,11 @@
     stormd.enable = true;
     nebula.enable = true;
   };
+
+  # opening this port for dev purposes
+  networking.firewall.allowedTCPPorts = [
+    5173 # Vite
+  ];
 
   # machine specific configuration
   # ==============================
