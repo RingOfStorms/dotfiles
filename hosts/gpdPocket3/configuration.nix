@@ -76,7 +76,7 @@
     "nvme"
     "xhci_pci"
     "usbhid"
-    "thuFryuni/PolyMC/developnderbolt"
+    # "thuFryuni/PolyMC/developnderbolt"
   ];
   services.xserver.videoDrivers = [ "intel" ];
   hardware.opengl = {
