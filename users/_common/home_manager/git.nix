@@ -10,6 +10,8 @@
       core.editor = "nvim";
 
       pull.rebase = false;
+
+      init.defaultBranch = "main";
     };
 
     difftastic = {

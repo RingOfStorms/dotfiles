@@ -56,10 +56,6 @@ in
       cosmic-store
     ];
 
-    boot.kernelParams = mkIf cfg.nvidiaExtraDisplayFix [
-      "nvidia_drm.fbdev=1"
-    ];
-
     # Config
     home-manager.backupFileExtension = "bak";
     home-manager.users.${settings.user.username} = {
