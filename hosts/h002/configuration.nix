@@ -8,8 +8,6 @@
     # Users this machine has
     (settings.usersDir + "/root/configuration.nix")
     (settings.usersDir + "/luser/configuration.nix")
-
-    # (settings.hostsDir + "/h002/nixserver.nix")
   ];
 
   # My custom modules
@@ -21,7 +19,7 @@
     neovim.enable = true;
     tty_caps_esc.enable = true;
     docker.enable = true;
-    stormd.enable = true;
+    # stormd.enable = true;
     nebula.enable = true;
     ssh.enable = true;
   };
