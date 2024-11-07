@@ -24,6 +24,7 @@
     ssh.enable = true;
     stormd.enable = true;
     nebula.enable = true;
+    rustdesk.enable = true;
   };
 
   # opening this port for dev purposes
