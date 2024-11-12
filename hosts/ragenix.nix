@@ -61,6 +61,10 @@
           file = /${settings.secretsDir}/nix2l002.age;
           owner = settings.user.username;
         };
+        nix2lio = {
+          file = /${settings.secretsDir}/nix2lio.age;
+          owner = settings.user.username;
+        };
       };
   };
 }

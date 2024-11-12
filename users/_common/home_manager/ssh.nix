@@ -16,6 +16,16 @@
         port = 3032;
       };
       # PERSONAL DEVICES
+      "lio" = {
+        identityFile = age.secrets.nix2lio.path;
+        hostname = "10.20.40.104";
+        user = "josh";
+      };
+      "lio_" = {
+        identityFile = age.secrets.nix2lio.path;
+        hostname = "10.12.14.116";
+        user = "josh";
+      };
       "joe" = {
         identityFile = age.secrets.nix2joe.path;
         hostname = "10.20.40.102";
@@ -31,11 +41,11 @@
         hostname = "10.20.40.180";
         user = "joshua.bell";
         localForwards = [
-          {
-            bind.port = 3000;
-            host.port = 3000;
-            host.address = "localhost";
-          }
+          # {
+          #   bind.port = 3000;
+          #   host.port = 3000;
+          #   host.address = "localhost";
+          # }
           {
             bind.port = 3002;
             host.port = 3002;

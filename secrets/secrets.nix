@@ -59,4 +59,7 @@ in
   "nix2l002.age" = {
     inherit publicKeys;
   };
+  "nix2lio.age" = {
+    inherit publicKeys;
+  };
 }
