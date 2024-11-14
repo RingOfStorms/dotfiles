@@ -1,5 +1,5 @@
 { pkgs, ... }:
 {
-  home.packages = [ pkgs.ladybird ];
+  # home.packages = [ pkgs.ladybird ];
 }
 

@@ -65,6 +65,10 @@
           file = /${settings.secretsDir}/nix2lio.age;
           owner = settings.user.username;
         };
+        github_read_token = {
+          file = /${settings.secretsDir}/github_read_token.age;
+          owner = settings.user.username;
+        };
       };
   };
 }

@@ -1,5 +1,6 @@
 {
   settings,
+  config,
   ...
 }:
 let
@@ -41,6 +42,11 @@ in
 
   # TODO should I have this set for my user...
   nix.settings.trusted-users = [ "root" "${settings.user.username}" ];
+
+  # rate limiting for github
+  nix.extraOptions = ''
+    !include ${config.age.secrets.github_read_token.path}
+  '';
 
   # nix helper
   programs.nh = {
