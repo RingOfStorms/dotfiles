@@ -38,10 +38,15 @@
       };
       nix_shell = {
         heuristic = true;
+        impure_msg = "不純 \\(ふじゅん\\)";
+        pure_msg = " 純粋 \\(じゅんすい\\)";
+      };
+      git_branch = {
+        format = "オン [$symbol$branch(:$remote_branch)]($style) ";
+      };
+      cmd_duration = {
+        format = "掛かった [$duration]($style) ";
       };
     };
   };
 }
-
-
-

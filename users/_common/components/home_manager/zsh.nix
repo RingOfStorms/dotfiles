@@ -9,6 +9,18 @@
     defaultKeymap = "emacs";
 
     initExtra = ''
+      # Set editor to neovim, TODO only do this if mod.neovim is enabled
+      export EDITOR=nvim
+      export VISUAL=nvim
+
+      # Enable editing command in external editor
+      autoload -Uz edit-command-line
+      zle -N edit-command-line
+      # Try multiple bindings for edit-command-line
+      bindkey '^X^E' edit-command-line    # Traditional Ctrl+X,Ctrl+E binding
+      bindkey '^[^M' edit-command-line    # Alt+Enter
+      # Note: Ctrl+Enter might not be distinctly capturable in all terminals
+
       # Make home/end and ctrl + left/right nav how I expect them to like in bash
       bindkey "\e[1~" beginning-of-line
       bindkey "\e[4~" end-of-line

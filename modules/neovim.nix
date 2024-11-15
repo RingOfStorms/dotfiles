@@ -18,8 +18,10 @@ in
   };
 
   config = mkIf cfg.enable {
-    environment.systemPackages = [
-      ringofstorms-nvim.packages.${settings.system.system}.neovim
-    ];
+    environment = {
+      systemPackages = [
+        ringofstorms-nvim.packages.${settings.system.system}.neovim
+      ];
+    };
   };
 }
