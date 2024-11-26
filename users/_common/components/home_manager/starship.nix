@@ -22,7 +22,7 @@
         sapphire = "#74c7ec";
         blue = "#89b4fa";
         lavender = "#b4befe";
-        # Coal variant: https://gist.github.com/RingOfStorms/b2ff0c4e37f5be9f985c72c3ec9a3e62
+        # Coal variant: https://gist.joshuabell.xyz/ringofstorms/catppucin-coal
         text = "#e0e0e0";
         subtext1 = "#cccccc";
         subtext0 = "#b8b8b8";
