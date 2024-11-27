@@ -12,14 +12,14 @@
 
   # My custom modules
   mods = {
-    boot_grub = true;
+    boot_grub.enable = true;
     shell_common.enable = true;
     de_gnome_xorg.enable = true;
     audio_pulse.enable = true;
     neovim.enable = true;
     tty_caps_esc.enable = true;
     docker.enable = true;
-    # stormd.enable = true;
+    stormd.enable = true;
     nebula.enable = true;
     ssh.enable = true;
   };

@@ -43,7 +43,13 @@
       url = "git+https://git.joshuabell.xyz/nvim";
     };
     ringofstorms-stormd = {
+      # Initial non git access run
+      # url = "./dummy";
+      # inputs.nixpkgs.follows = "nixpkgs_stable";
+
+      # Normal access
       url = "git+ssh://git.joshuabell.xyz:3032/stormd";
+
       # Local path usage for testing changes locally
       # url = "path:/home/josh/projects/stormd";
     };
@@ -164,9 +170,7 @@
                   path = lib.fileset.maybeMissing ./modules;
                   recursive = true;
                 }
-                ++ [
-                  ./hosts/configuration.nix
-                ];
+                ++ [ ./hosts/configuration.nix ];
               specialArgs = inputs // {
                 inherit ylib;
                 settings =
