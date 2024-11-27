@@ -15,6 +15,11 @@ in
   options = {
     mods.${name} = {
       enable = mkEnableOption (lib.mdDoc "Enable ${name}");
+      debug = mkOption {
+        type = types.bool;
+        default = false;
+        description = lib.mdDoc "Whether to enable debug logging for stormd daemon.";
+      };
     };
   };
 
@@ -24,7 +29,7 @@ in
     services.stormd = {
       enable = true;
       nebulaPackage = pkgs.nebula;
-      # extraOptions = [ "-v" ];
+      extraOptions = mkIf cfg.debug [ "-v" ];
     };
   };
 }
