@@ -44,6 +44,8 @@
     };
     ringofstorms-stormd = {
       url = "git+ssh://git.joshuabell.xyz:3032/stormd";
+      # Local path usage for testing changes locally
+      # url = "path:/home/josh/projects/stormd";
     };
 
     cosmic = {
