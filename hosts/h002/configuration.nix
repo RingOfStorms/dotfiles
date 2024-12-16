@@ -15,7 +15,7 @@
     boot_grub.enable = true;
     shell_common.enable = true;
     de_gnome_xorg.enable = true;
-    audio_pulse.enable = true;
+    audio.enable = true;
     neovim.enable = true;
     tty_caps_esc.enable = true;
     docker.enable = true;
