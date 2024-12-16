@@ -3,31 +3,31 @@
 
   inputs = {
     # Host flake pinning
-    lio_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
+    lio_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
     lio_home-manager = {
-      url = "github:nix-community/home-manager/release-24.05";
+      url = "github:nix-community/home-manager/release-24.11";
       inputs.nixpkgs.follows = "lio_nixpkgs";
     };
 
-    joe_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
+    joe_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
     joe_home-manager = {
-      url = "github:nix-community/home-manager/release-24.05";
+      url = "github:nix-community/home-manager/release-24.11";
       inputs.nixpkgs.follows = "joe_nixpkgs";
     };
 
-    h002_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
+    h002_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
     h002_home-manager = {
-      url = "github:nix-community/home-manager/release-24.05";
+      url = "github:nix-community/home-manager/release-24.11";
       inputs.nixpkgs.follows = "h002_nixpkgs";
     };
 
-    gpdPocket3_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
+    gpdPocket3_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
     gpdPocket3_home-manager = {
-      url = "github:nix-community/home-manager/release-24.05";
+      url = "github:nix-community/home-manager/release-24.11";
       inputs.nixpkgs.follows = "gpdPocket3_nixpkgs";
     };
 
-    nixpkgs_stable.url = "github:nixos/nixpkgs/nixos-24.05";
+    nixpkgs_stable.url = "github:nixos/nixpkgs/nixos-24.11";
     # Nix utility methods
     nypkgs = {
       url = "github:yunfachi/nypkgs";
@@ -43,7 +43,13 @@
       url = "git+https://git.joshuabell.xyz/nvim";
     };
     ringofstorms-stormd = {
+      # Initial non git access run
+      # url = "./dummy";
+      # inputs.nixpkgs.follows = "nixpkgs_stable";
+
+      # Normal access
       url = "git+ssh://git.joshuabell.xyz:3032/stormd";
+
       # Local path usage for testing changes locally
       # url = "path:/home/josh/projects/stormd";
     };
@@ -164,9 +170,7 @@
                   path = lib.fileset.maybeMissing ./modules;
                   recursive = true;
                 }
-                ++ [
-                  ./hosts/configuration.nix
-                ];
+                ++ [ ./hosts/configuration.nix ];
               specialArgs = inputs // {
                 inherit ylib;
                 settings =

@@ -14,7 +14,7 @@
     boot_systemd.enable = true;
     shell_common.enable = true;
     # de_cosmic.enable = true;
-    audio_pulse.enable = true;
+    audio.enable = true;
     de_gnome_xorg.enable = true;
     # de_gnome_wayland.enable = true;
     neovim.enable = true;
@@ -25,6 +25,7 @@
     stormd.enable = true;
     nebula.enable = true;
     rustdesk.enable = true;
+    saber.enable = true;
   };
 
   # opening this port for dev purposes

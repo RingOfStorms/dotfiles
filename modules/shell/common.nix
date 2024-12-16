@@ -79,6 +79,7 @@ in
       diff = "git diff";
       branches = "git branch -a";
       gcam = "git commit -a -m";
+      gcm = "git commit -m";
       stashes = "git stash list";
 
       # ripgrep

@@ -19,10 +19,11 @@
       '';
     }
     {
-      assertion = !(config.mods.de_cosmic.enable && config.mods.audio_pulse.enable);
+      # // TODO check sinc epoulse is no longer
+      assertion = !(config.mods.de_cosmic.enable && config.mods.audio.enable);
       message = ''
-        Configuration Error: cannot use pulse audio with cosmic.
-        Remove: mods.audio_pulse.enable
+        Configuration Error: cannot use audio with cosmic. Check if this is true anymore...
+        Remove: mods.audio.enable
       '';
     }
   ];

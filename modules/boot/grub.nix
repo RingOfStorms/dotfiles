@@ -12,7 +12,7 @@ in
   options = {
     mods.${name} = {
       enable = mkEnableOption (lib.mdDoc "Enable ${name}");
-      device = mkDefaultOption {
+      device = mkOption {
         type = types.str;
         default = "/dev/sda";
         description = ''
