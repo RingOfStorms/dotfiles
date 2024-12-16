@@ -9,21 +9,21 @@
       inputs.nixpkgs.follows = "lio_nixpkgs";
     };
 
-    joe_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
+    joe_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
     joe_home-manager = {
-      url = "github:nix-community/home-manager/release-24.05";
+      url = "github:nix-community/home-manager/release-24.11";
       inputs.nixpkgs.follows = "joe_nixpkgs";
     };
 
-    h002_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
+    h002_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
     h002_home-manager = {
-      url = "github:nix-community/home-manager/release-24.05";
+      url = "github:nix-community/home-manager/release-24.11";
       inputs.nixpkgs.follows = "h002_nixpkgs";
     };
 
-    gpdPocket3_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
+    gpdPocket3_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
     gpdPocket3_home-manager = {
-      url = "github:nix-community/home-manager/release-24.05";
+      url = "github:nix-community/home-manager/release-24.11";
       inputs.nixpkgs.follows = "gpdPocket3_nixpkgs";
     };
 

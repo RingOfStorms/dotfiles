@@ -12,7 +12,7 @@ with lib.hm.gvariant;
     # > `dconf dump / > /tmp/dconf_dump_start && watch -n0.5 "dconf dump / > /tmp/dconf_dump_current && diff --color /tmp/dconf_dump_start /tmp/dconf_dump_current -U12"`
     # OR (Must be logged into user directly, no SU to user will work): `dconf watch /`
     # OR get the exact converted nixConfig from `dconf dump / | dconf2nix | less` and search with forward slash
-    # gnome.dconf-editor
+    # dconf-editor
     # gnomeExtensions.workspace-switch-wraparound
     #gnomeExtensions.forge # probably don"t need on this on tiny laptop but may explore this instead of sway for my desktop
   ];
