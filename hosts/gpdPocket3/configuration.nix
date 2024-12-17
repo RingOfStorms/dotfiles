@@ -24,7 +24,30 @@
     stormd.enable = true;
     nebula.enable = true;
     ssh.enable = true;
-    rustdesk.enable = true;
+    # rustdesk.enable = true;
+  };
+
+  nix = {
+    distributedBuilds = true;
+    extraOptions = ''
+        builders-use-substitutes = true
+    '';
+    buildMachines = [
+      {
+        hostName = "lio_";
+        system = "x86_64-linux";
+        protocol = "ssh";
+        maxJobs = 32;
+        supportedFeatures = [
+          "nixos-test"
+          "benchmark"
+          "big-parallel"
+          "kvm"
+          "uid-range"  # Often helpful
+        ];
+        mandatoryFeatures = [ ];
+      }
+    ];
   };
 
   # machine specific configuration
