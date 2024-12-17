@@ -48,6 +48,7 @@ in
     ];
   };
 
+
   # rate limiting for github
   nix.extraOptions = ''
     keep-outputs = true
@@ -62,6 +63,34 @@ in
     clean.extraArgs = "--keep 10";
     # TODO this may need to be defined higher up if it is ever different for a machine...
     flake = "/home/${settings.user.username}/.config/nixos-config";
+  };
+
+  # Remote build off home lio computer
+  programs.ssh.extraConfig = ''
+    Host lio_
+      PubkeyAcceptedKeyTypes ssh-ed25519
+      ServerAliveInterval 60
+      IPQoS throughput
+      IdentityFile ${config.age.secrets.nix2lio.path}
+  '';
+  nix = {
+    distributedBuilds = true;
+    buildMachines = [
+      {
+        hostName = "lio_";
+        system = "x86_64-linux";
+        protocol = "ssh-ng";
+        maxJobs = 32;
+        supportedFeatures = [
+          "nixos-test"
+          "benchmark"
+          "big-parallel"
+          "kvm"
+          "uid-range" # Often helpful
+        ];
+        mandatoryFeatures = [ ];
+      }
+    ];
   };
 
   # TODO do I want this dynamic at all? Roaming?
