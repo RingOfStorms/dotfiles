@@ -14,8 +14,9 @@
   mods = {
     boot_grub.enable = true;
     shell_common.enable = true;
-    de_gnome_xorg.enable = true;
-    audio.enable = true;
+    # de_gnome_xorg.enable = true;
+    # audio.enable = true;
+    de_cosmic.enable = true;
     neovim.enable = true;
     tty_caps_esc.enable = true;
     docker.enable = true;

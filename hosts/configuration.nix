@@ -26,6 +26,7 @@ in
   boot.supportedFilesystems = [ "ntfs" ];
 
   nix.settings = {
+    max-jobs = "auto";
     # Fallback quickly if substituters are not available.
     connect-timeout = 5;
     download-attempts = 3;
@@ -81,6 +82,7 @@ in
         system = "x86_64-linux";
         protocol = "ssh-ng";
         maxJobs = 32;
+        speedFactor = 2;
         supportedFeatures = [
           "nixos-test"
           "benchmark"
