@@ -25,26 +25,33 @@ in
   # allow mounting ntfs filesystems
   boot.supportedFilesystems = [ "ntfs" ];
 
-  # Fallback quickly if substituters are not available.
-  nix.settings.connect-timeout = 5;
-  nix.settings.download-attempts = 3;
-  # The default at 10 is rarely enough.
-  nix.settings.log-lines = 50;
-  # Avoid disk full issues
-  nix.settings.max-free = (3000 * 1024 * 1024);
-  nix.settings.min-free = (1000 * 1024 * 1024);
-  # Avoid copying unnecessary stuff over SSH
-  nix.settings.builders-use-substitutes = true;
-  # Slower but mroe robust during crash TODO enable once we upgrade nix
-  # nix.settings.fsync-store-paths = true;
-  # nix.settings.fsync-metadata = true;
-  nix.settings.auto-optimise-store = true;
+  nix.settings = {
+    # Fallback quickly if substituters are not available.
+    connect-timeout = 5;
+    download-attempts = 3;
+    # The default at 10 is rarely enough.
+    log-lines = 50;
+    # Avoid disk full issues
+    max-free = (3000 * 1024 * 1024);
+    min-free = (1000 * 1024 * 1024);
+    # Avoid copying unnecessary stuff over SSH
+    builders-use-substitutes = true;
+    # Slower but more robust during crash TODO enable once we upgrade nix
+    # fsync-store-paths = true;
+    # fsync-metadata = true;
+    auto-optimise-store = true;
 
-  # TODO should I have this set for my user...
-  nix.settings.trusted-users = [ "root" "${settings.user.username}" ];
+    # TODO should I have this set for my user...
+    trusted-users = [
+      "root"
+      "${settings.user.username}"
+    ];
+  };
 
   # rate limiting for github
   nix.extraOptions = ''
+    keep-outputs = true
+    keep-derivations = true
     !include ${config.age.secrets.github_read_token.path}
   '';
 
@@ -52,7 +59,7 @@ in
   programs.nh = {
     enable = true;
     clean.enable = true;
-    clean.extraArgs = "--keep 3";
+    clean.extraArgs = "--keep 10";
     # TODO this may need to be defined higher up if it is ever different for a machine...
     flake = "/home/${settings.user.username}/.config/nixos-config";
   };

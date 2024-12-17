@@ -25,7 +25,7 @@
     stormd.enable = true;
     nebula.enable = true;
     rustdesk.enable = true;
-    saber.enable = true;
+    # saber.enable = true;
   };
 
   # opening this port for dev purposes
@@ -45,4 +45,4 @@
 
   # System76
   hardware.system76.enableAll = true;
-}
+  }

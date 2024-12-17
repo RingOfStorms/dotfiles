@@ -5,5 +5,5 @@
   ...
 }:
 {
-  home.packages = lib.mkIf (!nixConfig.mods.de_cosmic.enable) (with pkgs; [ gnome.nautilus qimgv ]);
+  home.packages = lib.mkIf (!nixConfig.mods.de_cosmic.enable) (with pkgs; [ nautilus qimgv ]);
 }
