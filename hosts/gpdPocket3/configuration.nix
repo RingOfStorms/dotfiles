@@ -24,7 +24,7 @@
     stormd.enable = true;
     nebula.enable = true;
     ssh.enable = true;
-    # rustdesk.enable = true;
+    rustdesk.enable = true;
   };
 
   nix = {
