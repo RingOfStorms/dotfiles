@@ -53,12 +53,10 @@
 
 ## Local tooling
 
-- stormd
-  - get stormd and build locally, copy release build to /etc/stormd
-  - enable stormd mod TODO LEFT OFF HERE... get this working on lio
 - atuin setup
   - if atuin is on enable that mod in configuration.nix, make sure to `atuin login` get key from existing device
   - TODO move key into secrets and mount it to atuin local share
+- stormd onboard to network
 
 ## Darwin
 
@@ -76,12 +74,6 @@ title Windows 11
 efi   /EFI/Microsoft/Boot/bootmgfw.efi
 ```
 
-###
-
-###
-
-- clone neovim setup...
-
 # Settings references
 
 - Flake docs: <https://nixos.wiki/wiki/Flakes>
@@ -91,21 +83,8 @@ efi   /EFI/Microsoft/Boot/bootmgfw.efi
 
 # TODO
 
-- Use top level split out home manager configurations instead of the one built into the system config...
-- Make a flake for neovim and move out some system packages required for that into that flake, re-use for root and user rather than cloning each place?
-- EDITOR env var set to neovim
-- gif command from video
-
-```sh
-gif () {
-  if [[ -z $1 ]]; then
-    echo "No gif specified"
-    return 1
-  fi
-  ffmpeg -i $1 -filter_complex "fps=7,scale=iw:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=32[p];[s1][p]paletteuse=dither=bayer" $1".gif"
-}
-```
-
+- Split config into further flakes, inputs should not affect other systems, like first run without stormd
+- work on secrets pre ragenix, stormd pre install for all the above bootstrapping steps would be ideal
+- reduce home manager, make per user modules support instead
 - Ensure my neovim undohistory/auto saves don't save `.age` files as they can be sensitive.
-- make sure all my aliases are accounted for, still missing things like rust etc: <https://github.com/RingOfStorms/setup>
-- add in copy paste support with xclip or nix equivalent
+- can I get tmux `tat` attach to remove new window if it restored from saved session?

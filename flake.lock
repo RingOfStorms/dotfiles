@@ -213,43 +213,6 @@
         "type": "github"
       }
     },
-    "joe_home-manager": {
-      "inputs": {
-        "nixpkgs": [
-          "joe_nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1734366194,
-        "narHash": "sha256-vykpJ1xsdkv0j8WOVXrRFHUAdp9NXHpxdnn1F4pYgSw=",
-        "owner": "nix-community",
-        "repo": "home-manager",
-        "rev": "80b0fdf483c5d1cb75aaad909bd390d48673857f",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nix-community",
-        "ref": "release-24.11",
-        "repo": "home-manager",
-        "type": "github"
-      }
-    },
-    "joe_nixpkgs": {
-      "locked": {
-        "lastModified": 1734323986,
-        "narHash": "sha256-m/lh6hYMIWDYHCAsn81CDAiXoT3gmxXI9J987W5tZrE=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "394571358ce82dff7411395829aa6a3aad45b907",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-24.11",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
     "lio_home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -1495,8 +1458,6 @@
         "gpdPocket3_nixpkgs": "gpdPocket3_nixpkgs",
         "h002_home-manager": "h002_home-manager",
         "h002_nixpkgs": "h002_nixpkgs",
-        "joe_home-manager": "joe_home-manager",
-        "joe_nixpkgs": "joe_nixpkgs",
         "lio_home-manager": "lio_home-manager",
         "lio_nixpkgs": "lio_nixpkgs",
         "nixpkgs_stable": "nixpkgs_stable",
