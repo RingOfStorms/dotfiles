@@ -9,6 +9,12 @@
       inputs.nixpkgs.follows = "lio_nixpkgs";
     };
 
+    oren_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
+    oren_home-manager = {
+      url = "github:nix-community/home-manager/release-24.11";
+      inputs.nixpkgs.follows = "oren_nixpkgs";
+    };
+
     joe_nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
     joe_home-manager = {
       url = "github:nix-community/home-manager/release-24.11";
@@ -66,6 +72,8 @@
       cosmic,
       lio_nixpkgs,
       lio_home-manager,
+      oren_nixpkgs,
+      oren_home-manager,
       joe_nixpkgs,
       joe_home-manager,
       gpdPocket3_nixpkgs,
@@ -93,6 +101,18 @@
             inherit user;
             nixpkgs = lio_nixpkgs;
             home-manager = lio_home-manager;
+            allowUnfree = true;
+          };
+        }
+        {
+          name = "oren";
+          opts = {
+            system = "x86_64-linux";
+          };
+          settings = {
+            inherit user;
+            nixpkgs = oren_nixpkgs;
+            home-manager = oren_home-manager;
             allowUnfree = true;
           };
         }
