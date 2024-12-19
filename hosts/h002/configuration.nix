@@ -36,4 +36,6 @@
   };
 
   environment.systemPackages = with pkgs; [ nvtopPackages.full ];
+
+  system.stateVersion = "23.11";
 }

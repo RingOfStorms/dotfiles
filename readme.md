@@ -34,6 +34,7 @@
   - `cd /mnt/etc/nixos`
   - `curl -O https://share.joshuabell.link/nix/onboard.sh`
   - `chmod +x onboard.sh && ./onboard.sh`
+  - verify hardware config, run `nixos-install`
   - `reboot`
 - log into USERNAME with `password1`, use `passwd` to change the password
 

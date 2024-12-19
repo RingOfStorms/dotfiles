@@ -113,6 +113,4 @@ in
 
   # Some basics
   nixpkgs.config.allowUnfree = settings.allowUnfree;
-
-  system.stateVersion = "23.11";
 }

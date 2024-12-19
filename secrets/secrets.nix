@@ -17,6 +17,8 @@ let
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC60tzOVF0mcyfnYK2V/omzikuyE8Ol0K+yAjGxBV7q4 luser@h002"
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFGp6oInUcGVnDl5axV1EHflMfZUiHxtqNa4eAuye/av root@lio"
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKxNhtJNx/y4W54kAGmm2pF80l437z1RLWl/GTVKy0Pd josh@lio"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK7bNX7R9ApoX/cHdXIhQdpA2sHrC9ii6VAulboAIJM2 root@oren"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICauUtSa71+oQAiLxp3GMMbmNXcbr9Mc7eK8b/lqZbbS josh@oren"
   ];
 in
 {

@@ -97,4 +97,6 @@
   environment.shellAliases = {
     kvm = "ffplay -i /dev/video2";
   };
+
+  system.stateVersion = "23.11";
 }
