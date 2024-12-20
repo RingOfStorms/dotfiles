@@ -10,7 +10,10 @@
 # secretsFile = (settings.secretsDir + /secrets.nix);
 {
   imports = [ ragenix.nixosModules.age ];
-  environment.systemPackages = [ ragenix.packages.${settings.system.system}.default pkgs.rage ];
+  environment.systemPackages = [
+    ragenix.packages.${settings.system.system}.default
+    pkgs.rage
+  ];
 
   age = {
     secrets =
@@ -63,6 +66,10 @@
         };
         nix2lio = {
           file = /${settings.secretsDir}/nix2lio.age;
+          owner = settings.user.username;
+        };
+        nix2oren = {
+          file = /${settings.secretsDir}/nix2oren.age;
           owner = settings.user.username;
         };
         github_read_token = {

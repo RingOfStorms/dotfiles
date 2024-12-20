@@ -48,15 +48,20 @@
 - Setup config as needed
   - top level flake.nix additions
   - add hosts dir and files needed
-- `nixos-rebuild switch --flake ~/.config/nixos-config`
+- `sudo nixos-rebuild switch --flake ~/.config/nixos-config`
 - Update remote, ssh should work now: `cd ~/.config/nixos-config && git remote remove origin && git remote add origin "ssh://git.joshuabell.xyz:3032/dotfiles" && git pull origin master`
 
 ## Local tooling
 
+
+* firefox/1password setup
+  - sign in to firefox
+  - sign into 1 password ext
 - atuin setup
   - if atuin is on enable that mod in configuration.nix, make sure to `atuin login` get key from existing device
   - TODO move key into secrets and mount it to atuin local share
 - stormd onboard to network
+- ssh key access, ssh iden in config in nix config
 
 ## Darwin
 
@@ -83,6 +88,7 @@ efi   /EFI/Microsoft/Boot/bootmgfw.efi
 
 # TODO
 
+- on new cosmic the bar is shown can i have this hidden by default
 - Split config into further flakes, inputs should not affect other systems, like first run without stormd
 - work on secrets pre ragenix, stormd pre install for all the above bootstrapping steps would be ideal
 - reduce home manager, make per user modules support instead

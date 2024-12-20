@@ -64,6 +64,9 @@ in
   "nix2lio.age" = {
     inherit publicKeys;
   };
+  "nix2oren.age" = {
+    inherit publicKeys;
+  };
   "github_read_token.age" = {
     inherit publicKeys;
   };

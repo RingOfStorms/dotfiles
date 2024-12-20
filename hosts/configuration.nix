@@ -113,4 +113,5 @@ in
 
   # Some basics
   nixpkgs.config.allowUnfree = settings.allowUnfree;
+  nixpkgs.config.allowUnfreePredicate = (pkg: true);
 }

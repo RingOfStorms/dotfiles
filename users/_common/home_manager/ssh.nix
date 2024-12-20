@@ -26,6 +26,11 @@
         hostname = "10.12.14.116";
         user = "josh";
       };
+      "oren" = {
+        identityFile = age.secrets.nix2oren.path;
+        # hostname = "10.20.40.104";
+        user = "josh";
+      };
       "joe" = {
         identityFile = age.secrets.nix2joe.path;
         hostname = "10.20.40.102";
