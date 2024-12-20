@@ -18,7 +18,7 @@
     tty_caps_esc.enable = true;
     docker.enable = true;
     fonts.enable = true;
-    # stormd.enable = true;
+    stormd.enable = true;
     nebula.enable = true;
     ssh.enable = true;
     # rustdesk.enable = true;
