@@ -49,7 +49,6 @@ in
     ];
   };
 
-
   # rate limiting for github
   nix.extraOptions = ''
     keep-outputs = true
@@ -110,6 +109,11 @@ in
     LC_TELEPHONE = defaultLocal;
     LC_TIME = defaultLocal;
   };
+
+  # make shutdown faster for waiting
+  systemd.extraConfig = ''
+    DefaultTimeoutStopSec=15s
+  '';
 
   # Some basics
   nixpkgs.config.allowUnfree = settings.allowUnfree;

@@ -28,7 +28,7 @@
       };
       "oren" = {
         identityFile = age.secrets.nix2oren.path;
-        # hostname = "10.20.40.104";
+        hostname = "10.20.40.105";
         user = "josh";
       };
       "joe" = {

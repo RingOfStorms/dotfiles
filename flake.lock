@@ -1438,11 +1438,11 @@
         "rust-overlay": "rust-overlay_4"
       },
       "locked": {
-        "lastModified": 1732677192,
-        "narHash": "sha256-Q8Tv53BKkdf4g01+NGqnly+hE+vIyBnloz4QG8NXMaw=",
+        "lastModified": 1734680189,
+        "narHash": "sha256-2ounQjXWJQU9u62N9zG5s/JNZJdyF6mtZwtM4YzDeNU=",
         "ref": "refs/heads/master",
-        "rev": "09a457218ae1973ca4a6da526b51ac6a98749038",
-        "revCount": 44,
+        "rev": "4f9f3f498d8c08cce47631492b0951b1f7998083",
+        "revCount": 50,
         "type": "git",
         "url": "ssh://git.joshuabell.xyz:3032/stormd"
       },
