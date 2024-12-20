@@ -59,7 +59,7 @@ in
     # Config
     home-manager.backupFileExtension = "bak";
     home-manager.users.${settings.user.username} = {
-      xdg.configFile = cosmicConfigFilesAttrs;
+      # xdg.configFile = cosmicConfigFilesAttrs;
     };
   };
 
