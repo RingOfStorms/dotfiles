@@ -77,7 +77,7 @@ in
     distributedBuilds = true;
     buildMachines = [
       {
-        hostName = "lio_";
+        hostName = "lio";
         system = "x86_64-linux";
         protocol = "ssh-ng";
         maxJobs = 32;
@@ -112,7 +112,7 @@ in
 
   # make shutdown faster for waiting
   systemd.extraConfig = ''
-    DefaultTimeoutStopSec=15s
+    DefaultTimeoutStopSec=5s
   '';
 
   # Some basics
