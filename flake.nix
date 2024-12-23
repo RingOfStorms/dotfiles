@@ -167,7 +167,7 @@
                   settings.home-manager.nixosModules.home-manager
                 ]
                 ++ ylib.umport {
-                  path = lib.fileset.maybeMissing ./modules;
+                  path = lib.fileset.maybeMissing ./modules_old;
                   recursive = true;
                 }
                 ++ [ ./hosts/configuration.nix ];
