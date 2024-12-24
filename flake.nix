@@ -144,7 +144,7 @@
         flakeDir = ./.;
         publicsDir = ./publics;
         secretsDir = ./secrets;
-        hostsDir = ./hosts;
+        hostsDir = ./hosts_old;
         usersDir = ./users;
       };
     in
@@ -170,7 +170,7 @@
                   path = lib.fileset.maybeMissing ./modules_old;
                   recursive = true;
                 }
-                ++ [ ./hosts/configuration.nix ];
+                ++ [ ./hosts_old/configuration.nix ];
               specialArgs = inputs // {
                 inherit ylib;
                 settings =
