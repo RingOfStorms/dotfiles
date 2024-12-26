@@ -130,11 +130,11 @@
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-q8gMFwivaZtlaqp44mV7W5M8T5RkBhvjnikr6Ed4xIQ=",
-        "path": "/nix/store/37xsf6hrn243an0ynwflam47sqzja5ki-source/modules/boot_systemd",
+        "path": "/nix/store/prvi2x26ymzgydzr49na2qs7ihgjrq2d-source/modules/boot_systemd",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/37xsf6hrn243an0ynwflam47sqzja5ki-source/modules/boot_systemd",
+        "path": "/nix/store/prvi2x26ymzgydzr49na2qs7ihgjrq2d-source/modules/boot_systemd",
         "type": "path"
       }
     },
@@ -147,12 +147,12 @@
       },
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-44urGkCVL5AUQeHR9OUKn9f/r3k4wRDWOsbE+nzxBEk=",
-        "path": "/nix/store/37xsf6hrn243an0ynwflam47sqzja5ki-source/modules/common",
+        "narHash": "sha256-lWrwhvR+E4BC9vSKptGrAKy0C12HeasTMCtDmqI0rdY=",
+        "path": "/nix/store/prvi2x26ymzgydzr49na2qs7ihgjrq2d-source/modules/common",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/37xsf6hrn243an0ynwflam47sqzja5ki-source/modules/common",
+        "path": "/nix/store/prvi2x26ymzgydzr49na2qs7ihgjrq2d-source/modules/common",
         "type": "path"
       }
     },

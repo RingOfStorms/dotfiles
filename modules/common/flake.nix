@@ -110,7 +110,7 @@
                 clean.enable = true;
                 clean.extraArgs = "--keep 10";
                 # TODO this may need to be defined higher up if it is ever different for a machine...
-                flake = "/home/${cfg.primaryUser}/.config/nixos-config/configs/${cfg.systemName}";
+                flake = "/home/${cfg.primaryUser}/.config/nixos-config/hosts/${cfg.systemName}";
               };
 
               # Remote build off home lio computer
