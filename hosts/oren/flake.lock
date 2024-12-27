@@ -25,6 +25,33 @@
         "type": "github"
       }
     },
+    "cosmic": {
+      "inputs": {
+        "flake-compat": "flake-compat",
+        "nixpkgs": [
+          "mods_de_cosmic",
+          "nixpkgs"
+        ],
+        "nixpkgs-stable": [
+          "mods_de_cosmic",
+          "nixpkgs-stable"
+        ],
+        "rust-overlay": "rust-overlay_2"
+      },
+      "locked": {
+        "lastModified": 1735263434,
+        "narHash": "sha256-5Bn1c2sWzedpGV+PNfXtoainQ3uUKkx/v7T3N6lKKms=",
+        "owner": "lilyinstarlight",
+        "repo": "nixos-cosmic",
+        "rev": "e5fdfe023742172ec0e7af0ca6d88362228d14b7",
+        "type": "github"
+      },
+      "original": {
+        "owner": "lilyinstarlight",
+        "repo": "nixos-cosmic",
+        "type": "github"
+      }
+    },
     "crane": {
       "locked": {
         "lastModified": 1725409566,
@@ -61,6 +88,22 @@
         "owner": "lnl7",
         "ref": "master",
         "repo": "nix-darwin",
+        "type": "github"
+      }
+    },
+    "flake-compat": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1717312683,
+        "narHash": "sha256-FrlieJH50AuvagamEvWMIE6D2OAnERuDboFDYAED/dE=",
+        "owner": "nix-community",
+        "repo": "flake-compat",
+        "rev": "38fd3954cf65ce6faf3d0d45cd26059e059f07ea",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "flake-compat",
         "type": "github"
       }
     },
@@ -129,12 +172,12 @@
     "mods_boot_systemd": {
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-q8gMFwivaZtlaqp44mV7W5M8T5RkBhvjnikr6Ed4xIQ=",
-        "path": "/nix/store/prvi2x26ymzgydzr49na2qs7ihgjrq2d-source/modules/boot_systemd",
+        "narHash": "sha256-9Z/Z8Y4Q1q95zUeJWfUQFyeaAVkhb804kd3tiBpHfpI=",
+        "path": "/nix/store/ka4sn5h3pw93s1j7blv48vn30jfxiw19-source/modules/boot_systemd",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/prvi2x26ymzgydzr49na2qs7ihgjrq2d-source/modules/boot_systemd",
+        "path": "/nix/store/ka4sn5h3pw93s1j7blv48vn30jfxiw19-source/modules/boot_systemd",
         "type": "path"
       }
     },
@@ -147,12 +190,33 @@
       },
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-lWrwhvR+E4BC9vSKptGrAKy0C12HeasTMCtDmqI0rdY=",
-        "path": "/nix/store/prvi2x26ymzgydzr49na2qs7ihgjrq2d-source/modules/common",
+        "narHash": "sha256-Hgc2b0w7x9oi15wHy45ZAZ3w6UEESORoDNZX2tVyYmc=",
+        "path": "/nix/store/ka4sn5h3pw93s1j7blv48vn30jfxiw19-source/modules/common",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/prvi2x26ymzgydzr49na2qs7ihgjrq2d-source/modules/common",
+        "path": "/nix/store/ka4sn5h3pw93s1j7blv48vn30jfxiw19-source/modules/common",
+        "type": "path"
+      }
+    },
+    "mods_de_cosmic": {
+      "inputs": {
+        "cosmic": "cosmic",
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "nixpkgs-stable": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-R80oVWKVWJJBUCYgMiyTtP1X25zf7zo4C0Ziwrrt7aA=",
+        "path": "/nix/store/ka4sn5h3pw93s1j7blv48vn30jfxiw19-source/modules/de_cosmic",
+        "type": "path"
+      },
+      "original": {
+        "path": "/nix/store/ka4sn5h3pw93s1j7blv48vn30jfxiw19-source/modules/de_cosmic",
         "type": "path"
       }
     },
@@ -202,6 +266,7 @@
         "home-manager": "home-manager",
         "mods_boot_systemd": "mods_boot_systemd",
         "mods_common": "mods_common",
+        "mods_de_cosmic": "mods_de_cosmic",
         "nixpkgs": "nixpkgs"
       }
     },
@@ -219,6 +284,28 @@
         "owner": "oxalica",
         "repo": "rust-overlay",
         "rev": "8cc45e678e914a16c8e224c3237fb07cf21e5e54",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "rust-overlay_2": {
+      "inputs": {
+        "nixpkgs": [
+          "mods_de_cosmic",
+          "cosmic",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1735180071,
+        "narHash": "sha256-ceUDFBsLf5Cz3GlhQAdaJsEfi5s1MDjDsO9VvPFoKAE=",
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "550e1f10be4a504747a7894c35e887e61235763b",
         "type": "github"
       },
       "original": {

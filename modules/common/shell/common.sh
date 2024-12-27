@@ -154,6 +154,8 @@ nixpkg () {
   eval $cmd
 }
 
+# Marks some files as in "git" but they won't actually get pushed up to the git repo
+# Usefull for `gintent .envrc flake.lock flake.nix` to add nix items required by flakes in a git repo that won't want flakes added
 gintent() {
     for file in "$@"; do
         if [ -f "$file" ]; then
@@ -165,4 +167,5 @@ gintent() {
         fi
     done
 }
+alias gintentnix="gintent .envrc flake.lock flake.nix"
 

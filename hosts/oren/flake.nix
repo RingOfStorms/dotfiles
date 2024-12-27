@@ -11,6 +11,9 @@
     mods_common.url = "../../modules/common";
     mods_common.inputs.nixpkgs.follows = "nixpkgs";
     mods_boot_systemd.url = "../../modules/boot_systemd";
+    mods_de_cosmic.url = "../../modules/de_cosmic";
+    mods_de_cosmic.inputs.nixpkgs-stable.follows = "nixpkgs";
+    mods_de_cosmic.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =

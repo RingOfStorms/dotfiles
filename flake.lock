@@ -1418,11 +1418,11 @@
         "rust-overlay": "rust-overlay_3"
       },
       "locked": {
-        "lastModified": 1735017137,
-        "narHash": "sha256-JXVFiAO3NpnxED+//+MS0aEElIJlUIsCyiWL5mEooug=",
+        "lastModified": 1735329660,
+        "narHash": "sha256-orVsy4BTlJjFFl8sZdKf0qOH0A7eISKqxu9upISnFw8=",
         "ref": "refs/heads/master",
-        "rev": "31b96e313a70650fee70bd33765bb4ffbeabcb1e",
-        "revCount": 247,
+        "rev": "b43def52fc1f11d6438bc657842b1b876ffebbcd",
+        "revCount": 248,
         "type": "git",
         "url": "https://git.joshuabell.xyz/nvim"
       },

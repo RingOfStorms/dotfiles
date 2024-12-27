@@ -11,8 +11,8 @@
 
   # My custom modules
   mods = {
-    boot_systemd.enable = true;
-    shell_common.enable = true;
+    boot_systemd.enable = true; # new
+    shell_common.enable = true; # new
     de_cosmic.enable = true;
     neovim.enable = true;
     tty_caps_esc.enable = true;
@@ -20,7 +20,7 @@
     fonts.enable = true;
     stormd.enable = true;
     nebula.enable = true;
-    ssh.enable = true;
+    ssh.enable = true; # new
     # rustdesk.enable = true;
   };
 

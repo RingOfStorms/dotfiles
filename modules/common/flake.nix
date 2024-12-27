@@ -1,4 +1,5 @@
 {
+  description = "Common flake for all of my systems. ANy logic that I do on all my ssystems I put here so that I don't need to put it into sepratate nix flakes. This includes some basic nix[helper] settings, ragenix secrets, and ssh (ssh keys are used for ragenix)";
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -54,6 +55,7 @@
               # NOTE: Ragenix requires services.openssh.enable to be true otherwise it would require manually setting public keys, so ssh is enabled in the common module as well
               ./ssh.nix
               ./ragenix.nix
+              ./shell/common.nix
             ];
             config = {
               _module.args = {
