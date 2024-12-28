@@ -46,7 +46,7 @@
                 default = true;
                 description = "Open the ssh port.";
               };
-              # users = mkOption {
+              docker = mkEnableOption (lib.mdDoc "Enable docker");
             };
 
             imports = [
@@ -56,6 +56,9 @@
               ./ssh.nix
               ./ragenix.nix
               ./shell/common.nix
+              ./tty_caps_esc.nix
+              ./docker.nix
+              ./fonts.nix
             ];
             config = {
               _module.args = {

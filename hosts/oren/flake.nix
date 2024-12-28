@@ -14,6 +14,8 @@
     mods_de_cosmic.url = "../../modules/de_cosmic";
     mods_de_cosmic.inputs.nixpkgs-stable.follows = "nixpkgs";
     mods_de_cosmic.inputs.nixpkgs.follows = "nixpkgs";
+    mods_ros_neovim.url = "../../modules/neovim";
+    mods_row_stormd.url = "../../modules/stormd";
   };
 
   outputs =
@@ -55,6 +57,7 @@
                       systemName = configuration_name;
                       allowUnfree = true;
                       primaryUser = "josh";
+                      docker = true;
                     };
                   };
                 }
