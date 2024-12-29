@@ -112,7 +112,7 @@ in
 
   # make shutdown faster for waiting
   systemd.extraConfig = ''
-    DefaultTimeoutStopSec=5s
+    DefaultTimeoutStopSec=8s
   '';
 
   # Some basics
