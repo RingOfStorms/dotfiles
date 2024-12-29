@@ -39,6 +39,7 @@
               home-manager.extraSpecialArgs = {
                 nixConfig = config;
               };
+              home-manager.backupFileExtension = "bak";
 
               home-manager.users = mapAttrs' (name: user: {
                 inherit name;

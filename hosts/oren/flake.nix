@@ -108,16 +108,15 @@
                             ../../components/hm/zsh.nix
                           ];
                         };
-                        root = {
-                          imports = [
-                            # ../../components/hm/atuin.nix
-                            ../../components/hm/nix_deprecations.nix
-                            ../../components/hm/postgres.nix
-                            ../../components/hm/starship.nix
-                            ../../components/hm/zoxide.nix
-                            ../../components/hm/zsh.nix
-                          ];
-                        };
+                        # root = {
+                        #   imports = [
+                        #     ../../components/hm/nix_deprecations.nix
+                        #     ../../components/hm/postgres.nix
+                        #     ../../components/hm/starship.nix
+                        #     ../../components/hm/zoxide.nix
+                        #     ../../components/hm/zsh.nix
+                        #   ];
+                        # };
                       };
                     };
                   };

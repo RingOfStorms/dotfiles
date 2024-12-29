@@ -23,15 +23,27 @@
             pkgs,
             ...
           }:
+          let
+            cosmicConfigDir = ./config;
+            cosmicFiles = builtins.attrNames (builtins.readDir cosmicConfigDir);
+            cosmicConfigFiles = map (fileName: {
+              name = "cosmic/${fileName}";
+              value = {
+                source = "${cosmicConfigDir}/${fileName}";
+                # mode = "0644";
+              };
+            }) cosmicFiles;
+            cosmicConfigFilesAttrs = builtins.listToAttrs cosmicConfigFiles;
+          in
           with lib;
           {
             options.mods.de_cosmic = {
               users = mkOption {
                 type = types.listOf types.str;
                 description = "Users to apply cosmic DE settings to.";
-                default = [
-                  "root"
-                ] ++ (lib.optionals (config.mods.common.primaryUser != null) [ config.mods.common.primaryUser ]);
+                default = (
+                  lib.optionals (config.mods.common.primaryUser != null) [ config.mods.common.primaryUser ]
+                );
               };
             };
 
@@ -60,12 +72,21 @@
                 cosmic-store
               ];
 
-              # Config
-              environment.etc = lib.mkIf (config.mods.de_cosmic.users != null) (
-                lib.genAttrs config.mods.de_cosmic.users (user: {
-                  source = ./config;
-                  target = "/home/${user}/.config/cosmic";
-                })
+              # there are cosmic-greeter files in /var/lib/cosmic-greeter/ and ~/.local/state/cosmic
+              # Config TODO my attempt to make this not home-manager driven...
+              # environment.etc = cosmicConfigFilesAttrs;
+              # systemd.user.tmpfiles.rules = [
+              #   "L %h/.config/cosmic - - - - /etc/cosmic"
+              # ];
+
+              # Config TODO come up with a non home-manager way to do this. I dont want this flake to require home-manager from somewhere else to exist
+              home-manager.users = listToAttrs (
+                map (name: {
+                  inherit name;
+                  value = {
+                    xdg.configFile = cosmicConfigFilesAttrs;
+                  };
+                }) config.mods.de_cosmic.users
               );
             };
           };

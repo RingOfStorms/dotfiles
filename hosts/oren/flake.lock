@@ -174,11 +174,11 @@
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-9Z/Z8Y4Q1q95zUeJWfUQFyeaAVkhb804kd3tiBpHfpI=",
-        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/boot_systemd",
+        "path": "/nix/store/zcwx1l0ry5ikll5rpzlaxw8s5ygbs9r8-source/modules/boot_systemd",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/boot_systemd",
+        "path": "/nix/store/zcwx1l0ry5ikll5rpzlaxw8s5ygbs9r8-source/modules/boot_systemd",
         "type": "path"
       }
     },
@@ -192,11 +192,11 @@
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-tSW1S2JPkgnJ563taboMx0RfcyCbcO4+zsaTjPYPRvI=",
-        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/common",
+        "path": "/nix/store/zcwx1l0ry5ikll5rpzlaxw8s5ygbs9r8-source/modules/common",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/common",
+        "path": "/nix/store/zcwx1l0ry5ikll5rpzlaxw8s5ygbs9r8-source/modules/common",
         "type": "path"
       }
     },
@@ -212,12 +212,12 @@
       },
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-kTwFBa1QFUbcld1+ZUOK2M0OjOpg6rzVGrkuAB8CemA=",
-        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/de_cosmic",
+        "narHash": "sha256-FjZF4kam1l427FeIHKCFSV+GbXGpQPS46mWribdVK/U=",
+        "path": "/nix/store/zcwx1l0ry5ikll5rpzlaxw8s5ygbs9r8-source/modules/de_cosmic",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/de_cosmic",
+        "path": "/nix/store/zcwx1l0ry5ikll5rpzlaxw8s5ygbs9r8-source/modules/de_cosmic",
         "type": "path"
       }
     },
@@ -230,12 +230,12 @@
       },
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-9W9vNv25dFBOXVtiK8OeSrwU0epvI8y0dqdjfIEZhEc=",
-        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/home_manager",
+        "narHash": "sha256-8aN/3ioMsr8IhBvo/Ym98bkFbHQ/4ODrww15W9b0i2g=",
+        "path": "/nix/store/zcwx1l0ry5ikll5rpzlaxw8s5ygbs9r8-source/modules/home_manager",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/home_manager",
+        "path": "/nix/store/zcwx1l0ry5ikll5rpzlaxw8s5ygbs9r8-source/modules/home_manager",
         "type": "path"
       }
     },
@@ -243,11 +243,11 @@
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-WfYwWhjnePj5MYb9d84AAH7DT4W77eXV7DE1HV5nWbk=",
-        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/nebula",
+        "path": "/nix/store/zcwx1l0ry5ikll5rpzlaxw8s5ygbs9r8-source/modules/nebula",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/nebula",
+        "path": "/nix/store/zcwx1l0ry5ikll5rpzlaxw8s5ygbs9r8-source/modules/nebula",
         "type": "path"
       }
     },
@@ -258,11 +258,11 @@
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-Do761YmlKOOr9+9vKUJnA2n5WQANXKPR2aesvsi/6VQ=",
-        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/neovim",
+        "path": "/nix/store/zcwx1l0ry5ikll5rpzlaxw8s5ygbs9r8-source/modules/neovim",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/neovim",
+        "path": "/nix/store/zcwx1l0ry5ikll5rpzlaxw8s5ygbs9r8-source/modules/neovim",
         "type": "path"
       }
     },
@@ -273,11 +273,11 @@
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-YjXJu/5Hcl7YpcpiHLd5wqCFUlJp39MM9CfQKhdpkk8=",
-        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/stormd",
+        "path": "/nix/store/zcwx1l0ry5ikll5rpzlaxw8s5ygbs9r8-source/modules/stormd",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/stormd",
+        "path": "/nix/store/zcwx1l0ry5ikll5rpzlaxw8s5ygbs9r8-source/modules/stormd",
         "type": "path"
       }
     },
