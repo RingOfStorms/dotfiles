@@ -3,7 +3,7 @@
     "agenix": {
       "inputs": {
         "darwin": "darwin",
-        "home-manager": "home-manager_2",
+        "home-manager": "home-manager",
         "nixpkgs": [
           "mods_common",
           "ragenix",
@@ -128,27 +128,6 @@
     "home-manager": {
       "inputs": {
         "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1735344290,
-        "narHash": "sha256-oJDtWPH1oJT34RJK1FSWjwX4qcGOBRkcNQPD0EbSfNM=",
-        "owner": "nix-community",
-        "repo": "home-manager",
-        "rev": "613691f285dad87694c2ba1c9e6298d04736292d",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nix-community",
-        "ref": "release-24.11",
-        "repo": "home-manager",
-        "type": "github"
-      }
-    },
-    "home-manager_2": {
-      "inputs": {
-        "nixpkgs": [
           "mods_common",
           "ragenix",
           "agenix",
@@ -169,15 +148,37 @@
         "type": "github"
       }
     },
+    "home-manager_2": {
+      "inputs": {
+        "nixpkgs": [
+          "mods_home-manager",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1735344290,
+        "narHash": "sha256-oJDtWPH1oJT34RJK1FSWjwX4qcGOBRkcNQPD0EbSfNM=",
+        "owner": "rycee",
+        "repo": "home-manager",
+        "rev": "613691f285dad87694c2ba1c9e6298d04736292d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "rycee",
+        "ref": "release-24.11",
+        "repo": "home-manager",
+        "type": "github"
+      }
+    },
     "mods_boot_systemd": {
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-9Z/Z8Y4Q1q95zUeJWfUQFyeaAVkhb804kd3tiBpHfpI=",
-        "path": "/nix/store/9jx7g5wvvwsgbkkdqmn83k0fd8hh6ydq-source/modules/boot_systemd",
+        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/boot_systemd",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/9jx7g5wvvwsgbkkdqmn83k0fd8hh6ydq-source/modules/boot_systemd",
+        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/boot_systemd",
         "type": "path"
       }
     },
@@ -190,12 +191,12 @@
       },
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-4fm0Y7ekxMI3Z93JkoPwpBInDDAa4HIcIp9JwXKWcys=",
-        "path": "/nix/store/9jx7g5wvvwsgbkkdqmn83k0fd8hh6ydq-source/modules/common",
+        "narHash": "sha256-tSW1S2JPkgnJ563taboMx0RfcyCbcO4+zsaTjPYPRvI=",
+        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/common",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/9jx7g5wvvwsgbkkdqmn83k0fd8hh6ydq-source/modules/common",
+        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/common",
         "type": "path"
       }
     },
@@ -212,11 +213,41 @@
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-kTwFBa1QFUbcld1+ZUOK2M0OjOpg6rzVGrkuAB8CemA=",
-        "path": "/nix/store/9jx7g5wvvwsgbkkdqmn83k0fd8hh6ydq-source/modules/de_cosmic",
+        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/de_cosmic",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/9jx7g5wvvwsgbkkdqmn83k0fd8hh6ydq-source/modules/de_cosmic",
+        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/de_cosmic",
+        "type": "path"
+      }
+    },
+    "mods_home-manager": {
+      "inputs": {
+        "home-manager": "home-manager_2",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-9W9vNv25dFBOXVtiK8OeSrwU0epvI8y0dqdjfIEZhEc=",
+        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/home_manager",
+        "type": "path"
+      },
+      "original": {
+        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/home_manager",
+        "type": "path"
+      }
+    },
+    "mods_nebula": {
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-WfYwWhjnePj5MYb9d84AAH7DT4W77eXV7DE1HV5nWbk=",
+        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/nebula",
+        "type": "path"
+      },
+      "original": {
+        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/nebula",
         "type": "path"
       }
     },
@@ -227,26 +258,26 @@
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-Do761YmlKOOr9+9vKUJnA2n5WQANXKPR2aesvsi/6VQ=",
-        "path": "/nix/store/9jx7g5wvvwsgbkkdqmn83k0fd8hh6ydq-source/modules/neovim",
+        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/neovim",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/9jx7g5wvvwsgbkkdqmn83k0fd8hh6ydq-source/modules/neovim",
+        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/neovim",
         "type": "path"
       }
     },
-    "mods_row_stormd": {
+    "mods_ros_stormd": {
       "inputs": {
         "ringofstorms-stormd": "ringofstorms-stormd"
       },
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-YjXJu/5Hcl7YpcpiHLd5wqCFUlJp39MM9CfQKhdpkk8=",
-        "path": "/nix/store/9jx7g5wvvwsgbkkdqmn83k0fd8hh6ydq-source/modules/stormd",
+        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/stormd",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/9jx7g5wvvwsgbkkdqmn83k0fd8hh6ydq-source/modules/stormd",
+        "path": "/nix/store/sm477lnilan12wmmyd9s0dgphg6fqygf-source/modules/stormd",
         "type": "path"
       }
     },
@@ -1365,12 +1396,13 @@
     },
     "root": {
       "inputs": {
-        "home-manager": "home-manager",
         "mods_boot_systemd": "mods_boot_systemd",
         "mods_common": "mods_common",
         "mods_de_cosmic": "mods_de_cosmic",
+        "mods_home-manager": "mods_home-manager",
+        "mods_nebula": "mods_nebula",
         "mods_ros_neovim": "mods_ros_neovim",
-        "mods_row_stormd": "mods_row_stormd",
+        "mods_ros_stormd": "mods_ros_stormd",
         "nixpkgs": "nixpkgs_3"
       }
     },
@@ -1443,7 +1475,7 @@
     "rust-overlay_4": {
       "inputs": {
         "nixpkgs": [
-          "mods_row_stormd",
+          "mods_ros_stormd",
           "ringofstorms-stormd",
           "nixpkgs"
         ]

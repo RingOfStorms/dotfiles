@@ -36,6 +36,11 @@
                 # default = "josh";
                 description = "The primary user of the system.";
               };
+              primaryAuthorizedKeys = mkOption {
+                type = types.listOf types.str;
+                default = [ ];
+                description = "The primary user's authorized keys.";
+              };
               defaultLocal = mkOption {
                 type = types.str;
                 default = "en_US.UTF-8";
@@ -47,6 +52,12 @@
                 description = "Open the ssh port.";
               };
               docker = mkEnableOption (lib.mdDoc "Enable docker");
+              zsh = mkEnableOption (lib.mdDoc "Enable zsh");
+              users = mkOption {
+                type = types.attrsOf types.attrs;
+                default = { };
+                description = "Users to configure. Should match nix options of users.userser.<name>.*";
+              };
             };
 
             imports = [
@@ -58,7 +69,9 @@
               ./shell/common.nix
               ./tty_caps_esc.nix
               ./docker.nix
+              ./zsh.nix
               ./fonts.nix
+              ./users.nix
             ];
             config = {
               _module.args = {
@@ -169,7 +182,7 @@
               '';
 
               # Some basics
-              nixpkgs.config.allowUnfree = settings.allowUnfree;
+              nixpkgs.config.allowUnfree = cfg.allowUnfree;
               nixpkgs.config.allowUnfreePredicate = (pkg: true);
             };
           };
