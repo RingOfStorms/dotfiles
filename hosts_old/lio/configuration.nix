@@ -11,21 +11,21 @@
 
   # My custom modules
   mods = {
-    boot_systemd.enable = true;
-    shell_common.enable = true;
-    # de_cosmic.enable = true;
+    boot_systemd.enable = true; # new
+    shell_common.enable = true; # new
+    # de_cosmic.enable = true; # TODO
     audio.enable = true;
     de_gnome_xorg.enable = true;
     # de_gnome_wayland.enable = true;
-    neovim.enable = true;
-    tty_caps_esc.enable = true;
-    docker.enable = true;
-    fonts.enable = true;
-    ssh.enable = true;
-    stormd.enable = true;
-    nebula.enable = true;
-    rustdesk.enable = true;
-    saber.enable = true;
+    neovim.enable = true; # new
+    tty_caps_esc.enable = true; # new
+    docker.enable = true; # new
+    fonts.enable = true; # new
+    ssh.enable = true; # new
+    stormd.enable = true; # new
+    nebula.enable = true; # new
+    rustdesk.enable = true; # TODO
+    saber.enable = true; # removed
   };
 
   # opening this port for dev purposes

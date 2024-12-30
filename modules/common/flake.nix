@@ -53,6 +53,7 @@
               };
               docker = mkEnableOption (lib.mdDoc "Enable docker");
               zsh = mkEnableOption (lib.mdDoc "Enable zsh");
+              enableSleep = mkEnableOption (lib.mdDoc "Enable auto sleeping");
               users = mkOption {
                 type = types.attrsOf types.attrs;
                 default = { };
@@ -179,6 +180,15 @@
               # make shutdown faster for waiting
               systemd.extraConfig = ''
                 DefaultTimeoutStopSec=8s
+              '';
+
+              # Turn off sleep
+              systemd.sleep.extraConfig = mkIf (!cfg.enableSleep) ''
+                [Sleep]
+                AllowSuspend=no
+                AllowHibernation=no
+                AllowSuspendThenHibernate=no
+                AllowHybridSleep=no
               '';
 
               # Some basics

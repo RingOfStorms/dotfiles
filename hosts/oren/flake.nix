@@ -1,5 +1,5 @@
 {
-  description = "Oren system flake";
+  description = "oren system flake";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
@@ -75,9 +75,8 @@
                           ];
                           shell = pkgs.zsh;
                           packages = with pkgs; [
-                            # blender
+                            signal-desktop
                             google-chrome
-                            # comma
                             discordo
                             discord
                             # nautilus qimgv # file browsing (not needed in cosmic)
