@@ -236,7 +236,9 @@
             ];
 
             shellHook = ''
-              mod_worktrees
+              if [ -z "''${SKIP_MOD_WORKTREES}" ]; then
+                mod_worktrees
+              fi
             '';
           };
         }
