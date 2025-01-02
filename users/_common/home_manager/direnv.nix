@@ -36,9 +36,11 @@
         hide_env_diff = true;
       };
       whitelist = {
-        prefix = [ "~/projects" ];
+        prefix = [
+          "~/projects"
+          "~/.config"
+        ];
       };
     };
   };
 }
-
