@@ -22,7 +22,7 @@
       ...
     }@inputs:
     let
-      configuration_name = "oren";
+      configuration_name = "gpdPocket3";
       lib = nixpkgs.lib;
     in
     {
