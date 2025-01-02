@@ -5,7 +5,7 @@
         "darwin": "darwin",
         "home-manager": "home-manager",
         "nixpkgs": [
-          "mods_common",
+          "mod_common",
           "ragenix",
           "nixpkgs"
         ],
@@ -29,11 +29,11 @@
       "inputs": {
         "flake-compat": "flake-compat",
         "nixpkgs": [
-          "mods_de_cosmic",
+          "mod_de_cosmic",
           "nixpkgs"
         ],
         "nixpkgs-stable": [
-          "mods_de_cosmic",
+          "mod_de_cosmic",
           "nixpkgs-stable"
         ],
         "rust-overlay": "rust-overlay_2"
@@ -70,7 +70,7 @@
     "darwin": {
       "inputs": {
         "nixpkgs": [
-          "mods_common",
+          "mod_common",
           "ragenix",
           "agenix",
           "nixpkgs"
@@ -128,7 +128,7 @@
     "home-manager": {
       "inputs": {
         "nixpkgs": [
-          "mods_common",
+          "mod_common",
           "ragenix",
           "agenix",
           "nixpkgs"
@@ -151,7 +151,7 @@
     "home-manager_2": {
       "inputs": {
         "nixpkgs": [
-          "mods_home-manager",
+          "mod_home-manager",
           "nixpkgs"
         ]
       },
@@ -170,7 +170,7 @@
         "type": "github"
       }
     },
-    "mods_boot_systemd": {
+    "mod_boot_systemd": {
       "locked": {
         "lastModified": 1735793935,
         "narHash": "sha256-ZmdChqcyS/6cal5pKKmzqfVkg9TbYM9jRa5LhziceiI=",
@@ -186,7 +186,7 @@
         "url": "https://git.joshuabell.xyz/dotfiles"
       }
     },
-    "mods_common": {
+    "mod_common": {
       "inputs": {
         "nixpkgs": [
           "nixpkgs"
@@ -208,7 +208,7 @@
         "url": "https://git.joshuabell.xyz/dotfiles"
       }
     },
-    "mods_de_cosmic": {
+    "mod_de_cosmic": {
       "inputs": {
         "cosmic": "cosmic",
         "nixpkgs": [
@@ -233,7 +233,7 @@
         "url": "https://git.joshuabell.xyz/dotfiles"
       }
     },
-    "mods_home-manager": {
+    "mod_home-manager": {
       "inputs": {
         "home-manager": "home-manager_2",
         "nixpkgs": [
@@ -255,13 +255,13 @@
         "url": "https://git.joshuabell.xyz/dotfiles"
       }
     },
-    "mods_nebula": {
+    "mod_nebula": {
       "locked": {
-        "lastModified": 1735796291,
-        "narHash": "sha256-WfYwWhjnePj5MYb9d84AAH7DT4W77eXV7DE1HV5nWbk=",
+        "lastModified": 1735798197,
+        "narHash": "sha256-QeS0WfeDOZJnpVL96MwWZlC2/SEncCT42DwAuso8Zu4=",
         "ref": "mod_nebula",
-        "rev": "139046b747f147d4ff068a549f304f71cbb763a6",
-        "revCount": 1,
+        "rev": "b8a9599fcf28a9ccbf3b5c903e62da496a8ccc0c",
+        "revCount": 2,
         "type": "git",
         "url": "https://git.joshuabell.xyz/dotfiles"
       },
@@ -271,7 +271,7 @@
         "url": "https://git.joshuabell.xyz/dotfiles"
       }
     },
-    "mods_ros_neovim": {
+    "mod_ros_neovim": {
       "inputs": {
         "ringofstorms-nvim": "ringofstorms-nvim"
       },
@@ -290,7 +290,7 @@
         "url": "https://git.joshuabell.xyz/dotfiles"
       }
     },
-    "mods_ros_stormd": {
+    "mod_ros_stormd": {
       "inputs": {
         "ringofstorms-stormd": "ringofstorms-stormd"
       },
@@ -1306,7 +1306,7 @@
         "crane": "crane",
         "flake-utils": "flake-utils",
         "nixpkgs": [
-          "mods_common",
+          "mod_common",
           "nixpkgs"
         ],
         "rust-overlay": "rust-overlay"
@@ -1424,20 +1424,20 @@
     },
     "root": {
       "inputs": {
-        "mods_boot_systemd": "mods_boot_systemd",
-        "mods_common": "mods_common",
-        "mods_de_cosmic": "mods_de_cosmic",
-        "mods_home-manager": "mods_home-manager",
-        "mods_nebula": "mods_nebula",
-        "mods_ros_neovim": "mods_ros_neovim",
-        "mods_ros_stormd": "mods_ros_stormd",
+        "mod_boot_systemd": "mod_boot_systemd",
+        "mod_common": "mod_common",
+        "mod_de_cosmic": "mod_de_cosmic",
+        "mod_home-manager": "mod_home-manager",
+        "mod_nebula": "mod_nebula",
+        "mod_ros_neovim": "mod_ros_neovim",
+        "mod_ros_stormd": "mod_ros_stormd",
         "nixpkgs": "nixpkgs_3"
       }
     },
     "rust-overlay": {
       "inputs": {
         "nixpkgs": [
-          "mods_common",
+          "mod_common",
           "ragenix",
           "nixpkgs"
         ]
@@ -1459,7 +1459,7 @@
     "rust-overlay_2": {
       "inputs": {
         "nixpkgs": [
-          "mods_de_cosmic",
+          "mod_de_cosmic",
           "cosmic",
           "nixpkgs"
         ]
@@ -1481,7 +1481,7 @@
     "rust-overlay_3": {
       "inputs": {
         "nixpkgs": [
-          "mods_ros_neovim",
+          "mod_ros_neovim",
           "ringofstorms-nvim",
           "nixpkgs"
         ]
@@ -1503,7 +1503,7 @@
     "rust-overlay_4": {
       "inputs": {
         "nixpkgs": [
-          "mods_ros_stormd",
+          "mod_ros_stormd",
           "ringofstorms-stormd",
           "nixpkgs"
         ]

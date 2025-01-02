@@ -5,7 +5,7 @@
         "darwin": "darwin",
         "home-manager": "home-manager",
         "nixpkgs": [
-          "mods_common",
+          "mod_common",
           "ragenix",
           "nixpkgs"
         ],
@@ -29,11 +29,11 @@
       "inputs": {
         "flake-compat": "flake-compat",
         "nixpkgs": [
-          "mods_de_cosmic",
+          "mod_de_cosmic",
           "nixpkgs"
         ],
         "nixpkgs-stable": [
-          "mods_de_cosmic",
+          "mod_de_cosmic",
           "nixpkgs-stable"
         ],
         "rust-overlay": "rust-overlay_2"
@@ -70,7 +70,7 @@
     "darwin": {
       "inputs": {
         "nixpkgs": [
-          "mods_common",
+          "mod_common",
           "ragenix",
           "agenix",
           "nixpkgs"
@@ -128,7 +128,7 @@
     "home-manager": {
       "inputs": {
         "nixpkgs": [
-          "mods_common",
+          "mod_common",
           "ragenix",
           "agenix",
           "nixpkgs"
@@ -151,7 +151,7 @@
     "home-manager_2": {
       "inputs": {
         "nixpkgs": [
-          "mods_home-manager",
+          "mod_home-manager",
           "nixpkgs"
         ]
       },
@@ -170,19 +170,23 @@
         "type": "github"
       }
     },
-    "mods_boot_systemd": {
+    "mod_boot_systemd": {
       "locked": {
-        "lastModified": 1,
-        "narHash": "sha256-9Z/Z8Y4Q1q95zUeJWfUQFyeaAVkhb804kd3tiBpHfpI=",
-        "path": "/nix/store/898nvmjvhjcbffp33izmx13nfm63g424-source/modules/boot_systemd",
-        "type": "path"
+        "lastModified": 1735793935,
+        "narHash": "sha256-ZmdChqcyS/6cal5pKKmzqfVkg9TbYM9jRa5LhziceiI=",
+        "ref": "mod_boot_systemd",
+        "rev": "3155d8a57286aefb835476617ba6d4df92b83013",
+        "revCount": 1,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
       },
       "original": {
-        "path": "/nix/store/898nvmjvhjcbffp33izmx13nfm63g424-source/modules/boot_systemd",
-        "type": "path"
+        "ref": "mod_boot_systemd",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
       }
     },
-    "mods_common": {
+    "mod_common": {
       "inputs": {
         "nixpkgs": [
           "nixpkgs"
@@ -190,17 +194,21 @@
         "ragenix": "ragenix"
       },
       "locked": {
-        "lastModified": 1,
-        "narHash": "sha256-tSW1S2JPkgnJ563taboMx0RfcyCbcO4+zsaTjPYPRvI=",
-        "path": "/nix/store/898nvmjvhjcbffp33izmx13nfm63g424-source/modules/common",
-        "type": "path"
+        "lastModified": 1735795919,
+        "narHash": "sha256-vreq5NKH6dCj9nAsR59KTHfT+i9SLDbtGbsEcv0Heuw=",
+        "ref": "mod_common",
+        "rev": "b693858091a4a1e1135393b941ad16cbf21fa5fe",
+        "revCount": 1,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
       },
       "original": {
-        "path": "/nix/store/898nvmjvhjcbffp33izmx13nfm63g424-source/modules/common",
-        "type": "path"
+        "ref": "mod_common",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
       }
     },
-    "mods_de_cosmic": {
+    "mod_de_cosmic": {
       "inputs": {
         "cosmic": "cosmic",
         "nixpkgs": [
@@ -211,17 +219,21 @@
         ]
       },
       "locked": {
-        "lastModified": 1,
-        "narHash": "sha256-qnVxk8Rj53Fhj3TiSD8jTgssjcZt1/RNrfC9N2Icgew=",
-        "path": "/nix/store/898nvmjvhjcbffp33izmx13nfm63g424-source/modules/de_cosmic",
-        "type": "path"
+        "lastModified": 1735796142,
+        "narHash": "sha256-/qhLqE1/LkXS+OS0r+iJnzyke23cLPIEGPmDymFMsKA=",
+        "ref": "mod_de_cosmic",
+        "rev": "8392467e87a95012cba37144418b6ebd072ab5ce",
+        "revCount": 1,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
       },
       "original": {
-        "path": "/nix/store/898nvmjvhjcbffp33izmx13nfm63g424-source/modules/de_cosmic",
-        "type": "path"
+        "ref": "mod_de_cosmic",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
       }
     },
-    "mods_home-manager": {
+    "mod_home-manager": {
       "inputs": {
         "home-manager": "home-manager_2",
         "nixpkgs": [
@@ -229,56 +241,72 @@
         ]
       },
       "locked": {
-        "lastModified": 1,
+        "lastModified": 1735796212,
         "narHash": "sha256-8aN/3ioMsr8IhBvo/Ym98bkFbHQ/4ODrww15W9b0i2g=",
-        "path": "/nix/store/898nvmjvhjcbffp33izmx13nfm63g424-source/modules/home_manager",
-        "type": "path"
+        "ref": "mod_home_manager",
+        "rev": "c3bcacb4ff5697c2f186c8d645c135356f68bc11",
+        "revCount": 1,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
       },
       "original": {
-        "path": "/nix/store/898nvmjvhjcbffp33izmx13nfm63g424-source/modules/home_manager",
-        "type": "path"
+        "ref": "mod_home_manager",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
       }
     },
-    "mods_nebula": {
+    "mod_nebula": {
       "locked": {
-        "lastModified": 1,
-        "narHash": "sha256-WfYwWhjnePj5MYb9d84AAH7DT4W77eXV7DE1HV5nWbk=",
-        "path": "/nix/store/898nvmjvhjcbffp33izmx13nfm63g424-source/modules/nebula",
-        "type": "path"
+        "lastModified": 1735798197,
+        "narHash": "sha256-QeS0WfeDOZJnpVL96MwWZlC2/SEncCT42DwAuso8Zu4=",
+        "ref": "mod_nebula",
+        "rev": "b8a9599fcf28a9ccbf3b5c903e62da496a8ccc0c",
+        "revCount": 2,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
       },
       "original": {
-        "path": "/nix/store/898nvmjvhjcbffp33izmx13nfm63g424-source/modules/nebula",
-        "type": "path"
+        "ref": "mod_nebula",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
       }
     },
-    "mods_ros_neovim": {
+    "mod_ros_neovim": {
       "inputs": {
         "ringofstorms-nvim": "ringofstorms-nvim"
       },
       "locked": {
-        "lastModified": 1,
-        "narHash": "sha256-Do761YmlKOOr9+9vKUJnA2n5WQANXKPR2aesvsi/6VQ=",
-        "path": "/nix/store/898nvmjvhjcbffp33izmx13nfm63g424-source/modules/neovim",
-        "type": "path"
+        "lastModified": 1735796481,
+        "narHash": "sha256-DvenriWxmFoh/hJ0nxpTKEr4lzgD+exLPboN4CK8Zyk=",
+        "ref": "mod_neovim",
+        "rev": "311a994ebb87242d55b9f00eed0232aa5b4c51d8",
+        "revCount": 1,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
       },
       "original": {
-        "path": "/nix/store/898nvmjvhjcbffp33izmx13nfm63g424-source/modules/neovim",
-        "type": "path"
+        "ref": "mod_neovim",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
       }
     },
-    "mods_ros_stormd": {
+    "mod_ros_stormd": {
       "inputs": {
         "ringofstorms-stormd": "ringofstorms-stormd"
       },
       "locked": {
-        "lastModified": 1,
+        "lastModified": 1735796563,
         "narHash": "sha256-YjXJu/5Hcl7YpcpiHLd5wqCFUlJp39MM9CfQKhdpkk8=",
-        "path": "/nix/store/898nvmjvhjcbffp33izmx13nfm63g424-source/modules/stormd",
-        "type": "path"
+        "ref": "mod_stormd",
+        "rev": "a184895fd3f32051499dfad8eb2cb18faaec4188",
+        "revCount": 1,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
       },
       "original": {
-        "path": "/nix/store/898nvmjvhjcbffp33izmx13nfm63g424-source/modules/stormd",
-        "type": "path"
+        "ref": "mod_stormd",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
       }
     },
     "nix-filter": {
@@ -1278,7 +1306,7 @@
         "crane": "crane",
         "flake-utils": "flake-utils",
         "nixpkgs": [
-          "mods_common",
+          "mod_common",
           "nixpkgs"
         ],
         "rust-overlay": "rust-overlay"
@@ -1396,20 +1424,20 @@
     },
     "root": {
       "inputs": {
-        "mods_boot_systemd": "mods_boot_systemd",
-        "mods_common": "mods_common",
-        "mods_de_cosmic": "mods_de_cosmic",
-        "mods_home-manager": "mods_home-manager",
-        "mods_nebula": "mods_nebula",
-        "mods_ros_neovim": "mods_ros_neovim",
-        "mods_ros_stormd": "mods_ros_stormd",
+        "mod_boot_systemd": "mod_boot_systemd",
+        "mod_common": "mod_common",
+        "mod_de_cosmic": "mod_de_cosmic",
+        "mod_home-manager": "mod_home-manager",
+        "mod_nebula": "mod_nebula",
+        "mod_ros_neovim": "mod_ros_neovim",
+        "mod_ros_stormd": "mod_ros_stormd",
         "nixpkgs": "nixpkgs_3"
       }
     },
     "rust-overlay": {
       "inputs": {
         "nixpkgs": [
-          "mods_common",
+          "mod_common",
           "ragenix",
           "nixpkgs"
         ]
@@ -1431,7 +1459,7 @@
     "rust-overlay_2": {
       "inputs": {
         "nixpkgs": [
-          "mods_de_cosmic",
+          "mod_de_cosmic",
           "cosmic",
           "nixpkgs"
         ]
@@ -1453,7 +1481,7 @@
     "rust-overlay_3": {
       "inputs": {
         "nixpkgs": [
-          "mods_ros_neovim",
+          "mod_ros_neovim",
           "ringofstorms-nvim",
           "nixpkgs"
         ]
@@ -1475,7 +1503,7 @@
     "rust-overlay_4": {
       "inputs": {
         "nixpkgs": [
-          "mods_ros_stormd",
+          "mod_ros_stormd",
           "ringofstorms-stormd",
           "nixpkgs"
         ]
