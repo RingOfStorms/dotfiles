@@ -219,11 +219,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1735796142,
-        "narHash": "sha256-/qhLqE1/LkXS+OS0r+iJnzyke23cLPIEGPmDymFMsKA=",
+        "lastModified": 1735839171,
+        "narHash": "sha256-yXTT8Lwbsm2ujIeK8NiVb0YUdjPT//3NK8vhXd9x8KE=",
         "ref": "mod_de_cosmic",
-        "rev": "8392467e87a95012cba37144418b6ebd072ab5ce",
-        "revCount": 1,
+        "rev": "ce85513ec5b69279aed6859bc37c78c22e5e944f",
+        "revCount": 2,
         "type": "git",
         "url": "https://git.joshuabell.xyz/dotfiles"
       },
@@ -257,11 +257,11 @@
     },
     "mod_nebula": {
       "locked": {
-        "lastModified": 1735798197,
-        "narHash": "sha256-QeS0WfeDOZJnpVL96MwWZlC2/SEncCT42DwAuso8Zu4=",
+        "lastModified": 1735839301,
+        "narHash": "sha256-f2JlNaCrA3BA8fPT0uThiuiIZX5ehDe0lPlSLL/QMgY=",
         "ref": "mod_nebula",
-        "rev": "b8a9599fcf28a9ccbf3b5c903e62da496a8ccc0c",
-        "revCount": 2,
+        "rev": "38c50b65c66740566b39529bbd91624b01b6ea2a",
+        "revCount": 3,
         "type": "git",
         "url": "https://git.joshuabell.xyz/dotfiles"
       },
