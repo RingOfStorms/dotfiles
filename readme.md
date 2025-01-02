@@ -1,5 +1,9 @@
 ## TODO working on changes to this now
 
+### Old Config prior to per system flake approach
+
+<https://git.joshuabell.xyz/dotfiles/~files/6527f67145fe047df57b4778c154dde580ec04c4>
+
 # First Install on new Machine
 
 ## NixOS install
@@ -16,17 +20,12 @@
 - Formatting
   - `mkfs.ext4 -L NIXROOT /dev/DEVICE_1` - root ext4
   - `mkfs.fat -F 32 -n NIXBOOT /dev/DEVICE_2` - boot FAT
-- Mount + swapfile
+- Mount
   - `mount /dev/disk/by-label/NIXROOT /mnt`
   - `mkdir -p /mnt/boot`
   - `mount -o umask=077 /dev/disk/by-label/NIXBOOT /mnt/boot`
+(Note that swap files is defined in nix config later not needed at this stage)
 
-# TODO swap may nto be needed anymore, this can just be added to hardware config and nixos will make it itself... <https://discourse.nixos.org/t/how-to-add-a-swap-after-nixos-installation/41742/2>
-
-- `dd if=/dev/zero of=/mnt/.swapfile bs=1024 count=2097152` (2GiB size, 2.14..GB) - make swap, count=62500000 (64GB)
-- `chmod 600 /mnt/.swapfile`
-- `mkswap /mnt/.swapfile`
-- `swapon /mnt/.swapfile`
 - nixos config and hardware config
   - `export HOSTNAME=desired_hostname_for_this_machine`
   - `export USERNAME=desired_username_for_admin_on_this_machine` (josh)
@@ -53,16 +52,16 @@
 
 ## Local tooling
 
-
-* firefox/1password setup
+- firefox/1password setup
   - sign in to firefox
   - sign into 1 password ext
+
 - atuin setup
   - if atuin is on enable that mod in configuration.nix, make sure to `atuin login` get key from existing device
   - TODO move key into secrets and mount it to atuin local share
 - stormd onboard to network
 - ssh key access, ssh iden in config in nix config
-- 
+-
 
 ## Darwin
 
