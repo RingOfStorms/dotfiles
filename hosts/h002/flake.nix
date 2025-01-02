@@ -2,10 +2,10 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
 
+    ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
     mod_common.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_common";
     mod_common.inputs.nixpkgs.follows = "nixpkgs";
     mod_boot_grub.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_boot_grub";
-    mod_ros_neovim.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_neovim";
     mod_ros_stormd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_stormd";
     mod_nebula.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_nebula";
     mod_home-manager.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_home_manager";
