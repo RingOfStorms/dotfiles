@@ -4,16 +4,16 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
 
-    mods_common.url = "../../modules/common";
+    mods_common.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_common";
     mods_common.inputs.nixpkgs.follows = "nixpkgs";
     mods_boot_systemd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_boot_systemd";
-    mods_de_cosmic.url = "../../modules/de_cosmic";
+    mods_de_cosmic.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_cosmic";
     mods_de_cosmic.inputs.nixpkgs-stable.follows = "nixpkgs";
     mods_de_cosmic.inputs.nixpkgs.follows = "nixpkgs";
-    mods_ros_neovim.url = "../../modules/neovim";
-    mods_ros_stormd.url = "../../modules/stormd";
-    mods_nebula.url = "../../modules/nebula";
-    mods_home-manager.url = "../../modules/home_manager";
+    mods_ros_neovim.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_neovim";
+    mods_ros_stormd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_stormd";
+    mods_nebula.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_nebula";
+    mods_home-manager.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_home_manager";
     mods_home-manager.inputs.home-manager.url = "github:rycee/home-manager/release-24.11";
     mods_home-manager.inputs.nixpkgs.follows = "nixpkgs";
   };
