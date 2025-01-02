@@ -172,14 +172,18 @@
     },
     "mods_boot_systemd": {
       "locked": {
-        "lastModified": 1,
-        "narHash": "sha256-9Z/Z8Y4Q1q95zUeJWfUQFyeaAVkhb804kd3tiBpHfpI=",
-        "path": "/nix/store/w6g1j7saj56rnr3fgh7yddps00rwirxv-source/modules/boot_systemd",
-        "type": "path"
+        "lastModified": 1735793935,
+        "narHash": "sha256-ZmdChqcyS/6cal5pKKmzqfVkg9TbYM9jRa5LhziceiI=",
+        "ref": "mod_boot_systemd",
+        "rev": "3155d8a57286aefb835476617ba6d4df92b83013",
+        "revCount": 1,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
       },
       "original": {
-        "path": "/nix/store/w6g1j7saj56rnr3fgh7yddps00rwirxv-source/modules/boot_systemd",
-        "type": "path"
+        "ref": "mod_boot_systemd",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
       }
     },
     "mods_common": {
@@ -192,11 +196,11 @@
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-vreq5NKH6dCj9nAsR59KTHfT+i9SLDbtGbsEcv0Heuw=",
-        "path": "/nix/store/w6g1j7saj56rnr3fgh7yddps00rwirxv-source/modules/common",
+        "path": "/nix/store/yyn760v331snh441bn7ix8cmillddawg-source/modules/common",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/w6g1j7saj56rnr3fgh7yddps00rwirxv-source/modules/common",
+        "path": "/nix/store/yyn760v331snh441bn7ix8cmillddawg-source/modules/common",
         "type": "path"
       }
     },
@@ -213,11 +217,11 @@
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-/qhLqE1/LkXS+OS0r+iJnzyke23cLPIEGPmDymFMsKA=",
-        "path": "/nix/store/w6g1j7saj56rnr3fgh7yddps00rwirxv-source/modules/de_cosmic",
+        "path": "/nix/store/yyn760v331snh441bn7ix8cmillddawg-source/modules/de_cosmic",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/w6g1j7saj56rnr3fgh7yddps00rwirxv-source/modules/de_cosmic",
+        "path": "/nix/store/yyn760v331snh441bn7ix8cmillddawg-source/modules/de_cosmic",
         "type": "path"
       }
     },
@@ -231,11 +235,11 @@
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-8aN/3ioMsr8IhBvo/Ym98bkFbHQ/4ODrww15W9b0i2g=",
-        "path": "/nix/store/w6g1j7saj56rnr3fgh7yddps00rwirxv-source/modules/home_manager",
+        "path": "/nix/store/yyn760v331snh441bn7ix8cmillddawg-source/modules/home_manager",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/w6g1j7saj56rnr3fgh7yddps00rwirxv-source/modules/home_manager",
+        "path": "/nix/store/yyn760v331snh441bn7ix8cmillddawg-source/modules/home_manager",
         "type": "path"
       }
     },
@@ -243,11 +247,11 @@
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-WfYwWhjnePj5MYb9d84AAH7DT4W77eXV7DE1HV5nWbk=",
-        "path": "/nix/store/w6g1j7saj56rnr3fgh7yddps00rwirxv-source/modules/nebula",
+        "path": "/nix/store/yyn760v331snh441bn7ix8cmillddawg-source/modules/nebula",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/w6g1j7saj56rnr3fgh7yddps00rwirxv-source/modules/nebula",
+        "path": "/nix/store/yyn760v331snh441bn7ix8cmillddawg-source/modules/nebula",
         "type": "path"
       }
     },
@@ -258,11 +262,11 @@
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-Do761YmlKOOr9+9vKUJnA2n5WQANXKPR2aesvsi/6VQ=",
-        "path": "/nix/store/w6g1j7saj56rnr3fgh7yddps00rwirxv-source/modules/neovim",
+        "path": "/nix/store/yyn760v331snh441bn7ix8cmillddawg-source/modules/neovim",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/w6g1j7saj56rnr3fgh7yddps00rwirxv-source/modules/neovim",
+        "path": "/nix/store/yyn760v331snh441bn7ix8cmillddawg-source/modules/neovim",
         "type": "path"
       }
     },
@@ -273,11 +277,11 @@
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-YjXJu/5Hcl7YpcpiHLd5wqCFUlJp39MM9CfQKhdpkk8=",
-        "path": "/nix/store/w6g1j7saj56rnr3fgh7yddps00rwirxv-source/modules/stormd",
+        "path": "/nix/store/yyn760v331snh441bn7ix8cmillddawg-source/modules/stormd",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/w6g1j7saj56rnr3fgh7yddps00rwirxv-source/modules/stormd",
+        "path": "/nix/store/yyn760v331snh441bn7ix8cmillddawg-source/modules/stormd",
         "type": "path"
       }
     },
