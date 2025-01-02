@@ -4,6 +4,39 @@
 
 <https://git.joshuabell.xyz/dotfiles/~files/6527f67145fe047df57b4778c154dde580ec04c4>
 
+## Setup local dev
+
+* Get modules in the same directory for ease of development
+```sh
+#!/bin/bash
+
+# Get all local and remote mod_* branches, removing lines with '+'
+branches=$(git branch -a | grep -E 'mod_' | grep -v '^\s*+' | sed 's/^[* ]*//; s/^remotes\/origin\///')
+
+# Remove duplicates and sort
+branches=$(echo "$branches" | sort -u)
+
+for branch in $branches; do
+    # Skip master or other non-mod branches
+    if [[ ! "$branch" =~ ^mod_ ]]; then
+        continue
+    fi
+
+    # Derive module name (remove mod_ prefix)
+    module_name="${branch#mod_}"
+    module_path="modules/$module_name"
+
+    # Check if worktree already exists
+    if [ ! -d "$module_path" ]; then
+        echo "Adding worktree for $branch in $module_path"
+        git worktree add "$module_path" "$branch" 2>/dev/null
+    else
+        echo "Worktree for $branch already exists"
+    fi
+done
+
+```
+
 # First Install on new Machine
 
 ## NixOS install
