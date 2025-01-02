@@ -1,6 +1,4 @@
 {
-  description = "lio system flake";
-
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
 
