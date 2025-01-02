@@ -1,4 +1,0 @@
-[submodule "modules/boot_systemd"]
-	path = modules/boot_systemd
-	url = ssh://git.joshuabell.xyz:3032/dotfiles
-	branch = mod_boot_systemd
