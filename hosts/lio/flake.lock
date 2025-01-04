@@ -39,11 +39,11 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1735781836,
-        "narHash": "sha256-3QBrsbyM1DyyXruthYJVAiK7kijJP4Mx996q1NC5FWE=",
+        "lastModified": 1735868220,
+        "narHash": "sha256-/2fV5/nf+v/7IY3N/hvVmnfwDmLbqRLNqKTB0954EW0=",
         "owner": "lilyinstarlight",
         "repo": "nixos-cosmic",
-        "rev": "553e7a4b77c4ddf8ed700776f9d71982a14e23c4",
+        "rev": "ee7f797d293e1956e3df90b748d9992dbb3c82ad",
         "type": "github"
       },
       "original": {
@@ -194,11 +194,11 @@
         "ragenix": "ragenix"
       },
       "locked": {
-        "lastModified": 1735795919,
-        "narHash": "sha256-vreq5NKH6dCj9nAsR59KTHfT+i9SLDbtGbsEcv0Heuw=",
+        "lastModified": 1735934181,
+        "narHash": "sha256-FuIaDsoyBOU8L0842gU9VKGs2wQ3ATRXAZe8LY/HEtY=",
         "ref": "mod_common",
-        "rev": "b693858091a4a1e1135393b941ad16cbf21fa5fe",
-        "revCount": 1,
+        "rev": "f10210d958d9d27bbd61fda8b72fe10106a1b8c0",
+        "revCount": 2,
         "type": "git",
         "url": "https://git.joshuabell.xyz/dotfiles"
       },
@@ -339,16 +339,15 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1735697839,
-        "narHash": "sha256-0Acw0UaLi+VNThsmeX8zOKi000DFrYXNnrgpOpk2+MM=",
+        "lastModified": 1735854365,
+        "narHash": "sha256-pNb03vdsQmn0jS5dKAdx2DFZ2QH4RRvrIzZxqpfMcS8=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "5eaa5fdf06d2b15d373b82c0f3a1ec1c6cab02ae",
+        "rev": "cd9f495ef7584a714938915d3fe9327c2735d7e4",
         "type": "github"
       },
       "original": {
         "owner": "nixos",
-        "ref": "master",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -1385,11 +1384,11 @@
         "rust-overlay": "rust-overlay_4"
       },
       "locked": {
-        "lastModified": 1735841437,
-        "narHash": "sha256-ZwmlaFhOlQ7f6Rq6VxRup7giPiwQlwe71HcoO/laRJo=",
+        "lastModified": 1735857201,
+        "narHash": "sha256-zyljmBv1FegF4kF2ZWdSdBCIktSHxJljPipwLOOyjrk=",
         "ref": "refs/heads/master",
-        "rev": "71d82c875fff85ae250804f45f1acf65f42cdc1e",
-        "revCount": 253,
+        "rev": "31220281739c7b6432f3533313a0fa0164f232c0",
+        "revCount": 254,
         "type": "git",
         "url": "https://git.joshuabell.xyz/nvim"
       },
@@ -1429,11 +1428,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1735698720,
-        "narHash": "sha256-+skLL6mq/T7s6J5YmSp89ivQOHBPQ40GEU2n8yqp6bs=",
+        "lastModified": 1735784864,
+        "narHash": "sha256-tIl5p3ueaPw7T5T1UXkLc8ISMk6Y8CI/D/rd0msf73I=",
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "a00807363a8a6cae6c3fa84ff494bf9d96333674",
+        "rev": "04d5f1836721461b256ec452883362c5edc5288e",
         "type": "github"
       },
       "original": {

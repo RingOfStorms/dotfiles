@@ -42,6 +42,7 @@
             modules = [
               ./configuration.nix
               ./hardware-configuration.nix
+              ./containers_test.nix
               (
                 { pkgs, ... }:
                 {
