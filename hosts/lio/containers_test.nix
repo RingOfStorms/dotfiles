@@ -5,10 +5,10 @@
 }:
 {
 
-# NOTE some useful links
-# nixos containers: https://blog.beardhatcode.be/2020/12/Declarative-Nixos-Containers.html
-# https://nixos.wiki/wiki/NixOS_Containers
-# 
+  # NOTE some useful links
+  # nixos containers: https://blog.beardhatcode.be/2020/12/Declarative-Nixos-Containers.html
+  # https://nixos.wiki/wiki/NixOS_Containers
+  #
 
   options.services.librechat =
     let
@@ -73,6 +73,7 @@
 
         # librechat
         librechat = {
+          user = "root";
           image = "ghcr.io/danny-avila/librechat-dev:latest";
           ports = [
             "${toString config.services.librechat.port}:${toString config.services.librechat.port}"
@@ -99,6 +100,7 @@
         };
 
         librechat_mongodb = {
+          user = "root";
           image = "mongo";
           volumes = [
             "${config.services.librechat.dataDir}/data-node:/data/db"
@@ -111,6 +113,7 @@
         };
 
         librechat_meilisearch = {
+          user = "root";
           image = "getmeili/librechat_meilisearch:v1.7.3";
           environment = {
             MEILI_HOST = "http://librechat_meilisearch:7700";
@@ -123,6 +126,7 @@
         };
 
         librechat_vectordb = {
+          user = "root";
           image = "ankane/pgvector:latest";
           environment = {
             POSTGRES_DB = "mydatabase";
@@ -136,6 +140,7 @@
         };
 
         librechat_rag_api = {
+          user = "root";
           image = "ghcr.io/danny-avila/librechat-rag-api-dev-lite:latest";
           environment = {
             DB_HOST = "librechat_vectordb";
@@ -149,6 +154,7 @@
 
         # TODO revisit local whisper, for now I am using groq free for STT
         # librechat_whisper = {
+        # user = "root";
         #   image = "onerahmet/openai-whisper-asr-webservice:latest";
         #   # ports = [ "8080:8080" ];
         #   environment = {

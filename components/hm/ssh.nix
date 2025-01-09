@@ -132,6 +132,17 @@ in
         hostname = "10.20.40.1";
         user = "luser";
       };
+      "l003_" = {
+        identityFile = age.secrets.nix2l002.path;
+        hostname = "172.234.26.141";
+        user = "luser";
+      };
+      # TODO
+      # "l003" = {
+      #   identityFile = age.secrets.nix2l002.path;
+      #   hostname = "10.20.40.TODO";
+      #   user = "luser";
+      # };
     };
   };
 }
