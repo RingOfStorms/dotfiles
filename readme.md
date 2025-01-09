@@ -87,3 +87,8 @@ efi   /EFI/Microsoft/Boot/bootmgfw.efi
 - work on secrets pre ragenix, stormd pre install for all the above bootstrapping steps would be ideal
 - reduce home manager, make per user modules support instead
 - Ensure my neovim undohistory/auto saves don't save `.age` files as they can be sensitive.
+
+
+# Server hosts
+
+simply run `deploy` in the host root and it will push changes to the server

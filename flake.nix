@@ -53,8 +53,9 @@
         in
         {
           default = pkgs.mkShell {
-            nativeBuildInputs = [
+            nativeBuildInputs = with pkgs; [
               mod_worktrees
+              deploy-rs
             ];
 
             shellHook = ''
