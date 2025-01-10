@@ -19,6 +19,21 @@
       lib = nixpkgs.lib;
     in
     {
+      deploy = {
+        sshUser = "root";
+        sshOpts = [
+          "-i"
+          "/run/agenix/nix2l002"
+        ];
+        nodes.${configuration_name} = {
+          hostname = "172.232.11.143";
+          profiles.system = {
+            user = "root";
+            path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.${configuration_name};
+          };
+        };
+      };
+
       nixosConfigurations = {
         nixos = self.nixosConfigurations.${configuration_name};
         "${configuration_name}" =
@@ -42,6 +57,7 @@
                 {
                   users.users.root.openssh.authorizedKeys.keys = [
                     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFLBVLiPbhVG+riNNpkvXnNtOioByV3CQwtY9gu8pstp nix2l002"
+                    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJuo6L6V52AzdQIK6fWW9s0aX1yKUUTXbPd8v8IU9p2o nix2linode"
                   ];
                   mods = {
                     common = {
@@ -59,6 +75,7 @@
                           isNormalUser = true;
                           openssh.authorizedKeys.keys = [
                             "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFLBVLiPbhVG+riNNpkvXnNtOioByV3CQwtY9gu8pstp nix2l002"
+                            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJuo6L6V52AzdQIK6fWW9s0aX1yKUUTXbPd8v8IU9p2o nix2linode"
                           ];
                         };
                       };
@@ -71,21 +88,6 @@
               inherit inputs;
             };
           });
-      };
-
-      deploy = {
-        sshUser = "root";
-        sshOpts = [
-          "-i"
-          "/run/agenix/nix2l002"
-        ];
-        nodes.${configuration_name} = {
-          hostname = "172.232.20.245";
-          profiles.system = {
-            user = "root";
-            path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.${configuration_name};
-          };
-        };
       };
     };
 }

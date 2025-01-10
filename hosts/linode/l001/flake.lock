@@ -57,6 +57,56 @@
         "url": "https://git.joshuabell.xyz/dotfiles"
       }
     },
+    "mod_nebula": {
+      "locked": {
+        "lastModified": 1735839301,
+        "narHash": "sha256-f2JlNaCrA3BA8fPT0uThiuiIZX5ehDe0lPlSLL/QMgY=",
+        "ref": "mod_nebula",
+        "rev": "38c50b65c66740566b39529bbd91624b01b6ea2a",
+        "revCount": 3,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
+      },
+      "original": {
+        "ref": "mod_nebula",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
+      }
+    },
+    "mod_ros_stormd": {
+      "inputs": {
+        "ringofstorms-stormd": "ringofstorms-stormd"
+      },
+      "locked": {
+        "lastModified": 1735796563,
+        "narHash": "sha256-YjXJu/5Hcl7YpcpiHLd5wqCFUlJp39MM9CfQKhdpkk8=",
+        "ref": "mod_stormd",
+        "rev": "a184895fd3f32051499dfad8eb2cb18faaec4188",
+        "revCount": 1,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
+      },
+      "original": {
+        "ref": "mod_stormd",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
+      }
+    },
+    "nix-filter": {
+      "locked": {
+        "lastModified": 1710156097,
+        "narHash": "sha256-1Wvk8UP7PXdf8bCCaEoMnOT1qe5/Duqgj+rL8sRQsSM=",
+        "owner": "numtide",
+        "repo": "nix-filter",
+        "rev": "3342559a24e85fc164b295c3444e8a139924675b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "nix-filter",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1702272962,
@@ -75,6 +125,22 @@
     },
     "nixpkgs_2": {
       "locked": {
+        "lastModified": 1728888510,
+        "narHash": "sha256-nsNdSldaAyu6PE3YUA+YQLqUDJh+gRbBooMMekZJwvI=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "a3c0b3b21515f74fd2665903d4ce6bc4dc81c77c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_3": {
+      "locked": {
         "lastModified": 1736200483,
         "narHash": "sha256-JO+lFN2HsCwSLMUWXHeOad6QUxOuwe9UOAF/iSl1J4I=",
         "owner": "nixos",
@@ -89,11 +155,55 @@
         "type": "github"
       }
     },
+    "ringofstorms-stormd": {
+      "inputs": {
+        "nix-filter": "nix-filter",
+        "nixpkgs": "nixpkgs_2",
+        "rust-overlay": "rust-overlay"
+      },
+      "locked": {
+        "lastModified": 1735420577,
+        "narHash": "sha256-2HWEALz0PVJCiP/2iZuDMj4qyukXR5IxNKFxT1NAMlQ=",
+        "ref": "refs/heads/master",
+        "rev": "7edf6888a460708889fabea2c762d4dfed4fa64f",
+        "revCount": 51,
+        "type": "git",
+        "url": "ssh://git.joshuabell.xyz:3032/stormd"
+      },
+      "original": {
+        "type": "git",
+        "url": "ssh://git.joshuabell.xyz:3032/stormd"
+      }
+    },
     "root": {
       "inputs": {
         "deploy-rs": "deploy-rs",
         "mod_common": "mod_common",
-        "nixpkgs": "nixpkgs_2"
+        "mod_nebula": "mod_nebula",
+        "mod_ros_stormd": "mod_ros_stormd",
+        "nixpkgs": "nixpkgs_3"
+      }
+    },
+    "rust-overlay": {
+      "inputs": {
+        "nixpkgs": [
+          "mod_ros_stormd",
+          "ringofstorms-stormd",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1729218602,
+        "narHash": "sha256-KDmYxpkFWa0Go0WnOpkgQOypVaQxbwgpEutET5ey1VQ=",
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "9051466c82b9b3a6ba9e06be99621ad25423ec94",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "type": "github"
       }
     },
     "systems": {

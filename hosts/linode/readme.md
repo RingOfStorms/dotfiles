@@ -53,7 +53,8 @@ shutdown 0
   - copy `linode.nix` into remote server and import it into `configuration.nix`
     - update ssh key for root user if needed
   - `nixos-install`
-  - `shutdown 0`
+- shutdown in linode, delete installer disk
 - delete the installer configuration profile in linode, boot into nixos configuration profile
+
 
 tada, should be able to ssh with root and ssh key defined in earlier in linode.nix

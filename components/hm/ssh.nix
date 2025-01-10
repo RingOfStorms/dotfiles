@@ -117,9 +117,14 @@ in
         user = "luser";
       };
       # LINODE SERVERS
-      "l001" = {
-        identityFile = age.secrets.nix2l001.path;
-        hostname = "172.105.22.34"; # TODO  REMOVE - OFF BOARD
+      # "l001" = {
+      #   identityFile = age.secrets.nix2linode.path;
+      #   hostname = "10.20.40.##"; TODO
+      #   user = "root";
+      # };
+      "l001_" = {
+        identityFile = age.secrets.nix2linode.path;
+        hostname = "172.234.26.141";
         user = "root";
       };
       "l002_" = {
@@ -132,17 +137,6 @@ in
         hostname = "10.20.40.1";
         user = "luser";
       };
-      "l003_" = {
-        identityFile = age.secrets.nix2l002.path;
-        hostname = "172.234.26.141";
-        user = "luser";
-      };
-      # TODO
-      # "l003" = {
-      #   identityFile = age.secrets.nix2l002.path;
-      #   hostname = "10.20.40.TODO";
-      #   user = "luser";
-      # };
     };
   };
 }
