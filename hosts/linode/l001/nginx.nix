@@ -53,6 +53,7 @@
         enableACME = true;
         forceSSL = true;
         locations."/" = {
+          proxyWebsockets = true;
           proxyPass = "http://10.20.40.104:3080";
         };
       };
@@ -88,23 +89,57 @@
         };
       };
 
-      # NOTE ellalala.com? joshuabell.xyz?
+      "www.joshuabell.xyz" = {
+        enableACME = true;
+        forceSSL = true;
+        locations."/" = {
+          return = "301 https://joshuabell.xyz";
+        };
+      };
+      "joshuabell.xyz" = {
+        enableACME = true;
+        forceSSL = true;
+        locations."/" = {
+          # return = "200 '<html>Hello World</html>'";
+          extraConfig = ''
+            default_type text/html;
+            return 200 '
+              <html>
+              <div style="display: flex;width:100vw;height:100vh;justify-content: center;align-items:center;text-align:center;overflow:hidden">
+              In the void you roam,</br>
+              A page that cannot be found-</br>
+              Turn back, seek anew.
+              </div>
+              </html>
+            ';
+          '';
+        };
+      };
+
+      "www.ellalala.com" = {
+        enableACME = true;
+        forceSSL = true;
+        locations."/" = {
+          return = "301 https://ellalala.com";
+        };
+      };
+      "ellalala.com" = {
+        enableACME = true;
+        forceSSL = true;
+        locations."/" = {
+          return = "404";
+        };
+      };
 
       "_" = {
         default = true;
         locations."/" = {
-          return = "404"; # or 444 for drop
+          return = "444"; # 404 for not found or 444 for drop
         };
       };
     };
 
     # STREAMS
-    # streams = {
-    #   # Adding stream configuration for port 3032
-    #   "3032" = {
-    #     proxyPass = "10.20.40.190:6611";
-    #   };
-    # };
     streamConfig = ''
       server {
         listen 3032;
@@ -125,10 +160,3 @@
 }
 
 # TODO
-# <html>
-# <div style="display: flex;width:100vw;height:100vh;justify-content: center;align-items:center;text-align:center;overflow:hidden">
-# In the void you roam,</br>
-# A page that cannot be found-</br>
-# Turn back, seek anew.
-# </div>
-# </html>
