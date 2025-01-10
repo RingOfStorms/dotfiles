@@ -24,21 +24,6 @@
       };
   };
 
-  virtualisation.oci-containers = {
-    backend = "docker";
-    # TODO remove test
-    containers = {
-      # Example of defining a container from the compose file
-      "test_nginx" = {
-        # autoStart = true; this is default true
-        image = "nginx:latest";
-        ports = [
-          "127.0.0.1:8085:80"
-        ];
-      };
-    };
-  };
-
   security.acme.acceptTerms = true;
   security.acme.email = "admin@joshuabell.xyz";
   services.nginx = {
@@ -104,20 +89,30 @@
       "joshuabell.xyz" = {
         enableACME = true;
         forceSSL = true;
-        locations."/" = {
-          # return = "200 '<html>Hello World</html>'";
-          extraConfig = ''
-            default_type text/html;
-            return 200 '
-              <html>
-              <div style="display: flex;width:100vw;height:100vh;justify-content: center;align-items:center;text-align:center;overflow:hidden">
-              In the void you roam,</br>
-              A page that cannot be found-</br>
-              Turn back, seek anew.
-              </div>
-              </html>
-            ';
-          '';
+        locations = {
+          "/wasabi" = {
+            proxyPass = "http://192.168.100.11/";
+            extraConfig = ''
+              rewrite ^/wasabi/(.*) /$1 break;
+            '';
+          };
+          "/" = {
+            # return = "200 '<html>Hello World</html>'";
+            extraConfig = ''
+              default_type text/html;
+              return 200 '
+                <html>
+                  <body style="width:100vw;height:100vh;overflow:hidden">
+                    <div style="display: flex;width:100vw;height:100vh;justify-content: center;align-items:center;text-align:center;overflow:hidden">
+                      In the void you roam,</br>
+                      A page that cannot be found-</br>
+                      Turn back, seek anew.
+                    </div>
+                  </body>
+                </html>
+              ';
+            '';
+          };
         };
       };
 

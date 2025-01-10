@@ -5,6 +5,7 @@
     ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
     mod_common.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_common";
     mod_common.inputs.nixpkgs.follows = "nixpkgs";
+    mod_secrets.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_secrets";
     mod_boot_systemd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_boot_systemd";
     mod_de_cosmic.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_cosmic";
     mod_de_cosmic.inputs.nixpkgs-stable.follows = "nixpkgs";

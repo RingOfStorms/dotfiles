@@ -35,15 +35,14 @@
         "nixpkgs-stable": [
           "mod_de_cosmic",
           "nixpkgs-stable"
-        ],
-        "rust-overlay": "rust-overlay"
+        ]
       },
       "locked": {
-        "lastModified": 1736188510,
-        "narHash": "sha256-9gUz9t43aPHHPNfSnqqb5R1ZLs4nd5DWFeJwJS4Y+L0=",
+        "lastModified": 1736513564,
+        "narHash": "sha256-eAKwqMdGWambTbuZvAp3YYhAoWjaIFWGvxDAxxyh/Tg=",
         "owner": "lilyinstarlight",
         "repo": "nixos-cosmic",
-        "rev": "e127ad3374836982730aa094d2b3f7268c025b02",
+        "rev": "0855bf33427209e4f5e3d2d0968a14784525e929",
         "type": "github"
       },
       "original": {
@@ -133,11 +132,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1735344290,
-        "narHash": "sha256-oJDtWPH1oJT34RJK1FSWjwX4qcGOBRkcNQPD0EbSfNM=",
+        "lastModified": 1736373539,
+        "narHash": "sha256-dinzAqCjenWDxuy+MqUQq0I4zUSfaCvN9rzuCmgMZJY=",
         "owner": "rycee",
         "repo": "home-manager",
-        "rev": "613691f285dad87694c2ba1c9e6298d04736292d",
+        "rev": "bd65bc3cde04c16755955630b344bc9e35272c56",
         "type": "github"
       },
       "original": {
@@ -193,11 +192,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1736191002,
-        "narHash": "sha256-t39PCeJFgIXzniqjUIIFnbv6AE15WyoPTCE3k3Xuyz0=",
+        "lastModified": 1736544147,
+        "narHash": "sha256-WijrrGDuY8O0VUgsIbZK6PrvCMdgUGPex23hv1FmmHs=",
         "ref": "mod_common",
-        "rev": "ac3c0c2422842edba1887279bddd02b895ec5ed2",
-        "revCount": 4,
+        "rev": "780bcb7c44a274e4128af656dafce6d26463d6b8",
+        "revCount": 6,
         "type": "git",
         "url": "https://git.joshuabell.xyz/dotfiles"
       },
@@ -218,11 +217,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1735839171,
-        "narHash": "sha256-yXTT8Lwbsm2ujIeK8NiVb0YUdjPT//3NK8vhXd9x8KE=",
+        "lastModified": 1736544162,
+        "narHash": "sha256-C1pkQDar5XSdZtir3EfMWtW9gX3z8vaucGg800YzMvw=",
         "ref": "mod_de_cosmic",
-        "rev": "ce85513ec5b69279aed6859bc37c78c22e5e944f",
-        "revCount": 2,
+        "rev": "6d8795b3c6ce2a640abe36801959e3af37d85a2e",
+        "revCount": 3,
         "type": "git",
         "url": "https://git.joshuabell.xyz/dotfiles"
       },
@@ -240,11 +239,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1735796212,
-        "narHash": "sha256-8aN/3ioMsr8IhBvo/Ym98bkFbHQ/4ODrww15W9b0i2g=",
+        "lastModified": 1736544172,
+        "narHash": "sha256-5Zp1Fg5A827aIjKrhtW84vvJmwRQqBHWzKButnaD14E=",
         "ref": "mod_home_manager",
-        "rev": "c3bcacb4ff5697c2f186c8d645c135356f68bc11",
-        "revCount": 1,
+        "rev": "df0c4e95ac6b056202c4ec6fabfcfa5bd205a0b4",
+        "revCount": 2,
         "type": "git",
         "url": "https://git.joshuabell.xyz/dotfiles"
       },
@@ -275,11 +274,11 @@
         "ringofstorms-stormd": "ringofstorms-stormd"
       },
       "locked": {
-        "lastModified": 1735796563,
-        "narHash": "sha256-YjXJu/5Hcl7YpcpiHLd5wqCFUlJp39MM9CfQKhdpkk8=",
+        "lastModified": 1736544199,
+        "narHash": "sha256-OWboCDCBHFy+PuWsFVShEqEaLEgVdZR98k9zrNIb+3s=",
         "ref": "mod_stormd",
-        "rev": "a184895fd3f32051499dfad8eb2cb18faaec4188",
-        "revCount": 1,
+        "rev": "765c7f4436db03936960373ff77dc2d41f0c4cd5",
+        "revCount": 2,
         "type": "git",
         "url": "https://git.joshuabell.xyz/dotfiles"
       },
@@ -294,11 +293,11 @@
         "ragenix": "ragenix"
       },
       "locked": {
-        "lastModified": 1736491821,
-        "narHash": "sha256-KGWlfhNd2mGLV4X6R7hZBnij9HjbccIWDN63M3wUZ8g=",
+        "lastModified": 1736544189,
+        "narHash": "sha256-itFFi1SGZRdmREBhcDpuSD93bInq2Juoj3JQ7Q/oF+8=",
         "ref": "mod_secrets",
-        "rev": "cb240dc1177f44b63e719abac5ea94a198f6dd13",
-        "revCount": 7,
+        "rev": "17777b25238d4cb84b903252c49c75bd7030a3f6",
+        "revCount": 8,
         "type": "git",
         "url": "https://git.joshuabell.xyz/dotfiles"
       },
@@ -357,11 +356,11 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1736061677,
-        "narHash": "sha256-DjkQPnkAfd7eB522PwnkGhOMuT9QVCZspDpJJYyOj60=",
+        "lastModified": 1736200483,
+        "narHash": "sha256-JO+lFN2HsCwSLMUWXHeOad6QUxOuwe9UOAF/iSl1J4I=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "cbd8ec4de4469333c82ff40d057350c30e9f7d36",
+        "rev": "3f0a8ac25fb674611b98089ca3a5dd6480175751",
         "type": "github"
       },
       "original": {
@@ -1304,7 +1303,7 @@
         "crane": "crane",
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs_2",
-        "rust-overlay": "rust-overlay_3"
+        "rust-overlay": "rust-overlay_2"
       },
       "locked": {
         "lastModified": 1726755133,
@@ -1324,7 +1323,7 @@
       "inputs": {
         "nix-filter": "nix-filter",
         "nixpkgs": "nixpkgs",
-        "rust-overlay": "rust-overlay_2"
+        "rust-overlay": "rust-overlay"
       },
       "locked": {
         "lastModified": 1735420577,
@@ -1413,7 +1412,7 @@
         "nvim_plugin-yetone/avante.nvim": "nvim_plugin-yetone/avante.nvim",
         "nvim_plugin-zbirenbaum/copilot-cmp": "nvim_plugin-zbirenbaum/copilot-cmp",
         "nvim_plugin-zbirenbaum/copilot.lua": "nvim_plugin-zbirenbaum/copilot.lua",
-        "rust-overlay": "rust-overlay_4"
+        "rust-overlay": "rust-overlay_3"
       },
       "locked": {
         "lastModified": 1735857201,
@@ -1430,28 +1429,6 @@
       }
     },
     "rust-overlay": {
-      "inputs": {
-        "nixpkgs": [
-          "mod_de_cosmic",
-          "cosmic",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1736044260,
-        "narHash": "sha256-DTAr0mAd8AZwWgRtU9ZZFPz3DwNeoH/Oi/1QMSqc9YQ=",
-        "owner": "oxalica",
-        "repo": "rust-overlay",
-        "rev": "c8ed24cc104ebbc218d992e208131e9f024b69f0",
-        "type": "github"
-      },
-      "original": {
-        "owner": "oxalica",
-        "repo": "rust-overlay",
-        "type": "github"
-      }
-    },
-    "rust-overlay_2": {
       "inputs": {
         "nixpkgs": [
           "mod_ros_stormd",
@@ -1473,7 +1450,7 @@
         "type": "github"
       }
     },
-    "rust-overlay_3": {
+    "rust-overlay_2": {
       "inputs": {
         "nixpkgs": [
           "mod_secrets",
@@ -1495,7 +1472,7 @@
         "type": "github"
       }
     },
-    "rust-overlay_4": {
+    "rust-overlay_3": {
       "inputs": {
         "nixpkgs": [
           "ros_neovim",
