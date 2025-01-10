@@ -76,6 +76,11 @@
           proxyPass = "http://localhost:42291";
         };
       };
+      "nexus.joshuabell.xyz" = {
+        locations."/" = {
+          proxyPass = "http://localhost:42291";
+        };
+      };
 
       # Redirect self IP to domain
       "172.234.26.141" = {
@@ -127,7 +132,7 @@
         enableACME = true;
         forceSSL = true;
         locations."/" = {
-          return = "404";
+          return = "444";
         };
       };
 

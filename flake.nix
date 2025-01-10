@@ -50,11 +50,36 @@
                 fi
             done
           '';
+          mod_status = pkgs.writeShellScriptBin "mod_status" ''
+            cwd=$(pwd)
+            root=$(git rev-parse --show-toplevel)
+            for dir in "$root"/modules/*/; do
+                cd "$dir"
+                echo
+                echo " >> $(basename "$dir"):"
+                git status
+            done
+            cd "$cwd"
+          '';
+          linode_deploy = pkgs.writeShellScriptBin "linode_deploy" ''
+            cwd=$(pwd)
+            root=$(git rev-parse --show-toplevel)
+            if [ ! -d "$root/hosts/linode/$1" ]; then
+              echo "Host $1 does not exist"
+              exit 1
+            fi
+            cd "$root/hosts/linode/$1"
+            echo "Deploying $(basename "$(pwd)")..."
+            deploy
+            cd "$cwd"
+          '';
         in
         {
           default = pkgs.mkShell {
             nativeBuildInputs = with pkgs; [
               mod_worktrees
+              mod_status
+              linode_deploy
               deploy-rs
             ];
 

@@ -117,23 +117,13 @@ in
         user = "luser";
       };
       # LINODE SERVERS
-      # "l001" = {
-      #   identityFile = age.secrets.nix2linode.path;
-      #   hostname = "10.20.40.##"; TODO
-      #   user = "root";
-      # };
-      "l001_" = {
+      "l002_" = {
         identityFile = age.secrets.nix2linode.path;
         hostname = "172.234.26.141";
         user = "root";
       };
-      "l002_" = {
-        identityFile = age.secrets.nix2l002.path;
-        hostname = "172.232.4.54";
-        user = "luser";
-      };
       "l002" = {
-        identityFile = age.secrets.nix2l002.path;
+        identityFile = age.secrets.nix2linode.path;
         hostname = "10.20.40.1";
         user = "luser";
       };
