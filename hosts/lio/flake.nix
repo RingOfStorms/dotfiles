@@ -7,9 +7,8 @@
     mod_common.inputs.nixpkgs.follows = "nixpkgs";
     mod_secrets.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_secrets";
     mod_boot_systemd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_boot_systemd";
-    mod_de_cosmic.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_cosmic";
-    mod_de_cosmic.inputs.nixpkgs-stable.follows = "nixpkgs";
-    mod_de_cosmic.inputs.nixpkgs.follows = "nixpkgs";
+    # mod_de_cosmic.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_cosmic";
+    mod_de_hyprland.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_hyprland";
     mod_ros_stormd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_stormd";
     mod_nebula.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_nebula";
     mod_home-manager.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_home_manager";

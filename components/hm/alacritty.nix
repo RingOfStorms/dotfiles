@@ -6,7 +6,7 @@
     settings = {
       window = {
         # TODO revisit, I still want some border shadow but no top bar but that is not an option
-        # decorations = "None";
+        decorations = "None";
         dynamic_title = false;
       };
       colors = {

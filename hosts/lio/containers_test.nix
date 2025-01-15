@@ -71,7 +71,10 @@
           ];
         };
 
-        # librechat
+        #############
+        # librechat #
+        #############
+        # NOTE settings live in `/var/lib/librechat` manually right now
         librechat = {
           user = "root";
           image = "ghcr.io/danny-avila/librechat-dev:latest";
@@ -88,6 +91,8 @@
             MEILI_HOST = "http://librechat_meilisearch:7700";
             RAG_PORT = toString config.services.librechat.ragPort;
             RAG_API_URL = "http://librechat_rag_api:${toString config.services.librechat.ragPort}";
+            # DEBUG_CONSOLE = "true";
+            # DEBUG_LOGGING = "true";
           };
           environmentFiles = [ "${config.services.librechat.dataDir}/.env" ];
           volumes = [
@@ -96,7 +101,10 @@
             "${config.services.librechat.dataDir}/images:/app/client/public/images"
             "${config.services.librechat.dataDir}/logs:/app/api/logs"
           ];
-          extraOptions = [ "--network=librechat-network" ];
+          extraOptions = [
+            "--network=librechat-network"
+            "--add-host=azureproxy:10.20.40.180"
+          ];
         };
 
         librechat_mongodb = {
@@ -163,6 +171,11 @@
         #   };
         #   extraOptions = [ "--network=librechat-network" ];
         # };
+
+        #########
+        # grist #
+        #########
+
       };
     };
 
