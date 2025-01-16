@@ -12,9 +12,11 @@
       placement_strategy = "center";
 
       # Remove window borders
-      # window_decorations = "none";
-      hide_window_decorations = "yes";
-      dynamic_title = false;
+      hide_window_decorations = "titlebar-only";
+      tab_title_template = "none";
+      active_tab_title_template  = "none";
+      draw_minimal_borders = "yes";
+      window_border_width = "0.1pt";
 
       # Colors (Catppuccin Coal)
       foreground = "#e0e0e0";
