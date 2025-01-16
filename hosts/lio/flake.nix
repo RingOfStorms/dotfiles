@@ -105,6 +105,7 @@
                           imports = [
                             ../../components/hm/tmux/tmux.nix
                             ../../components/hm/alacritty.nix
+                            ../../components/hm/kitty.nix
                             ../../components/hm/atuin.nix
                             ../../components/hm/direnv.nix
                             ../../components/hm/git.nix
