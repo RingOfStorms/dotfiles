@@ -3,6 +3,18 @@
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  boot.supportedFilesystems = [ "zfs" ];
+  boot.kernelParams = [ "net.ifnames=0" ];
+
+  networking.useDHCP = false;  # deprecated flag, set to false until removed
+  networking = {
+    defaultGateway = "10.0.0.1";
+    nameservers = [ "9.9.9.9" ];  
+    interfaces.eth0 = {
+      ipAddress = throw "set your own";
+      prefixLength = 24;
+    };
+  };
 
   # TODO disable after first startup with ssh keys
   services.openssh = {

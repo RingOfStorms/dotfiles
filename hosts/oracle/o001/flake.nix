@@ -55,6 +55,7 @@
             modules = [
               ./configuration.nix
               ./hardware-configuration.nix
+              ./nginx.nix
               (
                 { pkgs, ... }:
                 {
