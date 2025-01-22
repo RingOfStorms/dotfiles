@@ -12,7 +12,6 @@
   boot.loader.grub.device = "nodev";
   boot.loader.timeout = 10;
 
-  # TODO disable after first startup with ssh keys
   services.openssh = {
     enable = true;
     settings.PermitRootLogin = "yes";
