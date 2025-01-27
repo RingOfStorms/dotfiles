@@ -12,7 +12,7 @@
   imports = [
     ./containers/tests.nix
     ./containers/librechat.nix
-    ./containers/affine.nix
+    # ./containers/affine.nix
   ];
 
   config = {

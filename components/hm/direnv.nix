@@ -3,6 +3,7 @@
   programs.direnv = {
     enable = true;
     enableZshIntegration = true;
+    nix-direnv.enable = true;
     config = {
       nix-direnv = true;
       global = {
@@ -11,7 +12,10 @@
         hide_env_diff = true;
       };
       whitelist = {
-        prefix = [ "~/projects" ];
+        prefix = [
+          "~/projects"
+          "~/.config"
+        ];
       };
     };
   };

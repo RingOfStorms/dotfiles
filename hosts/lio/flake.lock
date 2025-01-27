@@ -204,11 +204,11 @@
     },
     "mod_nebula": {
       "locked": {
-        "lastModified": 1735839301,
-        "narHash": "sha256-f2JlNaCrA3BA8fPT0uThiuiIZX5ehDe0lPlSLL/QMgY=",
+        "lastModified": 1737504380,
+        "narHash": "sha256-fCUUWkXAzsJDdZuGoG4GhAMdGld4J8cvDtzo6SlB9Dg=",
         "ref": "mod_nebula",
-        "rev": "38c50b65c66740566b39529bbd91624b01b6ea2a",
-        "revCount": 3,
+        "rev": "70cea59e9f1f750fd0aee8cde8cd54aee8601336",
+        "revCount": 5,
         "type": "git",
         "url": "https://git.joshuabell.xyz/dotfiles"
       },
@@ -305,11 +305,11 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1736916166,
-        "narHash": "sha256-puPDoVKxkuNmYIGMpMQiK8bEjaACcCksolsG36gdaNQ=",
+        "lastModified": 1737885640,
+        "narHash": "sha256-GFzPxJzTd1rPIVD4IW+GwJlyGwBDV1Tj5FLYwDQQ9sM=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "e24b4c09e963677b1beea49d411cd315a024ad3a",
+        "rev": "4e96537f163fad24ed9eb317798a79afc85b51b7",
         "type": "github"
       },
       "original": {
