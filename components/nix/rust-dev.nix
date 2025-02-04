@@ -39,8 +39,8 @@ in
   };
 
   config = mkIf config.components.rust.enable {
-    environment.systemPackages = [
-      pkgs.rustup
+    environment.systemPackages = with pkgs; [
+      rustup gcc
     ] ++ (if config.components.rust.repl then [ pkgs.evcxr ] else [ ]);
 
     environment.shellAliases = mkIf config.components.rust.repl {
