@@ -7,9 +7,8 @@
     mod_common.inputs.nixpkgs.follows = "nixpkgs";
     mod_secrets.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_secrets";
     mod_boot_systemd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_boot_systemd";
-    mod_de_cosmic.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_cosmic";
-    mod_de_cosmic.inputs.nixpkgs-stable.follows = "nixpkgs";
-    mod_de_cosmic.inputs.nixpkgs.follows = "nixpkgs";
+    # mod_de_cosmic.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_cosmic";
+    mod_de_gnome.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_gnome";
     mod_ros_stormd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_stormd";
     mod_nebula.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_nebula";
     mod_home-manager.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_home_manager";
@@ -48,7 +47,7 @@
                 {
                   imports = [
                     ../../components/nix/lua.nix
-                    ../../components/nix/rust-repl.nix
+                    ../../components/nix/rust-dev.nix
                     ../../components/nix/qflipper.nix
                     ../../components/nix/qdirstat.nix
                   ];
@@ -89,6 +88,7 @@
                           imports = [
                             ../../components/hm/tmux/tmux.nix
                             ../../components/hm/alacritty.nix
+                            ../../components/hm/kitty.nix
                             ../../components/hm/atuin.nix
                             ../../components/hm/direnv.nix
                             ../../components/hm/git.nix
@@ -99,6 +99,7 @@
                             ../../components/hm/zoxide.nix
                             ../../components/hm/zsh.nix
                           ];
+                          components.kitty.font_size = 20.0;
                         };
                       };
                     };

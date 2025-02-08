@@ -44,16 +44,22 @@
                 # Check if worktree already exists
                 if [ ! -d "$module_path" ]; then
                     echo "Adding worktree for $branch in $module_path"
-                    git worktree add "$module_path" "$branch" 2>/dev/null
+                    (git worktree add "$module_path" "$branch" 2>/dev/null) &
                 else
-                    cd "$module_path"
-                    git fetch origin "$branch" >/dev/null 2>&1
-                    if ! git diff --quiet HEAD "origin/$branch"; then
-                        echo "Updates available for $branch in $module_path"
-                    fi
-                    cd - >/dev/null
+                    (
+                      cd "$module_path"
+                      git fetch origin "$branch" >/dev/null 2>&1
+                      if ! git diff --quiet HEAD "origin/$branch"; then
+                          echo "Updates available for $branch in $module_path"
+                          git pull origin "$branch"
+                      fi
+                      cd - >/dev/null
+                    ) &
                 fi
             done
+
+            # Wait for all background processes to finish
+            wait
 
             # Check for and remove orphaned module directories
             if [ -d "modules" ]; then
@@ -62,11 +68,13 @@
                         module_name="$(basename "$dir")"
                         if ! echo "$branches" | grep -q "^mod_$module_name$"; then
                             echo "Removing orphaned module directory: $dir"
-                            git worktree remove --force "$dir"
+                            (git worktree remove --force "$dir") &
                         fi
                     fi
                 done
             fi 
+
+            wait
           '';
           mod_status = pkgs.writeShellScriptBin "mod_status" ''
             cwd=$(pwd)
