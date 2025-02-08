@@ -33,6 +33,18 @@
     recommendedProxySettings = true;
     recommendedTlsSettings = true;
     virtualHosts = {
+      # default that is put first for fallbacks
+      # Note that order here doesn't matter it orders alphabetically so `0` puts it first
+      # I had an issue tha the first SSL port 443 site would catch any https traffic instead
+      # of hitting my default fallback and this fixes that issue and ensure this is hit instead
+      "0.joshuabell.xyz" = {
+        default = true;
+        enableACME = true;
+        forceSSL = true;
+        locations."/" = {
+          return = "444"; # 404 for not found or 444 for drop
+        };
+      };
       # PROXY HOSTS
       "chat.joshuabell.xyz" = {
         enableACME = true;
@@ -40,14 +52,6 @@
         locations."/" = {
           proxyWebsockets = true;
           proxyPass = "http://10.20.40.104:3080";
-        };
-      };
-      "affine.joshuabell.xyz" = {
-        enableACME = true;
-        forceSSL = true;
-        locations."/" = {
-          proxyWebsockets = true;
-          proxyPass = "http://10.20.40.104:3010";
         };
       };
       "gist.joshuabell.xyz" = {
@@ -138,13 +142,6 @@
           return = "444";
         };
       };
-
-      "_" = {
-        default = true;
-        locations."/" = {
-          return = "444"; # 404 for not found or 444 for drop
-        };
-      };
     };
 
     # STREAMS
@@ -166,5 +163,3 @@
     4242 # nebula
   ];
 }
-
-# TODO

@@ -103,7 +103,7 @@
 
             shellHook = ''
               if [ -z "''${SKIP_MOD_WORKTREES:-}" ]; then
-                mod_worktrees
+                mod_worktrees &
               fi
             '';
           };
