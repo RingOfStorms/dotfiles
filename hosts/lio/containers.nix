@@ -1,5 +1,4 @@
 {
-  config,
   ...
 }:
 {
@@ -7,12 +6,12 @@
   # NOTE some useful links
   # nixos containers: https://blog.beardhatcode.be/2020/12/Declarative-Nixos-Containers.html
   # https://nixos.wiki/wiki/NixOS_Containers
-  options = {};
+  options = { };
 
   imports = [
-    ./containers/tests.nix
-    ./containers/librechat.nix
-    # ./containers/affine.nix
+    ../../components/containers/librechat.nix
+    ../../components/containers/inventory.nix
+    ../../components/containers/pgadmin.nix
   ];
 
   config = {
@@ -20,6 +19,9 @@
     # networking.nat.enable = true;
     # networking.nat.internalInterfaces = [ "ve-*" ];
     # networking.nat.externalInterface = "eth0";
+
+    # mathesar
+    # services.mathesar.secretKey = "mImvhwyu0cFmtUNOAyOjm6qozWjEmHyrGIpOTZXWW7lnkj5RP3";
 
     virtualisation.oci-containers.backend = "docker";
 
@@ -32,22 +34,22 @@
       recommendedProxySettings = true;
       recommendedTlsSettings = true;
       virtualHosts = {
-        "local.belljm.com" = {
-          # enableACME = true;
-          # forceSSL = true;
-          locations."/".proxyPass = "http://${config.containers.wasabi.localAddress}:80";
-        };
-        "127.0.0.1" = {
-          locations."/wasabi/" = {
-            extraConfig = ''
-              rewrite ^/wasabi/(.*) /$1 break;
-            '';
-            proxyPass = "http://${config.containers.wasabi.localAddress}:80/";
-          };
-          locations."/" = {
-            return = "404"; # or 444 for drop
-          };
-        };
+        # "local.belljm.com" = {
+        #   # enableACME = true;
+        #   # forceSSL = true;
+        #   locations."/".proxyPass = "http://${config.containers.wasabi.localAddress}:80";
+        # };
+        # "127.0.0.1" = {
+        #   locations."/wasabi/" = {
+        #     extraConfig = ''
+        #       rewrite ^/wasabi/(.*) /$1 break;
+        #     '';
+        #     proxyPass = "http://${config.containers.wasabi.localAddress}:80/";
+        #   };
+        #   locations."/" = {
+        #     return = "404"; # or 444 for drop
+        #   };
+        # };
         "_" = {
           default = true;
           locations."/" = {

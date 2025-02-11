@@ -54,6 +54,14 @@
           proxyPass = "http://10.20.40.104:3080";
         };
       };
+      "db.joshuabell.xyz" = {
+        enableACME = true;
+        forceSSL = true;
+        locations."/" = {
+          proxyWebsockets = true;
+          proxyPass = "http://10.20.40.104:3085";
+        };
+      };
       "gist.joshuabell.xyz" = {
         enableACME = true;
         forceSSL = true;

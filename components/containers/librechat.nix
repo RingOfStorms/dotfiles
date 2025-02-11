@@ -15,7 +15,7 @@ in
       port = lib.mkOption {
         type = lib.types.port;
         default = 3080;
-        description = "Port number for the LibreChat API service";
+        description = "Port number for the LibreChat";
       };
       ragPort = lib.mkOption {
         type = lib.types.port;
