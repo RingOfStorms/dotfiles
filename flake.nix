@@ -109,11 +109,11 @@
               deploy-rs
             ];
 
-            shellHook = ''
-              if [ -z "''${SKIP_MOD_WORKTREES:-}" ]; then
-                mod_worktrees &
-              fi
-            '';
+            # shellHook = ''
+            #   if [ -z "''${SKIP_MOD_WORKTREES:-}" ]; then
+            #     mod_worktrees &
+            #   fi
+            # '';
           };
         }
       );
