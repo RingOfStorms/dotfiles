@@ -34,7 +34,7 @@ in
         user = "root";
         image = "dpage/pgadmin4:latest";
         ports = [
-          "10.20.40.104:${toString cfg.port}:${toString cfg.port}"
+          "${toString cfg.port}:${toString cfg.port}"
         ];
         environment = {
           PGADMIN_LISTEN_PORT = toString cfg.port;

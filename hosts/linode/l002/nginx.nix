@@ -1,5 +1,5 @@
 {
-  config,
+  pkgs,
   ...
 }:
 {
@@ -25,7 +25,7 @@
   };
 
   security.acme.acceptTerms = true;
-  security.acme.email = "admin@joshuabell.xyz";
+  security.acme.defaults.email = "admin@joshuabell.xyz";
   services.nginx = {
     enable = true;
     recommendedGzipSettings = true;
@@ -37,7 +37,7 @@
       # Note that order here doesn't matter it orders alphabetically so `0` puts it first
       # I had an issue tha the first SSL port 443 site would catch any https traffic instead
       # of hitting my default fallback and this fixes that issue and ensure this is hit instead
-      "0.joshuabell.xyz" = {
+      "002.linodes.joshuabell.xyz" = {
         default = true;
         enableACME = true;
         forceSSL = true;
@@ -51,7 +51,7 @@
         forceSSL = true;
         locations."/" = {
           proxyWebsockets = true;
-          proxyPass = "http://10.20.40.104:3080";
+          proxyPass = "http://100.64.0.1:3080";
         };
       };
       "db.joshuabell.xyz" = {
@@ -59,31 +59,21 @@
         forceSSL = true;
         locations."/" = {
           proxyWebsockets = true;
-          proxyPass = "http://10.20.40.104:3085";
+          proxyPass = "http://100.64.0.1:3085";
         };
       };
       "gist.joshuabell.xyz" = {
         enableACME = true;
         forceSSL = true;
         locations."/" = {
-          proxyPass = "http://10.20.40.190:6157";
+          proxyPass = "http://100.64.0.2:6157";
         };
       };
       "git.joshuabell.xyz" = {
         enableACME = true;
         forceSSL = true;
         locations."/" = {
-          proxyPass = "http://10.20.40.190:6610";
-        };
-      };
-      "nexus.l002.joshuabell.xyz" = {
-        locations."/" = {
-          proxyPass = "http://localhost:42291";
-        };
-      };
-      "nexus.joshuabell.xyz" = {
-        locations."/" = {
-          proxyPass = "http://localhost:42291";
+          proxyPass = "http://100.64.0.2:6610";
         };
       };
 
@@ -153,13 +143,37 @@
     };
 
     # STREAMS
+    # TODO left off trying to get direct ssh working...
     streamConfig = ''
       server {
         listen 3032;
-        proxy_pass 10.20.40.190:6611;
+        proxy_pass 100.64.0.2:6611;
       }
     '';
   };
+
+  # Convoluted way to get ssh to work for git server while also still allowing
+  # ssh connections to the machine normally (you can't have nginx bind port 22 since sshd does)
+  # but sshd allows us to use a ForceCommand that we cna then proxy through
+  environment.systemPackages = with pkgs; [
+    # NOTE requires nc which I am getting from somewhere.... would be better to put it here in sys packs?
+    (writeScriptBin "proxy-to-git" ''
+      #!${pkgs.bash}/bin/bash
+      nc 100.64.0.2 6611
+    '')
+  ];
+
+# TODO havent gotten this fully working yet
+
+  services.openssh.extraConfig = ''
+    Match Host git.joshuabell.xyz
+      ForceCommand proxy-to-git
+      PermitTTY no
+      X11Forwarding no
+      PermitTunnel no
+      GatewayPorts no
+      AllowAgentForwarding no
+  '';
 
   networking.firewall.allowedTCPPorts = [
     80 # web http

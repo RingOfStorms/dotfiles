@@ -41,7 +41,7 @@
               ./hardware-configuration.nix
               ./containers.nix
               (
-                { pkgs, ... }:
+                { config, pkgs, ... }:
                 {
                   imports = [
                     ../../components/nix/lua.nix
@@ -49,6 +49,7 @@
                     ../../components/nix/qflipper.nix
                     ../../components/nix/qdirstat.nix
                     ../../components/nix/steam.nix
+                    ../../components/nix/tailscale.nix
                   ];
 
                   environment.systemPackages = with pkgs; [

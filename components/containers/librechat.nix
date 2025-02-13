@@ -50,7 +50,7 @@ in
         user = "root";
         image = "ghcr.io/danny-avila/librechat-dev:latest";
         ports = [
-          "10.20.40.104:${toString cfg.port}:${toString cfg.port}"
+          "${toString cfg.port}:${toString cfg.port}"
         ];
         dependsOn = [
           "librechat_mongodb"
@@ -74,7 +74,7 @@ in
         ];
         extraOptions = [
           "--network=librechat-network"
-          "--add-host=azureproxy:10.20.40.180"
+          "--add-host=azureproxy:10.20.40.180" # TODO change to T
         ];
       };
 

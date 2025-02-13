@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 {
   # https://www.linode.com/docs/guides/install-nixos-on-linode/#configure-nixos
   boot.kernelParams = [ "console=ttyS0,19200n8" ];
@@ -12,12 +12,12 @@
   boot.loader.grub.device = "nodev";
   boot.loader.timeout = 10;
 
-  # TODO disable after first startup with ssh keys
   services.openssh = {
     enable = true;
     settings.PermitRootLogin = "yes";
     settings.PasswordAuthentication = false;
   };
+  users.users.root.openssh.authorizedKeys.keys = config.users.users.luser.openssh.authorizedKeys.keys;
 
   networking.usePredictableInterfaceNames = false;
   networking.useDHCP = false; # Disable DHCP globally as we will not need it.
@@ -28,12 +28,5 @@
     inetutils
     mtr
     sysstat
-    gitMinimal
-    vim
-    nano
-  ];
-
-  users.users.root.openssh.authorizedKeys.keys = [
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJuo6L6V52AzdQIK6fWW9s0aX1yKUUTXbPd8v8IU9p2o nix2linode"
   ];
 }

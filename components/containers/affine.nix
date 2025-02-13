@@ -53,7 +53,7 @@ in
         user = "root";
         image = "ghcr.io/toeverything/affine-graphql:stable";
         ports = [
-          "10.20.40.104:${toString cfg.port}:${toString cfg.port}"
+          "${toString cfg.port}:${toString cfg.port}"
         ];
         dependsOn = [
           "affine_redis"
