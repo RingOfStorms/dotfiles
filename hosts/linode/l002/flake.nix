@@ -29,7 +29,7 @@
           "/run/agenix/nix2linode"
         ];
         nodes.${configuration_name} = {
-          hostname = "100.64.0.4";
+          hostname = "172.234.26.141";
           profiles.system = {
             user = "root";
             path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.${configuration_name};
