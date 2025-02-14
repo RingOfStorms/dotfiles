@@ -90,10 +90,6 @@ in
         identityFile = age.secrets.nix2gpdPocket3.path;
         user = "TODO";
       };
-      "ipad1" = {
-        identityFile = age.secrets.nix2gpdPocket3.path;
-        user = "TODO";
-      };
       "tab1" = {
         identityFile = age.secrets.nix2gpdPocket3.path;
         user = "TODO";
