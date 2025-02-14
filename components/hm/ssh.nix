@@ -40,7 +40,7 @@ in
         identityFile = age.secrets.nix2joe.path;
         user = "josh";
       };
-      "gpdPocket3" = {
+      "gp3" = {
         identityFile = age.secrets.nix2gpdPocket3.path;
         user = "josh";
       };
@@ -59,6 +59,14 @@ in
             host.address = "localhost";
           }
         ];
+        setEnv = {
+          TERM = "vt100";
+        };
+      };
+      "t_" = {
+        identityFile = age.secrets.nix2t.path;
+        hostname = "10.12.14.103";
+        user = "joshua.bell";
         setEnv = {
           TERM = "vt100";
         };
