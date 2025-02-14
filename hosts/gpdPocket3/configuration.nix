@@ -56,7 +56,7 @@
     "xhci_pci"
     "usbhid"
   ];
-  services.xserver.videoDrivers = [ "intel" ];
+  services.xserver.videoDrivers = [ "modesetting" ];
   hardware.graphics.enable = true;
   hardware.graphics.extraPackages = with pkgs; [
     intel-media-driver

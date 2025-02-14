@@ -4,17 +4,13 @@
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
     mod_common.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_common";
-    mod_common.inputs.nixpkgs.follows = "nixpkgs";
     mod_secrets.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_secrets";
     mod_boot_systemd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_boot_systemd";
-    mod_de_cosmic.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_cosmic";
-    mod_de_cosmic.inputs.nixpkgs-stable.follows = "nixpkgs";
-    mod_de_cosmic.inputs.nixpkgs.follows = "nixpkgs";
-    mod_ros_stormd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_stormd";
-    mod_nebula.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_nebula";
+    # mod_de_cosmic.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_cosmic";
+    mod_de_gnome.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_gnome";
+
     mod_home-manager.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_home_manager";
     mod_home-manager.inputs.home-manager.url = "github:rycee/home-manager/release-24.11";
-    mod_home-manager.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -47,6 +43,7 @@
                 { pkgs, ... }:
                 {
                   imports = [
+                    ../../components/nix/tailscale.nix
                     ../../components/nix/lua.nix
                     ../../components/nix/rust-repl.nix
                     ../../components/nix/qdirstat.nix
@@ -86,6 +83,7 @@
                       users = {
                         josh = {
                           imports = [
+                            ../../components/hm/kitty.nix
                             ../../components/hm/tmux/tmux.nix
                             ../../components/hm/alacritty.nix
                             ../../components/hm/atuin.nix
