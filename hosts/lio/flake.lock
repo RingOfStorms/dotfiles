@@ -161,11 +161,11 @@
     },
     "mod_de_gnome": {
       "locked": {
-        "lastModified": 1737060750,
-        "narHash": "sha256-2uPSP5KyEUcmArlYDvfZvumL3Yo7x0D+//Q28QzTdjQ=",
+        "lastModified": 1739823381,
+        "narHash": "sha256-X1yfLqcwpXjenq681iTqqIMQ0FMGjT26maTEVPaWrg8=",
         "ref": "mod_de_gnome",
-        "rev": "218ad3b357bb2c3e6d5e52c484c397ea506c0628",
-        "revCount": 38,
+        "rev": "2434f4858db4b5ddb095d5a7d8bdb05890c48bb4",
+        "revCount": 39,
         "type": "git",
         "url": "https://git.joshuabell.xyz/dotfiles"
       },
