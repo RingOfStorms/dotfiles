@@ -56,6 +56,9 @@
 
       # local only files
       "*.local"
+
+      # AI tooling
+      ".aider*"
     ];
   };
 }
