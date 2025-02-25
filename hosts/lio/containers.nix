@@ -10,8 +10,8 @@
 
   imports = [
     ../../components/containers/librechat.nix
-    ../../components/containers/inventory.nix
-    ../../components/containers/pgadmin.nix
+    # ../../components/containers/inventory.nix
+    # ../../components/containers/pgadmin.nix
   ];
 
   config = {
