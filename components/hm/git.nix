@@ -59,6 +59,7 @@
 
       # AI tooling
       ".aider*"
+      "aider"
     ];
   };
 }

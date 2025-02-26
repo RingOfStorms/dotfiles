@@ -45,7 +45,7 @@
                 {
                   imports = [
                     ../../components/nix/lua.nix
-                    ../../components/nix/rust-repl.nix
+                    ../../components/nix/rust-dev.nix
                     ../../components/nix/qflipper.nix
                     ../../components/nix/qdirstat.nix
                     ../../components/nix/steam.nix
