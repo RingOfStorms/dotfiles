@@ -4,14 +4,11 @@
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
     mod_common.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_common";
-    mod_common.inputs.nixpkgs.follows = "nixpkgs";
     mod_secrets.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_secrets";
     mod_boot_systemd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_boot_systemd";
-    # mod_de_cosmic.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_cosmic";
     mod_de_gnome.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_gnome";
     mod_home-manager.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_home_manager";
     mod_home-manager.inputs.home-manager.url = "github:rycee/home-manager/release-24.11";
-    mod_home-manager.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
