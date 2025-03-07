@@ -1,7 +1,16 @@
-{ config, lib, ... }:
+{
+  custom_config_key,
+  config,
+  lib,
+  ...
+}:
+let
+  cfg = config."${custom_config_key}".boot.grub;
+in
 with lib;
 {
-  options.mods.boot_grub = {
+  options."${custom_config_key}".boot.grub = {
+    enable = mkEnableOption "Grub bootloader";
     device = mkOption {
       type = types.str;
       default = "/dev/sda";
@@ -10,10 +19,10 @@ with lib;
       '';
     };
   };
-  config = {
+  config = mkIf cfg.enable {
     boot.loader.grub = {
       enable = true;
-      device = config.mods.boot_grub.device;
+      device = cfg.device;
     };
   };
 }

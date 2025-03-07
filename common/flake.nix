@@ -26,17 +26,21 @@
             ...
           }:
           let
-            config_key = "ringofstorms_common";
+            custom_config_key = "ringofstorms_common";
           in
           {
-            config = { };
+            options = {
+            };
 
             imports = [
-
               ./boot/grub.nix
             ];
 
-            options = { };
+            config = {
+              specialArgs = {
+                inherit custom_config_key;
+              };
+            };
           };
       };
     };
