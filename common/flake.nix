@@ -13,35 +13,20 @@
 
   outputs =
     {
-      ros-neovim,
+      ros_neovim,
       ...
     }:
     {
       nixosModules = {
         default =
           {
-            config,
-            lib,
-            pkgs,
             ...
           }:
-          let
-            custom_config_key = "ringofstorms_common";
-          in
           {
-            options = {
-            };
-
             imports = [
-              ./boot/grub.nix
+              # ./boot/grub.nix
               ./boot/systemd.nix
             ];
-
-            config = {
-              specialArgs = {
-                inherit custom_config_key;
-              };
-            };
           };
       };
     };

@@ -2,10 +2,15 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
 
+    # Use relative to get current version for testing
+    common.url = "path:../../common";
+    # Pin to specific version
+    # common.url = "git+https://git.joshuabell.xyz/dotfiles?rev=88f2d95e6a871f084dccfc4f45ad9d2b31720998";
+
     ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
     mod_common.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_common";
     mod_secrets.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_secrets";
-    mod_boot_systemd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_boot_systemd";
+    # mod_boot_systemd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_boot_systemd";
     mod_de_gnome.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_gnome";
     mod_home-manager.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_home_manager";
     mod_home-manager.inputs.home-manager.url = "github:rycee/home-manager/release-24.11";
@@ -47,6 +52,9 @@
                     ../../components/nix/qdirstat.nix
                     ../../components/nix/tailscale.nix
                   ];
+                  ringofstorms_common = {
+                    boot.systemd.enable = true;
+                  };
                   mods = {
                     common = {
                       systemName = configuration_name;

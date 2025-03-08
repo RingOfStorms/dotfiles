@@ -1,15 +1,15 @@
 {
-  custom_config_key,
   config,
   lib,
   ...
 }:
 let
-  cfg = config."${custom_config_key}".boot.grub;
+  ccfg = import ../config.nix;
+  cfg = config.${ccfg.custom_config_key}.boot.grub;
 in
 with lib;
 {
-  options."${custom_config_key}".boot.grub = {
+  options.${ccfg.custom_config_key}.boot.grub = {
     enable = mkEnableOption "Grub bootloader";
     device = mkOption {
       type = types.str;
