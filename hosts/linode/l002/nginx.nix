@@ -76,6 +76,14 @@
           proxyPass = "http://100.64.0.2:6610";
         };
       };
+      "vault.t.joshuabell.xyz" = {
+        enableACME = true;
+        forceSSL = true;
+        locations."/" = {
+          proxyWebsockets = true;
+          proxyPass = "http://100.64.0.2:64608";
+        };
+      };
 
       # Redirect self IP to domain
       "172.234.26.141" = {
@@ -152,29 +160,29 @@
     '';
   };
 
-# this breaks on restart on the server side no idea, can no longer ssh in 22 normally
+  # this breaks on restart on the server side no idea, can no longer ssh in 22 normally
   # Convoluted way to get ssh to work for git server while also still allowing
   # ssh connections to the machine normally (you can't have nginx bind port 22 since sshd does)
   # but sshd allows us to use a ForceCommand that we cna then proxy through
-#   environment.systemPackages = with pkgs; [
-#     # NOTE requires nc which I am getting from somewhere.... would be better to put it here in sys packs?
-#     (writeScriptBin "proxy-to-git" ''
-#       #!${pkgs.bash}/bin/bash
-#       nc 100.64.0.2 6611
-#     '')
-#   ];
-#
-# # TODO havent gotten this fully working yet
-#
-#   services.openssh.extraConfig = ''
-#     Match Host git.joshuabell.xyz
-#       ForceCommand proxy-to-git
-#       PermitTTY no
-#       X11Forwarding no
-#       PermitTunnel no
-#       GatewayPorts no
-#       AllowAgentForwarding no
-#   '';
+  #   environment.systemPackages = with pkgs; [
+  #     # NOTE requires nc which I am getting from somewhere.... would be better to put it here in sys packs?
+  #     (writeScriptBin "proxy-to-git" ''
+  #       #!${pkgs.bash}/bin/bash
+  #       nc 100.64.0.2 6611
+  #     '')
+  #   ];
+  #
+  # # TODO havent gotten this fully working yet
+  #
+  #   services.openssh.extraConfig = ''
+  #     Match Host git.joshuabell.xyz
+  #       ForceCommand proxy-to-git
+  #       PermitTTY no
+  #       X11Forwarding no
+  #       PermitTunnel no
+  #       GatewayPorts no
+  #       AllowAgentForwarding no
+  #   '';
 
   networking.firewall.allowedTCPPorts = [
     80 # web http
