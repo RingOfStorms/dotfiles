@@ -10,8 +10,8 @@ let
 
   binds = [
     {
-      host = "${hostDataDir}/data";
-      container = "/data?";
+      host = "${hostDataDir}";
+      container = "/data";
       user = config.users.users.vaultwarden.name;
     }
   ];
@@ -53,12 +53,15 @@ in
         services.vaultwarden = {
           enable = true;
           dbBackend = "sqlite";
-          backupDir = "/asd";
+          backupDir = "/data/backups";
           config = {
             DOMAIN = "https://vault.joshuabell.xyz";
             SIGNUPS_ALLOWED = true;
           };
         };
+        networking.firewall.allowedTCPPorts = [
+          8222 # web http
+        ];
       };
   };
 
@@ -67,6 +70,8 @@ in
     forceSSL = true;
     locations = {
       "/" = {
+        proxyWebsockets = true;
+        proxyPass = "http://${localAddress}:8222"; # vaultwarden
       };
     };
   };
