@@ -96,11 +96,9 @@
                             discordo
                             discord
                             firefox-esr
-                            # freecad
                             openscad
-                            # ladybird
-                            # ollama
                             vlc
+                            bitwarden
                           ];
                         };
                       };

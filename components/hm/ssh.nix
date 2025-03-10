@@ -115,7 +115,7 @@ in
       # LINODE SERVERS
       "l001" = {
         identityFile = age.secrets.nix2linode.path;
-        hostname = "172.236.111.33";
+        hostname = "172.236.111.33"; # Not on the tailscale network it is the primary host
         user = "root";
       };
       "l002_" = {
@@ -125,6 +125,16 @@ in
       };
       "l002" = {
         identityFile = age.secrets.nix2linode.path;
+        user = "root";
+      };
+      # ORACLE SERVERS
+      "o001" = {
+        identityFile = age.secrets.nix2oracle.path;
+        user = "root";
+      };
+      "o001_" = {
+        identityFile = age.secrets.nix2oracle.path;
+        hostname = "64.181.210.7";
         user = "root";
       };
     };

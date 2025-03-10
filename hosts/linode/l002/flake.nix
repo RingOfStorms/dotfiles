@@ -6,8 +6,6 @@
     ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
     mod_common.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_common";
     mod_common.inputs.nixpkgs.follows = "nixpkgs";
-    # mod_ros_stormd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_stormd";
-    # mod_nebula.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_nebula";
   };
 
   outputs =
@@ -61,12 +59,10 @@
                 { pkgs, ... }:
                 {
                   users.users.root.openssh.authorizedKeys.keys = [
-                    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFLBVLiPbhVG+riNNpkvXnNtOioByV3CQwtY9gu8pstp nix2l002"
                     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJuo6L6V52AzdQIK6fWW9s0aX1yKUUTXbPd8v8IU9p2o nix2linode"
                   ];
                   components = {
-                    # NOTE we manually onboard this machine since it also hosts headscale itself and I don't want to push
-                    # the key in this config.
+                    # NOTE we manually onboard this machine since it has no secrets uploaded to it
                     tailscale.useSecretsAuth = false;
                   };
                   mods = {
@@ -84,7 +80,6 @@
                           ];
                           isNormalUser = true;
                           openssh.authorizedKeys.keys = [
-                            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFLBVLiPbhVG+riNNpkvXnNtOioByV3CQwtY9gu8pstp nix2l002"
                             "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJuo6L6V52AzdQIK6fWW9s0aX1yKUUTXbPd8v8IU9p2o nix2linode"
                           ];
                         };

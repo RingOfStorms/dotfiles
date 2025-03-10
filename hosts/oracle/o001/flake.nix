@@ -54,12 +54,17 @@
               ./configuration.nix
               ./hardware-configuration.nix
               ./nginx.nix
+              ../../../components/nix/tailscale.nix
               (
                 { pkgs, ... }:
                 {
                   users.users.root.openssh.authorizedKeys.keys = [
                     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG90Gg6dV3yhZ5+X40vICbeBwV9rfD39/8l9QSqluTw8 nix2oracle"
                   ];
+                  components = {
+                    # NOTE we manually onboard this machine since it has no secrets uploaded to it
+                    tailscale.useSecretsAuth = false;
+                  };
                   mods = {
                     common = {
                       disableRemoteBuildsOnLio = true;
