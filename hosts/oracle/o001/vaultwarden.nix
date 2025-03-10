@@ -6,13 +6,15 @@
 let
   name = "vaultwarden";
   hostDataDir = "/var/lib/${name}";
+  hostAddress = "192.168.100.2";
   localAddress = "192.168.100.111";
 
   binds = [
     {
       host = "${hostDataDir}";
       container = "/data";
-      user = config.users.users.vaultwarden.name;
+      user = "vaultwarden";
+      uid = 114;
     }
   ];
 in
@@ -25,8 +27,9 @@ in
         home = bind.host;
         createHome = true;
         group = bind.user;
+        uid = bind.uid;
       };
-      groups.${bind.user} = { };
+      groups.${bind.user}.gid = bind.uid;
     }
     // acc
   ) { } binds;
@@ -35,8 +38,7 @@ in
     ephemeral = true;
     autoStart = true;
     privateNetwork = true;
-    hostAddress = "192.168.100.2";
-    localAddress = localAddress;
+    inherit localAddress hostAddress;
     bindMounts = lib.foldl (
       acc: bind:
       {
@@ -50,18 +52,34 @@ in
     config =
       { ... }:
       {
+        system.stateVersion = "24.11";
+        users = lib.foldl (
+          acc: bind:
+          {
+            users.${bind.user} = {
+              isSystemUser = true;
+              home = bind.container;
+              uid = bind.uid;
+              group = bind.user;
+            };
+            groups.${bind.user}.gid = bind.uid;
+          }
+          // acc
+        ) { } binds;
+
         services.vaultwarden = {
           enable = true;
           dbBackend = "sqlite";
           backupDir = "/data/backups";
           config = {
             DOMAIN = "https://vault.joshuabell.xyz";
-            SIGNUPS_ALLOWED = true;
+            SIGNUPS_ALLOWED = false;
           };
         };
-        networking.firewall.allowedTCPPorts = [
-          8222 # web http
-        ];
+        networking.firewall = {
+          enable = true;
+          allowedTCPPorts = [ 8222 ];
+        };
       };
   };
 
@@ -71,7 +89,7 @@ in
     locations = {
       "/" = {
         proxyWebsockets = true;
-        proxyPass = "http://${localAddress}:8222"; # vaultwarden
+        proxyPass = "http://${localAddress}:8222"; # vaultwarden TODO left off here the port is 8000 depsite the docs showing 8222 as default, set ecplisit
       };
     };
   };

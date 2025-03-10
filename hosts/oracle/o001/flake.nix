@@ -54,6 +54,7 @@
               ./configuration.nix
               ./hardware-configuration.nix
               ./nginx.nix
+              ./vaultwarden.nix
               ../../../components/nix/tailscale.nix
               (
                 { pkgs, ... }:
