@@ -1,84 +1,68 @@
 {
-  lib,
-  config,
   ...
 }:
 let
   name = "vaultwarden";
+  user = name;
+  uid = 114;
   hostDataDir = "/var/lib/${name}";
-  hostAddress = "192.168.100.2";
-  localAddress = "192.168.100.111";
 
-  binds = [
-    {
-      host = "${hostDataDir}";
-      container = "/data";
-      user = "vaultwarden";
-      uid = 114;
-    }
-  ];
+  v_port = 8222;
 in
 {
-  users = lib.foldl (
-    acc: bind:
-    {
-      users.${bind.user} = {
-        isSystemUser = true;
-        home = bind.host;
-        createHome = true;
-        group = bind.user;
-        uid = bind.uid;
-      };
-      groups.${bind.user}.gid = bind.uid;
-    }
-    // acc
-  ) { } binds;
+  users = {
+    users.${user} = {
+      isSystemUser = true;
+      group = user;
+      inherit uid;
+    };
+    groups.${user}.gid = uid;
+  };
+  system.activationScripts.createMediaServerDirs = ''
+    mkdir -p ${hostDataDir}/data
+    mkdir -p ${hostDataDir}/backups
+    chown -R ${toString uid}:${toString uid} ${hostDataDir}
+    chmod -R 750 ${hostDataDir}
+  '';
 
   containers.${name} = {
     ephemeral = true;
     autoStart = true;
-    privateNetwork = true;
-    inherit localAddress hostAddress;
-    bindMounts = lib.foldl (
-      acc: bind:
-      {
-        "${bind.container}" = {
-          hostPath = bind.host;
-          isReadOnly = false;
-        };
-      }
-      // acc
-    ) { } binds;
+    privateNetwork = false;
+    bindMounts = {
+      "/var/lib/vaultwarden" = {
+        hostPath = "${hostDataDir}/data";
+        isReadOnly = false;
+      };
+      "/var/lib/backups/vaultwarden" = {
+        hostPath = "${hostDataDir}/backups";
+        isReadOnly = false;
+      };
+    };
     config =
       { ... }:
       {
         system.stateVersion = "24.11";
-        users = lib.foldl (
-          acc: bind:
-          {
-            users.${bind.user} = {
-              isSystemUser = true;
-              home = bind.container;
-              uid = bind.uid;
-              group = bind.user;
-            };
-            groups.${bind.user}.gid = bind.uid;
-          }
-          // acc
-        ) { } binds;
+        users = {
+          users.${user} = {
+            isSystemUser = true;
+            group = user;
+            inherit uid;
+          };
+          groups.${user}.gid = uid;
+        };
 
         services.vaultwarden = {
           enable = true;
           dbBackend = "sqlite";
-          backupDir = "/data/backups";
+          backupDir = "/var/lib/backups/vaultwarden";
           config = {
             DOMAIN = "https://vault.joshuabell.xyz";
             SIGNUPS_ALLOWED = false;
+            ROCKET_PORT = builtins.toString v_port;
+            ROCKET_ADDRESS = "127.0.0.1";
+            # ADMIN_TOKEN = "$argon2id$v=19$m=65540,t=3,p=4$2DU5GEIKJeMoxqHrAacAYpX4BsSbOgoRmM2+4wjbAvY$9ZyWVV4xIx4M7/WGfvznOhEvrVx+4DrHcBPmeKKUMYE";
           };
-        };
-        networking.firewall = {
-          enable = true;
-          allowedTCPPorts = [ 8222 ];
         };
       };
   };
@@ -89,7 +73,7 @@ in
     locations = {
       "/" = {
         proxyWebsockets = true;
-        proxyPass = "http://${localAddress}:8222"; # vaultwarden TODO left off here the port is 8000 depsite the docs showing 8222 as default, set ecplisit
+        proxyPass = "http://127.0.0.1:${builtins.toString v_port}";
       };
     };
   };

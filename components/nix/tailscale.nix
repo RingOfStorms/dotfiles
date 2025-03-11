@@ -28,6 +28,7 @@
       # https://tailscale.com/kb/1241/tailscale-up
       extraUpFlags = lib.mkIf config.components.tailscale.useHeadscale [
         "--login-server=https://headscale.joshuabell.xyz"
+        "--no-logs-support"
       ];
     };
     networking.firewall.trustedInterfaces = [ config.services.tailscale.interfaceName ];
