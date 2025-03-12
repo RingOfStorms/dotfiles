@@ -61,7 +61,7 @@ in
             SIGNUPS_ALLOWED = false;
             ROCKET_PORT = builtins.toString v_port;
             ROCKET_ADDRESS = "127.0.0.1";
-            # ADMIN_TOKEN = "$argon2id$v=19$m=65540,t=3,p=4$2DU5GEIKJeMoxqHrAacAYpX4BsSbOgoRmM2+4wjbAvY$9ZyWVV4xIx4M7/WGfvznOhEvrVx+4DrHcBPmeKKUMYE";
+            # ADMIN_TOKEN = "> vaultwarden hash";
           };
         };
       };
