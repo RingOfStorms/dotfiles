@@ -66,6 +66,14 @@
                     # NOTE we manually onboard this machine since it has no secrets uploaded to it
                     tailscale.useSecretsAuth = false;
                   };
+
+                  services.fail2ban = {
+                    enable = true;
+                    ignoreIP = [
+                      "100.64.0.0/10"
+                    ];
+                  };
+
                   mods = {
                     common = {
                       disableRemoteBuildsOnLio = true;
