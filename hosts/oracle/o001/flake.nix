@@ -73,6 +73,11 @@
                       "100.64.0.0/10"
                     ];
                   };
+                  services.openssh = {
+                    enable = true;
+                    settings.PermitRootLogin = "yes";
+                    settings.PasswordAuthentication = false;
+                  };
 
                   mods = {
                     common = {
