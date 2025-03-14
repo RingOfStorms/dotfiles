@@ -20,13 +20,30 @@
       nixosModules = {
         default =
           {
+            config,
+            lib,
             ...
           }:
+          let
+            ccfg = import ./config.nix;
+            cfg_path = "${ccfg.custom_config_key}";
+            cfg = config.${cfg_path};
+          in
           {
             imports = [
-              # ./boot/grub.nix
+              ./boot/grub.nix
               ./boot/systemd.nix
+              ./users/users.nix
             ];
+            options.${cfg_path} = {
+              systemName = lib.mkOption {
+                type = lib.types.str;
+                description = "The name of the system.";
+              };
+            };
+            config = {
+              # // TODO ADD Nix helper stuff rest of it.
+            };
           };
       };
     };

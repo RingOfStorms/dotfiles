@@ -4,16 +4,15 @@
   ...
 }:
 let
-  # ccfg = import ../config.nix;
-  # cfg_path = "${custom_config_key}".boot.systemd;
-  cfg = config.ringofstorms_common.boot.systemd;
+  ccfg = import ../config.nix;
+  cfg_path = "${ccfg.custom_config_key}".boot.systemd;
+  cfg = config.${cfg_path};
 in
-with lib;
 {
-  options.ringofstorms_common.boot.systemd = {
-    enable = mkEnableOption "Systemd bootloader";
+  options.${cfg_path} = {
+    enable = lib.mkEnableOption "Systemd bootloader";
   };
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
     boot.loader = {
       systemd-boot = {
         enable = true;
