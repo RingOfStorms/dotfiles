@@ -26,19 +26,11 @@
           in
           {
             imports = [
+              ./options.nix
               ./boot
               ./users
               ./general
             ];
-            options.${cfg_path} = {
-              systemName = lib.mkOption {
-                type = lib.types.str;
-                description = "The name of the system.";
-              };
-            };
-            config = {
-              # // TODO ADD Nix helper stuff rest of it.
-            };
           };
       };
     };

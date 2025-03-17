@@ -46,31 +46,27 @@
                 { pkgs, ... }:
                 {
                   imports = [
-                    ../../components/nix/lua.nix
                     ../../components/nix/rust-dev.nix
                     ../../components/nix/qflipper.nix
-                    ../../components/nix/qdirstat.nix
                     ../../components/nix/tailscale.nix
                   ];
+
+                  environment.systemPackages = with pkgs; [
+                    lua
+                    qdirstat
+                  ];
+
                   ringofstorms_common = {
+                    systemName = configuration_name;
                     boot.systemd.enable = true;
-                  };
-                  mods = {
-                    common = {
-                      systemName = configuration_name;
-                      allowUnfree = true;
-                      primaryUser = "josh";
-                      docker = true;
-                      zsh = true;
+                    users = {
+                      admins = [ "josh" ];
                       users = {
                         josh = {
                           openssh.authorizedKeys.keys = [
                             "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILMzgAe4od9K4EsvH2g7xjNU7hGoJiFJlYcvB0BoDCvn nix2oren"
                           ];
-                          initialPassword = "password1";
-                          isNormalUser = true;
                           extraGroups = [
-                            "wheel"
                             "networkmanager"
                             "video"
                             "input"
@@ -82,9 +78,23 @@
                             discordo
                             discord
                             firefox-esr
+                            spotify
+                            vlc
+                            vaultwarden
+                            bitwarden
                           ];
                         };
                       };
+                    };
+                  };
+
+                  mods = {
+                    common = {
+                      systemName = configuration_name;
+                      allowUnfree = true;
+                      primaryUser = "josh";
+                      docker = true;
+                      zsh = true;
                     };
                     home_manager = {
                       users = {
