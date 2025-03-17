@@ -37,7 +37,6 @@
               };
             };
             config = {
-              # // TODO ADD Nix helper stuff rest of it.
             };
           };
       };

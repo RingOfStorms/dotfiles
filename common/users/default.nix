@@ -44,10 +44,8 @@ in
       // {
         inherit name;
         isNormalUser = true;
-# TODO
-        # initialPassword = lib.mkIf (
-        #   userConfig.initialPassword != null
-        # ) userConfig.initialPassword "password1";
+        initialPassword =
+          if (lib.hasAttr "initialPassword" userConfig) then userConfig.initialPassword else "password1";
         extraGroups =
           lib.optionals (builtins.elem name cfg.admins) [ "wheel" ] ++ (userConfig.extraGroups or [ ]);
       }
