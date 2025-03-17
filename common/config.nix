@@ -1,3 +1,3 @@
 {
-  config_prefix = "ringofstorms_common";
+  custom_config_key = "ringofstorms_common";
 }

@@ -5,13 +5,19 @@
 }:
 let
   ccfg = import ../config.nix;
-  cfg_path = "${ccfg.custom_config_key}".boot.systemd;
-  cfg = config.${cfg_path};
+  cfg_path = [
+    ccfg.custom_config_key
+    "boot"
+    "systemd"
+  ];
+  cfg = lib.attrsets.getAttrFromPath cfg_path config;
 in
 {
-  options.${cfg_path} = {
-    enable = lib.mkEnableOption "Systemd bootloader";
-  };
+  options =
+    { }
+    // lib.attrsets.setAttrByPath cfg_path {
+      enable = lib.mkEnableOption "Systemd bootloader";
+    };
   config = lib.mkIf cfg.enable {
     boot.loader = {
       systemd-boot = {

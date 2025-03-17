@@ -3,11 +3,15 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
     # nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
+    # Use relative to get current version for testing
+    common.url = "path:../../common";
+    # Pin to specific version
+    # common.url = "git+https://git.joshuabell.xyz/dotfiles?rev=88f2d95e6a871f084dccfc4f45ad9d2b31720998";
+
     ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
     mod_common.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_common";
     mod_home-manager.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_home_manager";
     mod_secrets.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_secrets";
-    mod_boot_systemd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_boot_systemd";
     mod_de_gnome.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_gnome";
     mod_ros_stormd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_stormd";
     mod_nebula.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_nebula";
@@ -44,13 +48,49 @@
                 { config, pkgs, ... }:
                 {
                   imports = [
-                    ../../components/nix/lua.nix
                     ../../components/nix/rust-dev.nix
                     ../../components/nix/qflipper.nix
-                    ../../components/nix/qdirstat.nix
                     ../../components/nix/steam.nix
                     ../../components/nix/tailscale.nix
                   ];
+
+                  ringofstorms_common = {
+                    systemName = configuration_name;
+                    boot.systemd.enable = true;
+                    general = {
+                      # NOTE bunch of defaults in here I dont need to change
+                    };
+                    users = {
+                      # Users are all normal users and default password is password1
+                      admins = [ "josh" ]; # First admin is also the primary user owning nix config
+                      users = {
+                        josh = {
+                          openssh.authorizedKeys.keys = [
+                            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJN2nsLmAlF6zj5dEBkNSJaqcCya+aB6I0imY8Q5Ew0S nix2lio"
+                          ];
+                          extraGroups = [
+                            "networkmanager"
+                            "video"
+                            "input"
+                          ];
+                          shell = pkgs.zsh;
+                          packages = with pkgs; [
+                            signal-desktop
+                            spotify
+                            blender
+                            google-chrome
+                            discordo
+                            discord
+                            firefox-esr
+                            openscad
+                            vlc
+                            bitwarden
+                            vaultwarden
+                          ];
+                        };
+                      };
+                    };
+                  };
 
                   environment.systemPackages = with pkgs; [
                     lua
@@ -75,33 +115,6 @@
                       docker = true;
                       zsh = true;
                       users = {
-                        josh = {
-                          openssh.authorizedKeys.keys = [
-                            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJN2nsLmAlF6zj5dEBkNSJaqcCya+aB6I0imY8Q5Ew0S nix2lio"
-                          ];
-                          initialPassword = "password1";
-                          isNormalUser = true;
-                          extraGroups = [
-                            "wheel"
-                            "networkmanager"
-                            "video"
-                            "input"
-                          ];
-                          shell = pkgs.zsh;
-                          packages = with pkgs; [
-                            signal-desktop
-                            spotify
-                            blender
-                            google-chrome
-                            discordo
-                            discord
-                            firefox-esr
-                            openscad
-                            vlc
-                            bitwarden
-                            vaultwarden
-                          ];
-                        };
                       };
                     };
                     home_manager = {
