@@ -28,7 +28,7 @@
     "agenix_2": {
       "inputs": {
         "darwin": "darwin_2",
-        "home-manager": "home-manager_4",
+        "home-manager": "home-manager_3",
         "nixpkgs": [
           "mod_secrets",
           "ragenix",
@@ -96,7 +96,7 @@
       },
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-m8fxD1m9NkoFI10VdK3Mc/dd4ECFs5IApuIor9Yr+FI=",
+        "narHash": "sha256-ilegeRmjHmTfQfXlU7DOWYbRpanpNu3hNs2huRz4ldU=",
         "path": "../../common",
         "type": "path"
       },
@@ -337,28 +337,6 @@
       }
     },
     "home-manager_3": {
-      "inputs": {
-        "nixpkgs": [
-          "mod_home-manager",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1736373539,
-        "narHash": "sha256-dinzAqCjenWDxuy+MqUQq0I4zUSfaCvN9rzuCmgMZJY=",
-        "owner": "rycee",
-        "repo": "home-manager",
-        "rev": "bd65bc3cde04c16755955630b344bc9e35272c56",
-        "type": "github"
-      },
-      "original": {
-        "owner": "rycee",
-        "ref": "release-24.11",
-        "repo": "home-manager",
-        "type": "github"
-      }
-    },
-    "home-manager_4": {
       "inputs": {
         "nixpkgs": [
           "mod_secrets",
@@ -694,26 +672,6 @@
         "url": "https://git.joshuabell.xyz/dotfiles"
       }
     },
-    "mod_home-manager": {
-      "inputs": {
-        "home-manager": "home-manager_3",
-        "nixpkgs": "nixpkgs_5"
-      },
-      "locked": {
-        "lastModified": 1736544172,
-        "narHash": "sha256-5Zp1Fg5A827aIjKrhtW84vvJmwRQqBHWzKButnaD14E=",
-        "ref": "mod_home_manager",
-        "rev": "df0c4e95ac6b056202c4ec6fabfcfa5bd205a0b4",
-        "revCount": 2,
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/dotfiles"
-      },
-      "original": {
-        "ref": "mod_home_manager",
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/dotfiles"
-      }
-    },
     "mod_nebula": {
       "locked": {
         "lastModified": 1737504380,
@@ -865,22 +823,6 @@
     },
     "nixpkgs_5": {
       "locked": {
-        "lastModified": 1736344531,
-        "narHash": "sha256-8YVQ9ZbSfuUk2bUf2KRj60NRraLPKPS0Q4QFTbc+c2c=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "bffc22eb12172e6db3c5dde9e3e5628f8e3e7912",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_6": {
-      "locked": {
         "lastModified": 1728888510,
         "narHash": "sha256-nsNdSldaAyu6PE3YUA+YQLqUDJh+gRbBooMMekZJwvI=",
         "owner": "NixOS",
@@ -895,7 +837,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_7": {
+    "nixpkgs_6": {
       "locked": {
         "lastModified": 1725634671,
         "narHash": "sha256-v3rIhsJBOMLR8e/RNWxr828tB+WywYIoajrZKFM+0Gg=",
@@ -911,7 +853,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_8": {
+    "nixpkgs_7": {
       "locked": {
         "lastModified": 1740463929,
         "narHash": "sha256-4Xhu/3aUdCKeLfdteEHMegx5ooKQvwPHNkOgNCXQrvc=",
@@ -927,7 +869,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_9": {
+    "nixpkgs_8": {
       "locked": {
         "lastModified": 1742225912,
         "narHash": "sha256-HCD3GrAAJb1jYTEc221DPlBk2VDkBt43hww7DXC1tyc=",
@@ -1905,7 +1847,7 @@
         "agenix": "agenix_2",
         "crane": "crane_2",
         "flake-utils": "flake-utils_2",
-        "nixpkgs": "nixpkgs_7",
+        "nixpkgs": "nixpkgs_6",
         "rust-overlay": "rust-overlay_3"
       },
       "locked": {
@@ -1925,7 +1867,7 @@
     "ringofstorms-stormd": {
       "inputs": {
         "nix-filter": "nix-filter",
-        "nixpkgs": "nixpkgs_6",
+        "nixpkgs": "nixpkgs_5",
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
@@ -1947,17 +1889,16 @@
         "common": "common",
         "mod_common": "mod_common",
         "mod_de_gnome": "mod_de_gnome",
-        "mod_home-manager": "mod_home-manager",
         "mod_nebula": "mod_nebula",
         "mod_ros_stormd": "mod_ros_stormd",
         "mod_secrets": "mod_secrets",
-        "nixpkgs": "nixpkgs_8",
+        "nixpkgs": "nixpkgs_7",
         "ros_neovim": "ros_neovim"
       }
     },
     "ros_neovim": {
       "inputs": {
-        "nixpkgs": "nixpkgs_9",
+        "nixpkgs": "nixpkgs_8",
         "nvim_plugin-Almo7aya/openingh.nvim": "nvim_plugin-Almo7aya/openingh.nvim",
         "nvim_plugin-CopilotC-Nvim/CopilotChat.nvim": "nvim_plugin-CopilotC-Nvim/CopilotChat.nvim",
         "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring": "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring",

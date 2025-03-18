@@ -9,6 +9,7 @@
 
   outputs =
     {
+      home-manager,
       ...
     }:
     {
@@ -21,8 +22,10 @@
           }:
           {
             imports = [
+              home-manager.nixosModules.home-manager
               ./options.nix
               ./general
+              ./home_manager
               ./boot
               ./users
               ./programs
