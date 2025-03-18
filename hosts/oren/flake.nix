@@ -1,24 +1,20 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
+    # nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
-    common.url = "path:../../common";
-    # Pin to specific version
-    # common.url = "git+https://git.joshuabell.xyz/dotfiles?rev=88f2d95e6a871f084dccfc4f45ad9d2b31720998";
+    # common.url = "path:../../common";
+    common.url = "git+https://git.joshuabell.xyz/dotfiles";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
-    mod_common.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_common";
-    mod_secrets.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_secrets";
-    # mod_boot_systemd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_boot_systemd";
-    mod_de_gnome.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_gnome";
-    mod_home-manager.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_home_manager";
-    mod_home-manager.inputs.home-manager.url = "github:rycee/home-manager/release-24.11";
   };
 
   outputs =
     {
       nixpkgs,
+      common,
+      ros_neovim,
       ...
     }@inputs:
     let
@@ -27,29 +23,20 @@
     in
     {
       nixosConfigurations = {
-        "${configuration_name}" =
-          let
-            auto_modules = builtins.concatMap (
-              input:
-              lib.optionals
-                (builtins.hasAttr "nixosModules" input && builtins.hasAttr "default" input.nixosModules)
-                [
-                  input.nixosModules.default
-                ]
-            ) (builtins.attrValues inputs);
-          in
-          (lib.nixosSystem {
+        "${configuration_name}" = (
+          lib.nixosSystem {
             modules = [
+              common.nixosModules.default
+              ros_neovim.nixosModules.default
               ./configuration.nix
               ./hardware-configuration.nix
+              (import ./containers.nix { inherit inputs; })
               (
-                { pkgs, ... }:
+                { config, pkgs, ... }:
                 {
-                  imports = [
-                    ../../components/nix/rust-dev.nix
-                    ../../components/nix/qflipper.nix
-                    ../../components/nix/tailscale.nix
-                  ];
+                  programs = {
+                    steam.enable = true;
+                  };
 
                   environment.systemPackages = with pkgs; [
                     lua
@@ -59,8 +46,21 @@
                   ringofstorms_common = {
                     systemName = configuration_name;
                     boot.systemd.enable = true;
+                    general = {
+                      disableRemoteBuildsOnLio = true;
+                    };
+                    desktopEnvironment.gnome.enable = true;
+                    programs = {
+                      qFlipper.enable = true;
+                      rustDev.enable = true;
+                      uhkAgent.enable = true;
+                      tailnet.enable = true;
+                      ssh.enable = true;
+                      docker.enable = true;
+                    };
                     users = {
-                      admins = [ "josh" ];
+                      # Users are all normal users and default password is password1
+                      admins = [ "josh" ]; # First admin is also the primary user owning nix config
                       users = {
                         josh = {
                           openssh.authorizedKeys.keys = [
@@ -73,11 +73,9 @@
                           ];
                           shell = pkgs.zsh;
                           packages = with pkgs; [
-                            signal-desktop
                             google-chrome
                             discordo
                             discord
-                            firefox-esr
                             spotify
                             vlc
                             vaultwarden
@@ -86,45 +84,32 @@
                         };
                       };
                     };
-                  };
-
-                  mods = {
-                    common = {
-                      systemName = configuration_name;
-                      allowUnfree = true;
-                      primaryUser = "josh";
-                      docker = true;
-                      zsh = true;
-                    };
-                    home_manager = {
+                    homeManager = {
                       users = {
                         josh = {
-                          imports = [
-                            ../../components/hm/tmux/tmux.nix
-                            ../../components/hm/alacritty.nix
-                            ../../components/hm/kitty.nix
-                            ../../components/hm/atuin.nix
-                            ../../components/hm/direnv.nix
-                            ../../components/hm/git.nix
-                            ../../components/hm/nix_deprecations.nix
-                            ../../components/hm/postgres.nix
-                            ../../components/hm/ssh.nix
-                            ../../components/hm/starship.nix
-                            ../../components/hm/zoxide.nix
-                            ../../components/hm/zsh.nix
+                          imports = with common.homeManagerModules; [
+                            zsh
+                            ssh
+                            starship
+                            zoxide
+                            tmux
+                            atuin
+                            kitty
+                            direnv
+                            git
+                            nix_deprecations
+                            obs
+                            postgres
                           ];
-                          components.kitty.font_size = 20.0;
                         };
                       };
                     };
                   };
                 }
               )
-            ] ++ auto_modules;
-            specialArgs = {
-              inherit inputs;
-            };
-          });
+            ];
+          }
+        );
       };
     };
 }

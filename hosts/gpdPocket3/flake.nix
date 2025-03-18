@@ -32,6 +32,11 @@
               (
                 { config, pkgs, ... }:
                 {
+                  environment.systemPackages = with pkgs; [
+                    lua
+                    qdirstat
+                  ];
+
                   ringofstorms_common = {
                     systemName = configuration_name;
                     boot.systemd.enable = true;
