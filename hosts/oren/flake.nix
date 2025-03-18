@@ -30,7 +30,6 @@
               ros_neovim.nixosModules.default
               ./configuration.nix
               ./hardware-configuration.nix
-              (import ./containers.nix { inherit inputs; })
               (
                 { config, pkgs, ... }:
                 {
@@ -87,6 +86,7 @@
                     homeManager = {
                       users = {
                         josh = {
+                          components.kitty.font_size = 20.0;
                           imports = with common.homeManagerModules; [
                             zsh
                             ssh
