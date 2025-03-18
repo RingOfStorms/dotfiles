@@ -53,10 +53,17 @@ in
       };
       enableSleep = lib.mkEnableOption (lib.mdDoc "Enable auto sleeping");
     };
+  imports = [
+    ./shell/common.nix
+    ./fonts.nix
+    ./tty_caps_esc.nix
+  ];
   config = {
     # name this computer
     networking = {
       hostName = top_cfg.systemName;
+      nftables.enable = true;
+      firewall.enable = true;
     };
 
     # Enable flakes
@@ -114,6 +121,10 @@ in
         config ? age && config.age ? secrets && config.age.secrets ? github_read_token
       ) "!include ${config.age.secrets.github_read_token.path}"}
     '';
+
+    # Enable zsh
+    programs.zsh.enable = true;
+    environment.pathsToLink = [ "/share/zsh" ];
 
     # nix helper
     programs.nh = {

@@ -12,6 +12,7 @@ let
     "ssh"
   ];
   cfg = lib.attrsets.getAttrFromPath cfg_path config;
+  users_cfg = config.${ccfg.custom_config_key}.users;
 in
 {
   options =
@@ -87,8 +88,6 @@ in
           fi
         '';
       };
-    }) config.mods.common.users;
-
+    }) users_cfg.users;
   };
-
 }

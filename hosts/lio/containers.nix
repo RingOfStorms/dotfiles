@@ -1,3 +1,4 @@
+{ inputs }:
 {
   ...
 }:
@@ -9,9 +10,7 @@
   options = { };
 
   imports = [
-    ../../components/containers/librechat.nix
-    # ../../components/containers/inventory.nix
-    # ../../components/containers/pgadmin.nix
+    inputs.common.nixosModules.containers.librechat
   ];
 
   config = {

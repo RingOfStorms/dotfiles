@@ -1,7 +1,6 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }:
 let
@@ -12,7 +11,6 @@ let
     "docker"
   ];
   cfg = lib.attrsets.getAttrFromPath cfg_path config;
-
   users_cfg = config.${ccfg.custom_config_key}.users;
 in
 {

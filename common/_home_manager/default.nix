@@ -33,12 +33,6 @@ in
     home-manager.useGlobalPkgs = true;
     home-manager.backupFileExtension = "bak";
 
-    home-manager.sharedModules = [
-      ./programs/tmux/tmux.nix
-      ./programs/alacritty.nix
-      ./programs/atuin.nix
-    ];
-
     home-manager.users = lib.mapAttrs' (name: userConfig: {
       inherit name;
       value = userConfig // {

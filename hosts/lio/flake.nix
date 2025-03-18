@@ -9,12 +9,6 @@
     # common.url = "git+https://git.joshuabell.xyz/dotfiles?rev=88f2d95e6a871f084dccfc4f45ad9d2b31720998";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
-
-    mod_common.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_common";
-    mod_secrets.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_secrets";
-    mod_de_gnome.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_gnome";
-    mod_ros_stormd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_stormd";
-    mod_nebula.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_nebula";
   };
 
   outputs =
@@ -44,7 +38,7 @@
             modules = [
               ./configuration.nix
               ./hardware-configuration.nix
-              ./containers.nix
+              (import ./containers.nix { inherit inputs; })
               (
                 { config, pkgs, ... }:
                 {
@@ -54,6 +48,7 @@
                     general = {
                       disableRemoteBuildsOnLio = true;
                     };
+                    desktopEnvironment.gnome.enable = true;
                     programs = {
                       qFlipper.enable = true;
                       rustDev.enable = true;
@@ -95,25 +90,21 @@
                     homeManager = {
                       users = {
                         josh = {
-                          programs = {
-                            tmux.enable = true;
-                            alacritty.enable = true;
-                            atuin.enable = true;
-                          };
-                          imports = [
-                            ../../components/hm/kitty.nix
-                            ../../components/hm/direnv.nix
-                            ../../components/hm/git.nix
-                            ../../components/hm/nix_deprecations.nix
-                            ../../components/hm/obs.nix
-                            ../../components/hm/postgres.nix
-                            ../../components/hm/slicer.nix
-                            ../../components/hm/ssh.nix
-                            ../../components/hm/starship.nix
-                            ../../components/hm/zoxide.nix
-                            ../../components/hm/zsh.nix
+                          imports = with common.homeManagerModules; [
+                            tmux
+                            atuin
+                            kitty
+                            direnv
+                            git
+                            nix_deprecations
+                            obs
+                            postgres
+                            slicer
+                            ssh
+                            starship
+                            zoxide
+                            zsh
                           ];
-
                         };
                       };
                     };
@@ -136,15 +127,6 @@
                   ];
                   # Allow emulation of aarch64-linux binaries for cross compiling
                   boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
-
-                  mods = {
-                    common = {
-                      zsh = true;
-                      # still used somewhere...
-                      systemName = configuration_name;
-                      primaryUser = "josh";
-                    };
-                  };
                 }
               )
             ] ++ auto_modules;
