@@ -3,8 +3,8 @@
     home-manager.url = "github:rycee/home-manager/release-24.11";
     ragenix.url = "github:yaxitech/ragenix";
 
-    hyprland.url = "github:hyprwm/Hyprland";
-    cosmic.url = "github:lilyinstarlight/nixos-cosmic";
+    # hyprland.url = "github:hyprwm/Hyprland";
+    # cosmic.url = "github:lilyinstarlight/nixos-cosmic";
   };
 
   outputs =
@@ -55,13 +55,14 @@
         git = import ./_home_manager/mods/git.nix;
         nix_deprecations = import ./_home_manager/mods/nix_deprecations.nix;
 
+        kitty = import ./_home_manager/mods/kitty.nix;
         launcher_rofi = import ./_home_manager/mods/launcher_rofi.nix;
 
-        alacritty = import ./_home_manager/mods/alacritty.nix;
-        kitty = import ./_home_manager/mods/kitty.nix;
         obs = import ./_home_manager/mods/obs.nix;
         postgres = import ./_home_manager/mods/postgres.nix;
         slicer = import ./_home_manager/mods/slicer.nix;
+
+        alacritty = import ./_home_manager/mods/alacritty.nix;
       };
     };
 }

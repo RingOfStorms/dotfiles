@@ -1,15 +1,24 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    common.url = "path:./common";
+
+    # Manually synced with common/flake.nix inputs
+    # =====
+    home-manager.url = "github:rycee/home-manager/release-24.11";
+    ragenix.url = "github:yaxitech/ragenix";
+
+    # hyprland.url = "github:hyprwm/Hyprland";
+    # cosmic.url = "github:lilyinstarlight/nixos-cosmic";
+    # ======
   };
 
   outputs =
     {
       nixpkgs,
-      common,
+      home-manager,
+      ragenix,
       ...
-    }:
+    }@inputs:
     let
       # Utilities
       inherit (nixpkgs) lib;
@@ -17,6 +26,8 @@
       forAllSystems = lib.genAttrs lib.systems.flakeExposed;
       # Create a mapping from system to corresponding nixpkgs : https://nixos.wiki/wiki/Overlays#In_a_Nix_flake
       nixpkgsFor = forAllSystems (system: nixpkgs.legacyPackages.${system});
+
+      commonFlake = (import ./common/flake.nix).outputs inputs;
     in
     {
       devShells = forAllSystems (
@@ -58,8 +69,6 @@
           };
         }
       );
-
-      nixosModules = common.nixosModules;
-      homeManagerModules = common.homeManagerModules;
-    };
+    }
+    // commonFlake;
 }
