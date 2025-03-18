@@ -4,7 +4,7 @@
 # System key: `cat /etc/ssh/ssh_host_ed25519_key.pub`
 #
 # from authority
-# `nix run github:yaxitech/ragenix -- -i ~/.ssh/ragenix_authority --rules ~/.config/nixos-config/secrets/secrets.nix` <-r(eykey)|-e(edit) <File>>
+# `nix run github:yaxitech/ragenix -- -i ~/.ssh/ragenix_authority --rules ~/.config/nixos-config/common/secrets/secrets.nix` <-r(eykey)|-e(edit) <File>>
 
 let
   publicKeys = [
