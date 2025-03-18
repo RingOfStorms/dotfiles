@@ -22,9 +22,10 @@
           {
             imports = [
               ./options.nix
+              ./general
               ./boot
               ./users
-              ./general
+              ./programs
             ];
           };
       };

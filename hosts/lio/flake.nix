@@ -20,6 +20,7 @@
   outputs =
     {
       nixpkgs,
+      common,
       ...
     }@inputs:
     let
@@ -47,18 +48,19 @@
               (
                 { config, pkgs, ... }:
                 {
-                  imports = [
-                    ../../components/nix/rust-dev.nix
-                    ../../components/nix/qflipper.nix
-                    ../../components/nix/steam.nix
-                    ../../components/nix/tailscale.nix
-                  ];
-
                   ringofstorms_common = {
                     systemName = configuration_name;
                     boot.systemd.enable = true;
                     general = {
-                      # NOTE bunch of defaults in here I dont need to change
+                      disableRemoteBuildsOnLio = true;
+                    };
+                    programs = {
+                      qFlipper.enable = true;
+                      rustDev.enable = true;
+                      uhkAgent.enable = true;
+                      tailnet.enable = true;
+                      ssh.enable = true;
+                      docker.enable = true;
                     };
                     users = {
                       # Users are all normal users and default password is password1
@@ -92,10 +94,14 @@
                     };
                   };
 
+                  programs = {
+                    steam.enable = true;
+                  };
+
                   environment.systemPackages = with pkgs; [
                     lua
                     qdirstat
-                    qflipper
+                    # qflipper
                     steam
                   ];
 
@@ -108,14 +114,10 @@
 
                   mods = {
                     common = {
-                      disableRemoteBuildsOnLio = true;
-                      systemName = configuration_name;
-                      allowUnfree = true;
-                      primaryUser = "josh";
-                      docker = true;
                       zsh = true;
-                      users = {
-                      };
+                      # still used somewhere...
+                      systemName = configuration_name;
+                      primaryUser = "josh";
                     };
                     home_manager = {
                       users = {
