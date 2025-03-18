@@ -6,6 +6,7 @@
         "home-manager": "home-manager_2",
         "nixpkgs": [
           "common",
+          "common",
           "ragenix",
           "nixpkgs"
         ],
@@ -29,20 +30,24 @@
       "inputs": {
         "hyprutils": [
           "common",
+          "common",
           "hyprland",
           "hyprutils"
         ],
         "hyprwayland-scanner": [
+          "common",
           "common",
           "hyprland",
           "hyprwayland-scanner"
         ],
         "nixpkgs": [
           "common",
+          "common",
           "hyprland",
           "nixpkgs"
         ],
         "systems": [
+          "common",
           "common",
           "hyprland",
           "systems"
@@ -64,6 +69,25 @@
     },
     "common": {
       "inputs": {
+        "common": "common_2",
+        "nixpkgs": "nixpkgs_5"
+      },
+      "locked": {
+        "lastModified": 1742327593,
+        "narHash": "sha256-mFBdP15FrmS9AgNISjZyQtZhfBD1HmhRt92BDoKCPGA=",
+        "ref": "refs/heads/master",
+        "rev": "f4ff3ad3027dc23cfeacb889e1d932103e951787",
+        "revCount": 358,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/dotfiles"
+      }
+    },
+    "common_2": {
+      "inputs": {
         "cosmic": "cosmic",
         "home-manager": "home-manager",
         "hyprland": "hyprland",
@@ -72,11 +96,11 @@
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-0uw2ufJKp8bok7PveHuzOTF3CIO46fZgWLQLCJmU6zo=",
-        "path": "../../common",
+        "path": "./common",
         "type": "path"
       },
       "original": {
-        "path": "../../common",
+        "path": "./common",
         "type": "path"
       }
     },
@@ -118,6 +142,7 @@
     "darwin": {
       "inputs": {
         "nixpkgs": [
+          "common",
           "common",
           "ragenix",
           "agenix",
@@ -193,6 +218,7 @@
       "inputs": {
         "nixpkgs": [
           "common",
+          "common",
           "hyprland",
           "pre-commit-hooks",
           "nixpkgs"
@@ -235,6 +261,7 @@
       "inputs": {
         "nixpkgs": [
           "common",
+          "common",
           "ragenix",
           "agenix",
           "nixpkgs"
@@ -258,15 +285,18 @@
       "inputs": {
         "hyprlang": [
           "common",
+          "common",
           "hyprland",
           "hyprlang"
         ],
         "nixpkgs": [
           "common",
+          "common",
           "hyprland",
           "nixpkgs"
         ],
         "systems": [
+          "common",
           "common",
           "hyprland",
           "systems"
@@ -290,15 +320,18 @@
       "inputs": {
         "hyprutils": [
           "common",
+          "common",
           "hyprland",
           "hyprutils"
         ],
         "nixpkgs": [
           "common",
+          "common",
           "hyprland",
           "nixpkgs"
         ],
         "systems": [
+          "common",
           "common",
           "hyprland",
           "systems"
@@ -351,10 +384,12 @@
       "inputs": {
         "nixpkgs": [
           "common",
+          "common",
           "hyprland",
           "nixpkgs"
         ],
         "systems": [
+          "common",
           "common",
           "hyprland",
           "systems"
@@ -378,17 +413,20 @@
       "inputs": {
         "hyprlang": [
           "common",
+          "common",
           "hyprland",
           "hyprland-qtutils",
           "hyprlang"
         ],
         "nixpkgs": [
           "common",
+          "common",
           "hyprland",
           "hyprland-qtutils",
           "nixpkgs"
         ],
         "systems": [
+          "common",
           "common",
           "hyprland",
           "hyprland-qtutils",
@@ -414,10 +452,12 @@
         "hyprland-qt-support": "hyprland-qt-support",
         "hyprlang": [
           "common",
+          "common",
           "hyprland",
           "hyprlang"
         ],
         "hyprutils": [
+          "common",
           "common",
           "hyprland",
           "hyprland-qtutils",
@@ -426,10 +466,12 @@
         ],
         "nixpkgs": [
           "common",
+          "common",
           "hyprland",
           "nixpkgs"
         ],
         "systems": [
+          "common",
           "common",
           "hyprland",
           "systems"
@@ -453,15 +495,18 @@
       "inputs": {
         "hyprutils": [
           "common",
+          "common",
           "hyprland",
           "hyprutils"
         ],
         "nixpkgs": [
           "common",
+          "common",
           "hyprland",
           "nixpkgs"
         ],
         "systems": [
+          "common",
           "common",
           "hyprland",
           "systems"
@@ -485,10 +530,12 @@
       "inputs": {
         "nixpkgs": [
           "common",
+          "common",
           "hyprland",
           "nixpkgs"
         ],
         "systems": [
+          "common",
           "common",
           "hyprland",
           "systems"
@@ -512,10 +559,12 @@
       "inputs": {
         "nixpkgs": [
           "common",
+          "common",
           "hyprland",
           "nixpkgs"
         ],
         "systems": [
+          "common",
           "common",
           "hyprland",
           "systems"
@@ -617,11 +666,27 @@
     },
     "nixpkgs_5": {
       "locked": {
-        "lastModified": 1740463929,
-        "narHash": "sha256-4Xhu/3aUdCKeLfdteEHMegx5ooKQvwPHNkOgNCXQrvc=",
+        "lastModified": 1741173522,
+        "narHash": "sha256-k7VSqvv0r1r53nUI/IfPHCppkUAddeXn843YlAC5DR0=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "5d7db4668d7a0c6cc5fc8cf6ef33b008b2b1ed8b",
+        "rev": "d69ab0d71b22fa1ce3dbeff666e6deb4917db049",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_6": {
+      "locked": {
+        "lastModified": 1742268799,
+        "narHash": "sha256-IhnK4LhkBlf14/F8THvUy3xi/TxSQkp9hikfDZRD4Ic=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "da044451c6a70518db5b730fe277b70f494188f1",
         "type": "github"
       },
       "original": {
@@ -631,7 +696,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_6": {
+    "nixpkgs_7": {
       "locked": {
         "lastModified": 1742225912,
         "narHash": "sha256-HCD3GrAAJb1jYTEc221DPlBk2VDkBt43hww7DXC1tyc=",
@@ -1564,6 +1629,7 @@
         "gitignore": "gitignore",
         "nixpkgs": [
           "common",
+          "common",
           "hyprland",
           "nixpkgs"
         ]
@@ -1607,13 +1673,13 @@
     "root": {
       "inputs": {
         "common": "common",
-        "nixpkgs": "nixpkgs_5",
+        "nixpkgs": "nixpkgs_6",
         "ros_neovim": "ros_neovim"
       }
     },
     "ros_neovim": {
       "inputs": {
-        "nixpkgs": "nixpkgs_6",
+        "nixpkgs": "nixpkgs_7",
         "nvim_plugin-Almo7aya/openingh.nvim": "nvim_plugin-Almo7aya/openingh.nvim",
         "nvim_plugin-CopilotC-Nvim/CopilotChat.nvim": "nvim_plugin-CopilotC-Nvim/CopilotChat.nvim",
         "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring": "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring",
@@ -1690,6 +1756,7 @@
     "rust-overlay": {
       "inputs": {
         "nixpkgs": [
+          "common",
           "common",
           "ragenix",
           "nixpkgs"
@@ -1779,30 +1846,36 @@
       "inputs": {
         "hyprland-protocols": [
           "common",
+          "common",
           "hyprland",
           "hyprland-protocols"
         ],
         "hyprlang": [
+          "common",
           "common",
           "hyprland",
           "hyprlang"
         ],
         "hyprutils": [
           "common",
+          "common",
           "hyprland",
           "hyprutils"
         ],
         "hyprwayland-scanner": [
+          "common",
           "common",
           "hyprland",
           "hyprwayland-scanner"
         ],
         "nixpkgs": [
           "common",
+          "common",
           "hyprland",
           "nixpkgs"
         ],
         "systems": [
+          "common",
           "common",
           "hyprland",
           "systems"

@@ -4,9 +4,8 @@
     # nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
-    common.url = "path:../../common";
-    # Pin to specific version
-    # common.url = "git+https://git.joshuabell.xyz/dotfiles?rev=88f2d95e6a871f084dccfc4f45ad9d2b31720998";
+    # common.url = "path:../../common";
+    common.url = "git+https://git.joshuabell.xyz/dotfiles";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
   };
@@ -15,6 +14,7 @@
     {
       nixpkgs,
       common,
+      ros_neovim,
       ...
     }@inputs:
     let
@@ -23,19 +23,11 @@
     in
     {
       nixosConfigurations = {
-        "${configuration_name}" =
-          let
-            auto_modules = builtins.concatMap (
-              input:
-              lib.optionals
-                (builtins.hasAttr "nixosModules" input && builtins.hasAttr "default" input.nixosModules)
-                [
-                  input.nixosModules.default
-                ]
-            ) (builtins.attrValues inputs);
-          in
-          (lib.nixosSystem {
+        "${configuration_name}" = (
+          lib.nixosSystem {
             modules = [
+              common.nixosModules.default
+              ros_neovim.nixosModules.default
               ./configuration.nix
               ./hardware-configuration.nix
               (import ./containers.nix { inherit inputs; })
@@ -129,11 +121,10 @@
                   boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
                 }
               )
-            ] ++ auto_modules;
-            specialArgs = {
-              inherit inputs;
-            };
-          });
+            ];
+
+          }
+        );
       };
     };
 }
