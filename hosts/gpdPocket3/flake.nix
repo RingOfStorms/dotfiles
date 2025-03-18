@@ -2,20 +2,16 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
 
-    ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
-    mod_common.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_common";
-    mod_secrets.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_secrets";
-    mod_boot_systemd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_boot_systemd";
-    # mod_de_cosmic.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_cosmic";
-    mod_de_gnome.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_de_gnome";
+    # common.url = "path:../../common";
+    common.url = "git+https://git.joshuabell.xyz/dotfiles?dir=common";
 
-    mod_home-manager.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_home_manager";
-    mod_home-manager.inputs.home-manager.url = "github:rycee/home-manager/release-24.11";
+    ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
   };
 
   outputs =
     {
       nixpkgs,
+      common,
       ...
     }@inputs:
     let
@@ -40,30 +36,28 @@
               ./configuration.nix
               ./hardware-configuration.nix
               (
-                { pkgs, ... }:
+                { config, pkgs, ... }:
                 {
-                  imports = [
-                    ../../components/nix/tailscale.nix
-                    ../../components/nix/lua.nix
-                    ../../components/nix/rust-repl.nix
-                    ../../components/nix/qdirstat.nix
-                  ];
-                  mods = {
-                    common = {
-                      systemName = configuration_name;
-                      allowUnfree = true;
-                      primaryUser = "josh";
-                      docker = true;
-                      zsh = true;
+                  ringofstorms_common = {
+                    systemName = configuration_name;
+                    boot.systemd.enable = true;
+                    desktopEnvironment.gnome.enable = true;
+                    programs = {
+                      qFlipper.enable = true;
+                      rustDev.enable = true;
+                      tailnet.enable = true;
+                      ssh.enable = true;
+                      docker.enable = true;
+                    };
+                    users = {
+                      # Users are all normal users and default password is password1
+                      admins = [ "josh" ]; # First admin is also the primary user owning nix config
                       users = {
                         josh = {
                           openssh.authorizedKeys.keys = [
                             "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDa0MUnXwRzHPTDakjzLTmye2GTFbRno+KVs0DSeIPb7 nix2gpdpocket3"
                           ];
-                          initialPassword = "password1";
-                          isNormalUser = true;
                           extraGroups = [
-                            "wheel"
                             "networkmanager"
                             "video"
                             "input"
@@ -73,28 +67,26 @@
                             google-chrome
                             discordo
                             discord
-                            firefox-esr
                             vlc
                           ];
                         };
                       };
                     };
-                    home_manager = {
+                    homeManager = {
                       users = {
                         josh = {
-                          imports = [
-                            ../../components/hm/kitty.nix
-                            ../../components/hm/tmux/tmux.nix
-                            ../../components/hm/alacritty.nix
-                            ../../components/hm/atuin.nix
-                            ../../components/hm/direnv.nix
-                            ../../components/hm/git.nix
-                            ../../components/hm/nix_deprecations.nix
-                            ../../components/hm/postgres.nix
-                            ../../components/hm/ssh.nix
-                            ../../components/hm/starship.nix
-                            ../../components/hm/zoxide.nix
-                            ../../components/hm/zsh.nix
+                          imports = with common.homeManagerModules; [
+                            tmux
+                            atuin
+                            kitty
+                            direnv
+                            git
+                            nix_deprecations
+                            postgres
+                            ssh
+                            starship
+                            zoxide
+                            zsh
                           ];
                         };
                       };
