@@ -48,6 +48,7 @@
                     general = {
                       disableRemoteBuildsOnLio = true;
                     };
+                    secrets.enable = true;
                     desktopEnvironment.gnome.enable = true;
                     programs = {
                       qFlipper.enable = true;

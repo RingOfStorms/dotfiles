@@ -43,6 +43,7 @@
                     general = {
                       disableRemoteBuildsOnLio = true;
                     };
+                    secrets.enable = true;
                     desktopEnvironment.gnome.enable = true;
                     programs = {
                       rustDev.enable = true;

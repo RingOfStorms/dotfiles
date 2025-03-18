@@ -2,19 +2,19 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
     deploy-rs.url = "github:serokell/deploy-rs";
-
+    common.url = "git+https://git.joshuabell.xyz/dotfiles";
     ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
-    mod_common.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_common";
-    mod_common.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
     {
       self,
       nixpkgs,
+      common,
+      ros_neovim,
       deploy-rs,
       ...
-    }@inputs:
+    }:
     let
       configuration_name = "l002";
       lib = nixpkgs.lib;
@@ -37,62 +37,69 @@
 
       nixosConfigurations = {
         nixos = self.nixosConfigurations.${configuration_name};
-        "${configuration_name}" =
-          let
-            auto_modules = builtins.concatMap (
-              input:
-              lib.optionals
-                (builtins.hasAttr "nixosModules" input && builtins.hasAttr "default" input.nixosModules)
-                [
-                  input.nixosModules.default
-                ]
-            ) (builtins.attrValues inputs);
-          in
-          (lib.nixosSystem {
-            modules = [
-              ./configuration.nix
-              ./hardware-configuration.nix
-              ./linode.nix
-              ./nginx.nix
-              ../../../components/nix/tailscale.nix
-              (
-                { pkgs, ... }:
-                {
-                  users.users.root.openssh.authorizedKeys.keys = [
-                    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJuo6L6V52AzdQIK6fWW9s0aX1yKUUTXbPd8v8IU9p2o nix2linode"
-                  ];
-                  components = {
-                    # NOTE we manually onboard this machine since it has no secrets uploaded to it
-                    tailscale.useSecretsAuth = false;
+        "${configuration_name}" = lib.nixosSystem {
+          modules = [
+            common.nixosModules.default
+            ros_neovim.nixosModules.default
+            ./configuration.nix
+            ./hardware-configuration.nix
+            ./linode.nix
+            ./nginx.nix
+            (
+              { pkgs, ... }:
+              {
+                users.users.root.openssh.authorizedKeys.keys = [
+                  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJuo6L6V52AzdQIK6fWW9s0aX1yKUUTXbPd8v8IU9p2o nix2linode"
+                ];
+
+                ringofstorms_common = {
+                  systemName = configuration_name;
+                  general = {
+                    disableRemoteBuildsOnLio = true;
                   };
-                  mods = {
-                    common = {
-                      disableRemoteBuildsOnLio = true;
-                      systemName = configuration_name;
-                      allowUnfree = true;
-                      primaryUser = "luser";
-                      docker = true;
-                      users = {
-                        luser = {
-                          extraGroups = [
-                            "wheel"
-                            "networkmanager"
-                          ];
-                          isNormalUser = true;
-                          openssh.authorizedKeys.keys = [
-                            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJuo6L6V52AzdQIK6fWW9s0aX1yKUUTXbPd8v8IU9p2o nix2linode"
-                          ];
-                        };
+                  programs = {
+                    tailnet.enable = true;
+                    tailnet.useSecretsAuth = false;
+                    ssh.enable = true;
+                  };
+                  users = {
+                    # Users are all normal users and default password is password1
+                    admins = [ "luser" ]; # First admin is also the primary user owning nix config
+                    users = {
+                      luser = {
+                        extraGroups = [
+                          "networkmanager"
+                        ];
+                        openssh.authorizedKeys.keys = [
+                          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJuo6L6V52AzdQIK6fWW9s0aX1yKUUTXbPd8v8IU9p2o nix2linode"
+                        ];
+                        shell = pkgs.zsh;
+                        packages = with pkgs; [
+                          bitwarden
+                          vaultwarden
+                        ];
                       };
                     };
                   };
-                }
-              )
-            ] ++ auto_modules;
-            specialArgs = {
-              inherit inputs;
-            };
-          });
+                  homeManager = {
+                    users = {
+                      luser = {
+                        imports = with common.homeManagerModules; [
+                          tmux
+                          git
+                          postgres
+                          starship
+                          zoxide
+                          zsh
+                        ];
+                      };
+                    };
+                  };
+                };
+              }
+            )
+          ];
+        };
       };
     };
 }

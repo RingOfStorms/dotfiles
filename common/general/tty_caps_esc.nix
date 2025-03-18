@@ -1,11 +1,28 @@
 {
   lib,
   pkgs,
+  config,
   ...
 }:
-with lib;
+let
+  ccfg = import ../config.nix;
+  cfg_path = [
+    ccfg.custom_config_key
+    "general"
+  ];
+  cfg = lib.attrsets.getAttrFromPath cfg_path config;
+in
 {
-  config = {
+  options =
+    { }
+    // lib.attrsets.setAttrByPath cfg_path {
+      ttyCapsEscape = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Enable caps for escape key";
+      };
+    };
+  config = lib.mkIf cfg.ttyCapsEscape {
     services.xserver.xkb.options = "caps:escape";
     console = {
       earlySetup = true;
