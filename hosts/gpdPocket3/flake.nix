@@ -2,8 +2,8 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
 
-    # common.url = "path:../../common";
-    common.url = "git+https://git.joshuabell.xyz/dotfiles?dir=common";
+    common.url = "path:../../common";
+    # common.url = "git+https://git.joshuabell.xyz/dotfiles?dir=common";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
   };
