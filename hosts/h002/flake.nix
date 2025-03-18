@@ -30,7 +30,6 @@
               ros_neovim.nixosModules.default
               ./configuration.nix
               ./hardware-configuration.nix
-              (import ./containers.nix { inherit common; })
               (
                 { config, pkgs, ... }:
                 {
