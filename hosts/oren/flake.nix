@@ -16,7 +16,7 @@
       common,
       ros_neovim,
       ...
-    }@inputs:
+    }:
     let
       configuration_name = "oren";
       lib = nixpkgs.lib;

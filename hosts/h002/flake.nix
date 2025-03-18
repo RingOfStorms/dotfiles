@@ -1,104 +1,102 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
+    # nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+    # Use relative to get current version for testing
+    # common.url = "path:../../common";
+    common.url = "git+https://git.joshuabell.xyz/dotfiles";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
-    mod_common.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_common";
-    mod_common.inputs.nixpkgs.follows = "nixpkgs";
-    mod_secrets.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_secrets";
-    mod_boot_grub.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_boot_grub";
-    mod_ros_stormd.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_stormd";
-    mod_nebula.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_nebula";
-    mod_home-manager.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_home_manager";
-    mod_home-manager.inputs.home-manager.url = "github:rycee/home-manager/release-24.11";
-    mod_home-manager.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
     {
       nixpkgs,
+      common,
+      ros_neovim,
       ...
-    }@inputs:
+    }:
     let
       configuration_name = "h002";
       lib = nixpkgs.lib;
     in
     {
       nixosConfigurations = {
-        "${configuration_name}" =
-          let
-            auto_modules = builtins.concatMap (
-              input:
-              lib.optionals
-                (builtins.hasAttr "nixosModules" input && builtins.hasAttr "default" input.nixosModules)
-                [
-                  input.nixosModules.default
-                ]
-            ) (builtins.attrValues inputs);
-          in
-          (lib.nixosSystem {
+        "${configuration_name}" = (
+          lib.nixosSystem {
             modules = [
+              common.nixosModules.default
+              ros_neovim.nixosModules.default
               ./configuration.nix
               ./hardware-configuration.nix
+              (import ./containers.nix { inherit common; })
               (
-                { pkgs, ... }:
+                { config, pkgs, ... }:
                 {
-                  imports = [
-                    ../../components/nix/lua.nix
-                    ../../components/nix/rust-repl.nix
+                  environment.systemPackages = with pkgs; [
+                    lua
                   ];
 
-                  mods = {
-                    common = {
-                      systemName = configuration_name;
-                      allowUnfree = true;
-                      primaryUser = "luser";
-                      docker = true;
-                      zsh = true;
+                  ringofstorms_common = {
+                    systemName = configuration_name;
+                    boot.grub.enable = true;
+                    general = {
+                      disableRemoteBuildsOnLio = true;
+                    };
+                    desktopEnvironment.gnome.enable = true;
+                    programs = {
+                      rustDev.enable = true;
+                      tailnet.enable = true;
+                      ssh.enable = true;
+                      docker.enable = true;
+                    };
+                    users = {
+                      # Users are all normal users and default password is password1
+                      admins = [ "josh" ]; # First admin is also the primary user owning nix config
                       users = {
-                        luser = {
+                        josh = {
                           openssh.authorizedKeys.keys = [
-                            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJie9OPheWn/EZWfXJSZ3S0DnISqI3ToCmOqhX/Tkwby nix2h002"
+                            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJN2nsLmAlF6zj5dEBkNSJaqcCya+aB6I0imY8Q5Ew0S nix2h002"
                           ];
-                          initialPassword = "password1";
-                          isNormalUser = true;
                           extraGroups = [
-                            "wheel"
                             "networkmanager"
                             "video"
                             "input"
                           ];
                           shell = pkgs.zsh;
+                          packages = with pkgs; [
+                            bitwarden
+                            vaultwarden
+                          ];
                         };
                       };
                     };
-                    home_manager = {
+                    homeManager = {
                       users = {
-                        luser = {
-                          imports = [
-                            ../../components/hm/tmux/tmux.nix
-                            ../../components/hm/atuin.nix
-                            ../../components/hm/direnv.nix
-                            ../../components/hm/git.nix
-                            ../../components/hm/nix_deprecations.nix
-                            ../../components/hm/postgres.nix
-                            ../../components/hm/slicer.nix
-                            ../../components/hm/ssh.nix
-                            ../../components/hm/starship.nix
-                            ../../components/hm/zoxide.nix
-                            ../../components/hm/zsh.nix
+                        josh = {
+                          imports = with common.homeManagerModules; [
+                            tmux
+                            atuin
+                            direnv
+                            git
+                            nix_deprecations
+                            postgres
+                            ssh
+                            starship
+                            zoxide
+                            zsh
                           ];
                         };
                       };
                     };
                   };
+
                 }
               )
-            ] ++ auto_modules;
-            specialArgs = {
-              inherit inputs;
-            };
-          });
+            ];
+          }
+        );
       };
     };
 }

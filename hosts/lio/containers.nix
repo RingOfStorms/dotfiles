@@ -1,4 +1,4 @@
-{ inputs }:
+{ common }:
 {
   ...
 }:
@@ -10,7 +10,7 @@
   options = { };
 
   imports = [
-    inputs.common.nixosModules.containers.librechat
+    common.nixosModules.containers.librechat
   ];
 
   config = {

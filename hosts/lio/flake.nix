@@ -16,7 +16,7 @@
       common,
       ros_neovim,
       ...
-    }@inputs:
+    }:
     let
       configuration_name = "lio";
       lib = nixpkgs.lib;
@@ -30,7 +30,7 @@
               ros_neovim.nixosModules.default
               ./configuration.nix
               ./hardware-configuration.nix
-              (import ./containers.nix { inherit inputs; })
+              (import ./containers.nix { inherit common; })
               (
                 { config, pkgs, ... }:
                 {
