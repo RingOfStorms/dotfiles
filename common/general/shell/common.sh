@@ -169,6 +169,18 @@ gintent() {
 }
 alias gintentnix="gintent .envrc flake.lock flake.nix"
 
+gintent_undo() {
+  for file in "$@"; do
+    if [ -f "$file" ]; then
+        git update-index --no-assume-unchanged "$file"
+        echo "Intent removed for $file"
+    else
+        echo "File not found: $file"
+    fi
+  done
+}
+alias gintentnix_undo="gintent_undo .envrc flake.lock flake.nix"
+
 
 # Aider
 aider () {
