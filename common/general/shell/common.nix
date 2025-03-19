@@ -24,8 +24,6 @@ with lib;
       killall
       hdparm
       speedtest-cli
-      ffmpeg-full
-      appimage-run
     ];
 
     environment.shellAliases = {

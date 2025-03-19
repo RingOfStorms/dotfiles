@@ -43,7 +43,7 @@ in
       userConfig
       // {
         inherit name;
-        isNormalUser = true;
+        isNormalUser = lib.mkIf (name != "root") true;
         initialPassword =
           if (lib.hasAttr "initialPassword" userConfig) then userConfig.initialPassword else "password1";
         extraGroups =

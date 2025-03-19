@@ -2,18 +2,19 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
     deploy-rs.url = "github:serokell/deploy-rs";
-
+    common.url = "git+https://git.joshuabell.xyz/dotfiles";
     ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
-    mod_common.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_common";
   };
 
   outputs =
     {
       self,
       nixpkgs,
+      common,
+      ros_neovim,
       deploy-rs,
       ...
-    }@inputs:
+    }:
     let
       configuration_name = "l001";
       lib = nixpkgs.lib;
@@ -35,47 +36,56 @@
       };
 
       nixosConfigurations = {
-        nixos = self.nixosConfigurations.${configuration_name};
-        "${configuration_name}" =
-          let
-            auto_modules = builtins.concatMap (
-              input:
-              lib.optionals
-                (builtins.hasAttr "nixosModules" input && builtins.hasAttr "default" input.nixosModules)
-                [
-                  input.nixosModules.default
-                ]
-            ) (builtins.attrValues inputs);
-          in
-          (lib.nixosSystem {
+        "${configuration_name}" = (
+          lib.nixosSystem {
             modules = [
+              common.nixosModules.default
+              ros_neovim.nixosModules.default
               ./configuration.nix
               ./hardware-configuration.nix
               ./linode.nix
               ./nginx.nix
               ./headscale.nix
               (
-                { pkgs, ... }:
+                { config, pkgs, ... }:
                 {
-                  users.users.root.openssh.authorizedKeys.keys = [
-                    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJuo6L6V52AzdQIK6fWW9s0aX1yKUUTXbPd8v8IU9p2o nix2linode"
+                  environment.systemPackages = with pkgs; [
+                    bitwarden
+                    vaultwarden
                   ];
-                  mods = {
-                    common = {
+
+                  ringofstorms_common = {
+                    systemName = configuration_name;
+                    general = {
                       disableRemoteBuildsOnLio = true;
-                      systemName = configuration_name;
-                      allowUnfree = true;
-                      primaryUser = "luser";
-                      docker = true;
+                      readWindowsDrives = false;
+                      jetbrainsMonoFont = false;
+                      ttyCapsEscape = false;
+                    };
+                    programs = {
+                      ssh.enable = true;
+                    };
+                    users = {
                       users = {
-                        luser = {
-                          extraGroups = [
-                            "wheel"
-                            "networkmanager"
-                          ];
-                          isNormalUser = true;
+                        root = {
                           openssh.authorizedKeys.keys = [
                             "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJuo6L6V52AzdQIK6fWW9s0aX1yKUUTXbPd8v8IU9p2o nix2linode"
+                          ];
+                          shell = pkgs.zsh;
+                        };
+                      };
+                    };
+                    homeManager = {
+                      users = {
+                        root = {
+                          imports = with common.homeManagerModules; [
+                            tmux
+                            atuin
+                            git
+                            postgres
+                            starship
+                            zoxide
+                            zsh
                           ];
                         };
                       };
@@ -83,11 +93,9 @@
                   };
                 }
               )
-            ] ++ auto_modules;
-            specialArgs = {
-              inherit inputs;
-            };
-          });
+            ];
+          }
+        );
       };
     };
 }

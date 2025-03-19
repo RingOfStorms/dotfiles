@@ -41,6 +41,7 @@
                     systemName = configuration_name;
                     boot.systemd.enable = true;
                     desktopEnvironment.gnome.enable = true;
+                    secrets.enable = true;
                     programs = {
                       qFlipper.enable = true;
                       rustDev.enable = true;

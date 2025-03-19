@@ -29,7 +29,7 @@ in
         default = true;
         description = "Enable fail2ban.";
       };
-      allowRootPasswordLogin = lib.mkOption {
+      allowPasswordLogin = lib.mkOption {
         type = lib.types.bool;
         default = false;
         description = "Allow root password login.";
@@ -45,6 +45,10 @@ in
     # Use fail2ban
     services.fail2ban = lib.mkIf cfg.fail2Ban {
       enable = true;
+      # Ignore my tailnet
+      ignoreIP = [
+        "100.64.0.0/10"
+      ];
     };
 
     # Open ports in the firewall if enabled.
@@ -58,7 +62,7 @@ in
       settings = {
         LogLevel = "VERBOSE";
         PermitRootLogin = "yes";
-        PasswordAuthentication = if cfg.allowRootPasswordLogin then true else false;
+        PasswordAuthentication = cfg.allowPasswordLogin;
       };
     };
 

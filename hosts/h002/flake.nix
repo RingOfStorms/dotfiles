@@ -43,6 +43,7 @@
                     general = {
                       disableRemoteBuildsOnLio = true;
                     };
+                    secrets.enable = true;
                     desktopEnvironment.gnome.enable = true;
                     programs = {
                       rustDev.enable = true;
@@ -51,7 +52,6 @@
                       docker.enable = true;
                     };
                     users = {
-                      # Users are all normal users and default password is password1
                       admins = [ "luser" ]; # First admin is also the primary user owning nix config
                       users = {
                         luser = {
@@ -75,6 +75,7 @@
                       users = {
                         luser = {
                           imports = with common.homeManagerModules; [
+                            kitty
                             tmux
                             atuin
                             direnv

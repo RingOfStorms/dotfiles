@@ -42,6 +42,8 @@
                     lua
                     qdirstat
                     steam
+                    ffmpeg-full
+                    appimage-run
                   ];
 
                   # Also allow this key to work for root user, this will let us use this as a remote builder easier
@@ -54,6 +56,7 @@
                   ringofstorms_common = {
                     systemName = configuration_name;
                     boot.systemd.enable = true;
+                    secrets.enable = true;
                     general = {
                       disableRemoteBuildsOnLio = true;
                     };
