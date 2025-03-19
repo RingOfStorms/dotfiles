@@ -54,9 +54,14 @@
                     users = {
                       admins = [ "luser" ]; # First admin is also the primary user owning nix config
                       users = {
+                        root = {
+                          openssh.authorizedKeys.keys = [
+                            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJie9OPheWn/EZWfXJSZ3S0DnISqI3ToCmOqhX/Tkwby nix2h002"
+                          ];
+                        };
                         luser = {
                           openssh.authorizedKeys.keys = [
-                            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJN2nsLmAlF6zj5dEBkNSJaqcCya+aB6I0imY8Q5Ew0S nix2h002"
+                            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJie9OPheWn/EZWfXJSZ3S0DnISqI3ToCmOqhX/Tkwby nix2h002"
                           ];
                           extraGroups = [
                             "networkmanager"
@@ -91,7 +96,6 @@
                       };
                     };
                   };
-
                 }
               )
             ];
