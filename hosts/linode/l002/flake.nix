@@ -48,14 +48,18 @@
             (
               { pkgs, ... }:
               {
-                users.users.root.openssh.authorizedKeys.keys = [
-                  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJuo6L6V52AzdQIK6fWW9s0aX1yKUUTXbPd8v8IU9p2o nix2linode"
+                environment.systemPackages = with pkgs; [
+                  bitwarden
+                  vaultwarden
                 ];
 
                 ringofstorms_common = {
                   systemName = configuration_name;
                   general = {
                     disableRemoteBuildsOnLio = true;
+                    readWindowsDrives = false;
+                    jetbrainsMonoFont = false;
+                    ttyCapsEscape = false;
                   };
                   programs = {
                     tailnet.enable = true;
@@ -63,29 +67,21 @@
                     ssh.enable = true;
                   };
                   users = {
-                    # Users are all normal users and default password is password1
-                    admins = [ "luser" ]; # First admin is also the primary user owning nix config
                     users = {
-                      luser = {
-                        extraGroups = [
-                          "networkmanager"
-                        ];
+                      root = {
                         openssh.authorizedKeys.keys = [
                           "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJuo6L6V52AzdQIK6fWW9s0aX1yKUUTXbPd8v8IU9p2o nix2linode"
                         ];
                         shell = pkgs.zsh;
-                        packages = with pkgs; [
-                          bitwarden
-                          vaultwarden
-                        ];
                       };
                     };
                   };
                   homeManager = {
                     users = {
-                      luser = {
+                      root = {
                         imports = with common.homeManagerModules; [
                           tmux
+                          atuin
                           git
                           postgres
                           starship

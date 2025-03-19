@@ -52,7 +52,6 @@
                       docker.enable = true;
                     };
                     users = {
-                      # Users are all normal users and default password is password1
                       admins = [ "josh" ]; # First admin is also the primary user owning nix config
                       users = {
                         josh = {

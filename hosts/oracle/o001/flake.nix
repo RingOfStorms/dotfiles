@@ -2,18 +2,19 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
     deploy-rs.url = "github:serokell/deploy-rs";
-
-    mod_common.url = "git+https://git.joshuabell.xyz/dotfiles?ref=mod_common";
-    mod_common.inputs.nixpkgs.follows = "nixpkgs";
+    common.url = "git+https://git.joshuabell.xyz/dotfiles";
+    ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
   };
 
   outputs =
     {
       self,
       nixpkgs,
+      common,
+      ros_neovim,
       deploy-rs,
       ...
-    }@inputs:
+    }:
     let
       configuration_name = "o001";
       lib = nixpkgs.lib;
@@ -37,76 +38,67 @@
 
       nixosConfigurations = {
         nixos = self.nixosConfigurations.${configuration_name};
-        "${configuration_name}" =
-          let
-            auto_modules = builtins.concatMap (
-              input:
-              lib.optionals
-                (builtins.hasAttr "nixosModules" input && builtins.hasAttr "default" input.nixosModules)
-                [
-                  input.nixosModules.default
-                ]
-            ) (builtins.attrValues inputs);
-          in
-          (lib.nixosSystem {
-            system = "aarch64-linux";
-            modules = [
-              ./configuration.nix
-              ./hardware-configuration.nix
-              ./nginx.nix
-              ./vaultwarden.nix
-              ../../../components/nix/tailscale.nix
-              (
-                { pkgs, ... }:
-                {
-                  users.users.root.openssh.authorizedKeys.keys = [
-                    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG90Gg6dV3yhZ5+X40vICbeBwV9rfD39/8l9QSqluTw8 nix2oracle"
-                  ];
-                  components = {
-                    # NOTE we manually onboard this machine since it has no secrets uploaded to it
-                    tailscale.useSecretsAuth = false;
-                  };
+        "${configuration_name}" = lib.nixosSystem {
+          system = "aarch64-linux";
+          modules = [
+            common.nixosModules.default
+            ros_neovim.nixosModules.default
+            ./configuration.nix
+            ./hardware-configuration.nix
+            ./nginx.nix
+            ./vaultwarden.nix
+            (
+              { pkgs, ... }:
+              {
+                environment.systemPackages = with pkgs; [
+                  bitwarden
+                  vaultwarden
+                ];
 
-                  services.fail2ban = {
-                    enable = true;
-                    ignoreIP = [
-                      "100.64.0.0/10"
-                    ];
+                ringofstorms_common = {
+                  systemName = configuration_name;
+                  general = {
+                    disableRemoteBuildsOnLio = true;
+                    readWindowsDrives = false;
+                    jetbrainsMonoFont = false;
+                    ttyCapsEscape = false;
                   };
-                  services.openssh = {
-                    enable = true;
-                    settings.PermitRootLogin = "yes";
-                    settings.PasswordAuthentication = false;
+                  programs = {
+                    tailnet.enable = true;
+                    tailnet.useSecretsAuth = false;
+                    ssh.enable = true;
+                    docker.enable = true;
                   };
-
-                  mods = {
-                    common = {
-                      disableRemoteBuildsOnLio = true;
-                      systemName = configuration_name;
-                      allowUnfree = true;
-                      primaryUser = "luser";
-                      docker = true;
-                      users = {
-                        luser = {
-                          extraGroups = [
-                            "wheel"
-                            "networkmanager"
-                          ];
-                          isNormalUser = true;
-                          openssh.authorizedKeys.keys = [
-                            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG90Gg6dV3yhZ5+X40vICbeBwV9rfD39/8l9QSqluTw8 nix2oracle"
-                          ];
-                        };
+                  users = {
+                    users = {
+                      root = {
+                        openssh.authorizedKeys.keys = [
+                          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG90Gg6dV3yhZ5+X40vICbeBwV9rfD39/8l9QSqluTw8 nix2oracle"
+                        ];
+                        shell = pkgs.zsh;
                       };
                     };
                   };
-                }
-              )
-            ] ++ auto_modules;
-            specialArgs = {
-              inherit inputs;
-            };
-          });
+                  homeManager = {
+                    users = {
+                      root = {
+                        imports = with common.homeManagerModules; [
+                          tmux
+                          atuin
+                          git
+                          postgres
+                          starship
+                          zoxide
+                          zsh
+                        ];
+                      };
+                    };
+                  };
+                };
+              }
+            )
+          ];
+        };
       };
     };
 }

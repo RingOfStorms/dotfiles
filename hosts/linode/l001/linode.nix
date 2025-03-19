@@ -18,7 +18,6 @@
     settings.PermitRootLogin = "yes";
     settings.PasswordAuthentication = false;
   };
-  users.users.root.openssh.authorizedKeys.keys = config.users.users.luser.openssh.authorizedKeys.keys;
 
   networking.usePredictableInterfaceNames = false;
   networking.useDHCP = false; # Disable DHCP globally as we will not need it.

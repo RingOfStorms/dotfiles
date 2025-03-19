@@ -1,5 +1,4 @@
 {
-  pkgs,
   ...
 }:
 {
@@ -74,14 +73,6 @@
         forceSSL = true;
         locations."/" = {
           proxyPass = "http://100.64.0.2:6610";
-        };
-      };
-      "vault.t.joshuabell.xyz" = {
-        enableACME = true;
-        forceSSL = true;
-        locations."/" = {
-          proxyWebsockets = true;
-          proxyPass = "http://100.64.0.2:64608";
         };
       };
 
