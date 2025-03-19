@@ -39,7 +39,7 @@ in
         home.stateVersion = cfg.stateVersion;
         programs.home-manager.enable = true;
         home.username = name;
-        home.homeDirectory = lib.mkForce "/home/${name}";
+        home.homeDirectory = lib.mkForce (if name == "root" then "/root" else "/home/${name}");
       };
     }) cfg.users;
   };
