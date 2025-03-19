@@ -75,6 +75,7 @@
                       users = {
                         josh = {
                           imports = with common.homeManagerModules; [
+                            kitty
                             tmux
                             atuin
                             direnv
