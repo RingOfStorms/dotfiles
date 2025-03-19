@@ -4,6 +4,19 @@
 
 <https://git.joshuabell.xyz/dotfiles/~files/6527f67145fe047df57b4778c154dde580ec04c4>
 
+### Old modules from multi branch flake approach
+
+- [common](https://git.joshuabell.xyz/dotfiles/~files/a3df616bee120e8427728c6e6a642686d6efb96d)
+- [de_gnome](https://git.joshuabell.xyz/dotfiles/~files/2434f4858db4b5ddb095d5a7d8bdb05890c48bb4)
+- [de_cosmic](https://git.joshuabell.xyz/dotfiles/~files/f2ecd63921dd826b138dab2ba431085c31a151d1)
+- [de_hyperland](https://git.joshuabell.xyz/dotfiles/~files/ecb652f6e331312b401488140c583cabdcb0deba)
+- [secrets](https://git.joshuabell.xyz/dotfiles/~files/5f3633d5f7c729b8e8fc2805d2751e7c006a6f7a)
+- [nebula](https://git.joshuabell.xyz/dotfiles/~files/70cea59e9f1f750fd0aee8cde8cd54aee8601336)
+- [stormd](https://git.joshuabell.xyz/dotfiles/~files/765c7f4436db03936960373ff77dc2d41f0c4cd5)
+- [home_manager](https://git.joshuabell.xyz/dotfiles/~files/df0c4e95ac6b056202c4ec6fabfcfa5bd205a0b4)
+- [boot_grub](https://git.joshuabell.xyz/dotfiles/~files/f00b3d38ec2dd62741a84d706f88c0c3bdd60784)
+- [boot_systemd](https://git.joshuabell.xyz/dotfiles/~files/3155d8a57286aefb835476617ba6d4df92b83013)
+
 # First Install on new Machine
 
 ## NixOS install
@@ -52,9 +65,7 @@
 
 ## Local tooling
 
-- firefox/1password setup
-  - sign in to firefox
-  - sign into 1 password ext
+- bitwarden setup/sign into self hosted vault
 
 - atuin setup
   - if atuin is on enable that mod in configuration.nix, make sure to `atuin login` get key from existing device
@@ -88,7 +99,6 @@ efi   /EFI/Microsoft/Boot/bootmgfw.efi
 - reduce home manager, make per user modules support instead
 - Ensure my neovim undohistory/auto saves don't save `.age` files as they can be sensitive.
 
-
 # Server hosts
 
-simply run `deploy` in the host root and it will push changes to the server
+simply run `deploy` in the host root and it will push changes to the server (or `deploy_[oracle|linode] <name>` from root)
