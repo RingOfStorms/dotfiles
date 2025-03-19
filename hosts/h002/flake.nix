@@ -52,9 +52,9 @@
                     };
                     users = {
                       # Users are all normal users and default password is password1
-                      admins = [ "josh" ]; # First admin is also the primary user owning nix config
+                      admins = [ "luser" ]; # First admin is also the primary user owning nix config
                       users = {
-                        josh = {
+                        luser = {
                           openssh.authorizedKeys.keys = [
                             "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJN2nsLmAlF6zj5dEBkNSJaqcCya+aB6I0imY8Q5Ew0S nix2h002"
                           ];
@@ -73,7 +73,7 @@
                     };
                     homeManager = {
                       users = {
-                        josh = {
+                        luser = {
                           imports = with common.homeManagerModules; [
                             tmux
                             atuin
