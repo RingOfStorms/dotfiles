@@ -33,6 +33,7 @@ with lib;
       cat = "bat --pager=never -p";
       # TODO this may not be needed now that I am using `nh` clean mode (see /hosts/_common/configuration.nix#programs.nh)
       nix-boot-clean = "find '/boot/loader/entries' -type f ! -name 'windows.conf' | head -n -4 | xargs -I {} rm {}; nix store gc; nixos-rebuild boot; echo; df";
+      ndr = "nix-direnv-reload";
 
       # general unix
       date_compact = "date +'%Y%m%d'";

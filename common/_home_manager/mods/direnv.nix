@@ -17,12 +17,6 @@
           "~/.config"
         ];
       };
-      home.shellAliases = {
-        ndr = "nix-direnv-reload";
-      };
-      programs.zsh.shellAliases = {
-        ndr = "nix-direnv-reload";
-      };
     };
   };
 }
