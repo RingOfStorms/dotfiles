@@ -73,6 +73,7 @@
                           ];
                           shell = pkgs.zsh;
                           packages = with pkgs; [
+                            signal-desktop
                             google-chrome
                             discordo
                             discord

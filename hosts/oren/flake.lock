@@ -32,11 +32,11 @@
         "ragenix": "ragenix"
       },
       "locked": {
-        "lastModified": 1742440273,
-        "narHash": "sha256-/X4LmD+Fps6z/kd5SALSlqy+GIrtLi+a6R6PgpizLvc=",
+        "lastModified": 1742440358,
+        "narHash": "sha256-Ri44GPI4DgrOGCB7QmCA/PL7BsyDvo8946qnHiLdKLY=",
         "ref": "refs/heads/master",
-        "rev": "70b4ac8481b54b00088cdc7f3053d16a0aea6ca1",
-        "revCount": 382,
+        "rev": "810b4ac192d26b5841fae92128680960b5b58488",
+        "revCount": 383,
         "type": "git",
         "url": "https://git.joshuabell.xyz/dotfiles"
       },
