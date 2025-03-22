@@ -38,7 +38,7 @@ in
       };
       "joe" = {
         identityFile = age.secrets.nix2joe.path;
-        user = "josh";
+        user = "ringo";
       };
       "gp3" = {
         identityFile = age.secrets.nix2gpdPocket3.path;
