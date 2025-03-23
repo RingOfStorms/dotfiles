@@ -32,11 +32,11 @@
         "ragenix": "ragenix"
       },
       "locked": {
-        "lastModified": 1742334390,
-        "narHash": "sha256-F6PFJoZ8lxjIm0uGYZipT3xTk7wYJK/u0JdTp+BlZsg=",
+        "lastModified": 1742679839,
+        "narHash": "sha256-4ZzmwK3pXpiif3Doas0+jRY2RPxFYrnZeMmDmSuYZes=",
         "ref": "refs/heads/master",
-        "rev": "097a899f8d9cafbcbc7729549788908941d32b9f",
-        "revCount": 364,
+        "rev": "5065577842097298885b9f4cb53186bf2dda96a2",
+        "revCount": 386,
         "type": "git",
         "url": "https://git.joshuabell.xyz/dotfiles"
       },
@@ -194,11 +194,11 @@
     },
     "nixpkgs_4": {
       "locked": {
-        "lastModified": 1742268799,
-        "narHash": "sha256-IhnK4LhkBlf14/F8THvUy3xi/TxSQkp9hikfDZRD4Ic=",
+        "lastModified": 1742388435,
+        "narHash": "sha256-GheQGRNYAhHsvPxWVOhAmg9lZKkis22UPbEHlmZMthg=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "da044451c6a70518db5b730fe277b70f494188f1",
+        "rev": "b75693fb46bfaf09e662d09ec076c5a162efa9f6",
         "type": "github"
       },
       "original": {
