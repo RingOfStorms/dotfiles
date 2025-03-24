@@ -41,10 +41,10 @@ in
       ) config.age.secrets.headscale_auth.path;
       # https://tailscale.com/kb/1241/tailscale-up
       extraUpFlags =
-        lib.mkIf cfg.useHeadscale [
+        (lib.optionals cfg.useHeadscale [
           "--login-server=https://headscale.joshuabell.xyz"
           "--no-logs-support"
-        ]
+        ])
         ++ (lib.optionals cfg.enableExitNode [ "--advertise-exit-node" ]);
 
     };
