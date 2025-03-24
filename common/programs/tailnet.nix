@@ -23,6 +23,11 @@ in
         default = true;
         description = "Whether to use headscale login server.";
       };
+      enableExitNode = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Whether to enable exit node.";
+      };
     };
 
   config = lib.mkIf cfg.enable {
@@ -35,10 +40,13 @@ in
         config ? age && config.age ? secrets && config.age.secrets ? headscale_auth
       ) config.age.secrets.headscale_auth.path;
       # https://tailscale.com/kb/1241/tailscale-up
-      extraUpFlags = lib.mkIf cfg.useHeadscale [
-        "--login-server=https://headscale.joshuabell.xyz"
-        "--no-logs-support"
-      ];
+      extraUpFlags =
+        lib.mkIf cfg.useHeadscale [
+          "--login-server=https://headscale.joshuabell.xyz"
+          "--no-logs-support"
+        ]
+        ++ (lib.optional cfg.enableExitNode "--advertise-exit-node");
+
     };
     networking.firewall.trustedInterfaces = [ config.services.tailscale.interfaceName ];
     networking.firewall.checkReversePath = "loose";

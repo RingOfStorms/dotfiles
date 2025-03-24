@@ -66,6 +66,7 @@
                       rustDev.enable = true;
                       uhkAgent.enable = true;
                       tailnet.enable = true;
+                      tailnet.enableExitNode = true;
                       ssh.enable = true;
                       docker.enable = true;
                     };
