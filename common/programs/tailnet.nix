@@ -45,7 +45,7 @@ in
           "--login-server=https://headscale.joshuabell.xyz"
           "--no-logs-support"
         ]
-        ++ (lib.optional cfg.enableExitNode "--advertise-exit-node");
+        ++ (lib.optionals cfg.enableExitNode [ "--advertise-exit-node" ]);
 
     };
     networking.firewall.trustedInterfaces = [ config.services.tailscale.interfaceName ];
