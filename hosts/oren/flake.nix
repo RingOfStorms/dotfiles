@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
-    # nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
     # common.url = "path:../../common";
@@ -13,6 +13,7 @@
   outputs =
     {
       nixpkgs,
+      nixpkgs-unstable,
       common,
       ros_neovim,
       ...
@@ -41,6 +42,12 @@
                     lua
                     qdirstat
                   ];
+
+                  services.ollama = {
+                    enable = true;
+                    package = nixpkgs-unstable.legacyPackages.x86_64-linux.ollama;
+                    acceleration = "rocm"; # cuda for NVIDA; rocm for amd; false/default for neither
+                  };
 
                   ringofstorms_common = {
                     systemName = configuration_name;
