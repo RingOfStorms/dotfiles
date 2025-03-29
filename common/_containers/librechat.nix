@@ -76,6 +76,7 @@ in
         extraOptions = [
           "--network=librechat-network"
           "--add-host=azureproxy:100.64.0.8"
+          "--add-host=ollamaproxy:100.64.0.6"
         ];
       };
 
