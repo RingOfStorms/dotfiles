@@ -46,7 +46,8 @@
             ./configuration.nix
             ./hardware-configuration.nix
             ./nginx.nix
-            ./vaultwarden.nix
+            ./containers/vaultwarden.nix
+            ./containers/opengist.nix
             (
               { pkgs, ... }:
               {
@@ -65,7 +66,6 @@
                   };
                   programs = {
                     tailnet.enable = true;
-                    tailnet.useSecretsAuth = false;
                     ssh.enable = true;
                     docker.enable = true;
                   };
