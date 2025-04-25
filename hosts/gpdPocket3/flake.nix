@@ -35,6 +35,7 @@
                   environment.systemPackages = with pkgs; [
                     lua
                     qdirstat
+                    rustdesk-flutter
                   ];
 
                   ringofstorms_common = {
@@ -68,6 +69,9 @@
                             discordo
                             discord
                             vlc
+                            spotify
+                            bitwarden
+                            vaultwarden
                           ];
                         };
                       };
