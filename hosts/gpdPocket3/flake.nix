@@ -43,6 +43,7 @@
                     boot.systemd.enable = true;
                     desktopEnvironment.gnome.enable = true;
                     secrets.enable = true;
+                    general.enableSleep = true;
                     programs = {
                       qFlipper.enable = true;
                       rustDev.enable = true;

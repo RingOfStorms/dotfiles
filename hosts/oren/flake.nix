@@ -53,7 +53,8 @@
                     systemName = configuration_name;
                     boot.systemd.enable = true;
                     general = {
-                      disableRemoteBuildsOnLio = true;
+                      # disableRemoteBuildsOnLio = true;
+                      enableSleep = true;
                     };
                     secrets.enable = true;
                     desktopEnvironment.gnome.enable = true;
