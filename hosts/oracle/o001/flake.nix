@@ -48,6 +48,9 @@
             ./nginx.nix
             ./containers/vaultwarden.nix
             ./containers/opengist.nix
+            ./mods/postgresql.nix
+            ./mods/atuin.nix
+            ./mods/rustdesk-server.nix
             (
               { pkgs, ... }:
               {
@@ -82,6 +85,7 @@
                   homeManager = {
                     users = {
                       root = {
+                        programs.atuin.settings.sync_address = "http://localhost:8888";
                         imports = with common.homeManagerModules; [
                           tmux
                           atuin
