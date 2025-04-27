@@ -7,5 +7,6 @@
     ./tailnet.nix
     ./ssh.nix
     ./docker.nix
+    ./incus.nix
   ];
 }
