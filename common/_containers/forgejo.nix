@@ -7,8 +7,11 @@ let
   name = "forgejo";
 
   hostDataDir = "/var/lib/${name}";
+  hostAddress = "10.0.0.1";
+  containerAddress = "10.0.0.2";
   hostAddress6 = "fc00::1";
   containerAddress6 = "fc00::2";
+  hostBridge = "br0";
 
   binds = [
     # Postgres data, must use postgres user in container and host
@@ -80,6 +83,8 @@ in
     ephemeral = true;
     autoStart = true;
     privateNetwork = true;
+    hostAddress = hostAddress;
+    localAddress = containerAddress;
     hostAddress6 = hostAddress6;
     localAddress6 = containerAddress6;
     bindMounts = lib.foldl (
@@ -100,13 +105,15 @@ in
         networking = {
           firewall = {
             enable = true;
-            allowedTCPPorts = [ 3000 3032 ];
+            allowedTCPPorts = [
+              3000
+              3032
+            ];
           };
           # Use systemd-resolved inside the container
           # Workaround for bug https://github.com/NixOS/nixpkgs/issues/162686
           useHostResolvConf = lib.mkForce false;
         };
-
         services.resolved.enable = true;
 
         # Ensure users exist on container
@@ -163,6 +170,8 @@ in
               DISABLE_ORGANIZATIONS_PAGE = true;
             };
             repository = {
+              # ENABLE_PUSH_CREATE_USER = true;
+              # ENABLE_PUSH_CREATE_ORG = true;
               DISABLE_STARS = true;
               DEFAULT_PRIVATE = "private";
             };
@@ -174,6 +183,10 @@ in
               SHOW_FOOTER_POWERED_BY = false;
               SHOW_FOOTER_VERSION = false;
               SHOW_FOOTER_TEMPLATE_LOAD_TIME = false;
+            };
+            migrations = {
+              ALLOWED_DOMAINS = "*.github.com,github.com";
+              ALLOW_LOCALNETWORKS = true;
             };
           };
         };

@@ -16,10 +16,15 @@
 
   config = {
     ## Give internet access
-    networking.nat.enable = true;
-    networking.nat.internalInterfaces = [ "ve-*" ];
-    networking.nat.externalInterface = "ens3";
-    networking.nat.enableIPv6 = true;
+    networking = {
+      nat = {
+        enable = true;
+        internalInterfaces = [ "ve-*" ];
+        externalInterface = "eno1";
+        enableIPv6 = true;
+      };
+      firewall.trustedInterfaces = [ "ve-*" ];
+    };
 
     # mathesar
     # services.mathesar.secretKey = "mImvhwyu0cFmtUNOAyOjm6qozWjEmHyrGIpOTZXWW7lnkj5RP3";

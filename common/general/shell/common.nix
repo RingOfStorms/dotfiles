@@ -40,7 +40,7 @@ with lib;
       date_short = "date +'%Y-%m-%d'";
       ls = "ls --color -Gah";
       ll = "ls --color -Galh";
-      lss = "du --max-depth=0 -h * 2>/dev/null | sort -hr";
+      lss = "du --max-depth=0 -h {.,}* 2>/dev/null | sort -hr";
       psg = "ps aux | head -n 1 && ps aux | grep -v 'grep' | grep";
       cl = "clear";
 
