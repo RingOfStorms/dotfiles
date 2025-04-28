@@ -11,16 +11,37 @@
 
   imports = [
     common.nixosModules.containers.librechat
+    common.nixosModules.containers.forgejo
   ];
 
   config = {
     ## Give internet access
-    # networking.nat.enable = true;
-    # networking.nat.internalInterfaces = [ "ve-*" ];
-    # networking.nat.externalInterface = "eth0";
+    networking.nat.enable = true;
+    networking.nat.internalInterfaces = [ "ve-*" ];
+    networking.nat.externalInterface = "ens3";
+    networking.nat.enableIPv6 = true;
 
     # mathesar
     # services.mathesar.secretKey = "mImvhwyu0cFmtUNOAyOjm6qozWjEmHyrGIpOTZXWW7lnkj5RP3";
+
+    containers.wasabi = {
+      ephemeral = true;
+      autoStart = true;
+      privateNetwork = true;
+      hostAddress = "192.168.100.2";
+      localAddress = "192.168.100.11";
+      config =
+        { config, pkgs, ... }:
+        {
+          system.stateVersion = "24.11";
+          services.httpd.enable = true;
+          services.httpd.adminAddr = "foo@example.org";
+          networking.firewall = {
+            enable = true;
+            allowedTCPPorts = [ 80 ];
+          };
+        };
+    };
 
     virtualisation.oci-containers.backend = "docker";
 

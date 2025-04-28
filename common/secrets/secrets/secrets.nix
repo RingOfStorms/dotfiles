@@ -36,6 +36,9 @@ in
   "nix2bitbucket.age" = {
     inherit publicKeys;
   };
+  "nix2gitforgejo.age" = {
+    inherit publicKeys;
+  };
   "nix2gitjosh.age" = {
     inherit publicKeys;
   };

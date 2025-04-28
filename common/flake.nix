@@ -42,6 +42,7 @@
           };
         containers = {
           librechat = import ./_containers/librechat.nix;
+          forgejo = import ./_containers/forgejo.nix;
         };
       };
       homeManagerModules = {

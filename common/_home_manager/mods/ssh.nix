@@ -22,6 +22,10 @@ in
         identityFile = age.secrets.nix2gitjosh.path;
         user = "git";
       };
+      "[fc00::2]:3032" = {
+        identityFile = age.secrets.nix2gitforgejo.path;
+        user = "forgejo";
+      };
       # PERSONAL DEVICES
       "lio" = {
         identityFile = age.secrets.nix2lio.path;
