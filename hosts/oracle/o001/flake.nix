@@ -2,8 +2,8 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
     deploy-rs.url = "github:serokell/deploy-rs";
-    common.url = "git+https://git.joshuabell.xyz/dotfiles";
-    ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
+    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
+    ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
 
   outputs =

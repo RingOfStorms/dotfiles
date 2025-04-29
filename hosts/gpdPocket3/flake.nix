@@ -4,9 +4,9 @@
 
     # for local testing.
     # common.url = "path:../../common
-    common.url = "git+https://git.joshuabell.xyz/dotfiles";
+    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
 
-    ros_neovim.url = "git+https://git.joshuabell.xyz/nvim";
+    ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
 
   outputs =
