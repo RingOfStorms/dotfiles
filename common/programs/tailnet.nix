@@ -42,7 +42,7 @@ in
       # https://tailscale.com/kb/1241/tailscale-up
       extraUpFlags =
         (lib.optionals cfg.useHeadscale [
-          "--login-server=\"https://headscale.joshuabell.xyz\""
+          "--login-server=https://headscale.joshuabell.xyz"
         ])
         ++ (lib.optionals cfg.enableExitNode [ "--advertise-exit-node" ]);
 
