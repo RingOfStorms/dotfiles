@@ -36,16 +36,13 @@ in
       enable = true;
       openFirewall = true;
       useRoutingFeatures = "client";
-      authKeyFile = lib.mkIf (
-        config ? age && config.age ? secrets && config.age.secrets ? headscale_auth
-      ) config.age.secrets.headscale_auth.path;
+      # authKeyFile = lib.mkIf (
+      #   config ? age && config.age ? secrets && config.age.secrets ? headscale_auth
+      # ) config.age.secrets.headscale_auth.path;
       # https://tailscale.com/kb/1241/tailscale-up
       extraUpFlags =
-        [
-          "--no-logs-support"
-        ]
-        ++ (lib.optionals cfg.useHeadscale [
-          "--login-server=https://headscale.joshuabell.xyz"
+        (lib.optionals cfg.useHeadscale [
+          "--login-server=\"https://headscale.joshuabell.xyz\""
         ])
         ++ (lib.optionals cfg.enableExitNode [ "--advertise-exit-node" ]);
 
