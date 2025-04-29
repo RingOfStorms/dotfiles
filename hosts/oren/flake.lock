@@ -32,17 +32,17 @@
         "ragenix": "ragenix"
       },
       "locked": {
-        "lastModified": 1745624472,
-        "narHash": "sha256-mhf8UWKGKm7kOL4/qEmbWQ2JiGB5Cb3XbyhYbKll8O8=",
+        "lastModified": 1745957654,
+        "narHash": "sha256-7srBa6eMbDzR5zD1TFmSOw5gBy+vRsoEC3DrlQD8Vig=",
         "ref": "refs/heads/master",
-        "rev": "0a4450687286ea27ec4b7a0763078de45e711fc3",
-        "revCount": 402,
+        "rev": "46d5748992a9cbbf42f3c6e501288d5cf97de706",
+        "revCount": 425,
         "type": "git",
-        "url": "https://git.joshuabell.xyz/dotfiles"
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
       "original": {
         "type": "git",
-        "url": "https://git.joshuabell.xyz/dotfiles"
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       }
     },
     "crane": {
@@ -162,11 +162,11 @@
     },
     "nixpkgs-unstable": {
       "locked": {
-        "lastModified": 1745391562,
-        "narHash": "sha256-sPwcCYuiEopaafePqlG826tBhctuJsLx/mhKKM5Fmjo=",
+        "lastModified": 1745794561,
+        "narHash": "sha256-T36rUZHUART00h3dW4sV5tv4MrXKT7aWjNfHiZz7OHg=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "8a2f738d9d1f1d986b5a4cd2fd2061a7127237d7",
+        "rev": "5461b7fa65f3ca74cef60be837fd559a8918eaa0",
         "type": "github"
       },
       "original": {
@@ -210,11 +210,11 @@
     },
     "nixpkgs_4": {
       "locked": {
-        "lastModified": 1745487689,
-        "narHash": "sha256-FQoi3R0NjQeBAsEOo49b5tbDPcJSMWc3QhhaIi9eddw=",
+        "lastModified": 1745868005,
+        "narHash": "sha256-hZScOyQphT4RUmSEJX+2OxjIlGgLwSd8iW1LNtAWIOs=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "5630cf13cceac06cefe9fc607e8dfa8fb342dde3",
+        "rev": "330d0a4167924b43f31cc9406df363f71b768a02",
         "type": "github"
       },
       "original": {
@@ -1233,11 +1233,11 @@
         "rev": "e5523910a0c07c88d026d006f5962434bfa53548",
         "revCount": 277,
         "type": "git",
-        "url": "https://git.joshuabell.xyz/nvim"
+        "url": "https://git.joshuabell.xyz/ringofstorms/nvim"
       },
       "original": {
         "type": "git",
-        "url": "https://git.joshuabell.xyz/nvim"
+        "url": "https://git.joshuabell.xyz/ringofstorms/nvim"
       }
     },
     "rust-overlay": {
