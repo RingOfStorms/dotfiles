@@ -3,15 +3,9 @@
   ...
 }:
 {
-
-  # NOTE some useful links
-  # nixos containers: https://blog.beardhatcode.be/2020/12/Declarative-Nixos-Containers.html
-  # https://nixos.wiki/wiki/NixOS_Containers
-  options = { };
-
   imports = [
-    common.nixosModules.containers.librechat
-    common.nixosModules.containers.forgejo
+    # common.nixosModules.containers.librechat
+    # common.nixosModules.containers.forgejo
   ];
 
   config = {
@@ -20,7 +14,7 @@
       nat = {
         enable = true;
         internalInterfaces = [ "ve-*" ];
-        externalInterface = "eno1";
+        externalInterface = "enp0s31f6";
         enableIPv6 = true;
       };
       firewall.trustedInterfaces = [ "ve-*" ];
@@ -54,7 +48,7 @@
       };
     };
 
-    virtualisation.oci-containers.backend = "docker";
+    virtualisation.oci-containers.backend = "podman";
 
     services.nginx = {
       enable = true;
@@ -63,28 +57,18 @@
       recommendedProxySettings = true;
       recommendedTlsSettings = true;
       virtualHosts = {
-        # "local.belljm.com" = {
-        #   # enableACME = true;
-        #   # forceSSL = true;
-        #   locations."/".proxyPass = "http://${config.containers.wasabi.localAddress}:80";
-        # };
-        # "127.0.0.1" = {
-        #   locations."/wasabi/" = {
-        #     extraConfig = ''
-        #       rewrite ^/wasabi/(.*) /$1 break;
-        #     '';
-        #     proxyPass = "http://${config.containers.wasabi.localAddress}:80/";
-        #   };
-        #   locations."/" = {
-        #     return = "404"; # or 444 for drop
-        #   };
-        # };
-        "git.joshuabell.xyz" = {
-          # GIT passthrough
+        "localhost" = {
           locations."/" = {
-            proxyPass = "http://10.0.0.2:3000";
+            proxyPass = "http://10.0.0.111";
           };
         };
+
+        # "git.joshuabell.xyz" = {
+        #   # GIT passthrough
+        #   locations."/" = {
+        #     proxyPass = "http://10.0.0.2:3000";
+        #   };
+        # };
 
         "_" = {
           default = true;

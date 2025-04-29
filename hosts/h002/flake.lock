@@ -32,17 +32,17 @@
         "ragenix": "ragenix"
       },
       "locked": {
-        "lastModified": 1742406739,
-        "narHash": "sha256-1Tdt3a0Le9cDD0voBeDcSuHtRbVTX/vAhbDrMIOE/+o=",
+        "lastModified": 1745957989,
+        "narHash": "sha256-mLYJXPri4DVRa6exEPtzlkje5FZVSYAteObHOxcAvfA=",
         "ref": "refs/heads/master",
-        "rev": "2b026ed0c883c942a84d20a9c0491905e61ddbf3",
-        "revCount": 373,
+        "rev": "6277d06b4dcaa6665e92aaf5f20eee49a8362556",
+        "revCount": 426,
         "type": "git",
-        "url": "https://git.joshuabell.xyz/dotfiles"
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
       "original": {
         "type": "git",
-        "url": "https://git.joshuabell.xyz/dotfiles"
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       }
     },
     "crane": {
@@ -210,16 +210,15 @@
     },
     "nixpkgs_5": {
       "locked": {
-        "lastModified": 1735697839,
-        "narHash": "sha256-0Acw0UaLi+VNThsmeX8zOKi000DFrYXNnrgpOpk2+MM=",
+        "lastModified": 1745961410,
+        "narHash": "sha256-RU4c9JVZp/CdWyPUUZGsZvTWvjrFtXLUnlMs38IeHD0=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "5eaa5fdf06d2b15d373b82c0f3a1ec1c6cab02ae",
+        "rev": "a2001229477b3a343b13e6e7870fa37fedd8e09d",
         "type": "github"
       },
       "original": {
         "owner": "nixos",
-        "ref": "master",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -621,22 +620,6 @@
       "original": {
         "owner": "lukas-reineke",
         "repo": "indent-blankline.nvim",
-        "type": "github"
-      }
-    },
-    "nvim_plugin-lvimuser/lsp-inlayhints.nvim": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1686236485,
-        "narHash": "sha256-06CiJ+xeMO4+OJkckcslqwloJyt2gwg514JuxV6KOfQ=",
-        "owner": "lvimuser",
-        "repo": "lsp-inlayhints.nvim",
-        "rev": "d981f65c9ae0b6062176f0accb9c151daeda6f16",
-        "type": "github"
-      },
-      "original": {
-        "owner": "lvimuser",
-        "repo": "lsp-inlayhints.nvim",
         "type": "github"
       }
     },
@@ -1193,7 +1176,6 @@
         "nvim_plugin-lewis6991/gitsigns.nvim": "nvim_plugin-lewis6991/gitsigns.nvim",
         "nvim_plugin-lnc3l0t/glow.nvim": "nvim_plugin-lnc3l0t/glow.nvim",
         "nvim_plugin-lukas-reineke/indent-blankline.nvim": "nvim_plugin-lukas-reineke/indent-blankline.nvim",
-        "nvim_plugin-lvimuser/lsp-inlayhints.nvim": "nvim_plugin-lvimuser/lsp-inlayhints.nvim",
         "nvim_plugin-m4xshen/hardtime.nvim": "nvim_plugin-m4xshen/hardtime.nvim",
         "nvim_plugin-mbbill/undotree": "nvim_plugin-mbbill/undotree",
         "nvim_plugin-mfussenegger/nvim-lint": "nvim_plugin-mfussenegger/nvim-lint",
@@ -1228,17 +1210,17 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1735841437,
-        "narHash": "sha256-ZwmlaFhOlQ7f6Rq6VxRup7giPiwQlwe71HcoO/laRJo=",
+        "lastModified": 1745585761,
+        "narHash": "sha256-xS3068xhndFrZh9GcTTNTmeebGq1A3uVykRRdzJOj3Y=",
         "ref": "refs/heads/master",
-        "rev": "71d82c875fff85ae250804f45f1acf65f42cdc1e",
-        "revCount": 253,
+        "rev": "e5523910a0c07c88d026d006f5962434bfa53548",
+        "revCount": 277,
         "type": "git",
-        "url": "https://git.joshuabell.xyz/nvim"
+        "url": "https://git.joshuabell.xyz/ringofstorms/nvim"
       },
       "original": {
         "type": "git",
-        "url": "https://git.joshuabell.xyz/nvim"
+        "url": "https://git.joshuabell.xyz/ringofstorms/nvim"
       }
     },
     "rust-overlay": {

@@ -30,6 +30,7 @@
               ros_neovim.nixosModules.default
               ./configuration.nix
               ./hardware-configuration.nix
+              (import ./containers { inherit common; })
               (
                 { config, pkgs, ... }:
                 {
@@ -44,7 +45,7 @@
                     programs = {
                       tailnet.enable = true;
                       ssh.enable = true;
-                      docker.enable = true;
+                      podman.enable = true;
                     };
                     users = {
                       admins = [ "luser" ]; # First admin is also the primary user owning nix config
