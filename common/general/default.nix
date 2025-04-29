@@ -92,6 +92,7 @@ in
       # Fallback quickly if substituters are not available.
       connect-timeout = 5;
       download-attempts = 3;
+      download-buffer-size = 524288000; # default is 67108864, this increases to ~500MB
       # The default at 10 is rarely enough.
       log-lines = 50;
       # Avoid disk full issues
