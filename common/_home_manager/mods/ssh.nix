@@ -105,12 +105,12 @@ in
       # HOME SERVERS
       "h001" = {
         identityFile = age.secrets.nix2h001.path;
-        user = "root";
+        user = "luser";
       };
       "h001_" = {
         identityFile = age.secrets.nix2h001.path;
         hostname = "10.12.14.2";
-        user = "root";
+        user = "luser";
       };
       "h002" = {
         identityFile = age.secrets.nix2h002.path;

@@ -36,9 +36,9 @@ in
       enable = true;
       openFirewall = true;
       useRoutingFeatures = "client";
-      # authKeyFile = lib.mkIf (
-      #   config ? age && config.age ? secrets && config.age.secrets ? headscale_auth
-      # ) config.age.secrets.headscale_auth.path;
+      authKeyFile = lib.mkIf (
+        config ? age && config.age ? secrets && config.age.secrets ? headscale_auth
+      ) config.age.secrets.headscale_auth.path;
       # https://tailscale.com/kb/1241/tailscale-up
       extraUpFlags =
         (lib.optionals cfg.useHeadscale [
