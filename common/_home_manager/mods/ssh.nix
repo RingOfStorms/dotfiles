@@ -24,7 +24,7 @@ in
       # };
       "git.joshuabell.xyz" = {
         identityFile = age.secrets.nix2gitforgejo.path;
-        user = "forgejo";
+        user = "git";
       };
       # PERSONAL DEVICES
       "lio" = {

@@ -159,6 +159,7 @@ in
               SSH_LISTEN_HOST = "0.0.0.0";
               SSH_LISTEN_PORT = 3032; # actual listen port
               SSH_PORT = 3032; # used in UI
+              BUILTIN_SSH_SERVER_USER = "git";
 
               LANDING_PAGE = "explore";
             };
