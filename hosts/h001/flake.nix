@@ -39,7 +39,7 @@
 
                   ringofstorms_common = {
                     systemName = configuration_name;
-                    boot.grub.enable = true;
+                    boot.systemd.enable = true;
                     secrets.enable = true;
                     programs = {
                       tailnet.enable = true;

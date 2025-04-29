@@ -32,11 +32,11 @@
         "ragenix": "ragenix"
       },
       "locked": {
-        "lastModified": 1745881365,
-        "narHash": "sha256-ihAOLcQf9VGLCW94POGL+aoqLK9zvC05IYEYg0GAjmY=",
+        "lastModified": 1745953495,
+        "narHash": "sha256-8FzNmiQ4FuAk3Lz1vP3Up2npluYPXe5eos05h3npvrA=",
         "ref": "refs/heads/master",
-        "rev": "e671f877d9a07907d07bd3dfdad581aa09c057fc",
-        "revCount": 408,
+        "rev": "37d4ac85b2450a407d8528aef1f5de38fbabb72d",
+        "revCount": 413,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
