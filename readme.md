@@ -68,9 +68,7 @@
 - atuin setup
   - if atuin is on enable that mod in configuration.nix, make sure to `atuin login` get key from existing device
   - TODO move key into secrets and mount it to atuin local share
-- stormd onboard to network
 - ssh key access, ssh iden in config in nix config
--
 
 ### Notes
 
