@@ -11,7 +11,6 @@ let
   containerAddress = "10.0.0.2";
   hostAddress6 = "fc00::1";
   containerAddress6 = "fc00::2";
-  hostBridge = "br0";
 
   binds = [
     # Postgres data, must use postgres user in container and host
