@@ -151,12 +151,12 @@ in
             };
             server = {
               PROTOCOL = "http";
-              # DOMAIN = "git.joshuabell.xyz";
+              DOMAIN = "git.joshuabell.xyz";
               HTTP_ADDR = "0.0.0.0";
               HTTP_PORT = 3000;
 
               START_SSH_SERVER = true;
-              # SSH_DOMAIN = "git.joshuabell.xyz";
+              SSH_DOMAIN = "git.joshuabell.xyz";
               SSH_LISTEN_HOST = "0.0.0.0";
               SSH_LISTEN_PORT = 3032; # actual listen port
               SSH_PORT = 3032; # used in UI

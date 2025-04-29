@@ -18,7 +18,7 @@
       ...
     }:
     let
-      configuration_name = "h002";
+      configuration_name = "h001";
       lib = nixpkgs.lib;
     in
     {
@@ -41,9 +41,7 @@
                     systemName = configuration_name;
                     boot.grub.enable = true;
                     secrets.enable = true;
-                    desktopEnvironment.gnome.enable = true;
                     programs = {
-                      rustDev.enable = true;
                       tailnet.enable = true;
                       ssh.enable = true;
                       docker.enable = true;
@@ -53,12 +51,12 @@
                       users = {
                         root = {
                           openssh.authorizedKeys.keys = [
-                            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJie9OPheWn/EZWfXJSZ3S0DnISqI3ToCmOqhX/Tkwby nix2h002"
+                            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILZigrRMF/HHMhjBIwiOnS2pqbOz8Az19tch680BGvmu nix2h001"
                           ];
                         };
                         luser = {
                           openssh.authorizedKeys.keys = [
-                            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJie9OPheWn/EZWfXJSZ3S0DnISqI3ToCmOqhX/Tkwby nix2h002"
+                            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILZigrRMF/HHMhjBIwiOnS2pqbOz8Az19tch680BGvmu nix2h001"
                           ];
                           extraGroups = [
                             "networkmanager"

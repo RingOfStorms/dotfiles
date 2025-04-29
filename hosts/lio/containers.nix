@@ -75,6 +75,13 @@
         #     return = "404"; # or 444 for drop
         #   };
         # };
+        "git.joshuabell.xyz" = {
+          # GIT passthrough
+          locations."/" = {
+            proxyPass = "http://10.0.0.2:3000";
+          };
+        };
+
         "_" = {
           default = true;
           locations."/" = {
@@ -82,6 +89,15 @@
           };
         };
       };
+
+      # STREAMS
+      streamConfig = ''
+        server {
+          listen 3032;
+          proxy_pass 10.0.0.2:3032;
+        }
+      '';
+
     };
 
     networking.firewall.allowedTCPPorts = [

@@ -18,11 +18,11 @@ in
       "bitbucket.org" = {
         identityFile = age.secrets.nix2bitbucket.path;
       };
+      # "git.joshuabell.xyz" = {
+      #   identityFile = age.secrets.nix2gitjosh.path;
+      #   user = "git";
+      # };
       "git.joshuabell.xyz" = {
-        identityFile = age.secrets.nix2gitjosh.path;
-        user = "git";
-      };
-      "[fc00::2]:3032" = {
         identityFile = age.secrets.nix2gitforgejo.path;
         user = "forgejo";
       };

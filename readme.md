@@ -24,8 +24,6 @@
 1. Install nix minimal:
 
 - Partitions
-  - <https://nixos.org/manual/nixos/stable/#sec-installation>
-  - <https://nixos.wiki/wiki/NixOS_Installation_Guide#Swap_file>
   - `parted /dev/DEVICE -- mklabel gpt` - make GPT partition table
   - `parted /dev/DEVICE -- mkpart NIXROOT ext4 2GB 100%` - make root partition (2GB offset for boot)
   - `parted /dev/DEVICE -- mkpart ESP fat32 1MB 2GB` - make boot partition (2GB)
@@ -54,7 +52,7 @@
 
 - `cat /etc/ssh/ssh_host_ed25519_key.pub ~/.ssh/id_ed25519.pub`
   - On an already onboarded computer copy these and add them to secrets/secrets.nix file
-  - Rekey secrets: `nix run github:yaxitech/ragenix -- --rules ~/.config/nixos-config/secrets/secrets.nix -r`
+  - Rekey secrets: `nix run github:yaxitech/ragenix -- --rules ~/.config/nixos-config/common/secrets/secrets/secrets.nix -r`
   - Maybe copy hardware/configs over and setup, otehrwise do it on the client machine
 - git clone nixos-config `git clone https://git.joshuabell.xyz/dotfiles ~/.config/nixos-config`
 - Setup config as needed

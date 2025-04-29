@@ -131,7 +131,7 @@ in
     # nix helper
     programs.nh = {
       enable = true;
-      clean.enable = true;
+      # clean.enable = true; # TODO revist does this solve my re-building issues?
       clean.extraArgs = "--keep 10";
       # `flake` path is set in users/default.nix for the primary user if set
     };
