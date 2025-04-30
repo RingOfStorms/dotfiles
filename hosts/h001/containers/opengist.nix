@@ -10,7 +10,6 @@ in
 {
   virtualisation.oci-containers.containers = {
     opengist = {
-      user = "root";
       image = "ghcr.io/thomiceli/opengist:1";
       ports = [
         "127.0.0.1:${toString v_port}:${toString v_port}"
@@ -23,6 +22,11 @@ in
       };
     };
   };
+  system.activationScripts."${name}_directories" = ''
+    mkdir -p ${hostDataDir}
+    chown -R root:root ${hostDataDir}
+    chmod -R 777 ${hostDataDir}
+  '';
 
   services.nginx.virtualHosts."gist.joshuabell.xyz" = {
     locations = {
