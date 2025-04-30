@@ -32,17 +32,17 @@
         "ragenix": "ragenix"
       },
       "locked": {
-        "lastModified": 1745444238,
-        "narHash": "sha256-zT1T9zC7dr+HApuC390eQHPpCJq4vYvOwYSq507DtFA=",
+        "lastModified": 1746052265,
+        "narHash": "sha256-/cb1BPEUb1O/clHP101M52hvUZ2zo8FAyJS7BF/M3Mg=",
         "ref": "refs/heads/master",
-        "rev": "214e6f289da1e888ff547aff173aaffc8517092b",
-        "revCount": 399,
+        "rev": "7ae93579413e6bfcc6a55d1fae05ef77dc224676",
+        "revCount": 436,
         "type": "git",
-        "url": "https://git.joshuabell.xyz/dotfiles"
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
       "original": {
         "type": "git",
-        "url": "https://git.joshuabell.xyz/dotfiles"
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       }
     },
     "crane": {
@@ -1263,17 +1263,17 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1744648171,
-        "narHash": "sha256-DodI1yschNbktPZiGKM6Gke2pgEM0J4wkVaM+Ygk0Cs=",
+        "lastModified": 1745585761,
+        "narHash": "sha256-xS3068xhndFrZh9GcTTNTmeebGq1A3uVykRRdzJOj3Y=",
         "ref": "refs/heads/master",
-        "rev": "0a14d0e7451d17a2f368749cf269c6a59aa35059",
-        "revCount": 274,
+        "rev": "e5523910a0c07c88d026d006f5962434bfa53548",
+        "revCount": 277,
         "type": "git",
-        "url": "https://git.joshuabell.xyz/nvim"
+        "url": "https://git.joshuabell.xyz/ringofstorms/nvim"
       },
       "original": {
         "type": "git",
-        "url": "https://git.joshuabell.xyz/nvim"
+        "url": "https://git.joshuabell.xyz/ringofstorms/nvim"
       }
     },
     "rust-overlay": {

@@ -8,7 +8,6 @@ let
   v_port = 6157;
 in
 {
-  virtualisation.oci-containers.backend = "docker";
   virtualisation.oci-containers.containers = {
     opengist = {
       user = "root";
@@ -26,8 +25,6 @@ in
   };
 
   services.nginx.virtualHosts."gist.joshuabell.xyz" = {
-    enableACME = true;
-    forceSSL = true;
     locations = {
       "/" = {
         proxyWebsockets = true;

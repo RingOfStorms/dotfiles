@@ -6,6 +6,7 @@
   imports = [
     # common.nixosModules.containers.librechat
     common.nixosModules.containers.forgejo
+    ./opengist.nix
   ];
 
   config = {
