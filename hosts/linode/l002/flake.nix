@@ -63,7 +63,6 @@
                   };
                   programs = {
                     tailnet.enable = true;
-                    tailnet.useSecretsAuth = false;
                     ssh.enable = true;
                   };
                   users = {

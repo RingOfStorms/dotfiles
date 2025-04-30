@@ -72,7 +72,7 @@
         enableACME = true;
         forceSSL = true;
         locations."/" = {
-          proxyPass = "http://100.64.0.1";
+          proxyPass = "http://100.64.0.13";
         };
       };
 
@@ -145,7 +145,7 @@
     streamConfig = ''
       server {
         listen 3032;
-        proxy_pass 100.64.0.1:3032;
+        proxy_pass 100.64.0.13:3032;
       }
     '';
   };

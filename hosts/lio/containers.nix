@@ -3,7 +3,6 @@
   ...
 }:
 {
-
   # NOTE some useful links
   # nixos containers: https://blog.beardhatcode.be/2020/12/Declarative-Nixos-Containers.html
   # https://nixos.wiki/wiki/NixOS_Containers
@@ -11,7 +10,7 @@
 
   imports = [
     common.nixosModules.containers.librechat
-    common.nixosModules.containers.forgejo
+    # common.nixosModules.containers.forgejo
   ];
 
   config = {
@@ -26,33 +25,33 @@
       firewall.trustedInterfaces = [ "ve-*" ];
     };
 
-    containers.wasabi = {
-      ephemeral = true;
-      autoStart = true;
-      privateNetwork = true;
-      hostAddress = "10.0.0.1";
-      localAddress = "10.0.0.111";
-      config =
-        { config, pkgs, ... }:
-        {
-          system.stateVersion = "24.11";
-          services.httpd.enable = true;
-          services.httpd.adminAddr = "foo@example.org";
-          networking.firewall = {
-            enable = true;
-            allowedTCPPorts = [ 80 ];
-          };
-        };
-    };
+    # containers.wasabi = {
+    #   ephemeral = true;
+    #   autoStart = true;
+    #   privateNetwork = true;
+    #   hostAddress = "10.0.0.1";
+    #   localAddress = "10.0.0.111";
+    #   config =
+    #     { config, pkgs, ... }:
+    #     {
+    #       system.stateVersion = "24.11";
+    #       services.httpd.enable = true;
+    #       services.httpd.adminAddr = "foo@example.org";
+    #       networking.firewall = {
+    #         enable = true;
+    #         allowedTCPPorts = [ 80 ];
+    #       };
+    #     };
+    # };
 
-    virtualisation.oci-containers.containers = {
-      ntest = {
-        image = "nginx:alpine";
-        ports = [
-          "127.0.0.1:8085:80"
-        ];
-      };
-    };
+    # virtualisation.oci-containers.containers = {
+    #   ntest = {
+    #     image = "nginx:alpine";
+    #     ports = [
+    #       "127.0.0.1:8085:80"
+    #     ];
+    #   };
+    # };
 
     virtualisation.oci-containers.backend = "docker";
 
@@ -63,45 +62,13 @@
       recommendedProxySettings = true;
       recommendedTlsSettings = true;
       virtualHosts = {
-        # "local.belljm.com" = {
-        #   # enableACME = true;
-        #   # forceSSL = true;
-        #   locations."/".proxyPass = "http://${config.containers.wasabi.localAddress}:80";
-        # };
-        # "127.0.0.1" = {
-        #   locations."/wasabi/" = {
-        #     extraConfig = ''
-        #       rewrite ^/wasabi/(.*) /$1 break;
-        #     '';
-        #     proxyPass = "http://${config.containers.wasabi.localAddress}:80/";
-        #   };
-        #   locations."/" = {
-        #     return = "404"; # or 444 for drop
-        #   };
-        # };
-        "git.joshuabell.xyz" = {
-          # GIT passthrough
-          locations."/" = {
-            proxyPass = "http://10.0.0.2:3000";
-          };
-        };
-
         "_" = {
           default = true;
           locations."/" = {
-            return = "404"; # or 444 for drop
+            return = "444"; # or 444 for drop
           };
         };
       };
-
-      # STREAMS
-      streamConfig = ''
-        server {
-          listen 3032;
-          proxy_pass 10.0.0.2:3032;
-        }
-      '';
-
     };
 
     networking.firewall.allowedTCPPorts = [

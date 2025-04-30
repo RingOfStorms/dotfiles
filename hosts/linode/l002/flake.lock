@@ -32,17 +32,17 @@
         "ragenix": "ragenix"
       },
       "locked": {
-        "lastModified": 1742406125,
-        "narHash": "sha256-+NQNj2IMJuEiymB+YrcZkxeZt7QlC+Bwe5rWgRRHKrU=",
+        "lastModified": 1745965414,
+        "narHash": "sha256-Vn/sXOtIj5y09jGKw3iaLIrpqW5h37vW1vFBmFehRx8=",
         "ref": "refs/heads/master",
-        "rev": "138565efadeed6baf2a632c5dcc95a2031c77f86",
-        "revCount": 371,
+        "rev": "3d4d7d88290dd1f55542691d3ac45b2a5f021709",
+        "revCount": 430,
         "type": "git",
-        "url": "https://git.joshuabell.xyz/dotfiles"
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
       "original": {
         "type": "git",
-        "url": "https://git.joshuabell.xyz/dotfiles"
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       }
     },
     "crane": {
@@ -143,11 +143,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1742234739,
-        "narHash": "sha256-zFL6zsf/5OztR1NSNQF33dvS1fL/BzVUjabZq4qrtY4=",
+        "lastModified": 1744743431,
+        "narHash": "sha256-iyn/WBYDc7OtjSawbegINDe/gIkok888kQxk3aVnkgg=",
         "owner": "rycee",
         "repo": "home-manager",
-        "rev": "f6af7280a3390e65c2ad8fd059cdc303426cbd59",
+        "rev": "c61bfe3ae692f42ce688b5865fac9e0de58e1387",
         "type": "github"
       },
       "original": {
@@ -198,11 +198,11 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1742069588,
-        "narHash": "sha256-C7jVfohcGzdZRF6DO+ybyG/sqpo1h6bZi9T56sxLy+k=",
+        "lastModified": 1744463964,
+        "narHash": "sha256-LWqduOgLHCFxiTNYi3Uj5Lgz0SR+Xhw3kr/3Xd0GPTM=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "c80f6a7e10b39afcc1894e02ef785b1ad0b0d7e5",
+        "rev": "2631b0b7abcea6e640ce31cd78ea58910d31e650",
         "type": "github"
       },
       "original": {
@@ -672,22 +672,6 @@
       "original": {
         "owner": "lukas-reineke",
         "repo": "indent-blankline.nvim",
-        "type": "github"
-      }
-    },
-    "nvim_plugin-lvimuser/lsp-inlayhints.nvim": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1686236485,
-        "narHash": "sha256-06CiJ+xeMO4+OJkckcslqwloJyt2gwg514JuxV6KOfQ=",
-        "owner": "lvimuser",
-        "repo": "lsp-inlayhints.nvim",
-        "rev": "d981f65c9ae0b6062176f0accb9c151daeda6f16",
-        "type": "github"
-      },
-      "original": {
-        "owner": "lvimuser",
-        "repo": "lsp-inlayhints.nvim",
         "type": "github"
       }
     },
@@ -1245,7 +1229,6 @@
         "nvim_plugin-lewis6991/gitsigns.nvim": "nvim_plugin-lewis6991/gitsigns.nvim",
         "nvim_plugin-lnc3l0t/glow.nvim": "nvim_plugin-lnc3l0t/glow.nvim",
         "nvim_plugin-lukas-reineke/indent-blankline.nvim": "nvim_plugin-lukas-reineke/indent-blankline.nvim",
-        "nvim_plugin-lvimuser/lsp-inlayhints.nvim": "nvim_plugin-lvimuser/lsp-inlayhints.nvim",
         "nvim_plugin-m4xshen/hardtime.nvim": "nvim_plugin-m4xshen/hardtime.nvim",
         "nvim_plugin-mbbill/undotree": "nvim_plugin-mbbill/undotree",
         "nvim_plugin-mfussenegger/nvim-lint": "nvim_plugin-mfussenegger/nvim-lint",
@@ -1280,17 +1263,17 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1742226527,
-        "narHash": "sha256-CT9227XXn1t8H1ivNBBkBcf+npB7tWk5yzEQoJvbGVU=",
+        "lastModified": 1745585761,
+        "narHash": "sha256-xS3068xhndFrZh9GcTTNTmeebGq1A3uVykRRdzJOj3Y=",
         "ref": "refs/heads/master",
-        "rev": "e8bafafc36fb2227dab8f0ddb67a2439d9077091",
-        "revCount": 268,
+        "rev": "e5523910a0c07c88d026d006f5962434bfa53548",
+        "revCount": 277,
         "type": "git",
-        "url": "https://git.joshuabell.xyz/nvim"
+        "url": "https://git.joshuabell.xyz/ringofstorms/nvim"
       },
       "original": {
         "type": "git",
-        "url": "https://git.joshuabell.xyz/nvim"
+        "url": "https://git.joshuabell.xyz/ringofstorms/nvim"
       }
     },
     "rust-overlay": {
