@@ -5,7 +5,7 @@
 {
   imports = [
     # common.nixosModules.containers.librechat
-    # common.nixosModules.containers.forgejo
+    common.nixosModules.containers.forgejo
   ];
 
   config = {
@@ -60,6 +60,12 @@
         "localhost" = {
           locations."/" = {
             proxyPass = "http://10.0.0.111";
+          };
+        };
+
+        "git.joshuabell.xyz" = {
+          locations."/" = {
+            proxyPass = "http://10.0.0.2:3000";
           };
         };
 
