@@ -65,7 +65,7 @@
         enableACME = true;
         forceSSL = true;
         locations."/" = {
-          proxyPass = "http://100.64.0.2:6157";
+          proxyPass = "http://100.64.0.13";
         };
       };
       "git.joshuabell.xyz" = {
