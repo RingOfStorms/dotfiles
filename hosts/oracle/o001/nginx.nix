@@ -155,5 +155,7 @@
   networking.firewall.allowedTCPPorts = [
     80 # web http
     443 # web https
+
+    3032 # ssh for git server
   ];
 }
