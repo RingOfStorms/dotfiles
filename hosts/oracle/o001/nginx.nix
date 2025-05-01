@@ -152,6 +152,7 @@
     '';
   };
 
+  # NOTE Oracle also has security rules that must expose these ports so this alone will not work! See readme
   networking.firewall.allowedTCPPorts = [
     80 # web http
     443 # web https
