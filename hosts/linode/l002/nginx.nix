@@ -53,14 +53,6 @@
           proxyPass = "http://100.64.0.1:3080";
         };
       };
-      "db.joshuabell.xyz" = {
-        enableACME = true;
-        forceSSL = true;
-        locations."/" = {
-          proxyWebsockets = true;
-          proxyPass = "http://100.64.0.1:3085";
-        };
-      };
       "gist.joshuabell.xyz" = {
         enableACME = true;
         forceSSL = true;

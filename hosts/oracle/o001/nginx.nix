@@ -52,11 +52,21 @@
         # Redirect self IP to domain
         "64.181.210.7" = {
           locations."/" = {
-            return = "301 https://o001.joshuabell.xyz";
+            return = "301 https://joshuabell.xyz";
           };
         };
 
-        "o001.joshuabell.xyz" = {
+        "100.64.0.11" = tailnetConfig;
+        "o001.net.joshuabell.xyz" = tailnetConfig;
+
+        "www.joshuabell.xyz" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            return = "301 https://joshuabell.xyz";
+          };
+        };
+        "joshuabell.xyz" = {
           enableACME = true;
           forceSSL = true;
           locations = {
@@ -74,7 +84,6 @@
                   <html>
                     <body style="width:100vw;height:100vh;overflow:hidden">
                       <div style="display: flex;width:100vw;height:100vh;justify-content: center;align-items:center;text-align:center;overflow:hidden">
-
                         In the void you roam,</br>
                         A page that cannot be found-</br>
                         Turn back, seek anew.
@@ -87,13 +96,49 @@
           };
         };
 
-        "100.64.0.11" = tailnetConfig;
-        "o001.net.joshuabell.xyz" = tailnetConfig;
+        "www.ellalala.com" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            return = "301 https://ellalala.com";
+          };
+        };
+        "ellalala.com" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            return = "444";
+          };
+        };
+
+        # PROXY HOSTS
+        "chat.joshuabell.xyz" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyWebsockets = true;
+            proxyPass = "http://100.64.0.1:3080";
+          };
+        };
+        "gist.joshuabell.xyz" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyPass = "http://100.64.0.13";
+          };
+        };
+        "git.joshuabell.xyz" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyPass = "http://100.64.0.13";
+          };
+        };
 
         "_" = {
           default = true;
           locations."/" = {
-            return = "404"; # 404 for not found or 444 for drop
+            return = "444"; # 404 for not found or 444 for drop
           };
         };
       };
