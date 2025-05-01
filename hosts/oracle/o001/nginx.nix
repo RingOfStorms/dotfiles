@@ -142,6 +142,14 @@
           };
         };
       };
+
+    # STREAMS
+    streamConfig = ''
+      server {
+        listen 3032;
+        proxy_pass 100.64.0.13:3032;
+      }
+    '';
   };
 
   networking.firewall.allowedTCPPorts = [
