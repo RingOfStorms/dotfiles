@@ -25,6 +25,8 @@
                 compact-top-bar.extensionUuid
                 tray-icons-reloaded.extensionUuid
                 vitals.extensionUuid
+              ] ++ lib.optionals cfg.enableRotate [
+                screen-rotate.extensionUuid
               ];
             };
 
