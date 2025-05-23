@@ -35,7 +35,7 @@ in
     services.tailscale = {
       enable = true;
       openFirewall = true;
-      useRoutingFeatures = "client";
+      useRoutingFeatures = if cfg.enableExitNode then "both" else "client";
       authKeyFile = lib.mkIf (
         config ? age && config.age ? secrets && config.age.secrets ? headscale_auth
       ) config.age.secrets.headscale_auth.path;
