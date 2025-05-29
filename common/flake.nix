@@ -1,6 +1,6 @@
 {
   inputs = {
-    home-manager.url = "github:rycee/home-manager/release-24.11";
+    home-manager.url = "github:rycee/home-manager/release-25.05";
     ragenix.url = "github:yaxitech/ragenix";
 
     # hyprland.url = "github:hyprwm/Hyprland";
