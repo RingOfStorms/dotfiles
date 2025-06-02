@@ -42,6 +42,9 @@
   #   };
   # };
 
+  # accelerometer
+  hardware.sensor.iio.enable = true;
+
   # TODO evaluate if any of this kernal/hardware stuff is actually needed for our pocket. This is a hodge podge of shit from online
   # The GPD Pocket3 uses a tablet OLED display, that is mounted rotated 90° counter-clockwise.
   # This requires cusotm kernal params.

@@ -1,10 +1,10 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
 
     # for local testing.
-    common.url = "path:../../common";
-    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
+    # common.url = "path:../../common";
+    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -37,12 +37,16 @@
                     qdirstat
                     rustdesk-flutter
                     styluslabs-write
+                    xournalpp
                   ];
 
                   ringofstorms_common = {
                     systemName = configuration_name;
                     boot.systemd.enable = true;
-                    desktopEnvironment.gnome.enable = true;
+                    desktopEnvironment.gnome = {
+                      enable = true;
+                      enableRotate = true;
+                    };
                     secrets.enable = true;
                     general.enableSleep = true;
                     programs = {
