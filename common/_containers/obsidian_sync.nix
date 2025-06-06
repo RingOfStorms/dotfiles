@@ -29,7 +29,7 @@ in
       dockerEnvFiles = lib.mkOption {
         type = lib.types.listOf lib.types.path;
         default = [ ];
-        description = "List of environment files to be used by the Obsidian Sync container";
+        description = "List of environment files to be used by the Obsidian Sync container. When provided you must supply chouchdb user/password env files they will not be supplied by default.";
       };
     };
 
@@ -47,8 +47,8 @@ in
         environment = {
           SERVER_URL = cfg.serverUrl;
           COUCHDB_DATABASE = "obsidian_sync";
-          COUCHDB_USER = "adminu";
-          COUCHDB_PASSWORD = "Password123"; # TODO move to a secret and link to it via envFiles
+          COUCHDB_USER = pkgs.lib.mkIf cfg.dockerEnvFiles != [] "adminu";
+          COUCHDB_PASSWORD = pkgs.lib.mkIf cfg.dockerEnvFiles != [] "Password123";
         };
         environmentFiles = cfg.dockerEnvFiles;
         volumes = [
