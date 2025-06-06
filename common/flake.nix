@@ -43,6 +43,7 @@
         containers = {
           librechat = import ./_containers/librechat.nix;
           forgejo = import ./_containers/forgejo.nix;
+          obsidian_sync = import ./_containers/obsidian_sync.nix;
         };
       };
       homeManagerModules = {
