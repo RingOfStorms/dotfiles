@@ -11,7 +11,7 @@
 
   imports = [
     common.nixosModules.containers.librechat
-    # common.nixosModules.containers.obsidian_sync
+    common.nixosModules.containers.obsidian_sync
   ];
 
   config = {
