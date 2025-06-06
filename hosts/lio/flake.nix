@@ -46,6 +46,7 @@
                     appimage-run
                     rustdesk-flutter
                     element-desktop
+                    obsidian
                   ];
 
                   # Also allow this key to work for root user, this will let us use this as a remote builder easier

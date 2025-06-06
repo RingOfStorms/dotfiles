@@ -31,15 +31,14 @@
         "ragenix": "ragenix"
       },
       "locked": {
-        "lastModified": 1,
-        "narHash": "sha256-ZMMYuJqLYqqFc/bHjjRi7wpd9N9+1w4xN0ByLCPvLBQ=",
         "path": "../../common",
         "type": "path"
       },
       "original": {
         "path": "../../common",
         "type": "path"
-      }
+      },
+      "parent": []
     },
     "crane": {
       "locked": {
