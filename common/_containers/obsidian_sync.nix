@@ -47,12 +47,13 @@ in
         environment = {
           SERVER_URL = cfg.serverUrl;
           COUCHDB_DATABASE = "obsidian_sync";
-          COUCHDB_USER = pkgs.lib.mkIf (cfg.dockerEnvFiles == []) "adminu";
-          COUCHDB_PASSWORD =  pkgs.lib.mkIf (cfg.dockerEnvFiles == [])  "Password123";
+          COUCHDB_USER = pkgs.lib.mkIf (cfg.dockerEnvFiles == [ ]) "adminu";
+          COUCHDB_PASSWORD = pkgs.lib.mkIf (cfg.dockerEnvFiles == [ ]) "Password123";
         };
         environmentFiles = cfg.dockerEnvFiles;
         volumes = [
           "${cfg.dataDir}/data:/opt/couchdb/data"
+          "${cfg.dataDir}/config:/opt/couchdb/etc/local.d"
         ];
       };
     };
