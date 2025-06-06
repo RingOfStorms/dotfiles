@@ -134,6 +134,13 @@
             proxyPass = "http://100.64.0.13";
           };
         };
+        "obsidiansync.joshuabell.xyz" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyPass = "http://100.64.0.1:5984";
+          };
+        };
 
         "_" = {
           default = true;

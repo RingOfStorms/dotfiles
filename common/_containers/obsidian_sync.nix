@@ -47,8 +47,8 @@ in
         environment = {
           SERVER_URL = cfg.serverUrl;
           COUCHDB_DATABASE = "obsidian_sync";
-          COUCHDB_USER = if cfg.dockerEnvFiles == [] then "adminu" else null;
-          COUCHDB_PASSWORD = if cfg.dockerEnvFiles == [] then "Password123" else null;
+          COUCHDB_USER = pkgs.lib.mkIf (cfg.dockerEnvFiles == []) "adminu";
+          COUCHDB_PASSWORD =  pkgs.lib.mkIf (cfg.dockerEnvFiles == [])  "Password123";
         };
         environmentFiles = cfg.dockerEnvFiles;
         volumes = [
