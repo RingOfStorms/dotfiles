@@ -35,7 +35,7 @@ in
       #############
       obsidian_sync = {
         user = "root";
-        image = "ghcr.io/danny-avila/obsidian_sync-dev:latest";
+        image = "docker.io/oleduc/docker-obsidian-livesync-couchdb:master";
         ports = [
           "${toString cfg.port}:${toString cfg.port}"
         ];

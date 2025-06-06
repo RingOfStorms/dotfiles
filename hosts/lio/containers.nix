@@ -10,10 +10,15 @@
 
   imports = [
     common.nixosModules.containers.librechat
-    # common.nixosModules.containers.forgejo
+    common.nixosModules.containers.obsidian_sync
   ];
 
   config = {
+    # Obsidian Sync settings
+    services.obsidian_sync = {
+      serverUrl = "https://obsidiansync.joshuabell.xyz";
+    };
+
     ## Give internet access
     networking = {
       nat = {
