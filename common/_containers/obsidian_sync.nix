@@ -26,6 +26,11 @@ in
         type = lib.types.str;
         description = "URL of the Obsidian Sync server";
       };
+      dockerEnvFiles = lib.mkOption {
+        type = lib.types.listOf lib.types.path;
+        default = [ ];
+        description = "List of environment files to be used by the Obsidian Sync container";
+      };
     };
 
   config = {
@@ -41,11 +46,11 @@ in
         ];
         environment = {
           SERVER_URL = cfg.serverUrl;
+          COUCHDB_DATABASE = "obsidian_sync";
           COUCHDB_USER = "adminu";
           COUCHDB_PASSWORD = "Password123"; # TODO move to a secret and link to it via envFiles
-          COUCHDB_DATABASE = "obsidian_sync";
         };
-        # environmentFiles = [ "${cfg.dataDir}/.env" ]; $ TODO see above todo
+        environmentFiles = cfg.dockerEnvFiles;
         volumes = [
           "${cfg.dataDir}/data:/opt/couchdb/data"
         ];

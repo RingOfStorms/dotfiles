@@ -84,4 +84,7 @@ in
   "headscale_auth.age" = {
     inherit publicKeys;
   };
+  "obsidian_sync_env.age" = {
+    inherit publicKeys;
+  };
 }
