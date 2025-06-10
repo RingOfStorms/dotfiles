@@ -41,6 +41,7 @@
                   environment.systemPackages = with pkgs; [
                     lua
                     qdirstat
+                    obsidian
                   ];
 
                   services.ollama = {
