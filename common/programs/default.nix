@@ -13,6 +13,7 @@ in
     ./docker.nix
     ./podman.nix
     ./incus.nix
+    ./flatpaks.nix
   ];
   config = {
     assertions = [

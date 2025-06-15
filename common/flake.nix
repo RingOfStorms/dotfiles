@@ -2,6 +2,7 @@
   inputs = {
     home-manager.url = "github:rycee/home-manager/release-25.05";
     ragenix.url = "github:yaxitech/ragenix";
+    nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
 
     # hyprland.url = "github:hyprwm/Hyprland";
     # cosmic.url = "github:lilyinstarlight/nixos-cosmic";
@@ -11,6 +12,7 @@
     {
       home-manager,
       ragenix,
+      nix-flatpak,
       ...
     }:
     {
@@ -25,6 +27,7 @@
             imports = [
               home-manager.nixosModules.home-manager
               ragenix.nixosModules.age
+              nix-flatpak.nixosModules.nix-flatpak
               ./_home_manager
               ./options.nix
               ./general
@@ -37,6 +40,7 @@
             config = {
               _module.args = {
                 inherit ragenix;
+                inherit nix-flatpak;
               };
             };
           };

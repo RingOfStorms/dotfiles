@@ -22,7 +22,7 @@ in
       };
       stateVersion = lib.mkOption {
         type = lib.types.str;
-        default = "23.11";
+        default = "25.05";
         description = "Home manager state version";
       };
     };
