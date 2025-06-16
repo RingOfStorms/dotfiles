@@ -1,15 +1,16 @@
 {
   inputs = {
+    # NOTE if you add any inputs here also add them in the TOP level repo's flake.nix
     home-manager.url = "github:rycee/home-manager/release-25.05";
     ragenix.url = "github:yaxitech/ragenix";
-    nix_flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
+    nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
   };
 
   outputs =
     {
       home-manager,
       ragenix,
-      nix_flatpak,
+      nix-flatpak,
       ...
     }:
     {
@@ -24,7 +25,7 @@
             imports = [
               home-manager.nixosModules.home-manager
               ragenix.nixosModules.age
-              nix_flatpak.nixosModules.nix-flatpak
+              nix-flatpak.nixosModules.nix-flatpak
               ./_home_manager
               ./options.nix
               ./general

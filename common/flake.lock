@@ -121,7 +121,7 @@
         "type": "github"
       }
     },
-    "nix_flatpak": {
+    "nix-flatpak": {
       "locked": {
         "lastModified": 1739444422,
         "narHash": "sha256-iAVVHi7X3kWORftY+LVbRiStRnQEob2TULWyjMS6dWg=",
@@ -194,7 +194,7 @@
     "root": {
       "inputs": {
         "home-manager": "home-manager",
-        "nix_flatpak": "nix_flatpak",
+        "nix-flatpak": "nix-flatpak",
         "ragenix": "ragenix"
       }
     },
