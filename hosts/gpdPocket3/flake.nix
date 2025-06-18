@@ -35,9 +35,6 @@
                   environment.systemPackages = with pkgs; [
                     lua
                     qdirstat
-                    rustdesk-flutter
-                    styluslabs-write
-                    xournalpp
                   ];
 
                   ringofstorms_common = {
@@ -55,6 +52,22 @@
                       tailnet.enable = true;
                       ssh.enable = true;
                       docker.enable = true;
+                      flatpaks = {
+                        enable = true;
+                        packages = [
+                          "org.signal.Signal"
+                          "com.discordapp.Discord"
+                          "md.obsidian.Obsidian"
+                          "com.spotify.Client"
+                          "org.videolan.VLC"
+                          "com.bitwarden.desktop"
+                          "org.openscad.OpenSCAD"
+                          "org.blender.Blender"
+                          "im.riot.Riot"
+                          "com.rustdesk.RustDesk"
+                          "com.google.Chrome"
+                        ];
+                      };
                     };
                     users = {
                       # Users are all normal users and default password is password1
@@ -70,15 +83,6 @@
                             "input"
                           ];
                           shell = pkgs.zsh;
-                          packages = with pkgs; [
-                            google-chrome
-                            discordo
-                            discord
-                            vlc
-                            spotify
-                            bitwarden
-                            vaultwarden
-                          ];
                         };
                       };
                     };
