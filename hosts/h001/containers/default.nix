@@ -1,4 +1,7 @@
-{ common }:
+{ inputs }:
+let
+  common = inputs.common;
+in
 {
   ...
 }:

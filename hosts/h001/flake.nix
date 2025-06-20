@@ -8,6 +8,8 @@
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
+
+    nixarr.url = "github:rasmus-kirk/nixarr";
   };
 
   outputs =
@@ -15,8 +17,9 @@
       nixpkgs,
       common,
       ros_neovim,
+      nixarr,
       ...
-    }:
+    }@inputs:
     let
       configuration_name = "h001";
       lib = nixpkgs.lib;
@@ -28,10 +31,11 @@
             modules = [
               common.nixosModules.default
               ros_neovim.nixosModules.default
+              nixarr.nixosModules.default
               ./configuration.nix
               ./hardware-configuration.nix
               ./mods
-              (import ./containers { inherit common; })
+              (import ./containers { inherit inputs; })
               (
                 { config, pkgs, ... }:
                 {
