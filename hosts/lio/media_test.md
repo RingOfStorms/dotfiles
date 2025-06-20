@@ -9,4 +9,6 @@
 [jellyseer](http://10.0.0.3:5055/)
 
 
+[nixarr wiki](https://nixarr.com/wiki/)
+
 [reference for setup](https://www.youtube.com/watch?v=twJDyoj0tDc&t=1172s)
