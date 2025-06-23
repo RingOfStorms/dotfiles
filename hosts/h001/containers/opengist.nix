@@ -9,7 +9,7 @@ let
 in
 {
   virtualisation.oci-containers.containers = {
-    opengist = {
+    "${name}" = {
       image = "ghcr.io/thomiceli/opengist:1";
       ports = [
         "127.0.0.1:${toString v_port}:${toString v_port}"

@@ -10,6 +10,7 @@ in
     # common.nixosModules.containers.librechat
     common.nixosModules.containers.forgejo
     ./opengist.nix
+    ./homarr.nix
   ];
 
   config = {
@@ -54,8 +55,8 @@ in
 
     virtualisation.oci-containers.backend = "podman";
 
-  security.acme.acceptTerms = true;
-  security.acme.defaults.email = "admin@joshuabell.xyz";
+    security.acme.acceptTerms = true;
+    security.acme.defaults.email = "admin@joshuabell.xyz";
     services.nginx = {
       enable = true;
       recommendedGzipSettings = true;
@@ -69,18 +70,12 @@ in
           };
         };
 
+        # forgejo http traffic
         "git.joshuabell.xyz" = {
           locations."/" = {
             proxyPass = "http://10.0.0.2:3000";
           };
         };
-
-        # "git.joshuabell.xyz" = {
-        #   # GIT passthrough
-        #   locations."/" = {
-        #     proxyPass = "http://10.0.0.2:3000";
-        #   };
-        # };
 
         "_" = {
           default = true;
@@ -91,6 +86,7 @@ in
       };
 
       # STREAMS
+      # Forgejo ssh
       streamConfig = ''
         server {
           listen 3032;

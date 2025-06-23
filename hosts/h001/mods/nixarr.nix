@@ -45,60 +45,6 @@
             proxyPass = "http://localhost:5055";
           };
         };
-        "jellyfin.h001.n.joshuabell.xyz" = {
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://localhost:8096";
-          };
-        };
-        "media.h001.n.joshuabell.xyz" = {
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://localhost:5055";
-          };
-        };
-        "sabnzbd.h001.n.joshuabell.xyz" = {
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://localhost:6336";
-          };
-        };
-        "prowlarr.h001.n.joshuabell.xyz" = {
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://localhost:9696";
-          };
-        };
-        "radarr.h001.n.joshuabell.xyz" = {
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://localhost:7878";
-          };
-        };
-        "sonarr.h001.n.joshuabell.xyz" = {
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://localhost:8989";
-          };
-        };
-        "lidarr.h001.n.joshuabell.xyz" = {
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://localhost:8686";
-          };
-        };
-        "readarr.h001.n.joshuabell.xyz" = {
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://localhost:8787";
-          };
-        };
-        "bazarr.h001.n.joshuabell.xyz" = {
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://localhost:6767";
-          };
-        };
       };
     };
   };
