@@ -148,6 +148,21 @@
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
           '';
         };
+        "jellyfin.joshuabell.xyz" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyPass = "http://100.64.0.13";
+          };
+        };
+        "media.joshuabell.xyz" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyPass = "http://100.64.0.13";
+          };
+        };
+
 
         "_" = {
           default = true;
