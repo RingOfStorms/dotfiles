@@ -54,6 +54,8 @@ in
 
     virtualisation.oci-containers.backend = "podman";
 
+  security.acme.acceptTerms = true;
+  security.acme.defaults.email = "admin@joshuabell.xyz";
     services.nginx = {
       enable = true;
       recommendedGzipSettings = true;

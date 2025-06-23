@@ -41,7 +41,7 @@
 
     services.nginx = {
       virtualHosts = {
-        "h001.net.joshuabell.xyz  " = {
+        "h001.net.joshuabell.xyz" = {
           locations."/" = {
             proxyPass = "http://localhost:3000";
           };
