@@ -7,6 +7,7 @@ let
   ccfg = import ../config.nix;
   cfg_path = [
     ccfg.custom_config_key
+    "general"
     "reporting"
   ];
   cfg = lib.attrsets.getAttrFromPath cfg_path config;
@@ -18,7 +19,7 @@ in
       enable = lib.mkEnableOption "Reporting node info and logs to grafana";
       lokiUrl = lib.mkOption {
         type = lib.types.str;
-        default = "http://100.64.0.13:3100/loki/api/v1/push";
+        default = "http://h001.net.joshuabell.xyz:3100/loki/api/v1/push";
         description = "URL of the Loki instance to send logs to";
       };
     };

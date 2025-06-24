@@ -33,7 +33,6 @@ in
         default = true;
         description = "Enable jetbrains mono font";
       };
-
     };
 
   config = lib.mkIf cfg.jetbrainsMonoFont {
