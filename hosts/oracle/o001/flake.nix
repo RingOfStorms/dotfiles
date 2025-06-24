@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
     deploy-rs.url = "github:serokell/deploy-rs";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
@@ -65,6 +65,7 @@
                     readWindowsDrives = false;
                     jetbrainsMonoFont = false;
                     ttyCapsEscape = false;
+                    reporting.enable = true;
                   };
                   programs = {
                     tailnet.enable = true;
