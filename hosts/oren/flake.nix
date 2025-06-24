@@ -54,6 +54,7 @@
                     boot.systemd.enable = true;
                     general = {
                       enableSleep = true;
+                      reporting.enable = true;
                     };
                     secrets.enable = true;
                     desktopEnvironment.gnome.enable = true;
