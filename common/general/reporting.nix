@@ -15,7 +15,12 @@ in
   options =
     { }
     // lib.attrsets.setAttrByPath cfg_path {
-      enable = lib.mkEnabledOption true "Reporting node and logs";
+      enable = lib.mkEnableOption "Reporting node info and logs to grafana";
+      lokiUrl = lib.mkOption {
+        type = lib.types.str;
+        default = "http://100.64.0.13:3100/loki/api/v1/push";
+        description = "URL of the Loki instance to send logs to";
+      };
     };
 
   config = lib.mkIf cfg.enable {
@@ -45,7 +50,7 @@ in
         };
         clients = [
           {
-            url = "http://100.64.0.13:3100/loki/api/v1/push"; # Points to your Loki instance
+            url = cfg.lokiUrl;
           }
         ];
         scrape_configs = [
