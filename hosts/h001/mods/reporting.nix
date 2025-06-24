@@ -4,7 +4,10 @@
 }:
 {
   config = {
-    services.prometheus.exporters.node.enable = true; # port 9080
+    services.prometheus.exporters.node = {
+      enable = true;
+      port = 9100;
+    };
     # Create necessary directories with appropriate permissions
     systemd.tmpfiles.rules = [
       "d /tmp/positions 1777 - - -" # World-writable directory for positions file
@@ -26,7 +29,7 @@
         };
         clients = [
           {
-            url = "http://localhost:3100/loki/api/v1/push"; # Points to your Loki instance
+            url = "http://100.64.0.13:3100/loki/api/v1/push"; # Points to your Loki instance
           }
         ];
         scrape_configs = [
@@ -38,27 +41,13 @@
               path = "/var/log/journal";
               labels = {
                 job = "systemd-journal";
-                host = "${config.networking.hostName}";
+                host = config.networking.hostName;
               };
             };
             relabel_configs = [
               {
                 source_labels = [ "__journal__systemd_unit" ];
                 target_label = "unit";
-              }
-            ];
-          }
-          # Simple file-based logs as a fallback
-          {
-            job_name = "system";
-            static_configs = [
-              {
-                targets = [ "localhost" ];
-                labels = {
-                  job = "syslog";
-                  host = "${config.networking.hostName}";
-                  __path__ = "/var/log/syslog";
-                };
               }
             ];
           }

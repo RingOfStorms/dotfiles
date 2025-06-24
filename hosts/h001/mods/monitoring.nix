@@ -11,7 +11,7 @@
           job_name = "node";
           static_configs = [
             {
-              targets = [ "localhost:9100" ];
+              targets = [ "100.64.0.13:9100" ];
               labels.instance = config.networking.hostName; # h001
             }
             # {
@@ -109,7 +109,6 @@
         };
 
         ruler = {
-          alertmanager_url = "http://localhost:9093";
           storage = {
             type = "local";
             local = {
