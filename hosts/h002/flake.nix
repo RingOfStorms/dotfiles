@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
     # nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
@@ -43,6 +43,9 @@
                     boot.grub.enable = true;
                     secrets.enable = true;
                     desktopEnvironment.gnome.enable = true;
+                    general = {
+                      reporting.enable = true;
+                    };
                     programs = {
                       qFlipper.enable = true;
                       rustDev.enable = true;
