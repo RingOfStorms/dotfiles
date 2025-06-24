@@ -23,25 +23,10 @@ in
       };
     };
   };
+
   system.activationScripts."${name}_directories" = ''
     mkdir -p ${hostDataDir}
     chown -R root:root ${hostDataDir}
     chmod -R 777 ${hostDataDir}
   '';
-
-  services.nginx.virtualHosts = {
-    "100.64.0.13" = {
-      locations."/" = {
-        return = "301 http://h001.net.joshuabell.xyz";
-      };
-    };
-    "h001.net.joshuabell.xyz" = {
-      locations = {
-        "/" = {
-          proxyWebsockets = true;
-          proxyPass = "http://127.0.0.1:${builtins.toString v_port}";
-        };
-      };
-    };
-  };
 }

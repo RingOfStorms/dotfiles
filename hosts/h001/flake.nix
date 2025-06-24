@@ -35,6 +35,7 @@
               ./configuration.nix
               ./hardware-configuration.nix
               ./mods
+              ./nginx.nix
               (import ./containers { inherit inputs; })
               (
                 { config, pkgs, ... }:
