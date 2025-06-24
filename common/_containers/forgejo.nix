@@ -138,7 +138,7 @@ in
         services.forgejo = {
           enable = true;
           dump = {
-            enable = true;
+            enable = false;
             type = "tar.gz";
           };
           database = {

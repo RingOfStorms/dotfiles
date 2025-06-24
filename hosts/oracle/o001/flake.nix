@@ -47,7 +47,6 @@
             ./hardware-configuration.nix
             ./nginx.nix
             ./containers/vaultwarden.nix
-            ./containers/opengist.nix
             ./mods/postgresql.nix
             ./mods/atuin.nix
             ./mods/rustdesk-server.nix

@@ -36,10 +36,15 @@
     ];
   };
 
+  fileSystems."/drives/wd10" = {
+    device = "/dev/sda";
+    fsType = "ext4";
+  };
+
   swapDevices = [
     {
       device = "/.swapfile";
-      size = 64 * 1024; # 64GB
+      size = 4 * 1024; # 4GB
     }
   ];
   networking.useDHCP = lib.mkDefault true;

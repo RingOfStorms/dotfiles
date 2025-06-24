@@ -4,11 +4,9 @@
 
     # Manually synced with common/flake.nix inputs
     # =====
-    home-manager.url = "github:rycee/home-manager/release-24.11";
+    home-manager.url = "github:rycee/home-manager/release-25.05";
     ragenix.url = "github:yaxitech/ragenix";
-
-    # hyprland.url = "github:hyprwm/Hyprland";
-    # cosmic.url = "github:lilyinstarlight/nixos-cosmic";
+    nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
     # ======
   };
 
@@ -17,6 +15,7 @@
       nixpkgs,
       home-manager,
       ragenix,
+      nix-flatpak,
       ...
     }@inputs:
     let

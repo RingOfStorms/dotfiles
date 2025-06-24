@@ -61,6 +61,8 @@ in
           MONGO_URI = "mongodb://librechat_mongodb:27017/LibreChat";
           SEARCH = "true";
           MEILI_HOST = "http://librechat_meilisearch:7700";
+          MEILI_NO_ANALYTICS = "true";
+          MEILI_MASTER_KEY = "ringofstormsLibreChat";
           RAG_PORT = toString cfg.ragPort;
           RAG_API_URL = "http://librechat_rag_api:${toString cfg.ragPort}";
           # DEBUG_CONSOLE = "true";
@@ -95,13 +97,14 @@ in
 
       librechat_meilisearch = {
         user = "root";
-        image = "getmeili/meilisearch:v1.13";
+        image = "getmeili/meilisearch:v1.12.3";
         environment = {
           MEILI_HOST = "http://librechat_meilisearch:7700";
           MEILI_NO_ANALYTICS = "true";
+          MEILI_MASTER_KEY = "ringofstormsLibreChat";
         };
         volumes = [
-          "${cfg.dataDir}/meili_data_v1.13:/meili_data"
+          "${cfg.dataDir}/meili_data_v1.12:/meili_data"
         ];
         extraOptions = [ "--network=librechat-network" ];
       };

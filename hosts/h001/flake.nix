@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
     # nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
@@ -8,6 +8,8 @@
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
+
+    nixarr.url = "github:rasmus-kirk/nixarr";
   };
 
   outputs =
@@ -15,8 +17,9 @@
       nixpkgs,
       common,
       ros_neovim,
+      nixarr,
       ...
-    }:
+    }@inputs:
     let
       configuration_name = "h001";
       lib = nixpkgs.lib;
@@ -28,23 +31,31 @@
             modules = [
               common.nixosModules.default
               ros_neovim.nixosModules.default
+              nixarr.nixosModules.default
               ./configuration.nix
               ./hardware-configuration.nix
+              ./mods
+              ./nginx.nix
+              (import ./containers { inherit inputs; })
               (
                 { config, pkgs, ... }:
                 {
                   environment.systemPackages = with pkgs; [
                     lua
+                    sqlite
                   ];
 
                   ringofstorms_common = {
                     systemName = configuration_name;
                     boot.systemd.enable = true;
                     secrets.enable = true;
+                    general = {
+                      reporting.enable = true;
+                    };
                     programs = {
                       tailnet.enable = true;
                       ssh.enable = true;
-                      docker.enable = true;
+                      podman.enable = true;
                     };
                     users = {
                       admins = [ "luser" ]; # First admin is also the primary user owning nix config

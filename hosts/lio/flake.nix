@@ -1,7 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
-    # nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
 
     # Use relative to get current version for testing
     # common.url = "path:../../common";
@@ -16,7 +15,7 @@
       common,
       ros_neovim,
       ...
-    }:
+    }@inputs:
     let
       configuration_name = "lio";
       lib = nixpkgs.lib;
@@ -25,12 +24,13 @@
       nixosConfigurations = {
         "${configuration_name}" = (
           lib.nixosSystem {
+            specialArgs = { inherit inputs; };
             modules = [
               common.nixosModules.default
               ros_neovim.nixosModules.default
               ./configuration.nix
               ./hardware-configuration.nix
-              (import ./containers.nix { inherit common; })
+              (import ./containers.nix { inherit inputs; })
               (
                 { config, pkgs, ... }:
                 {
@@ -44,7 +44,6 @@
                     steam
                     ffmpeg-full
                     appimage-run
-                    rustdesk-flutter
                   ];
 
                   # Also allow this key to work for root user, this will let us use this as a remote builder easier
@@ -59,6 +58,7 @@
                     boot.systemd.enable = true;
                     secrets.enable = true;
                     general = {
+                      reporting.enable = true;
                       disableRemoteBuildsOnLio = true;
                     };
                     desktopEnvironment.gnome.enable = true;
@@ -70,6 +70,22 @@
                       tailnet.enableExitNode = true;
                       ssh.enable = true;
                       docker.enable = true;
+                      flatpaks = {
+                        enable = true;
+                        packages = [
+                          "org.signal.Signal"
+                          "com.discordapp.Discord"
+                          "md.obsidian.Obsidian"
+                          "com.spotify.Client"
+                          "org.videolan.VLC"
+                          "com.bitwarden.desktop"
+                          "org.openscad.OpenSCAD"
+                          "org.blender.Blender"
+                          "im.riot.Riot"
+                          "com.rustdesk.RustDesk"
+                          "com.google.Chrome"
+                        ];
+                      };
                     };
                     users = {
                       # Users are all normal users and default password is password1
@@ -86,17 +102,7 @@
                           ];
                           shell = pkgs.zsh;
                           packages = with pkgs; [
-                            signal-desktop
-                            spotify
-                            blender
-                            google-chrome
-                            discordo
-                            discord
-                            firefox-esr
-                            openscad
-                            vlc
-                            bitwarden
-                            vaultwarden
+                            sabnzbd
                           ];
                         };
                       };

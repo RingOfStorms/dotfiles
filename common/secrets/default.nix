@@ -102,6 +102,10 @@ in
             file = ./secrets/headscale_auth.age;
             owner = users_cfg.primary;
           };
+          obsidian_sync_env = {
+            file = ./secrets/obsidian_sync_env.age;
+            owner = users_cfg.primary;
+          };
         };
     };
   };

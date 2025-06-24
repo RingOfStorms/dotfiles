@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
@@ -53,7 +53,6 @@
                     systemName = configuration_name;
                     boot.systemd.enable = true;
                     general = {
-                      # disableRemoteBuildsOnLio = true;
                       enableSleep = true;
                     };
                     secrets.enable = true;
@@ -65,6 +64,22 @@
                       tailnet.enable = true;
                       ssh.enable = true;
                       docker.enable = true;
+                      flatpaks = {
+                        enable = true;
+                        packages = [
+                          "org.signal.Signal"
+                          "com.discordapp.Discord"
+                          "md.obsidian.Obsidian"
+                          "com.spotify.Client"
+                          "org.videolan.VLC"
+                          "com.bitwarden.desktop"
+                          "org.openscad.OpenSCAD"
+                          "org.blender.Blender"
+                          "im.riot.Riot"
+                          "com.rustdesk.RustDesk"
+                          "com.google.Chrome"
+                        ];
+                      };
                     };
                     users = {
                       # Users are all normal users and default password is password1
@@ -80,16 +95,6 @@
                             "input"
                           ];
                           shell = pkgs.zsh;
-                          packages = with pkgs; [
-                            signal-desktop
-                            google-chrome
-                            discordo
-                            discord
-                            spotify
-                            vlc
-                            vaultwarden
-                            bitwarden
-                          ];
                         };
                       };
                     };

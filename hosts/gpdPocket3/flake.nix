@@ -1,9 +1,9 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
 
     # for local testing.
-    # common.url = "path:../../common
+    # common.url = "path:../../common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
@@ -35,13 +35,15 @@
                   environment.systemPackages = with pkgs; [
                     lua
                     qdirstat
-                    rustdesk-flutter
                   ];
 
                   ringofstorms_common = {
                     systemName = configuration_name;
                     boot.systemd.enable = true;
-                    desktopEnvironment.gnome.enable = true;
+                    desktopEnvironment.gnome = {
+                      enable = true;
+                      enableRotate = true;
+                    };
                     secrets.enable = true;
                     general.enableSleep = true;
                     programs = {
@@ -50,6 +52,22 @@
                       tailnet.enable = true;
                       ssh.enable = true;
                       docker.enable = true;
+                      flatpaks = {
+                        enable = true;
+                        packages = [
+                          "org.signal.Signal"
+                          "com.discordapp.Discord"
+                          "md.obsidian.Obsidian"
+                          "com.spotify.Client"
+                          "org.videolan.VLC"
+                          "com.bitwarden.desktop"
+                          "org.openscad.OpenSCAD"
+                          "org.blender.Blender"
+                          "im.riot.Riot"
+                          "com.rustdesk.RustDesk"
+                          "com.google.Chrome"
+                        ];
+                      };
                     };
                     users = {
                       # Users are all normal users and default password is password1
@@ -65,15 +83,6 @@
                             "input"
                           ];
                           shell = pkgs.zsh;
-                          packages = with pkgs; [
-                            google-chrome
-                            discordo
-                            discord
-                            vlc
-                            spotify
-                            bitwarden
-                            vaultwarden
-                          ];
                         };
                       };
                     };

@@ -57,6 +57,7 @@ in
     ./shell/common.nix
     ./fonts.nix
     ./tty_caps_esc.nix
+    ./reporting.nix
   ];
   config = {
     # name this computer

@@ -8,7 +8,7 @@
 
     defaultKeymap = "emacs";
 
-    initExtra = ''
+    initContent = ''
       # Set editor to neovim, TODO only do this if mod.neovim is enabled
       export EDITOR=nvim
       export VISUAL=nvim

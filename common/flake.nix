@@ -1,16 +1,16 @@
 {
   inputs = {
-    home-manager.url = "github:rycee/home-manager/release-24.11";
+    # NOTE if you add/change any inputs here also add them in the TOP level repo's flake.nix
+    home-manager.url = "github:rycee/home-manager/release-25.05";
     ragenix.url = "github:yaxitech/ragenix";
-
-    # hyprland.url = "github:hyprwm/Hyprland";
-    # cosmic.url = "github:lilyinstarlight/nixos-cosmic";
+    nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
   };
 
   outputs =
     {
       home-manager,
       ragenix,
+      nix-flatpak,
       ...
     }:
     {
@@ -25,6 +25,7 @@
             imports = [
               home-manager.nixosModules.home-manager
               ragenix.nixosModules.age
+              nix-flatpak.nixosModules.nix-flatpak
               ./_home_manager
               ./options.nix
               ./general
@@ -43,6 +44,7 @@
         containers = {
           librechat = import ./_containers/librechat.nix;
           forgejo = import ./_containers/forgejo.nix;
+          obsidian_sync = import ./_containers/obsidian_sync.nix;
         };
       };
       homeManagerModules = {

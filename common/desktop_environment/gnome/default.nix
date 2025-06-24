@@ -24,6 +24,7 @@ with lib;
         default = "kitty";
         description = "The terminal command to use.";
       };
+      enableRotate = lib.mkEnableOption "enable screen rotation";
     };
 
   imports = [
@@ -65,6 +66,8 @@ with lib;
       gnomeExtensions.compact-top-bar
       gnomeExtensions.tray-icons-reloaded
       gnomeExtensions.vitals
+    ] ++ lib.optionals cfg.enableRotate [
+      gnomeExtensions.screen-rotate
     ];
     environment.sessionVariables = {
       NIXOS_OZONE_WL = "1";

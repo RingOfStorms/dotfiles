@@ -35,6 +35,7 @@
                 {
                   environment.systemPackages = with pkgs; [
                     lua
+                    qdirstat
                   ];
 
                   ringofstorms_common = {
@@ -43,10 +44,12 @@
                     secrets.enable = true;
                     desktopEnvironment.gnome.enable = true;
                     programs = {
+                      qFlipper.enable = true;
                       rustDev.enable = true;
                       tailnet.enable = true;
                       ssh.enable = true;
                       docker.enable = true;
+                      uhkAgent.enable = true;
                     };
                     users = {
                       admins = [ "luser" ]; # First admin is also the primary user owning nix config
@@ -69,6 +72,10 @@
                           packages = with pkgs; [
                             bitwarden
                             vaultwarden
+                            google-chrome
+                            firefox-esr
+                            openscad
+                            vlc
                           ];
                         };
                       };
