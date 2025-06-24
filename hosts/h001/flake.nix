@@ -49,6 +49,9 @@
                     systemName = configuration_name;
                     boot.systemd.enable = true;
                     secrets.enable = true;
+                    general = {
+                      reporting.enable = true;
+                    };
                     programs = {
                       tailnet.enable = true;
                       ssh.enable = true;
