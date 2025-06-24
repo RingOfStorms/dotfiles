@@ -11,13 +11,13 @@
           job_name = "node";
           static_configs = [
             {
-              targets = [ "100.64.0.13:9100" ];
+              targets = [ "localhost:9100" ];
               labels.instance = config.networking.hostName; # h001
             }
-            # {
-            #   targets = [ "http://lio.net.joshuabell.xyz:9100" ];
-            #   labels.instance = "lio";
-            # }
+            {
+              targets = [ "lio.net.joshuabell.xyz:9100" ];
+              labels.instance = "lio";
+            }
           ];
         }
       ];
