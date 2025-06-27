@@ -1,4 +1,5 @@
 {
+  lib,
   ...
 }:
 {
@@ -6,13 +7,23 @@
     services.pinchflat = {
       enable = true;
       port = 8945;
-      mediaDir = "/drives/wd10/nixarr/media/library/youtube";
+      selfhosted = true;
+      mediaDir = "/drives/wd10/pinchflat/media";
     };
 
-    # Adds the pinchflat user to the nixarr media group so we can write to the same media folder
-    systemd.services.pinchflat.serviceConfig.SupplementaryGroups = [ "media" ];
+
+
+    users.users.pinchflat.isSystemUser = true;
+    users.users.pinchflat.group = "pinchflat";
+    users.groups.pinchflat = { };
+    systemd.services.pinchflat.serviceConfig = {
+      DynamicUser = lib.mkForce false;
+      User = "pinchflat";
+      Group = "pinchflat";
+    };
+
     systemd.tmpfiles.rules = [
-      "d '/drives/wd10/nixarr/media/library/youtube' 0775 root media - -"
+      "d '/drives/wd10/pinchflat/media' 0775 pinchflat pinchflat - -"
     ];
 
     # services.nginx = {
