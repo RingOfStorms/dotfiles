@@ -16,7 +16,6 @@
       radarr.enable = true; # Movies
       bazarr.enable = true; # subtitles for sonarr and radarr
       lidarr.enable = true; # music
-      readarr.enable = true; # books
     };
 
     services.nginx = {
