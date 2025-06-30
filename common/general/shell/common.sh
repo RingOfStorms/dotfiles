@@ -186,3 +186,8 @@ alias gintentnix_undo="gintent_undo .envrc flake.lock flake.nix"
 aider () {
   http_proxy="" all_proxy="" https_proxy="" AZURE_API_BASE=http://100.64.0.8 AZURE_API_VERSION=2025-01-01-preview AZURE_API_KEY=1 nix run "nixpkgs#aider-chat-full" -- aider --dark-mode --no-gitignore --no-check-update --no-auto-commits --model azure/gpt-4.1-2025-04-14 $@
 }
+
+# SST Opencode
+oc () {
+  http_proxy="" all_proxy="" https_proxy="" AZURE_API_BASE=http://100.64.0.8 AZURE_API_VERSION=2025-01-01-preview AZURE_API_KEY=1 opencode $@
+}
