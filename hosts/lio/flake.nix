@@ -3,8 +3,8 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
 
     # Use relative to get current version for testing
-    # common.url = "path:../../common";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
+    common.url = "path:../../common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -32,7 +32,12 @@
               ./hardware-configuration.nix
               (import ./containers.nix { inherit inputs; })
               (
-                { config, pkgs, ... }:
+                {
+                  config,
+                  pkgs,
+                  lib,
+                  ...
+                }:
                 {
                   programs = {
                     steam.enable = true;
@@ -70,6 +75,7 @@
                       tailnet.enableExitNode = true;
                       ssh.enable = true;
                       docker.enable = true;
+                      opencode.enable = true;
                       flatpaks = {
                         enable = true;
                         packages = [
