@@ -1152,6 +1152,23 @@
         "type": "github"
       }
     },
+    "opencode": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1752020810,
+        "narHash": "sha256-Sh7FEn34iL4iZuusmghLCvKHfx/CMjOogBwnT+enz4g=",
+        "owner": "sst",
+        "repo": "opencode",
+        "rev": "58b1c58bc59e82ea05dfa5f4dfce8111c4e2995a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sst",
+        "ref": "v0.2.13",
+        "repo": "opencode",
+        "type": "github"
+      }
+    },
     "ragenix": {
       "inputs": {
         "agenix": "agenix",
@@ -1179,6 +1196,7 @@
         "common": "common",
         "nixpkgs": "nixpkgs_4",
         "nixpkgs-unstable": "nixpkgs-unstable",
+        "opencode": "opencode",
         "ros_neovim": "ros_neovim"
       }
     },

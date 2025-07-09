@@ -8,6 +8,9 @@
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
+
+    opencode.url = "github:sst/opencode/v0.2.13";
+    opencode.flake = false;
   };
 
   outputs =
@@ -48,7 +51,16 @@
                       {
                         nixpkgs.overlays = [
                           (final: prev: {
-                            opencode = nixpkgs-unstable.legacyPackages.${prev.system}.opencode;
+                            opencode = nixpkgs-unstable.legacyPackages.${prev.system}.opencode.overrideAttrs (old: rec {
+                              version = "0.2.13";
+                              src = inputs.opencode;
+                              node_modules = old.node_modules.overrideAttrs (nmOld: {
+                                outputHash = "sha256-1ZxetDrrRdNNOfDOW2uMwMwpEs5S3BLF+SejWcRdtik=";
+                              });
+                              tui = old.tui.overrideAttrs (tuiOld: {
+                                vendorHash = "sha256-Qvn59PU95TniPy7JaZDJhn/wUCfFYM+7bzav1jxNv34=";
+                              });
+                            });
                           })
                         ];
                       }
