@@ -139,6 +139,30 @@ from_master () {
   git checkout $(getdefault) $@
 }
 
+stash() {
+  local branch
+  branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+  local datetime
+  datetime=$(date +"%Y-%m-%d_%H-%M")
+  local default_label="${datetime}_${branch}"
+  if [ -n "$ZSH_VERSION" ]; then
+    read "label?Stash label [default: $default_label]: "
+  else
+    read -e -p "Stash label [default: $default_label]: " label
+  fi
+  label=${label:-$default_label}
+  git stash push -m "$label"
+}
+
+pop() {
+  local selection
+  selection=$(git stash list | fzf --prompt="Select stash to pop: " --preview="git stash show -p $(echo {} | awk -F: '{print $1}') | bat --color always --paging=never -l diff")
+  [ -z "$selection" ] && echo "No stash selected." && return 1
+  local stash_ref
+  stash_ref=$(echo "$selection" | awk -F: '{print $1}')
+  echo "Popping $stash_ref..."
+  git stash pop "$stash_ref"
+}
 
 # nix
 alias nixpkgs=nixpkg

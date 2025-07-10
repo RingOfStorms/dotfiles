@@ -45,8 +45,6 @@ with lib;
       cl = "clear";
 
       # git
-      stash = "git stash";
-      pop = "git stash pop";
       branch = "git checkout -b";
       status = "git status";
       diff = "git diff";
