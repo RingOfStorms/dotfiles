@@ -156,7 +156,9 @@ stash() {
 
 pop() {
   local selection
-  selection=$(git stash list | fzf --prompt="Select stash to pop: " --preview="git stash show -p $(echo {} | awk -F: '{print $1}') | bat --color always --paging=never -l diff")
+  selection=$(git stash list | \
+    fzf --prompt="Select stash to pop: " \
+        --preview="git stash show -p \$(echo {} | awk -F: '{print \$1}') | bat --color always --paging=never --style=plain -l diff")
   [ -z "$selection" ] && echo "No stash selected." && return 1
   local stash_ref
   stash_ref=$(echo "$selection" | awk -F: '{print $1}')
