@@ -175,7 +175,7 @@ delstash() {
   local stash_ref
   stash_ref=$(echo "$selection" | awk -F: '{print $1}')
   echo "About to delete $stash_ref."
-  git stash drop "$stash_ref";;
+  git stash drop "$stash_ref"
 }
 
 # nix
