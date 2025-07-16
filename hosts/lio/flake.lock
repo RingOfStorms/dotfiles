@@ -30,14 +30,16 @@
         "home-manager": "home-manager",
         "nix-flatpak": "nix-flatpak",
         "nixpkgs": "nixpkgs_2",
+        "nixpkgs-unstable": "nixpkgs-unstable",
+        "opencode": "opencode",
         "ragenix": "ragenix"
       },
       "locked": {
-        "lastModified": 1752240162,
-        "narHash": "sha256-KkLdybzUATyYMpDHlmprIyEdF0XgYMJnIJSeimFb9Sg=",
+        "lastModified": 1752684005,
+        "narHash": "sha256-Fnby9YV48yRgYuORzfkI0HDXpHkPf563WLKP97o50ts=",
         "ref": "refs/heads/master",
-        "rev": "7808611cbb879abbe3b022d41617aa21412a428a",
-        "revCount": 535,
+        "rev": "e9eb7868119ef8224405380d374d1c34f808d53b",
+        "revCount": 539,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -179,11 +181,11 @@
     },
     "nixpkgs-unstable": {
       "locked": {
-        "lastModified": 1751792365,
-        "narHash": "sha256-J1kI6oAj25IG4EdVlg2hQz8NZTBNYvIS0l4wpr9KcUo=",
+        "lastModified": 1752480373,
+        "narHash": "sha256-JHQbm+OcGp32wAsXTE/FLYGNpb+4GLi5oTvCxwSoBOA=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "1fd8bada0b6117e6c7eb54aad5813023eed37ccb",
+        "rev": "62e0f05ede1da0d54515d4ea8ce9c733f12d9f08",
         "type": "github"
       },
       "original": {
@@ -227,11 +229,11 @@
     },
     "nixpkgs_4": {
       "locked": {
-        "lastModified": 1751741127,
-        "narHash": "sha256-t75Shs76NgxjZSgvvZZ9qOmz5zuBE8buUaYD28BMTxg=",
+        "lastModified": 1752436162,
+        "narHash": "sha256-Kt1UIPi7kZqkSc5HVj6UY5YLHHEzPBkgpNUByuyxtlw=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "29e290002bfff26af1db6f64d070698019460302",
+        "rev": "dfcd5b901dbab46c9c6e80b265648481aafb01f8",
         "type": "github"
       },
       "original": {
@@ -1155,16 +1157,16 @@
     "opencode": {
       "flake": false,
       "locked": {
-        "lastModified": 1752513658,
-        "narHash": "sha256-FX4dlDOEsKBTucZhzAWI2fUqBffc+UWXW00YpmO2EUs=",
+        "lastModified": 1752630643,
+        "narHash": "sha256-PRNRs0UsKNXFTwvtrrImd3UmrpNvFP9xc8BrIdx1Q9Q=",
         "owner": "sst",
         "repo": "opencode",
-        "rev": "ba676e7ae095a6e2089b2b061a1ec8f3cffd4e42",
+        "rev": "0793c3f2a373436fb70eb936df16e21ce1243b19",
         "type": "github"
       },
       "original": {
         "owner": "sst",
-        "ref": "v0.3.5",
+        "ref": "v0.3.13",
         "repo": "opencode",
         "type": "github"
       }
@@ -1195,8 +1197,6 @@
       "inputs": {
         "common": "common",
         "nixpkgs": "nixpkgs_4",
-        "nixpkgs-unstable": "nixpkgs-unstable",
-        "opencode": "opencode",
         "ros_neovim": "ros_neovim"
       }
     },

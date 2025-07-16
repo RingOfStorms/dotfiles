@@ -1,22 +1,17 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
-    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
     # common.url = "path:../../common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
-
-    opencode.url = "github:sst/opencode/v0.3.5";
-    opencode.flake = false;
   };
 
   outputs =
     {
       nixpkgs,
-      nixpkgs-unstable,
       common,
       ros_neovim,
       ...
@@ -44,28 +39,6 @@
                   ...
                 }:
                 {
-
-                  imports = [
-                    (
-                      { ... }:
-                      {
-                        nixpkgs.overlays = [
-                          (final: prev: {
-                            opencode = nixpkgs-unstable.legacyPackages.${prev.system}.opencode.overrideAttrs (old: rec {
-                              version = "0.3.5";
-                              src = inputs.opencode;
-                              node_modules = old.node_modules.overrideAttrs (nmOld: {
-                                outputHash = "sha256-B/nTDMoADK+okDOROCCTF51GJALVlOMilEGWmLqmixA=";
-                              });
-                              tui = old.tui.overrideAttrs (tuiOld: {
-                                vendorHash = "sha256-TkY4wVCaZ9JjwPE/K4ThCnxakcQwFmSVgUSYlWU4yiw=";
-                              });
-                            });
-                          })
-                        ];
-                      }
-                    )
-                  ];
                   programs = {
                     steam.enable = true;
                   };
