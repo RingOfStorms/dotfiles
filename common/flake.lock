@@ -153,6 +153,22 @@
         "type": "github"
       }
     },
+    "nixpkgs-unstable": {
+      "locked": {
+        "lastModified": 1752480373,
+        "narHash": "sha256-JHQbm+OcGp32wAsXTE/FLYGNpb+4GLi5oTvCxwSoBOA=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "62e0f05ede1da0d54515d4ea8ce9c733f12d9f08",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nixpkgs_2": {
       "locked": {
         "lastModified": 1741379970,
@@ -166,6 +182,23 @@
         "owner": "nixos",
         "ref": "nixos-unstable",
         "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "opencode": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1752630643,
+        "narHash": "sha256-PRNRs0UsKNXFTwvtrrImd3UmrpNvFP9xc8BrIdx1Q9Q=",
+        "owner": "sst",
+        "repo": "opencode",
+        "rev": "0793c3f2a373436fb70eb936df16e21ce1243b19",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sst",
+        "ref": "v0.3.13",
+        "repo": "opencode",
         "type": "github"
       }
     },
@@ -195,6 +228,8 @@
       "inputs": {
         "home-manager": "home-manager",
         "nix-flatpak": "nix-flatpak",
+        "nixpkgs-unstable": "nixpkgs-unstable",
+        "opencode": "opencode",
         "ragenix": "ragenix"
       }
     },

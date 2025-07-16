@@ -4,6 +4,11 @@
     home-manager.url = "github:rycee/home-manager/release-25.05";
     ragenix.url = "github:yaxitech/ragenix";
     nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
+
+    # tmp
+    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+    opencode.url = "github:sst/opencode/v0.3.13";
+    opencode.flake = false;
   };
 
   outputs =
@@ -11,6 +16,8 @@
       home-manager,
       ragenix,
       nix-flatpak,
+      opencode,
+      nixpkgs-unstable,
       ...
     }:
     {
@@ -23,6 +30,25 @@
           }:
           {
             imports = [
+              (
+                { ... }:
+                {
+                  nixpkgs.overlays = [
+                    (final: prev: {
+                      opencode = nixpkgs-unstable.legacyPackages.${prev.system}.opencode.overrideAttrs (old: rec {
+                        version = "0.3.13";
+                        src = opencode;
+                        node_modules = old.node_modules.overrideAttrs (nmOld: {
+                          outputHash = "sha256-YqSGiikWLErq//RKC3Qcf0aGNFncs3Qx33E8sdKYJ5o=";
+                        });
+                        tui = old.tui.overrideAttrs (tuiOld: {
+                          vendorHash = "sha256-BVq3+CUMI3CeI9EZkqbnRCvwNc02LgLIvXUp4XQlAx4=";
+                        });
+                      });
+                    })
+                  ];
+                }
+              )
               home-manager.nixosModules.home-manager
               ragenix.nixosModules.age
               nix-flatpak.nixosModules.nix-flatpak
