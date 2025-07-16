@@ -65,6 +65,7 @@
                       tailnet.enable = true;
                       ssh.enable = true;
                       docker.enable = true;
+                      opencode.enable = true;
                       flatpaks = {
                         enable = true;
                         packages = [
