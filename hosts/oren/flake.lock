@@ -35,11 +35,11 @@
         "ragenix": "ragenix"
       },
       "locked": {
-        "lastModified": 1752684145,
-        "narHash": "sha256-dBafYMeHy6wpITEeGP2XledrNTMvaeIhxNh6X/ezRag=",
+        "lastModified": 1752801266,
+        "narHash": "sha256-6s9ucwKuq3xESrX36IV74NbGETbZbWTW5zrO2vhox+k=",
         "ref": "refs/heads/master",
-        "rev": "78c2e2ef8774893733faf7d3e75230ae3ee73890",
-        "revCount": 540,
+        "rev": "5de71972629db685880a5d19bbe4b765410ef53f",
+        "revCount": 544,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -1173,16 +1173,16 @@
     "opencode": {
       "flake": false,
       "locked": {
-        "lastModified": 1752630643,
-        "narHash": "sha256-PRNRs0UsKNXFTwvtrrImd3UmrpNvFP9xc8BrIdx1Q9Q=",
+        "lastModified": 1752694492,
+        "narHash": "sha256-p65NhGI8zzcs8BDVAhPNZMZ9hXHKjztIGaLhXLxJAuY=",
         "owner": "sst",
         "repo": "opencode",
-        "rev": "0793c3f2a373436fb70eb936df16e21ce1243b19",
+        "rev": "fc45c0c9448eb435a183b86205fcfceda9714ec9",
         "type": "github"
       },
       "original": {
         "owner": "sst",
-        "ref": "v0.3.13",
+        "ref": "v0.3.17",
         "repo": "opencode",
         "type": "github"
       }
