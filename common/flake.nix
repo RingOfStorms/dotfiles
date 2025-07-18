@@ -7,7 +7,7 @@
 
     # tmp
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
-    opencode.url = "github:sst/opencode/v0.3.13";
+    opencode.url = "github:sst/opencode/v0.3.17";
     opencode.flake = false;
   };
 
@@ -36,13 +36,13 @@
                   nixpkgs.overlays = [
                     (final: prev: {
                       opencode = nixpkgs-unstable.legacyPackages.${prev.system}.opencode.overrideAttrs (old: rec {
-                        version = "0.3.13";
+                        version = "0.3.17";
                         src = opencode;
                         node_modules = old.node_modules.overrideAttrs (nmOld: {
-                          outputHash = "sha256-YqSGiikWLErq//RKC3Qcf0aGNFncs3Qx33E8sdKYJ5o=";
+                          outputHash = "sha256-nWHdoRI9uaR3Innt14SR6l3V1SpFU/1A+TELh6J6o/A=";
                         });
                         tui = old.tui.overrideAttrs (tuiOld: {
-                          vendorHash = "sha256-BVq3+CUMI3CeI9EZkqbnRCvwNc02LgLIvXUp4XQlAx4=";
+                          vendorHash = "sha256-GeXDi/y9NoJJ9P5hQk0vtIxg/6pDDtMPdxgQvHZJzJ4=";
                         });
                       });
                     })
