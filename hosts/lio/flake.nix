@@ -31,7 +31,7 @@
               ./configuration.nix
               ./hardware-configuration.nix
               (import ./containers.nix { inherit inputs; })
-              ./jails_text.nix
+              # ./jails_text.nix
               (
                 {
                   config,
