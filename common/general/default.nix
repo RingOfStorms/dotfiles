@@ -64,6 +64,7 @@ in
     networking = {
       hostName = top_cfg.systemName;
       nftables.enable = true;
+      nftables.flushRuleset = true;
       firewall.enable = true;
     };
 
