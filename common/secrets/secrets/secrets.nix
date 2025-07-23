@@ -87,4 +87,7 @@ in
   "obsidian_sync_env.age" = {
     inherit publicKeys;
   };
+  "us_chi_wg.age" = {
+    inherit publicKeys;
+  };
 }

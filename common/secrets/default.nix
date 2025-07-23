@@ -106,6 +106,10 @@ in
             file = ./secrets/obsidian_sync_env.age;
             owner = users_cfg.primary;
           };
+          us_chi_wg = {
+            file = ./secrets/us_chi_wg.age;
+            owner = users_cfg.primary;
+          };
         };
     };
   };
