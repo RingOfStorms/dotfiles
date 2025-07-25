@@ -35,11 +35,11 @@
         "ragenix": "ragenix"
       },
       "locked": {
-        "lastModified": 1753291690,
-        "narHash": "sha256-eXVqiN+LVrHS6DcYwtZ4ycpKjwVaAV+4M1YNeTa5BxM=",
+        "lastModified": 1753304140,
+        "narHash": "sha256-F2RjgmsvQYU2aOocSivL0slsmsHukNyYPwULZTERYEQ=",
         "ref": "refs/heads/master",
-        "rev": "67b202a5e66435a8257086201007fb6b5b6072ae",
-        "revCount": 550,
+        "rev": "d8fa93baac8d54659bac25cbb609e4ef414e5891",
+        "revCount": 552,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -1106,22 +1106,6 @@
         "type": "github"
       }
     },
-    "nvim_plugin-yetone/avante.nvim": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1753113754,
-        "narHash": "sha256-Jnhh6LsgyoWuycOj8f8Yq0/iRNpMa0lwguCokIPnmQg=",
-        "owner": "yetone",
-        "repo": "avante.nvim",
-        "rev": "e9c031ab6ba26e01ba4be534b2756005583efd11",
-        "type": "github"
-      },
-      "original": {
-        "owner": "yetone",
-        "repo": "avante.nvim",
-        "type": "github"
-      }
-    },
     "nvim_plugin-zbirenbaum/copilot-cmp": {
       "flake": false,
       "locked": {
@@ -1256,17 +1240,16 @@
         "nvim_plugin-tpope/vim-surround": "nvim_plugin-tpope/vim-surround",
         "nvim_plugin-uga-rosa/ccc.nvim": "nvim_plugin-uga-rosa/ccc.nvim",
         "nvim_plugin-windwp/nvim-ts-autotag": "nvim_plugin-windwp/nvim-ts-autotag",
-        "nvim_plugin-yetone/avante.nvim": "nvim_plugin-yetone/avante.nvim",
         "nvim_plugin-zbirenbaum/copilot-cmp": "nvim_plugin-zbirenbaum/copilot-cmp",
         "nvim_plugin-zbirenbaum/copilot.lua": "nvim_plugin-zbirenbaum/copilot.lua",
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1753287947,
-        "narHash": "sha256-hlfj3OKri9J0vbzUfusZH2gonIAdSOef9Lk//12BLd0=",
+        "lastModified": 1753481982,
+        "narHash": "sha256-Jcy3ADSNI8cvzRPtek35k7daKuiqkewvKv2NgNMSVug=",
         "ref": "refs/heads/master",
-        "rev": "a627ebcfcfa39b4bbeb3a3d7d349a3ad7c8e4b79",
-        "revCount": 296,
+        "rev": "50e521bda3576f15da4b4547038609ace83a8e5e",
+        "revCount": 297,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/nvim"
       },
