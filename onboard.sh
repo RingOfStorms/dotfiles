@@ -1,5 +1,5 @@
 #!/bin/sh
-# curl --proto '=https' --tlsv1.2 -sSf https://share.joshuabell.link/nix/onboard.sh
+# curl --proto '=https' --tlsv1.2 -sSf https://git.joshuabell.xyz/ringofstorms/dotfiles/raw/branch/master/onboard.sh
 
 # Go to nix configuration
 cd /mnt/etc/nixos
@@ -19,19 +19,19 @@ while true; do
 done
 
 # Switch to use labels in hardware-configuration
-ex +'/fileSystems."\/"' +"/by-uuid" +'s#by-uuid/.*"#by-label/NIXROOT"' \
-    +'/fileSystems."\/boot"' +"/by-uuid" +'s#by-uuid/.*"#by-label/NIXBOOT"' \
-    +"wq" hardware-configuration.nix
-echo "Switched hardware configuration to use labels"
-grep "by-uuid" hardware-configuration.nix # Should show nothing, this will help prompt for changes
-grep "by-label" hardware-configuration.nix
-echo
+# ex +'/fileSystems."\/"' +"/by-uuid" +'s#by-uuid/.*"#by-label/NIXROOT"' \
+#     +'/fileSystems."\/boot"' +"/by-uuid" +'s#by-uuid/.*"#by-label/NIXBOOT"' \
+#     +"wq" hardware-configuration.nix
+# echo "Switched hardware configuration to use labels"
+# grep "by-uuid" hardware-configuration.nix # Should show nothing, this will help prompt for changes
+# grep "by-label" hardware-configuration.nix
+# echo
 
-echo "TODO add swap section here that asks for sizes..."
-echo
+# echo "TODO add swap section here that asks for sizes..."
+# echo
 
 # Download settings needed for initial boot
-curl -O https://share.joshuabell.link/nix/onboard.nix
+curl -O https://git.joshuabell.xyz/ringofstorms/dotfiles/raw/branch/master/onboard.nix
 # update username and hostname in onboard file
 ex +"%s/%%HOSTNAME%%/$VAR_HOST/g" +"%s/%%USERNAME%%/$VAR_USER/g" +"wq" onboard.nix
 # Import onboard file in configuration.nix

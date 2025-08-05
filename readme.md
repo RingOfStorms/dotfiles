@@ -78,7 +78,7 @@
   - `export USERNAME=desired_username_for_admin_on_this_machine` (josh)
   - `nixos-generate-config --root /mnt`
   - `cd /mnt/etc/nixos`
-  - `curl -O https://share.joshuabell.link/nix/onboard.sh`
+  - `curl --proto '=https' --tlsv1.2 -sSf https://share.joshuabell.link/nix/onboard.sh`
   - `chmod +x onboard.sh && ./onboard.sh`
   - verify hardware config, run `nixos-install`
   - `reboot`
