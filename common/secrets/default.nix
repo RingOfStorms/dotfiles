@@ -62,6 +62,10 @@ in
             file = ./secrets/nix2h002.age;
             owner = users_cfg.primary;
           };
+          nix2h003 = {
+            file = ./secrets/nix2h003.age;
+            owner = users_cfg.primary;
+          };
           nix2joe = {
             file = ./secrets/nix2joe.age;
             owner = users_cfg.primary;
