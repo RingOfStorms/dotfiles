@@ -21,6 +21,42 @@
 
 ## NixOS install
 
+1. Install nix minimal: (new with btrfs backing)
+
+- Partitions
+  - `parted /dev/DEVICE -- mklabel gpt` - make GPT partition table
+  - `parted /dev/DEVICE -- mkpart NIXROOT 2GB 100%` - make root partition (2GB offset for boot)
+  - `parted /dev/DEVICE -- mkpart ESP fat32 1MB 2GB` - make boot partition (2GB)
+  - `parted /dev/DEVICE -- set 2 esp on` - make boot bootable
+- LUKS Encryption
+  - `cryptsetup luksFormat /dev/DEVICE_1`
+    - Create passphrase and save to bitwarden
+  - `cryptsetup luksOpen /dev/DEVUCE_1 cryptroot`
+  - Create keyfile for auto-unlock (optional)
+    - `dd if=/dev/random of=/tmp/keyfile bs=1024 count=4`
+    - `chmod 400 /tmp/keyfile`
+    - `cryptsetup luksAddKey /dev/DEVICE_1 /tmp/keyfile`
+- Formatting
+  - `mkfs.btrfs -L NIXROOT /dev/mapper/cryptroot`
+  - `mkfs.fat -F 32 -n NIXBOOT /dev/DEVICE_2`
+- Create btrfs subvolumes (for better snapshot performance) (this is optional and can technically be skipped and put everything in one but I like this setup for cleanliness)
+  - `mount /dev/mapper/cryptroot /mnt`
+  - `btrfs subvolume create /mnt/root`
+  - `btrfs subvolume create /mnt/nix`
+  - `btrfs subvolume create /mnt/snapshots`
+  - `umount /mnt`
+- Mount
+  - `mount -o subvol=root,compress=zstd,noatime /dev/mapper/cryptroot /mnt`
+  - `mkdir -p /mnt/{nix,boot,.snapshots}`
+  - `mount -o subvol=nix,compress=zstd,noatime /dev/mapper/cryptroot /mnt/nix`
+  - `mount -o subvol=snapshots,compress=zstd,noatime /dev/mapper/cryptroot /mnt/.snapshots`
+  - `mount -o umask=077 /dev/disk/by-label/NIXBOOT /mnt/boot`
+- Copy keyfile for auto-unlock (optional)
+  - `cp /tmp/keyfile /mnt/boot/keyfile`
+  - `chmod 400 /mnt/boot/keyfile`
+
+2. same as below...
+
 1. Install nix minimal:
 
 - Partitions
