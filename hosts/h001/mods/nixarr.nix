@@ -37,7 +37,6 @@
         };
       };
       prowlarr.enable = true; # Index manager
-      autobrr.enable = true; # Automated torrent downloader
       sonarr.enable = true; # TV
       radarr.enable = true; # Movies
       bazarr.enable = true; # subtitles for sonarr and radarr
