@@ -39,7 +39,7 @@
   };
 
   boot.initrd.luks.devices."cryptroot" = {
-    device = "/dev/disk/by-label/NIXROOT";
+    device = "/dev/disk/by-partlabel/NIXROOT";
     keyFile = "/keyfile_nvme0n1p1";
     allowDiscards = true; # Allows SSD TRIM to manage wear on SSD
   };
