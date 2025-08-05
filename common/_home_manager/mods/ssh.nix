@@ -116,6 +116,10 @@ in
         identityFile = age.secrets.nix2h002.path;
         user = "luser";
       };
+      "h003" = {
+        identityFile = age.secrets.nix2h003.path;
+        user = "luser";
+      };
       # LINODE SERVERS
       "l001" = {
         identityFile = age.secrets.nix2linode.path;

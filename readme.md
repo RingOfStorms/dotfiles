@@ -99,7 +99,6 @@ boot.initrd.luks.devices
   - Maybe copy hardware/configs over and setup, otherwise do it on the client machine
 - git clone nixos-config `git clone https://git.joshuabell.xyz/ringofstorms/dotfiles ~/.config/nixos-config`
 - Setup config as needed
-  - top level flake.nix additions
   - add hosts dir and files needed
 - `sudo nixos-rebuild switch --flake ~/.config/nixos-config/hosts/$HOSTNAME`
 - Update remote, ssh should work now: `cd ~/.config/nixos-config && git remote remove origin && git remote add origin "ssh://git.joshuabell.xyz:3032/ringofstorms/dotfiles" && git pull origin master`
