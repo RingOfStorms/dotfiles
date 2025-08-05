@@ -33,52 +33,59 @@
     - Create passphrase and save to bitwarden
   - `cryptsetup luksOpen /dev/DEVUCE_1 cryptroot`
   - Create keyfile for auto-unlock (optional)
-    - `dd if=/dev/random of=/tmp/keyfile bs=1024 count=4`
+    - `dd if=/dev/random of=/tmp/keyfile_DEVICE_1 bs=1024 count=4`
     - `chmod 400 /tmp/keyfile`
-    - `cryptsetup luksAddKey /dev/DEVICE_1 /tmp/keyfile`
+    - `cryptsetup luksAddKey /dev/DEVICE_1 /tmp/keyfile_DEVICE_1`
 - Formatting
   - `mkfs.btrfs -L NIXROOT /dev/mapper/cryptroot`
   - `mkfs.fat -F 32 -n NIXBOOT /dev/DEVICE_2`
-- Create btrfs subvolumes (for better snapshot performance) (this is optional and can technically be skipped and put everything in one but I like this setup for cleanliness)
+- Create btrfs subvolumes (optional: for better snapshot perf)
   - `mount /dev/mapper/cryptroot /mnt`
   - `btrfs subvolume create /mnt/root`
   - `btrfs subvolume create /mnt/nix`
   - `btrfs subvolume create /mnt/snapshots`
   - `umount /mnt`
-- Mount
+- Mount (with sub vols above)
   - `mount -o subvol=root,compress=zstd,noatime /dev/mapper/cryptroot /mnt`
   - `mkdir -p /mnt/{nix,boot,.snapshots}`
   - `mount -o subvol=nix,compress=zstd,noatime /dev/mapper/cryptroot /mnt/nix`
   - `mount -o subvol=snapshots,compress=zstd,noatime /dev/mapper/cryptroot /mnt/.snapshots`
   - `mount -o umask=077 /dev/disk/by-label/NIXBOOT /mnt/boot`
-- Copy keyfile for auto-unlock (optional)
-  - `cp /tmp/keyfile /mnt/boot/keyfile`
-  - `chmod 400 /mnt/boot/keyfile`
-
-2. same as below...
-
-1. Install nix minimal:
-
-- Partitions
-  - `parted /dev/DEVICE -- mklabel gpt` - make GPT partition table
-  - `parted /dev/DEVICE -- mkpart NIXROOT ext4 2GB 100%` - make root partition (2GB offset for boot)
-  - `parted /dev/DEVICE -- mkpart ESP fat32 1MB 2GB` - make boot partition (2GB)
-  - `parted /dev/DEVICE -- set 2 esp on` - make boot bootable
-- Formatting
-  - `mkfs.ext4 -L NIXROOT /dev/DEVICE_1` - root ext4
-  - `mkfs.fat -F 32 -n NIXBOOT /dev/DEVICE_2` - boot FAT
-- Mount
-  - `mount /dev/disk/by-label/NIXROOT /mnt`
+- Mount (with no sub vols)
+  - `mount -o compress=zstd,noatime /dev/mapper/cryptroot /mnt`
   - `mkdir -p /mnt/boot`
   - `mount -o umask=077 /dev/disk/by-label/NIXBOOT /mnt/boot`
-(Note that swap files is defined in nix config later not needed at this stage)
+- Add SWAP device (optional)
+  - in hardware config
+```nix
+swapDevices = [
+  {
+    device = "/.swapfile";
+    size = 32 * 1024; # 32GB
+  }
+];
+```
+- Copy keyfile for auto-unlock (optional)
+  - `cp /tmp/keyfile_DEVICE_1 /mnt/boot/keyfile_DEVICE_1`
+  - `chmod 400 /mnt/boot/keyfile_DEVICE_1`
+- If Encrypted keyfile exists
+  - Add to hardware config
+```nix
+boot.initrd.secrets = {
+  "/keyfile_DEVICE_1" = "/boot/keyfile_DEVICE_1";
+};
+
+boot.initrd.luks.devices
+```
+
+2. Install and setup nixos
 
 - nixos config and hardware config
   - `export HOSTNAME=desired_hostname_for_this_machine`
   - `export USERNAME=desired_username_for_admin_on_this_machine` (josh)
   - `nixos-generate-config --root /mnt`
   - `cd /mnt/etc/nixos`
-  - `curl --proto '=https' --tlsv1.2 -sSf https://share.joshuabell.link/nix/onboard.sh`
+  - `curl -O --proto '=https' --tlsv1.2 -sSf https://git.joshuabell.xyz/ringofstorms/dotfiles/raw/branch/master/onboard.sh`
   - `chmod +x onboard.sh && ./onboard.sh`
   - verify hardware config, run `nixos-install`
   - `reboot`
@@ -88,8 +95,8 @@
 
 - `cat /etc/ssh/ssh_host_ed25519_key.pub ~/.ssh/id_ed25519.pub`
   - On an already onboarded computer copy these and add them to secrets/secrets.nix file
-  - Rekey secrets: `nix run github:yaxitech/ragenix -- --rules ~/.config/nixos-config/common/secrets/secrets/secrets.nix -r`
-  - Maybe copy hardware/configs over and setup, otehrwise do it on the client machine
+    - `nix run github:yaxitech/ragenix -- --rules ~/.config/nixos-config/common/secrets/secrets/secrets.nix -r`
+  - Maybe copy hardware/configs over and setup, otherwise do it on the client machine
 - git clone nixos-config `git clone https://git.joshuabell.xyz/ringofstorms/dotfiles ~/.config/nixos-config`
 - Setup config as needed
   - top level flake.nix additions
@@ -133,23 +140,27 @@ efi   /EFI/Microsoft/Boot/bootmgfw.efi
     Remove manual `deploy_linode`/`deploy_oracle` scripts. Use `deploy-rs` to apply updates across one or all hosts, including remote builds.
 - [ ] **Add `isoImage` outputs for every host for instant USB/boot media creation.**  
     Use:  
+
     ```
     packages.x86_64-linux.install-iso = nixosConfigurations.<host>.config.system.build.isoImage;
     ```
+
     Then:  
+
     ```
     nix build .#packages.x86_64-linux.install-iso
     ```
+
 - [ ] **Document or automate new host bootstrap:**  
-    - Script or steps: boot custom ISO, git clone config, secrets onboarding (agenix), nixos-install with flake config.
-    - Provide an example shell script or README note for a single-command initial setup.
+  - Script or steps: boot custom ISO, git clone config, secrets onboarding (agenix), nixos-install with flake config.
+  - Provide an example shell script or README note for a single-command initial setup.
 - [ ] **(Optional) Add an ephemeral “vm-experiment” target for NixOS VM/dev testing.**  
-    - Use new host config with minimal stateful services, then  
+  - Use new host config with minimal stateful services, then  
       `nixos-rebuild build-vm --flake .#vm-experiment`
 - [ ] **Remote build reliability:**  
-    - Parametrize/automate remote builder enable/disable.
-    - Add quickstart SSH builder key setup instructions per-host in README.
-    - (Optional) Use deploy-rs's agent forwarding and improve errors if builder can't be reached at deploy time.
+  - Parametrize/automate remote builder enable/disable.
+  - Add quickstart SSH builder key setup instructions per-host in README.
+  - (Optional) Use deploy-rs's agent forwarding and improve errors if builder can't be reached at deploy time.
 - [ ] **Add [disko](https://github.com/nix-community/disko) to declaratively manage disk/partition creation for new installs and reinstalls.**
 
 - work on secrets pre ragenix, stormd pre install for all the above bootstrapping steps would be ideal

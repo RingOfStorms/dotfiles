@@ -1,5 +1,5 @@
 #!/bin/sh
-# curl --proto '=https' --tlsv1.2 -sSf https://git.joshuabell.xyz/ringofstorms/dotfiles/raw/branch/master/onboard.sh
+# curl -O --proto '=https' --tlsv1.2 -sSf https://git.joshuabell.xyz/ringofstorms/dotfiles/raw/branch/master/onboard.sh
 
 # Go to nix configuration
 cd /mnt/etc/nixos
