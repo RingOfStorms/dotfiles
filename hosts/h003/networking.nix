@@ -23,11 +23,6 @@
 
     # Configure VLANs on the bonded interface
     vlans = {
-      # vlan1 = {
-      #   # Management
-      #   id = 1;
-      #   interface = "bond0";
-      # };
       vlan10 = {
         # WAN
         id = 10;
@@ -66,7 +61,6 @@
         ];
       };
       # Management VLAN 1
-      # vlan1 = {
       bond0 = {
         ipv4.addresses = [
           {
@@ -89,7 +83,6 @@
       externalInterface = "vlan10"; # WAN
       internalInterfaces = [
         "vlan20"
-        # "vlan1"
         "bond0"
       ]; # LAN/Management
       enableIPv6 = lib.mkIf config.networking.enableIPv6 true; # Enable IPv6 NAT
@@ -113,6 +106,12 @@
         ip protocol udp ct state {established, related} accept
         ip6 nexthdr tcp ct state {established, related} accept
         ip6 nexthdr udp ct state {established, related} accept
+        
+        # --- Inter-VLAN Security ---
+        # Block any NEW connection attempts between LAN and Management
+        # Log prefix helps with debugging in `dmesg` or `journalctl -k`
+        iifname "vlan20" oifname "bond0" log-prefix "DROP LAN->MGMT: " drop
+        iifname "bond0" oifname "vlan20" log-prefix "DROP MGMT->LAN: " drop
 
         # Explicitly allow LAN and Management to go to the WAN
         oifname "vlan10" accept
@@ -179,24 +178,24 @@
       # Listen only on LAN interface
       interface = [
         "vlan20"
-        # "vlan1"
         "bond0"
       ];
       bind-interfaces = true;
 
       # DHCP range and settings
       dhcp-range = [
-        "10.12.14.100,10.12.14.200,1h" # LAN devices
-        "10.12.16.100,10.12.16.200,1h" # Management devices
+        "set:lan,10.12.14.100,10.12.14.200,1h"
+        "set:mng,10.12.16.100,10.12.16.200,1h" # Management devices
       ]
       ++ lib.optionals config.networking.enableIPv6 [
-        "fd12:14::100,fd12:14::200,64,6h" # For LAN
-        "fd12:14:1::100,fd12:14:1::200,64,6h" # For Management
+        "set:lan,fd12:14::100,fd12:14::200,64,6h"
+        "set:mng,fd12:14:1::100,fd12:14:1::200,64,6h" # For Management
       ];
-      # dhcp-option = [
-      # "option:router,10.12.14.1"
-      # "option:dns-server,10.12.14.1,1.1.1.1,8.8.8.8"
-      # ];
+      dhcp-option = [
+        "tag:lan,option:router,10.12.14.1"
+        "tag:mng,option:router,10.12.16.1"
+        # "option:dns-server,10.12.14.1,1.1.1.1,8.8.8.8"
+      ];
 
       # Static DHCP reservations
       dhcp-host = [
@@ -213,7 +212,6 @@
       # interface, min interval, max interval
       ra-param = lib.mkIf config.networking.enableIPv6 [
         "vlan20,60,120"
-        # "vlan1,60,120"
         "bond0,60,120"
       ];
 
