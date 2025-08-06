@@ -109,9 +109,8 @@
         
         # --- Inter-VLAN Security ---
         # Block any NEW connection attempts between LAN and Management
-        # Log prefix helps with debugging in `dmesg` or `journalctl -k`
-        iifname "vlan20" oifname "bond0" log-prefix "DROP LAN->MGMT: " drop
-        iifname "bond0" oifname "vlan20" log-prefix "DROP MGMT->LAN: " drop
+        iifname "vlan20" oifname "bond0" drop
+        iifname "bond0" oifname "vlan20" drop
 
         # Explicitly allow LAN and Management to go to the WAN
         oifname "vlan10" accept
