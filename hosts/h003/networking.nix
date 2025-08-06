@@ -6,7 +6,6 @@
 {
   networking = {
     # My Switch seems to not let me change management vlan so this is assume native default here for proper routing
-    interfaces.bond0.nativeVlanId = 1;
     # Configure bonding (LAG)
     bonds = {
       bond0 = {
@@ -24,11 +23,11 @@
 
     # Configure VLANs on the bonded interface
     vlans = {
-      vlan1 = {
-        # Management
-        id = 1;
-        interface = "bond0";
-      };
+      # vlan1 = {
+      #   # Management
+      #   id = 1;
+      #   interface = "bond0";
+      # };
       vlan10 = {
         # WAN
         id = 10;
@@ -67,7 +66,8 @@
         ];
       };
       # Management VLAN 1
-      vlan1 = {
+      # vlan1 = {
+      bond0 = {
         ipv4.addresses = [
           {
             address = "10.12.16.1"; # Management network
@@ -89,7 +89,8 @@
       externalInterface = "vlan10"; # WAN
       internalInterfaces = [
         "vlan20"
-        "vlan1"
+        # "vlan1"
+        "bond0"
       ]; # LAN/Management
       enableIPv6 = lib.mkIf config.networking.enableIPv6 true; # Enable IPv6 NAT
     };
@@ -99,15 +100,13 @@
       enable = true;
       allowPing = true; # For ddiagnostics
 
-      trustedInterfaces = [
-        "vlan20" # Allow all on LAN
-        "vlan1" # Allow all on management
-      ];
+      # trustedInterfaces = [
+      #   "vlan20" # Allow all on LAN
+      #   "bond0" # Allow all on management
+      # ];
 
       # Block vlan to vlan communication
       filterForward = true;
-      #   ip saddr 10.12.14.0/24 ip daddr 10.12.16.0/24 drop
-      #   ip6 saddr fd12:14::/64 ip6 daddr fd12:14:1::/64 drop
       extraForwardRules = ''
         # Allow established connections (allows return traffic)
         ip protocol tcp ct state {established, related} accept
@@ -119,7 +118,7 @@
         oifname "vlan10" accept
 
         # Drop any other forwarding attempts between internal networks
-        # drop
+        drop
       '';
 
       interfaces = {
@@ -130,39 +129,35 @@
           allowedUDPPorts = [ ];
         };
 
-        # # LAN interface (VLAN 20) - FULL SERVICE
-        # vlan20 = {
-        #   allowedTCPPorts = [
-        #     22 # SSH (if you want to SSH to your router from LAN devices)
-        #     53 # DNS queries
-        #     80 # HTTP (for local web services)
-        #     443 # HTTPS (for local web services)
-        #     # Add other services you run locally (Plex, Home Assistant, etc.)
-        #   ];
-        #   allowedUDPPorts = [
-        #     53 # DNS queries
-        #     67 # DHCP server (dnsmasq)
-        #     68 # DHCP client responses
-        #     # 123 # NTP (if you run a time server)
-        #   ];
-        # };
-        #
-        # # Management interface (VLAN 1) - LIMITED SERVICE
-        # vlan1 = {
-        #   allowedTCPPorts = [
-        #     22 # SSH (for remote admin access)
-        #     53 # DNS
-        #     80 # HTTP (to access switch web interface through the router)
-        #     443
-        #     # HTTPS
-        #   ];
-        #   allowedUDPPorts = [
-        #     53 # DNS
-        #     67 # DHCP server
-        #     68
-        #     # DHCP client
-        #   ];
-        # };
+        # LAN interface (VLAN 20) - FULL SERVICE
+        vlan20 = {
+          allowedTCPPorts = [
+            22 # SSH (if you want to SSH to your router from LAN devices)
+            53 # DNS queries
+            80
+            443 # HTTP (for local web services)
+          ];
+          allowedUDPPorts = [
+            53 # DNS queries
+            67 # DHCP server (dnsmasq)
+            68 # DHCP client responses
+          ];
+        };
+
+        # Management interface (VLAN 1) - LIMITED SERVICE
+        bond0 = {
+          allowedTCPPorts = [
+            22 # SSH (for remote admin access)
+            53 # DNS
+            80
+            443 # HTTP
+          ];
+          allowedUDPPorts = [
+            53 # DNS
+            67 # DHCP server
+            68
+          ];
+        };
       };
     };
 
@@ -184,7 +179,8 @@
       # Listen only on LAN interface
       interface = [
         "vlan20"
-        "vlan1"
+        # "vlan1"
+        "bond0"
       ];
       bind-interfaces = true;
 
@@ -217,7 +213,8 @@
       # interface, min interval, max interval
       ra-param = lib.mkIf config.networking.enableIPv6 [
         "vlan20,60,120"
-        "vlan1,60,120"
+        # "vlan1,60,120"
+        "bond0,60,120"
       ];
 
       # DNS settings
