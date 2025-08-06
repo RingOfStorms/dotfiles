@@ -63,12 +63,20 @@
         ];
       };
 
-      vlan1.ipv4.addresses = [
-        {
-          address = "192.168.0.2"; # Management network
-          prefixLength = 24;
-        }
-      ];
+      vlan1 = {
+        ipv4.addresses = [
+          {
+            address = "10.12.16.1"; # Management network
+            prefixLength = 24;
+          }
+        ];
+        ipv6.addresses = lib.mkIf config.networking.enableIPv6 [
+          {
+            address = "fd12:14::1::1";
+            prefixLength = 64;
+          }
+        ];
+      };
     };
 
     # NAT configuration
@@ -94,12 +102,9 @@
 
       # Block vlan to vlan communication
       filterForward = true;
-      extraForwardRules = ''
-        ip saddr 10.12.14.0/24 ip daddr 192.168.0.0/24 drop
-      '';
-      # extraCommands = ''
-      #   # Block LAN (vlan20) from accessing Management (vlan1)
-      #   nft add rule inet nixos-fw forward ip saddr 10.12.14.0/24 ip daddr 192.168.0.0/24 drop
+      # extraForwardRules = ''
+      #   ip saddr 10.12.14.0/24 ip daddr 10.12.16.0/24 drop
+      #   ip6 saddr fd12:14::/64 ip6 daddr fd12:14:1::/64 drop
       # '';
 
       interfaces = {
@@ -170,12 +175,12 @@
 
       # DHCP range and settings
       dhcp-range = [
-        "10.12.14.100,10.12.14.200,1h" # LAN devices
-        "192.168.0.10,192.168.0.50,1h" # Management devices
+        "10.12.14.100,10.12.14.200,6h" # LAN devices
+        "10.12.16.100,10.12.16.200,6h" # Management devices
       ]
       ++ lib.optionals config.networking.enableIPv6 [
-        # IPv6 DHCP range
-        "fd12:14::100,fd12:14::200,64,24h"
+        "fd12:14::100,fd12:14::200,64,6h" # For LAN (vlan20)
+        "fd12:14:1::100,fd12:14:1::200,64,6h" # For Management (vlan1)
       ];
       # dhcp-option = [
       #   "option:router,10.12.14.1"
@@ -184,16 +189,21 @@
 
       # Static DHCP reservations
       dhcp-host = [
-        "00:BE:43:B9:F4:E0,H001,10.12.14.10"
+        "00:be:43:b9:f4:e0,H001,10.12.14.10"
         # TODO add H002 for .11
-        "C8:C9:A3:2B:7B:19,PRUSA-MK4,10.12.14.21"
-        "24:E8:53:73:A3:C6,LGWEBOSTV,10.12.14.30"
-        "2C:CF:67:6A:45:47,HOMEASSISTANT,10.12.14.22"
-        "2A:D0:EC:FA:B9:7E,PIXEL-6,10.12.14.31"
+        "c8:c9:a3:2b:7b:19,PRUSA-MK4,10.12.14.21"
+        "24:e8:53:73:a3:c6,LGWEBOSTV,10.12.14.30"
+        "2c:cf:67:6a:45:47,HOMEASSISTANT,10.12.14.22"
+        "2a:d0:ec:fa:b9:7e,PIXEL-6,10.12.14.31"
+        "01:a8:29:48:94:23:dd,TL-SG1428PE,192.168.0.1"
       ];
 
       enable-ra = lib.mkIf config.networking.enableIPv6 true;
-      ra-param = lib.mkIf config.networking.enableIPv6 "vlan20,60,120"; # interface, min interval, max interval
+      # interface, min interval, max interval
+      ra-param = lib.mkIf config.networking.enableIPv6 [
+        "vlan20,60,120"
+        "vlan1,60,120"
+      ];
 
       # DNS settings
       server = [
@@ -209,7 +219,6 @@
   boot.kernel.sysctl = {
     # Enable IPv4 forwarding
     "net.ipv4.conf.all.forwarding" = true;
-    # "net.ipv4.ip_forward" = 1;
     # Enable IPv6 forwarding
     "net.ipv6.conf.all.forwarding" = true;
 
