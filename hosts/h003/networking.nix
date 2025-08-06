@@ -5,6 +5,8 @@
 }:
 {
   networking = {
+    # My Switch seems to not let me change management vlan so this is assume native default here for proper routing
+    interfaces.bond0.nativeVlanId = 1;
     # Configure bonding (LAG)
     bonds = {
       bond0 = {
@@ -22,16 +24,19 @@
 
     # Configure VLANs on the bonded interface
     vlans = {
+      vlan1 = {
+        # Management
+        id = 1;
+        interface = "bond0";
+      };
       vlan10 = {
+        # WAN
         id = 10;
         interface = "bond0";
       };
       vlan20 = {
+        # LAN
         id = 20;
-        interface = "bond0";
-      };
-      vlan1 = {
-        id = 1;
         interface = "bond0";
       };
     };
@@ -46,7 +51,6 @@
         useDHCP = true; # Get IP from modem/ISP
         tempAddress = lib.mkIf config.networking.enableIPv6 "disabled"; # For IPv6 privacy
       };
-
       # LAN interface (VLAN 20 - main network)
       vlan20 = {
         ipv4.addresses = [
@@ -57,12 +61,12 @@
         ];
         ipv6.addresses = lib.mkIf config.networking.enableIPv6 [
           {
-            address = "fd12:14::1"; # ULA prefix only
+            address = "fd12:14:0::1"; # ULA prefix only
             prefixLength = 64;
           }
         ];
       };
-
+      # Management VLAN 1
       vlan1 = {
         ipv4.addresses = [
           {
@@ -72,7 +76,7 @@
         ];
         ipv6.addresses = lib.mkIf config.networking.enableIPv6 [
           {
-            address = "fd12:14::1::1";
+            address = "fd12:14:1::1";
             prefixLength = 64;
           }
         ];
@@ -86,7 +90,7 @@
       internalInterfaces = [
         "vlan20"
         "vlan1"
-      ]; # LAN
+      ]; # LAN/Management
       enableIPv6 = lib.mkIf config.networking.enableIPv6 true; # Enable IPv6 NAT
     };
 
@@ -102,10 +106,21 @@
 
       # Block vlan to vlan communication
       filterForward = true;
-      # extraForwardRules = ''
       #   ip saddr 10.12.14.0/24 ip daddr 10.12.16.0/24 drop
       #   ip6 saddr fd12:14::/64 ip6 daddr fd12:14:1::/64 drop
-      # '';
+      extraForwardRules = ''
+        # Allow established connections (allows return traffic)
+        ip protocol tcp ct state {established, related} accept
+        ip protocol udp ct state {established, related} accept
+        ip6 nexthdr tcp ct state {established, related} accept
+        ip6 nexthdr udp ct state {established, related} accept
+
+        # Explicitly allow LAN and Management to go to the WAN
+        oifname "vlan10" accept
+
+        # Drop any other forwarding attempts between internal networks
+        # drop
+      '';
 
       interfaces = {
         # WAN interface - allow nothing inbound by default
@@ -175,16 +190,16 @@
 
       # DHCP range and settings
       dhcp-range = [
-        "10.12.14.100,10.12.14.200,6h" # LAN devices
-        "10.12.16.100,10.12.16.200,6h" # Management devices
+        "10.12.14.100,10.12.14.200,1h" # LAN devices
+        "10.12.16.100,10.12.16.200,1h" # Management devices
       ]
       ++ lib.optionals config.networking.enableIPv6 [
-        "fd12:14::100,fd12:14::200,64,6h" # For LAN (vlan20)
-        "fd12:14:1::100,fd12:14:1::200,64,6h" # For Management (vlan1)
+        "fd12:14::100,fd12:14::200,64,6h" # For LAN
+        "fd12:14:1::100,fd12:14:1::200,64,6h" # For Management
       ];
       # dhcp-option = [
-      #   "option:router,10.12.14.1"
-      #   "option:dns-server,10.12.14.1,1.1.1.1,8.8.8.8"
+      # "option:router,10.12.14.1"
+      # "option:dns-server,10.12.14.1,1.1.1.1,8.8.8.8"
       # ];
 
       # Static DHCP reservations
@@ -195,7 +210,7 @@
         "24:e8:53:73:a3:c6,LGWEBOSTV,10.12.14.30"
         "2c:cf:67:6a:45:47,HOMEASSISTANT,10.12.14.22"
         "2a:d0:ec:fa:b9:7e,PIXEL-6,10.12.14.31"
-        "01:a8:29:48:94:23:dd,TL-SG1428PE,192.168.0.1"
+        "a8:29:48:94:23:dd,TL-SG1428PE,10.12.16.2"
       ];
 
       enable-ra = lib.mkIf config.networking.enableIPv6 true;
