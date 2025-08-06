@@ -1,6 +1,5 @@
 {
   config,
-  pkgs,
   lib,
   ...
 }:
@@ -26,22 +25,19 @@
       vlan10 = {
         id = 10;
         interface = "bond0";
-        # interface = "enp1s0";
       };
       vlan20 = {
         id = 20;
         interface = "bond0";
-        # interface = "enp1s0";
       };
       vlan1 = {
         id = 1;
         interface = "bond0";
-        # interface = "enp1s0";
       };
     };
 
     # enable ipv6 or not
-    enableIPv6 = false;
+    enableIPv6 = true;
 
     # Interface configuration
     interfaces = {
@@ -95,6 +91,16 @@
         "vlan20" # Allow all on LAN
         "vlan1" # Allow all on management
       ];
+
+      # Block vlan to vlan communication
+      filterForward = true;
+      extraForwardRules = ''
+        ip saddr 10.12.14.0/24 ip daddr 192.168.0.0/24 drop
+      '';
+      # extraCommands = ''
+      #   # Block LAN (vlan20) from accessing Management (vlan1)
+      #   nft add rule inet nixos-fw forward ip saddr 10.12.14.0/24 ip daddr 192.168.0.0/24 drop
+      # '';
 
       interfaces = {
         # WAN interface - allow nothing inbound by default
@@ -164,8 +170,8 @@
 
       # DHCP range and settings
       dhcp-range = [
-        "10.12.14.100,10.12.14.200,24h" # LAN devices
-        "192.168.0.10,192.168.0.50,24h" # Management devices
+        "10.12.14.100,10.12.14.200,1h" # LAN devices
+        "192.168.0.10,192.168.0.50,1h" # Management devices
       ]
       ++ lib.optionals config.networking.enableIPv6 [
         # IPv6 DHCP range
