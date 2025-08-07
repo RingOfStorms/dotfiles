@@ -21,6 +21,9 @@ in
       environment = {
         SECRET_ENCRYPTION_KEY = "0b7e80116a742d16a8f07452a2d9b206b1997d32a6dd2c29cfe4df676e281295";
       };
+      extraOptions = [
+        "--add-host=h003:100.64.0.14"
+      ];
     };
   };
 
