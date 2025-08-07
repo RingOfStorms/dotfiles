@@ -10,20 +10,22 @@
     };
 
     networking.firewall.allowedTCPPorts = [
-      53
-      67
-      68
-      5543
-      3000
+      53 # DNS
+      68 # DHCP
+      5543 # DNSCrypt
+      # 3000 # Initial installation
+      80 # admin panel
+      443 # admin panel
+      853 # DNS over tls
+      # 6060 # Debugging profile
     ];
     networking.firewall.allowedUDPPorts = [
-      53
-      67
-      68
-      784
-      853
-      8853
-      5443
+      53 # DNS
+      # 67 # DHCP
+      # 68 # DHCP
+      443 # Admin panel/https dns over https
+      853 # DNS over quic
+      5443 # DNSCrypt
     ];
   };
 }

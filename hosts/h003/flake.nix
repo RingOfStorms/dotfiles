@@ -29,7 +29,7 @@
               ros_neovim.nixosModules.default
               ./configuration.nix
               ./hardware-configuration.nix
-              ./networking.nix
+              ./mods
               (
                 { config, pkgs, ... }:
                 {

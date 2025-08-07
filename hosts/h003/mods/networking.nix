@@ -179,6 +179,7 @@
         "vlan30"
       ];
       bind-interfaces = true;
+      port = 0; # DISABLE DNS we are using ad guard for that
 
       # DHCP range and settings
       dhcp-range = [
@@ -192,7 +193,8 @@
       dhcp-option = [
         "tag:mng,option:router,10.12.16.1"
         "tag:lan,option:router,10.12.14.1"
-        # "option:dns-server,10.12.14.1,1.1.1.1,8.8.8.8"
+        "tag:mng,option:dns-server,10.12.16.1"
+        "tag:lan,option:dns-server,10.12.14.1"
       ];
 
       # Static DHCP reservations
