@@ -36,6 +36,7 @@
                   environment.systemPackages = with pkgs; [
                     lua
                     sqlite
+                    tcpdump
                   ];
 
                   ringofstorms_common = {
