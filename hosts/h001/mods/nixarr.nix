@@ -58,6 +58,12 @@
             proxyPass = "http://localhost:5055";
           };
         };
+        "10.12.14.10" = {
+          locations."/" = {
+            proxyWebsockets = true;
+            proxyPass = "http://localhost:8096";
+          };
+        };
         "jellyfin.h001.local.joshuabell.xyz" = {
           locations."/" = {
             proxyWebsockets = true;
