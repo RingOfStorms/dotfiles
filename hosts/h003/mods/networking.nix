@@ -179,7 +179,11 @@
         "vlan30"
       ];
       bind-interfaces = true;
-      port = 0; # DISABLE DNS we are using ad guard for that
+
+      # Shift DNS to localhost only on a separate non standard port
+      # We are using ./adguardhome.nix for DNS and we still run this one for reverse name lookups
+      listen-address = "127.0.0.1";
+      port = 9053;
 
       # DHCP range and settings
       dhcp-range = [
@@ -215,14 +219,13 @@
         "vlan30,60,120"
       ];
 
-      # DNS settings
-      server = [
-        # TODO ad guard
-        "1.1.1.1"
-        "8.8.8.8"
-        "2606:4700:4700::1111" # Cloudflare IPv6
-        "2001:4860:4860::8888" # Google IPv6
-      ];
+      # DNS settings (not needed since we use adguard for dns)
+      # server = [
+      #   "1.1.1.1"
+      #   "8.8.8.8"
+      #   "2606:4700:4700::1111" # Cloudflare IPv6
+      #   "2001:4860:4860::8888" # Google IPv6
+      # ];
     };
   };
 
