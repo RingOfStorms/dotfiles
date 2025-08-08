@@ -182,6 +182,7 @@
 
       # Shift DNS to localhost only on a separate non standard port
       # We are using ./adguardhome.nix for DNS and we still run this one for reverse name lookups
+      # Note in Ad GuardHome in DNS Settings add localhost:9053 to Private reverse DNS servers and enable them
       listen-address = "127.0.0.1";
       port = 9053;
 
