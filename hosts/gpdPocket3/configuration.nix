@@ -18,6 +18,8 @@
   environment.systemPackages = with pkgs; [
     # [Laptop] Battery status
     acpi
+    # for kvm video playback
+    ffmpeg
   ];
   environment.shellAliases = {
     battery = "acpi";
