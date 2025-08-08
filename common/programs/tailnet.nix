@@ -39,7 +39,6 @@ in
       authKeyFile = lib.mkIf (
         config ? age && config.age ? secrets && config.age.secrets ? headscale_auth
       ) config.age.secrets.headscale_auth.path;
-      # https://tailscale.com/kb/1241/tailscale-up
       extraUpFlags =
         (lib.optionals cfg.useHeadscale [
           "--login-server=https://headscale.joshuabell.xyz"
