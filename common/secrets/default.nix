@@ -54,6 +54,10 @@ in
             file = ./secrets/nix2gitforgejo.age;
             owner = users_cfg.primary;
           };
+          nix2nix = {
+            file = ./secrets/nix2nix.age;
+            owner = users_cfg.primary;
+          };
           nix2h001 = {
             file = ./secrets/nix2h001.age;
             owner = users_cfg.primary;

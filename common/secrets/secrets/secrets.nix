@@ -46,6 +46,9 @@ in
   "nix2gitjosh.age" = {
     inherit publicKeys;
   };
+  "nix2nix.age" = {
+    inherit publicKeys;
+  };
   # Server keys
   "nix2h001.age" = {
     inherit publicKeys;
