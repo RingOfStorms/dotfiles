@@ -15,6 +15,7 @@ in
     ./incus.nix
     ./flatpaks.nix
     ./opencode.nix
+    ./virt-manager.nix
   ];
   config = {
     assertions = [

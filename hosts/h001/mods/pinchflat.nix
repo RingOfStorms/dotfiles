@@ -11,8 +11,6 @@
       mediaDir = "/drives/wd10/pinchflat/media";
     };
 
-
-
     users.users.pinchflat.isSystemUser = true;
     users.users.pinchflat.group = "pinchflat";
     users.groups.pinchflat = { };
@@ -20,6 +18,12 @@
       DynamicUser = lib.mkForce false;
       User = "pinchflat";
       Group = "pinchflat";
+    };
+
+    # Use Nixarr vpn
+    systemd.services.pinchflat.vpnconfinement = {
+      enable = true;
+      vpnnamespace = "wg";
     };
 
     systemd.tmpfiles.rules = [

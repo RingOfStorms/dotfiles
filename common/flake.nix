@@ -28,6 +28,7 @@
             lib,
             ...
           }:
+  
           {
             imports = [
               (
@@ -64,7 +65,6 @@
               ./secrets
             ];
             config = {
-
               _module.args = {
                 inherit ragenix;
               };
