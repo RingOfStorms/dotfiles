@@ -204,16 +204,16 @@
     "opencode": {
       "flake": false,
       "locked": {
-        "lastModified": 1754526276,
-        "narHash": "sha256-OkkjbytvvUBOcSCjf3zd8NWLaM+I1tUR9IxcRZrdVeM=",
+        "lastModified": 1754890102,
+        "narHash": "sha256-3o8bHU5vSG+MxbvjLzlqeagnW9hnekl0hlj3EiNFaaQ=",
         "owner": "sst",
         "repo": "opencode",
-        "rev": "1a561bb5120b1b87a4c477f7cb6c3a0a4ce79114",
+        "rev": "4580c88c0b38519e8187d2df1035e9538b51ec2a",
         "type": "github"
       },
       "original": {
         "owner": "sst",
-        "ref": "v0.3.133",
+        "ref": "v0.4.12",
         "repo": "opencode",
         "type": "github"
       }

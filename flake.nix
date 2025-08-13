@@ -9,7 +9,7 @@
     nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
 
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
-    opencode.url = "github:sst/opencode/v0.3.133";
+    opencode.url = "github:sst/opencode/v0.4.12";
     opencode.flake = false;
     # ======
   };

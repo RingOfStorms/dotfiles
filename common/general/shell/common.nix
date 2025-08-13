@@ -12,6 +12,7 @@ with lib;
       nano
       wget
       curl
+      jq
       fastfetch
       bat
       htop
