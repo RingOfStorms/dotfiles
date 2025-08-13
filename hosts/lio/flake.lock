@@ -29,19 +29,24 @@
       "inputs": {
         "home-manager": "home-manager",
         "nix-flatpak": "nix-flatpak",
+        "nixpkgs": "nixpkgs_2",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "opencode": "opencode",
         "ragenix": "ragenix"
       },
       "locked": {
-        "path": "../../common",
-        "type": "path"
+        "lastModified": 1755097136,
+        "narHash": "sha256-26LJsGUnccrlWNAm+2ttCapbCLY8dx4+gyqFPmuHM0c=",
+        "ref": "refs/heads/master",
+        "rev": "1f619f0b73766710597fc888fbb725affd46424a",
+        "revCount": 593,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
       "original": {
-        "path": "../../common",
-        "type": "path"
-      },
-      "parent": []
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+      }
     },
     "crane": {
       "locked": {
@@ -192,6 +197,22 @@
     },
     "nixpkgs_2": {
       "locked": {
+        "lastModified": 1753694789,
+        "narHash": "sha256-cKgvtz6fKuK1Xr5LQW/zOUiAC0oSQoA9nOISB0pJZqM=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "dc9637876d0dcc8c9e5e22986b857632effeb727",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_3": {
+      "locked": {
         "lastModified": 1741379970,
         "narHash": "sha256-Wh7esNh7G24qYleLvgOSY/7HlDUzWaL/n4qzlBePpiw=",
         "owner": "nixos",
@@ -206,13 +227,13 @@
         "type": "github"
       }
     },
-    "nixpkgs_3": {
+    "nixpkgs_4": {
       "locked": {
-        "lastModified": 1752866191,
-        "narHash": "sha256-NV4S2Lf2hYmZQ3Qf4t/YyyBaJNuxLPyjzvDma0zPp/M=",
+        "lastModified": 1754937576,
+        "narHash": "sha256-3sWA5WJybUE16kIMZ3+uxcxKZY/JRR4DFBqLdSLBo7w=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "f01fe91b0108a7aff99c99f2e9abbc45db0adc2a",
+        "rev": "ddae11e58c0c345bf66efbddbf2192ed0e58f896",
         "type": "github"
       },
       "original": {
@@ -222,7 +243,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_4": {
+    "nixpkgs_5": {
       "locked": {
         "lastModified": 1753848940,
         "narHash": "sha256-jH7fqN4HzsIlj2c/SAuVWmgUIjBwDdEKVnL97xlECHY=",
@@ -1139,7 +1160,7 @@
         "agenix": "agenix",
         "crane": "crane",
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs_2",
+        "nixpkgs": "nixpkgs_3",
         "rust-overlay": "rust-overlay"
       },
       "locked": {
@@ -1159,13 +1180,13 @@
     "root": {
       "inputs": {
         "common": "common",
-        "nixpkgs": "nixpkgs_3",
+        "nixpkgs": "nixpkgs_4",
         "ros_neovim": "ros_neovim"
       }
     },
     "ros_neovim": {
       "inputs": {
-        "nixpkgs": "nixpkgs_4",
+        "nixpkgs": "nixpkgs_5",
         "nvim_plugin-Almo7aya/openingh.nvim": "nvim_plugin-Almo7aya/openingh.nvim",
         "nvim_plugin-CopilotC-Nvim/CopilotChat.nvim": "nvim_plugin-CopilotC-Nvim/CopilotChat.nvim",
         "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring": "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring",
