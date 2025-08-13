@@ -10,7 +10,7 @@ let
     let
       secrets = age.secrets or { };
     in
-    secrets ? secret && secrets.${secret} != null;
+    secrets ? ${secret} && secrets.${secret} != null;
 in
 {
   # TODO can I put all IP's in the flake.nix top level settings and pull them in here instead?
