@@ -94,7 +94,7 @@ in
       };
       "mbptv_" = lib.mkIf (hasSecret "nix2gpdPocket3") {
         identityFile = age.secrets.nix2gpdPocket3.path;
-        hostname = "10.12.14.101";
+        hostname = "10.12.14.30";
         user = "waka";
         setEnv = {
           TERM = "vt100";
@@ -119,7 +119,7 @@ in
       };
       "h001_" = lib.mkIf (hasSecret "nix2h001") {
         identityFile = age.secrets.nix2h001.path;
-        hostname = "10.12.14.2";
+        hostname = "10.12.14.10";
         user = "luser";
       };
       "h002" = lib.mkIf (hasSecret "nix2h002") {
