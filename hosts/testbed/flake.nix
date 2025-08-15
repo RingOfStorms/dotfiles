@@ -7,8 +7,8 @@
     common.url = "path:../../common";
     # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
 
-    inputs.disko.url = "github:nix-community/disko/latest";
-    inputs.disko.inputs.nixpkgs.follows = "nixpkgs";
+    disko.url = "github:nix-community/disko/latest";
+    disko.inputs.nixpkgs.follows = "nixpkgs";
     # impermanence.url = "github:nix-community/impermanence";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
@@ -30,7 +30,7 @@
     in
     {
       packages = {
-        x86_64-linux.vm = self.nixosConfigurations.${configuration_name}.config.system.build.vm;
+        x86_64-linux.vm = self.nixosConfigurations.${configuration_name}.config.system.build.vmWithDisko;
       };
       nixosConfigurations = {
         "${configuration_name}" = (
@@ -42,6 +42,7 @@
               ros_neovim.nixosModules.default
               ./configuration.nix
               ./hardware-configuration.nix
+              ./disko-config.nix
               (
                 { config, pkgs, ... }:
                 {

@@ -29,7 +29,7 @@ in
                   type = "filesystem";
                   format = "vfat";
                   mountpoint = "/boot";
-                  formatOptions = [
+                  extraArgs = [
                     "-n"
                     "NIXBOOT"
                   ];
@@ -71,7 +71,7 @@ in
                       "@swap" = lib.mkIf cfg.withSwap {
                         inherit mountOptions;
                         mountpoint = "/.swapfile";
-                        swap.swapfile.size = 8 * 1024; # 8GB
+                        swap.swapfile.size = "8G";
                       };
                     };
                 };
