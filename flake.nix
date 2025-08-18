@@ -7,10 +7,6 @@
     home-manager.url = "github:rycee/home-manager/release-25.05";
     ragenix.url = "github:yaxitech/ragenix";
     nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
-
-    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
-    opencode.url = "github:sst/opencode/v0.4.12";
-    opencode.flake = false;
     # ======
   };
 

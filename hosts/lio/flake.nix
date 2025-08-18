@@ -42,6 +42,16 @@
                 {
                   programs = {
                     steam.enable = true;
+                    nix-ld = {
+                      enable = true;
+                      libraries = with pkgs; [
+                        icu
+                        gmp
+                        glibc
+                        openssl
+                        stdenv.cc.cc
+                      ];
+                    };
                   };
 
                   environment.systemPackages = with pkgs; [
@@ -50,7 +60,13 @@
                     steam
                     ffmpeg-full
                     appimage-run
+                    nodejs_24
                   ];
+
+                  environment.shellAliases = {
+                    "oc" =
+                      "all_proxy='' http_proxy='' https_proxy='' /home/josh/other/opencode/node_modules/opencode-linux-x64/bin/opencode";
+                  };
 
                   # Also allow this key to work for root user, this will let us use this as a remote builder easier
                   users.users.root.openssh.authorizedKeys.keys = [
@@ -76,7 +92,6 @@
                       tailnet.enableExitNode = true;
                       ssh.enable = true;
                       docker.enable = true;
-                      opencode.enable = true;
                       virt-manager.enable = true;
                       flatpaks = {
                         enable = true;
