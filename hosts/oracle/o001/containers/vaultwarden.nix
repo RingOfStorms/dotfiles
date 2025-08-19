@@ -1,4 +1,5 @@
 {
+  config,
   ...
 }:
 let
@@ -38,6 +39,10 @@ in
         hostPath = "${hostDataDir}/backups";
         isReadOnly = false;
       };
+      "/var/secrets/vaultwarden.env" = {
+        hostPath = config.age.secrets.vaultwarden_env.path;
+        readOnly = true;
+      };
     };
     config =
       { ... }:
@@ -56,6 +61,7 @@ in
           enable = true;
           dbBackend = "sqlite";
           backupDir = "/var/lib/backups/vaultwarden";
+          environmentFile = "/var/secrets/vaultwarden.env";
           config = {
             DOMAIN = "https://vault.joshuabell.xyz";
             SIGNUPS_ALLOWED = false;

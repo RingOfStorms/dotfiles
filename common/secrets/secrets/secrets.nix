@@ -46,7 +46,11 @@ let
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILQLt2Hc+CN6+e7/sf3Fv0FQlp6+yrIbIJ/J9AdnJCjI luser@h003"
   ];
 
-  publicKeys = authorityKey ++ gpdPocket3 ++ lio ++ joe ++ oren ++ h001 ++ h002 ++ h003;
+  trustedKeys = authorityKey ++ gpdPocket3 ++ lio ++ joe ++ oren ++ h001 ++ h002 ++ h003;
+
+  o001 = [
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFrwvahx1x4rue28QHCzyADQndOeTESIv80f7d00NXWT" # root
+  ];
 in
 {
   ## To make a new secret:
@@ -58,69 +62,73 @@ in
 
   # Git keys
   "nix2github.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "nix2bitbucket.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "nix2gitforgejo.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "nix2gitjosh.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "nix2nix.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   # Server keys
   "nix2h001.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "nix2h002.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "nix2h003.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "nix2joe.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "nix2gpdPocket3.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "nix2t.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "nix2l002.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "nix2linode.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "nix2oracle.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "nix2lio.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "nix2oren.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   # Others
   "github_read_token.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "headscale_auth.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "obsidian_sync_env.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "us_chi_wg.age" = {
-    inherit publicKeys;
+    publicKeys = trustedKeys;
   };
   "zitadel_master_key.age" = {
     # h001 only
     publicKeys = authorityKey ++ h001;
+  };
+  "vaultwarden_env.age" = {
+    # h001 only
+    publicKeys = authorityKey ++ o001;
   };
 }

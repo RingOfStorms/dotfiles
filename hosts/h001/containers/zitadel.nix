@@ -80,8 +80,6 @@ in
       };
     };
 
-    networking.firewall.allowedTCPPorts = [ 8080 ];
-
     # Ensure users exist on host machine
     inherit users;
 

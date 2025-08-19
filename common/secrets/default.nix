@@ -123,6 +123,11 @@ in
             owner = users_cfg.primary;
             mode = "444"; # World readable!
           };
+          vaultwarden_env = {
+            file = ./secrets/vaultwarden_env.age;
+            owner = users_cfg.primary;
+            mode = "444"; # World readable!
+          };
         };
     };
   };

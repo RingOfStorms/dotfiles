@@ -60,6 +60,7 @@
 
                 ringofstorms_common = {
                   systemName = configuration_name;
+                  secrets.enable = true;
                   general = {
                     disableRemoteBuildsOnLio = true;
                     readWindowsDrives = false;
