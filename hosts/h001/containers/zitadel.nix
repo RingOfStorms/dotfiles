@@ -31,10 +31,17 @@ let
       uid = config.ids.uids.postgres;
       gid = config.ids.gids.postgres;
     }
+    # secret
+    {
+      host = config.age.secrets.zitadel_master_key.path;
+      container = "/var/secrets/zitadel_master_key.age";
+      readOnly = true;
+    }
   ];
+  bindsWithUsers = lib.filter (b: b ? user) binds;
   uniqueUsers = lib.foldl' (
     acc: bind: if lib.lists.any (item: item.user == bind.user) acc then acc else acc ++ [ bind ]
-  ) [ ] binds;
+  ) [ ] bindsWithUsers;
   users = {
     users = lib.listToAttrs (
       lib.map (u: {
@@ -64,10 +71,30 @@ in
       locations = {
         "/" = {
           proxyWebsockets = true;
+          recommendedProxySettings = true;
           proxyPass = "http://${containerAddress}:8080";
+          extraConfig = ''
+            proxy_set_header X-Forwarded-Proto https;
+          '';
         };
       };
     };
+
+    networking.firewall.allowedTCPPorts = [ 8080 ];
+
+    # Ensure users exist on host machine
+    inherit users;
+
+    # Ensure directories exist on host machine
+    system.activationScripts."createDirsFor${name}" = ''
+      ${lib.concatStringsSep "\n" (
+        lib.map (bind: ''
+          mkdir -p ${bind.host}
+          chown -R ${toString bind.user}:${toString bind.gid} ${bind.host}
+          chmod -R 750 ${bind.host}
+        '') bindsWithUsers
+      )}
+    '';
 
     containers.${name} = {
       ephemeral = true;
@@ -82,7 +109,7 @@ in
         {
           "${bind.container}" = {
             hostPath = bind.host;
-            isReadOnly = false;
+            isReadOnly = bind.readOnly or false;
           };
         }
         // acc
@@ -96,8 +123,7 @@ in
             firewall = {
               enable = true;
               allowedTCPPorts = [
-                3000
-                3032
+                8080
               ];
             };
             # Use systemd-resolved inside the container
@@ -137,7 +163,7 @@ in
 
           services.zitadel = {
             enable = true;
-            # masterKeyFile = "TODO";
+            masterKeyFile = "/var/secrets/zitadel_master_key.age";
             settings = {
               Port = 8080;
               Database.postgres = {
@@ -159,9 +185,9 @@ in
               ExternalSecure = true;
             };
             steps.FirstInstance = {
-              InstanceName = "ros_sso";
+              InstanceName = "sso";
               Org = {
-                Name = "ZI";
+                Name = "SSO";
                 Human = {
                   UserName = "admin@joshuabell.xyz";
                   FirstName = "admin";
