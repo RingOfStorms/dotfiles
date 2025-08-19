@@ -41,7 +41,7 @@ in
       };
       "/var/secrets/vaultwarden.env" = {
         hostPath = config.age.secrets.vaultwarden_env.path;
-        readOnly = true;
+        isReadOnly = true;
       };
     };
     config =
