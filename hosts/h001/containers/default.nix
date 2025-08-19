@@ -11,6 +11,7 @@ in
     common.nixosModules.containers.forgejo
     ./opengist.nix
     ./homarr.nix
+    ./zitadel.nix
   ];
 
   config = {
