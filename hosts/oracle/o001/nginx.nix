@@ -138,6 +138,9 @@
           forceSSL = true;
           locations."/" = {
             proxyPass = "http://100.64.0.13";
+            extraConfig = ''
+              proxy_set_header X-Forwarded-Proto https;
+            '';
           };
         };
         "obsidiansync.joshuabell.xyz" = {
@@ -168,7 +171,6 @@
             proxyPass = "http://100.64.0.13";
           };
         };
-
 
         "_" = {
           default = true;
