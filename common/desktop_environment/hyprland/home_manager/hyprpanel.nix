@@ -43,7 +43,11 @@
     ## To enable matugen based color theming and setting wallpapers
     # swww
   ];
+
+  # uncomment this to make it possible to use the normal config agent using
+  # > hyprpanel toggleWindow settings-dialog
   # xdg.configFile.hyprpanel.target =  lib.mkForce "hyprpanel/config.generated.json";
+
   programs.hyprpanel = {
     enable = true;
     settings = {
