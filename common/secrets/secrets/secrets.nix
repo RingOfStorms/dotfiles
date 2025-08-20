@@ -123,12 +123,12 @@ in
   "us_chi_wg.age" = {
     publicKeys = trustedKeys;
   };
-  "zitadel_master_key.age" = {
-    # h001 only
-    publicKeys = authorityKey ++ h001;
-  };
-  "vaultwarden_env.age" = {
-    # h001 only
-    publicKeys = authorityKey ++ o001;
-  };
+  # "zitadel_master_key.age" = {
+  #   # h001 only
+  #   publicKeys = authorityKey ++ h001;
+  # };
+  # "vaultwarden_env.age" = {
+  #   # h001 only
+  #   publicKeys = authorityKey ++ o001;
+  # };
 }

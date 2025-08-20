@@ -24,6 +24,7 @@ with lib;
       killall
       hdparm
       speedtest-cli
+      lf
     ];
 
     environment.shellAliases = {

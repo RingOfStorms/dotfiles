@@ -1,12 +1,17 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
+    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
-    # common.url = "path:../../common";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
+    common.url = "path:../../common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
+
+    zaphkiel = {
+      url = "github:Rexcrazy804/Zaphkiel";
+    };
   };
 
   outputs =
@@ -83,7 +88,16 @@
                       reporting.enable = true;
                       disableRemoteBuildsOnLio = true;
                     };
-                    desktopEnvironment.gnome.enable = true;
+                    desktopEnvironment.hyprland = {
+                      enable = true;
+                      extraOptions = {
+                        # hyprctl monitors all
+                        monitor = [
+                          "desc:ASUSTek COMPUTER INC ASUS PG43U 0x01010101,3840x2160@97.98,0x0,1,transform,0"
+                          "desc:Samsung Electric Company C34J79x HTRM900776,3440x1440@99.98,-1440x-640,1,transform,1"
+                        ];
+                      };
+                    };
                     programs = {
                       qFlipper.enable = true;
                       rustDev.enable = true;

@@ -118,16 +118,16 @@ in
             file = ./secrets/us_chi_wg.age;
             owner = users_cfg.primary;
           };
-          zitadel_master_key = {
-            file = ./secrets/zitadel_master_key.age;
-            owner = users_cfg.primary;
-            mode = "444"; # World readable!
-          };
-          vaultwarden_env = {
-            file = ./secrets/vaultwarden_env.age;
-            owner = users_cfg.primary;
-            mode = "444"; # World readable!
-          };
+          # zitadel_master_key = {
+          #   file = ./secrets/zitadel_master_key.age;
+          #   owner = users_cfg.primary;
+          #   mode = "444"; # World readable!
+          # };
+          # vaultwarden_env = {
+          #   file = ./secrets/vaultwarden_env.age;
+          #   owner = users_cfg.primary;
+          #   mode = "444"; # World readable!
+          # };
         };
     };
   };

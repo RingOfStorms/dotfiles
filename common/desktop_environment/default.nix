@@ -6,6 +6,7 @@ in
 {
   imports = [
     ./gnome
+    ./hyprland
   ];
   config = {
     assertions = [
@@ -15,6 +16,10 @@ in
             {
               name = "gnome";
               enabled = cfg.gnome.enable;
+            }
+            {
+              name = "hyprland";
+              enabled = cfg.hyprland.enable;
             }
           ];
         in
