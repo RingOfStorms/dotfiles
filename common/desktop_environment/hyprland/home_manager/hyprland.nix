@@ -92,7 +92,7 @@ in
         "$mainMod, Return, exec, ${cfg.terminalCommand}"
         "$mainMod, Space, exec, pkill wofi || wofi --show drun"
         "$mainMod, q, killactive"
-        "$mainMod SHIFT, q, exec, hyprlock"
+        "$mainMod SHIFT, q, exec, swaylock"
         "$mainMod, f, togglefloating"
         "$mainMod, g, pseudo"
         "$mainMod, t, togglesplit"
@@ -129,7 +129,7 @@ in
 
       bindr = [
         # overview
-        "$mainMod, SUPER_L, overview:toggle, all"
+        "$mainMod, SUPER_L, overview:toggle"
       ];
 
       binde = [
