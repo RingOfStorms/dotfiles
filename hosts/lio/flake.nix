@@ -1,12 +1,17 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
+    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
-    # common.url = "path:../../common";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
+    common.url = "path:../../common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
+
+    zaphkiel = {
+      url = "github:Rexcrazy804/Zaphkiel";
+    };
   };
 
   outputs =
@@ -42,6 +47,16 @@
                 {
                   programs = {
                     steam.enable = true;
+                    nix-ld = {
+                      enable = true;
+                      libraries = with pkgs; [
+                        icu
+                        gmp
+                        glibc
+                        openssl
+                        stdenv.cc.cc
+                      ];
+                    };
                   };
 
                   environment.systemPackages = with pkgs; [
@@ -50,7 +65,13 @@
                     steam
                     ffmpeg-full
                     appimage-run
+                    nodejs_24
                   ];
+
+                  environment.shellAliases = {
+                    "oc" =
+                      "all_proxy='' http_proxy='' https_proxy='' /home/josh/other/opencode/node_modules/opencode-linux-x64/bin/opencode";
+                  };
 
                   # Also allow this key to work for root user, this will let us use this as a remote builder easier
                   users.users.root.openssh.authorizedKeys.keys = [
@@ -67,7 +88,16 @@
                       reporting.enable = true;
                       disableRemoteBuildsOnLio = true;
                     };
-                    desktopEnvironment.gnome.enable = true;
+                    desktopEnvironment.hyprland = {
+                      enable = true;
+                      extraOptions = {
+                        # hyprctl monitors all
+                        monitor = [
+                          "desc:ASUSTek COMPUTER INC ASUS PG43U 0x01010101,3840x2160@97.98,0x0,1,transform,0"
+                          "desc:Samsung Electric Company C34J79x HTRM900776,3440x1440@99.98,-1440x-640,1,transform,1"
+                        ];
+                      };
+                    };
                     programs = {
                       qFlipper.enable = true;
                       rustDev.enable = true;
@@ -76,7 +106,7 @@
                       tailnet.enableExitNode = true;
                       ssh.enable = true;
                       docker.enable = true;
-                      opencode.enable = true;
+                      virt-manager.enable = true;
                       flatpaks = {
                         enable = true;
                         packages = [
@@ -136,7 +166,6 @@
                       };
                     };
                   };
-
                 }
               )
             ];

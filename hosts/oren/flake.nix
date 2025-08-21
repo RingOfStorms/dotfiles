@@ -66,6 +66,7 @@
                       ssh.enable = true;
                       docker.enable = true;
                       opencode.enable = true;
+                      virt-manager.enable = true;
                       flatpaks = {
                         enable = true;
                         packages = [

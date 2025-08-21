@@ -2,7 +2,9 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
     deploy-rs.url = "github:serokell/deploy-rs";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
+
+    common.url = "path:../../../common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
 
@@ -60,6 +62,7 @@
 
                 ringofstorms_common = {
                   systemName = configuration_name;
+                  secrets.enable = true;
                   general = {
                     disableRemoteBuildsOnLio = true;
                     readWindowsDrives = false;

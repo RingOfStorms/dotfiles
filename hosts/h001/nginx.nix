@@ -9,7 +9,7 @@ let
 in
 {
   services.nginx.virtualHosts = {
-    "10.12.14.2" = {
+    "10.12.14.10" = {
       locations = {
         "/" = {
           return = "301 http://h001.local.joshuabell.xyz";

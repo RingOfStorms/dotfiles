@@ -1,4 +1,5 @@
 {
+  config,
   ...
 }:
 let
@@ -38,6 +39,10 @@ in
         hostPath = "${hostDataDir}/backups";
         isReadOnly = false;
       };
+      "/var/secrets/vaultwarden.env" = {
+        hostPath = config.age.secrets.vaultwarden_env.path;
+        isReadOnly = true;
+      };
     };
     config =
       { ... }:
@@ -56,12 +61,12 @@ in
           enable = true;
           dbBackend = "sqlite";
           backupDir = "/var/lib/backups/vaultwarden";
+          environmentFile = "/var/secrets/vaultwarden.env";
           config = {
             DOMAIN = "https://vault.joshuabell.xyz";
             SIGNUPS_ALLOWED = false;
             ROCKET_PORT = builtins.toString v_port;
             ROCKET_ADDRESS = "127.0.0.1";
-            # ADMIN_TOKEN = "$argon2id$v=19$m=65540,t=3,p=4$YMFEq4GZiCeM+MBSW75G+gq6Dnywszaqhhdrt5pIyLw$zdlU/ws8kfBVa/FWp1LVfhnu+CVuItG2nPGXgKyjWug";
           };
         };
       };

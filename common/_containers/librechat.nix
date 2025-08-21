@@ -65,8 +65,6 @@ in
           MEILI_MASTER_KEY = "ringofstormsLibreChat";
           RAG_PORT = toString cfg.ragPort;
           RAG_API_URL = "http://librechat_rag_api:${toString cfg.ragPort}";
-          # DEBUG_CONSOLE = "true";
-          # DEBUG_LOGGING = "true";
         };
         environmentFiles = [ "${cfg.dataDir}/.env" ];
         volumes = [
@@ -129,7 +127,6 @@ in
         environment = {
           DB_HOST = "librechat_vectordb";
           RAG_PORT = toString cfg.ragPort;
-          OPENAI_API_KEY = "not_using_openai";
         };
         dependsOn = [ "librechat_vectordb" ];
         environmentFiles = [ "${cfg.dataDir}/.env" ];

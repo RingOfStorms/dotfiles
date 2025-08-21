@@ -7,6 +7,7 @@ let
   name = "forgejo";
 
   hostDataDir = "/var/lib/${name}";
+
   hostAddress = "10.0.0.1";
   containerAddress = "10.0.0.2";
   hostAddress6 = "fc00::1";

@@ -12,6 +12,7 @@ with lib;
       nano
       wget
       curl
+      jq
       fastfetch
       bat
       htop
@@ -23,6 +24,7 @@ with lib;
       killall
       hdparm
       speedtest-cli
+      lf
     ];
 
     environment.shellAliases = {
