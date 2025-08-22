@@ -116,7 +116,7 @@
           forceSSL = true;
           locations."/" = {
             proxyWebsockets = true;
-            proxyPass = "http://100.64.0.1:3080";
+            proxyPass = "http://100.64.0.13";
           };
         };
         "gist.joshuabell.xyz" = {

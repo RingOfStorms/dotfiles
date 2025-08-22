@@ -130,6 +130,7 @@ in
       bindr = [
         # overview
         "$mainMod, SUPER_L, overview:toggle"
+        "$mainMod SHIFT, R, exec, systemctl --user restart hyprpanel.service"
       ];
 
       binde = [
