@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
-    # nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
     common.url = "path:../../common";
@@ -28,6 +28,13 @@
       nixosConfigurations = {
         "${configuration_name}" = (
           lib.nixosSystem {
+            specialArgs = {
+              inherit inputs;
+              upkgs = import inputs.nixpkgs-unstable {
+                system = "x86_64-linux";
+                config.allowUnfree = true;
+              };
+            };
             modules = [
               common.nixosModules.default
               ros_neovim.nixosModules.default

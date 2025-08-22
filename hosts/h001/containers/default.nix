@@ -12,7 +12,6 @@ in
     ./opengist.nix
     ./homarr.nix
     ./zitadel.nix
-    ./open-webui.nix
   ];
 
   config = {

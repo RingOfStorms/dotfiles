@@ -37,6 +37,7 @@ let
   # Any secrets that should be world-readable even after auto-import
   worldReadable = [
     "zitadel_master_key"
+    "openwebui_env"
     "vaultwarden_env"
   ];
 
