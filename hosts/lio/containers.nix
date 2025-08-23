@@ -13,7 +13,6 @@ in
   options = { };
 
   imports = [
-    common.nixosModules.containers.librechat
     common.nixosModules.containers.obsidian_sync
   ];
 

@@ -4,8 +4,8 @@
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
-    # common.url = "path:../../common";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
+    common.url = "path:../../common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
@@ -90,13 +90,26 @@
                     };
                     desktopEnvironment.hyprland = {
                       enable = true;
-                      extraOptions = {
-                        # hyprctl monitors all
-                        monitor = [
-                          "desc:ASUSTek COMPUTER INC ASUS PG43U 0x01010101,3840x2160@97.98,0x0,1,transform,0"
-                          "desc:Samsung Electric Company C34J79x HTRM900776,3440x1440@99.98,-1440x-640,1,transform,1"
-                        ];
-                      };
+                      extraOptions =
+                        let
+                          main = "desc:ASUSTek COMPUTER INC ASUS PG43U 0x01010101";
+                          secondary = "desc:Samsung Electric Company C34J79x HTRM900776";
+                        in
+                        {
+                          # hyprctl monitors all
+                          monitor = [
+                            "${main},3840x2160@97.98,0x0,1,transform,0"
+                            "${secondary},3440x1440@99.98,-1440x-640,1,transform,1"
+                          ];
+                          # Pin workspaces 1-6 to main monitor and rest on other monitor
+                          workspace =
+                            let
+                              inherit (builtins) map toString;
+                              inherit (lib) range;
+                              mkWs = monitor: i: "${toString i},monitor:${monitor}";
+                            in
+                            (map (mkWs main) (range 1 6)) ++ (map (mkWs secondary) (range 7 10));
+                        };
                     };
                     programs = {
                       qFlipper.enable = true;

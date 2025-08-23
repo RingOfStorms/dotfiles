@@ -69,6 +69,35 @@
           enableACME = true;
           forceSSL = true;
           locations = {
+            "~ ^/ttyd-t(.*)$" = {
+              proxyPass = "http://100.64.0.8:9999";
+              extraConfig = ''
+                rewrite ^/ttyd-tempus(.*) /$1 break;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection "upgrade";
+                proxy_set_header Host $host;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_set_header X-Forwarded-Port $server_port;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_read_timeout 1d; # dont kill connection after 60s of inactivity
+              '';
+            };
+            # "~ ^/tunnel_tempus/(?<port>[0-9]+)(.*)$" = {
+            #   extraConfig = ''
+            #     set $target_port $port;
+            #     rewrite ^/tunnel_tempus/(?<port>[0-9]+)(.*)$ /$2 break;
+            #     proxy_pass http://100.64.0.8:$target_port;
+            #     proxy_http_version 1.1;
+            #     proxy_set_header Upgrade $http_upgrade;
+            #     proxy_set_header Connection "upgrade";
+            #     proxy_set_header Host $host;
+            #     proxy_set_header X-Forwarded-Proto $scheme;
+            #     proxy_set_header X-Forwarded-Port $server_port;
+            #     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            #     proxy_read_timeout 1d; # dont kill connection after 60s of inactivity
+            #   '';
+            # };
             "/wasabi" = {
               proxyPass = "http://192.168.100.11/";
               extraConfig = ''

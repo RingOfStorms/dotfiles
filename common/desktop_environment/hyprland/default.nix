@@ -60,10 +60,24 @@ with lib;
     environment.systemPackages = with pkgs; [
       wl-clipboard
       wl-clip-persist
-      wofi
-      nemo
-      feh
+      wofi # application launcher
+      nemo # file manager
+      feh # image viewer
+      networkmanager # network management
+      upower # power management
+      brightnessctl # screen/keyboard brightness control
+      wireplumber # media session manager
+      libgtop # system monitor library
+      bluez # Bluetooth support
+      bluez-tools # Bluetooth tools
+      blueman # Bluetooth manager
+      power-profiles-daemon # power profiles
+      grimblast # screenshot tool
+      wf-recorder # screen recording tool
+      btop # system monitor
     ];
+
+    services.blueman.enable = config.hardware.bluetooth.enable;
 
     programs.hyprland = {
       enable = true;

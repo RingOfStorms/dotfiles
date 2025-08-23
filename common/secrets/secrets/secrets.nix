@@ -49,7 +49,7 @@ let
   trustedKeys = authorityKey ++ gpdPocket3 ++ lio ++ joe ++ oren ++ h001 ++ h002 ++ h003;
 
   o001 = [
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFrwvahx1x4rue28QHCzyADQndOeTESIv80f7d00NXWT" # root
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFrwvahx1x4rue28QHCzyADQndOeTESIv80f7d00NXWT root@o001"
   ];
 in
 {
