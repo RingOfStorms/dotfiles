@@ -9,7 +9,7 @@
         "com.spotify.Client"
       ];
 
-      positionX = "center";
+      positionX = "right";
       positionY = "top";
       layer = "overlay";
       control-center-layer = "top";

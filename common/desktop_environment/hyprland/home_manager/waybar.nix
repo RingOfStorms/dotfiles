@@ -23,7 +23,6 @@
         modules-center = [
           "clock"
           "temperature"
-          "custom/notifications"
           "cpu"
           "memory"
           "disk"
@@ -33,8 +32,8 @@
           "pulseaudio"
           "network"
           "bluetooth"
+          "custom/notifications"
           "hyprland/language"
-          "custom/power"
         ];
 
         # Workspaces configuration
@@ -163,12 +162,6 @@
           format-en = "EN";
           format-ja = "JP";
         };
-
-        "custom/power" = {
-          format = "⏻";
-          tooltip = false;
-          on-click = "wlogout";
-        };
       };
     };
 
@@ -227,8 +220,7 @@
       #disk,
       #network,
       #bluetooth,
-      #language,
-      #custom-power {
+      #language {
         padding: 0 8px;
         color: #c0caf5;
         margin: 2px;
@@ -236,16 +228,6 @@
 
       #temperature.critical {
         color: #f7768e;
-      }
-
-      #custom-power {
-        color: #f7768e;
-        padding: 0 10px;
-      }
-
-      #custom-power:hover {
-        background: rgba(247, 118, 142, 0.2);
-        border-radius: 5px;
       }
 
       #network.disconnected {
