@@ -84,6 +84,9 @@
               "󰕾"
             ];
           };
+          scroll-step = 5;
+          on-click = "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle";
+          on-click-right = "swaync-client -t -sw";
         };
 
         "custom/notifications" = {
@@ -108,7 +111,9 @@
         };
 
         # Clock
-        clock.format = "{:%Y-%m-%d} {:%H:%M}";
+        clock = {
+          format = "{:%b %d, %H:%M}";
+        };
 
         temperature = {
           thermal-zone = 2;
@@ -142,7 +147,8 @@
           tooltip-format = "{ifname} via {gwaddr} ";
           format-linked = "󰈀 {ifname} (No IP)";
           format-disconnected = "󰖪 Disconnected";
-          format-alt = "{ifname}: {ipaddr}/{cidr}";
+          on-click = "wofi-wifi-menu";
+          on-click-right = "nmcli radio wifi toggle";
         };
 
         bluetooth = {
@@ -153,7 +159,8 @@
           tooltip-format-connected = "{controller_alias}\t{controller_address}\n\n{num_connections} connected\n\n{device_enumerate}";
           tooltip-format-enumerate-connected = "{device_alias}\t{device_address}";
           tooltip-format-enumerate-connected-battery = "{device_alias}\t{device_address}\t{device_battery_percentage}%";
-          on-click = "blueman-manager";
+          on-click = "wofi-bluetooth-menu";
+          on-click-right = "bluetoothctl power toggle";
         };
 
         # Keyboard input (language)

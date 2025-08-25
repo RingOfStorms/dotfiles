@@ -69,8 +69,6 @@ with lib;
       wireplumber # media session manager
       libgtop # system monitor library
       bluez # Bluetooth support
-      bluez-tools # Bluetooth tools
-      blueman # Bluetooth manager
       power-profiles-daemon # power profiles
       grimblast # screenshot tool
       wf-recorder # screen recording tool

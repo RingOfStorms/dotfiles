@@ -32,11 +32,14 @@ in
       # Default monitor configuration
       monitor = "monitor = , preferred, auto, 1";
 
-      windowrulev2 = [
-        "float, class:.*blueman-manager.*"
-        "size 700 500, class:.*blueman-manager.*"
-        "center, class:.*blueman-manager.*"
-      ];
+        windowrulev2 = [
+          "float, class:^(?i)chrome-nngceckbapebfimnlniiiahkandclblb-Default$, initialtitle:^_crx_nngceckbapebfimnlniiiahkandclblb$"
+          "center, class:^(?i)chrome-nngceckbapebfimnlniiiahkandclblb-Default$, initialtitle:^_crx_nngceckbapebfimnlniiiahkandclblb$"
+          "size 720 600, class:^(?i)chrome-nngceckbapebfimnlniiiahkandclblb-Default$, initialtitle:^_crx_nngceckbapebfimnlniiiahkandclblb$"
+          "float, class:.*blueman-manager.*"
+          "size 700 500, class:.*blueman-manager.*"
+          "center, class:.*blueman-manager.*"
+        ];
 
       # Input configuration
       input = {

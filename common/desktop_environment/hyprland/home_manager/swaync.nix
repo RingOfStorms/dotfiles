@@ -86,17 +86,17 @@
             {
               label = "󰐥";
               tooltip = "Shutdown";
-              command = "systemctl poweroff";
+              command = "confirm-action 'systemctl poweroff' 'Shutdown?'";
             }
             {
               label = "󰜉";
               tooltip = "Reboot";
-              command = "systemctl reboot";
+              command = "confirm-action 'systemctl reboot' 'Reboot?'";
             }
             {
               label = "󰍃";
               tooltip = "Logout";
-              command = "hyprctl dispatch exit";
+              command = "confirm-action 'hyprctl dispatch exit' 'Logout?'";
             }
             {
               label = "󰤄";
@@ -113,7 +113,7 @@
             {
               label = "󰖩";
               tooltip = "Wi‑Fi Settings";
-              command = "nm-connection-editor";
+              command = "wofi-wifi-menu";
             }
 
             # Bluetooth (requires bluez/bluetoothctl, blueman optional)
@@ -125,7 +125,26 @@
             {
               label = "󰂯";
               tooltip = "Bluetooth Settings";
-              command = "blueman-manager";
+              command = "wofi-bluetooth-menu";
+            }
+
+            # Media
+            {
+              label = "󰍭";
+              tooltip = "Toggle Mic Mute";
+              command = "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle";
+            }
+
+            # Toggles
+            {
+              label = "󰀝";
+              tooltip = "Toggle Airplane Mode";
+              command = "toggle-airplane-mode";
+            }
+            {
+              label = "󰓅";
+              tooltip = "Toggle Power Profile";
+              command = "toggle-power-profile";
             }
           ];
         };
