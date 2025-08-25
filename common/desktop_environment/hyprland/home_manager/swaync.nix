@@ -98,54 +98,6 @@
               tooltip = "Logout";
               command = "confirm-action 'hyprctl dispatch exit' 'Logout?'";
             }
-            {
-              label = "󰤄";
-              tooltip = "Suspend";
-              command = "systemctl suspend";
-            }
-
-            # Network (requires NetworkManager/nmcli)
-            {
-              label = "󰖪";
-              tooltip = "Toggle Wi‑Fi";
-              command = "nmcli radio wifi toggle";
-            }
-            {
-              label = "󰖩";
-              tooltip = "Wi‑Fi Settings";
-              command = "wofi-wifi-menu";
-            }
-
-            # Bluetooth (requires bluez/bluetoothctl, blueman optional)
-            {
-              label = "󰂲";
-              tooltip = "Toggle Bluetooth";
-              command = "bluetoothctl power toggle";
-            }
-            {
-              label = "󰂯";
-              tooltip = "Bluetooth Settings";
-              command = "wofi-bluetooth-menu";
-            }
-
-            # Media
-            {
-              label = "󰍭";
-              tooltip = "Toggle Mic Mute";
-              command = "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle";
-            }
-
-            # Toggles
-            {
-              label = "󰀝";
-              tooltip = "Toggle Airplane Mode";
-              command = "toggle-airplane-mode";
-            }
-            {
-              label = "󰓅";
-              tooltip = "Toggle Power Profile";
-              command = "toggle-power-profile";
-            }
           ];
         };
       };
