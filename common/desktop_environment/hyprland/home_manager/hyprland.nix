@@ -29,8 +29,17 @@ in
       #   "waybar"
       # ];
 
-      # Default monitor configuration
-      monitor = "monitor = , preferred, auto, 1";
+       # Default monitor configuration
+       monitor = "monitor = , preferred, auto, 1";
+
+       # Make workspaces 7-10 always on MONITOR-2 (replace DP-2 if your secondary isn't DP-2)
+       # You can get the name of your monitor via `hyprctl monitors`
+       workspace = [
+         "7, monitor:DP-2, persistent:true"
+         "8, monitor:DP-2, persistent:true"
+         "9, monitor:DP-2, persistent:true"
+         "10, monitor:DP-2, persistent:true"
+       ];
 
         windowrulev2 = [
           "float, class:^(?i)chrome-nngceckbapebfimnlniiiahkandclblb-Default$, initialtitle:^_crx_nngceckbapebfimnlniiiahkandclblb$"
