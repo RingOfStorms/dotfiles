@@ -29,7 +29,13 @@
       nixosConfigurations = {
         "${configuration_name}" = (
           lib.nixosSystem {
-            specialArgs = { inherit inputs; };
+            specialArgs = {
+              inherit inputs;
+              upkgs = import inputs.nixpkgs-unstable {
+                system = "x86_64-linux";
+                config.allowUnfree = true;
+              };
+            };
             modules = [
               common.nixosModules.default
               ros_neovim.nixosModules.default
@@ -41,6 +47,7 @@
                 {
                   config,
                   pkgs,
+                  upkgs,
                   lib,
                   ...
                 }:
@@ -80,6 +87,11 @@
                   # Allow emulation of aarch64-linux binaries for cross compiling
                   boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
 
+                  home-manager.extraSpecialArgs = {
+                    inherit inputs;
+                    inherit upkgs;
+                  };
+
                   ringofstorms_common = {
                     systemName = configuration_name;
                     boot.systemd.enable = true;
@@ -90,6 +102,8 @@
                     };
                     desktopEnvironment.hyprland = {
                       enable = true;
+                      waybar.enable = true;
+                      swaync.enable = true;
                       extraOptions =
                         let
                           main = "desc:ASUSTek COMPUTER INC ASUS PG43U 0x01010101";

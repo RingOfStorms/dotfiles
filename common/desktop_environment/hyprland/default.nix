@@ -29,6 +29,12 @@ with lib;
         default = { };
         description = "Extra options for Hyprland configuration.";
       };
+      swaync = {
+        enable = lib.mkEnableOption "Enable Swaync (notification center for Hyprland)";
+      };
+      waybar = {
+        enable = lib.mkEnableOption "Enable Waybar (status bar for Hyprland)";
+      };
     };
 
   config = lib.mkIf cfg.enable {
