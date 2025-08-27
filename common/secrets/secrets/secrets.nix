@@ -117,9 +117,9 @@ in
   "headscale_auth.age" = {
     publicKeys = trustedKeys;
   };
-  "obsidian_sync_env.age" = {
-    publicKeys = trustedKeys;
-  };
+  # "obsidian_sync_env.age" = {
+  #   publicKeys = trustedKeys;
+  # };
   "us_chi_wg.age" = {
     publicKeys = trustedKeys;
   };

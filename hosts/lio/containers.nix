@@ -13,15 +13,15 @@ in
   options = { };
 
   imports = [
-    common.nixosModules.containers.obsidian_sync
+    # common.nixosModules.containers.obsidian_sync
   ];
 
   config = {
     # Obsidian Sync settings
-    services.obsidian_sync = {
-      serverUrl = "https://obsidiansync.joshuabell.xyz";
-      dockerEnvFiles = [ config.age.secrets.obsidian_sync_env.path ];
-    };
+    # services.obsidian_sync = {
+    #   serverUrl = "https://obsidiansync.joshuabell.xyz";
+    #   dockerEnvFiles = [ config.age.secrets.obsidian_sync_env.path ];
+    # };
 
     ## Give internet access
     networking = {
@@ -62,7 +62,7 @@ in
     #   };
     # };
 
-    virtualisation.oci-containers.backend = "docker";
+    # virtualisation.oci-containers.backend = "docker";
 
     services.nginx = {
       enable = true;
@@ -74,7 +74,7 @@ in
         "_" = {
           default = true;
           locations."/" = {
-            return = "444"; # or 444 for drop
+            return = "404"; # or 444 for drop
           };
         };
       };

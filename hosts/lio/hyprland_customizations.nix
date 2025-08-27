@@ -12,13 +12,13 @@ let
       "${mainMonitor},3840x2160@97.98,0x0,1,transform,0"
       "${secondaryMonitor},3440x1440@99.98,-1440x-640,1,transform,1"
     ];
-    workspace =
-      let
-        inherit (builtins) map toString;
-        inherit (lib) range;
-        mkWs = monitor: i: "${toString i},monitor:${monitor},persistent:true";
-      in
-      (map (mkWs mainMonitor) (range 1 6)) ++ (map (mkWs secondaryMonitor) (range 7 10));
+    # workspace =
+    #   let
+    #     inherit (builtins) map toString;
+    #     inherit (lib) range;
+    #     mkWs = monitor: i: "${toString i},persistent:true";
+    #   in
+    #   (map (mkWs mainMonitor) (range 1 6)) ++ (map (mkWs secondaryMonitor) (range 7 10));
   };
 
   moveScript = pkgs.writeShellScriptBin "hyprland-move-workspaces" ''
@@ -91,7 +91,7 @@ let
       # Subscribe to Hyprland events and react to monitor changes
       ''${SOCAT} - "UNIX-CONNECT:${"$"}sock" | while IFS= read -r line; do
         case "${"$"}line" in
-          monitoradded*|monitorremoved*|activemonitor*|layoutchange*)
+          monitoradded*|monitorremoved*|activemonitor*|layoutchange*|createworkspace*)
             place_workspaces
           ;;
         esac
