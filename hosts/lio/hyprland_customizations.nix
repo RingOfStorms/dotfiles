@@ -16,7 +16,7 @@ let
       let
         inherit (builtins) map toString;
         inherit (lib) range;
-        mkWs = monitor: i: "${toString i},monitor:${monitor}";
+        mkWs = monitor: i: "${toString i},monitor:${monitor},persistent:true";
       in
       (map (mkWs mainMonitor) (range 1 6)) ++ (map (mkWs secondaryMonitor) (range 7 10));
   };
