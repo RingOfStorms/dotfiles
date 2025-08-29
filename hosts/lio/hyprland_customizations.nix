@@ -130,8 +130,6 @@ in
         Restart = "always";
         RestartSec = "2s";
       };
-
-      wantedBy = [ "graphical-session.target" ];
     };
   };
 }
