@@ -93,6 +93,10 @@ with lib;
     environment.sessionVariables = {
       NIXOS_OZONE_WL = "1";
       GTK_THEME = "Adwaita:dark";
+      XDG_SESSION_TYPE = "wayland";
+      XDG_CURRENT_DESKTOP = "Hyprland";
+      XDG_SESSION_DESKTOP = "Hyprland";
+      ELECTRON_OZONE_PLATFORM_HINT = "wayland";
     };
 
     # Qt theming

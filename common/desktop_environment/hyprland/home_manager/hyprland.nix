@@ -25,6 +25,9 @@ in
     ];
 
     settings = lib.attrsets.recursiveUpdate {
+      # TODO determine if need to keep
+      env = [ "XWAYLAND_NO_GLAMOR,1" ];
+
       # Default monitor configuration
       monitor = "monitor = , preferred, auto, 1";
 

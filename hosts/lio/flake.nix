@@ -8,10 +8,6 @@
     # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
-
-    zaphkiel = {
-      url = "github:Rexcrazy804/Zaphkiel";
-    };
   };
 
   outputs =
