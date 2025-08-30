@@ -1,7 +1,7 @@
 {
   osConfig,
   lib,
-  pkgs,
+  hyprlandPkgs,
   ...
 }:
 let
@@ -16,22 +16,19 @@ in
 {
   wayland.windowManager.hyprland = {
     enable = true;
-    # set the Hyprland and XDPH packages to null to use the ones from the NixOS module
-    package = null;
-    portalPackage = null;
-
-    plugins = with pkgs.hyprlandPlugins; [
+    plugins = with hyprlandPkgs.hyprlandPlugins; [
       hyprspace
     ];
 
     settings = lib.attrsets.recursiveUpdate {
-      # TODO determine if need to keep
-      env = [ "XWAYLAND_NO_GLAMOR,1" ];
+      # Debug logs enabled when this is uncommented
+      "debug:disable_logs" = false;
 
       # Default monitor configuration
       monitor = "monitor = , preferred, auto, 1";
 
       windowrulev2 = [
+        # Bitwarden password manager popup for chrome, always float it
         "float, class:^(?i)chrome-nngceckbapebfimnlniiiahkandclblb-Default$, initialtitle:^_crx_nngceckbapebfimnlniiiahkandclblb$"
         "center, class:^(?i)chrome-nngceckbapebfimnlniiiahkandclblb-Default$, initialtitle:^_crx_nngceckbapebfimnlniiiahkandclblb$"
         "size 720 600, class:^(?i)chrome-nngceckbapebfimnlniiiahkandclblb-Default$, initialtitle:^_crx_nngceckbapebfimnlniiiahkandclblb$"
@@ -91,6 +88,7 @@ in
         "$mainMod, Return, exec, ${cfg.terminalCommand}"
         "$mainMod, Space, exec, pkill wofi || wofi --show drun"
         "$mainMod, q, killactive"
+        "$mainMod SHIFT, escape, exit"
         "$mainMod SHIFT, q, exec, swaylock"
         "$mainMod, f, togglefloating"
         "$mainMod, g, pseudo"

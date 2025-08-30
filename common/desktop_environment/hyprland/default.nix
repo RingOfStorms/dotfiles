@@ -2,6 +2,8 @@
   config,
   lib,
   pkgs,
+  hyprland,
+  hyprlandPkgs,
   ...
 }:
 let
@@ -21,7 +23,7 @@ with lib;
       enable = lib.mkEnableOption "hyprland desktop environment";
       terminalCommand = mkOption {
         type = lib.types.str;
-        default = "kitty";
+        default = "foot";
         description = "The terminal command to use.";
       };
       extraOptions = mkOption {
@@ -41,16 +43,18 @@ with lib;
     # Enable for all users
     home-manager = {
       sharedModules = [
+        hyprland.homeManagerModules.default
         ./home_manager
       ];
     };
 
-    # Display Manager
-    services = {
-      displayManager = {
-        sddm = {
-          enable = true;
-          wayland.enable = true;
+    services.greetd = {
+      enable = true;
+      vt = 2;
+      settings = {
+        default_session = {
+          command = "${pkgs.greetd.tuigreet}/bin/tuigreet --time --remember --remember-session --cmd '${pkgs.dbus}/bin/dbus-run-session ${hyprlandPkgs.hyprland}/bin/Hyprland'";
+          user = "greeter";
         };
       };
     };
@@ -61,7 +65,6 @@ with lib;
       layout = "us";
       options = "caps:escape";
     };
-    hardware.graphics.enable = true;
 
     environment.systemPackages = with pkgs; [
       wl-clipboard
@@ -76,6 +79,9 @@ with lib;
       libgtop # system monitor library
       bluez # Bluetooth support
       power-profiles-daemon # power profiles
+      grim
+      slurp
+      hyprpicker
       grimblast # screenshot tool
       wf-recorder # screen recording tool
       btop # system monitor
@@ -85,8 +91,21 @@ with lib;
 
     programs.hyprland = {
       enable = true;
-      xwayland.enable = true;
+      # xwayland.enable = true;
       withUWSM = true;
+
+      # set the flake package
+      package = hyprlandPkgs.hyprland;
+      # make sure to also set the portal package, so that they are in sync
+      portalPackage = hyprlandPkgs.xdg-desktop-portal-hyprland;
+    };
+
+    hardware.graphics = {
+      enable = true;
+      package = hyprlandPkgs.mesa;
+      # if you also want 32-bit support (e.g for Steam)
+      # enable32Bit = true;
+      package32 = hyprlandPkgs.pkgsi686Linux.mesa;
     };
 
     # Environment variables
@@ -97,6 +116,8 @@ with lib;
       XDG_CURRENT_DESKTOP = "Hyprland";
       XDG_SESSION_DESKTOP = "Hyprland";
       ELECTRON_OZONE_PLATFORM_HINT = "wayland";
+      CLUTTER_BACKEND = "wayland";
+      WLR_RENDERER = "vulkan";
     };
 
     # Qt theming

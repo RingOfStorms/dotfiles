@@ -59,7 +59,7 @@ with lib;
       gnome-tweaks
       wayland
       wayland-utils
-      xwayland
+      # xwayland
       wl-clipboard
       numix-cursor-theme
       gnomeExtensions.vertical-workspaces

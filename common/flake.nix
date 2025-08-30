@@ -4,6 +4,8 @@
     home-manager.url = "github:rycee/home-manager/release-25.05";
     ragenix.url = "github:yaxitech/ragenix";
     nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
+
+    hyprland.url = "github:hyprwm/Hyprland";
   };
 
   outputs =
@@ -11,6 +13,7 @@
       home-manager,
       ragenix,
       nix-flatpak,
+      hyprland,
       ...
     }:
     {
@@ -19,13 +22,15 @@
           {
             config,
             lib,
+            pkgs,
             ...
           }:
           {
             imports = [
-              home-manager.nixosModules.home-manager
+              home-manager.nixosModules.default
               ragenix.nixosModules.age
               nix-flatpak.nixosModules.nix-flatpak
+              hyprland.nixosModules.default
               ./_home_manager
               ./options.nix
               ./general
@@ -36,17 +41,28 @@
               ./secrets
             ];
             config = {
+              nixpkgs.overlays = [
+                # (final: prev: {
+                #   wayland-protocols =
+                #     nixpkgs-unstable.legacyPackages.${prev.stdenv.hostPlatform.system}.wayland-protocols;
+                # })
+              ];
               _module.args = {
-                inherit ragenix;
+                inherit ragenix hyprland;
+                hyprlandPkgs = import hyprland.inputs.nixpkgs {
+                  system = pkgs.stdenv.hostPlatform.system;
+                  config = config.nixpkgs.config or { };
+                };
               };
             };
           };
         containers = {
           forgejo = import ./_containers/forgejo.nix;
-          # obsidian_sync = import ./_containers/obsidian_sync.nix;
         };
       };
       homeManagerModules = {
+        hyprland = hyprland.homeManagerModules.default;
+
         zsh = import ./_home_manager/mods/zsh.nix;
         tmux = import ./_home_manager/mods/tmux/tmux.nix;
         atuin = import ./_home_manager/mods/atuin.nix;
@@ -57,6 +73,8 @@
         git = import ./_home_manager/mods/git.nix;
         nix_deprecations = import ./_home_manager/mods/nix_deprecations.nix;
 
+        alacritty = import ./_home_manager/mods/alacritty.nix;
+        foot = import ./_home_manager/mods/foot.nix;
         kitty = import ./_home_manager/mods/kitty.nix;
         launcher_rofi = import ./_home_manager/mods/launcher_rofi.nix;
 
@@ -64,7 +82,6 @@
         postgres = import ./_home_manager/mods/postgres.nix;
         slicer = import ./_home_manager/mods/slicer.nix;
 
-        alacritty = import ./_home_manager/mods/alacritty.nix;
       };
     };
 }

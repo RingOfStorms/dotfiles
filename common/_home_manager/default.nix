@@ -1,6 +1,8 @@
 {
   config,
   lib,
+  hyprland,
+  hyprlandPkgs,
   ...
 }:
 let
@@ -32,6 +34,10 @@ in
     home-manager.useUserPackages = true;
     home-manager.useGlobalPkgs = true;
     home-manager.backupFileExtension = "bak";
+
+    home-manager.extraSpecialArgs = {
+      inherit hyprland hyprlandPkgs;
+    };
 
     home-manager.users = lib.mapAttrs' (name: userConfig: {
       inherit name;
