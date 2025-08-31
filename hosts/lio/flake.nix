@@ -114,7 +114,7 @@
                         enable = true;
                         packages = [
                           "org.signal.Signal"
-                          "com.discordapp.Discord"
+                          "dev.vencord.Vesktop"
                           "md.obsidian.Obsidian"
                           "com.spotify.Client"
                           "org.videolan.VLC"

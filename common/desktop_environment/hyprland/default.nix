@@ -70,8 +70,10 @@ with lib;
       wl-clipboard
       wl-clip-persist
       wofi # application launcher
-      nemo # file manager
-      feh # image viewer
+      nemo # file manager (x11)
+      # nautilus # file manager
+      feh # image viewer (x11)
+      # imv # image viewer
       networkmanager # network management
       upower # power management
       brightnessctl # screen/keyboard brightness control
@@ -91,13 +93,26 @@ with lib;
 
     programs.hyprland = {
       enable = true;
-      # xwayland.enable = true;
+      # xwayland.enable = false;
       withUWSM = true;
 
       # set the flake package
       package = hyprlandPkgs.hyprland;
       # make sure to also set the portal package, so that they are in sync
-      portalPackage = hyprlandPkgs.xdg-desktop-portal-hyprland;
+      # This is set below now in xdf portal directly so we can also add things like gtk
+      # portalPackage = hyprlandPkgs.xdg-desktop-portal-hyprland;
+    };
+
+    xdg.portal = {
+      enable = true;
+      extraPortals = lib.mkForce [
+        hyprlandPkgs.xdg-desktop-portal-hyprland
+        hyprlandPkgs.xdg-desktop-portal-gtk
+      ];
+      config.common.default = [
+        "hyprland"
+        "gtk"
+      ];
     };
 
     hardware.graphics = {
@@ -110,14 +125,20 @@ with lib;
 
     # Environment variables
     environment.sessionVariables = {
-      NIXOS_OZONE_WL = "1";
       GTK_THEME = "Adwaita:dark";
       XDG_SESSION_TYPE = "wayland";
       XDG_CURRENT_DESKTOP = "Hyprland";
       XDG_SESSION_DESKTOP = "Hyprland";
-      ELECTRON_OZONE_PLATFORM_HINT = "wayland";
-      CLUTTER_BACKEND = "wayland";
       WLR_RENDERER = "vulkan";
+
+      # Tell apps to run native wayland
+      NIXOS_OZONE_WL = "1";
+      ELECTRON_OZONE_PLATFORM_HINT = "wayland";
+      GDK_BACKEND = "wayland,x11"; # GTK
+      QT_QPA_PLATFORM = "wayland;xcb"; # Qt 5/6
+      MOZ_ENABLE_WAYLAND = "1"; # Firefox
+      SDL_VIDEODRIVER = "wayland"; # SDL apps/games
+      CLUTTER_BACKEND = "wayland"; # You already have this
     };
 
     # Qt theming

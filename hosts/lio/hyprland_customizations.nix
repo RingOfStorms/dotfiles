@@ -123,23 +123,23 @@ in
     ringofstorms_common.desktopEnvironment.hyprland.extraOptions = hyprlandExtraOptions;
 
     # User-level systemd service that follows your Hyprland session and watches for monitor changes
-    systemd.user.services.hyprland-move-workspaces = {
-      description = "Keep workspaces 1–6 on main and 7–10 on secondary; react to monitor changes";
-
-      # Start/stop with Hyprland specifically
-      wantedBy = [ "hyprland-session.target" ];
-      after = [ "hyprland-session.target" ];
-      partOf = [ "hyprland-session.target" ];
-      bindsTo = [ "hyprland-session.target" ];
-      # Only start once Hyprland's event socket exists
-      unitConfig.ConditionPathExistsGlob = "%t/hypr/*/.socket2.sock";
-
-      serviceConfig = {
-        Type = "simple";
-        ExecStart = "${moveScript}/bin/hyprland-move-workspaces";
-        Restart = "always";
-        RestartSec = "2s";
-      };
-    };
+    # systemd.user.services.hyprland-move-workspaces = {
+    #   description = "Keep workspaces 1–6 on main and 7–10 on secondary; react to monitor changes";
+    #
+    #   # Start/stop with Hyprland specifically
+    #   wantedBy = [ "hyprland-session.target" ];
+    #   after = [ "hyprland-session.target" ];
+    #   partOf = [ "hyprland-session.target" ];
+    #   bindsTo = [ "hyprland-session.target" ];
+    #   # Only start once Hyprland's event socket exists
+    #   unitConfig.ConditionPathExistsGlob = "%t/hypr/*/.socket2.sock";
+    #
+    #   serviceConfig = {
+    #     Type = "simple";
+    #     ExecStart = "${moveScript}/bin/hyprland-move-workspaces";
+    #     Restart = "always";
+    #     RestartSec = "2s";
+    #   };
+    # };
   };
 }

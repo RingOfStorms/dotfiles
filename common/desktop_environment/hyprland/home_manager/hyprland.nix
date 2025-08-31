@@ -16,13 +16,17 @@ in
 {
   wayland.windowManager.hyprland = {
     enable = true;
-    plugins = with hyprlandPkgs.hyprlandPlugins; [
-      hyprspace
-    ];
+    xwayland.enable = osConfig.programs.hyprland.xwayland.enable;
+    # plugins = with hyprlandPkgs.hyprlandPlugins; [
+    #   hyprspace
+    # ];
 
     settings = lib.attrsets.recursiveUpdate {
       # Debug logs enabled when this is uncommented
-      "debug:disable_logs" = false;
+      debug.disable_logs = false;
+      debug.disable_time = false;
+
+      exec-once = [ "pgrep waybar>/dev/null || waybar" ];
 
       # Default monitor configuration
       monitor = "monitor = , preferred, auto, 1";
@@ -144,7 +148,7 @@ in
 
       bindr = [
         # overview
-        "$mainMod, SUPER_L, overview:toggle"
+        # "$mainMod, SUPER_L, overview:toggle" $ hyprspace plugin
         "$mainMod SHIFT, R, exec, systemctl --user restart hyprpanel.service"
       ];
 

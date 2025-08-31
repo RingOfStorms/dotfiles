@@ -32,14 +32,16 @@ in
         global = {
           Context.sockets = [
             "wayland"
-            "x11"
+            "fallback-x11"
           ];
 
           Environment = {
             XCURSOR_PATH = "/run/host/user-share/icons:/run/host/share/icons";
             GTK_THEME = "Adwaita:dark";
             # Force wayland as much as possible.
-            ELECTRON_OZONE_PLATFORM_HINT = "wayland"; # or 'auto'
+            ELECTRON_OZONE_PLATFORM_HINT = "auto"; # or 'auto'
+            GTK_USE_PORTAL = "1";
+            OZONE_PLATFORM = "wayland";
           };
         };
         "org.signal.Signal" = {
@@ -50,6 +52,11 @@ in
             sockets = [
               "xfg-settings"
             ];
+          };
+        };
+        "com.google.Chrome" = {
+          Environment = {
+            CHROME_EXTRA_ARGS = "--enable-features=WaylandWindowDecorations --ozone-platform-hint=auto";
           };
         };
       };
