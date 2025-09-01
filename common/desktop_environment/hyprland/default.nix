@@ -129,7 +129,7 @@ with lib;
       XDG_SESSION_TYPE = "wayland";
       XDG_CURRENT_DESKTOP = "Hyprland";
       XDG_SESSION_DESKTOP = "Hyprland";
-      WLR_RENDERER = "vulkan";
+      WLR_RENDERER = "auto";
 
       # Tell apps to run native wayland
       NIXOS_OZONE_WL = "1";

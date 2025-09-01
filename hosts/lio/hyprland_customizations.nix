@@ -119,7 +119,6 @@ in
   config = {
     environment.systemPackages = [ moveScript ];
 
-    # Pass the options to home-manager for hyprland (as you already do)
     ringofstorms_common.desktopEnvironment.hyprland.extraOptions = hyprlandExtraOptions;
 
     # User-level systemd service that follows your Hyprland session and watches for monitor changes

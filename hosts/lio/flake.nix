@@ -41,6 +41,7 @@
               (import ./containers.nix { inherit inputs; })
               # ./jails_text.nix
               ./hyprland_customizations.nix
+              ./sway_customizations.nix
               (
                 {
                   config,
@@ -65,6 +66,7 @@
                   environment.shellAliases = {
                     "oc" =
                       "all_proxy='' http_proxy='' https_proxy='' /home/josh/other/opencode/node_modules/opencode-linux-x64/bin/opencode";
+                    "occ" = "oc -c";
                   };
 
                   environment.systemPackages = with pkgs; [
@@ -96,7 +98,7 @@
                       reporting.enable = true;
                       disableRemoteBuildsOnLio = true;
                     };
-                    desktopEnvironment.hyprland = {
+                    desktopEnvironment.sway = {
                       enable = true;
                       waybar.enable = true;
                       swaync.enable = true;

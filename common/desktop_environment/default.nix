@@ -7,6 +7,8 @@ in
   imports = [
     ./gnome
     ./hyprland
+    ./sway
+    ./cosmic
   ];
   config = {
     assertions = [
@@ -20,6 +22,14 @@ in
             {
               name = "hyprland";
               enabled = cfg.hyprland.enable;
+            }
+            {
+              name = "sway";
+              enabled = cfg.sway.enable;
+            }
+            {
+              name = "cosmic";
+              enabled = cfg.cosmic.enable;
             }
           ];
         in
