@@ -109,7 +109,7 @@
                       tailnet.enable = true;
                       tailnet.enableExitNode = true;
                       ssh.enable = true;
-                      # docker.enable = true; # TODO use podman instead
+                      podman.enable = true;
                       virt-manager.enable = true;
                       flatpaks = {
                         enable = true;
