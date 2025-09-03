@@ -13,6 +13,8 @@
       pull.rebase = false;
 
       init.defaultBranch = "main";
+
+      rerere.enabled = true;
     };
 
     difftastic = {
@@ -52,7 +54,7 @@
       ".apdisk"
 
       # direnv things
-      "/.direnv"
+      ".direnv"
 
       # local only files
       "*.local"

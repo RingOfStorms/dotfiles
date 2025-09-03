@@ -16,6 +16,8 @@
       # Enable editing command in external editor
       autoload -Uz edit-command-line
       zle -N edit-command-line
+      # fix delete key
+      bindkey "^[[3~" delete-char
       # Try multiple bindings for edit-command-line
       bindkey '^X^E' edit-command-line    # Traditional Ctrl+X,Ctrl+E binding
       bindkey '^[^M' edit-command-line    # Alt+Enter
@@ -38,4 +40,3 @@
     '';
   };
 }
-

@@ -16,7 +16,7 @@
     mouse = true;
     keyMode = "vi";
     shell = "${pkgs.zsh}/bin/zsh";
-    terminal = "screen-256color";
+    terminal = "tmux-256color";
     aggressiveResize = true;
     sensibleOnTop = false;
 

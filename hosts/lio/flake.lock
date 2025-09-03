@@ -67,9 +67,6 @@
         "home-manager": "home-manager",
         "hyprland": "hyprland",
         "nix-flatpak": "nix-flatpak",
-        "nixpkgs-unstable": [
-          "nixpkgs-unstable"
-        ],
         "ragenix": "ragenix"
       },
       "locked": {
