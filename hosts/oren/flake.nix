@@ -50,6 +50,9 @@
                     "oc" =
                       "all_proxy='' http_proxy='' https_proxy='' /home/josh/other/opencode/node_modules/opencode-linux-x64/bin/opencode";
                     "occ" = "oc -c";
+
+                    "ollamal" = "ollama list | tail -n +2 | awk '{print $1}' | fzf --ansi --preview 'ollama show {}'";
+                    "battery" = "cat /sys/class/power_supply/BAT1/capacity";
                   };
 
                   environment.systemPackages = with pkgs; [
@@ -86,7 +89,7 @@
                       uhkAgent.enable = true;
                       tailnet.enable = true;
                       ssh.enable = true;
-                      # docker.enable = true;
+                      podman.enable = true;
                       virt-manager.enable = true;
                       flatpaks = {
                         enable = true;
