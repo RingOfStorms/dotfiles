@@ -5,7 +5,8 @@
     ragenix.url = "github:yaxitech/ragenix";
     nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
 
-    hyprland.url = "github:hyprwm/Hyprland";
+    # disabled for now
+    # hyprland.url = "github:hyprwm/Hyprland";
   };
 
   outputs =
@@ -13,7 +14,7 @@
       home-manager,
       ragenix,
       nix-flatpak,
-      hyprland,
+      # hyprland,
       ...
     }:
     {
@@ -30,7 +31,7 @@
               home-manager.nixosModules.default
               ragenix.nixosModules.age
               nix-flatpak.nixosModules.nix-flatpak
-              hyprland.nixosModules.default
+              # hyprland.nixosModules.default
               ./_home_manager
               ./options.nix
               ./general
@@ -48,11 +49,12 @@
                 # })
               ];
               _module.args = {
-                inherit ragenix hyprland;
-                hyprlandPkgs = import hyprland.inputs.nixpkgs {
-                  system = pkgs.stdenv.hostPlatform.system;
-                  config = config.nixpkgs.config or { };
-                };
+                inherit ragenix;
+                # inherit hyprland;
+                # hyprlandPkgs = import hyprland.inputs.nixpkgs {
+                #   system = pkgs.stdenv.hostPlatform.system;
+                #   config = config.nixpkgs.config or { };
+                # };
               };
             };
           };
@@ -61,7 +63,7 @@
         };
       };
       homeManagerModules = {
-        hyprland = hyprland.homeManagerModules.default;
+        # hyprland = hyprland.homeManagerModules.default;
 
         zsh = import ./_home_manager/mods/zsh.nix;
         tmux = import ./_home_manager/mods/tmux/tmux.nix;

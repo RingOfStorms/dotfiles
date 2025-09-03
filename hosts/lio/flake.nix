@@ -6,7 +6,6 @@
     # Use relative to get current version for testing
     common.url = "path:../../common";
     # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
-    common.inputs.nixpkgs-unstable.follows = "nixpkgs-unstable";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -40,7 +39,7 @@
               ./hardware-configuration.nix
               (import ./containers.nix { inherit inputs; })
               # ./jails_text.nix
-              ./hyprland_customizations.nix
+              # ./hyprland_customizations.nix
               ./sway_customizations.nix
               (
                 {
