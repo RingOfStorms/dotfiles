@@ -71,7 +71,6 @@
                   environment.systemPackages = with pkgs; [
                     lua
                     qdirstat
-                    steam
                     ffmpeg-full
                     appimage-run
                     nodejs_24

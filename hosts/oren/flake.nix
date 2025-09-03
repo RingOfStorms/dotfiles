@@ -35,12 +35,33 @@
                 { config, pkgs, ... }:
                 {
                   programs = {
-                    steam.enable = true;
+                    nix-ld = {
+                      enable = true;
+                      libraries = with pkgs; [
+                        icu
+                        gmp
+                        glibc
+                        openssl
+                        stdenv.cc.cc
+                      ];
+                    };
+                  };
+                  environment.shellAliases = {
+                    "oc" =
+                      "all_proxy='' http_proxy='' https_proxy='' /home/josh/other/opencode/node_modules/opencode-linux-x64/bin/opencode";
+                    "occ" = "oc -c";
+
+                    "ollamal" = "ollama list | tail -n +2 | awk '{print $1}' | fzf --ansi --preview 'ollama show {}'";
+                    "battery" = "cat /sys/class/power_supply/BAT1/capacity";
                   };
 
                   environment.systemPackages = with pkgs; [
                     lua
                     qdirstat
+                    ffmpeg-full
+                    appimage-run
+                    nodejs_24
+                    foot
                   ];
 
                   services.ollama = {
@@ -57,15 +78,18 @@
                       reporting.enable = true;
                     };
                     secrets.enable = true;
-                    desktopEnvironment.gnome.enable = true;
+                    desktopEnvironment.sway = {
+                      enable = true;
+                      waybar.enable = true;
+                      swaync.enable = true;
+                    };
                     programs = {
                       qFlipper.enable = true;
                       rustDev.enable = true;
                       uhkAgent.enable = true;
                       tailnet.enable = true;
                       ssh.enable = true;
-                      docker.enable = true;
-                      opencode.enable = true;
+                      podman.enable = true;
                       virt-manager.enable = true;
                       flatpaks = {
                         enable = true;
@@ -113,6 +137,7 @@
                             tmux
                             atuin
                             kitty
+                            foot
                             direnv
                             git
                             nix_deprecations
