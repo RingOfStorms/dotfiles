@@ -46,7 +46,6 @@ with lib;
       cl = "clear";
 
       # git
-      branch = "git checkout -b";
       status = "git status";
       diff = "git diff";
       branches = "git branch -a";
