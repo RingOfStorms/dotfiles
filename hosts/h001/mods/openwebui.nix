@@ -137,8 +137,10 @@
             litellm_params = {
               model = "github_copilot/claude-sonnet-4";
               extra_headers = {
-                "editor-version" = "vscode/1.92.0";
+                "editor-version" = "vscode/1.85.1";
                 "Copilot-Integration-Id" = "vscode-chat";
+                "user-agent" = "GithubCopilot/1.155.0";
+                "editor-plugin-version" = "copilot/1.155.0";
               };
             };
           }
