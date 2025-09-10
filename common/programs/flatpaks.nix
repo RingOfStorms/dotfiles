@@ -32,9 +32,9 @@ in
         global = {
           Context.sockets = [
             "wayland"
-            "fallback-x11"
+            "x11"
           ];
-
+          Context.devices = [ "dri" ]; # allow GPU access if desired
           Environment = {
             XCURSOR_PATH = "/run/host/user-share/icons:/run/host/share/icons";
             GTK_THEME = "Adwaita:dark";
@@ -42,6 +42,7 @@ in
             ELECTRON_OZONE_PLATFORM_HINT = "auto"; # or 'auto'
             GTK_USE_PORTAL = "1";
             OZONE_PLATFORM = "wayland";
+            QT_QPA_PLATFORM = "xcb";    # force XCB for Flatpaks (XWayland)
           };
         };
         "org.signal.Signal" = {
