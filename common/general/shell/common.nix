@@ -25,6 +25,17 @@ with lib;
       hdparm
       speedtest-cli
       lf
+
+      # Build script bins from repo scripts
+      (pkgs.writeShellScriptBin "branch" ''#!/usr/bin/env bash
+. ${./branch.sh}
+branch "$@"
+'')
+      (pkgs.writeShellScriptBin "branchd" ''#!/usr/bin/env bash
+. ${./branch.sh}
+branchd "$@"
+'')
+      (pkgs.writeShellScriptBin "link_ignored" (builtins.readFile ./link_ignored.sh))
     ];
 
     environment.shellAliases = {
@@ -52,6 +63,7 @@ with lib;
       gcam = "git commit -a -m";
       gcm = "git commit -m";
       stashes = "git stash list";
+
 
       # ripgrep
       rg = "rg --no-ignore";
