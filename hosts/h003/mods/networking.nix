@@ -211,6 +211,7 @@
         "2c:cf:67:6a:45:47,HOMEASSISTANT,10.12.14.22"
         "2a:d0:ec:fa:b9:7e,PIXEL-6,10.12.14.31"
         "a8:29:48:94:23:dd,TL-SG1428PE,10.12.16.2"
+        "00:23:a4:0b:3b:be,TMREM00004335,10.12.14.181"
       ];
 
       enable-ra = lib.mkIf config.networking.enableIPv6 true;

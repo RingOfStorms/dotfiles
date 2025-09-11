@@ -25,17 +25,6 @@ with lib;
       hdparm
       speedtest-cli
       lf
-
-      # Build script bins from repo scripts
-      (pkgs.writeShellScriptBin "branch" ''#!/usr/bin/env bash
-. ${./branch.sh}
-branch "$@"
-'')
-      (pkgs.writeShellScriptBin "branchd" ''#!/usr/bin/env bash
-. ${./branch.sh}
-branchd "$@"
-'')
-      (pkgs.writeShellScriptBin "link_ignored" (builtins.readFile ./link_ignored.sh))
     ];
 
     environment.shellAliases = {
@@ -64,12 +53,16 @@ branchd "$@"
       gcm = "git commit -m";
       stashes = "git stash list";
 
-
       # ripgrep
       rg = "rg --no-ignore";
       rgf = "rg --files --glob '!/nix/store/**' 2>/dev/null | rg";
     };
 
-    environment.shellInit = builtins.readFile ./common.sh;
+    environment.shellInit = lib.concatStringsSep "\n\n" [
+      (builtins.readFile ./common.sh)
+      (builtins.readFile ./branch.func.sh)
+      (builtins.readFile ./branchd.func.sh)
+      (builtins.readFile ./link_ignored.func.sh)
+    ];
   };
 }
