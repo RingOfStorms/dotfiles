@@ -28,8 +28,6 @@ in
 
           modules-left = [
             "sway/workspaces"
-            "sway/mode"
-            "sway/scratchpad"
           ];
           modules-center = [
             "clock"
@@ -249,6 +247,7 @@ in
             "menu-actions" = {
               shutdown = "shutdown 0";
               reboot = "reboot";
+              logout = "loginctl terminate-session $(loginctl list-sessions | grep seat0 | awk '{print $1}')";
             };
           };
 

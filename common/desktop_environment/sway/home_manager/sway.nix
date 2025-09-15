@@ -48,9 +48,26 @@ in
 
         gaps = {
           inner = 2;
-          outer = 4;
+          outer = 5;
           smartGaps = false;
           smartBorders = "on";
+        };
+
+        colors = {
+          focused = {
+            background = "#444444";
+            border = "#555555";
+            childBorder = "#444444";
+            indicator = "#595959";
+            text = "#f1f1f1";
+          };
+          unfocused = {
+            background = "#222222";
+            border = "#333333";
+            childBorder = "#222222";
+            indicator = "#292d2e";
+            text = "#888888";
+          };
         };
 
         window = {
