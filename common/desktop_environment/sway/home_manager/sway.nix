@@ -60,11 +60,34 @@ in
             # Bitwarden chrome popup as floating example from Hyprland rules
             {
               criteria = {
-                class = "chrome-nngceckbapebfimnlniiiahkandclblb-Default";
-                title = "_crx_nngceckbapebfimnlniiiahkandclblb";
-                instance = ".*";
+                app_id = "chrome-nngceckbapebfimnlniiiahkandclblb-Default";
               };
-              command = "floating enable, move position center, resize set 720 600";
+              command = "floating enable";
+            }
+            {
+              criteria = {
+                app_id = "pavucontrol";
+              };
+              command = "floating enable, move position center, resize set 620 1200";
+            }
+            {
+              criteria = {
+                class = "Google-chrome";
+                window_role = "pop-up";
+              };
+              command = "floating enable, move position center, resize set 720 480";
+            }
+            {
+              criteria = {
+                window_role = "pop-up";
+              };
+              command = "floating enable, move position center, resize set 640 420";
+            }
+            {
+              criteria = {
+                window_role = "About";
+              };
+              command = "floating enable, move position center, resize set 640 420";
             }
           ];
         };

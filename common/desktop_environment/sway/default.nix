@@ -79,6 +79,7 @@ with lib;
       slurp
       wf-recorder
       btop
+      pavucontrol
     ];
 
     services.blueman.enable = config.hardware.bluetooth.enable;
