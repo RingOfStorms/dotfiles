@@ -4,8 +4,8 @@
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
-    # common.url = "path:../../common";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
+    common.url = "path:../../common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -52,7 +52,6 @@
                     "occ" = "oc -c";
 
                     "ollamal" = "ollama list | tail -n +2 | awk '{print $1}' | fzf --ansi --preview 'ollama show {}'";
-                    "battery" = "cat /sys/class/power_supply/BAT1/capacity";
                   };
 
                   environment.systemPackages = with pkgs; [
@@ -95,13 +94,11 @@
                         enable = true;
                         packages = [
                           "org.signal.Signal"
-                          "com.discordapp.Discord"
+                          "dev.vencord.Vesktop"
                           "md.obsidian.Obsidian"
                           "com.spotify.Client"
                           "org.videolan.VLC"
                           "com.bitwarden.desktop"
-                          "org.openscad.OpenSCAD"
-                          "org.blender.Blender"
                           "im.riot.Riot"
                           "com.rustdesk.RustDesk"
                           "com.google.Chrome"

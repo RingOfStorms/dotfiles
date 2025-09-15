@@ -157,7 +157,7 @@ in
         bars = [ ]; # Use Waybar via Home Manager
         startup = [
           {
-            command = "swaymsg workspace number 7 ; swaymsg workspace number 1";
+            command = "exec sh -c 'sleep 0.01; swaymsg workspace number 7 ; sleep 0.01; swaymsg workspace number 1'";
           }
           { command = "pgrep waybar >/dev/null || waybar"; }
         ];
