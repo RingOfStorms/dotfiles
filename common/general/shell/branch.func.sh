@@ -76,8 +76,16 @@ branch() {
   git -C "$repo_dir" fetch --all --prune || true
 
   local wt_root wt_path
+  if [ -z "$xdg" ]; then
+    xdg="${XDG_DATA_HOME:-$HOME/.local/share}"
+  fi
   wt_root="$xdg/git_worktrees/${repo_base}_${repo_hash}"
   wt_path="$wt_root/$branch_name"
+
+  # ensure worktree root exists
+  if [ ! -d "$wt_root" ]; then
+    mkdir -p "$wt_root" || { echo "Failed to create worktree root: $wt_root" >&2; return 1; }
+  fi
 
   # If worktree already exists at our expected path, open a shell there
   if [ -d "$wt_path" ]; then
@@ -86,11 +94,23 @@ branch() {
     return 0
   fi
 
-  local branch_exists branch_from
+  local branch_exists branch_from local_exists
   branch_exists=$(git -C "$repo_dir" ls-remote --heads origin "$branch_name" | wc -l)
+  # check if a local branch exists
+  if git -C "$repo_dir" show-ref --verify --quiet "refs/heads/$branch_name"; then
+    local_exists=1
+  else
+    local_exists=0
+  fi
+
   branch_from="$default_branch"
   if [ "$branch_exists" -eq 0 ]; then
-    echo "Branch '$branch_name' does not exist on remote; creating from '$branch_from'."
+    if [ "$local_exists" -eq 1 ]; then
+      branch_from="$branch_name"
+      echo "Branch '$branch_name' exists locally; creating worktree from local branch."
+    else
+      echo "Branch '$branch_name' does not exist on remote; creating from '$branch_from'."
+    fi
   else
     branch_from="origin/$branch_name"
     echo "Branch '$branch_name' exists on remote; creating worktree tracking it."
@@ -99,9 +119,16 @@ branch() {
   echo "Creating new worktree for branch '$branch_name' at '$wt_path'."
 
   # Try to add or update worktree from the resolved ref. Use a fallback path if needed.
-  if git -C "$repo_dir" worktree add -b "$branch_name" "$wt_path" "$branch_from" 2>/dev/null; then
-    cd "$wt_path" || return 1
-    return 0
+  if [ "$local_exists" -eq 1 ]; then
+    if git -C "$repo_dir" worktree add "$wt_path" "$branch_name" 2>/dev/null; then
+      cd "$wt_path" || return 1
+      return 0
+    fi
+  else
+    if git -C "$repo_dir" worktree add -b "$branch_name" "$wt_path" "$branch_from" 2>/dev/null; then
+      cd "$wt_path" || return 1
+      return 0
+    fi
   fi
 
   # Fallback: try to resolve a concrete SHA and create the branch ref locally, then add worktree

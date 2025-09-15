@@ -8,7 +8,7 @@
     };
     alpha = lib.mkOption {
       type = lib.types.float;
-      default = 0.9;
+      default = 0.935;
       description = "Background opacity for Foot terminal (1.0 = opaque)";
     };
   };
