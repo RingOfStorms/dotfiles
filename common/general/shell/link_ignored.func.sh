@@ -38,24 +38,26 @@ EOF
     return 2
   fi
 
-  local -a candidates
-  IFS=$'\0' read -r -d '' -a candidates < <(git -C "$repo_root" ls-files --others --ignored --exclude-standard -z || true)
+  local -a candidates=()
+  while IFS= read -r -d '' file; do
+    candidates+=("$file")
+  done < <(git -C "$repo_root" ls-files --others --ignored --exclude-standard -z || true)
 
   if [ ${#candidates[@]} -eq 0 ]; then
     echo "No untracked/ignored files found in $repo_root"
     return 0
   fi
 
-  declare -A _seen
   local -a tops=()
   for c in "${candidates[@]}"; do
     c="${c%/}"
     local top="${c%%/*}"
     [ -z "$top" ] && continue
-    if [ -z "${_seen[$top]:-}" ]; then
-      _seen[$top]=1
-      tops+=("$top")
-    fi
+    local found=0
+    for existing in "${tops[@]}"; do
+      [ "$existing" = "$top" ] && found=1 && break
+    done
+    [ "$found" -eq 0 ] && tops+=("$top")
   done
 
   if [ ${#tops[@]} -eq 0 ]; then
@@ -89,7 +91,12 @@ EOF
     if [ -z "$selected" ]; then
       echo "No files selected." && return 0
     fi
-    IFS=$'\n' read -r -d '' -a chosen < <(printf "%s\n" "$selected" && printf '\0')
+    chosen=()
+    while IFS= read -r line; do
+      chosen+=("$line")
+    done <<EOF
+$selected
+EOF
   else
     chosen=("${filtered[@]}")
   fi

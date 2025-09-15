@@ -1,16 +1,7 @@
 branch() {
   local branch_name=${1:-}
-  if [ -z "$branch_name" ]; then
-    echo "Usage: branch <name>" >&2
-    return 2
-  fi
 
-  # branch <name> — create or open a worktree for <name>
-  # This function will change directory into the selected worktree so the
-  # caller's shell is moved into it.
-
-  local xdg=${XDG_DATA_HOME:-$HOME/.local/share}
-
+  # Determine repo root early so we can run branches inside it
   local common_dir
   if ! common_dir=$(git rev-parse --git-common-dir 2>/dev/null); then
     echo "Not inside a git repository." >&2
@@ -23,6 +14,36 @@ branch() {
   if [ -z "$repo_dir" ]; then
     echo "Unable to determine repository root." >&2
     return 1
+  fi
+
+  # If no branch was provided, present an interactive selector combining local and remote branches
+  if [ -z "$branch_name" ]; then
+    if ! command -v fzf >/dev/null 2>&1; then
+      echo "Usage: branch <name>" >&2
+      return 2
+    fi
+
+    local branches_list_raw branches_list selection
+    if declare -f local_branches >/dev/null 2>&1; then
+      branches_list_raw=$(local_branches 2>/dev/null || true; remote_branches 2>/dev/null || true)
+    else
+      branches_list_raw=$(git -C "$repo_dir" branch --format='%(refname:short)' 2>/dev/null || true; git -C "$repo_dir" branch -r --format='%(refname:short)' 2>/dev/null | sed 's#^.*/##' || true)
+    fi
+
+    branches_list=$(printf "%s
+" "$branches_list_raw" | awk '!seen[$0]++')
+    if [ -z "$branches_list" ]; then
+      echo "No branches found." >&2
+      return 1
+    fi
+
+    selection=$(printf "%s\n" "$branches_list" | fzf --height=40% --prompt="Select branch: ")
+    if [ -z "$selection" ]; then
+      echo "No branch selected." >&2
+      return 1
+    fi
+
+    branch_name="$selection"
   fi
 
   local repo_base repo_hash default_branch

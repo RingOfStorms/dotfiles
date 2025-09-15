@@ -15,6 +15,7 @@
         prefix = [
           "~/projects"
           "~/.config"
+          "~/.local/share/git_worktrees/"
         ];
       };
     };
