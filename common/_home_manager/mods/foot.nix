@@ -6,6 +6,11 @@
       default = 12.0;
       description = "Font size for Foot terminal";
     };
+    alpha = lib.mkOption {
+      type = lib.types.float;
+      default = 0.9;
+      description = "Background opacity for Foot terminal (1.0 = opaque)";
+    };
   };
   config = {
     programs.foot = {
@@ -23,7 +28,7 @@
 
         colors = {
           # Background opacity (1.0 = opaque)
-          alpha = "1.0";
+          alpha = toString config.components.foot.alpha;
 
           # Foreground/background
           foreground = "e0e0e0";
