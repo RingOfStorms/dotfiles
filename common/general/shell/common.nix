@@ -60,6 +60,7 @@ with lib;
 
     environment.shellInit = lib.concatStringsSep "\n\n" [
       (builtins.readFile ./common.sh)
+      (builtins.readFile ./tmux_helpers.sh)
       (builtins.readFile ./branch.func.sh)
       (builtins.readFile ./branchd.func.sh)
       (builtins.readFile ./link_ignored.func.sh)

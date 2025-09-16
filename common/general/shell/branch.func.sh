@@ -1,6 +1,48 @@
 branch() {
   local branch_name=${1:-}
 
+  # helper: set tmux window name. If tmux is in auto mode, always rename.
+  # If tmux is manual but the current window name matches the previous branch,
+  # allow renaming from previous branch name to the new one.
+  _branch__maybe_set_tmux_name() {
+    if ! command -v tmux_window >/dev/null 2>&1; then
+      return 1
+    fi
+    local new_name prev_branch tmux_status tmux_cur
+    new_name=${1:-}
+    prev_branch=${2:-}
+    tmux_status=$(tmux_window status 2>/dev/null || true)
+    if [ "$tmux_status" = "auto" ]; then
+      tmux_window rename "$new_name" 2>/dev/null || true
+      return 0
+    fi
+    # tmux is manual. If the current tmux name matches the previous branch,
+    # we consider it safe to update it to the new branch name.
+    if [ -n "$prev_branch" ]; then
+      tmux_cur=$(tmux_window get 2>/dev/null || true)
+      if [ "$tmux_cur" = "$prev_branch" ]; then
+        tmux_window rename "$new_name" 2>/dev/null || true
+      fi
+    fi
+  }
+
+  # helper: revert tmux to automatic rename only if current tmux name matches previous branch
+  _branch__revert_tmux_auto() {
+    if ! command -v tmux_window >/dev/null 2>&1; then
+      return 1
+    fi
+    local prev_branch=${1:-}
+    if [ -z "$prev_branch" ]; then
+      tmux_window rename 2>/dev/null || true
+      return 0
+    fi
+    local tmux_cur
+    tmux_cur=$(tmux_window get 2>/dev/null || true)
+    if [ "$tmux_cur" = "$prev_branch" ]; then
+      tmux_window rename 2>/dev/null || true
+    fi
+  }
+
   # Determine repo root early so we can run branches inside it
   local common_dir
   if ! common_dir=$(git rev-parse --git-common-dir 2>/dev/null); then
@@ -24,12 +66,11 @@ branch() {
     fi
 
     local branches_list_raw branches_list selection
+    # Gather local and remote branches with fallbacks to ensure locals appear
+    branches_list_raw=""
     if declare -f local_branches >/dev/null 2>&1; then
-      branches_list_raw=$(local_branches 2>/dev/null || true; remote_branches 2>/dev/null || true)
-    else
-      branches_list_raw=$(git -C "$repo_dir" branch --format='%(refname:short)' 2>/dev/null || true; git -C "$repo_dir" branch -r --format='%(refname:short)' 2>/dev/null | sed 's#^.*/##' || true)
+      branches_list_raw=$(cd "$repo_dir" && local_branches 2>/dev/null || true; cd "$repo_dir" && remote_branches 2>/dev/null || true)
     fi
-
     branches_list=$(printf "%s
 " "$branches_list_raw" | awk '!seen[$0]++')
     if [ -z "$branches_list" ]; then
@@ -37,13 +78,19 @@ branch() {
       return 1
     fi
 
-    selection=$(printf "%s\n" "$branches_list" | fzf --height=40% --prompt="Select branch: ")
-    if [ -z "$selection" ]; then
+    fzf_out=$(printf "%s\n" "$branches_list" | fzf --height=40% --prompt="Select branch: " --print-query)
+    if [ -z "$fzf_out" ]; then
       echo "No branch selected." >&2
       return 1
     fi
-
-    branch_name="$selection"
+    branch_query=$(printf "%s\n" "$fzf_out" | sed -n '1p')
+    branch_selection=$(printf "%s\n" "$fzf_out" | sed -n '2p')
+    if [ -n "$branch_selection" ]; then
+      branch_name="$branch_selection"
+    else
+      # user typed something in fzf but didn't select: use that as new branch name
+      branch_name=$(printf "%s" "$branch_query" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    fi
   fi
 
   local repo_base repo_hash default_branch
@@ -52,6 +99,10 @@ branch() {
 
   default_branch=$(getdefault)
 
+  # capture current branch name as seen by tmux so we can decide safe renames later
+  local prev_branch
+  prev_branch=$(git -C "$PWD" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+
   # Special-case: jump to the main working tree on the default branch
   if [ "$branch_name" = "default" ] || [ "$branch_name" = "master" ] || [ "$branch_name" = "$default_branch" ]; then
     if [ "$repo_dir" = "$PWD" ]; then
@@ -59,7 +110,10 @@ branch() {
       return 0
     fi
     echo "Switching to main working tree on branch '$default_branch'."
+    # capture current branch name as seen by tmux so we only revert if it matches
+    prev_branch=$(git -C "$PWD" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
     cd "$repo_dir" || return 1
+    _branch__revert_tmux_auto "$prev_branch" || true
     return 0
   fi
 
@@ -69,6 +123,7 @@ branch() {
   if [ -n "$existing" ]; then
     echo "Opening existing worktree for branch '$branch_name' at '$existing'."
     cd "$existing" || return 1
+    _branch__maybe_set_tmux_name "$branch_name" "$prev_branch" || true
     return 0
   fi
 
@@ -91,6 +146,7 @@ branch() {
   if [ -d "$wt_path" ]; then
     echo "Opening existing worktree at '$wt_path'."
     cd "$wt_path" || return 1
+    _branch__maybe_set_tmux_name "$branch_name" "$prev_branch" || true
     return 0
   fi
 
@@ -120,13 +176,16 @@ branch() {
 
   # Try to add or update worktree from the resolved ref. Use a fallback path if needed.
   if [ "$local_exists" -eq 1 ]; then
-    if git -C "$repo_dir" worktree add "$wt_path" "$branch_name" 2>/dev/null; then
+      if git -C "$repo_dir" worktree add "$wt_path" "$branch_name" 2>/dev/null; then
       cd "$wt_path" || return 1
+      _branch__maybe_set_tmux_name "$branch_name" "$prev_branch" || true
       return 0
     fi
+
   else
     if git -C "$repo_dir" worktree add -b "$branch_name" "$wt_path" "$branch_from" 2>/dev/null; then
       cd "$wt_path" || return 1
+      _branch__maybe_set_tmux_name "$branch_name" "$prev_branch" || true
       return 0
     fi
   fi
@@ -135,9 +194,10 @@ branch() {
   local start_sha
   if start_sha=$(git -C "$repo_dir" rev-parse --verify "$branch_from" 2>/dev/null); then
     if git -C "$repo_dir" branch "$branch_name" "$start_sha" 2>/dev/null; then
-      if git -C "$repo_dir" worktree add "$wt_path" "$branch_name" 2>/dev/null; then
-        cd "$wt_path" || return 1
-        return 0
+        if git -C "$repo_dir" worktree add "$wt_path" "$branch_name" 2>/dev/null; then
+      cd "$wt_path" || return 1
+      _branch__maybe_set_tmux_name "$branch_name" "$prev_branch" || true
+      return 0
       else
         git -C "$repo_dir" branch -D "$branch_name" 2>/dev/null || true
         rmdir "$wt_path" 2>/dev/null || true

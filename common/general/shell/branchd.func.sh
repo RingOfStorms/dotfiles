@@ -79,12 +79,22 @@ branchdel() {
   if git -C "$repo_dir" worktree remove "$target_wt" 2>/dev/null; then
     rm -rf -- "$target_wt" 2>/dev/null || true
     echo "Removed worktree: $target_wt"
+    # delete local branch if it exists
+    if git -C "$repo_dir" show-ref --verify --quiet "refs/heads/$branch"; then
+      git -C "$repo_dir" branch -D "$branch" 2>/dev/null || true
+      echo "Deleted local branch: $branch"
+    fi
     return 0
   fi
   # try with --force as a fallback
   if git -C "$repo_dir" worktree remove --force "$target_wt" 2>/dev/null; then
     rm -rf -- "$target_wt" 2>/dev/null || true
     echo "Removed worktree (forced): $target_wt"
+    # delete local branch if it exists
+    if git -C "$repo_dir" show-ref --verify --quiet "refs/heads/$branch"; then
+      git -C "$repo_dir" branch -D "$branch" 2>/dev/null || true
+      echo "Deleted local branch: $branch"
+    fi
     return 0
   fi
 

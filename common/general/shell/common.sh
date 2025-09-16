@@ -103,11 +103,11 @@ forcepush () {
 }
 
 remote_branches () {
-  git branch -a | grep 'remotes' | grep -v -E '.*(HEAD|${DEFAULT})' | cut -d'/' -f 3-
+  git for-each-ref --format='%(refname:short)' refs/remotes 2>/dev/null | sed 's#^[^/]*/##' | grep -v '^HEAD$' || true
 }
 
 local_branches () {
-  git branch -a | grep -v 'remotes' | grep -v -E '.*(HEAD|${DEFAULT})' | grep -v '^*' |  cut -d' ' -f 3-
+  git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null || true
 }
 
 prunel () {
