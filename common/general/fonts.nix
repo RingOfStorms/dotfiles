@@ -33,9 +33,27 @@ in
         default = true;
         description = "Enable jetbrains mono font";
       };
+      japaneseFonts = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Enable japanese fonts";
+      };
     };
 
-  config = lib.mkIf cfg.jetbrainsMonoFont {
-    fonts.packages = [ jetbrainsMonoFont ];
+  config = {
+    fonts.packages =
+      lib.optionals cfg.jetbrainsMonoFont [
+        jetbrainsMonoFont
+      ]
+      ++ lib.optionals cfg.japaneseFonts (
+        with pkgs;
+        [
+          ipafont
+          kochi-substitute
+          noto-fonts-cjk-sans # Or another CJK font
+        ]
+      );
+
+    fonts.fontconfig.enable = true;
   };
 }

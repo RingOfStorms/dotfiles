@@ -4,8 +4,8 @@
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
-    # common.url = "path:../../common";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
+    common.url = "path:../../common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -77,6 +77,7 @@
                     foot
                     vlc
                     upkgs.ladybird
+                    google-chrome
                   ];
                   # Also allow this key to work for root user, this will let us use this as a remote builder easier
                   users.users.root.openssh.authorizedKeys.keys = [
@@ -122,7 +123,6 @@
                           "org.openscad.OpenSCAD"
                           "org.blender.Blender"
                           "com.rustdesk.RustDesk"
-                          "com.google.Chrome"
                         ];
                       };
                     };

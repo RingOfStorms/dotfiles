@@ -52,6 +52,7 @@ with lib;
       gcam = "git commit -a -m";
       gcm = "git commit -m";
       stashes = "git stash list";
+      bd = "branch default";
 
       # ripgrep
       rg = "rg --no-ignore";
