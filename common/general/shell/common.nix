@@ -53,6 +53,9 @@ with lib;
       gcm = "git commit -m";
       stashes = "git stash list";
       bd = "branch default";
+      li = "link_ignored";
+      bx = "branchdel";
+      b = "branch";
 
       # ripgrep
       rg = "rg --no-ignore";
