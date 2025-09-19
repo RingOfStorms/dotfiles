@@ -7,8 +7,8 @@
     userName = "RingOfStorms (Joshua Bell)";
 
     extraConfig = {
-      core.pager = "cat";
-      core.editor = "nvim";
+      core.pager = "bat";
+      core.editor = "nano";
 
       pull.rebase = false;
 
