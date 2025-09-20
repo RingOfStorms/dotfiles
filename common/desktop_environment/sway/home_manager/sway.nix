@@ -163,6 +163,11 @@ in
           "${modifier}+shift+9" = "move container to workspace number 9";
           "${modifier}+shift+0" = "move container to workspace number 10";
 
+          "${modifier}+left" =  "resize shrink width 10 px or 10 ppt";
+          "${modifier}+down" =  "resize shrink height 10 px or 10 ppt";
+          "${modifier}+up" =    "resize grow height 10 px or 10 ppt";
+          "${modifier}+right" = "resize grow width 10 px or 10 ppt";
+
           # Mouse bindings (Mod + drag)
           "${modifier}+button1" = "move";
           "${modifier}+button3" = "resize";
