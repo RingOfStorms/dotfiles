@@ -104,9 +104,25 @@ with lib;
       ];
     };
 
+    # Enable PipeWire + WirePlumber so xdg-desktop-portal can do screencast
+    services.pipewire = {
+      enable = true;
+      # Enable WirePlumber session manager via the pipewire module option
+      wireplumber = {
+        enable = true;
+      };
+    };
+
+    # Ensure graphics/OpenGL are enabled so Sway uses GPU-backed rendering
     hardware.graphics = {
       enable = true;
       # Keep defaults; Sway runs fine with mesa in system
+    };
+
+    hardware.opengl = {
+      enable = true;
+      # extraPackages can be used to force vendor-specific mesa/drivers if needed
+      extraPackages = with pkgs; [];
     };
 
     # Environment variables
@@ -116,11 +132,14 @@ with lib;
         XDG_SESSION_TYPE = "wayland";
         XDG_CURRENT_DESKTOP = "sway";
         XDG_SESSION_DESKTOP = "sway";
-        WLR_RENDERER = "auto";
+        # prefer EGL renderer (can be changed back to "auto" if needed)
+        WLR_RENDERER = "egl";
 
         # Tell apps to run native wayland
         NIXOS_OZONE_WL = "1";
         ELECTRON_OZONE_PLATFORM_HINT = "wayland";
+        ELECTRON_ENABLE_WAYLAND = "1";
+        ELECTRON_DISABLE_SANDBOX = "0";
         GDK_BACKEND = "wayland,x11"; # GTK
         QT_QPA_PLATFORM = "wayland;xcb"; # Qt 5/6
         MOZ_ENABLE_WAYLAND = "1"; # Firefox
