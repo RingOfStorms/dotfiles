@@ -57,14 +57,14 @@ let
         scale = "1";
         pos = "0 0";
         mode = "3840x2160@97.983Hz";
-        bg = "${./wallpapers/pixel_neon.png} fill";
+        bg = "${../_shared_assets/wallpapers/pixel_neon.png} fill";
       };
       "DP-2" = {
         scale = "1";
         transform = "270";
         pos = "-1440 -640";
         mode = "3440x1440@99.982Hz";
-        bg = "${./wallpapers/pixel_neon_v.png} fill";
+        bg = "${../_shared_assets/wallpapers/pixel_neon_v.png} fill";
       };
     };
   };
