@@ -10,7 +10,7 @@ let
     # Optional output settings
     output = {
       "eDP-1" = {
-        scale = "1";
+        scale = "1.7";
         pos = "0 0";
         mode = "2560x1600@165.000Hz";
         bg = "${../_shared_assets/wallpapers/pixel_neon.png} fill";

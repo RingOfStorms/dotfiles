@@ -126,7 +126,6 @@
                     homeManager = {
                       users = {
                         josh = {
-                          components.kitty.font_size = 20.0;
                           imports = with common.homeManagerModules; [
                             zsh
                             ssh

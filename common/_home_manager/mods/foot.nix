@@ -20,7 +20,7 @@
       settings = {
         main = {
           # Use the same font and size as your Kitty config
-          font = "JetBrainsMonoNL Nerd Font:size=${toString config.components.kitty.font_size}";
+          font = "JetBrainsMonoNL Nerd Font:size=${toString config.components.foot.font_size}";
 
           # Initial window size in character cells (Kitty used 160c x 55c)
           "initial-window-size-chars" = "160x55";
