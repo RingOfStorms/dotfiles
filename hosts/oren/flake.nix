@@ -35,6 +35,14 @@
               (
                 { config, pkgs, ... }:
                 {
+                  networking = {
+                    firewall = {
+                      allowedTCPPorts = [
+                        9991
+                      ];
+                    };
+                  };
+
                   programs = {
                     nix-ld = {
                       enable = true;
@@ -62,6 +70,7 @@
                     appimage-run
                     nodejs_24
                     foot
+                    ttyd
                   ];
 
                   services.ollama = {
