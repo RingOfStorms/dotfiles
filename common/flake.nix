@@ -4,8 +4,6 @@
     home-manager.url = "github:rycee/home-manager/release-25.05";
     ragenix.url = "github:yaxitech/ragenix";
     nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
-
-    # disabled for now
     hyprland.url = "github:hyprwm/Hyprland";
   };
 
