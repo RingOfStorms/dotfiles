@@ -6,7 +6,7 @@ in
 {
   imports = [
     ./gnome
-    # ./hyprland
+    ./hyprland
     ./sway
     ./cosmic
   ];
@@ -19,10 +19,10 @@ in
               name = "gnome";
               enabled = cfg.gnome.enable;
             }
-            # {
-            #   name = "hyprland";
-            #   enabled = cfg.hyprland.enable;
-            # }
+            {
+              name = "hyprland";
+              enabled = cfg.hyprland.enable;
+            }
             {
               name = "sway";
               enabled = cfg.sway.enable;

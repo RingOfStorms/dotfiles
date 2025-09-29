@@ -50,7 +50,6 @@ in
             "custom/power"
           ];
 
-          # LEFT
           "sway/workspaces" = {
             format = "{icon}";
             format-icons = {

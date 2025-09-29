@@ -31,10 +31,15 @@
               ros_neovim.nixosModules.default
               ./configuration.nix
               ./hardware-configuration.nix
-              ./sway_customizations.nix
+              # ./sway_customizations.nix
+              ./hyprland_customizations.nix
               (
                 { config, pkgs, ... }:
                 {
+                  services.devmon.enable = true;
+                  services.gvfs.enable = true;
+                  services.udisks2.enable = true;
+
                   networking = {
                     firewall = {
                       allowedTCPPorts = [
@@ -87,7 +92,7 @@
                       reporting.enable = true;
                     };
                     secrets.enable = true;
-                    desktopEnvironment.sway = {
+                    desktopEnvironment.hyprland = {
                       enable = true;
                       waybar.enable = true;
                       swaync.enable = true;

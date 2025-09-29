@@ -26,7 +26,7 @@ in
       debug.disable_logs = false;
       debug.disable_time = false;
 
-      exec-once = [ "pgrep waybar>/dev/null || waybar" ];
+      # exec-once = [ "pgrep waybar>/dev/null || waybar" ];
 
       # Default monitor configuration
       monitor = "monitor = , preferred, auto, 1";
@@ -95,6 +95,7 @@ in
         "$mainMod SHIFT, escape, exit"
         "$mainMod SHIFT, q, exec, swaylock"
         "$mainMod, f, togglefloating"
+        "$mainMod SHIFT, F, fullscreen"
         "$mainMod, g, pseudo"
         "$mainMod, t, togglesplit"
 
