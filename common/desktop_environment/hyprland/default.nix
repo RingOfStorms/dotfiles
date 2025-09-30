@@ -31,6 +31,11 @@ with lib;
         default = { };
         description = "Extra options for Hyprland configuration.";
       };
+      hyprpaperSettings = lib.mkOption {
+        type = lib.types.attrs;
+        default = { };
+        description = "Extra options for hyprpaper configuration.";
+      };
       swaync = {
         enable = lib.mkEnableOption "Enable Swaync (notification center for Hyprland)";
       };
@@ -94,7 +99,7 @@ with lib;
     programs.hyprland = {
       enable = true;
       # xwayland.enable = false;
-      withUWSM = true;
+      # withUWSM = true;
 
       # set the flake package
       package = hyprlandPkgs.hyprland;
@@ -115,6 +120,15 @@ with lib;
       ];
     };
 
+    # Enable PipeWire + WirePlumber so xdg-desktop-portal can do screencast
+    services.pipewire = {
+      enable = true;
+      # Enable WirePlumber session manager via the pipewire module option
+      wireplumber = {
+        enable = true;
+      };
+    };
+
     hardware.graphics = {
       enable = true;
       package = hyprlandPkgs.mesa;
@@ -127,18 +141,21 @@ with lib;
     environment.sessionVariables = {
       GTK_THEME = "Adwaita:dark";
       XDG_SESSION_TYPE = "wayland";
-      XDG_CURRENT_DESKTOP = "Hyprland";
-      XDG_SESSION_DESKTOP = "Hyprland";
-      WLR_RENDERER = "auto";
+      XDG_CURRENT_DESKTOP = "sway";
+      XDG_SESSION_DESKTOP = "sway";
+      # prefer EGL renderer (can be changed back to "auto" if needed)
+      WLR_RENDERER = "egl";
 
       # Tell apps to run native wayland
       NIXOS_OZONE_WL = "1";
       ELECTRON_OZONE_PLATFORM_HINT = "wayland";
+      ELECTRON_ENABLE_WAYLAND = "1";
+      ELECTRON_DISABLE_SANDBOX = "0";
       GDK_BACKEND = "wayland,x11"; # GTK
       QT_QPA_PLATFORM = "wayland;xcb"; # Qt 5/6
       MOZ_ENABLE_WAYLAND = "1"; # Firefox
       SDL_VIDEODRIVER = "wayland"; # SDL apps/games
-      CLUTTER_BACKEND = "wayland"; # You already have this
+      CLUTTER_BACKEND = "wayland";
     };
 
     # Qt theming

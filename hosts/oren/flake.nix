@@ -4,8 +4,8 @@
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
-    common.url = "path:../../common";
-    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
+    # common.url = "path:../../common";
+    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -31,10 +31,23 @@
               ros_neovim.nixosModules.default
               ./configuration.nix
               ./hardware-configuration.nix
-              ./sway_customizations.nix
+              # ./sway_customizations.nix
+              ./hyprland_customizations.nix
               (
                 { config, pkgs, ... }:
                 {
+                  services.devmon.enable = true;
+                  services.gvfs.enable = true;
+                  services.udisks2.enable = true;
+
+                  networking = {
+                    firewall = {
+                      allowedTCPPorts = [
+                        9991
+                      ];
+                    };
+                  };
+
                   programs = {
                     nix-ld = {
                       enable = true;
@@ -62,6 +75,7 @@
                     appimage-run
                     nodejs_24
                     foot
+                    ttyd
                   ];
 
                   services.ollama = {
@@ -78,7 +92,7 @@
                       reporting.enable = true;
                     };
                     secrets.enable = true;
-                    desktopEnvironment.sway = {
+                    desktopEnvironment.hyprland = {
                       enable = true;
                       waybar.enable = true;
                       swaync.enable = true;

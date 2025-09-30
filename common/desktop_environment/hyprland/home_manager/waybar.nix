@@ -1,8 +1,4 @@
-{
-  lib,
-  osConfig,
-  ...
-}:
+{ lib, osConfig, ... }:
 let
   ccfg = import ../../../config.nix;
   cfg_path = [
@@ -15,6 +11,7 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+
     programs.waybar = {
       enable = true;
       systemd.enable = true;
@@ -22,7 +19,7 @@ in
         mainBar = {
           layer = "top";
           position = "top";
-          height = 30;
+          height = 28;
           spacing = 6;
           margin-top = 0;
           margin-bottom = 0;
@@ -32,7 +29,6 @@ in
           modules-left = [
             "hyprland/workspaces"
           ];
-
           modules-center = [
             "clock"
             "temperature"
@@ -40,16 +36,19 @@ in
             "memory"
             "disk"
           ];
-
           modules-right = [
+            "battery"
+            "battery#bat2"
             "pulseaudio"
             "network"
             "bluetooth"
+            "power-profiles-daemon"
+            "backlight"
             "custom/notifications"
-            "hyprland/language"
+            "tray"
+            "custom/power"
           ];
 
-          # Workspaces configuration
           "hyprland/workspaces" = {
             format = "{icon}";
             format-icons = {
@@ -74,7 +73,65 @@ in
               "19" = "十九";
               "20" = "二十";
             };
-            show-special = false;
+            disable-scroll = false;
+          };
+
+          # CENTER
+          clock = {
+            format = "{:%b %d, %H:%M}";
+            tooltip-format = "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>";
+          };
+
+          temperature = {
+            thermal-zone = 2;
+            hwmon-path = "/sys/class/hwmon/hwmon2/temp1_input";
+            critical-threshold = 80;
+            format-critical = "󰔏 {temperatureC}°C";
+            format = "󰔏 {temperatureC}°C";
+          };
+
+          cpu = {
+            format = "󰻠 {usage}%";
+            tooltip = true;
+            on-click = "btop";
+          };
+
+          memory = {
+            format = "󰍛 {}%";
+            on-click = "btop";
+          };
+
+          disk = {
+            interval = 30;
+            format = "󰋊 {percentage_used}%";
+            path = "/";
+            on-click = "btop";
+          };
+
+          # RIGHT
+          "battery" = {
+            "states" = {
+              # "good"= 95;
+              "warning" = 30;
+              "critical" = 15;
+            };
+            "format" = "{capacity}% {icon}";
+            "format-full" = "{capacity}% {icon}";
+            "format-charging" = "{capacity}% ";
+            "format-plugged" = "{capacity}% ";
+            "format-alt" = "{time} {icon}";
+            # "format-good"= ""; // An empty format will hide the module
+            # "format-full"= "";
+            "format-icons" = [
+              ""
+              ""
+              ""
+              ""
+              ""
+            ];
+          };
+          "battery#bat2" = {
+            "bat" = "BAT2";
           };
 
           pulseaudio = {
@@ -98,8 +155,57 @@ in
               ];
             };
             scroll-step = 5;
-            on-click = "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle";
-            on-click-right = "swaync-client -t -sw";
+            on-click = "pavucontrol";
+            on-click-right = "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle";
+          };
+
+          network = {
+            format-wifi = "󰤨 {essid} ({signalStrength}%)";
+            format-ethernet = "󰈀 {ipaddr}/{cidr}";
+            tooltip-format = "{ifname} via {gwaddr} ";
+            format-linked = "󰈀 {ifname} (No IP)";
+            format-disconnected = "󰖪 Disconnected";
+            # on-click = "wofi-wifi-menu";
+            # on-click-right = "nmcli radio wifi toggle";
+          };
+
+          bluetooth = {
+            format = "󰂯 {status}";
+            format-connected = "󰂱 {device_alias}";
+            format-connected-battery = "󰂱 {device_alias} {device_battery_percentage}%";
+            tooltip-format = "{controller_alias}\t{controller_address}\n\n{num_connections} connected";
+            tooltip-format-connected = "{controller_alias}\t{controller_address}\n\n{num_connections} connected\n\n{device_enumerate}";
+            tooltip-format-enumerate-connected = "{device_alias}\t{device_address}";
+            tooltip-format-enumerate-connected-battery = "{device_alias}\t{device_address}\t{device_battery_percentage}%";
+            # on-click = "wofi-bluetooth-menu";
+            # on-click-right = "bluetoothctl power toggle";
+          };
+
+          "power-profiles-daemon" = {
+            format = "{icon}";
+            "tooltip-format" = "Power profile: {profile}\nDriver: {driver}";
+            tooltip = true;
+            "format-icons" = {
+              default = "";
+              performance = "";
+              balanced = "";
+              "power-saver" = "";
+            };
+          };
+
+          backlight = {
+            format = "{percent}% {icon}";
+            "format-icons" = [
+              ""
+              ""
+              ""
+              ""
+              ""
+              ""
+              ""
+              ""
+              ""
+            ];
           };
 
           "custom/notifications" = {
@@ -123,145 +229,30 @@ in
             tooltip = false;
           };
 
-          # Clock
-          clock = {
-            format = "{:%b %d, %H:%M}";
-          };
-
-          temperature = {
-            thermal-zone = 2;
-            hwmon-path = "/sys/class/hwmon/hwmon2/temp1_input";
-            critical-threshold = 80;
-            format-critical = "󰔏 {temperatureC}°C";
-            format = "󰔏 {temperatureC}°C";
-          };
-
-          cpu = {
-            format = "󰻠 {usage}%";
-            tooltip = false;
-            on-click = "btop";
-          };
-
-          memory = {
-            format = "󰍛 {}%";
-            on-click = "btop";
-          };
-
-          disk = {
-            interval = 30;
-            format = "󰋊 {percentage_used}%";
-            path = "/";
-            on-click = "btop";
-          };
-
-          network = {
-            format-wifi = "󰤨 {essid} ({signalStrength}%)";
-            format-ethernet = "󰈀 {ipaddr}/{cidr}";
-            tooltip-format = "{ifname} via {gwaddr} ";
-            format-linked = "󰈀 {ifname} (No IP)";
-            format-disconnected = "󰖪 Disconnected";
-            on-click = "wofi-wifi-menu";
-            on-click-right = "nmcli radio wifi toggle";
-          };
-
-          bluetooth = {
-            format = "󰂯 {status}";
-            format-connected = "󰂱 {device_alias}";
-            format-connected-battery = "󰂱 {device_alias} {device_battery_percentage}%";
-            tooltip-format = "{controller_alias}\t{controller_address}\n\n{num_connections} connected";
-            tooltip-format-connected = "{controller_alias}\t{controller_address}\n\n{num_connections} connected\n\n{device_enumerate}";
-            tooltip-format-enumerate-connected = "{device_alias}\t{device_address}";
-            tooltip-format-enumerate-connected-battery = "{device_alias}\t{device_address}\t{device_battery_percentage}%";
-            on-click = "wofi-bluetooth-menu";
-            on-click-right = "bluetoothctl power toggle";
-          };
-
-          # Keyboard input (language)
-          "hyprland/language" = {
+          "sway/language" = {
             format = "{}";
-            format-en = "EN";
-            format-ja = "JP";
           };
+
+          "tray" = {
+            "spacing" = 10;
+          };
+
+          "custom/power" = {
+            format = "⏻ ";
+            tooltip = false;
+            menu = "on-click";
+            "menu-file" = ./waybar/power_menu.xml;
+            "menu-actions" = {
+              shutdown = "shutdown 0";
+              reboot = "reboot";
+              logout = "loginctl terminate-session $(loginctl list-sessions | grep seat0 | awk '{print $1}')";
+            };
+          };
+
         };
       };
 
-      style = ''
-        * {
-          font-family: "JetBrainsMonoNL Nerd Font";
-          font-size: 12px;
-          border: none;
-          border-radius: 0;
-          min-height: 0;
-        }
-
-        window#waybar {
-          background: transparent;
-          border-radius: 10px;
-          margin: 0px;
-        }
-
-        .modules-left,
-        .modules-center,
-        .modules-right {
-          background: rgba(26, 27, 38, 0.8);
-          border-radius: 10px;
-          margin: 4px;
-          padding: 0 10px;
-        }
-
-        #workspaces {
-          padding: 0 5px;
-        }
-
-        #workspaces button {
-          padding: 0 8px;
-          background: transparent;
-          color: #c0caf5;
-          border-radius: 5px;
-          margin: 2px;
-        }
-
-        #workspaces button:hover {
-          background: rgba(125, 196, 228, 0.2);
-          color: #7dcae4;
-        }
-
-        #workspaces button.active {
-          background: #7dcae4;
-          color: #1a1b26;
-        }
-
-        #pulseaudio,
-        #custom-notifications,
-        #clock,
-        #temperature,
-        #cpu,
-        #memory,
-        #disk,
-        #network,
-        #bluetooth,
-        #language {
-          padding: 0 8px;
-          color: #c0caf5;
-          margin: 2px;
-        }
-
-        #temperature.critical {
-          color: #f7768e;
-        }
-
-        #network.disconnected {
-          color: #f7768e;
-        }
-
-        #bluetooth.disabled {
-          color: #565f89;
-        }
-
-        #pulseaudio.muted {
-          color: #565f89;
-        }
-      '';
+      style = builtins.readFile ./waybar/waybar.css;
     };
   };
 }
