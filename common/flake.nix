@@ -61,8 +61,6 @@
         };
       };
       homeManagerModules = {
-        # hyprland = hyprland.homeManagerModules.default;
-
         zsh = import ./_home_manager/mods/zsh.nix;
         tmux = import ./_home_manager/mods/tmux/tmux.nix;
         atuin = import ./_home_manager/mods/atuin.nix;

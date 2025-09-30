@@ -112,10 +112,12 @@ with lib;
       enable = true;
       extraPortals = lib.mkForce [
         hyprlandPkgs.xdg-desktop-portal-hyprland
+        # hyprlandPkgs.xdg-desktop-portal-wlr
         hyprlandPkgs.xdg-desktop-portal-gtk
       ];
       config.common.default = [
         "hyprland"
+        # "wlr"
         "gtk"
       ];
     };

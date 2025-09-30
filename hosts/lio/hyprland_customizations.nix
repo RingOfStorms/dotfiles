@@ -121,6 +121,19 @@ in
 
     ringofstorms_common.desktopEnvironment.hyprland.extraOptions = hyprlandExtraOptions;
 
+    ringofstorms_common.desktopEnvironment.hyprland.hyprpaperSettings = {
+      mode = "fill"; # Wallpaper display mode: fill, fit, stretch, center, tile
+
+      preload = [
+        "${../_shared_assets/wallpapers/pixel_neon.png}"
+      ];
+
+      wallpaper = [
+        "${mainMonitor},${../_shared_assets/wallpapers/pixel_neon.png}"
+        "${secondaryMonitor},${../_shared_assets/wallpapers/pixel_neon_v.png}"
+      ];
+    };
+
     # User-level systemd service that follows your Hyprland session and watches for monitor changes
     # systemd.user.services.hyprland-move-workspaces = {
     #   description = "Keep workspaces 1–6 on main and 7–10 on secondary; react to monitor changes";
