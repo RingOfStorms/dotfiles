@@ -17,7 +17,7 @@
       jellyfin.enable = true; # jellyfinnnnnn!
       jellyfin.vpn.enable = true;
       jellyseerr.enable = true; # request manager for media
-      jellyseerr.vpn.enable = true;
+      # jellyseerr.vpn.enable = true; # NOTE makes it not able to communicate to *arr apps
       sabnzbd.enable = true; # Usenet downloader
       transmission = {
         enable = true; # Torrent downloader
