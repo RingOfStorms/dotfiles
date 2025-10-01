@@ -6,36 +6,18 @@
 {
   networking = {
     # My Switch seems to not let me change management vlan so this is assume native default here for proper routing
-    # Configure bonding (LAG)
-    bonds = {
-      bond0 = {
-        interfaces = [
-          "enp1s0"
-          "enp2s0"
-        ];
-        driverOptions = {
-          # My shitty switch doesn't support this
-          # mode = "802.3ad"; # LACP
-          # lacp_rate = "fast";
-          mode = "balance-xor";
-          miimon = "100";
-        };
-      };
-    };
 
-    # Configure VLANs on the bonded interface
+    # Configure VLANs on the trunk interface (enp2s0)
     vlans = {
       vlan10 = {
+        # management
         id = 10;
-        interface = "bond0";
+        interface = "enp2s0";
       };
       vlan20 = {
+        # normal devices
         id = 20;
-        interface = "bond0";
-      };
-      vlan30 = {
-        id = 30;
-        interface = "bond0";
+        interface = "enp2s0";
       };
     };
 
@@ -44,8 +26,8 @@
 
     # Interface configuration
     interfaces = {
-      # WAN interface (VLAN 10 - to modem)
-      vlan10 = {
+      # WAN interface (physical enp1s0 - to modem)
+      enp1s0 = {
         useDHCP = true; # Get IP from modem/ISP
         tempAddress = lib.mkIf config.networking.enableIPv6 "disabled"; # For IPv6 privacy
       };
@@ -64,8 +46,8 @@
           }
         ];
       };
-      # Management VLAN 1
-      vlan30 = {
+      # Management VLAN 10
+      vlan10 = {
         ipv4.addresses = [
           {
             address = "10.12.16.1"; # Management network
@@ -84,10 +66,10 @@
     # NAT configuration
     nat = {
       enable = true;
-      externalInterface = "vlan10"; # WAN
+      externalInterface = "enp1s0"; # WAN (physical)
       internalInterfaces = [
+        "vlan10"
         "vlan20"
-        "vlan30"
       ]; # LAN/Management
       enableIPv6 = lib.mkIf config.networking.enableIPv6 true; # Enable IPv6 NAT
     };
@@ -108,10 +90,11 @@
 
         # --- Inter-VLAN Security ---
         # Block any NEW connection attempts between LAN and Management
-        iifname "vlan20" oifname "vlan30" drop
-        iifname "vlan30" oifname "vlan20" drop
+        iifname "vlan20" oifname "vlan10" drop
+        iifname "vlan10" oifname "vlan20" drop
 
         # Explicitly allow LAN and Management to go to the WAN
+        oifname "enp1s0" accept
         oifname "vlan10" accept
 
         # Drop any other forwarding attempts between internal networks
@@ -120,6 +103,12 @@
 
       interfaces = {
         # WAN interface - allow nothing inbound by default
+        enp1s0 = {
+          # Block all WAN
+          allowedTCPPorts = [ ];
+          allowedUDPPorts = [ ];
+        };
+
         vlan10 = {
           # Block all WAN
           allowedTCPPorts = [ ];
@@ -141,8 +130,8 @@
           ];
         };
 
-        # Management interface (VLAN 1) - LIMITED SERVICE
-        vlan30 = {
+        # NOTE check this...
+        vlan10 = {
           allowedTCPPorts = [
             22 # SSH (for remote admin access)
             53 # DNS
@@ -176,7 +165,7 @@
       # Listen only on LAN interface
       interface = [
         "vlan20"
-        "vlan30"
+        "vlan10"
       ];
       bind-interfaces = true;
 
@@ -218,7 +207,7 @@
       # interface, min interval, max interval
       ra-param = lib.mkIf config.networking.enableIPv6 [
         "vlan20,60,120"
-        "vlan30,60,120"
+        "vlan10,60,120"
       ];
 
       # DNS settings (not needed since we use adguard for dns)
