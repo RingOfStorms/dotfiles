@@ -7,5 +7,6 @@
     ./monitoring.nix
     ./pinchflat.nix
     ./openwebui.nix
+    ./trilium.nix
   ];
 }
