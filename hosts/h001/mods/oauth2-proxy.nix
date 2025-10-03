@@ -11,7 +11,7 @@
     oidcIssuerUrl = "https://sso.joshuabell.xyz:443";
     keyFile = config.age.secrets.oauth2_proxy_zitadel_client_secret.path;
     nginx.domain = "sso-proxy.joshuabell.xyz";
-    # email.domains = [ ];
+    email.domains = [ "*" ];
     # extraConfig = {
     #   whitelist-domain = ".joshuabell.xyz";
     #   cookie-domain = ".joshuabell.xyz";
