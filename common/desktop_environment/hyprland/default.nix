@@ -143,8 +143,8 @@ with lib;
     environment.sessionVariables = {
       GTK_THEME = "Adwaita:dark";
       XDG_SESSION_TYPE = "wayland";
-      XDG_CURRENT_DESKTOP = "sway";
-      XDG_SESSION_DESKTOP = "sway";
+      # XDG_CURRENT_DESKTOP = "sway";
+      # XDG_SESSION_DESKTOP = "sway";
       # prefer EGL renderer (can be changed back to "auto" if needed)
       WLR_RENDERER = "egl";
 
