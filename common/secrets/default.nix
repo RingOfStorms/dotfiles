@@ -4,7 +4,7 @@
   lib,
   pkgs,
   ...
-}@args:
+}:
 
 let
   ccfg = import ../config.nix;
