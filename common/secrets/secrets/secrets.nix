@@ -126,10 +126,7 @@ in
   "zitadel_master_key.age" = {
     publicKeys = authorityKey ++ h001;
   };
-  "oauth2_proxy_zitadel_client_secret.age" = {
-    publicKeys = authorityKey ++ h001;
-  };
-  "oauth2_proxy_cookie_secret.age" = {
+  "oauth2_proxy_key_file.age" = {
     publicKeys = authorityKey ++ h001;
   };
   "openwebui_env.age" = {
