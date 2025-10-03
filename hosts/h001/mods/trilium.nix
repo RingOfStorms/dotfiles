@@ -1,17 +1,20 @@
-{ lib, pkgs, config, ... }:
+{
+  ...
+}:
 {
   config = {
     services.trilium-server = {
       enable = true;
       port = 9111;
-      host = "0.0.0.0";
+      host = "127.0.0.1";
       dataDir = "/var/lib/trilium";
-      # noAuthentication = true; # keep authentication for now
+      noAuthentication = true;
+      instanceName = "joshuabell";
     };
 
-    # systemd.tmpfiles.rules = [
-    #   "d /var/lib/trilium 0755 trilium trilium -"
-    # ];
+    systemd.services.trilium-server.environment = {
+      TRILIUM_NO_UPLOAD_LIMIT = true;
+    };
 
     # services.nginx = {
     #   virtualHosts = {
