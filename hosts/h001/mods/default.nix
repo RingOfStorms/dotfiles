@@ -8,5 +8,6 @@
     ./pinchflat.nix
     ./openwebui.nix
     ./trilium.nix
+    ./oauth2-proxy.nix
   ];
 }

@@ -3,8 +3,8 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
     deploy-rs.url = "github:serokell/deploy-rs";
 
-    common.url = "path:../../../common";
-    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
+    # common.url = "path:../../../common";
+    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
 

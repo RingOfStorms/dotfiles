@@ -172,6 +172,16 @@
             '';
           };
         };
+        "sso-proxy.joshuabell.xyz" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyPass = "http://100.64.0.13";
+            extraConfig = ''
+              proxy_set_header X-Forwarded-Proto https;
+            '';
+          };
+        };
         # "obsidiansync.joshuabell.xyz" = {
         #   enableACME = true;
         #   forceSSL = true;

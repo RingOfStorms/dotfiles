@@ -17,7 +17,6 @@
 
   options = { };
   config = {
-
     services.nginx.virtualHosts."chat.joshuabell.xyz" = {
       locations = {
         "/" = {
@@ -89,7 +88,7 @@
             model_name = "GPT-5";
             litellm_params = {
               model = "azure/gpt-5-2025-08-07";
-              api_base = "http://100.64.0.8:9001";
+              api_base = "http://100.64.0.8:9010/azure";
               api_version = "2025-04-01-preview";
               api_key = "na";
             };
@@ -98,7 +97,25 @@
             model_name = "GPT-5-mini";
             litellm_params = {
               model = "azure/gpt-5-mini-2025-08-07";
-              api_base = "http://100.64.0.8:9001";
+              api_base = "http://100.64.0.8:9010/azure";
+              api_version = "2025-04-01-preview";
+              api_key = "na";
+            };
+          }
+          {
+            model_name = "GPT-5-nano";
+            litellm_params = {
+              model = "azure/gpt-5-nano-2025-08-07";
+              api_base = "http://100.64.0.8:9010/azure";
+              api_version = "2025-04-01-preview";
+              api_key = "na";
+            };
+          }
+          {
+            model_name = "GPT-5-codex";
+            litellm_params = {
+              model = "azure/gpt-5-codex-2025-09-15";
+              api_base = "http://100.64.0.8:9010/azure";
               api_version = "2025-04-01-preview";
               api_key = "na";
             };
@@ -107,7 +124,7 @@
             model_name = "GPT-4.1";
             litellm_params = {
               model = "azure/gpt-4.1-2025-04-14";
-              api_base = "http://100.64.0.8:9001";
+              api_base = "http://100.64.0.8:9010/azure";
               api_version = "2025-04-01-preview";
               api_key = "na";
             };
@@ -116,7 +133,7 @@
             model_name = "GPT-4.1-mini";
             litellm_params = {
               model = "azure/gpt-4.1-mini-2025-04-14";
-              api_base = "http://100.64.0.8:9001";
+              api_base = "http://100.64.0.8:9010/azure";
               api_version = "2025-04-01-preview";
               api_key = "na";
             };
@@ -125,7 +142,16 @@
             model_name = "GPT-4o";
             litellm_params = {
               model = "azure/gpt-4o-2024-05-13";
-              api_base = "http://100.64.0.8:9001";
+              api_base = "http://100.64.0.8:9010/azure";
+              api_version = "2025-04-01-preview";
+              api_key = "na";
+            };
+          }
+          {
+            model_name = "dall-e-3-3.0";
+            litellm_params = {
+              model = "azure/dall-e-3-3.0";
+              api_base = "http://100.64.0.8:9010/azure";
               api_version = "2025-04-01-preview";
               api_key = "na";
             };
