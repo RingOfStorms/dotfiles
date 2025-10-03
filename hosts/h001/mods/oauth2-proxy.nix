@@ -10,7 +10,7 @@
     validateURL = "https://sso.joshuabell.xyz/oauth2/";
     oidcIssuerUrl = "https://sso.joshuabell.xyz:443";
     keyFile = config.age.secrets.oauth2_proxy_zitadel_client_secret.path;
-    # nginx.domain = "sso-proxy.joshuabell.xyz";
+    nginx.domain = "sso-proxy.joshuabell.xyz";
     # email.domains = [ ];
     # extraConfig = {
     #   whitelist-domain = ".joshuabell.xyz";

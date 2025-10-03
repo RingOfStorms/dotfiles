@@ -13,7 +13,18 @@
     };
 
     systemd.services.trilium-server.environment = {
-      TRILIUM_NO_UPLOAD_LIMIT = true;
+      TRILIUM_NO_UPLOAD_LIMIT = "true";
+    };
+
+    services.oauth2-proxy.nginx.virtualHosts."notes.joshuabell.xyz".allowed_groups = [ "notes" ];
+    services.nginx.virtualHosts."notes.joshuabell.xyz" = {
+      locations = {
+        "/" = {
+          proxyWebsockets = true;
+          recommendedProxySettings = true;
+          proxyPass = "http://127.0.0.1:9111";
+        };
+      };
     };
 
     # services.nginx = {
