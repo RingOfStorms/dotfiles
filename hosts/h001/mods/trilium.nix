@@ -16,7 +16,9 @@
       TRILIUM_NO_UPLOAD_LIMIT = "true";
     };
 
-    services.oauth2-proxy.nginx.virtualHosts."notes.joshuabell.xyz".allowed_groups = [ "notes" ];
+    services.oauth2-proxy.nginx.virtualHosts."notes.joshuabell.xyz" = {
+      allowed_groups = [ "notes" ];
+    };
     services.nginx.virtualHosts."notes.joshuabell.xyz" = {
       locations = {
         "/" = {
