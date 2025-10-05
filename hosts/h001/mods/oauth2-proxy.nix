@@ -15,9 +15,18 @@
     extraConfig = {
       whitelist-domain = "*.joshuabell.xyz";
       cookie-domain = ".joshuabell.xyz";
+      oidc-groups-claim = "flatRolesClaim";
+      # scope = "openid email profiles";
+
+      # pass-access-token = "true";
+      # set-authorization-header = "true";
+      # pass-user-headers = "true";
+
+      # show-debug-on-error = "true";
+      # errors-to-info-log = "true";
     };
     cookie.refresh = "30m";
-    setXauthrequest = true;
+    # setXauthrequest = true;
   };
 
   services.nginx.virtualHosts."sso-proxy.joshuabell.xyz" = {

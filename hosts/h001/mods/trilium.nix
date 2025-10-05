@@ -28,24 +28,5 @@
         };
       };
     };
-
-    # services.nginx = {
-    #   virtualHosts = {
-    #     "trilium" = {
-    #       serverName = "h001.net.joshuabell.xyz";
-    #       listen = [
-    #         {
-    #           port = 9111;
-    #           addr = "0.0.0.0";
-    #         }
-    #       ];
-    #       locations."/" = {
-    #         proxyWebsockets = true;
-    #         recommendedProxySettings = true;
-    #         proxyPass = "http://127.0.0.1:9111";
-    #       };
-    #     };
-    #   };
-    # };
   };
 }
