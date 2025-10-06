@@ -30,6 +30,9 @@
     recommendedOptimisation = true;
     recommendedProxySettings = true;
     recommendedTlsSettings = true;
+    appendHttpConfig = ''
+      client_max_body_size 500M;
+    '';
     virtualHosts =
       let
         tailnetConfig = {
