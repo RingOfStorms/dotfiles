@@ -9,9 +9,7 @@ let
 in
 {
   services.nginx = {
-    appendHttpConfig = ''
-      client_max_body_size 500M;
-    '';
+    clientMaxBodySize = "500m";
     virtualHosts = {
       "10.12.14.10" = {
         locations = {
