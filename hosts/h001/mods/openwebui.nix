@@ -111,15 +111,15 @@
               api_key = "na";
             };
           }
-          {
-            model_name = "GPT-5-codex";
-            litellm_params = {
-              model = "azure/gpt-5-codex-2025-09-15";
-              api_base = "http://100.64.0.8:9010/azure";
-              api_version = "2025-04-01-preview";
-              api_key = "na";
-            };
-          }
+          # {
+          #   model_name = "GPT-5-codex";
+          #   litellm_params = {
+          #     model = "azure/gpt-5-codex-2025-09-15";
+          #     api_base = "http://100.64.0.8:9010/azure";
+          #     api_version = "2025-04-01-preview";
+          #     api_key = "na";
+          #   };
+          # }
           {
             model_name = "GPT-4.1";
             litellm_params = {
@@ -147,15 +147,15 @@
               api_key = "na";
             };
           }
-          {
-            model_name = "dall-e-3-3.0";
-            litellm_params = {
-              model = "azure/dall-e-3-3.0";
-              api_base = "http://100.64.0.8:9010/azure";
-              api_version = "2025-04-01-preview";
-              api_key = "na";
-            };
-          }
+          # {
+          #   model_name = "dall-e-3-3.0";
+          #   litellm_params = {
+          #     model = "azure/dall-e-3-3.0";
+          #     api_base = "http://100.64.0.8:9010/azure";
+          #     api_version = "2025-04-01-preview";
+          #     api_key = "na";
+          #   };
+          # }
 
           # Copilot
           {
@@ -170,6 +170,30 @@
               };
             };
           }
+          {
+            model_name = "copilot-google-gemini-2.5-pro";
+            litellm_params = {
+              model = "github_copilot/gemini-2.5-pro";
+              extra_headers = {
+                "editor-version" = "vscode/1.85.1";
+                "Copilot-Integration-Id" = "vscode-chat";
+                "user-agent" = "GithubCopilot/1.155.0";
+                "editor-plugin-version" = "copilot/1.155.0";
+              };
+            };
+          }
+          # {
+          #   model_name = "copilot-google-gemini-2.0-flash";
+          #   litellm_params = {
+          #     model = "github_copilot/gemini-2.0-flash";
+          #     extra_headers = {
+          #       "editor-version" = "vscode/1.85.1";
+          #       "Copilot-Integration-Id" = "vscode-chat";
+          #       "user-agent" = "GithubCopilot/1.155.0";
+          #       "editor-plugin-version" = "copilot/1.155.0";
+          #     };
+          #   };
+          # }
         ];
       };
     };
