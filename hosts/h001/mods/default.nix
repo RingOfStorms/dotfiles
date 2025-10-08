@@ -10,5 +10,6 @@
     ./openwebui.nix
     ./trilium.nix
     ./oauth2-proxy.nix
+    ./n8n.nix
   ];
 }

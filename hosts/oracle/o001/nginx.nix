@@ -163,6 +163,14 @@
             proxyPass = "http://100.64.0.13";
           };
         };
+        "n8n.joshuabell.xyz" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyWebsockets = true;
+            proxyPass = "http://100.64.0.13";
+          };
+        };
         "notes.joshuabell.xyz" = {
           enableACME = true;
           forceSSL = true;
