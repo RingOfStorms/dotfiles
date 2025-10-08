@@ -3,6 +3,7 @@
 }:
 {
   imports = [
+    ./litellm.nix
     ./nixarr.nix
     ./monitoring.nix
     ./pinchflat.nix

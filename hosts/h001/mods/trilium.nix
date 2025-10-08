@@ -1,12 +1,22 @@
 {
-  upkgs,
+  inputs,
   ...
 }:
+let
+  declaration = "services/web-apps/trilium.nix";
+  nixpkgs = inputs.open-webui-nixpkgs;
+  pkgs = import nixpkgs {
+    system = "x86_64-linux";
+    config.allowUnfree = true;
+  };
+in
 {
+  disabledModules = [ declaration ];
+  imports = [ "${nixpkgs}/nixos/modules/${declaration}" ];
   config = {
     services.trilium-server = {
       enable = true;
-      package = upkgs.trilium-server;
+      package = pkgs.trilium-server;
       port = 9111;
       host = "127.0.0.1";
       dataDir = "/var/lib/trilium";

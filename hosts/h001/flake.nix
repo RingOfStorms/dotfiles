@@ -2,7 +2,10 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
     # nixpkgs-unstable.url = "github:wrvsrx/nixpkgs/fix-open-webui";
-    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+    open-webui-nixpkgs.url = "github:nixos/nixpkgs/e9f00bd893984bc8ce46c895c3bf7cac95331127";
+    litellm-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    trilium-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    oauth2-proxy-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
     common.url = "path:../../common";
@@ -31,10 +34,6 @@
           lib.nixosSystem {
             specialArgs = {
               inherit inputs;
-              upkgs = import inputs.nixpkgs-unstable {
-                system = "x86_64-linux";
-                config.allowUnfree = true;
-              };
             };
             modules = [
               common.nixosModules.default
