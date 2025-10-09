@@ -4,7 +4,7 @@
 }:
 let
   declaration = "services/misc/litellm.nix";
-  nixpkgs = inputs.open-webui-nixpkgs;
+  nixpkgs = inputs.litellm-nixpkgs;
   pkgs = import nixpkgs {
     system = "x86_64-linux";
     config.allowUnfree = true;

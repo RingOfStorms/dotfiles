@@ -5,7 +5,7 @@
 }:
 let
   declaration = "services/security/oauth2-proxy.nix";
-  nixpkgs = inputs.open-webui-nixpkgs;
+  nixpkgs = inputs.oauth2-proxy-nixpkgs;
   pkgs = import nixpkgs {
     system = "x86_64-linux";
     config.allowUnfree = true;
@@ -40,7 +40,7 @@ in
         # show-debug-on-error = "true";
         # errors-to-info-log = "true";
       };
-      cookie.refresh = "30m";
+      cookie.refresh = "12h";
       # setXauthrequest = true;
     };
 
