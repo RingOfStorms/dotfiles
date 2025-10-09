@@ -110,9 +110,17 @@
         };
 
         vlan10 = {
-          # Block all WAN
-          allowedTCPPorts = [ ];
-          allowedUDPPorts = [ ];
+          allowedTCPPorts = [
+            22 # SSH (for remote admin access)
+            53 # DNS
+            80
+            443 # HTTP
+          ];
+          allowedUDPPorts = [
+            53 # DNS
+            67 # DHCP server
+            68
+          ];
         };
 
         # LAN interface (VLAN 20) - FULL SERVICE
@@ -127,21 +135,6 @@
             53 # DNS queries
             67 # DHCP server (dnsmasq)
             68 # DHCP client responses
-          ];
-        };
-
-        # NOTE check this...
-        vlan10 = {
-          allowedTCPPorts = [
-            22 # SSH (for remote admin access)
-            53 # DNS
-            80
-            443 # HTTP
-          ];
-          allowedUDPPorts = [
-            53 # DNS
-            67 # DHCP server
-            68
           ];
         };
       };
@@ -164,8 +157,8 @@
     settings = {
       # Listen only on LAN interface
       interface = [
-        "vlan20"
         "vlan10"
+        "vlan20"
       ];
       bind-interfaces = true;
 
@@ -174,6 +167,9 @@
       # Note in Ad GuardHome in DNS Settings add localhost:9053 to Private reverse DNS servers and enable them
       listen-address = "127.0.0.1";
       port = 9053;
+      host-record = [
+        "media.joshuabell.xyz,10.12.14.10"
+      ];
 
       # DHCP range and settings
       dhcp-range = [
@@ -206,8 +202,8 @@
       enable-ra = lib.mkIf config.networking.enableIPv6 true;
       # interface, min interval, max interval
       ra-param = lib.mkIf config.networking.enableIPv6 [
-        "vlan20,60,120"
         "vlan10,60,120"
+        "vlan20,60,120"
       ];
 
       # DNS settings (not needed since we use adguard for dns)
