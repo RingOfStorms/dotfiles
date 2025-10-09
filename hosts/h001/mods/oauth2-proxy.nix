@@ -45,11 +45,15 @@ in
     };
 
     services.nginx.virtualHosts."sso-proxy.joshuabell.xyz" = {
+      # enableACME = true;
+      # forceSSL = true;
       locations = {
         "/" = {
           proxyWebsockets = true;
-          recommendedProxySettings = true;
           proxyPass = "http://127.0.0.1:4180";
+          extraConfig = ''
+            proxy_set_header X-Forwarded-Proto https;
+          '';
         };
       };
     };

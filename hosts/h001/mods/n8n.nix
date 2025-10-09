@@ -6,6 +6,8 @@
   config = {
     services.nginx.virtualHosts = {
       "n8n.joshuabell.xyz" = {
+        # enableACME = true;
+        # forceSSL = true;
         locations = {
           "/" = {
             proxyWebsockets = true;

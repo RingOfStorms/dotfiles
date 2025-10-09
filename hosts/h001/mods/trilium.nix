@@ -1,6 +1,5 @@
 {
   inputs,
-  lib,
   ...
 }:
 let
@@ -45,6 +44,8 @@ in
     };
     services.nginx.virtualHosts = {
       "notes.joshuabell.xyz" = {
+        # enableACME = true;
+        # forceSSL = true;
         locations = {
           "/" = {
             proxyWebsockets = true;

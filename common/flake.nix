@@ -56,9 +56,6 @@
               };
             };
           };
-        containers = {
-          forgejo = import ./_containers/forgejo.nix;
-        };
       };
       homeManagerModules = {
         zsh = import ./_home_manager/mods/zsh.nix;

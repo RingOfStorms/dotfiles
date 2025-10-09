@@ -68,6 +68,8 @@ in
   options = { };
   config = {
     services.nginx.virtualHosts."sso.joshuabell.xyz" = {
+      # enableACME = true;
+      # forceSSL = true;
       locations = {
         "/" = {
           proxyWebsockets = true;

@@ -8,7 +8,14 @@ let
   };
 in
 {
+  security.acme.acceptTerms = true;
+  security.acme.defaults.email = "admin@joshuabell.xyz";
   services.nginx = {
+    enable = true;
+    recommendedGzipSettings = true;
+    recommendedOptimisation = true;
+    recommendedProxySettings = true;
+    recommendedTlsSettings = true;
     clientMaxBodySize = "500m";
     virtualHosts = {
       "10.12.14.10" = {

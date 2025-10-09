@@ -17,6 +17,8 @@ in
   options = { };
   config = {
     services.nginx.virtualHosts."chat.joshuabell.xyz" = {
+      # enableACME = true;
+      # forceSSL = true;
       locations = {
         "/" = {
           proxyWebsockets = true;

@@ -29,6 +29,8 @@ in
   '';
 
   services.nginx.virtualHosts."gist.joshuabell.xyz" = {
+    # enableACME = true;
+    # forceSSL = true;
     locations = {
       "/" = {
         proxyWebsockets = true;

@@ -43,7 +43,7 @@
               ./hardware-configuration.nix
               ./mods
               ./nginx.nix
-              (import ./containers { inherit inputs; })
+              ./containers
               (
                 { config, pkgs, ... }:
                 {
