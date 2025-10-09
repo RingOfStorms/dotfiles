@@ -169,6 +169,10 @@
       port = 9053;
       host-record = [
         "media.joshuabell.xyz,10.12.14.10"
+        "jellyfin.joshuabell.xyz,10.12.14.10"
+      ];
+      address = [
+        "/h001.local.joshuabell.xyz/10.12.14.10"
       ];
 
       # DHCP range and settings
