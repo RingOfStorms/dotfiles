@@ -11,5 +11,6 @@
     ./trilium.nix
     ./oauth2-proxy.nix
     ./n8n.nix
+    ./postgresql.nix
   ];
 }

@@ -29,8 +29,8 @@
       N8N_HOST = "n8n.joshuabell.xyz";
       VUE_APP_URL_BASE_API = "https://n8n.joshuabell.xyz/";
       N8N_HIRING_BANNER_ENABLED = "false";
-      N8N_PUBLIC_API_DISABLED = "true";
-      N8N_PUBLIC_API_SWAGGERUI_DISABLED = "true";
+      # N8N_PUBLIC_API_DISABLED = "true";
+      # N8N_PUBLIC_API_SWAGGERUI_DISABLED = "true";
     };
   };
 }
