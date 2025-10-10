@@ -58,13 +58,6 @@
             proxyPass = "http://10.0.0.111";
           };
         };
-
-        "_" = {
-          default = true;
-          locations."/" = {
-            return = "404"; # or 444 for drop
-          };
-        };
       };
     };
 

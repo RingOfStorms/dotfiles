@@ -1,4 +1,5 @@
 {
+  config,
   ...
 }:
 let
@@ -8,8 +9,21 @@ let
   };
 in
 {
-  security.acme.acceptTerms = true;
-  security.acme.defaults.email = "admin@joshuabell.xyz";
+  # TODO transfer these to o001 to use same certs?
+  security.acme = {
+    acceptTerms = true;
+    defaults.email = "admin@joshuabell.xyz";
+    certs."joshuabell.xyz" = {
+      domain = "joshuabell.xyz";
+      extraDomainNames = [ "*.joshuabell.xyz" ];
+      credentialFiles = {
+        LINODE_TOKEN_FILE = config.age.secrets.linode_rw_domains.path;
+      };
+      dnsProvider = "linode";
+      group = "nginx";
+    };
+  };
+
   services.nginx = {
     enable = true;
     recommendedGzipSettings = true;
@@ -43,6 +57,14 @@ in
             recommendedProxySettings = true;
           };
           "/" = homarr;
+        };
+      };
+
+      "_" = {
+        rejectSSL = true;
+        default = true;
+        locations."/" = {
+          return = "444"; # 404 for not found or 444 for drop
         };
       };
     };
