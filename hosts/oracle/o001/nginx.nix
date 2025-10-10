@@ -199,20 +199,6 @@
             '';
           };
         };
-        # "obsidiansync.joshuabell.xyz" = {
-        #   enableACME = true;
-        #   forceSSL = true;
-        #   locations."/" = {
-        #     proxyPass = "http://100.64.0.1:5984";
-        #   };
-        #   extraConfig = ''
-        #     client_max_body_size 100M;
-        #     proxy_redirect off;
-        #     proxy_buffering off;
-        #     proxy_set_header Host $host;
-        #     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        #   '';
-        # };
         "jellyfin.joshuabell.xyz" = {
           enableACME = true;
           forceSSL = true;
@@ -229,6 +215,7 @@
         };
 
         "_" = {
+          rejectSSL = true;
           default = true;
           locations."/" = {
             return = "444"; # 404 for not found or 444 for drop
