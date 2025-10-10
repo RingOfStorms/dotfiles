@@ -50,12 +50,23 @@ in
         locations = {
           "/" = {
             proxyWebsockets = true;
-            recommendedProxySettings = true;
             proxyPass = "http://127.0.0.1:9111";
           };
+        };
+      };
+      "blog.joshuabell.xyz" = {
+        addSSL = true;
+        sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
+        sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
+        locations = {
           "/share" = {
             proxyWebsockets = true;
-            recommendedProxySettings = true;
+            proxyPass = "http://127.0.0.1:9111";
+            extraConfig = ''
+              auth_request off;
+            '';
+          };
+          "/assets" = {
             proxyPass = "http://127.0.0.1:9111";
             extraConfig = ''
               auth_request off;
