@@ -6,8 +6,9 @@
   config = {
     services.nginx.virtualHosts = {
       "n8n.joshuabell.xyz" = {
-        # enableACME = true;
-        # forceSSL = true;
+        addSSL = true;
+        sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
+        sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
         locations = {
           "/" = {
             proxyWebsockets = true;

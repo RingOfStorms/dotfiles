@@ -79,6 +79,8 @@
                     upkgs.ladybird
                     google-chrome
                     trilium-desktop
+                    dig
+                    traceroute
                   ];
                   # Also allow this key to work for root user, this will let us use this as a remote builder easier
                   users.users.root.openssh.authorizedKeys.keys = [

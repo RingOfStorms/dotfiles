@@ -45,8 +45,9 @@ in
     };
 
     services.nginx.virtualHosts."sso-proxy.joshuabell.xyz" = {
-      # enableACME = true;
-      # forceSSL = true;
+      addSSL = true;
+      sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
+      sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
       locations = {
         "/" = {
           proxyWebsockets = true;

@@ -69,6 +69,9 @@ in
     virtualHosts = {
       # forgejo http traffic
       "git.joshuabell.xyz" = {
+        addSSL = true;
+        sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
+        sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
         locations."/" = {
           proxyPass = "http://10.0.0.2:3000";
         };
