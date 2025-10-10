@@ -26,20 +26,15 @@
               
             in
             [
-              # {
-              #   type = "A";
-              #   name = "jellyfin.joshuabell.xyz";
-              #   value = "100.64.0.13";
-              # }
-              h001ARecord "jellyfin"
-              h001ARecord "media"
-              h001ARecord "notes"
-              h001ARecord "chat"
-              h001ARecord "sso-proxy"
-              h001ARecord "n8n"
-              h001ARecord "sso"
-              h001ARecord "gist"
-              h001ARecord "git"
+              (h001ARecord "jellyfin")
+              (h001ARecord "media")
+              (h001ARecord "notes")
+              (h001ARecord "chat")
+              (h001ARecord "sso-proxy")
+              (h001ARecord "n8n")
+              (h001ARecord "sso")
+              (h001ARecord "gist")
+              (h001ARecord "git")
             ];
         };
       };

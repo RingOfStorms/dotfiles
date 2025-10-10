@@ -167,12 +167,14 @@
       # Note in Ad GuardHome in DNS Settings add localhost:9053 to Private reverse DNS servers and enable them
       listen-address = "127.0.0.1";
       port = 9053;
+      # NOTE these make it so my other devices don't hit the open net to stream movies
+      # while on the local network. Note that this is being paired with stateful settings
+      # in Adguardhome upstream dns servers:
+      # [/media.joshuabell.xyz/]127.0.0.1:9053
+      # [/jellyfin.joshuabell.xyz/]127.0.0.1:9053
       host-record = [
         "media.joshuabell.xyz,10.12.14.10"
         "jellyfin.joshuabell.xyz,10.12.14.10"
-      ];
-      address = [
-        "/h001.local.joshuabell.xyz/10.12.14.10"
       ];
 
       # DHCP range and settings
