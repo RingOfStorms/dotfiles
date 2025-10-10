@@ -53,6 +53,14 @@ in
             recommendedProxySettings = true;
             proxyPass = "http://127.0.0.1:9111";
           };
+          "/share" = {
+            proxyWebsockets = true;
+            recommendedProxySettings = true;
+            proxyPass = "http://127.0.0.1:9111";
+            extraConfig = ''
+              auth_request off;
+            '';
+          };
         };
       };
       # TODO revisit, am I going to use the native app or web version
