@@ -35,6 +35,7 @@
               (h001ARecord "sso")
               (h001ARecord "gist")
               (h001ARecord "git")
+              (h001ARecord "blog")
             ];
         };
       };
