@@ -36,140 +36,15 @@ in
       settings = {
         environment_variables = {
           LITELLM_PROXY_API_KEY = "na";
+          LITELLM_PROXY_API_BASE = "http://100.64.0.8:9010/air_key";
         };
         litellm_settings = {
           check_provider_endpoints = true;
+          drop_params = true;
         };
         model_list = [
-          # existing
-          {
-            model_name = "GPT-5";
-            litellm_params = {
-              model = "azure/gpt-5-2025-08-07";
-              api_base = "http://100.64.0.8:9010/azure";
-              api_version = "2025-04-01-preview";
-              api_key = "na";
-            };
-          }
-          {
-            model_name = "GPT-5-mini";
-            litellm_params = {
-              model = "azure/gpt-5-mini-2025-08-07";
-              api_base = "http://100.64.0.8:9010/azure";
-              api_version = "2025-04-01-preview";
-              api_key = "na";
-            };
-          }
-          {
-            model_name = "GPT-5-nano";
-            litellm_params = {
-              model = "azure/gpt-5-nano-2025-08-07";
-              api_base = "http://100.64.0.8:9010/azure";
-              api_version = "2025-04-01-preview";
-              api_key = "na";
-            };
-          }
-          # {
-          #   model_name = "GPT-5-codex";
-          #   litellm_params = {
-          #     model = "azure/gpt-5-codex-2025-09-15";
-          #     api_base = "http://100.64.0.8:9010/azure";
-          #     api_version = "2025-04-01-preview";
-          #     api_key = "na";
-          #   };
-          # }
-          {
-            model_name = "GPT-4.1";
-            litellm_params = {
-              model = "azure/gpt-4.1-2025-04-14";
-              api_base = "http://100.64.0.8:9010/azure";
-              api_version = "2025-04-01-preview";
-              api_key = "na";
-            };
-          }
-          {
-            model_name = "GPT-4.1-mini";
-            litellm_params = {
-              model = "azure/gpt-4.1-mini-2025-04-14";
-              api_base = "http://100.64.0.8:9010/azure";
-              api_version = "2025-04-01-preview";
-              api_key = "na";
-            };
-          }
-          {
-            model_name = "GPT-4o";
-            litellm_params = {
-              model = "azure/gpt-4o-2024-05-13";
-              api_base = "http://100.64.0.8:9010/azure";
-              api_version = "2025-04-01-preview";
-              api_key = "na";
-            };
-          }
-          # {
-          #   model_name = "dall-e-3-3.0";
-          #   litellm_params = {
-          #     model = "azure/dall-e-3-3.0";
-          #     api_base = "http://100.64.0.8:9010/azure";
-          #     api_version = "2025-04-01-preview";
-          #     api_key = "na";
-          #   };
-          # }
-
-          # Copilot
-          {
-            model_name = "copilot-claude-sonnet-4.5";
-            litellm_params = {
-              model = "github_copilot/claude-sonnet-4.5";
-              extra_headers = {
-                editor-version = "vscode/${pkgs.vscode.version}";
-                editor-plugin-version = "copilot/${pkgs.vscode-marketplace-release.github.copilot.version}";
-                Copilot-Integration-Id = "vscode-chat";
-                Copilot-Vision-Request = "true";
-                user-agent = "GithubCopilot/${pkgs.vscode-marketplace-release.github.copilot.version}";
-              };
-            };
-          }
-          {
-            model_name = "copilot-claude-sonnet-4";
-            litellm_params = {
-              model = "github_copilot/claude-sonnet-4";
-              extra_headers = {
-                editor-version = "vscode/${pkgs.vscode.version}";
-                editor-plugin-version = "copilot/${pkgs.vscode-marketplace-release.github.copilot.version}";
-                Copilot-Integration-Id = "vscode-chat";
-                Copilot-Vision-Request = "true";
-                user-agent = "GithubCopilot/${pkgs.vscode-marketplace-release.github.copilot.version}";
-              };
-            };
-          }
-          {
-            model_name = "copilot-google-gemini-2.5-pro";
-            litellm_params = {
-              model = "github_copilot/gemini-2.5-pro";
-              extra_headers = {
-                editor-version = "vscode/${pkgs.vscode.version}";
-                editor-plugin-version = "copilot/${pkgs.vscode-marketplace-release.github.copilot.version}";
-                Copilot-Integration-Id = "vscode-chat";
-                Copilot-Vision-Request = "true";
-                user-agent = "GithubCopilot/${pkgs.vscode-marketplace-release.github.copilot.version}";
-              };
-            };
-          }
-          # {
-          #   model_name = "copilot-google-gemini-2.0-flash";
-          #   litellm_params = {
-          #     model = "github_copilot/gemini-2.0-flash";
-          #     extra_headers = {
-          #       "editor-version" = "vscode/1.85.1";
-          #       "Copilot-Integration-Id" = "vscode-chat";
-          #       "user-agent" = "GithubCopilot/1.155.0";
-          #       "editor-plugin-version" = "copilot/1.155.0";
-          #     };
-          #   };
-          # }
-
           # 宙 Proxy
-          # {
+          # { # NOTE model discovery not working yet? https://canary.discord.com/channels/1123360753068540065/1409974123987210350/1427864010241609752
           #   model_name = "litellm_proxy/*";
           #   litellm_params = {
           #     model = "litellm_proxy/*";
@@ -177,7 +52,91 @@ in
           #     api_key = "os.environ/LITELLM_PROXY_API_KEY";
           #   };
           # }
-        ];
+        ]
+        # Azure
+        ++ (builtins.map
+          (m: {
+            model_name = "azure-${m}";
+            litellm_params = {
+              model = "azure/${m}";
+              api_base = "http://100.64.0.8:9010/azure";
+              api_version = "2025-04-01-preview";
+              api_key = "na";
+            };
+          })
+          [
+            "gpt-4o-2024-05-13"
+            "gpt-4.1-2025-04-14"
+            "gpt-4.1-mini-2025-04-14"
+            "gpt-5-nano-2025-08-07"
+            "gpt-5-mini-2025-08-07"
+            "gpt-5-2025-08-07"
+            # "gpt-5-codex-2025-09-15"
+          ]
+        )
+        # Copilot
+        ++ (builtins.map
+          (m: {
+            model_name = "copilot-${m}";
+            litellm_params = {
+              model = "github_copilot/${m}";
+              extra_headers = {
+                editor-version = "vscode/${pkgs.vscode.version}";
+                editor-plugin-version = "copilot/${pkgs.vscode-extensions.github.copilot.version}";
+                Copilot-Integration-Id = "vscode-chat";
+                Copilot-Vision-Request = "true";
+                user-agent = "GithubCopilot/${pkgs.vscode-extensions.github.copilot.version}";
+              };
+            };
+
+          })
+          # List from https://github.com/settings/copilot/features enabled models
+          [
+            "claude-sonnet-4.5"
+            "claude-sonnet-4"
+            "gemini-2.5-pro"
+          ]
+        )
+        # 宙 Proxy
+        ++ (builtins.map
+          (m: {
+            model_name = "air-${m}";
+            litellm_params = {
+              model = "litellm_proxy/${m}";
+              api_base = "http://100.64.0.8:9010/air_key";
+              api_key = "os.environ/LITELLM_PROXY_API_KEY";
+            };
+          })
+          # curl -L t.net.joshuabell.xyz:9010/air_key/models | jq '.data.[].id'
+          [
+            "gpt-5-mini"
+            "gpt-5"
+            "gpt-4.1"
+            "gpt-4.1-mini"
+            "gpt-4o"
+            "gpt-4o-mini"
+            "o3-mini"
+            "o4-mini"
+            "gemini-2.5-pro"
+            "gemini-2.0-flash"
+            "gemini-2.5-flash"
+            "gemini-2.0-flash-lite"
+            "gemini-2.5-flash-lite"
+            "claude-opus-4.1"
+            "claude-opus-4"
+            "claude-sonnet-4"
+            "claude-3.7-sonnet"
+            "text-embedding-3-small"
+            "text-embedding-3-large"
+            "text-embedding-ada-002"
+            "text-embedding-large-exp-03-07"
+            "text-embedding-005"
+            "llama7b"
+            "medgemma-4b"
+            "qwen3-instruct"
+            "bge-small-en-v1.5"
+          ]
+        );
       };
     };
   };

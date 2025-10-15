@@ -68,6 +68,8 @@ in
         OAUTH_ADMIN_ROLES = "admin";
         # OAUTH_PICTURE_CLAIM = "picture";
         # OAUTH_UPDATE_PICTURE_ON_LOGIN = "True";
+
+        BYPASS_MODEL_ACCESS_CONTROL="True";
       };
     };
   };
