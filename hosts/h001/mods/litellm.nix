@@ -117,14 +117,28 @@ in
 
           # Copilot
           {
+            model_name = "copilot-claude-sonnet-4.5";
+            litellm_params = {
+              model = "github_copilot/claude-sonnet-4.5";
+              extra_headers = {
+                editor-version = "vscode/${pkgs.vscode.version}";
+                editor-plugin-version = "copilot/${pkgs.vscode-marketplace-release.github.copilot.version}";
+                Copilot-Integration-Id = "vscode-chat";
+                Copilot-Vision-Request = "true";
+                user-agent = "GithubCopilot/${pkgs.vscode-marketplace-release.github.copilot.version}";
+              };
+            };
+          }
+          {
             model_name = "copilot-claude-sonnet-4";
             litellm_params = {
               model = "github_copilot/claude-sonnet-4";
               extra_headers = {
-                "editor-version" = "vscode/1.85.1";
-                "Copilot-Integration-Id" = "vscode-chat";
-                "user-agent" = "GithubCopilot/1.155.0";
-                "editor-plugin-version" = "copilot/1.155.0";
+                editor-version = "vscode/${pkgs.vscode.version}";
+                editor-plugin-version = "copilot/${pkgs.vscode-marketplace-release.github.copilot.version}";
+                Copilot-Integration-Id = "vscode-chat";
+                Copilot-Vision-Request = "true";
+                user-agent = "GithubCopilot/${pkgs.vscode-marketplace-release.github.copilot.version}";
               };
             };
           }
@@ -133,10 +147,11 @@ in
             litellm_params = {
               model = "github_copilot/gemini-2.5-pro";
               extra_headers = {
-                "editor-version" = "vscode/1.85.1";
-                "Copilot-Integration-Id" = "vscode-chat";
-                "user-agent" = "GithubCopilot/1.155.0";
-                "editor-plugin-version" = "copilot/1.155.0";
+                editor-version = "vscode/${pkgs.vscode.version}";
+                editor-plugin-version = "copilot/${pkgs.vscode-marketplace-release.github.copilot.version}";
+                Copilot-Integration-Id = "vscode-chat";
+                Copilot-Vision-Request = "true";
+                user-agent = "GithubCopilot/${pkgs.vscode-marketplace-release.github.copilot.version}";
               };
             };
           }
