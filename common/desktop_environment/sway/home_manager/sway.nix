@@ -18,6 +18,8 @@ in
     enable = true;
     xwayland = true;
 
+    systemd.enable = true;
+
     config = lib.mkMerge [
       rec {
         modifier = "Mod4"; # SUPER
@@ -181,7 +183,8 @@ in
           {
             command = "exec sh -c 'sleep 0.01; swaymsg workspace number 7 ; sleep 0.01; swaymsg workspace number 1'";
           }
-          { command = "pgrep waybar >/dev/null || waybar"; }
+          # Waybar is managed by Home Manager systemd unit
+          # { command = "pgrep waybar >/dev/null || waybar"; }
         ];
       }
       cfg.extraOptions

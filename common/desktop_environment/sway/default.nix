@@ -116,13 +116,9 @@ with lib;
     # Ensure graphics/OpenGL are enabled so Sway uses GPU-backed rendering
     hardware.graphics = {
       enable = true;
-      # Keep defaults; Sway runs fine with mesa in system
-    };
-
-    hardware.opengl = {
-      enable = true;
       # extraPackages can be used to force vendor-specific mesa/drivers if needed
-      extraPackages = with pkgs; [];
+      # Keep defaults; Sway runs fine with mesa in system
+      # extraPackages = with pkgs; [];
     };
 
     # Environment variables

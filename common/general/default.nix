@@ -65,9 +65,23 @@ in
     networking = {
       hostName = top_cfg.systemName;
       nftables.enable = true;
+      # Clears firewall rules on reboot, only ones set in config will be remade
       nftables.flushRuleset = true;
       firewall.enable = true;
     };
+
+    # services.opensnitch = {
+    #   enable = true;
+    #   settings = {
+    #     Firewall = if config.networking.nftables.enable then "nftables" else "iptables";
+    #     InterceptUknown = true;
+    #     ProcMonitorMethod = "ebpf";
+    #     DefaultAction = "deny";
+    #   };
+    #   rules = {
+    #
+    #   };
+    # };
 
     # Enable flakes
     nix.settings.experimental-features = lib.mkIf cfg.flakeOptions [
