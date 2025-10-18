@@ -145,7 +145,7 @@ stash() {
     read -e -p "Stash label [default: $default_label]: " label
   fi
   label=${label:-$default_label}
-  git stash push -m "$label"
+  git stash push -u -k -m "$label"
 }
 
 pop() {
