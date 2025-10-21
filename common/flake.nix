@@ -3,7 +3,6 @@
     # NOTE if you add/change any inputs here also add them in the TOP level repo's flake.nix
     home-manager.url = "github:rycee/home-manager/release-25.05";
     ragenix.url = "github:yaxitech/ragenix";
-    nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
     hyprland.url = "github:hyprwm/Hyprland";
   };
 
@@ -28,7 +27,6 @@
             imports = [
               home-manager.nixosModules.default
               ragenix.nixosModules.age
-              nix-flatpak.nixosModules.nix-flatpak
               hyprland.nixosModules.default
               ./_home_manager
               ./options.nix

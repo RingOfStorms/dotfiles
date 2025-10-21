@@ -13,7 +13,6 @@ in
     ./docker.nix
     ./podman.nix
     ./incus.nix
-    ./flatpaks.nix
     ./virt-manager.nix
   ];
   config = {
