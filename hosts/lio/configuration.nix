@@ -4,6 +4,8 @@
   ...
 }:
 {
+  system.stateVersion = "23.11";
+
   hardware.enableAllFirmware = true;
 
   # Connectivity

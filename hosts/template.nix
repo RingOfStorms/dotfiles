@@ -3,8 +3,6 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
     home-manager.url = "github:rycee/home-manager/release-25.05";
 
-    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
-
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
@@ -25,10 +23,11 @@
       flatpaks,
       ros_neovim,
       ...
-    }@inputs:
+    }:
     let
-      configuration_name = "lio";
+      configuration_name = "SYSTEM_NAME";
       system = "x86_64-linux";
+      stateVersion = "25.05";
       primaryUser = "josh";
       lib = nixpkgs.lib;
     in
@@ -37,13 +36,6 @@
         "${configuration_name}" = (
           lib.nixosSystem {
             inherit system;
-            specialArgs = {
-              inherit inputs;
-              upkgs = import inputs.nixpkgs-unstable {
-                inherit system;
-                config.allowUnfree = true;
-              };
-            };
             modules = [
               home-manager.nixosModules.default
 
@@ -55,25 +47,13 @@
               common.nixosModules.git
               common.nixosModules.tmux
               common.nixosModules.boot_systemd
-              common.nixosModules.de_sway
               common.nixosModules.hardening
               common.nixosModules.jetbrains_font
               common.nixosModules.nix_options
-              common.nixosModules.no_sleep
-              common.nixosModules.podman
-              common.nixosModules.q_flipper
               common.nixosModules.tailnet
               common.nixosModules.timezone_auto
               common.nixosModules.tty_caps_esc
               common.nixosModules.zsh
-
-              ./configuration.nix
-              ./hardware-configuration.nix
-              (import ./containers.nix { inherit inputs; })
-              # ./jails_text.nix
-              # ./hyprland_customizations.nix
-              ./sway_customizations.nix
-              ./opencode-shim.nix
               (
                 {
                   config,
@@ -90,7 +70,7 @@
                     backupFileExtension = "bak";
                     # add all normal users to home manager so it applies to them
                     users = lib.mapAttrs (name: user: {
-                      home.stateVersion = "25.05";
+                      home.stateVersion = stateVersion;
                       programs.home-manager.enable = true;
                     }) (lib.filterAttrs (name: user: user.isNormalUser or false) users.users);
 
@@ -101,22 +81,16 @@
                       common.homeManagerModules.direnv
                       common.homeManagerModules.foot
                       common.homeManagerModules.git
-                      common.homeManagerModules.kitty
                       common.homeManagerModules.postgres_cli_options
-                      common.homeManagerModules.slicer
                       common.homeManagerModules.ssh
                       common.homeManagerModules.starship
                       common.homeManagerModules.zoxide
                       common.homeManagerModules.zsh
                     ];
-
-                    extraSpecialArgs = {
-                      inherit inputs;
-                      inherit upkgs;
-                    };
                   };
 
                   # System configuration
+                  system.stateVersion = stateVersion;
                   networking.hostName = configuration_name;
                   programs.nh.flake = "/home/${primaryUser}/.config/nixos-config/hosts/${config.networking.hostName}";
                   nixpkgs.config.allowUnfree = true;
