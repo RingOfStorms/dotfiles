@@ -103,7 +103,7 @@
       # Keybindings mirroring Hyprland
       keybindings = {
         # Apps
-        "${modifier}+return" = "exec ${config.wayland.winfowManager.sway.config.terminal}";
+        "${modifier}+return" = "exec ${config.wayland.windowManager.sway.config.terminal}";
         "${modifier}+space" = "exec pkill wofi || wofi --show drun";
         "${modifier}+q" = "kill";
         "${modifier}+shift+Escape" = "exit";

@@ -14,6 +14,7 @@ in
     ./podman.nix
     ./incus.nix
     ./virt-manager.nix
+    ./flatpaks.nix
   ];
   config = {
     assertions = [

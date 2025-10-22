@@ -4,6 +4,7 @@
     home-manager.url = "github:rycee/home-manager/release-25.05";
     ragenix.url = "github:yaxitech/ragenix";
     hyprland.url = "github:hyprwm/Hyprland";
+    nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
   };
 
   outputs =
@@ -27,6 +28,8 @@
             imports = [
               home-manager.nixosModules.default
               ragenix.nixosModules.age
+
+              nix-flatpak.nixosModules.nix-flatpak
               hyprland.nixosModules.default
               ./_home_manager
               ./options.nix

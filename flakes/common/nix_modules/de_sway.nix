@@ -6,11 +6,6 @@
 }:
 
 {
-  # Enable for all users via Home Manager fragments in this module
-  home-manager = {
-    sharedModules = [ ./home_manager ];
-  };
-
   services.greetd = {
     enable = true;
     vt = 2;

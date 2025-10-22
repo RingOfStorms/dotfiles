@@ -20,7 +20,6 @@
           {
             imports = [
               ragenix.nixosModules.age
-              ./secrets
             ];
             config =
               let
@@ -64,7 +63,7 @@
                   in
                   lib.nameValuePair base (
                     {
-                      file = ./. + "/secrets/${name}";
+                      file = ./. + "/${name}";
                       owner = user;
                     }
                     // lib.optionalAttrs (lib.elem base worldReadable) {

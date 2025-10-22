@@ -1,4 +1,6 @@
 {
+  upkgs,
+  pkgs,
   ...
 }:
 {
@@ -10,8 +12,6 @@
 
   # System76
   hardware.system76.enableAll = true;
-
-  system.stateVersion = "23.11";
 
   services = {
     # https://discourse.nixos.org/t/very-high-fan-noises-on-nixos-using-a-system76-thelio/23875/10
@@ -28,4 +28,27 @@
       # };
     };
   };
+
+  # Also allow this key to work for root user, this will let us use this as a remote builder easier
+  users.users.root.openssh.authorizedKeys.keys = [
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJN2nsLmAlF6zj5dEBkNSJaqcCya+aB6I0imY8Q5Ew0S nix2lio"
+  ];
+  # Allow emulation of aarch64-linux binaries for cross compiling
+  boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
+
+  environment.systemPackages = with pkgs; [
+    lua
+    qdirstat
+    ffmpeg-full
+    appimage-run
+    nodejs_24
+    foot
+    vlc
+    upkgs.ladybird
+    google-chrome
+    trilium-desktop
+    dig
+    traceroute
+    # opensnitch-ui
+  ];
 }

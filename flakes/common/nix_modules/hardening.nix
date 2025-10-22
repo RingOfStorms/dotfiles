@@ -52,6 +52,7 @@
     enable = true;
     settings = {
       LogLevel = "VERBOSE";
+      # TODO revisit allowing root login
       PermitRootLogin = "yes";
       PasswordAuthentication = false;
     };
