@@ -27,14 +27,20 @@
     },
     "common": {
       "locked": {
-        "path": "../../flakes/common",
-        "type": "path"
+        "dir": "flakes/common",
+        "lastModified": 1761107519,
+        "narHash": "sha256-HV+W8peuB0elo/32CgwfITp/ox4dFDXaM22z/HlmZ2c=",
+        "ref": "refs/heads/master",
+        "rev": "9de4c7892bdf28735875d43849d67d9b16b6d700",
+        "revCount": 731,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
       "original": {
-        "path": "../../flakes/common",
-        "type": "path"
-      },
-      "parent": []
+        "dir": "flakes/common",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+      }
     },
     "crane": {
       "locked": {
@@ -98,14 +104,20 @@
         "nix-flatpak": "nix-flatpak"
       },
       "locked": {
-        "path": "../../flakes/flatpaks",
-        "type": "path"
+        "dir": "flakes/flatpaks",
+        "lastModified": 1761107519,
+        "narHash": "sha256-HV+W8peuB0elo/32CgwfITp/ox4dFDXaM22z/HlmZ2c=",
+        "ref": "refs/heads/master",
+        "rev": "9de4c7892bdf28735875d43849d67d9b16b6d700",
+        "revCount": 731,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
       "original": {
-        "path": "../../flakes/flatpaks",
-        "type": "path"
-      },
-      "parent": []
+        "dir": "flakes/flatpaks",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+      }
     },
     "home-manager": {
       "inputs": {
@@ -1279,14 +1291,20 @@
         "ragenix": "ragenix"
       },
       "locked": {
-        "path": "../../flakes/secrets",
-        "type": "path"
+        "dir": "flakes/secrets",
+        "lastModified": 1761107519,
+        "narHash": "sha256-HV+W8peuB0elo/32CgwfITp/ox4dFDXaM22z/HlmZ2c=",
+        "ref": "refs/heads/master",
+        "rev": "9de4c7892bdf28735875d43849d67d9b16b6d700",
+        "revCount": 731,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
       "original": {
-        "path": "../../flakes/secrets",
-        "type": "path"
-      },
-      "parent": []
+        "dir": "flakes/secrets",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+      }
     },
     "systems": {
       "locked": {
