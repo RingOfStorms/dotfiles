@@ -68,9 +68,4 @@
       }
     ];
   };
-
-  home.shellAliases = {
-    t = "tmux";
-    tat = "tmux attach-session";
-  };
 }
