@@ -1,4 +1,4 @@
-{ lib, pkgs, ... }:
+{ ... }:
 let
   hyprlandExtraOptions = {
     exec-once = [
@@ -11,20 +11,23 @@ let
   };
 in
 {
-  options = { };
+  home-manager.sharedModules = [
+    (
+      { ... }:
+      {
+        wayland.windowManager.hyprland.settings = hyprlandExtraOptions;
+        services.hyprpaper.settings = {
+          mode = "fill"; # Wallpaper display mode: fill, fit, stretch, center, tile
 
-  config = {
-    ringofstorms_common.desktopEnvironment.hyprland.extraOptions = hyprlandExtraOptions;
-    ringofstorms_common.desktopEnvironment.hyprland.hyprpaperSettings = {
-      mode = "fill"; # Wallpaper display mode: fill, fit, stretch, center, tile
+          preload = [
+            "${../_shared_assets/wallpapers/pixel_neon.png}"
+          ];
 
-      preload = [
-        "${../_shared_assets/wallpapers/pixel_neon.png}"
-      ];
-
-      wallpaper = [
-        "eDP-1,${../_shared_assets/wallpapers/pixel_neon.png}"
-      ];
-    };
-  };
+          wallpaper = [
+            "eDP-1,${../_shared_assets/wallpapers/pixel_neon.png}"
+          ];
+        };
+      }
+    )
+  ];
 }

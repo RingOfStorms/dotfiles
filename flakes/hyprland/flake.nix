@@ -1,6 +1,6 @@
 {
   inputs = {
-    ragenix.url = "github:yaxitech/ragenix";
+    hyprland.url = "github:hyprwm/Hyprland";
   };
 
   outputs =
@@ -20,6 +20,7 @@
           {
             imports = [
               hyprland.nixosModules.default
+              ./hyprland.nix
             ];
             config = {
               _module.args = {

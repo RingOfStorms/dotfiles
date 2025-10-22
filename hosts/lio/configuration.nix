@@ -1,5 +1,4 @@
 {
-  upkgs,
   pkgs,
   ...
 }:
@@ -46,11 +45,6 @@
     nodejs_24
     foot
     vlc
-    upkgs.ladybird
     google-chrome
-    trilium-desktop
-    dig
-    traceroute
-    # opensnitch-ui
   ];
 }

@@ -4,15 +4,6 @@
   hyprlandPkgs,
   ...
 }:
-let
-  ccfg = import ../../../config.nix;
-  cfg_path = [
-    ccfg.custom_config_key
-    "desktopEnvironment"
-    "hyprland"
-  ];
-  cfg = lib.attrsets.getAttrFromPath cfg_path osConfig;
-in
 {
   wayland.windowManager.hyprland = {
     enable = true;
@@ -21,7 +12,7 @@ in
     #   hyprspace
     # ];
 
-    settings = lib.attrsets.recursiveUpdate {
+    settings = {
       # Debug logs enabled when this is uncommented
       debug.disable_logs = false;
       debug.disable_time = false;
@@ -89,7 +80,7 @@ in
 
       bind = [
         # Applications
-        "$mainMod, Return, exec, ${cfg.terminalCommand}"
+        "$mainMod, Return, exec, foot"
         "$mainMod, Space, exec, pkill wofi || wofi --show drun"
         "$mainMod, q, killactive"
         "$mainMod SHIFT, escape, exit"
@@ -171,6 +162,6 @@ in
         "$mainMod, mouse:273, resizewindow"
       ];
 
-    } cfg.extraOptions;
+    };
   };
 }
