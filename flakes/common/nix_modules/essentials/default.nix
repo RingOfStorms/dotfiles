@@ -38,6 +38,8 @@ with lib;
     # general unix
     date_compact = "date +'%Y%m%d'";
     date_short = "date +'%Y-%m-%d'";
+    time_compact = "date +'%Y%m%d%H%M%'";
+    time_short = "date +'%Y-%m-%dT%H:%M:%S'";
     ls = "ls --color -Gah";
     ll = "ls --color -Galhtr";
     lss = "du --max-depth=0 -h {.,}* 2>/dev/null | sort -hr";
