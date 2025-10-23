@@ -19,6 +19,7 @@ with lib;
     stashes = "git stash list";
     bd = "branch default";
     li = "link_ignored";
+    ci = "copy_ignored";
     bx = "branchdel";
     b = "branch";
   };
@@ -28,5 +29,6 @@ with lib;
     (builtins.readFile ./branch.func.sh)
     (builtins.readFile ./branchd.func.sh)
     (builtins.readFile ./link_ignored.func.sh)
+    (builtins.readFile ./copy_ignored.func.sh)
   ];
 }
