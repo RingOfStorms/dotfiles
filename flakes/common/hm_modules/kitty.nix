@@ -6,7 +6,7 @@
 
     settings = {
       # Window settings
-      background_opacity = 1.0;
+      background_opacity = 0.9;
       os_window_class = "kitty";
       remember_window_size = false;
       placement_strategy = "center";

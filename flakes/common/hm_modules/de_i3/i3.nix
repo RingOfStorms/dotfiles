@@ -25,7 +25,7 @@
       };
 
       keybindings = {
-        "${modifier}+return" = "exec ${terminal}";
+        "${modifier}+Return" = "exec ${terminal}";
         "${modifier}+space" = "exec pkill rofi || rofi -show drun";
         "${modifier}+q" = "kill";
         "${modifier}+shift+Escape" = "exit";
@@ -73,10 +73,10 @@
         "${modifier}+shift+9" = "move container to workspace number 9";
         "${modifier}+shift+0" = "move container to workspace number 10";
 
-        "${modifier}+left" = "resize shrink width 10 px or 10 ppt";
-        "${modifier}+down" = "resize shrink height 10 px or 10 ppt";
-        "${modifier}+up" = "resize grow height 10 px or 10 ppt";
-        "${modifier}+right" = "resize grow width 10 px or 10 ppt";
+        "${modifier}+Left" = "resize shrink width 10 px or 10 ppt";
+        "${modifier}+Down" = "resize shrink height 10 px or 10 ppt";
+        "${modifier}+Up" = "resize grow height 10 px or 10 ppt";
+        "${modifier}+Right" = "resize grow width 10 px or 10 ppt";
 
         "Print" = "exec sh -c 'maim -s | xclip -selection clipboard -t image/png'";
       };

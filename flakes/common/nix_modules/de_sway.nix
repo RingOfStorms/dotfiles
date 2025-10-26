@@ -6,6 +6,25 @@
 }:
 
 {
+  # Caps Lock as Escape for console/tty and Wayland
+  console.useXkbConfig = true;
+  services.xserver.xkb = {
+    layout = "us";
+    options = "caps:escape";
+  };
+
+  xdg.portal = {
+    enable = true;
+    extraPortals = lib.mkForce [
+      pkgs.xdg-desktop-portal-wlr
+      pkgs.xdg-desktop-portal-gtk
+    ];
+    config.common.default = [
+      "wlr"
+      "gtk"
+    ];
+  };
+
   services.greetd = {
     enable = true;
     vt = 2;
@@ -15,13 +34,6 @@
         user = "greeter";
       };
     };
-  };
-
-  # Caps Lock as Escape for console/tty and Wayland
-  console.useXkbConfig = true;
-  services.xserver.xkb = {
-    layout = "us";
-    options = "caps:escape";
   };
 
   # Core packages and tools
@@ -52,18 +64,6 @@
     wrapperFeatures.gtk = true; # include GTK integration env
     extraPackages = with pkgs; [
       xwayland # allow legacy X11 apps
-    ];
-  };
-
-  xdg.portal = {
-    enable = true;
-    extraPortals = lib.mkForce [
-      pkgs.xdg-desktop-portal-wlr
-      pkgs.xdg-desktop-portal-gtk
-    ];
-    config.common.default = [
-      "wlr"
-      "gtk"
     ];
   };
 

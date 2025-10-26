@@ -55,8 +55,8 @@
               common.nixosModules.git
               common.nixosModules.tmux
               common.nixosModules.boot_systemd
-              common.nixosModules.de_sway
-              # common.nixosModules.de_i3
+              # common.nixosModules.de_sway
+              common.nixosModules.de_i3
               common.nixosModules.hardening
               common.nixosModules.jetbrains_font
               common.nixosModules.nix_options
@@ -73,8 +73,8 @@
               (import ./containers.nix { inherit inputs; })
               # ./jails_text.nix
               # ./hyprland_customizations.nix
-              ./sway_customizations.nix
-               # ./i3_customizations.nix
+              # ./sway_customizations.nix
+              ./i3_customizations.nix
               ./opencode-shim.nix
               (
                 {
@@ -97,14 +97,15 @@
                     }) (lib.filterAttrs (name: user: user.isNormalUser or false) users.users);
 
                     sharedModules = [
-                      common.homeManagerModules.de_sway
-                      # common.homeManagerModules.de_i3
+                      # common.homeManagerModules.de_sway
+                      common.homeManagerModules.de_i3
                       common.homeManagerModules.tmux
                       common.homeManagerModules.atuin
                       common.homeManagerModules.direnv
                       common.homeManagerModules.foot
                       common.homeManagerModules.git
                       common.homeManagerModules.kitty
+                      common.homeManagerModules.launcher_rofi
                       common.homeManagerModules.postgres_cli_options
                       common.homeManagerModules.slicer
                       common.homeManagerModules.ssh

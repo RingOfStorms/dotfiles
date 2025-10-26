@@ -6,6 +6,7 @@
       window = {
         decorations = "None";
         dynamic_title = false;
+        opacity = 0.94;
       };
       colors = {
         primary = {
