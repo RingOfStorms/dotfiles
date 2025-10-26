@@ -34,11 +34,18 @@ in
          let
            inherit (lib) mkAfter;
          in
-         {
-           xsession.windowManager.i3.config.startup = mkAfter i3ExtraOptions.startup;
-           xsession.windowManager.i3.extraConfig = mkAfter assignLines;
+          {
+            xsession.windowManager.i3.config.bars = lib.mkForce [];
+            xsession.windowManager.i3.config.startup = mkAfter (i3ExtraOptions.startup ++ [
+              { command = "nm-applet"; }
+              { command = "blueman-applet"; }
+              { command = "xfce4-power-manager"; }
+              { command = "sh -c 'pgrep -x xfsettingsd >/dev/null || xfsettingsd'"; }
+              { command = "sh -c 'pgrep -x xfce4-panel >/dev/null || (sleep 0.5; xfce4-panel --disable-wm-check)'"; }
+            ]);
+            xsession.windowManager.i3.extraConfig = mkAfter assignLines;
             home.packages = [ pkgs.xwallpaper pkgs.xorg.xrandr ];
-         }
+          }
       )
     ];
   };
