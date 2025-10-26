@@ -6,8 +6,8 @@
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
-    # common.url = "path:../../flakes/common";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    common.url = "path:../../flakes/common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets.url = "path:../../flakes/secrets";
     secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
     # flatpaks.url = "path:../../flakes/flatpaks";
@@ -56,6 +56,7 @@
               common.nixosModules.tmux
               common.nixosModules.boot_systemd
               common.nixosModules.de_sway
+              # common.nixosModules.de_i3
               common.nixosModules.hardening
               common.nixosModules.jetbrains_font
               common.nixosModules.nix_options
@@ -73,6 +74,7 @@
               # ./jails_text.nix
               # ./hyprland_customizations.nix
               ./sway_customizations.nix
+               # ./i3_customizations.nix
               ./opencode-shim.nix
               (
                 {
@@ -96,6 +98,7 @@
 
                     sharedModules = [
                       common.homeManagerModules.de_sway
+                      # common.homeManagerModules.de_i3
                       common.homeManagerModules.tmux
                       common.homeManagerModules.atuin
                       common.homeManagerModules.direnv

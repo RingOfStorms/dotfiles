@@ -84,5 +84,5 @@
         fi
       '';
     };
-  }) config.users.users;
+  }) (lib.filterAttrs (n: u: u.isNormalUser or false) config.users.users);
 }
