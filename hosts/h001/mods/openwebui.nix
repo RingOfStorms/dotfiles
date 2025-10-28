@@ -1,6 +1,7 @@
 {
   inputs,
   config,
+  lib,
   ...
 }:
 let
@@ -10,12 +11,18 @@ let
     system = "x86_64-linux";
     config.allowUnfree = true;
   };
+  hasSecret =
+    secret:
+    let
+      secrets = config.age.secrets or { };
+    in
+    secrets ? ${secret} && secrets.${secret} != null;
 in
 {
   disabledModules = [ declaration ];
   imports = [ "${nixpkgs}/nixos/modules/${declaration}" ];
   options = { };
-  config = {
+  config = lib.mkIf (hasSecret "openwebui_env") {
     services.nginx.virtualHosts."chat.joshuabell.xyz" = {
       addSSL = true;
       sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";

@@ -1,7 +1,16 @@
 {
   config,
+  lib,
   ...
 }:
+let
+  hasSecret =
+    secret:
+    let
+      secrets = config.age.secrets or { };
+    in
+    secrets ? ${secret} && secrets.${secret} != null;
+in
 {
   config = {
     nixarr = {
@@ -9,7 +18,7 @@
       mediaDir = "/drives/wd10/nixarr/media";
       stateDir = "/var/lib/nixarr/state";
 
-      vpn = {
+      vpn = lib.mkIf (hasSecret "us_chi_wg") {
         enable = true;
         wgConf = config.age.secrets.us_chi_wg.path;
       };

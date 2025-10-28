@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   ...
 }:
 let
@@ -9,6 +10,13 @@ let
   hostDataDir = "/var/lib/${name}";
 
   v_port = 8222;
+  
+  hasSecret =
+    secret:
+    let
+      secrets = config.age.secrets or { };
+    in
+    secrets ? ${secret} && secrets.${secret} != null;
 in
 {
   users = {
@@ -26,7 +34,7 @@ in
     chmod -R 750 ${hostDataDir}
   '';
 
-  containers.${name} = {
+  containers.${name} = lib.mkIf (hasSecret "vaultwarden_env") {
     ephemeral = true;
     autoStart = true;
     privateNetwork = false;
@@ -72,7 +80,7 @@ in
       };
   };
 
-  services.nginx.virtualHosts."vault.joshuabell.xyz" = {
+  services.nginx.virtualHosts."vault.joshuabell.xyz" = lib.mkIf (hasSecret "vaultwarden_env") {
     enableACME = true;
     forceSSL = true;
     locations = {

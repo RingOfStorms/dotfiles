@@ -1,6 +1,7 @@
 {
   inputs,
   config,
+  lib,
   ...
 }:
 let
@@ -10,11 +11,17 @@ let
     system = "x86_64-linux";
     config.allowUnfree = true;
   };
+  hasSecret =
+    secret:
+    let
+      secrets = config.age.secrets or { };
+    in
+    secrets ? ${secret} && secrets.${secret} != null;
 in
 {
   disabledModules = [ declaration ];
   imports = [ "${nixpkgs}/nixos/modules/${declaration}" ];
-  config = {
+  config = lib.mkIf (hasSecret "oauth2_proxy_key_file") {
     services.oauth2-proxy = {
       enable = true;
       httpAddress = "http://127.0.0.1:4180";

@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   ...
 }:
 let
@@ -7,10 +8,16 @@ let
     proxyWebsockets = true;
     proxyPass = "http://localhost:7575";
   };
+  hasSecret =
+    secret:
+    let
+      secrets = config.age.secrets or { };
+    in
+    secrets ? ${secret} && secrets.${secret} != null;
 in
 {
   # TODO transfer these to o001 to use same certs?
-  security.acme = {
+  security.acme = lib.mkIf (hasSecret "linode_rw_domains") {
     acceptTerms = true;
     defaults.email = "admin@joshuabell.xyz";
     certs."joshuabell.xyz" = {
