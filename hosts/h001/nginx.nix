@@ -1,4 +1,6 @@
 {
+  config,
+  lib,
   ...
 }:
 let
@@ -6,9 +8,35 @@ let
     proxyWebsockets = true;
     proxyPass = "http://localhost:7575";
   };
+  hasSecret =
+    secret:
+    let
+      secrets = config.age.secrets or { };
+    in
+    secrets ? ${secret} && secrets.${secret} != null;
 in
 {
+  # TODO transfer these to o001 to use same certs?
+  security.acme = lib.mkIf (hasSecret "linode_rw_domains") {
+    acceptTerms = true;
+    defaults.email = "admin@joshuabell.xyz";
+    certs."joshuabell.xyz" = {
+      domain = "joshuabell.xyz";
+      extraDomainNames = [ "*.joshuabell.xyz" ];
+      credentialFiles = {
+        LINODE_TOKEN_FILE = config.age.secrets.linode_rw_domains.path;
+      };
+      dnsProvider = "linode";
+      group = "nginx";
+    };
+  };
+
   services.nginx = {
+    enable = true;
+    recommendedGzipSettings = true;
+    recommendedOptimisation = true;
+    recommendedProxySettings = true;
+    recommendedTlsSettings = true;
     clientMaxBodySize = "500m";
     virtualHosts = {
       "10.12.14.10" = {
@@ -36,6 +64,14 @@ in
             recommendedProxySettings = true;
           };
           "/" = homarr;
+        };
+      };
+
+      "_" = {
+        rejectSSL = true;
+        default = true;
+        locations."/" = {
+          return = "444"; # 404 for not found or 444 for drop
         };
       };
     };

@@ -1,9 +1,10 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
+    home-manager.url = "github:rycee/home-manager/release-24.11";
     deploy-rs.url = "github:serokell/deploy-rs";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
-    ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
+    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?rev=39edfefa5871d07c9f88ce92a55995eb347d9b09";
+    common.inputs.home-manager.follows = "home-manager";
   };
 
   outputs =
@@ -11,7 +12,6 @@
       self,
       nixpkgs,
       common,
-      ros_neovim,
       deploy-rs,
       ...
     }:
@@ -40,7 +40,6 @@
           lib.nixosSystem {
             modules = [
               common.nixosModules.default
-              ros_neovim.nixosModules.default
               ./configuration.nix
               ./hardware-configuration.nix
               ./linode.nix
@@ -49,11 +48,6 @@
               (
                 { config, pkgs, ... }:
                 {
-                  environment.systemPackages = with pkgs; [
-                    bitwarden
-                    vaultwarden
-                  ];
-
                   ringofstorms_common = {
                     systemName = configuration_name;
                     general = {

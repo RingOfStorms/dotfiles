@@ -29,6 +29,9 @@ in
   '';
 
   services.nginx.virtualHosts."gist.joshuabell.xyz" = {
+    addSSL = true;
+    sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
+    sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
     locations = {
       "/" = {
         proxyWebsockets = true;

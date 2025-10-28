@@ -1,6 +1,5 @@
 {
   inputs,
-  lib,
   ...
 }:
 let
@@ -45,14 +44,38 @@ in
     };
     services.nginx.virtualHosts = {
       "notes.joshuabell.xyz" = {
+        addSSL = true;
+        sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
+        sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
         locations = {
           "/" = {
             proxyWebsockets = true;
-            recommendedProxySettings = true;
             proxyPass = "http://127.0.0.1:9111";
           };
         };
       };
+      "blog.joshuabell.xyz" = {
+        addSSL = true;
+        sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
+        sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
+        locations = {
+          "/share" = {
+            proxyWebsockets = true;
+            proxyPass = "http://127.0.0.1:9111";
+            extraConfig = ''
+              auth_request off;
+            '';
+          };
+          "/assets" = {
+            proxyPass = "http://127.0.0.1:9111";
+            extraConfig = ''
+              auth_request off;
+            '';
+          };
+        };
+      };
+      # TODO revisit, am I going to use the native app or web version
+      # this is only needed for the app that can't handle the oauth flow
       "trilium_overlay" = {
         serverName = "h001.net.joshuabell.xyz";
         listen = [

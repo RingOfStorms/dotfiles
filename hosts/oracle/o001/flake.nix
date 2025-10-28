@@ -19,6 +19,7 @@
     }:
     let
       configuration_name = "o001";
+      system = "aarch64-linux";
       lib = nixpkgs.lib;
     in
     {
@@ -30,7 +31,7 @@
         ];
         nodes.${configuration_name} = {
           hostname = "64.181.210.7";
-          targetPlatform = "aarch64-linux";
+          targetPlatform = system;
           profiles.system = {
             user = "root";
             path = deploy-rs.lib.aarch64-linux.activate.nixos self.nixosConfigurations.${configuration_name};
@@ -41,7 +42,7 @@
       nixosConfigurations = {
         nixos = self.nixosConfigurations.${configuration_name};
         "${configuration_name}" = lib.nixosSystem {
-          system = "aarch64-linux";
+          inherit system;
           modules = [
             common.nixosModules.default
             ros_neovim.nixosModules.default

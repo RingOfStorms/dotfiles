@@ -1,13 +1,9 @@
-{ inputs }:
-let
-  common = inputs.common;
-in
 {
   ...
 }:
 {
   imports = [
-    common.nixosModules.containers.forgejo
+    ./forgejo.nix
     ./opengist.nix
     ./homarr.nix
     ./zitadel.nix
@@ -55,45 +51,14 @@ in
 
     virtualisation.oci-containers.backend = "podman";
 
-    security.acme.acceptTerms = true;
-    security.acme.defaults.email = "admin@joshuabell.xyz";
     services.nginx = {
-      enable = true;
-      recommendedGzipSettings = true;
-      recommendedOptimisation = true;
-      recommendedProxySettings = true;
-      recommendedTlsSettings = true;
       virtualHosts = {
         "localhost" = {
           locations."/" = {
             proxyPass = "http://10.0.0.111";
           };
         };
-
-        # forgejo http traffic
-        "git.joshuabell.xyz" = {
-          locations."/" = {
-            proxyPass = "http://10.0.0.2:3000";
-          };
-        };
-
-        "_" = {
-          default = true;
-          locations."/" = {
-            return = "404"; # or 444 for drop
-          };
-        };
       };
-
-      # STREAMS
-      # Forgejo ssh
-      streamConfig = ''
-        server {
-          listen 3032;
-          proxy_pass 10.0.0.2:3032;
-        }
-      '';
-
     };
 
     networking.firewall.allowedTCPPorts = [

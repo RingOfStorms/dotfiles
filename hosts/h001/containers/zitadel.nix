@@ -13,6 +13,13 @@ let
   hostAddress6 = "fc00::1";
   containerAddress6 = "fc00::3";
 
+  hasSecret =
+    secret:
+    let
+      secrets = config.age.secrets or { };
+    in
+    secrets ? ${secret} && secrets.${secret} != null;
+
   binds = [
     # Postgres data, must use postgres user in container and host
     {
@@ -31,6 +38,7 @@ let
       uid = config.ids.uids.postgres;
       gid = config.ids.gids.postgres;
     }
+  ] ++ lib.optionals (hasSecret "zitadel_master_key") [
     # secret
     {
       host = config.age.secrets.zitadel_master_key.path;
@@ -68,6 +76,9 @@ in
   options = { };
   config = {
     services.nginx.virtualHosts."sso.joshuabell.xyz" = {
+      addSSL = true;
+      sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
+      sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
       locations = {
         "/" = {
           proxyWebsockets = true;

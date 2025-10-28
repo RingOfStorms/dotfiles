@@ -74,8 +74,15 @@ in
   options = { };
 
   config = {
-    environment.systemPackages = [ ];
+    # ringofstorms_common.desktopEnvironment.sway.extraOptions = swayExtraOptions;
 
-    ringofstorms_common.desktopEnvironment.sway.extraOptions = swayExtraOptions;
+    home-manager.sharedModules = [
+      (
+        { ... }:
+        {
+          wayland.windowManager.sway.config = swayExtraOptions;
+        }
+      )
+    ];
   };
 }

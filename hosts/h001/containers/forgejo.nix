@@ -65,6 +65,28 @@ let
   };
 in
 {
+  services.nginx = {
+    virtualHosts = {
+      # forgejo http traffic
+      "git.joshuabell.xyz" = {
+        addSSL = true;
+        sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
+        sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
+        locations."/" = {
+          proxyPass = "http://10.0.0.2:3000";
+        };
+      };
+    };
+    # STREAMS
+    # Forgejo ssh
+    streamConfig = ''
+      server {
+        listen 3032;
+        proxy_pass 10.0.0.2:3032;
+      }
+    '';
+  };
+
   # Ensure users exists on host machine with same IDs as container
   inherit users;
 

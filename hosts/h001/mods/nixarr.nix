@@ -1,7 +1,16 @@
 {
   config,
+  lib,
   ...
 }:
+let
+  hasSecret =
+    secret:
+    let
+      secrets = config.age.secrets or { };
+    in
+    secrets ? ${secret} && secrets.${secret} != null;
+in
 {
   config = {
     nixarr = {
@@ -9,7 +18,7 @@
       mediaDir = "/drives/wd10/nixarr/media";
       stateDir = "/var/lib/nixarr/state";
 
-      vpn = {
+      vpn = lib.mkIf (hasSecret "us_chi_wg") {
         enable = true;
         wgConf = config.age.secrets.us_chi_wg.path;
       };
@@ -47,30 +56,18 @@
     services.nginx = {
       virtualHosts = {
         "jellyfin.joshuabell.xyz" = {
+          addSSL = true;
+          sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
+          sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
           locations."/" = {
             proxyWebsockets = true;
             proxyPass = "http://localhost:8096";
           };
         };
         "media.joshuabell.xyz" = {
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://localhost:5055";
-          };
-        };
-        "10.12.14.10" = {
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://localhost:8096";
-          };
-        };
-        "jellyfin.h001.local.joshuabell.xyz" = {
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://localhost:8096";
-          };
-        };
-        "media.h001.local.joshuabell.xyz" = {
+          addSSL = true;
+          sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
+          sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
           locations."/" = {
             proxyWebsockets = true;
             proxyPass = "http://localhost:5055";

@@ -1,6 +1,7 @@
 {
   inputs,
   config,
+  lib,
   ...
 }:
 let
@@ -10,13 +11,22 @@ let
     system = "x86_64-linux";
     config.allowUnfree = true;
   };
+  hasSecret =
+    secret:
+    let
+      secrets = config.age.secrets or { };
+    in
+    secrets ? ${secret} && secrets.${secret} != null;
 in
 {
   disabledModules = [ declaration ];
   imports = [ "${nixpkgs}/nixos/modules/${declaration}" ];
   options = { };
-  config = {
+  config = lib.mkIf (hasSecret "openwebui_env") {
     services.nginx.virtualHosts."chat.joshuabell.xyz" = {
+      addSSL = true;
+      sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
+      sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
       locations = {
         "/" = {
           proxyWebsockets = true;
@@ -65,6 +75,8 @@ in
         OAUTH_ADMIN_ROLES = "admin";
         # OAUTH_PICTURE_CLAIM = "picture";
         # OAUTH_UPDATE_PICTURE_ON_LOGIN = "True";
+
+        BYPASS_MODEL_ACCESS_CONTROL="True";
       };
     };
   };

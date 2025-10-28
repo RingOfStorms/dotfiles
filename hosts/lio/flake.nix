@@ -1,11 +1,17 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
+    home-manager.url = "github:rycee/home-manager/release-25.05";
+
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
-    common.url = "path:../../common";
-    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
+    common.url = "path:../../flakes/common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    # secrets.url = "path:../../flakes/secrets";
+    secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
+    # flatpaks.url = "path:../../flakes/flatpaks";
+    flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -13,34 +19,63 @@
   outputs =
     {
       nixpkgs,
+      home-manager,
       common,
+      secrets,
+      flatpaks,
       ros_neovim,
       ...
     }@inputs:
     let
       configuration_name = "lio";
+      system = "x86_64-linux";
+      primaryUser = "josh";
       lib = nixpkgs.lib;
     in
     {
       nixosConfigurations = {
         "${configuration_name}" = (
           lib.nixosSystem {
+            inherit system;
             specialArgs = {
               inherit inputs;
               upkgs = import inputs.nixpkgs-unstable {
-                system = "x86_64-linux";
+                inherit system;
                 config.allowUnfree = true;
               };
             };
             modules = [
-              common.nixosModules.default
+              home-manager.nixosModules.default
+
+              secrets.nixosModules.default
               ros_neovim.nixosModules.default
+              flatpaks.nixosModules.default
+
+              common.nixosModules.essentials
+              common.nixosModules.git
+              common.nixosModules.tmux
+              common.nixosModules.boot_systemd
+              # common.nixosModules.de_sway
+              common.nixosModules.de_i3
+              common.nixosModules.hardening
+              common.nixosModules.jetbrains_font
+              common.nixosModules.nix_options
+              common.nixosModules.no_sleep
+              common.nixosModules.podman
+              common.nixosModules.q_flipper
+              common.nixosModules.tailnet
+              common.nixosModules.timezone_auto
+              common.nixosModules.tty_caps_esc
+              common.nixosModules.zsh
+
               ./configuration.nix
               ./hardware-configuration.nix
               (import ./containers.nix { inherit inputs; })
               # ./jails_text.nix
               # ./hyprland_customizations.nix
-              ./sway_customizations.nix
+              # ./sway_customizations.nix
+              ./i3_customizations.nix
+              ./opencode-shim.nix
               (
                 {
                   config,
@@ -49,131 +84,75 @@
                   lib,
                   ...
                 }:
-                {
-                  programs = {
-                    nix-ld = {
-                      enable = true;
-                      libraries = with pkgs; [
-                        icu
-                        gmp
-                        glibc
-                        openssl
-                        stdenv.cc.cc
+                rec {
+                  # Home Manager
+                  home-manager = {
+                    useUserPackages = true;
+                    useGlobalPkgs = true;
+                    backupFileExtension = "bak";
+                    # add all normal users to home manager so it applies to them
+                    users = lib.mapAttrs (name: user: {
+                      home.stateVersion = "25.05";
+                      programs.home-manager.enable = true;
+                    }) (lib.filterAttrs (name: user: user.isNormalUser or false) users.users);
+
+                    sharedModules = [
+                      # common.homeManagerModules.de_sway
+                      common.homeManagerModules.de_i3
+                      common.homeManagerModules.tmux
+                      common.homeManagerModules.atuin
+                      common.homeManagerModules.direnv
+                      common.homeManagerModules.foot
+                      common.homeManagerModules.git
+                      common.homeManagerModules.kitty
+                      common.homeManagerModules.launcher_rofi
+                      common.homeManagerModules.postgres_cli_options
+                      common.homeManagerModules.slicer
+                      common.homeManagerModules.ssh
+                      common.homeManagerModules.starship
+                      common.homeManagerModules.zoxide
+                      common.homeManagerModules.zsh
+                    ];
+
+                    extraSpecialArgs = {
+                      inherit inputs;
+                      inherit upkgs;
+                    };
+                  };
+
+                  # System configuration
+                  networking.hostName = configuration_name;
+                  programs.nh.flake = "/home/${primaryUser}/.config/nixos-config/hosts/${config.networking.hostName}";
+                  nixpkgs.config.allowUnfree = true;
+                  users.users = {
+                    "${primaryUser}" = {
+                      isNormalUser = true;
+                      initialPassword = "password1";
+                      extraGroups = [
+                        "wheel"
+                        "networkmanager"
+                        "video"
+                        "input"
+                      ];
+                      openssh.authorizedKeys.keys = [
+                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJN2nsLmAlF6zj5dEBkNSJaqcCya+aB6I0imY8Q5Ew0S nix2lio"
                       ];
                     };
                   };
-                  environment.shellAliases = {
-                    "oc" =
-                      "all_proxy='' http_proxy='' https_proxy='' /home/josh/other/opencode/node_modules/opencode-linux-x64/bin/opencode";
-                    "occ" = "oc -c";
-                  };
 
-                  environment.systemPackages = with pkgs; [
-                    lua
-                    qdirstat
-                    ffmpeg-full
-                    appimage-run
-                    nodejs_24
-                    foot
-                    vlc
-                    upkgs.ladybird
-                    google-chrome
-                    trilium-desktop
+                  services.flatpak.packages = [
+                    "org.signal.Signal"
+                    "dev.vencord.Vesktop"
+                    "md.obsidian.Obsidian"
+                    "com.spotify.Client"
+                    "com.bitwarden.desktop"
+                    "org.openscad.OpenSCAD"
+                    "org.blender.Blender"
+                    "com.rustdesk.RustDesk"
                   ];
-                  # Also allow this key to work for root user, this will let us use this as a remote builder easier
-                  users.users.root.openssh.authorizedKeys.keys = [
-                    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJN2nsLmAlF6zj5dEBkNSJaqcCya+aB6I0imY8Q5Ew0S nix2lio"
-                  ];
-                  # Allow emulation of aarch64-linux binaries for cross compiling
-                  boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
-
-                  home-manager.extraSpecialArgs = {
-                    inherit inputs;
-                    inherit upkgs;
-                  };
-
-                  ringofstorms_common = {
-                    systemName = configuration_name;
-                    boot.systemd.enable = true;
-                    secrets.enable = true;
-                    general = {
-                      reporting.enable = true;
-                      disableRemoteBuildsOnLio = true;
-                    };
-                    desktopEnvironment.sway = {
-                      enable = true;
-                      waybar.enable = true;
-                      swaync.enable = true;
-                    };
-                    programs = {
-                      rustDev.enable = true;
-                      uhkAgent.enable = true;
-                      tailnet.enable = true;
-                      tailnet.enableExitNode = true;
-                      ssh.enable = true;
-                      podman.enable = true;
-                      virt-manager.enable = true;
-                      flatpaks = {
-                        enable = true;
-                        packages = [
-                          "org.signal.Signal"
-                          "dev.vencord.Vesktop"
-                          "md.obsidian.Obsidian"
-                          "com.spotify.Client"
-                          "com.bitwarden.desktop"
-                          "org.openscad.OpenSCAD"
-                          "org.blender.Blender"
-                          "com.rustdesk.RustDesk"
-                        ];
-                      };
-                    };
-                    users = {
-                      # Users are all normal users and default password is password1
-                      admins = [ "josh" ]; # First admin is also the primary user owning nix config
-                      users = {
-                        josh = {
-                          openssh.authorizedKeys.keys = [
-                            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJN2nsLmAlF6zj5dEBkNSJaqcCya+aB6I0imY8Q5Ew0S nix2lio"
-                          ];
-                          extraGroups = [
-                            "networkmanager"
-                            "video"
-                            "input"
-                          ];
-                          shell = pkgs.zsh;
-                          packages = with pkgs; [
-                            sabnzbd
-                          ];
-                        };
-                      };
-                    };
-                    homeManager = {
-                      users = {
-                        josh = {
-                          imports = with common.homeManagerModules; [
-                            tmux
-                            atuin
-                            kitty
-                            foot
-                            direnv
-                            git
-                            nix_deprecations
-                            obs
-                            postgres
-                            slicer
-                            ssh
-                            starship
-                            zoxide
-                            zsh
-                          ];
-                        };
-                      };
-                    };
-                  };
                 }
               )
             ];
-
           }
         );
       };

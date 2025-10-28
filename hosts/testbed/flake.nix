@@ -4,8 +4,8 @@
     # nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
-    common.url = "path:../../common";
-    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
+    # common.url = "path:../../common";
+    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
 
     disko.url = "github:nix-community/disko/latest";
     disko.inputs.nixpkgs.follows = "nixpkgs";
