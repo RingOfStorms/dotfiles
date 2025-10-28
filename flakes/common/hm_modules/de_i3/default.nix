@@ -1,4 +1,4 @@
 { ... }:
 {
-  imports = [ ./i3.nix ];
+  imports = [ ./i3.nix ./polybar.nix ];
 }

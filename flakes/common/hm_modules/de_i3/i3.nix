@@ -81,13 +81,7 @@
         "Print" = "exec sh -c 'maim -s | xclip -selection clipboard -t image/png'";
       };
 
-      bars = [
-        # {
-        #   position = "top";
-        #   statusCommand = "${pkgs.i3status}/bin/i3status";
-        # }
-      ];
-
+      bars = [ ];
       startup = [ ];
     };
   };
