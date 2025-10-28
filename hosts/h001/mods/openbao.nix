@@ -12,7 +12,8 @@
     settings = {
       ui = true;
       
-      listener.tcp = {
+      listener.default = {
+        type = "tcp";
         address = "127.0.0.1:8200";
         tls_disable = true; # nginx will handle TLS
       };
