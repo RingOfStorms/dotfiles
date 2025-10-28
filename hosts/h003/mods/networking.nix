@@ -201,6 +201,11 @@
         "2a:d0:ec:fa:b9:7e,PIXEL-6,10.12.14.31"
         "a8:29:48:94:23:dd,TL-SG1428PE,10.12.16.2"
         "00:23:a4:0b:3b:be,TMREM00004335,10.12.14.181"
+        # Ellas work laptop
+        "38:18:68:49:3c:48,ellawork-w,10.12.14.122"
+        "d4:a2:cd:39:4e:f0,ellawork-e,10.12.14.132"
+        # Josh Work laptop
+        "00:23:a4:0b:3b:be,TMREM00004335,10.12.14.181"
       ];
 
       enable-ra = lib.mkIf config.networking.enableIPv6 true;
