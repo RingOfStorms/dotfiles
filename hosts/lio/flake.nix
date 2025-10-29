@@ -49,6 +49,7 @@
 
               secrets.nixosModules.default
               ros_neovim.nixosModules.default
+              ({ ... }: { ringofstorms-nvim.includeAllRuntimeDependencies = true; })
               flatpaks.nixosModules.default
 
               common.nixosModules.essentials

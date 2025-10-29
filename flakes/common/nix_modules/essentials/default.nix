@@ -53,5 +53,6 @@ with lib;
   environment.shellInit = lib.concatStringsSep "\n\n" [
     (builtins.readFile ./unix_utils.func.sh)
     (builtins.readFile ./nixpkg.func.sh)
+    (builtins.readFile ./envrc-import.func.sh)
   ];
 }

@@ -5,23 +5,38 @@
   ...
 }:
 {
+  services.nginx = {
+    virtualHosts = {
+      "sec.joshuabell.xyz" = {
+        addSSL = true;
+        sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
+        sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
+        locations."/" = {
+          proxyWebsockets = true;
+          proxyPass = "http://localhost:8200";
+          recommendedProxySettings = true;
+        };
+      };
+    };
+  };
+
   services.openbao = {
     enable = true;
     package = pkgs.openbao;
-    
+
     settings = {
       ui = true;
-      
+
       listener.default = {
         type = "tcp";
         address = "127.0.0.1:8200";
         tls_disable = true; # nginx will handle TLS
       };
-      
+
       storage.file = {
         path = "/var/lib/openbao";
       };
-      
+
       # Disable mlock requirement for development
       # In production, you may want to enable this
       disable_mlock = true;
@@ -42,7 +57,7 @@
       ProtectSystem = "strict";
       ProtectHome = true;
       ReadWritePaths = [ "/var/lib/openbao" ];
-      
+
       # Resource limits
       LimitNOFILE = 65536;
       LimitNPROC = 4096;

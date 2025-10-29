@@ -41,14 +41,16 @@ services.openbao = {
 
 ### 1.2 Configure Nginx Reverse Proxy
 
-**File:** `hosts/h001/nginx.nix`
+**File:** Put this inside of the openbao.nix file as well above or below the existing configuration.
 
 **Tasks:**
-- [ ] Add virtualHost for `vault.joshuabell.xyz`
-- [ ] Configure SSL using existing ACME wildcard cert
-- [ ] Set up proxy to `http://127.0.0.1:8200`
-- [ ] Enable websockets for UI
-- [ ] Add security headers
+- [x] Add virtualHost for `sec.joshuabell.xyz`
+- [x] Configure SSL using existing ACME wildcard cert
+- [x] Add virtualHost for `sec.joshuabell.xyz`
+- [x] Configure SSL using existing ACME wildcard cert
+- [x] Set up proxy to `http://127.0.0.1:8200`
+- [x] Enable websockets for UI
+- [x] Add security headers
 
 **Expected config:**
 ```nix
