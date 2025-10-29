@@ -2,7 +2,7 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
     # nixpkgs-unstable.url = "github:wrvsrx/nixpkgs/fix-open-webui";
-    open-webui-nixpkgs.url = "github:nixos/nixpkgs/e9f00bd893984bc8ce46c895c3bf7cac95331127";
+    open-webui-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     litellm-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     trilium-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     oauth2-proxy-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
