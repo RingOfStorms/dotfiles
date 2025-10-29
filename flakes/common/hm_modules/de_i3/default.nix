@@ -1,4 +1,5 @@
 { ... }:
 {
-  imports = [ ./i3.nix ./polybar.nix ];
+  imports = [ ./i3.nix ./polybar.nix ./theme.nix ];
 }
+

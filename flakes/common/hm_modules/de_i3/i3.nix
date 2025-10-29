@@ -9,6 +9,12 @@
         default_border pixel 1
         default_floating_border pixel 1
         floating_modifier Mod4
+
+        # Dark mode colors
+        client.focused          #2e3440 #4c566a #eceff4 #4c566a #2e3440
+        client.unfocused        #2e3440 #2e3440 #d8dee9 #2e3440 #2e3440
+        client.focused_inactive #2e3440 #3b4252 #e5e9f0 #3b4252 #2e3440
+        client.urgent           #2e3440 #bf616a #eceff4 #bf616a #2e3440
     '';
     config = rec {
       modifier = "Mod4";

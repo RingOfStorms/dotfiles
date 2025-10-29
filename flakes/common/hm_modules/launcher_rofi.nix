@@ -10,7 +10,7 @@
       modi = "drun,run,ssh,window,calc";
       terminal = "alacritty";
     };
-    theme = "glue_pro_blue";
+    theme = "Arc-Dark";
   };
   programs.wofi = {
     enable = true;
