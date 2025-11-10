@@ -1,12 +1,14 @@
 link_ignored() {
   local DRY_RUN=0
   local USE_FZF=1
+  local AUTO=0
   local -a PATTERNS=()
 
   while [ $# -gt 0 ]; do
     case "$1" in
       --dry-run) DRY_RUN=1; shift ;;
       --no-fzf) USE_FZF=0; shift ;;
+      --auto) AUTO=1; shift ;;
       -h|--help) link_ignored_usage; return 0 ;;
       --) shift; break ;;
       *) PATTERNS+=("$1"); shift ;;
@@ -15,11 +17,16 @@ link_ignored() {
 
   link_ignored_usage() {
     cat <<EOF
-Usage: link_ignored [--dry-run] [--no-fzf] [pattern ...]
+Usage: link_ignored [--dry-run] [--no-fzf] [--auto] [pattern ...]
 
 Interactively or non-interactively create symlinks in the current worktree
 for files/dirs that exist in the main repository root but are git-ignored /
 untracked.
+
+Defaults:
+- If no patterns provided, tries git config worktree.autolink (multi)
+- Else falls back to env LINK_IGNORED_DEFAULTS (space-separated)
+- With --auto and defaults present, skips fzf and links immediately
 EOF
   }
 
@@ -36,6 +43,38 @@ EOF
   if [ -z "$repo_root" ]; then
     echo "Error: unable to determine repository root." >&2
     return 2
+  fi
+
+  _li_load_defaults() {
+    local -a cfg=()
+    while IFS= read -r line; do
+      [ -n "$line" ] && cfg+=("$line")
+    done < <(git -C "$repo_root" config --get-all worktree.autolink 2>/dev/null || true)
+
+    if [ ${#cfg[@]} -gt 0 ]; then
+      PATTERNS=("${cfg[@]}")
+      return 0
+    fi
+
+    if [ -n "${LINK_IGNORED_DEFAULTS:-}" ]; then
+      if [ -n "${ZSH_VERSION:-}" ]; then
+        eval "PATTERNS=(${=LINK_IGNORED_DEFAULTS})"
+      else
+        read -r -a PATTERNS <<< "$LINK_IGNORED_DEFAULTS"
+      fi
+      return 0
+    fi
+    return 1
+  }
+
+  # Try to load defaults if none provided
+  if [ ${#PATTERNS[@]} -eq 0 ]; then
+    _li_load_defaults || true
+  fi
+
+  # If AUTO requested and we have patterns, skip fzf
+  if [ $AUTO -eq 1 ] && [ ${#PATTERNS[@]} -gt 0 ]; then
+    USE_FZF=0
   fi
 
   local -a candidates=()

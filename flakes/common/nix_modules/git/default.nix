@@ -19,9 +19,9 @@ with lib;
     stashes = "git stash list";
     bd = "branch default";
     li = "link_ignored";
-    ci = "copy_ignored";
     bx = "branchdel";
     b = "branch";
+    bs = "branching_setup";
   };
 
   environment.shellInit = lib.concatStringsSep "\n\n" [
@@ -29,6 +29,6 @@ with lib;
     (builtins.readFile ./branch.func.sh)
     (builtins.readFile ./branchd.func.sh)
     (builtins.readFile ./link_ignored.func.sh)
-    (builtins.readFile ./copy_ignored.func.sh)
+    (builtins.readFile ./branching_setup.func.sh)
   ];
 }

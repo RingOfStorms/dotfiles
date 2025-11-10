@@ -175,10 +175,61 @@ branch() {
   echo "Creating new worktree for branch '$branch_name' at '$wt_path'."
 
   # Try to add or update worktree from the resolved ref. Use a fallback path if needed.
+
+  _branch__post_setup() {
+    local repo_dir="$1" wt_path="$2"
+    # Sentinel in worktree-specific git dir to avoid re-running
+    local git_dir sentinel
+    git_dir=$(git -C "$wt_path" rev-parse --git-dir 2>/dev/null || true)
+    sentinel="$git_dir/post-setup.done"
+    if [ -f "$sentinel" ]; then
+      return 0
+    fi
+    _branch__auto_link "$repo_dir" "$wt_path" || true
+    _branch__bootstrap "$repo_dir" "$wt_path" || true
+    : > "$sentinel" 2>/dev/null || true
+  }
+
+  _branch__auto_link() {
+    local repo_dir="$1" wt_path="$2"
+    local has_cfg
+    has_cfg=$(git -C "$repo_dir" config --get-all worktree.autolink 2>/dev/null | wc -l)
+    if [ "${BRANCH_AUTOLINK:-0}" -eq 1 ] || [ "$has_cfg" -gt 0 ]; then
+      if command -v link_ignored >/dev/null 2>&1; then
+        ( cd "$wt_path" && link_ignored --auto --no-fzf ) || true
+      fi
+    fi
+  }
+
+  _branch__bootstrap() {
+    local repo_dir="$1" wt_path="$2"
+    local mode cmd
+    mode=$(git -C "$repo_dir" config --get worktree.bootstrap 2>/dev/null || true)
+    if [ -n "${BRANCH_BOOTSTRAP_CMD:-}" ]; then
+      cmd="$BRANCH_BOOTSTRAP_CMD"
+    elif [ -n "$mode" ]; then
+      cmd="$mode"
+    else
+      case "${BRANCH_BOOTSTRAP:-skip}" in
+        auto)
+          if [ -f "$wt_path/pnpm-lock.yaml" ]; then cmd="pnpm i --frozen-lockfile"
+          elif [ -f "$wt_path/yarn.lock" ]; then cmd="yarn install --frozen-lockfile || yarn install --immutable"
+          elif [ -f "$wt_path/package-lock.json" ]; then cmd="npm ci"
+          else cmd=""; fi
+          ;;
+        skip|0|false) cmd="" ;;
+        1|true) cmd="npm ci" ;;
+      esac
+    fi
+    [ -z "$cmd" ] && return 0
+    ( cd "$wt_path" && eval "$cmd" ) || true
+  }
+
   if [ "$local_exists" -eq 1 ]; then
       if git -C "$repo_dir" worktree add "$wt_path" "$branch_name" 2>/dev/null; then
       cd "$wt_path" || return 1
       _branch__maybe_set_tmux_name "$branch_name" "$prev_branch" || true
+      _branch__post_setup "$repo_dir" "$wt_path" || true
       return 0
     fi
 
@@ -186,6 +237,7 @@ branch() {
     if git -C "$repo_dir" worktree add -b "$branch_name" "$wt_path" "$branch_from" 2>/dev/null; then
       cd "$wt_path" || return 1
       _branch__maybe_set_tmux_name "$branch_name" "$prev_branch" || true
+      _branch__post_setup "$repo_dir" "$wt_path" || true
       return 0
     fi
   fi
@@ -197,6 +249,7 @@ branch() {
         if git -C "$repo_dir" worktree add "$wt_path" "$branch_name" 2>/dev/null; then
       cd "$wt_path" || return 1
       _branch__maybe_set_tmux_name "$branch_name" "$prev_branch" || true
+      _branch__post_setup "$repo_dir" "$wt_path" || true
       return 0
       else
         git -C "$repo_dir" branch -D "$branch_name" 2>/dev/null || true
