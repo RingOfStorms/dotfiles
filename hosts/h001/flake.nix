@@ -10,7 +10,7 @@
     oauth2-proxy-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     pinchflat-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
-    # Use relative to get current version for testin
+    # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets.url = "path:../../flakes/secrets";
