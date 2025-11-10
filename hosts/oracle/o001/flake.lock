@@ -1273,14 +1273,20 @@
         "ragenix": "ragenix"
       },
       "locked": {
-        "path": "../../../flakes/secrets",
-        "type": "path"
+        "dir": "flakes/secrets",
+        "lastModified": 1762758426,
+        "narHash": "sha256-ynggVRutohq7TPhbz0ADXWRtsi4BGynGoRXdGyertRo=",
+        "ref": "refs/heads/master",
+        "rev": "7185d24a8ba9b7176b6f742ea2ee0e57d375dc43",
+        "revCount": 769,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
       "original": {
-        "path": "../../../flakes/secrets",
-        "type": "path"
-      },
-      "parent": []
+        "dir": "flakes/secrets",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+      }
     },
     "systems": {
       "locked": {
