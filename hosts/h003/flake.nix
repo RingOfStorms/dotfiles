@@ -24,7 +24,7 @@
     let
       configuration_name = "h003";
       system = "x86_64-linux";
-      stateVersion = "24.11";
+      stateVersion = "25.05";
       primaryUser = "luser";
       lib = nixpkgs.lib;
     in
@@ -53,7 +53,6 @@
               common.nixosModules.tty_caps_esc
               common.nixosModules.zsh
 
-              ./configuration.nix
               ./hardware-configuration.nix
               ./mods
               (
