@@ -115,7 +115,7 @@ in
     publicKeys = trustedKeys;
   };
   "headscale_auth.age" = {
-    publicKeys = trustedKeys;
+    publicKeys = trustedKeys ++ o001;
   };
   "us_chi_wg.age" = {
     publicKeys = trustedKeys;

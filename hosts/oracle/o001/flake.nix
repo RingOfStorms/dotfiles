@@ -42,7 +42,7 @@
           targetPlatform = system;
           profiles.system = {
             user = "root";
-            path = deploy-rs.lib.aarch64-linux.activate.nixos self.nixosConfigurations.${configuration_name};
+            path = deploy-rs.lib.${system}.activate.nixos self.nixosConfigurations.${configuration_name};
           };
         };
       };
