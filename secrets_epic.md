@@ -41,18 +41,20 @@ services.openbao = {
 
 ### 1.2 Configure Nginx Reverse Proxy
 
-**File:** `hosts/h001/nginx.nix`
+**File:** Put this inside of the openbao.nix file as well above or below the existing configuration.
 
 **Tasks:**
-- [ ] Add virtualHost for `vault.joshuabell.xyz`
-- [ ] Configure SSL using existing ACME wildcard cert
-- [ ] Set up proxy to `http://127.0.0.1:8200`
-- [ ] Enable websockets for UI
-- [ ] Add security headers
+- [x] Add virtualHost for `sec.joshuabell.xyz`
+- [x] Configure SSL using existing ACME wildcard cert
+- [x] Add virtualHost for `sec.joshuabell.xyz`
+- [x] Configure SSL using existing ACME wildcard cert
+- [x] Set up proxy to `http://127.0.0.1:8200`
+- [x] Enable websockets for UI
+- [x] Add security headers
 
 **Expected config:**
 ```nix
-services.nginx.virtualHosts."vault.joshuabell.xyz" = {
+services.nginx.virtualHosts."sec.joshuabell.xyz" = {
   addSSL = true;
   sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
   sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
@@ -74,12 +76,12 @@ services.nginx.virtualHosts."vault.joshuabell.xyz" = {
 ### 1.4 Initial Deployment
 
 **Tasks:**
-- [ ] Deploy to h001 with `nixos-rebuild switch`
-- [ ] Verify OpenBao service is running
-- [ ] Access UI at `https://vault.joshuabell.xyz`
-- [ ] Initialize OpenBao (generates root token and unseal keys)
-- [ ] Save unseal keys and root token securely (LastPass/Bitwarden)
-- [ ] Unseal the vault
+- [x] Deploy to h001 with `nixos-rebuild switch`
+- [x] Verify OpenBao service is running
+- [x] Access UI at `https://sec.joshuabell.xyz`
+- [x] Initialize OpenBao (generates root token and unseal keys)
+- [x] Save unseal keys and root token securely (LastPass/Bitwarden)
+- [x] Unseal the vault
 
 **Commands:**
 ```bash
@@ -104,7 +106,7 @@ openbao operator unseal <key3>
 
 **Commands:**
 ```bash
-export VAULT_ADDR='https://vault.joshuabell.xyz'
+export VAULT_ADDR='https://sec.joshuabell.xyz'
 openbao login <root-token>
 openbao secrets enable -version=2 kv
 openbao kv put kv/test password=hello
@@ -275,7 +277,7 @@ in {
 **Tasks:**
 - [ ] Import vault-agent module
 - [ ] Configure vault-agent for h001:
-  - vault address: `https://vault.joshuabell.xyz`
+  - vault address: `https://sec.joshuabell.xyz`
   - role: `nixos-h001`
   - JWT path: `/etc/vault/h001-jwt`
 - [ ] Define secrets needed by h001 services
@@ -285,7 +287,7 @@ in {
 ```nix
 services.vault-agent = {
   enable = true;
-  vaultAddress = "https://vault.joshuabell.xyz";
+  vaultAddress = "https://sec.joshuabell.xyz";
   role = "nixos-h001";
   secrets = {
     postgres-password = {
@@ -513,7 +515,7 @@ openbao kv put kv/hosts/h001/openwebui \
 
 ## Success Criteria
 
-- [ ] OpenBao running and accessible at `https://vault.joshuabell.xyz`
+- [ ] OpenBao running and accessible at `https://sec.joshuabell.xyz`
 - [ ] Zitadel OIDC authentication working for machine users
 - [ ] At least 3 secrets migrated from agenix to OpenBao
 - [ ] Services on h001 starting successfully with vault-agent secrets

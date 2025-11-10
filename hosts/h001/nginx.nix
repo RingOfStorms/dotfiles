@@ -17,6 +17,7 @@ let
 in
 {
   # TODO transfer these to o001 to use same certs?
+  # Will I ever get rate limited by lets encrypt with both doing their own?
   security.acme = lib.mkIf (hasSecret "linode_rw_domains") {
     acceptTerms = true;
     defaults.email = "admin@joshuabell.xyz";

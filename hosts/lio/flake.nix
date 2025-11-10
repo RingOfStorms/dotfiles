@@ -49,6 +49,12 @@
 
               secrets.nixosModules.default
               ros_neovim.nixosModules.default
+              (
+                { ... }:
+                {
+                  ringofstorms-nvim.includeAllRuntimeDependencies = true;
+                }
+              )
               flatpaks.nixosModules.default
 
               common.nixosModules.essentials
@@ -149,6 +155,10 @@
                     "org.openscad.OpenSCAD"
                     "org.blender.Blender"
                     "com.rustdesk.RustDesk"
+                  ];
+
+                  networking.firewall.allowedTCPPorts = [
+                    8080
                   ];
                 }
               )

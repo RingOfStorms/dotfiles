@@ -130,6 +130,11 @@ in
       };
       "h003" = lib.mkIf (hasSecret "nix2h003") {
         identityFile = age.secrets.nix2h003.path;
+        hostname = "10.12.14.1";
+        user = "luser";
+      };
+      "h003_" = lib.mkIf (hasSecret "nix2h003") {
+        identityFile = age.secrets.nix2h003.path;
         user = "luser";
       };
       # LINODE SERVERS

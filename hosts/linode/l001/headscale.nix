@@ -32,6 +32,7 @@
               (h001ARecord "chat")
               (h001ARecord "sso-proxy")
               (h001ARecord "n8n")
+              (h001ARecord "sec")
               (h001ARecord "sso")
               (h001ARecord "gist")
               (h001ARecord "git")

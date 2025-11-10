@@ -14,7 +14,8 @@ let
   '';
   bg1 = ../_shared_assets/wallpapers/pixel_neon.png;
   bg2 = ../_shared_assets/wallpapers/pixel_neon_v.png;
-  xrSetup = "xrandr --output DP-1 --mode 3840x2160 --rate 97.98 --pos 0x0 --primary; sleep 0.2; xrandr --output DP-2 --mode 3440x1440 --rate 99.98 --rotate left --left-of DP-1";
+  # xrSetup = "xrandr --output DP-1 --mode 3840x2160 --rate 119.88 --pos 0x0 --primary; sleep 0.2; xrandr --output DP-2 --mode 3440x1440 --rate 99.98 --rotate left --left-of DP-1";
+  xrSetup = "xrandr --output DP-1 --mode 3840x2160 --rate 60 --pos 0x0 --primary; sleep 0.2; xrandr --output DP-2 --mode 3440x1440 --rate 99.98 --rotate left --left-of DP-1";
   xwallpaperCmd = "xwallpaper --output DP-1 --zoom ${bg1} --output DP-2 --zoom ${bg2}";
   startupCmd = "sh -c 'sleep 0.2; i3-msg workspace number 7; sleep 0.2; i3-msg workspace number 1'";
   i3ExtraOptions = {

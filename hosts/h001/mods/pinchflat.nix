@@ -1,10 +1,22 @@
 {
   lib,
+  inputs,
   ...
 }:
+let
+  declaration = "services/misc/pinchflat.nix";
+  nixpkgs = inputs.pinchflat-nixpkgs;
+  pkgs = import nixpkgs {
+    system = "x86_64-linux";
+    config.allowUnfree = true;
+  };
+in
 {
+  disabledModules = [ declaration ];
+  imports = [ "${nixpkgs}/nixos/modules/${declaration}" ];
   config = {
     services.pinchflat = {
+      package = pkgs.pinchflat;
       enable = true;
       port = 8945;
       selfhosted = true;

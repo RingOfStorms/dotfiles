@@ -24,6 +24,7 @@
         dmenu
         maim
         xclip
+        xfce.thunar
       ];
     };
     displayManager = {
