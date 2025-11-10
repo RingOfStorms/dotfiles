@@ -1,7 +1,7 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
-    home-manager.url = "github:rycee/home-manager/release-24.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
+    home-manager.url = "github:rycee/home-manager/release-25.05";
     deploy-rs.url = "github:serokell/deploy-rs";
 
     # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?rev=39edfefa5871d07c9f88ce92a55995eb347d9b09";
@@ -76,7 +76,7 @@
                     users = lib.mapAttrs (name: user: {
                       home.stateVersion = stateVersion;
                       programs.home-manager.enable = true;
-                    }) (lib.filterAttrs (name: user: user.isNormalUser or false) users.users);
+                    }) (lib.filterAttrs (name: user: name == "root" || (user.isNormalUser or false)) users.users);
 
                     sharedModules = [
                       common.homeManagerModules.tmux
