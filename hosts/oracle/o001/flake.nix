@@ -1,25 +1,33 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
+    home-manager.url = "github:rycee/home-manager/release-25.05";
     deploy-rs.url = "github:serokell/deploy-rs";
-
-    # common.url = "path:../../../common";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
+
+    # Use relative to get current version for testing
+    # common.url = "path:../../../flakes/common";
+    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    secrets.url = "path:../../../flakes/secrets";
+    # secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
   };
 
   outputs =
     {
       self,
       nixpkgs,
+      home-manager,
       common,
+      secrets,
       ros_neovim,
       deploy-rs,
       ...
-    }:
+    }@inputs:
     let
       configuration_name = "o001";
       system = "aarch64-linux";
+      stateVersion = "23.11";
+      primaryUser = "root";
       lib = nixpkgs.lib;
     in
     {
@@ -40,73 +48,79 @@
       };
 
       nixosConfigurations = {
-        nixos = self.nixosConfigurations.${configuration_name};
-        "${configuration_name}" = lib.nixosSystem {
-          inherit system;
-          modules = [
-            common.nixosModules.default
-            ros_neovim.nixosModules.default
-            ./configuration.nix
-            ./hardware-configuration.nix
-            ./nginx.nix
-            ./containers/vaultwarden.nix
-            ./mods/postgresql.nix
-            ./mods/atuin.nix
-            ./mods/rustdesk-server.nix
-            (
-              { pkgs, ... }:
-              {
-                environment.systemPackages = with pkgs; [
-                  bitwarden
-                  vaultwarden
-                ];
+        "${configuration_name}" = (
+          lib.nixosSystem {
+            inherit system;
+            specialArgs = {
+              inherit inputs;
+            };
+            modules = [
+              home-manager.nixosModules.default
+              secrets.nixosModules.default
 
-                ringofstorms_common = {
-                  systemName = configuration_name;
-                  secrets.enable = true;
-                  general = {
-                    disableRemoteBuildsOnLio = true;
-                    readWindowsDrives = false;
-                    jetbrainsMonoFont = false;
-                    ttyCapsEscape = false;
-                    reporting.enable = true;
+              common.nixosModules.essentials
+              common.nixosModules.git
+              common.nixosModules.hardening
+              common.nixosModules.nix_options
+              common.nixosModules.docker
+              common.nixosModules.tailnet
+              common.nixosModules.zsh
+
+              ros_neovim.nixosModules.default
+              ./configuration.nix
+              ./hardware-configuration.nix
+              ./nginx.nix
+              ./containers/vaultwarden.nix
+              ./mods/postgresql.nix
+              ./mods/atuin.nix
+              ./mods/rustdesk-server.nix
+              (
+                { pkgs, ... }:
+                rec {
+                  # Home Manager
+                  home-manager = {
+                    useUserPackages = true;
+                    useGlobalPkgs = true;
+                    backupFileExtension = "bak";
+                    # add all normal users to home manager so it applies to them
+                    users = lib.mapAttrs (name: user: {
+                      home.stateVersion = stateVersion;
+                      programs.home-manager.enable = true;
+                    }) (lib.filterAttrs (name: user: name == "root" || (user.isNormalUser or false)) users.users);
+
+                    sharedModules = [
+                      common.homeManagerModules.tmux
+                      common.homeManagerModules.atuin
+                      common.homeManagerModules.git
+                      common.homeManagerModules.postgres_cli_options
+                      common.homeManagerModules.starship
+                      common.homeManagerModules.zoxide
+                      common.homeManagerModules.zsh
+                    ];
                   };
-                  programs = {
-                    tailnet.enable = true;
-                    ssh.enable = true;
-                    docker.enable = true;
-                  };
-                  users = {
-                    users = {
-                      root = {
-                        openssh.authorizedKeys.keys = [
-                          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG90Gg6dV3yhZ5+X40vICbeBwV9rfD39/8l9QSqluTw8 nix2oracle"
-                        ];
-                        shell = pkgs.zsh;
-                      };
+
+                  # System configuration
+                  system.stateVersion = stateVersion;
+                  networking.hostName = configuration_name;
+                  programs.nh.flake = "/home/${primaryUser}/.config/nixos-config/hosts/${configuration_name}";
+                  nixpkgs.config.allowUnfree = true;
+                  users.users = {
+                    "${primaryUser}" = {
+                      shell = pkgs.zsh;
+                      openssh.authorizedKeys.keys = [
+                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG90Gg6dV3yhZ5+X40vICbeBwV9rfD39/8l9QSqluTw8 nix2oracle"
+                      ];
                     };
                   };
-                  homeManager = {
-                    users = {
-                      root = {
-                        programs.atuin.settings.sync_address = "http://localhost:8888";
-                        imports = with common.homeManagerModules; [
-                          tmux
-                          atuin
-                          git
-                          postgres
-                          starship
-                          zoxide
-                          zsh
-                        ];
-                      };
-                    };
-                  };
-                };
-              }
-            )
-          ];
-        };
+
+                  environment.systemPackages = with pkgs; [
+                    vaultwarden
+                  ];
+                }
+              )
+            ];
+          }
+        );
       };
     };
 }

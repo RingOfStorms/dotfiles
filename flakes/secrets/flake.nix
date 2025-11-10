@@ -26,11 +26,13 @@
                 secretsRaw = import ./secrets.nix;
                 systemName = config.networking.hostName;
                 # TODO revisit this slightly kinda scary method for choosing owners...
-                user = builtins.head (
-                  builtins.filter (name: config.users.users.${name}.isNormalUser or false) (
-                    builtins.attrNames config.users.users
-                  )
-                );
+                user =
+                  let
+                    normalUsers = builtins.filter (name: config.users.users.${name}.isNormalUser or false) (
+                      builtins.attrNames config.users.users
+                    );
+                  in
+                  if normalUsers == [ ] then "root" else builtins.head normalUsers;
                 authorityMarker = "authority";
 
                 # Key matches this host if its trailing comment contains "@<host>"

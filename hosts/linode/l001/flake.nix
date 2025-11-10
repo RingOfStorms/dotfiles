@@ -4,9 +4,6 @@
     home-manager.url = "github:rycee/home-manager/release-25.05";
     deploy-rs.url = "github:serokell/deploy-rs";
 
-    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?rev=39edfefa5871d07c9f88ce92a55995eb347d9b09";
-    # common.inputs.home-manager.follows = "home-manager";
-
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
