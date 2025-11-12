@@ -6,8 +6,8 @@
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
-    common.url = "path:../../flakes/common";
-    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    # common.url = "path:../../flakes/common";
+    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets.url = "path:../../flakes/secrets";
     secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
     # flatpaks.url = "path:../../flakes/flatpaks";
