@@ -14,22 +14,42 @@ branching_setup() {
     return 1
   fi
 
-  # Build candidate ignored/untracked file list
-  local -a candidates=()
+  # Build candidate ignored/untracked top-level entries
+  local -a raw=()
   while IFS= read -r -d '' file; do
-    candidates+=("$file")
+    raw+=("$file")
   done < <(git -C "$repo_root" ls-files --others --ignored --exclude-standard -z || true)
 
-  # Include some common dotfiles at root even if tracked (for selection convenience)
+  # Reduce to top-level names (directories or files)
+  local -a tops=()
+  for c in "${raw[@]}"; do
+    c="${c%/}"
+    local top="${c%%/*}"
+    [ -z "$top" ] && continue
+    local found=0
+    for existing in "${tops[@]}"; do
+      [ "$existing" = "$top" ] && found=1 && break
+    done
+    [ "$found" -eq 0 ] && tops+=("$top")
+  done
+
+  # Include common root items even if tracked (for convenience)
   for extra in .env .env.development .env.development.local .envrc .direnv flake.nix flake.lock; do
     if [ -e "$repo_root/$extra" ]; then
-      candidates+=("$extra")
+      local exists=0
+      for t in "${tops[@]}"; do [ "$t" = "$extra" ] && exists=1 && break; done
+      [ $exists -eq 0 ] && tops+=("$extra")
     fi
   done
 
-  # De-duplicate
-  local unique
-  unique=$(printf "%s\n" "${candidates[@]}" | awk '!seen[$0]++')
+  # Hard-coded excludes (noise, build outputs)
+  local -a EXCLUDES=(build dist)
+  local -a filtered=()
+  for t in "${tops[@]}"; do
+    local skip=0
+    for e in "${EXCLUDES[@]}"; do [ "$t" = "$e" ] && skip=1 && break; done
+    [ $skip -eq 0 ] && filtered+=("$t")
+  done
 
   # Current config values
   local -a current
@@ -39,7 +59,7 @@ branching_setup() {
 
   # Preselect current ones in fzf (mark with *)
   local list
-  list=$(printf "%s\n" $unique | while read -r x; do
+  list=$(printf "%s\n" "${filtered[@]}" | while read -r x; do
     local mark=""
     for c in "${current[@]}"; do [ "$c" = "$x" ] && mark="*" && break; done
     printf "%s%s\n" "$mark" "$x"

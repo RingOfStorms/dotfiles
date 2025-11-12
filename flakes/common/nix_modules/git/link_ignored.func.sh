@@ -99,6 +99,18 @@ EOF
     [ "$found" -eq 0 ] && tops+=("$top")
   done
 
+  # Hard-coded top-level excludes to avoid noisy build outputs
+  local -a EXCLUDES=(build dist)
+  if [ ${#tops[@]} -gt 0 ]; then
+    local -a tops_filtered=()
+    for t in "${tops[@]}"; do
+      local skip=0
+      for e in "${EXCLUDES[@]}"; do [ "$t" = "$e" ] && skip=1 && break; done
+      [ $skip -eq 0 ] && tops_filtered+=("$t")
+    done
+    tops=("${tops_filtered[@]}")
+  fi
+ 
   if [ ${#tops[@]} -eq 0 ]; then
     echo "No top-level ignored/untracked entries found in $repo_root"
     return 0
@@ -126,7 +138,7 @@ EOF
   local -a chosen
   if command -v fzf >/dev/null 2>&1 && [ "$USE_FZF" -eq 1 ]; then
     local selected
-    selected=$(printf "%s\n" "${filtered[@]}" | fzf --multi --height=40% --border --prompt="Select files to link: " --preview "if [ -f '$repo_root'/{} ]; then bat --color always --paging=never --style=plain '$repo_root'/{}; else ls -la '$repo_root'/{}; fi")
+    selected=$(printf "%s\n" "${filtered[@]}" | fzf --multi --height=40% --border --prompt="Select items to link: " --preview "if [ -f '$repo_root'/{} ]; then bat --color always --paging=never --style=plain '$repo_root'/{}; else ls -la '$repo_root'/{}; fi")
     if [ -z "$selected" ]; then
       echo "No files selected." && return 0
     fi

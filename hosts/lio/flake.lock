@@ -1269,11 +1269,11 @@
       },
       "locked": {
         "dir": "flakes/secrets",
-        "lastModified": 1761107519,
-        "narHash": "sha256-HV+W8peuB0elo/32CgwfITp/ox4dFDXaM22z/HlmZ2c=",
+        "lastModified": 1762828900,
+        "narHash": "sha256-0AtMggGG2kUpE3HpWEweLe2jlstMGhEGAHBgqBXA2Ds=",
         "ref": "refs/heads/master",
-        "rev": "9de4c7892bdf28735875d43849d67d9b16b6d700",
-        "revCount": 731,
+        "rev": "1dd7e442dd99d8f3e3867655ecb0c5f4d666853c",
+        "revCount": 774,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
