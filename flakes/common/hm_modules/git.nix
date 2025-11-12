@@ -55,13 +55,10 @@
 
       # direnv things
       ".direnv"
+      ".envrc"
 
       # local only files
       "*.local"
-
-      # AI tooling
-      ".aider*"
-      "aider"
     ];
   };
 }
