@@ -12,6 +12,7 @@
     ./oauth2-proxy.nix
     ./n8n.nix
     ./postgresql.nix
-    ./openbao.nix
+    # ./openbao.nix
+    ./vault.nix
   ];
 }
