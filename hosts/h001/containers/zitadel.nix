@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  inputs,
   ...
 }:
 let
@@ -12,6 +13,8 @@ let
   containerAddress = "10.0.0.3";
   hostAddress6 = "fc00::1";
   containerAddress6 = "fc00::3";
+
+  zitadelNixpkgs = inputs.zitadel-nixpkgs;
 
   hasSecret =
     secret:
@@ -38,7 +41,8 @@ let
       uid = config.ids.uids.postgres;
       gid = config.ids.gids.postgres;
     }
-  ] ++ lib.optionals (hasSecret "zitadel_master_key") [
+  ]
+  ++ lib.optionals (hasSecret "zitadel_master_key") [
     # secret
     {
       host = config.age.secrets.zitadel_master_key.path;
@@ -123,98 +127,106 @@ in
         }
         // acc
       ) { } binds;
+      nixpkgs = zitadelNixpkgs;
       config =
-        { config, pkgs, ... }:
         {
-          system.stateVersion = "25.05";
+          config,
+          pkgs,
+          lib,
+          ...
+        }:
+        {
+          config = {
+            system.stateVersion = "25.05";
 
-          networking = {
-            firewall = {
+            networking = {
+              firewall = {
+                enable = true;
+                allowedTCPPorts = [
+                  8080
+                ];
+              };
+              # Use systemd-resolved inside the container
+              # Workaround for bug https://github.com/NixOS/nixpkgs/issues/162686
+              useHostResolvConf = lib.mkForce false;
+            };
+            services.resolved.enable = true;
+
+            # Ensure users exist on container
+            inherit users;
+
+            services.postgresql = {
               enable = true;
-              allowedTCPPorts = [
-                8080
+              package = pkgs.postgresql_17.withJIT;
+              enableJIT = true;
+              authentication = ''
+                local all all trust
+                host all all 127.0.0.1/8 trust
+                host all all ::1/128 trust
+                host all all fc00::1/128 trust
+              '';
+              ensureDatabases = [ "zitadel" ];
+              ensureUsers = [
+                {
+                  name = "zitadel";
+                  ensureDBOwnership = true;
+                  ensureClauses.login = true;
+                  ensureClauses.superuser = true;
+                }
               ];
             };
-            # Use systemd-resolved inside the container
-            # Workaround for bug https://github.com/NixOS/nixpkgs/issues/162686
-            useHostResolvConf = lib.mkForce false;
-          };
-          services.resolved.enable = true;
 
-          # Ensure users exist on container
-          inherit users;
-
-          services.postgresql = {
-            enable = true;
-            package = pkgs.postgresql_17.withJIT;
-            enableJIT = true;
-            authentication = ''
-              local all all trust
-              host all all 127.0.0.1/8 trust
-              host all all ::1/128 trust
-              host all all fc00::1/128 trust
-            '';
-            ensureDatabases = [ "zitadel" ];
-            ensureUsers = [
-              {
-                name = "zitadel";
-                ensureDBOwnership = true;
-                ensureClauses.login = true;
-                ensureClauses.superuser = true;
-              }
-            ];
-          };
-
-          # Backup database
-          services.postgresqlBackup = {
-            enable = true;
-          };
-
-          services.zitadel = {
-            enable = true;
-            masterKeyFile = "/var/secrets/zitadel_master_key.age";
-            settings = {
-              Port = 8080;
-              Database.postgres = {
-                Host = "/var/run/postgresql/";
-                Port = 5432;
-                Database = "zitadel";
-                User = {
-                  Username = "zitadel";
-                  SSL.Mode = "disable";
-                };
-                Admin = {
-                  Username = "zitadel";
-                  SSL.Mode = "disable";
-                  ExistingDatabase = "zitadel";
-                };
-              };
-              ExternalDomain = "sso.joshuabell.xyz";
-              ExternalPort = 443;
-              ExternalSecure = true;
+            # Backup database
+            services.postgresqlBackup = {
+              enable = true;
             };
-            steps.FirstInstance = {
-              InstanceName = "sso";
-              Org = {
-                Name = "SSO";
-                Human = {
-                  UserName = "admin@joshuabell.xyz";
-                  FirstName = "admin";
-                  LastName = "admin";
-                  Email.Address = "admin@joshuabell.xuz";
-                  Email.Verified = true;
-                  Password = "Password1!";
-                  PasswordChangeRequired = true;
-                };
-              };
-              LoginPolicy.AllowRegister = false;
-            };
-            openFirewall = true;
-          };
 
-          systemd.services.zitadel = {
-            requires = [ "postgresql.service" ];
-            after = [ "postgresql.service" ];
+            services.zitadel = {
+              enable = true;
+              masterKeyFile = "/var/secrets/zitadel_master_key.age";
+              settings = {
+                Port = 8080;
+                Database.postgres = {
+                  Host = "/var/run/postgresql/";
+                  Port = 5432;
+                  Database = "zitadel";
+                  User = {
+                    Username = "zitadel";
+                    SSL.Mode = "disable";
+                  };
+                  Admin = {
+                    Username = "zitadel";
+                    SSL.Mode = "disable";
+                    ExistingDatabase = "zitadel";
+                  };
+                };
+                ExternalDomain = "sso.joshuabell.xyz";
+                ExternalPort = 443;
+                ExternalSecure = true;
+              };
+              steps.FirstInstance = {
+                InstanceName = "sso";
+                Org = {
+                  Name = "SSO";
+                  Human = {
+                    UserName = "admin@joshuabell.xyz";
+                    FirstName = "admin";
+                    LastName = "admin";
+                    Email.Address = "admin@joshuabell.xuz";
+                    Email.Verified = true;
+                    Password = "Password1!";
+                    PasswordChangeRequired = true;
+                  };
+                };
+                LoginPolicy.AllowRegister = false;
+              };
+              openFirewall = true;
+            };
+
+            systemd.services.zitadel = {
+              requires = [ "postgresql.service" ];
+              after = [ "postgresql.service" ];
+            };
           };
         };
     };

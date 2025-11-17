@@ -9,6 +9,7 @@
     trilium-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     oauth2-proxy-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     pinchflat-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    zitadel-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
@@ -50,7 +51,13 @@
               home-manager.nixosModules.default
 
               secrets.nixosModules.default
-              ros_neovim.nixosModules.default
+              ros_neovim.nixosModules.default 
+              (
+                { ... }:
+                {
+                  ringofstorms-nvim.includeAllRuntimeDependencies = true;
+                }
+              )
 
               common.nixosModules.essentials
               common.nixosModules.git

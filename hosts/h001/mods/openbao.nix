@@ -1,10 +1,12 @@
 {
-  config,
-  lib,
   pkgs,
   ...
 }:
 {
+  environment.variables = {
+    VAULT_ADDR = "http://localhost:8200";
+  };
+
   services.nginx = {
     virtualHosts = {
       "sec.joshuabell.xyz" = {

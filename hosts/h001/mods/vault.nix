@@ -5,6 +5,7 @@
   ...
 }:
 {
+  environment.systemPackages = with pkgs; [ vault-bin campground.vault-scripts];
   services.nginx = {
     virtualHosts = {
       "sec.joshuabell.xyz" = {
@@ -22,11 +23,13 @@
 
   services.vault = {
     enable = true;
+    package = pkgs.vault-bin;
     dev = true; # trying it out... remove
     address = "127.0.0.1:8200";
-    storagePath = "/var/lib/hashi_vault";
-
-     };
+    # storagePath = "/var/lib/hashi_vault";
+  };
+  users.users.vault.uid =lib.mkForce 116;
+  users.groups.vault.gid = lib.mkForce 116;
 
   # Ensure the data directory exists with proper permissions
   systemd.tmpfiles.rules = [
