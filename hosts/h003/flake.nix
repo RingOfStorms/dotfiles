@@ -63,7 +63,7 @@
                 {
                   beszelAgent = {
                     listen = "${overlayIp}:45876";
-                    token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
+                    token = "f8a54c41-486b-487a-a78d-a087385c317b";
                   };
                 }
               )
