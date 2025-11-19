@@ -30,14 +30,20 @@
         "beszel-nixpkgs": "beszel-nixpkgs"
       },
       "locked": {
-        "path": "../../flakes/beszel",
-        "type": "path"
+        "dir": "flakes/beszel",
+        "lastModified": 1763529921,
+        "narHash": "sha256-M0HYDpE5wUQv4lx07tHGb0TYnXA7QRJznHLRzjzDvVc=",
+        "ref": "refs/heads/master",
+        "rev": "f46bd74d654de5a524fc05ac7939258525a70c6d",
+        "revCount": 787,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
       "original": {
-        "path": "../../flakes/beszel",
-        "type": "path"
-      },
-      "parent": []
+        "dir": "flakes/beszel",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+      }
     },
     "beszel-nixpkgs": {
       "locked": {
