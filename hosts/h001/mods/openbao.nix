@@ -4,7 +4,7 @@
 }:
 {
   environment.variables = {
-    VAULT_ADDR = "http://localhost:8200";
+    BAO_ADDR = "http://localhost:8200";
   };
 
   services.nginx = {
