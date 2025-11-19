@@ -17,6 +17,8 @@
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets.url = "path:../../flakes/secrets";
     secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
+    # beszel.url = "path:../../flakes/beszel";
+    beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
@@ -29,6 +31,7 @@
       home-manager,
       common,
       secrets,
+      beszel,
       ros_neovim,
       nixarr,
       ...
@@ -38,6 +41,7 @@
       system = "x86_64-linux";
       stateVersion = "24.11";
       primaryUser = "luser";
+      overlayIp = "100.64.0.13";
       lib = nixpkgs.lib;
     in
     {
@@ -52,7 +56,7 @@
               home-manager.nixosModules.default
 
               secrets.nixosModules.default
-              ros_neovim.nixosModules.default 
+              ros_neovim.nixosModules.default
               (
                 { ... }:
                 {
@@ -70,6 +74,17 @@
               common.nixosModules.timezone_auto
               common.nixosModules.tty_caps_esc
               common.nixosModules.zsh
+
+              beszel.nixosModules.agent
+              (
+                { ... }:
+                {
+                  beszelAgent = {
+                    listen = "${overlayIp}:45876";
+                    token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
+                  };
+                }
+              )
 
               nixarr.nixosModules.default
               ./hardware-configuration.nix

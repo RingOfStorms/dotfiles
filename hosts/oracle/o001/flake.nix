@@ -10,6 +10,8 @@
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets.url = "path:../../../flakes/secrets";
     secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
+    # beszel.url = "path:../../flakes/beszel";
+    beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
   };
 
   outputs =
@@ -19,6 +21,7 @@
       home-manager,
       common,
       secrets,
+      beszel,
       ros_neovim,
       deploy-rs,
       ...
@@ -28,6 +31,7 @@
       system = "aarch64-linux";
       stateVersion = "23.11";
       primaryUser = "root";
+      overlayIp = "100.64.0.11";
       lib = nixpkgs.lib;
     in
     {
@@ -65,6 +69,17 @@
               common.nixosModules.docker
               common.nixosModules.tailnet
               common.nixosModules.zsh
+
+              beszel.nixosModules.agent
+              (
+                { ... }:
+                {
+                  beszelAgent = {
+                    listen = "${overlayIp}:45876";
+                    token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
+                  };
+                }
+              )
 
               ros_neovim.nixosModules.default
               ./configuration.nix

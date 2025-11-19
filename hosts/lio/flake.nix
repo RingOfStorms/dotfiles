@@ -33,6 +33,7 @@
       configuration_name = "lio";
       system = "x86_64-linux";
       primaryUser = "josh";
+      overlayIp = "100.64.0.1";
       lib = nixpkgs.lib;
     in
     {
@@ -82,7 +83,7 @@
                 { ... }:
                 {
                   beszelAgent = {
-                    listen = "100.64.0.1:45876";
+                    listen = "${overlayIp}:45876";
                     token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
                   };
                 }

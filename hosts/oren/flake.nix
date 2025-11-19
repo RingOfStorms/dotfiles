@@ -12,6 +12,8 @@
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     # hyprland.url = "path:../../flakes/hyprland";
     hyprland.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/hyprland";
+    # beszel.url = "path:../../flakes/beszel";
+    beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -24,6 +26,7 @@
       secrets,
       flatpaks,
       hyprland,
+      beszel,
       ros_neovim,
       ...
     }:
@@ -32,6 +35,7 @@
       system = "x86_64-linux";
       stateVersion = "25.05";
       primaryUser = "josh";
+      overlayIp = "100.64.0.5";
       lib = nixpkgs.lib;
     in
     {
@@ -66,6 +70,17 @@
               common.nixosModules.timezone_auto
               common.nixosModules.tty_caps_esc
               common.nixosModules.zsh
+
+              beszel.nixosModules.agent
+              (
+                { ... }:
+                {
+                  beszelAgent = {
+                    listen = "${overlayIp}:45876";
+                    token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
+                  };
+                }
+              )
 
               ./configuration.nix
               ./hardware-configuration.nix
