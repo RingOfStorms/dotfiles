@@ -6,7 +6,8 @@
     ./litellm.nix
     ./nixarr.nix
     ./monitoring.nix
-    ./monitoring_new.nix
+    ./monitoring_hub.nix
+    ./monitoring_agent.nix
     ./pinchflat.nix
     ./openwebui.nix
     ./trilium.nix
