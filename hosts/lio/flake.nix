@@ -149,6 +149,7 @@
                   environment.systemPackages = with pkgs; [
                     vlang
                     ttyd
+                    pavucontrol
                   ];
 
                   services.flatpak.packages = [
