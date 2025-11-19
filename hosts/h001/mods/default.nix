@@ -5,7 +5,7 @@
   imports = [
     ./litellm.nix
     ./nixarr.nix
-    ./monitoring.nix
+    # ./monitoring.nix # disabling
     ./monitoring_hub.nix
     ./monitoring_agent.nix
     ./pinchflat.nix
