@@ -22,19 +22,24 @@
       ...
     }@inputs:
     let
-      configuration_name = "h003";
-      system = "x86_64-linux";
-      stateVersion = "25.05";
-      primaryUser = "luser";
+      hostConfig = {
+        configurationName = "h003";
+        system = "x86_64-linux";
+        stateVersion = "25.05";
+        primaryUser = "luser";
+
+        overlayIp = "100.64.0.14";
+      };
       lib = nixpkgs.lib;
     in
+    with hostConfig;
     {
       nixosConfigurations = {
-        "${configuration_name}" = (
+        "${configurationName}" = (
           lib.nixosSystem {
             inherit system;
             specialArgs = {
-              inherit inputs;
+              inherit inputs hostConfig;
             };
             modules = [
               home-manager.nixosModules.default
@@ -84,8 +89,8 @@
 
                   # System configuration
                   system.stateVersion = stateVersion;
-                  networking.hostName = configuration_name;
-                  programs.nh.flake = "/home/${primaryUser}/.config/nixos-config/hosts/${configuration_name}";
+                  networking.hostName = configurationName;
+                  programs.nh.flake = "/home/${primaryUser}/.config/nixos-config/hosts/${configurationName}";
                   nixpkgs.config.allowUnfree = true;
                   users.users = {
                     "${primaryUser}" = {

@@ -12,6 +12,8 @@
     secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
     # flatpaks.url = "path:../../flakes/flatpaks";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
+    beszel.url = "path:../../flakes/beszel";
+    # beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -23,6 +25,7 @@
       common,
       secrets,
       flatpaks,
+      beszel,
       ros_neovim,
       ...
     }@inputs:
@@ -73,6 +76,17 @@
               common.nixosModules.timezone_auto
               common.nixosModules.tty_caps_esc
               common.nixosModules.zsh
+
+              beszel.nixosModules.agent
+              (
+                { ... }:
+                {
+                  beszelAgent = {
+                    listen = "100.64.0.1:45876";
+                    token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
+                  };
+                }
+              )
 
               ./configuration.nix
               ./hardware-configuration.nix
