@@ -59,11 +59,6 @@ in
       };
       "h001.net.joshuabell.xyz" = {
         locations = {
-          "/grafana/" = {
-            proxyPass = "http://localhost:3001";
-            proxyWebsockets = true;
-            recommendedProxySettings = true;
-          };
           "/" = homarr;
         };
       };
