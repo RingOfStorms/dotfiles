@@ -25,7 +25,43 @@
         "type": "github"
       }
     },
+    "beszel": {
+      "inputs": {
+        "beszel-nixpkgs": "beszel-nixpkgs"
+      },
+      "locked": {
+        "dir": "flakes/beszel",
+        "lastModified": 1763531088,
+        "narHash": "sha256-suRi8Rjy1o7fQTs5tIn8ZQuzbLeenpu8gN7ng1/4h2g=",
+        "ref": "refs/heads/master",
+        "rev": "b64242cda1425c9ce0b370520926c9fe0abb5bc0",
+        "revCount": 792,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+      },
+      "original": {
+        "dir": "flakes/beszel",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+      }
+    },
     "beszel-nixpkgs": {
+      "locked": {
+        "lastModified": 1763421233,
+        "narHash": "sha256-Stk9ZYRkGrnnpyJ4eqt9eQtdFWRRIvMxpNRf4sIegnw=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "89c2b2330e733d6cdb5eae7b899326930c2c0648",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "beszel-nixpkgs_2": {
       "locked": {
         "lastModified": 1763421233,
         "narHash": "sha256-Stk9ZYRkGrnnpyJ4eqt9eQtdFWRRIvMxpNRf4sIegnw=",
@@ -1208,7 +1244,8 @@
     },
     "root": {
       "inputs": {
-        "beszel-nixpkgs": "beszel-nixpkgs",
+        "beszel": "beszel",
+        "beszel-nixpkgs": "beszel-nixpkgs_2",
         "common": "common",
         "home-manager": "home-manager",
         "litellm-nixpkgs": "litellm-nixpkgs",

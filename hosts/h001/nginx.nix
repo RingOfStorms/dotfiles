@@ -59,11 +59,6 @@ in
       };
       "h001.net.joshuabell.xyz" = {
         locations = {
-          "/beszel/" = {
-            proxyPass = "http://100.64.0.13:8090";
-            proxyWebsockets = true;
-            recommendedProxySettings = true;
-          };
           "/" = homarr;
         };
       };
