@@ -59,8 +59,8 @@ in
       };
       "h001.net.joshuabell.xyz" = {
         locations = {
-          "/grafana/" = {
-            proxyPass = "http://localhost:3001";
+          "/beszel/" = {
+            proxyPass = "http://100.64.0.13:8090";
             proxyWebsockets = true;
             recommendedProxySettings = true;
           };
