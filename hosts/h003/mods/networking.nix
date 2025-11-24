@@ -173,6 +173,7 @@
       # [/media.joshuabell.xyz/]127.0.0.1:9053
       # [/jellyfin.joshuabell.xyz/]127.0.0.1:9053
       host-record = [
+        # DNS splitting
         "media.joshuabell.xyz,10.12.14.10"
         "jellyfin.joshuabell.xyz,10.12.14.10"
       ];
