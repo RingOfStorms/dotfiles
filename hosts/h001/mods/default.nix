@@ -13,6 +13,7 @@
     ./n8n.nix
     ./postgresql.nix
     ./openbao.nix
+    ./homepage-dashboard.nix
     # ./vault.nix
   ];
 }

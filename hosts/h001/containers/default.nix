@@ -5,7 +5,6 @@
   imports = [
     ./forgejo.nix
     ./opengist.nix
-    ./homarr.nix
     ./zitadel.nix
   ];
 

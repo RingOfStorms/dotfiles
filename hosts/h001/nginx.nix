@@ -4,9 +4,9 @@
   ...
 }:
 let
-  homarr = {
+  homepage = {
     proxyWebsockets = true;
-    proxyPass = "http://localhost:7575";
+    proxyPass = "http://localhost:8082";
   };
   hasSecret =
     secret:
@@ -49,7 +49,7 @@ in
       };
       "h001.local.joshuabell.xyz" = {
         locations = {
-          "/" = homarr;
+          "/" = homepage;
         };
       };
       "100.64.0.13" = {
@@ -59,7 +59,7 @@ in
       };
       "h001.net.joshuabell.xyz" = {
         locations = {
-          "/" = homarr;
+          "/" = homepage;
         };
       };
 
