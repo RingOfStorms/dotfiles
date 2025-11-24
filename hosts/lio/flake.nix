@@ -97,6 +97,7 @@
               # ./sway_customizations.nix
               ./i3_customizations.nix
               ./opencode-shim.nix
+              ./vms.nix
               (
                 {
                   config,

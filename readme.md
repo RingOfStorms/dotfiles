@@ -27,12 +27,103 @@
 
 1. Install nix minimal: (new with btrfs backing)
 
+```bash
+# Partition main drive with btrfs
+lsblk
+echo "Read the above output and determine what drive to install NixOS on"
+read -p "Enter device name: " DEVICE
+
+# Partitioning
+echo "Creating partitions on $DEVICE..."
+parted /dev/$DEVICE -- mklabel gpt # make GPT partition table
+parted /dev/$DEVICE -- mkpart NIXROOT 2GB 100% # make root partition (2GB offset for boot)
+parted /dev/$DEVICE -- mkpart ESP fat32 1MB 2GB # make boot partition, 1MB alignment offset
+parted /dev/$DEVICE -- set 2 esp on # make boot partition bootable
+
+ROOT=$DEVICE"1"
+BOOT=$DEVICE"2"
+
+# Encryption Luks
+prompt="Use encryption on root partition?" var=ENC && read -r -p "$prompt (y/n) [n]: " resp && resp=$(echo "$resp" | tr '[:upper:]' '[:lower:]'); [[ "$resp" == "y" || "$resp" == "yes" || "$resp" == "1" ]] && export $var=true || export $var=false
+if [ $ENC = true ]; then
+  while true; do
+    echo "Setting up encrypted root, you will want to save the passphrase somewhere!"
+    cryptsetup luksFormat /dev/$ROOT
+    if [ $? -eq 0 ]; then
+      echo "Encryption setup successful"
+      cryptsetup luksOpen /dev/$ROOT cryptroot
+      break
+    elif [ $? -eq 2 ]; then
+      echo "Missmatched passphrase, try again or select NO to cancel encryption"
+    else
+      prompt="Failed to setup encrypted root, continue without encryption?" var=CON && read -r -p "$prompt (y/n) [n]: " resp && resp=$(echo "$resp" | tr '[:upper:]' '[:lower:]'); [[ "$resp" == "y" || "$resp" == "yes" || "$resp" == "1" ]] && export $var=true || export $var=false
+      if [ $CON = true ]; then
+        ENC=false
+        break
+      fi
+    fi
+  done
+fi
+
+if [ $ENC = true ]; then ROOTP="/dev/mapper/cryptroot" ; else ROOTP="/dev/$ROOT"; fi
+
+# Formatting
+echo "Formatting drives..."
+mkfs.fat -F 32 -n NIXBOOT /dev/$BOOT
+mkfs.btrfs -fL NIXROOT $ROOTP
+
+# Subvolumes
+prompt="Use subvolumes for nix store and snapshots?" var=SUBV && read -r -p "$prompt (y/n) [n]: " resp && resp=$(echo "$resp" | tr '[:upper:]' '[:lower:]'); [[ "$resp" == "y" || "$resp" == "yes" || "$resp" == "1" ]] && export $var=true || export $var=false
+if [ $SUBV = true ]; then
+  mount $ROOTP /mnt
+  btrfs subvolume create /mnt/root
+  btrfs subvolume create /mnt/nix
+  btrfs subvolume create /mnt/snapshots
+  umount /mnt
+fi
+
+if [ $SUBV = true ]; then
+  mount $ROOTP /mnt
+  mount -o subvol=root,compress=zstd,noatime $ROOTP /mnt
+  mkdir -p /mnt/{nix,boot,.snapshots}
+  mount -o subvol=nix,compress=zstd,noatime $ROOTP /mnt/nix
+  mount -o subvol=snapshots,compress=zstd,noatime $ROOTP /mnt/.snapshots
+  mount -o umask=077 /dev/disk/by-label/NIXBOOT /mnt/boot
+else
+  mount -o compress=zstd,noatime $ROOTP /mnt
+  mkdir -p /mnt/boot
+  mount -o umask=077 /dev/disk/by-label/NIXBOOT /mnt/boot
+fi
+
+echo "Generating nixos-config..."
+nixos-generate-config --root /mnt
+
+prompt="Add swap file?" var=SWP && read -r -p "$prompt (y/n) [n]: " resp && resp=$(echo "$resp" | tr '[:upper:]' '[:lower:]'); [[ "$resp" == "y" || "$resp" == "yes" || "$resp" == "1" ]] && export $var=true || export $var=false
+if [ $SWP = true ]; then
+  SIZE=$(grep MemTotal /proc/meminfo | awk 'function ceil(x, y){y=int(x); return(x>y? y+1:y)} {print ceil($2/1024/1024)}')
+  read -r -p "Custom size in GB? [$SIZE]" SIZE_OVERRIDE
+  SIZE="${SIZE_OVERRIDE:-$SIZE}"
+
+  SWAP_DEVICE='  swapDevices = [ { device = "/.swapfile"; size = $SIZE * 1024; } ];'
+  sed -i "/swapDevices/c\\$SWAP_DEVICE" /mnt/etc/nixos/hardware-configuration.nix
+  echo "Added swap device to hardware configuration"
+fi
+
+echo "Getting initial config for Jason"
+curl -o /mnt/etc/nixos/jason.nix https://gist.joshuabell.xyz/ringofstorms/jason-nix/raw/HEAD/jason.nix
+sed -i '/\.\/hardware-configuration.nix/a \      ./jason.nix' /mnt/etc/nixos/configuration.nix
+echo "Added config to imports of configuration.nix"
+
+echo "Installing nixos"
+sudo nixos-install
+```
+
 - Partitions
   - `parted /dev/DEVICE -- mklabel gpt` - make GPT partition table
   - `parted /dev/DEVICE -- mkpart NIXROOT 2GB 100%` - make root partition (2GB offset for boot)
   - `parted /dev/DEVICE -- mkpart ESP fat32 1MB 2GB` - make boot partition (2GB)
   - `parted /dev/DEVICE -- set 2 esp on` - make boot bootable
-- LUKS Encryption
+- LUKS Encryption (optional)
   - `cryptsetup luksFormat /dev/DEVICE_1`
     - Create passphrase and save to bitwarden
   - `cryptsetup luksOpen /dev/DEVUCE_1 cryptroot`
@@ -41,10 +132,11 @@
     - `chmod 400 /tmp/keyfile`
     - `cryptsetup luksAddKey /dev/DEVICE_1 /tmp/keyfile_DEVICE_1`
 - Formatting
-  - `mkfs.btrfs -L NIXROOT /dev/mapper/cryptroot`
-  - `mkfs.fat -F 32 -n NIXBOOT /dev/DEVICE_2`
+- `mkfs.btrfs -L NIXROOT /dev/mapper/cryptroot`
+  - `/dev/sda1` if not encyrpted instead of dev mapper cryptroot
+- `mkfs.fat -F 32 -n NIXBOOT /dev/DEVICE_2`
 - Create btrfs subvolumes (optional: for better snapshot perf)
-  - `mount /dev/mapper/cryptroot /mnt`
+  - `mount /dev/mapper/cryptroot /mnt` (`/dev/sda1` for non encrypted)
   - `btrfs subvolume create /mnt/root`
   - `btrfs subvolume create /mnt/nix`
   - `btrfs subvolume create /mnt/snapshots`
