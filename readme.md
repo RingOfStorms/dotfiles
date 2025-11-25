@@ -29,46 +29,30 @@
 
 ```bash
 # Partition main drive with btrfs
-lsblk
-echo "Read the above output and determine what drive to install NixOS on"
-read -p "Enter device name: " DEVICE
+# tip: lsblk
+export D=sda # or whatever drive we will be installing on
 
 # Partitioning
-echo "Creating partitions on $DEVICE..."
-parted /dev/$DEVICE -- mklabel gpt # make GPT partition table
-parted /dev/$DEVICE -- mkpart NIXROOT 2GB 100% # make root partition (2GB offset for boot)
-parted /dev/$DEVICE -- mkpart ESP fat32 1MB 2GB # make boot partition, 1MB alignment offset
-parted /dev/$DEVICE -- set 2 esp on # make boot partition bootable
+echo "Creating partitions on $D..."
+parted /dev/$D -- mklabel gpt # make GPT partition table
+parted /dev/$D -- mkpart NIXROOT 2GB 100% # make root partition (2GB offset for boot)
+parted /dev/$D -- mkpart ESP fat32 1MB 2GB # make boot partition, 1MB alignment offset
+parted /dev/$D -- set 2 esp on # make boot partition bootable
 
-ROOT=$DEVICE"1"
-BOOT=$DEVICE"2"
+# NOTE this is not bulletproof, check actual name and set these appropriately
+export ROOT=$D"1"
+export BOOT=$D"2"
 
-# Encryption Luks
-prompt="Use encryption on root partition?" var=ENC && read -r -p "$prompt (y/n) [n]: " resp && resp=$(echo "$resp" | tr '[:upper:]' '[:lower:]'); [[ "$resp" == "y" || "$resp" == "yes" || "$resp" == "1" ]] && export $var=true || export $var=false
-if [ $ENC = true ]; then
-  while true; do
-    echo "Setting up encrypted root, you will want to save the passphrase somewhere!"
-    cryptsetup luksFormat /dev/$ROOT
-    if [ $? -eq 0 ]; then
-      echo "Encryption setup successful"
-      cryptsetup luksOpen /dev/$ROOT cryptroot
-      break
-    elif [ $? -eq 2 ]; then
-      echo "Missmatched passphrase, try again or select NO to cancel encryption"
-    else
-      prompt="Failed to setup encrypted root, continue without encryption?" var=CON && read -r -p "$prompt (y/n) [n]: " resp && resp=$(echo "$resp" | tr '[:upper:]' '[:lower:]'); [[ "$resp" == "y" || "$resp" == "yes" || "$resp" == "1" ]] && export $var=true || export $var=false
-      if [ $CON = true ]; then
-        ENC=false
-        break
-      fi
-    fi
-  done
-fi
+# Anything else to partition before moving on?
+
+# Encryption Luks (optional)
+export ENC=true
+cryptsetup luksFormat /dev/$ROOT
+cryptsetup luksOpen /dev/$ROOT cryptroot
 
 if [ $ENC = true ]; then ROOTP="/dev/mapper/cryptroot" ; else ROOTP="/dev/$ROOT"; fi
 
 # Formatting
-echo "Formatting drives..."
 mkfs.fat -F 32 -n NIXBOOT /dev/$BOOT
 mkfs.btrfs -fL NIXROOT $ROOTP
 
@@ -79,15 +63,18 @@ if [ $SUBV = true ]; then
   btrfs subvolume create /mnt/root
   btrfs subvolume create /mnt/nix
   btrfs subvolume create /mnt/snapshots
+  btrfs subvolume create /mnt/swap
   umount /mnt
 fi
 
 if [ $SUBV = true ]; then
-  mount $ROOTP /mnt
   mount -o subvol=root,compress=zstd,noatime $ROOTP /mnt
-  mkdir -p /mnt/{nix,boot,.snapshots}
+  mkdir -p /mnt/{nix,boot,.snapshots,.swap}
+  chattr +C /mnt/.swap
   mount -o subvol=nix,compress=zstd,noatime $ROOTP /mnt/nix
   mount -o subvol=snapshots,compress=zstd,noatime $ROOTP /mnt/.snapshots
+  mount -o subvol=swap,noatime $ROOTP /mnt/.swap
+  btrfs property set /mnt/.swap compression none
   mount -o umask=077 /dev/disk/by-label/NIXBOOT /mnt/boot
 else
   mount -o compress=zstd,noatime $ROOTP /mnt
@@ -104,7 +91,11 @@ if [ $SWP = true ]; then
   read -r -p "Custom size in GB? [$SIZE]" SIZE_OVERRIDE
   SIZE="${SIZE_OVERRIDE:-$SIZE}"
 
-  SWAP_DEVICE='  swapDevices = [ { device = "/.swapfile"; size = $SIZE * 1024; } ];'
+  if [ $SUBV = true ]; then
+    SWAP_DEVICE='  swapDevices = [ { device = "/.swap/file"; size = '$SIZE' * 1024; } ];'
+  else
+    SWAP_DEVICE='  swapDevices = [ { device = "/.swapfile"; size = '$SIZE' * 1024; } ];'
+  fi
   sed -i "/swapDevices/c\\$SWAP_DEVICE" /mnt/etc/nixos/hardware-configuration.nix
   echo "Added swap device to hardware configuration"
 fi

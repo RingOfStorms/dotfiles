@@ -4,10 +4,16 @@
   inputs = {
     stable.url = "github:nixos/nixpkgs/nixos-25.05";
     unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+    ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
 
   outputs =
-    { stable, unstable, ... }:
+    {
+      stable,
+      unstable,
+      ros_neovim,
+      ...
+    }:
     let
       lib = stable.lib;
       systems = lib.systems.flakeExposed;
@@ -23,6 +29,7 @@
         nixpkgs.lib.nixosSystem {
           inherit system;
           modules = [
+            ros_neovim.nixosModules.default
             (
               { pkgs, modulesPath, ... }:
               {
@@ -40,6 +47,9 @@
                   fastfetch
                   fzf
                 ];
+                environment.shellAliases = {
+                  n = "nvim";
+                };
 
                 services.openssh = {
                   enable = true;
@@ -49,6 +59,9 @@
                   };
                 };
 
+                programs.zsh.enable = true;
+                environment.pathsToLink = [ "/share/zsh" ];
+                users.defaultUserShell = pkgs.zsh;
                 users.users.nixos = {
                   password = "password";
                   initialHashedPassword = lib.mkForce null;
