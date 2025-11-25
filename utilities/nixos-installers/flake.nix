@@ -43,7 +43,6 @@
                 ];
 
                 environment.systemPackages = with pkgs; [
-                  neovim
                   fastfetch
                   fzf
                 ];
@@ -62,6 +61,9 @@
                 programs.zsh.enable = true;
                 environment.pathsToLink = [ "/share/zsh" ];
                 users.defaultUserShell = pkgs.zsh;
+                system.userActivationScripts.zshrc = "touch .zshrc";
+                programs.starship.enable = true;
+
                 users.users.nixos = {
                   password = "password";
                   initialHashedPassword = lib.mkForce null;

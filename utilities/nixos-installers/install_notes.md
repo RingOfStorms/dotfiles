@@ -43,107 +43,104 @@ btrfs subvolume create /mnt/@root
 btrfs subvolume create /mnt/@nix
 btrfs subvolume create /mnt/@snapshots
 btrfs subvolume create /mnt/@swap
+btrfs subvolume create /mnt/@persist
 umount /mnt
 
 # Mount for real system use
-mount -o subvol=@root,compress=zstd,noatime "$ROOTP" /mnt
-mkdir -p /mnt/{nix,boot,.snapshots,.swap}
+mount -o subvol=@root,compress=zstd "$ROOTP" /mnt
+mkdir -p /mnt/{nix,boot,.snapshots,.swap,persist}
+
+mount -o umask=077 /dev/disk/by-label/NIXBOOT /mnt/boot
+
 mount -o subvol=@nix,compress=zstd,noatime "$ROOTP" /mnt/nix
-mount -o subvol=@snapshots,compress=zstd,noatime "$ROOTP" /mnt/.snapshots
 mount -o subvol=@swap,noatime "$ROOTP" /mnt/.swap
+mount -o subvol=@snapshots,compress=zstd,noatime "$ROOTP" /mnt/.snapshots
+mount -o subvol=@persist,compress=zstd,noatime "$ROOTP" /mnt/persist
 
 # Create config
 nixos-generate-config --root /mnt
 ```
 
-TODO leftoff here
-`!a%oz0rrtsrnhCRULxpMBqdIlh28bpom$%$1%O1Yh` luks password on test machine for now
+
 ### Fix hardware-configuration
 ```hardware-configuration.nix
+# @root options + "compress=zstd"
+# @nix options + "compress=zstd" "noatime"
+# @swap options + "noatime"
+# @snapshots options + "compress=zstd" "noatime"
+# @persist options + "compress=zstd"
 
-```
-prompt="Add swap file?" var=SWP && read -r -p "$prompt (y/n) [n]: " resp && resp=$(echo "$resp" | tr '[:upper:]' '[:lower:]'); [[ "$resp" == "y" || "$resp" == "yes" || "$resp" == "1" ]] && export $var=true || export $var=false
-if [ $SWP = true ]; then
-  SIZE=$(grep MemTotal /proc/meminfo | awk 'function ceil(x, y){y=int(x); return(x>y? y+1:y)} {print ceil($2/1024/1024)}')
-  read -r -p "Custom size in GB? [$SIZE]" SIZE_OVERRIDE
-  SIZE="${SIZE_OVERRIDE:-$SIZE}"
+# add Swap device
+swapDevices = [{ 
+  device = "/.swap/swapfile"; 
+  size = 8*1024; # Creates an 8GB swap file 
+}];
 
-  if [ $SUBV = true ]; then
-    SWAP_DEVICE='  swapDevices = [ { device = "/.swap/file"; size = '$SIZE' * 1024; } ];'
-  else
-    SWAP_DEVICE='  swapDevices = [ { device = "/.swapfile"; size = '$SIZE' * 1024; } ];'
-  fi
-  sed -i "/swapDevices/c\\$SWAP_DEVICE" /mnt/etc/nixos/hardware-configuration.nix
-  echo "Added swap device to hardware configuration"
-fi
-
-echo "Getting initial config for Jason"
-curl -o /mnt/etc/nixos/jason.nix https://gist.joshuabell.xyz/ringofstorms/jason-nix/raw/HEAD/jason.nix
-sed -i '/\.\/hardware-configuration.nix/a \      ./jason.nix' /mnt/etc/nixos/configuration.nix
-echo "Added config to imports of configuration.nix"
-
-echo "Installing nixos"
-sudo nixos-install
-```
-
-- Partitions
-  - `parted /dev/DEVICE -- mklabel gpt` - make GPT partition table
-  - `parted /dev/DEVICE -- mkpart NIXROOT 2GB 100%` - make root partition (2GB offset for boot)
-  - `parted /dev/DEVICE -- mkpart ESP fat32 1MB 2GB` - make boot partition (2GB)
-  - `parted /dev/DEVICE -- set 2 esp on` - make boot bootable
-- LUKS Encryption (optional)
-  - `cryptsetup luksFormat /dev/DEVICE_1`
-    - Create passphrase and save to bitwarden
-  - `cryptsetup luksOpen /dev/DEVUCE_1 cryptroot`
-  - Create keyfile for auto-unlock (optional)
-    - `dd if=/dev/random of=/tmp/keyfile_DEVICE_1 bs=1024 count=4`
-    - `chmod 400 /tmp/keyfile`
-    - `cryptsetup luksAddKey /dev/DEVICE_1 /tmp/keyfile_DEVICE_1`
-- Formatting
-- `mkfs.btrfs -L NIXROOT /dev/mapper/cryptroot`
-  - `/dev/sda1` if not encyrpted instead of dev mapper cryptroot
-- `mkfs.fat -F 32 -n NIXBOOT /dev/DEVICE_2`
-- Create btrfs subvolumes (optional: for better snapshot perf)
-  - `mount /dev/mapper/cryptroot /mnt` (`/dev/sda1` for non encrypted)
-  - `btrfs subvolume create /mnt/root`
-  - `btrfs subvolume create /mnt/nix`
-  - `btrfs subvolume create /mnt/snapshots`
-  - `umount /mnt`
-- Mount (with sub vols above)
-  - `mount -o subvol=root,compress=zstd,noatime /dev/mapper/cryptroot /mnt`
-  - `mkdir -p /mnt/{nix,boot,.snapshots}`
-  - `mount -o subvol=nix,compress=zstd,noatime /dev/mapper/cryptroot /mnt/nix`
-  - `mount -o subvol=snapshots,compress=zstd,noatime /dev/mapper/cryptroot /mnt/.snapshots`
-  - `mount -o umask=077 /dev/disk/by-label/NIXBOOT /mnt/boot`
-- Mount (with no sub vols)
-  - `mount -o compress=zstd,noatime /dev/mapper/cryptroot /mnt`
-  - `mkdir -p /mnt/boot`
-  - `mount -o umask=077 /dev/disk/by-label/NIXBOOT /mnt/boot`
-- Add SWAP device (optional)
-  - in hardware config
-
-```nix
-swapDevices = [
-  {
-    device = "/.swapfile";
-    size = 32 * 1024; # 32GB
-  }
-];
-```
-
-- Copy keyfile for auto-unlock (optional)
-  - `cp /tmp/keyfile_DEVICE_1 /mnt/boot/keyfile_DEVICE_1`
-  - `chmod 400 /mnt/boot/keyfile_DEVICE_1`
-- If Encrypted keyfile exists
-  - Add to hardware config
-
-```nix
-boot.initrd.secrets = {
-  "/keyfile_DEVICE_1" = "/boot/keyfile_DEVICE_1";
+# https://wiki.nixos.org/wiki/Btrfs#Scrubbing
+services.btrfs.autoScrub = {
+  enable = true;
+  # syntax defined by https://www.freedesktop.org/software/systemd/man/systemd.time.html#Calendar%20Events
+  interval = "monthly";
+  fileSystems = [ "/" ];
 };
-
-boot.initrd.luks.devices
 ```
+
+### Add initial system config changes
+```sh
+curl -o /mnt/etc/nixos/onboard.nix https://git.joshuabell.xyz/ringofstorms/dotfiles/raw/branch/master/utilities/nixos-installers/onboard.nix
+# add import to configuration.nix
+sed -i '/\.\/hardware-configuration.nix/a \      ./onboard.nix' /mnt/etc/nixos/configuration.nix
+```
+in configuration.nix add
+```nix
+onboardOpts = {
+  hostName = "NAME";
+  primaryUser = "luser";
+};
+```
+
+### Auto unlock luks (optional) - USB key
+```sh
+# Format if needed (fat32 for compatibility)
+sudo parted /dev/DRIVEDEVICE
+  mklabel gpt
+  mkpart primary fat32 0% 100%
+  quit
+sudo mkfs.vfat -F 32 /dev/DRIVEDEVICE1
+
+# Create key
+mkdir -p /key_tmpfs
+sudo mount -o umask=0022,gid=$(id -g),uid=$(id -u) /dev/DRIVEDEVICE /key_tmpfs
+dd if=/dev/random of=/key_tmpfs/keyfile bs=1024 count=4
+sudo chmod 0400 /key_tmpfs/keyfile
+sudo cryptsetup luksAddKey /dev/ROOT_DEVICE /key_tmpfs/keyfile
+lsblk && ll /dev/
+sudo umount /key_tmpfs
+rmdir /key_tmpfs
+```
+
+In hardware-configuration ensure these are all added:
+```hardware-configuration.nix
+  boot.initrd.availableKernelModules = [
+    "xhci_pci" "ehci_pci" "usb_storage" "uas"
+  ];
+
+  boot.initrd.luks.devices."cryptroot" = {
+    device = "/dev/disk/by-uuid/<LUKS_UUID>";
+
+    keyFile = "/keyfile";
+    # The USB device that holds the keyfile (by UUID for reliability)
+    keyfileDevice = "/dev/disk/by-uuid/<USB_UUID>";
+
+    tryEmptyPassphrase = true;
+    fallbackToPassword = true;
+    crypttabExtraOpts = [ "tries=3" ];
+  };
+```
+
+### Install nixos
+`sudo nixos-install`
+`reboot`
 
 2. Install and setup nixos
 

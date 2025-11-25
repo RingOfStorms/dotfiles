@@ -29,6 +29,14 @@
       "flakes"
     ];
 
+    # nix helper
+    programs.nh = {
+      enable = true;
+      clean.enable = true;
+      clean.extraArgs = "--keep 10";
+      flake = "/etc/nixos";
+    };
+
     environment.systemPackages = with pkgs; [
       vim
       curl
