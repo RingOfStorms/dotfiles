@@ -1,4 +1,126 @@
-# TODO a good readme
+## Install nix minimal with btrfs filesystem + luks encryption
+
+```bash
+# Partition main drive with btrfs
+# tip: lsblk
+# use correct drive name
+export D=sda
+
+# Partitioning
+# make GPT partition table
+parted /dev/$D -- mklabel gpt
+# make root partition (2GB offset for boot)
+parted /dev/$D -- mkpart NIXROOT 2GB 100%
+# make boot partition, 1MB alignment offset
+parted /dev/$D -- mkpart ESP fat32 1MB 2GB 
+# make boot partition bootable
+parted /dev/$D -- set 2 esp on 
+
+# NOTE this is not bulletproof, check actual name and set these appropriately
+export ROOT=$D"1"
+export BOOT=$D"2"
+
+# Anything else to partition before moving on?
+
+# Encryption Luks (optional)
+export ENC=true
+cryptsetup luksFormat /dev/$ROOT
+cryptsetup luksOpen /dev/$ROOT cryptroot
+
+if [ $ENC = true ]; then 
+    ROOTP="/dev/mapper/cryptroot"
+else
+    ROOTP="/dev/$ROOT"
+fi
+
+# Formatting
+mkfs.fat -F 32 -n NIXBOOT /dev/$BOOT
+mkfs.btrfs -fL NIXROOT $ROOTP
+
+# Subvolumes (so snapshots 
+mount -o subvolid=5 "$ROOTP" /mnt
+btrfs subvolume create /mnt/@root
+btrfs subvolume create /mnt/@nix
+btrfs subvolume create /mnt/@snapshots
+btrfs subvolume create /mnt/@swap
+umount /mnt
+
+# Mount for real system use
+mount -o subvol=@root,compress=zstd,noatime "$ROOTP" /mnt
+mkdir -p /mnt/{nix,boot,.snapshots,.swap}
+mount -o subvol=@nix,compress=zstd,noatime "$ROOTP" /mnt/nix
+mount -o subvol=@snapshots,compress=zstd,noatime "$ROOTP" /mnt/.snapshots
+mount -o subvol=@swap,noatime "$ROOTP" /mnt/.swap
+
+# Create config
+nixos-generate-config --root /mnt
+```
+
+TODO leftoff here
+`!a%oz0rrtsrnhCRULxpMBqdIlh28bpom$%$1%O1Yh` luks password on test machine for now
+### Fix hardware-configuration
+```hardware-configuration.nix
+
+```
+prompt="Add swap file?" var=SWP && read -r -p "$prompt (y/n) [n]: " resp && resp=$(echo "$resp" | tr '[:upper:]' '[:lower:]'); [[ "$resp" == "y" || "$resp" == "yes" || "$resp" == "1" ]] && export $var=true || export $var=false
+if [ $SWP = true ]; then
+  SIZE=$(grep MemTotal /proc/meminfo | awk 'function ceil(x, y){y=int(x); return(x>y? y+1:y)} {print ceil($2/1024/1024)}')
+  read -r -p "Custom size in GB? [$SIZE]" SIZE_OVERRIDE
+  SIZE="${SIZE_OVERRIDE:-$SIZE}"
+
+  if [ $SUBV = true ]; then
+    SWAP_DEVICE='  swapDevices = [ { device = "/.swap/file"; size = '$SIZE' * 1024; } ];'
+  else
+    SWAP_DEVICE='  swapDevices = [ { device = "/.swapfile"; size = '$SIZE' * 1024; } ];'
+  fi
+  sed -i "/swapDevices/c\\$SWAP_DEVICE" /mnt/etc/nixos/hardware-configuration.nix
+  echo "Added swap device to hardware configuration"
+fi
+
+echo "Getting initial config for Jason"
+curl -o /mnt/etc/nixos/jason.nix https://gist.joshuabell.xyz/ringofstorms/jason-nix/raw/HEAD/jason.nix
+sed -i '/\.\/hardware-configuration.nix/a \      ./jason.nix' /mnt/etc/nixos/configuration.nix
+echo "Added config to imports of configuration.nix"
+
+echo "Installing nixos"
+sudo nixos-install
+```
+
+- Partitions
+  - `parted /dev/DEVICE -- mklabel gpt` - make GPT partition table
+  - `parted /dev/DEVICE -- mkpart NIXROOT 2GB 100%` - make root partition (2GB offset for boot)
+  - `parted /dev/DEVICE -- mkpart ESP fat32 1MB 2GB` - make boot partition (2GB)
+  - `parted /dev/DEVICE -- set 2 esp on` - make boot bootable
+- LUKS Encryption (optional)
+  - `cryptsetup luksFormat /dev/DEVICE_1`
+    - Create passphrase and save to bitwarden
+  - `cryptsetup luksOpen /dev/DEVUCE_1 cryptroot`
+  - Create keyfile for auto-unlock (optional)
+    - `dd if=/dev/random of=/tmp/keyfile_DEVICE_1 bs=1024 count=4`
+    - `chmod 400 /tmp/keyfile`
+    - `cryptsetup luksAddKey /dev/DEVICE_1 /tmp/keyfile_DEVICE_1`
+- Formatting
+- `mkfs.btrfs -L NIXROOT /dev/mapper/cryptroot`
+  - `/dev/sda1` if not encyrpted instead of dev mapper cryptroot
+- `mkfs.fat -F 32 -n NIXBOOT /dev/DEVICE_2`
+- Create btrfs subvolumes (optional: for better snapshot perf)
+  - `mount /dev/mapper/cryptroot /mnt` (`/dev/sda1` for non encrypted)
+  - `btrfs subvolume create /mnt/root`
+  - `btrfs subvolume create /mnt/nix`
+  - `btrfs subvolume create /mnt/snapshots`
+  - `umount /mnt`
+- Mount (with sub vols above)
+  - `mount -o subvol=root,compress=zstd,noatime /dev/mapper/cryptroot /mnt`
+  - `mkdir -p /mnt/{nix,boot,.snapshots}`
+  - `mount -o subvol=nix,compress=zstd,noatime /dev/mapper/cryptroot /mnt/nix`
+  - `mount -o subvol=snapshots,compress=zstd,noatime /dev/mapper/cryptroot /mnt/.snapshots`
+  - `mount -o umask=077 /dev/disk/by-label/NIXBOOT /mnt/boot`
+- Mount (with no sub vols)
+  - `mount -o compress=zstd,noatime /dev/mapper/cryptroot /mnt`
+  - `mkdir -p /mnt/boot`
+  - `mount -o umask=077 /dev/disk/by-label/NIXBOOT /mnt/boot`
+- Add SWAP device (optional)
+  - in hardware config
 
 ```nix
 swapDevices = [
