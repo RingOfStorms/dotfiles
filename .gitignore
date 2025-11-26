@@ -3,3 +3,4 @@
 ./configuration.nix
 modules/
 **/result
+*.qcow
