@@ -168,18 +168,27 @@ boot.initrd.postResumeCommands = lib.mkAfter ''
 `sudo nixos-install`
 `reboot` and remove start up media
 
-2. Install and setup nixos
 
-- nixos config and hardware config
-  - `export HOSTNAME=desired_hostname_for_this_machine`
-  - `export USERNAME=desired_username_for_admin_on_this_machine` (josh)
-  - `nixos-generate-config --root /mnt`
-  - `cd /mnt/etc/nixos`
-  - `curl -O --proto '=https' --tlsv1.2 -sSf https://git.joshuabell.xyz/ringofstorms/dotfiles/raw/branch/master/onboard.sh`
-  - `chmod +x onboard.sh && ./onboard.sh`
-  - verify hardware config, run `nixos-install`
-  - `reboot`
-- log into USERNAME with `password1`, use `passwd` to change the password
+
+## Impermanence Tips
+
+```sh
+sudo mkdir /btrfs_root
+sudo mount -o subvolid=5,compress=zstd /dev/mapper/cryptroot /btrfs_root
+```
+
+
+
+
+
+
+
+
+
+
+
+
+TODO
 
 > Easiest to ssh into the machine for these steps so you can copy paste...
 
