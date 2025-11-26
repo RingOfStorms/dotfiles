@@ -5,21 +5,25 @@
 
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
-
-    # impermanence.url = "github:nix-community/impermanence";
+    
+    impermanence.url = "github:nix-community/impermanence";
   };
 
   outputs =
     {
+      nixpkgs,
+      home-manager,
+      common,
+      ros_neovim,
       ...
     }@inputs:
     let
-      configurationName = "MACHINE_HOST_NAME";
+      configurationName = "testbed";
       system = "x86_64-linux";
       primaryUser = "luser";
-      configLocation = "/etc/nixos";
+      configLocation = "/home/${primaryUser}/.config/nixos-config";
       # configLocation = "/home/${primaryUser}/.config/nixos-config/hosts/${configurationName}";
-      lib = inputs.nixpkgs.lib;
+      lib = nixpkgs.lib;
     in
     {
       nixosConfigurations = {
@@ -30,10 +34,10 @@
               inherit inputs;
             };
             modules = [
-              # inputs.impermanence.nixosModules.impermanence
+              inputs.impermanence.nixosModules.impermanence
               inputs.home-manager.nixosModules.default
 
-              inputs.ros_neovim.nixosModules.default
+              ros_neovim.nixosModules.default
               (
                 { ... }:
                 {
@@ -41,21 +45,20 @@
                 }
               )
 
-              inputs.common.nixosModules.essentials
-              inputs.common.nixosModules.git
-              inputs.common.nixosModules.tmux
-              # TODO PICK ONE
-              # inputs.common.nixosModules.boot_systemd
-              # inputs.common.nixosModules.boot_grub
-              inputs.common.nixosModules.hardening
-              inputs.common.nixosModules.jetbrains_font
-              inputs.common.nixosModules.nix_options
-              inputs.common.nixosModules.no_sleep
-              inputs.common.nixosModules.timezone_auto
-              inputs.common.nixosModules.tty_caps_esc
-              inputs.common.nixosModules.zsh
+              common.nixosModules.essentials
+              common.nixosModules.git
+              common.nixosModules.tmux
+              common.nixosModules.boot_systemd
+              common.nixosModules.hardening
+              common.nixosModules.jetbrains_font
+              common.nixosModules.nix_options
+              common.nixosModules.no_sleep
+              common.nixosModules.timezone_auto
+              common.nixosModules.tty_caps_esc
+              common.nixosModules.zsh
 
               ./hardware-configuration.nix
+              ./impermanence.nix
               (
                 {
                   config,
@@ -65,9 +68,7 @@
                   ...
                 }:
                 rec {
-                  # TODO ensure matches configuration.nix, and add anything else from there that is needed
-                  system.stateVersion = "25.05";
-                  # No ssh pub keys setup yet, allow password login, TODO remove
+ 		              system.stateVersion = "25.05";
                   services.openssh.settings.PasswordAuthentication = lib.mkForce true;
 
                   # Home Manager
@@ -82,14 +83,14 @@
                     }) (lib.filterAttrs (name: user: user.isNormalUser or false) users.users);
 
                     sharedModules = [
-                      inputs.common.homeManagerModules.tmux
-                      inputs.common.homeManagerModules.atuin
-                      inputs.common.homeManagerModules.direnv
-                      inputs.common.homeManagerModules.git
-                      inputs.common.homeManagerModules.postgres_cli_options
-                      inputs.common.homeManagerModules.starship
-                      inputs.common.homeManagerModules.zoxide
-                      inputs.common.homeManagerModules.zsh
+                      common.homeManagerModules.tmux
+                      common.homeManagerModules.atuin
+                      common.homeManagerModules.direnv
+                      common.homeManagerModules.git
+                      common.homeManagerModules.postgres_cli_options
+                      common.homeManagerModules.starship
+                      common.homeManagerModules.zoxide
+                      common.homeManagerModules.zsh
                     ];
 
                     extraSpecialArgs = {
@@ -112,7 +113,6 @@
                         "networkmanager"
                       ];
                       openssh.authorizedKeys.keys = [
-                        # TODO set a public key for access
                       ];
                     };
                   };
@@ -124,3 +124,4 @@
       };
     };
 }
+

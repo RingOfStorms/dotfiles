@@ -5,6 +5,12 @@
 }:
 with lib;
 {
+  security.sudo = {
+    extraConfig = ''
+      Defaults lecture="never"
+    '';
+  };
+
   environment.systemPackages = with pkgs; [
     # Essentials
     vim
