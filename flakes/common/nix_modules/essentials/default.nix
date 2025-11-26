@@ -23,6 +23,7 @@ with lib;
     lsof
     killall
     speedtest-cli
+    parted
   ];
 
   environment.shellAliases = {

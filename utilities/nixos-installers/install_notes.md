@@ -87,17 +87,9 @@ services.btrfs.autoScrub = {
 
 ### Add initial system config changes
 ```sh
-curl -o /mnt/etc/nixos/onboard.nix https://git.joshuabell.xyz/ringofstorms/dotfiles/raw/branch/master/utilities/nixos-installers/onboard.nix
-# add import to configuration.nix
-sed -i '/\.\/hardware-configuration.nix/a \      ./onboard.nix' /mnt/etc/nixos/configuration.nix
+curl -o /mnt/etc/nixos/flake.nix https://git.joshuabell.xyz/ringofstorms/dotfiles/raw/branch/master/utilities/nixos-installers/new-flake.nix
 ```
-in configuration.nix add
-```nix
-onboardOpts = {
-  hostName = "NAME";
-  primaryUser = "luser";
-};
-```
+Open and edit config name/location as desired.
 
 ### Auto unlock luks (optional) - USB key
 ```sh
@@ -129,12 +121,11 @@ In hardware-configuration ensure these are all added:
     device = "/dev/disk/by-uuid/<LUKS_UUID>";
 
     keyFile = "/keyfile";
-    # The USB device that holds the keyfile (by UUID for reliability)
-    keyfileDevice = "/dev/disk/by-uuid/<USB_UUID>";
+    keyFileTimeout = 5;
 
     tryEmptyPassphrase = true;
     fallbackToPassword = true;
-    crypttabExtraOpts = [ "tries=3" ];
+    crypttabExtraOpts = [ "tries=2" ];
   };
 ```
 
