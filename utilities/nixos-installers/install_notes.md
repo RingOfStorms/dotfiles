@@ -61,8 +61,8 @@ mount -o subvol=@persist,compress=zstd,noatime "$ROOTP" /mnt/persist
 nixos-generate-config --root /mnt
 ```
 
-
 ### Fix hardware-configuration
+
 ```hardware-configuration.nix
 # @root options + "compress=zstd"
 # @nix options + "compress=zstd" "noatime"
@@ -86,42 +86,45 @@ services.btrfs.autoScrub = {
 ```
 
 ### Add initial system config changes
+
 ```sh
 curl -o /mnt/etc/nixos/flake.nix https://git.joshuabell.xyz/ringofstorms/dotfiles/raw/branch/master/utilities/nixos-installers/new-flake.nix
 ```
+
 Open and edit config name/location as desired.
 
 ### Auto unlock luks (optional) - USB key
+
 ```sh
 # Format if needed (fat32 for compatibility)
 sudo parted /dev/DRIVEDEVICE
   mklabel gpt
-  mkpart primary fat32 0% 100%
+  mkpart primary 1MiB 9MiB
   quit
-sudo mkfs.vfat -F 32 /dev/DRIVEDEVICE1
 
 # Create key
-mkdir -p /key_tmpfs
-sudo mount -o umask=0022,gid=$(id -g),uid=$(id -u) /dev/DRIVEDEVICE /key_tmpfs
 dd if=/dev/random of=/key_tmpfs/keyfile bs=1024 count=4
-sudo chmod 0400 /key_tmpfs/keyfile
-sudo cryptsetup luksAddKey /dev/ROOT_DEVICE /key_tmpfs/keyfile
-lsblk && ll /dev/
-sudo umount /key_tmpfs
-rmdir /key_tmpfs
+# writing some random data, choose a random offset
+sudo dd if=/dev/urandom of=/dev/sdX1 bs=4096 count=4 seek=5443 status=none
+sudo cryptsetup luksAddKey /dev/LUKSROOT --new-keyfile /dev/USBKEY --new-keyfile-size 5000 --new-keyfile-offset 5443
 ```
 
 In hardware-configuration ensure these are all added:
+
 ```hardware-configuration.nix
   boot.initrd.availableKernelModules = [
     "xhci_pci" "ehci_pci" "usb_storage" "uas"
   ];
 
   boot.initrd.luks.devices."cryptroot" = {
-    device = "/dev/disk/by-uuid/<LUKS_UUID>";
+    device = "/dev/disk/by-uuid/LUKS_UUID (same as root above)";
 
-    keyFile = "/keyfile";
-    keyFileTimeout = 5;
+    # Auto decrypt
+    keyFileTimeout = 2;
+    keyFile = "/dev/disk/by-uuid/KEY UUID";
+    # Set if used in generation command above
+    keyFileSize = 5000;
+    keyFileOffset = 5443;
 
     tryEmptyPassphrase = true;
     fallbackToPassword = true;
@@ -130,8 +133,9 @@ In hardware-configuration ensure these are all added:
 ```
 
 ### Install nixos
+
 `sudo nixos-install`
-`reboot`
+`reboot` and remove start up media
 
 2. Install and setup nixos
 
