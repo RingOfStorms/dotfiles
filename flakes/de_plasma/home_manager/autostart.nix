@@ -1,6 +1,11 @@
-{ config, lib, pkgs, ... }:
+{
+  osConfig,
+  lib,
+  pkgs,
+  ...
+}:
 let
-  cfg = config.ringofstorms.dePlasma;
+  cfg = osConfig.ringofstorms.dePlasma;
   inherit (lib) mkIf;
   delayMs = cfg.monitors.scriptDelayMs;
   script = pkgs.writeShellScriptBin "plasma-kscreen-overrides" ''
@@ -10,7 +15,7 @@ let
   '';
 in
 {
-  options = {};
+  options = { };
   config = mkIf (cfg.enable && cfg.monitors.enableOverrides && cfg.monitors.commands != [ ]) {
     # Use XDG autostart
     xdg.autostart."ringofstorms-kscreen-overrides" = {

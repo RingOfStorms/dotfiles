@@ -1,10 +1,14 @@
-{ config, lib, pkgs, ... }:
+{
+  osConfig,
+  lib,
+  ...
+}:
 let
-  cfg = config.ringofstorms.dePlasma;
+  cfg = osConfig.ringofstorms.dePlasma;
   inherit (lib) mkIf;
 in
 {
-  options = {};
+  options = { };
   config = mkIf (cfg.enable && cfg.appearance.dark.enable) {
     programs.plasma = {
       workspace = {

@@ -1,6 +1,6 @@
-{ config, lib, pkgs, ... }:
+{ osConfig, lib, pkgs, ... }:
 let
-  cfg = config.ringofstorms.dePlasma;
+  cfg = osConfig.ringofstorms.dePlasma;
   inherit (lib) mkIf;
 in
 {

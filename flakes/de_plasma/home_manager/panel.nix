@@ -1,22 +1,28 @@
-{ config, lib, pkgs, ... }:
+{
+  osConfig,
+  lib,
+  ...
+}:
 let
-  cfg = config.ringofstorms.dePlasma;
+  cfg = osConfig.ringofstorms.dePlasma;
   inherit (lib) mkIf;
-  mkPanel = {
-    location ? cfg.panel.location,
-    height ? cfg.panel.height,
-    opacity ? cfg.panel.opacity,
-    widgets ? cfg.panel.widgets
-  }: {
-    location = location;
-    height = height;
-    opacity = opacity;
-    widgets = widgets;
-  };
+  mkPanel =
+    {
+      location ? cfg.panel.location,
+      height ? cfg.panel.height,
+      opacity ? cfg.panel.opacity,
+      widgets ? cfg.panel.widgets,
+    }:
+    {
+      location = location;
+      height = height;
+      opacity = opacity;
+      widgets = widgets;
+    };
 in
 {
-  options = {};
+  options = { };
   config = mkIf (cfg.enable && cfg.panel.enabled) {
-    programs.plasma.panels = [ (mkPanel {}) ];
+    programs.plasma.panels = [ (mkPanel { }) ];
   };
 }
