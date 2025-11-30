@@ -27,7 +27,7 @@ let
   panelDefaults = {
     enabled = true;
     location = "top";
-    height = 28;
+    height = 24;
     opacity = "translucent"; # "adaptive" | "translucent" | "opaque"
     widgets = [
       "org.kde.plasma.kickoff"
