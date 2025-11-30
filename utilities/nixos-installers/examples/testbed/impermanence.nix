@@ -14,7 +14,7 @@
 
       "/etc/NetworkManager/system-connections"
       "/var/lib/bluetooth"
-
+      "/var/lib/fail2ban"
     ];
     files = [
       "/etc/machine-id"
@@ -28,6 +28,9 @@
         ".local/share/atuin"
 
         ".local/share/zoxide"
+
+        # KDE connect specific
+        ".config/kdeconnect"
       ];
       files = [
 
