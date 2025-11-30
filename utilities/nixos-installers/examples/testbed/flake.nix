@@ -61,7 +61,6 @@
 
               ./hardware-configuration.nix
               ./impermanence.nix
-              ./plasma.nix
               (
                 {
                   config,
@@ -74,7 +73,7 @@
                   system.stateVersion = "25.05";
                   services.openssh.settings.PasswordAuthentication = lib.mkForce true;
 
-                  myPlasma = {
+                  ringofstorms.dePlasma = {
                     enable = true;
                     gpu.intel.enable = true;
                     sddm.autologinUser = "luser";
