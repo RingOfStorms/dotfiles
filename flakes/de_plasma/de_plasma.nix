@@ -217,12 +217,19 @@ in
     apps.include = mkOption {
       type = types.listOf types.package;
       default = with pkgs; [
+        # Core KDE tools
         kdePackages.kde-gtk-config
         kdePackages.konsole
         kdePackages.dolphin
         kdePackages.spectacle
         kdePackages.plasma-browser-integration
         kdePackages.plasma-workspace-wallpapers
+        # Panel applets required for widgets
+        kdePackages.plasma-nm        # org.kde.plasma.networkmanagement
+        kdePackages.bluedevil        # org.kde.plasma.bluetooth
+        kdePackages.plasma-pa        # org.kde.plasma.volume
+        kdePackages.kdeplasma-addons # extra widgets
+        kdePackages.powerdevil       # power management services
       ];
     };
   };
