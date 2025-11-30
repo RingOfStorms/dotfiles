@@ -18,9 +18,9 @@ in
   options = { };
   config = mkIf (cfg.enable && cfg.monitors.enableOverrides && cfg.monitors.commands != [ ]) {
     # Use XDG autostart
-    xdg.autostart."ringofstorms-kscreen-overrides" = {
-      name = "Apply monitor overrides";
-      exec = "${script}/bin/plasma-kscreen-overrides";
-    };
+    # xdg.autostart."ringofstorms-kscreen-overrides" = {
+    #   name = "Apply monitor overrides";
+    #   exec = "${script}/bin/plasma-kscreen-overrides";
+    # };
   };
 }
