@@ -24,24 +24,6 @@ let
         cfg.gpu.intel.enable or false
       ]
     )) <= 1;
-  panelDefaults = {
-    enabled = true;
-    location = "top";
-    height = 24;
-    opacity = "translucent"; # "adaptive" | "translucent" | "opaque"
-    widgets = [
-      "org.kde.plasma.kickoff"
-      "org.kde.plasma.icontasks"
-      "org.kde.plasma.systemtray"
-      "org.kde.plasma.networkmanagement"
-      "org.kde.plasma.bluetooth"
-      "org.kde.plasma.volume"
-      "org.kde.plasma.battery"
-      "org.kde.plasma.powerprofiles"
-      "org.kde.plasma.notifications"
-      "org.kde.plasma.digitalclock"
-    ];
-  };
 in
 {
   options.ringofstorms.dePlasma = {
@@ -117,37 +99,11 @@ in
       };
     };
 
-    panel = {
-      enabled = mkOption {
-        type = types.bool;
-        default = panelDefaults.enabled;
-      };
-      location = mkOption {
-        type = types.enum [
-          "top"
-          "bottom"
-          "left"
-          "right"
-        ];
-        default = panelDefaults.location;
-      };
-      height = mkOption {
-        type = types.int;
-        default = panelDefaults.height;
-      };
-      opacity = mkOption {
-        type = types.enum [
-          "adaptive"
-          "translucent"
-          "opaque"
-        ];
-        default = panelDefaults.opacity;
-      };
-      widgets = mkOption {
-        type = types.listOf types.str;
-        default = panelDefaults.widgets;
-      };
-    };
+    # TODO how to use same type as home manager programs.plasma.panels.*
+    # panels = mkOption {
+    #     type = types.listOf types.;
+    #     default = [ defaultPanel ];
+    # };
 
     shortcuts = {
       terminal = mkOption {
@@ -225,11 +181,11 @@ in
         kdePackages.plasma-browser-integration
         kdePackages.plasma-workspace-wallpapers
         # Panel applets required for widgets
-        kdePackages.plasma-nm        # org.kde.plasma.networkmanagement
-        kdePackages.bluedevil        # org.kde.plasma.bluetooth
-        kdePackages.plasma-pa        # org.kde.plasma.volume
+        kdePackages.plasma-nm # org.kde.plasma.networkmanagement
+        kdePackages.bluedevil # org.kde.plasma.bluetooth
+        kdePackages.plasma-pa # org.kde.plasma.volume
         kdePackages.kdeplasma-addons # extra widgets
-        kdePackages.powerdevil       # power management services
+        kdePackages.powerdevil # power management services
       ];
     };
   };
