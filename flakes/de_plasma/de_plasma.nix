@@ -9,7 +9,6 @@ let
   inherit (lib)
     mkOption
     types
-    mkEnableOption
     mkIf
     mkMerge
     optionals
@@ -46,7 +45,11 @@ let
 in
 {
   options.ringofstorms.dePlasma = {
-    enable = mkEnableOption "KDE Plasma desktop";
+    enable = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Enable KDE Plasma DE.";
+    };
 
     wayland = mkOption {
       type = types.bool;

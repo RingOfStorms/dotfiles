@@ -12,10 +12,6 @@
 
   outputs =
     {
-      nixpkgs,
-      home-manager,
-      common,
-      ros_neovim,
       ...
     }@inputs:
     let
@@ -24,7 +20,7 @@
       primaryUser = "luser";
       configLocation = "/home/${primaryUser}/.config/nixos-config/utilities/nixos-installers/examples/${configurationName}";
       # configLocation = "/home/${primaryUser}/.config/nixos-config/hosts/${configurationName}";
-      lib = nixpkgs.lib;
+      lib = inputs.nixpkgs.lib;
     in
     {
       nixosConfigurations = {
@@ -38,8 +34,7 @@
               inputs.impermanence.nixosModules.impermanence
               inputs.home-manager.nixosModules.default
 
-              inputs.de_plasma.nixosModules.default
-              ros_neovim.nixosModules.default
+              inputs.ros_neovim.nixosModules.default
               (
                 { ... }:
                 {
@@ -47,17 +42,19 @@
                 }
               )
 
-              common.nixosModules.essentials
-              common.nixosModules.git
-              common.nixosModules.tmux
-              common.nixosModules.boot_systemd
-              common.nixosModules.hardening
-              common.nixosModules.jetbrains_font
-              common.nixosModules.nix_options
-              common.nixosModules.no_sleep
-              common.nixosModules.timezone_auto
-              common.nixosModules.tty_caps_esc
-              common.nixosModules.zsh
+              inputs.de_plasma.nixosModules.default
+
+              inputs.common.nixosModules.essentials
+              inputs.common.nixosModules.git
+              inputs.common.nixosModules.tmux
+              inputs.common.nixosModules.boot_systemd
+              inputs.common.nixosModules.hardening
+              inputs.common.nixosModules.jetbrains_font
+              inputs.common.nixosModules.nix_options
+              inputs.common.nixosModules.no_sleep
+              inputs.common.nixosModules.timezone_auto
+              inputs.common.nixosModules.tty_caps_esc
+              inputs.common.nixosModules.zsh
 
               ./hardware-configuration.nix
               ./impermanence.nix
@@ -72,7 +69,7 @@
                 rec {
                   system.stateVersion = "25.05";
                   services.openssh.settings.PasswordAuthentication = lib.mkForce true;
-
+                  
                   ringofstorms.dePlasma = {
                     enable = true;
                     gpu.intel.enable = true;
@@ -91,14 +88,14 @@
                     }) (lib.filterAttrs (name: user: user.isNormalUser or false) users.users);
 
                     sharedModules = [
-                      common.homeManagerModules.tmux
-                      common.homeManagerModules.atuin
-                      common.homeManagerModules.direnv
-                      common.homeManagerModules.git
-                      common.homeManagerModules.postgres_cli_options
-                      common.homeManagerModules.starship
-                      common.homeManagerModules.zoxide
-                      common.homeManagerModules.zsh
+                      inputs.common.homeManagerModules.tmux
+                      inputs.common.homeManagerModules.atuin
+                      inputs.common.homeManagerModules.direnv
+                      inputs.common.homeManagerModules.git
+                      inputs.common.homeManagerModules.postgres_cli_options
+                      inputs.common.homeManagerModules.starship
+                      inputs.common.homeManagerModules.zoxide
+                      inputs.common.homeManagerModules.zsh
                     ];
 
                     extraSpecialArgs = {
