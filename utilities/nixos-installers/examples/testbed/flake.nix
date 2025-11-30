@@ -4,6 +4,7 @@
     home-manager.url = "github:rycee/home-manager/release-25.05";
 
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
     impermanence.url = "github:nix-community/impermanence";
@@ -21,7 +22,7 @@
       configurationName = "testbed";
       system = "x86_64-linux";
       primaryUser = "luser";
-      configLocation = "/home/${primaryUser}/.config/nixos-config";
+      configLocation = "/home/${primaryUser}/.config/nixos-config/utilities/nixos-installers/examples/${configurationName}";
       # configLocation = "/home/${primaryUser}/.config/nixos-config/hosts/${configurationName}";
       lib = nixpkgs.lib;
     in
@@ -37,6 +38,7 @@
               inputs.impermanence.nixosModules.impermanence
               inputs.home-manager.nixosModules.default
 
+              inputs.de_plasma.nixosModules.default
               ros_neovim.nixosModules.default
               (
                 { ... }:
