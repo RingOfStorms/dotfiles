@@ -5,7 +5,7 @@
 
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
-    
+
     impermanence.url = "github:nix-community/impermanence";
   };
 
@@ -59,6 +59,7 @@
 
               ./hardware-configuration.nix
               ./impermanence.nix
+              ./plasma.nix
               (
                 {
                   config,
@@ -68,8 +69,14 @@
                   ...
                 }:
                 rec {
- 		              system.stateVersion = "25.05";
+                  system.stateVersion = "25.05";
                   services.openssh.settings.PasswordAuthentication = lib.mkForce true;
+
+                  myPlasma = {
+                    enable = true;
+                    gpu.intel.enable = true;
+                    sddm.autologinUser = "luser";
+                  };
 
                   # Home Manager
                   home-manager = {
@@ -124,4 +131,3 @@
       };
     };
 }
-
