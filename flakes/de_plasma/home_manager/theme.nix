@@ -14,7 +14,7 @@ in
       workspace = {
         colorScheme = "Breeze Dark";
         lookAndFeel = "org.kde.breezedark.desktop";
-        cursorTheme = "breeze_cursors";
+        cursor.theme = "breeze_cursors";
       };
       fonts = { }; # keep defaults
       kscreenlocker = { }; # swaylock analog not applicable; left default

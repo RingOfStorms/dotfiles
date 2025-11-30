@@ -36,7 +36,7 @@ in
     );
 
     programs.plasma.hotkeys.commands = {
-      ringofstorms_terminal = {
+      ringofstorms-terminal = {
         key = "Meta+Return";
         command = cfg.shortcuts.terminal;
       };
@@ -44,7 +44,7 @@ in
     // (
       if cfg.shortcuts.launcher == "rofi" then
         {
-          ringofstorms_launcher = {
+          ringofstorms-launcher = {
             key = "Meta+Space";
             command = "rofi -show drun";
           };

@@ -233,10 +233,10 @@ in
         enable = true;
         wayland.enable = cfg.wayland;
         theme = "breeze";
-        autoLogin = mkIf (cfg.sddm.autologinUser != null) {
-          enable = true;
-          user = cfg.sddm.autologinUser;
-        };
+      };
+      services.displayManager.autoLogin = mkIf (cfg.sddm.autologinUser != null) {
+        enable = true;
+        user = cfg.sddm.autologinUser;
       };
       services.desktopManager.plasma6.enable = true;
 
@@ -259,9 +259,9 @@ in
       environment.sessionVariables.NIXOS_OZONE_WL = "1";
 
       # OpenGL base
-      hardware.opengl = {
+      hardware.graphics = {
         enable = true;
-        driSupport32Bit = cfg.gpu.enable32Bit;
+        enable32Bit = cfg.gpu.enable32Bit;
       };
 
       # KDEConnect
@@ -279,7 +279,7 @@ in
 
       # Home Manager modules (plasma-manager + our HM layer)
       home-manager.sharedModules = [
-        plasma-manager.homeManagerModules.plasma-manager
+        plasma-manager.homeModules.plasma-manager
         ./home_manager
       ];
     }
@@ -317,11 +317,11 @@ in
     # GPU blocks
     (mkIf cfg.gpu.amd.enable {
       services.xserver.videoDrivers = [ "amdgpu" ];
-      hardware.opengl.extraPackages = with pkgs; [
+      hardware.graphics.extraPackages = with pkgs; [
         vaapiVdpau
         libvdpau-va-gl
       ];
-      hardware.opengl.extraPackages32 = with pkgs.pkgsi686Linux; [
+      hardware.graphics.extraPackages32 = with pkgs.pkgsi686Linux; [
         libva
         vaapiVdpau
         libvdpau-va-gl
@@ -331,14 +331,14 @@ in
 
     (mkIf cfg.gpu.intel.enable {
       services.xserver.videoDrivers = [ "modesetting" ];
-      hardware.opengl.extraPackages =
+      hardware.graphics.extraPackages =
         with pkgs;
         [
           intel-media-driver
           libvdpau-va-gl
         ]
         ++ optionals cfg.gpu.intel.legacyVaapi [ pkgs.vaapiIntel ];
-      hardware.opengl.extraPackages32 =
+      hardware.graphics.extraPackages32 =
         with pkgs.pkgsi686Linux;
         [
           libva
