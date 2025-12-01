@@ -60,6 +60,13 @@ in
               icon = "opengist";
             };
           }
+          {
+            "Open WebUI" = {
+              description = "LLM Chats";
+              href = "https://chat.joshuabell.xyz";
+              icon = "openai";
+            };
+          }
         ];
       }
       {
