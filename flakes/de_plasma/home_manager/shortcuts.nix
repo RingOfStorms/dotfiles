@@ -1,7 +1,5 @@
-{ osConfig, lib, ... }:
+{ ... }:
 let
-  cfg = osConfig.ringofstorms.dePlasma;
-  inherit (lib) mkIf;
   workspaces = builtins.genList (i: i + 1) 9;
   kwinWorkspace = builtins.listToAttrs (
     map (i: {
@@ -15,42 +13,22 @@ let
       value = "Meta+Shift+${toString i}";
     }) workspaces
   );
-  krunnerShortcut =
-    if cfg.shortcuts.launcher == "krunner" then
-      {
-        krunner = {
-          "Run Command" = "Meta+Space";
-        };
-      }
-    else
-      { };
 in
 {
   options = { };
-  config = mkIf (cfg.enable && cfg.shortcuts.useI3Like) {
-    programs.plasma.shortcuts = (
-      {
-        kwin = ({ "Close Window" = cfg.shortcuts.closeWindow; } // kwinWorkspace // kwinMoveWorkspace);
-      }
-      // krunnerShortcut
-    );
+  config = {
+    programs.plasma.shortcuts = ({
+      kwin = ({ "Close Window" = "Meta+Q"; } // kwinWorkspace // kwinMoveWorkspace);
+      krunner = {
+        "Run Command" = "Meta+Space";
+      };
+    });
 
     programs.plasma.hotkeys.commands = {
       ringofstorms-terminal = {
         key = "Meta+Return";
-        command = cfg.shortcuts.terminal;
+        command = "foot"; # TODO configurable?
       };
-    }
-    // (
-      if cfg.shortcuts.launcher == "rofi" then
-        {
-          ringofstorms-launcher = {
-            key = "Meta+Space";
-            command = "rofi -show drun";
-          };
-        }
-      else
-        { }
-    );
+    };
   };
 }

@@ -17,21 +17,8 @@ in
         ];
         scriptDelayMs = 500;
       };
-      shortcuts = {
-        terminal = "kitty";
-        launcher = "krunner";
-        useI3Like = true;
-        closeWindow = "Meta+Q";
-      };
-      panel = {
-        enabled = true;
-        location = "top";
-        height = 28;
-        opacity = "translucent";
-      };
       sddm.autologinUser = null;
-      flatpak.enable = false;
-      # GPU vendor left unset; set per machine if needed
+      # GPU vendor left unset; set per machine if needed TODO
     };
   };
 }

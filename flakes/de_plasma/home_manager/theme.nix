@@ -16,8 +16,6 @@ in
         lookAndFeel = "org.kde.breezedark.desktop";
         cursor.theme = "breeze_cursors";
       };
-      fonts = { }; # keep defaults
-      kscreenlocker = { }; # swaylock analog not applicable; left default
     };
   };
 }

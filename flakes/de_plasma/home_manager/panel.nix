@@ -5,7 +5,7 @@
 }:
 let
   cfg = osConfig.ringofstorms.dePlasma;
-  inherit (lib) mkIf;
+  inherit (lib) mkIf mkDefault;
 
   defaultPanel = {
     location = "top";
@@ -36,6 +36,6 @@ in
 {
   options = { };
   config = mkIf cfg.enable {
-    programs.plasma.panels = [ defaultPanel ];
+    programs.plasma.panels = mkDefault [ defaultPanel ];
   };
 }
