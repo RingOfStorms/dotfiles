@@ -1,7 +1,7 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
-    home-manager.url = "github:rycee/home-manager/release-25.05";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
+    home-manager.url = "github:rycee/home-manager/release-25.11";
 
     # nixpkgs-unstable.url = "github:wrvsrx/nixpkgs/fix-open-webui";
     open-webui-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
