@@ -148,7 +148,7 @@ in
         kdePackages.bluedevil # org.kde.plasma.bluetooth
         kdePackages.plasma-pa # org.kde.plasma.volume
         kdePackages.kdeplasma-addons # extra widgets
-        kdePackages.powerdevil # power management services;
+        kdePackages.powerdevil # power management services
       ];
 
       # Keyboard like sway/i3

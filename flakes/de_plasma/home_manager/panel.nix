@@ -26,7 +26,7 @@ let
       "org.kde.plasma.bluetooth"
       "org.kde.plasma.volume"
       "org.kde.plasma.battery"
-      "org.kde.plasma.powerprofiles"
+      # "org.kde.plasma.powerprofiles"
       "org.kde.plasma.notifications"
       "org.kde.plasma.digitalclock"
       "org.kde.plasma.showdesktop"
