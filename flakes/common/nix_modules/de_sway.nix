@@ -27,7 +27,6 @@
 
   services.greetd = {
     enable = true;
-    vt = 2;
     settings = {
       default_session = {
         command = "${pkgs.greetd.tuigreet}/bin/tuigreet --time --remember --remember-session --cmd '${pkgs.dbus}/bin/dbus-run-session ${pkgs.sway}/bin/sway'";

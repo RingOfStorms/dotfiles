@@ -1,17 +1,17 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
-    home-manager.url = "github:rycee/home-manager/release-25.05";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
+    home-manager.url = "github:rycee/home-manager/release-25.11";
 
     # Use relative to get current version for testin
-    # common.url = "path:../../flakes/common";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    common.url = "path:../../flakes/common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets.url = "path:../../flakes/secrets";
     secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
     # flatpaks.url = "path:../../flakes/flatpaks";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
-    # hyprland.url = "path:../../flakes/hyprland";
-    hyprland.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/hyprland";
+    hyprland.url = "path:../../flakes/hyprland";
+    # hyprland.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/hyprland";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
 
