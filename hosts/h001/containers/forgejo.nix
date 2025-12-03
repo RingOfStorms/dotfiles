@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  inputs,
   ...
 }:
 let
@@ -12,6 +13,8 @@ let
   containerAddress = "10.0.0.2";
   hostAddress6 = "fc00::1";
   containerAddress6 = "fc00::2";
+
+  forgejoNixpkgs = inputs.forgejo-nixpkgs;
 
   binds = [
     # Postgres data, must use postgres user in container and host
@@ -119,6 +122,7 @@ in
       }
       // acc
     ) { } binds;
+    nixpkgs = forgejoNixpkgs;
     config =
       { config, pkgs, ... }:
       {
@@ -208,7 +212,7 @@ in
               SHOW_FOOTER_TEMPLATE_LOAD_TIME = false;
             };
             migrations = {
-              ALLOWED_DOMAINS = "*.github.com,github.com";
+              ALLOWED_DOMAINS = "*.github.com,github.com,codeberg.org,*.codeberg.org";
               ALLOW_LOCALNETWORKS = true;
             };
           };

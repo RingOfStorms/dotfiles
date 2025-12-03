@@ -11,6 +11,7 @@
     pinchflat-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     zitadel-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     beszel-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    forgejo-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
