@@ -100,14 +100,20 @@
     },
     "common": {
       "locked": {
-        "path": "../../flakes/common",
-        "type": "path"
+        "dir": "flakes/common",
+        "lastModified": 1764723102,
+        "narHash": "sha256-r/7YCPpMysTC5ihE/k0hDzKnqc6Q/I1RifQQUwhmajM=",
+        "ref": "refs/heads/master",
+        "rev": "142ffff43950bcba13214bd8f96e83f0a5d9ad3c",
+        "revCount": 833,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
       "original": {
-        "path": "../../flakes/common",
-        "type": "path"
-      },
-      "parent": []
+        "dir": "flakes/common",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+      }
     },
     "crane": {
       "locked": {
@@ -336,14 +342,20 @@
         "hyprland": "hyprland_2"
       },
       "locked": {
-        "path": "../../flakes/hyprland",
-        "type": "path"
+        "dir": "flakes/hyprland",
+        "lastModified": 1764723102,
+        "narHash": "sha256-r/7YCPpMysTC5ihE/k0hDzKnqc6Q/I1RifQQUwhmajM=",
+        "ref": "refs/heads/master",
+        "rev": "142ffff43950bcba13214bd8f96e83f0a5d9ad3c",
+        "revCount": 833,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
       "original": {
-        "path": "../../flakes/hyprland",
-        "type": "path"
-      },
-      "parent": []
+        "dir": "flakes/hyprland",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+      }
     },
     "hyprland-guiutils": {
       "inputs": {
