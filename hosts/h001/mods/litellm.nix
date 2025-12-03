@@ -65,6 +65,8 @@ in
             "claude-sonnet-3.5"
             "claude-sonnet-4"
             "claude-sonnet-4.5"
+            "claude-haiku-4.5"
+            "grok-code-fast-1"
             "gemini-2.5-pro"
             "openai-gpt-5"
             "openai-gpt-5-mini"
@@ -77,7 +79,8 @@ in
             litellm_params = {
               model = "azure/${m}";
               api_base = "http://100.64.0.8:9010/azure";
-              api_version = "2025-04-01-preview";
+              api_version = "2025-11-01-preview";
+              # api_version = "2025-04-01-preview";
               api_key = "na";
             };
           })
@@ -88,7 +91,12 @@ in
             "gpt-5-nano-2025-08-07"
             "gpt-5-mini-2025-08-07"
             "gpt-5-2025-08-07"
-            # "gpt-5-codex-2025-09-15"
+            "gpt-5-2025-08-15"
+            "gpt-5.1-2025-11-13"
+            "gpt-5.1-chat-2025-11-13"
+            "gpt-5.1-codex-2025-11-13"
+            "gpt-5.1-codex-mini-2025-11-13"
+            "sora-2-2025-10-06"
           ]
         )
         # 宙 Proxy
@@ -101,13 +109,16 @@ in
               api_key = "os.environ/LITELLM_PROXY_API_KEY";
             };
           })
-          # curl -L t.net.joshuabell.xyz:9010/air_key/models | jq '.data.[].id'
+          # curl -L t.net.joshuabell.xyz:9010/air_prd/models | jq '.data.[].id'
           [
             "gpt-5-mini"
+            "gpt-5-nano"
+            "gpt-5.1"
             "gpt-5"
             "gpt-4.1"
             "gpt-4.1-mini"
             "gpt-4o"
+            "gpt-4o-applied-ai"
             "gpt-4o-mini"
             "o3-mini"
             "o4-mini"
@@ -116,6 +127,7 @@ in
             "gemini-2.5-flash"
             "gemini-2.0-flash-lite"
             "gemini-2.5-flash-lite"
+            "gemini-2.5-flash-image"
             "claude-opus-4.1"
             "claude-opus-4"
             "claude-sonnet-4"
@@ -125,10 +137,6 @@ in
             "text-embedding-ada-002"
             "text-embedding-large-exp-03-07"
             "text-embedding-005"
-            "llama7b"
-            "medgemma-4b"
-            "qwen3-instruct"
-            "bge-small-en-v1.5"
           ]
         );
       };
