@@ -141,6 +141,7 @@
                     ffmpeg-full
                     vlc
                     google-chrome
+                    ladybird
 
                     nodejs_24
                     ttyd
