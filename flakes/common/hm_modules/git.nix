@@ -1,12 +1,20 @@
 { ... }:
 {
+  programs.difftastic = {
+    enable = true;
+    git.enable = true;
+    options = {
+      background = "dark";
+    };
+  };
   programs.git = {
     enable = true;
     # TODO make configurable
-    userEmail = "ringofstorms@gmail.com";
-    userName = "RingOfStorms (Joshua Bell)";
-
-    extraConfig = {
+    settings = {
+      user = {
+        email = "ringofstorms@gmail.com";
+        name = "RingOfStorms (Joshua Bell)";
+      };
       core.pager = "bat";
       core.editor = "nano";
 
@@ -15,11 +23,6 @@
       init.defaultBranch = "main";
 
       rerere.enabled = true;
-    };
-
-    difftastic = {
-      enable = true;
-      background = "dark";
     };
 
     ignores = [
