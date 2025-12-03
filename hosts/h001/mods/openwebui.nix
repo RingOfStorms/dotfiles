@@ -77,6 +77,10 @@ in
         # OAUTH_UPDATE_PICTURE_ON_LOGIN = "True";
 
         BYPASS_MODEL_ACCESS_CONTROL="True";
+
+        # Other settings
+        CHAT_STREAM_RESPONSE_CHUNK_MAX_BUFFER_SIZE="10485760";
+        REPLACE_IMAGE_URLS_IN_CHAT_RESPONSE="True";
       };
     };
   };
