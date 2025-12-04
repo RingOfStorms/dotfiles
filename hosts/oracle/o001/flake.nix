@@ -54,7 +54,6 @@
       nixosConfigurations = {
         "${configuration_name}" = (
           lib.nixosSystem {
-            inherit system;
             specialArgs = {
               inherit inputs;
             };

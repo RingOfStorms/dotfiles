@@ -32,7 +32,6 @@
     }:
     let
       configuration_name = "oren";
-      system = "x86_64-linux";
       stateVersion = "25.05";
       primaryUser = "josh";
       overlayIp = "100.64.0.5";
@@ -42,7 +41,6 @@
       nixosConfigurations = {
         "${configuration_name}" = (
           lib.nixosSystem {
-            inherit system;
             modules = [
               home-manager.nixosModules.default
 

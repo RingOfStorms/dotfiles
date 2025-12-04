@@ -6,8 +6,8 @@
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
-    common.url = "path:../../flakes/common";
-    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    # common.url = "path:../../flakes/common";
+    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets.url = "path:../../flakes/secrets";
     secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
     # flatpaks.url = "path:../../flakes/flatpaks";
@@ -31,7 +31,6 @@
     }@inputs:
     let
       configuration_name = "lio";
-      system = "x86_64-linux";
       primaryUser = "josh";
       overlayIp = "100.64.0.1";
       lib = nixpkgs.lib;
@@ -40,11 +39,9 @@
       nixosConfigurations = {
         "${configuration_name}" = (
           lib.nixosSystem {
-            inherit system;
             specialArgs = {
               inherit inputs;
               upkgs = import inputs.nixpkgs-unstable {
-                inherit system;
                 config.allowUnfree = true;
               };
             };

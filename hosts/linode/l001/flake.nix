@@ -20,7 +20,6 @@
     }@inputs:
     let
       configuration_name = "l001";
-      system = "x86_64-linux";
       stateVersion = "24.11";
       primaryUser = "root";
       lib = nixpkgs.lib;
@@ -44,7 +43,6 @@
       nixosConfigurations = {
         "${configuration_name}" = (
           lib.nixosSystem {
-            inherit system;
             specialArgs = {
               inherit inputs;
             };

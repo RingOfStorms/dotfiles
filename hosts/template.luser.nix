@@ -23,7 +23,6 @@
     }:
     let
       configuration_name = "SYSTEM_NAME";
-      system = "x86_64-linux";
       stateVersion = "25.05";
       primaryUser = "luser";
       lib = nixpkgs.lib;
@@ -32,7 +31,6 @@
       nixosConfigurations = {
         "${configuration_name}" = (
           lib.nixosSystem {
-            inherit system;
             modules = [
               home-manager.nixosModules.default
 

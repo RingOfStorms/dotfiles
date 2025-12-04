@@ -15,7 +15,6 @@
     }@inputs:
     let
       configurationName = "MACHINE_HOST_NAME";
-      system = "x86_64-linux";
       primaryUser = "luser";
       configLocation = "/etc/nixos";
       # configLocation = "/home/${primaryUser}/.config/nixos-config/hosts/${configurationName}";
@@ -25,7 +24,6 @@
       nixosConfigurations = {
         "${configurationName}" = (
           lib.nixosSystem {
-            inherit system;
             specialArgs = {
               inherit inputs;
             };

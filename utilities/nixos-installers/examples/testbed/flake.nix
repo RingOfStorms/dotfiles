@@ -16,7 +16,6 @@
     }@inputs:
     let
       configurationName = "testbed";
-      system = "x86_64-linux";
       primaryUser = "luser";
       configLocation = "/home/${primaryUser}/.config/nixos-config/utilities/nixos-installers/examples/${configurationName}";
       # configLocation = "/home/${primaryUser}/.config/nixos-config/hosts/${configurationName}";
@@ -26,7 +25,6 @@
       nixosConfigurations = {
         "${configurationName}" = (
           lib.nixosSystem {
-            inherit system;
             specialArgs = {
               inherit inputs;
             };

@@ -26,7 +26,6 @@
     }@inputs:
     let
       configurationName = "h003";
-      system = "x86_64-linux";
       stateVersion = "25.05";
       primaryUser = "luser";
       overlayIp = "100.64.0.14";
@@ -36,7 +35,6 @@
       nixosConfigurations = {
         "${configurationName}" = (
           lib.nixosSystem {
-            inherit system;
             specialArgs = {
               inherit inputs;
             };
