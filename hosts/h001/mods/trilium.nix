@@ -1,22 +1,23 @@
 {
   inputs,
+  pkgs,
   ...
 }:
 let
   declaration = "services/web-apps/trilium.nix";
-  nixpkgs = inputs.trilium-nixpkgs;
-  pkgs = import nixpkgs {
-    system = "x86_64-linux";
+  nixpkgsTrilium = inputs.trilium-nixpkgs;
+  pkgsTrilium = import nixpkgsTrilium {
+    inherit (pkgs) system;
     config.allowUnfree = true;
   };
 in
 {
   disabledModules = [ declaration ];
-  imports = [ "${nixpkgs}/nixos/modules/${declaration}" ];
+  imports = [ "${nixpkgsTrilium}/nixos/modules/${declaration}" ];
   config = {
     services.trilium-server = {
       enable = true;
-      package = pkgs.trilium-server;
+      package = pkgsTrilium.trilium-server;
       port = 9111;
       host = "127.0.0.1";
       dataDir = "/var/lib/trilium";

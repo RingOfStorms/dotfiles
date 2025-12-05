@@ -1,19 +1,20 @@
 {
   inputs,
+  pkgs,
   ...
 }:
 let
   declaration = "services/misc/litellm.nix";
-  nixpkgs = inputs.litellm-nixpkgs;
-  pkgs = import nixpkgs {
-    system = "x86_64-linux";
+  nixpkgsLitellm = inputs.litellm-nixpkgs;
+  pkgsLitellm = import nixpkgsLitellm {
+    inherit (pkgs) system;
     config.allowUnfree = true;
   };
   port = 8094;
 in
 {
   disabledModules = [ declaration ];
-  imports = [ "${nixpkgs}/nixos/modules/${declaration}" ];
+  imports = [ "${nixpkgsLitellm}/nixos/modules/${declaration}" ];
   options = { };
   config = {
     networking.firewall.enable = true;
@@ -25,7 +26,7 @@ in
       inherit port;
       host = "0.0.0.0";
       openFirewall = false;
-      package = pkgs.litellm;
+      package = pkgsLitellm.litellm;
       environment = {
         SCARF_NO_ANALYTICS = "True";
         DO_NOT_TRACK = "True";
@@ -33,7 +34,7 @@ in
         GITHUB_COPILOT_TOKEN_DIR = "/var/lib/litellm/github_copilot";
         XDG_CONFIG_HOME = "/var/lib/litellm/.config";
       };
-      settings = { 
+      settings = {
         environment_variables = {
           LITELLM_PROXY_API_KEY = "na";
         };
@@ -50,11 +51,11 @@ in
             litellm_params = {
               model = "github_copilot/${m}";
               extra_headers = {
-                editor-version = "vscode/${pkgs.vscode.version}";
-                editor-plugin-version = "copilot/${pkgs.vscode-extensions.github.copilot.version}";
+                editor-version = "vscode/${pkgsLitellm.vscode.version}";
+                editor-plugin-version = "copilot/${pkgsLitellm.vscode-extensions.github.copilot.version}";
                 Copilot-Integration-Id = "vscode-chat";
                 Copilot-Vision-Request = "true";
-                user-agent = "GithubCopilot/${pkgs.vscode-extensions.github.copilot.version}";
+                user-agent = "GithubCopilot/${pkgsLitellm.vscode-extensions.github.copilot.version}";
               };
             };
 
@@ -80,7 +81,7 @@ in
               api_key = "na";
             };
           })
-            # curl -L "http://100.64.0.8:9010/azure/openai/models?api-version=2025-04-01-preview" | jq '.data.[].id'
+          # curl -L "http://100.64.0.8:9010/azure/openai/models?api-version=2025-04-01-preview" | jq '.data.[].id'
           [
             "gpt-5.1-2025-11-13"
             "gpt-4o-2024-05-13"

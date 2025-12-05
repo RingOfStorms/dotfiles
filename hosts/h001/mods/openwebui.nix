@@ -1,14 +1,15 @@
 {
   inputs,
   config,
+  pkgs,
   lib,
   ...
 }:
 let
   declaration = "services/misc/open-webui.nix";
-  nixpkgs = inputs.open-webui-nixpkgs;
-  pkgs = import nixpkgs {
-    system = "x86_64-linux";
+  nixpkgsOpenWebui = inputs.open-webui-nixpkgs;
+  pkgsOpenWebui = import nixpkgsOpenWebui {
+    inherit (pkgs) system;
     config.allowUnfree = true;
   };
   hasSecret =
@@ -20,7 +21,7 @@ let
 in
 {
   disabledModules = [ declaration ];
-  imports = [ "${nixpkgs}/nixos/modules/${declaration}" ];
+  imports = [ "${nixpkgsOpenWebui}/nixos/modules/${declaration}" ];
   options = { };
   config = lib.mkIf (hasSecret "openwebui_env") {
     services.nginx.virtualHosts."chat.joshuabell.xyz" = {
@@ -44,7 +45,7 @@ in
       port = 8084;
       host = "127.0.0.1";
       openFirewall = false;
-      package = pkgs.open-webui;
+      package = pkgsOpenWebui.open-webui;
       environmentFile = config.age.secrets.openwebui_env.path;
       environment = {
         # Declarative config, we don't use admin panel for anything
@@ -76,11 +77,11 @@ in
         # OAUTH_PICTURE_CLAIM = "picture";
         # OAUTH_UPDATE_PICTURE_ON_LOGIN = "True";
 
-        BYPASS_MODEL_ACCESS_CONTROL="True";
+        BYPASS_MODEL_ACCESS_CONTROL = "True";
 
         # Other settings
-        CHAT_STREAM_RESPONSE_CHUNK_MAX_BUFFER_SIZE="10485760";
-        REPLACE_IMAGE_URLS_IN_CHAT_RESPONSE="True";
+        CHAT_STREAM_RESPONSE_CHUNK_MAX_BUFFER_SIZE = "10485760";
+        REPLACE_IMAGE_URLS_IN_CHAT_RESPONSE = "True";
       };
     };
   };

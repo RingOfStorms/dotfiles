@@ -28,7 +28,6 @@
     }@inputs:
     let
       configuration_name = "o001";
-      system = "aarch64-linux";
       stateVersion = "23.11";
       primaryUser = "root";
       overlayIp = "100.64.0.11";
@@ -41,12 +40,14 @@
           "-i"
           "/run/agenix/nix2oracle"
         ];
-        nodes.${configuration_name} = {
+        nodes.${configuration_name} = rec {
           hostname = "64.181.210.7";
-          targetPlatform = system;
+          targetPlatform = "aarch64-linux";
           profiles.system = {
             user = "root";
-            path = deploy-rs.lib.${system}.activate.nixos self.nixosConfigurations.${configuration_name};
+            path =
+              deploy-rs.lib.${targetPlatform}.activate.nixos
+                self.nixosConfigurations.${configuration_name};
           };
         };
       };

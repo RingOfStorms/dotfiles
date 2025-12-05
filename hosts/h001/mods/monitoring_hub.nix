@@ -1,21 +1,22 @@
 {
   inputs,
+  pkgs,
   ...
 }:
 let
   declaration = "services/monitoring/beszel-hub.nix";
-  nixpkgs = inputs.beszel-nixpkgs;
-  pkgs = import nixpkgs {
-    system = "x86_64-linux";
+  nixpkgsBeszel = inputs.beszel-nixpkgs;
+  pkgsBeszel = import nixpkgsBeszel {
+    inherit (pkgs) system;
     config.allowUnfree = true;
   };
 in
 {
   disabledModules = [ declaration ];
-  imports = [ "${nixpkgs}/nixos/modules/${declaration}" ];
+  imports = [ "${nixpkgsBeszel}/nixos/modules/${declaration}" ];
   config = {
     services.beszel.hub = {
-      package = pkgs.beszel;
+      package = pkgsBeszel.beszel;
       enable = true;
       port = 8090;
       host = "100.64.0.13";

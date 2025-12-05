@@ -1,14 +1,15 @@
 {
   inputs,
   config,
+  pkgs,
   lib,
   ...
 }:
 let
   declaration = "services/security/oauth2-proxy.nix";
-  nixpkgs = inputs.oauth2-proxy-nixpkgs;
-  pkgs = import nixpkgs {
-    system = "x86_64-linux";
+  nixpkgsOauth2Proxy = inputs.oauth2-proxy-nixpkgs;
+  pkgsOauth2Proxy = import nixpkgsOauth2Proxy {
+    inherit (pkgs) system;
     config.allowUnfree = true;
   };
   hasSecret =
@@ -20,12 +21,12 @@ let
 in
 {
   disabledModules = [ declaration ];
-  imports = [ "${nixpkgs}/nixos/modules/${declaration}" ];
+  imports = [ "${nixpkgsOauth2Proxy}/nixos/modules/${declaration}" ];
   config = lib.mkIf (hasSecret "oauth2_proxy_key_file") {
     services.oauth2-proxy = {
       enable = true;
       httpAddress = "http://127.0.0.1:4180";
-      package = pkgs.oauth2-proxy;
+      package = pkgsOauth2Proxy.oauth2-proxy;
       provider = "oidc";
       reverseProxy = true;
       redirectURL = "https://sso-proxy.joshuabell.xyz/oauth2/callback";
