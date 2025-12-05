@@ -225,6 +225,22 @@
         "type": "github"
       }
     },
+    "n8n-nixpkgs": {
+      "locked": {
+        "lastModified": 1764667669,
+        "narHash": "sha256-7WUCZfmqLAssbDqwg9cUDAXrSoXN79eEEq17qhTNM/Y=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "418468ac9527e799809c900eda37cbff999199b6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nixarr": {
       "inputs": {
         "nixpkgs": "nixpkgs_2",
@@ -1266,6 +1282,7 @@
         "forgejo-nixpkgs": "forgejo-nixpkgs",
         "home-manager": "home-manager",
         "litellm-nixpkgs": "litellm-nixpkgs",
+        "n8n-nixpkgs": "n8n-nixpkgs",
         "nixarr": "nixarr",
         "nixpkgs": "nixpkgs_3",
         "oauth2-proxy-nixpkgs": "oauth2-proxy-nixpkgs",
