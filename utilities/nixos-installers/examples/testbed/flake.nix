@@ -4,8 +4,8 @@
     home-manager.url = "github:rycee/home-manager/release-25.11";
 
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    de_plasma.url = "path:../../../../flakes/de_plasma";
-    # de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
+    # de_plasma.url = "path:../../../../flakes/de_plasma";
+    de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
     impermanence.url = "github:nix-community/impermanence";
