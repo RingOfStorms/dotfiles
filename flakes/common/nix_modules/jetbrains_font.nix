@@ -23,11 +23,10 @@ in
       jetbrainsMonoFont
     ]
     # TODO verify if these are needed/working
-    # ++ (with pkgs; [
-    #   ipafont
-    #   kochi-substitute
-    #   noto-fonts-cjk-sans # Or another CJK font
-    # ])
-    ;
+    ++ (with pkgs; [
+      ipafont
+      kochi-substitute
+      noto-fonts-cjk-sans # Or another CJK font
+    ]);
   };
 }

@@ -14,7 +14,7 @@
       initial_window_height = "55c";
 
       # Remove window borders
-      hide_window_decorations = "titlebar-only";
+      hide_window_decorations = "yes";
       tab_title_template = "none";
       active_tab_title_template = "none";
       draw_minimal_borders = "yes";

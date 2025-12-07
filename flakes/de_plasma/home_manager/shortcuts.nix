@@ -1,10 +1,20 @@
-{ ... }:
+{ osConfig, lib, ... }:
 let
+  cfg = osConfig.ringofstorms.dePlasma;
+  inherit (lib) mkIf;
   workspaces = builtins.genList (i: i + 1) 9;
+  workspaceLetters = [ "n" "m" "," "." "/" ];
   kwinWorkspace = builtins.listToAttrs (
     map (i: {
       name = "Switch to Desktop ${toString i}";
-      value = "Meta+${toString i}";
+      value =
+        let
+          idx = i - 1;
+        in
+        if idx < builtins.length workspaceLetters then
+          [ "Meta+${toString i}" "Meta+${builtins.elemAt workspaceLetters idx}" ]
+        else
+          "Meta+${toString i}";
     }) workspaces
   );
   kwinMoveWorkspace = builtins.listToAttrs (
@@ -16,18 +26,30 @@ let
 in
 {
   options = { };
-  config = {
-    programs.plasma.shortcuts = ({
-      kwin = ({ "Close Window" = "Meta+Q"; } // kwinWorkspace // kwinMoveWorkspace);
-      krunner = {
-        "Run Command" = "Meta+Space";
-      };
-    });
+  config = mkIf (cfg.enable) {
+    # Configure virtual desktops declaratively
+    programs.plasma.shortcuts = {
+      kwin = {
+        "Window Close" = "Meta+Q";
+        "Overview" = "Meta";
+      }
+      // kwinWorkspace
+      // kwinMoveWorkspace;
 
+      plasmashell = {
+        "activate application launcher widget" = [ ];
+      };
+
+      ksmserver = {
+        "Lock Session" = "Meta+Shift+L";
+      };
+    };
+
+    # Custom hotkey commands
     programs.plasma.hotkeys.commands = {
-      ringofstorms-terminal = {
+      terminal = {
         key = "Meta+Return";
-        command = "foot"; # TODO configurable?
+        command = "kitty";
       };
     };
   };

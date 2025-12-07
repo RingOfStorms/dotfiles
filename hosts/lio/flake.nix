@@ -6,14 +6,16 @@
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
-    # common.url = "path:../../flakes/common";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    common.url = "path:../../flakes/common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets.url = "path:../../flakes/secrets";
     secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
     # flatpaks.url = "path:../../flakes/flatpaks";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
+    de_plasma.url = "path:../../flakes/de_plasma";
+    # de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -48,14 +50,20 @@
             modules = [
               home-manager.nixosModules.default
 
+              inputs.de_plasma.nixosModules.default
+              ({
+                ringofstorms.dePlasma = {
+                  enable = true;
+                  gpu.amd.enable = true;
+                  # TODO once encrypted boot?
+                  # sddm.autologinUser = "josh";
+                };
+              })
               secrets.nixosModules.default
               ros_neovim.nixosModules.default
-              (
-                { ... }:
-                {
-                  ringofstorms-nvim.includeAllRuntimeDependencies = true;
-                }
-              )
+              ({
+                ringofstorms-nvim.includeAllRuntimeDependencies = true;
+              })
               flatpaks.nixosModules.default
 
               common.nixosModules.essentials
@@ -63,7 +71,7 @@
               common.nixosModules.tmux
               common.nixosModules.boot_systemd
               # common.nixosModules.de_sway
-              common.nixosModules.de_i3
+              # common.nixosModules.de_i3
               common.nixosModules.hardening
               common.nixosModules.jetbrains_font
               common.nixosModules.nix_options
@@ -76,15 +84,12 @@
               common.nixosModules.zsh
 
               beszel.nixosModules.agent
-              (
-                { ... }:
-                {
-                  beszelAgent = {
-                    listen = "${overlayIp}:45876";
-                    token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
-                  };
-                }
-              )
+              ({
+                beszelAgent = {
+                  listen = "${overlayIp}:45876";
+                  token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
+                };
+              })
 
               ./configuration.nix
               ./hardware-configuration.nix
@@ -117,7 +122,7 @@
 
                     sharedModules = [
                       # common.homeManagerModules.de_sway
-                      common.homeManagerModules.de_i3
+                      # common.homeManagerModules.de_i3
                       common.homeManagerModules.tmux
                       common.homeManagerModules.atuin
                       common.homeManagerModules.direnv

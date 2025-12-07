@@ -31,6 +31,8 @@
 
         # KDE connect specific
         ".config/kdeconnect"
+
+        ".local/state/nvim_ringofstorms_helium"
       ];
       files = [
 

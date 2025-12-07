@@ -119,7 +119,8 @@ in
         wireplumber.enable = true;
       };
 
-      services.power-profiles-daemon.enable = true;
+      # TODO revisit
+      # services.power-profiles-daemon.enable = true;
 
       # Wayland-friendly Electron/Chromium
       environment.sessionVariables.NIXOS_OZONE_WL = "1";
@@ -199,12 +200,12 @@ in
     (mkIf cfg.gpu.amd.enable {
       services.xserver.videoDrivers = [ "amdgpu" ];
       hardware.graphics.extraPackages = with pkgs; [
-        vaapiVdpau
+        libva-vdpau-driver
         libvdpau-va-gl
       ];
       hardware.graphics.extraPackages32 = with pkgs.pkgsi686Linux; [
         libva
-        vaapiVdpau
+        libva-vdpau-driver
         libvdpau-va-gl
       ];
       environment.systemPackages = optionals cfg.gpu.amd.useAmdvlk [ pkgs.amdvlk ];
