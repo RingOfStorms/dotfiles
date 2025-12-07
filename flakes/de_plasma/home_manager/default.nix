@@ -105,10 +105,7 @@ in
         appearance = {
           alwaysShowClock = true;
           showMediaControls = true;
-          wallpaper = [
-            ../../../hosts/_shared_assets/wallpapers/pixel_night.png
-            ../../../hosts/_shared_assets/wallpapers/pixel_night_v.png
-          ];
+          wallpaper = ../../../hosts/_shared_assets/wallpapers/pixel_night.png;
           # wallpaperPlainColor = "0,64,174,256";
         };
         autoLock = false;
