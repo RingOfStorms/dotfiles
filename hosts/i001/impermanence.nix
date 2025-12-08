@@ -21,6 +21,9 @@
     ];
     users.luser = {
       directories = [
+        ".ssh"
+        ".gnupg"
+
         "projects"
         ".config/nixos-config"
 
@@ -29,9 +32,14 @@
 
         ".local/share/zoxide"
 
-        # KDE connect specific
+        # KDE
         ".config/kdeconnect"
+        ".local/kwalletd"
 
+        # Chrome
+        ".config/google-chrome"
+
+        # neovim ros_neovim
         ".local/state/nvim_ringofstorms_helium"
       ];
       files = [
