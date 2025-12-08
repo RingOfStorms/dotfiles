@@ -34,7 +34,7 @@
 
         # KDE
         ".config/kdeconnect"
-        ".local/kwalletd"
+        ".local/kwalletd" # TODO remove? I disabled it so we can try removing something here
 
         # Chrome
         ".config/google-chrome"
