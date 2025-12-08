@@ -62,7 +62,6 @@
 
               ./hardware-configuration.nix
               ./impermanence.nix
-              ./test.nix
               (
                 {
                   config,
