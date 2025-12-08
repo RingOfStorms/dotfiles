@@ -112,7 +112,7 @@
                   users.users = {
                     "${primaryUser}" = {
                       isNormalUser = true;
-                      hashedPassword = "$y$j9T$v1QhXiZMRY1pFkPmkLkdp0$451GvQt.XFU2qCAi4EQNd1BEqjM/CH6awU8gjcULps6"; # "test" password
+                      initialHashedPassword = "$y$j9T$v1QhXiZMRY1pFkPmkLkdp0$451GvQt.XFU2qCAi4EQNd1BEqjM/CH6awU8gjcULps6"; # "test" password
                       extraGroups = [
                         "wheel"
                         "networkmanager"
