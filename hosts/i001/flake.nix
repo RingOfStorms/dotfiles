@@ -66,7 +66,6 @@
                 {
                   config,
                   pkgs,
-                  upkgs,
                   lib,
                   ...
                 }:
@@ -99,7 +98,6 @@
 
                     extraSpecialArgs = {
                       inherit inputs;
-                      inherit upkgs;
                     };
                   };
 

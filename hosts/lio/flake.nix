@@ -29,6 +29,7 @@
       flatpaks,
       beszel,
       ros_neovim,
+      nixpkgs-unstable,
       ...
     }@inputs:
     let
@@ -43,11 +44,17 @@
           lib.nixosSystem {
             specialArgs = {
               inherit inputs;
-              upkgs = import inputs.nixpkgs-unstable {
-                config.allowUnfree = true;
-              };
             };
             modules = [
+              ({
+                nixpkgs.overlays = [
+                  (final: prev: {
+                    unstable = import nixpkgs-unstable {
+                      inherit (final) system config;
+                    };
+                  })
+                ];
+              })
               home-manager.nixosModules.default
 
               inputs.de_plasma.nixosModules.default
@@ -97,14 +104,12 @@
               # ./jails_text.nix
               # ./hyprland_customizations.nix
               # ./sway_customizations.nix
-              ./i3_customizations.nix
-              ./opencode-shim.nix
+              # ./i3_customizations.nix
               ./vms.nix
               (
                 {
                   config,
                   pkgs,
-                  upkgs,
                   lib,
                   ...
                 }:
@@ -140,7 +145,6 @@
 
                     extraSpecialArgs = {
                       inherit inputs;
-                      inherit upkgs;
                     };
                   };
 
@@ -168,17 +172,16 @@
                     vlang
                     ttyd
                     pavucontrol
+                    unstable.opencode
                   ];
 
                   services.flatpak.packages = [
                     "org.signal.Signal"
                     "dev.vencord.Vesktop"
-                    "md.obsidian.Obsidian"
                     "com.spotify.Client"
                     "com.bitwarden.desktop"
                     "org.openscad.OpenSCAD"
                     "org.blender.Blender"
-                    "com.rustdesk.RustDesk"
                   ];
 
                   networking.firewall.allowedTCPPorts = [
