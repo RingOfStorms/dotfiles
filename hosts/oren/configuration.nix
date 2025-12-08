@@ -23,6 +23,4 @@
     "rtlwifi"
     "mac80211"
   ];
-
-  services.tlp.enable = true;
 }
