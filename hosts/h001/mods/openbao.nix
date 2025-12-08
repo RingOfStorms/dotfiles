@@ -1,5 +1,4 @@
 {
-  config,
   pkgs,
   ...
 }:
@@ -71,62 +70,84 @@
   # AUTO UNSEAL
   systemd.services.openbao-auto-unseal = {
     description = "Auto-unseal OpenBao using stored unseal key shares";
+    partOf = [ "openbao.service" ];
     after = [ "openbao.service" ];
     wants = [ "openbao.service" ];
-    # Run once at boot; doesn't restart
+    wantedBy = [ "multi-user.target" "openbao.service" ];
+    path = [
+      pkgs.openbao
+      pkgs.gnugrep
+    ];
+    environment = {
+      BAO_ADDR = "http://127.0.0.1:8200";
+    };
+
     serviceConfig = {
       Type = "oneshot";
-      # run as the same user as the openbao service
-      # User = config.systemd.services.openbao.User;
-      # Group = config.systemd.services.openbao.Group;
-      # /run/keys/... are usually readable by root only; you might prefer to run as root
       User = "root";
       Group = "root";
 
-      # Only needs network access to 127.0.0.1
       PrivateTmp = true;
       ProtectSystem = "strict";
       ProtectHome = true;
-      ReadOnlyPaths = [ "/" ];
-      # allow reading /run/keys and talking to localhost
-      ReadWritePaths = [ "/run" ];
+      ReadOnlyPaths = [ "/bao-keys" ];
       NoNewPrivileges = true;
 
       ExecStart = pkgs.writeShellScript "openbao-auto-unseal" ''
         #!/usr/bin/env bash
-        set -euo pipefail
+        echo "Auto-unseal: waiting for OpenBao to be reachable"
 
-        export BAO_ADDR="http://127.0.0.1:8200"
-
-        # Wait for OpenBao to be listening
-        # (systemd "after" ensures start order but not readiness)
+        # Wait for OpenBao to be listening & initialized
         for i in {1..30}; do
-          if bao status >/dev/null 2>&1; then
+          BAO_STATUS=$(bao status 2>/dev/null);
+          # echo "Current status:"
+          # echo "$BAO_STATUS"
+
+          # Check if initialized
+          if grep -qi 'initialized.*true' <<< "$BAO_STATUS"; then
+            echo "OpenBao is initialized"
             break
           fi
           sleep 1
         done
 
+        # Check again; if still not initialized, bail
+        BAO_STATUS=$(bao status 2>/dev/null);
+        if ! grep -qi 'initialized.*true' <<< "$BAO_STATUS"; then
+          echo "OpenBao is not initialized yet; skipping auto-unseal" >&2
+          exit 1
+        fi
+
         # If it's already unsealed, exit
-        if bao status 2>/dev/null | grep -q 'sealed *false'; then
+        if grep -qi 'sealed.*false' <<< "$BAO_STATUS"; then
+          echo "OpenBao already unsealed; nothing to do"
           exit 0
         fi
 
+        echo "OpenBao is sealed; applying unseal key shares"
+
         # Apply each unseal key share; ignore "already unsealed" errors
-        # TODO change this back to /run/agenix instead of /root/bao-keys
-        for key in /root/bao-keys/openbao-unseal-*; do
+        for key in /bao-keys/openbao-unseal-*; do
           if [ -f "$key" ]; then
+            echo "Unsealing with key $key"
             bao operator unseal "$(cat "$key")" || true
           fi
         done
 
-        # Check final status; fail if still sealed
-        if bao status 2>/dev/null | grep -q 'sealed *true'; then
+        # Final status check
+        if ! BAO_STATUS=$(bao status 2>/dev/null); then
+          echo "OpenBao not responding after unseal attempts" >&2
+          exit 1
+        fi
+        # echo "Final status:"
+        # echo "$BAO_STATUS"
+        if grep -qi 'sealed.*true' <<< "$BAO_STATUS"; then
           echo "OpenBao is still sealed after applying unseal keys" >&2
           exit 1
         fi
+
+        echo "Successfully unsealed OpenBao"
       '';
     };
-    wantedBy = [ "multi-user.target" ];
   };
 }

@@ -15,8 +15,8 @@
     n8n-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
-    # common.url = "path:../../flakes/common";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    common.url = "path:../../flakes/common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets.url = "path:../../flakes/secrets";
     secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
     # beszel.url = "path:../../flakes/beszel";
@@ -57,12 +57,9 @@
 
               secrets.nixosModules.default
               ros_neovim.nixosModules.default
-              (
-                { ... }:
-                {
-                  ringofstorms-nvim.includeAllRuntimeDependencies = true;
-                }
-              )
+              ({
+                ringofstorms-nvim.includeAllRuntimeDependencies = true;
+              })
 
               common.nixosModules.essentials
               common.nixosModules.git
@@ -71,23 +68,20 @@
               common.nixosModules.nix_options
               common.nixosModules.podman
               common.nixosModules.tailnet
-              common.nixosModules.timezone_auto
+              common.nixosModules.timezone_chi
               common.nixosModules.tty_caps_esc
               common.nixosModules.zsh
 
               beszel.nixosModules.agent
-              (
-                { ... }:
-                {
-                  beszelAgent = {
-                    listen = "${overlayIp}:45876";
-                    token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
-                  };
-                  services.beszel.agent.environment = {
-                    EXTRA_FILESYSTEMS = "sda__Media";
-                  };
-                }
-              )
+              ({
+                beszelAgent = {
+                  listen = "${overlayIp}:45876";
+                  token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
+                };
+                services.beszel.agent.environment = {
+                  EXTRA_FILESYSTEMS = "sda__Media";
+                };
+              })
 
               nixarr.nixosModules.default
               ./hardware-configuration.nix
