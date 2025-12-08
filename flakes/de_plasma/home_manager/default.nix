@@ -301,7 +301,7 @@ in
       };
 
       configFile = {
-
+        kwalletrc.Wallet.Enabled = false;
       };
     };
   };
