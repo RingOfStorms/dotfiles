@@ -175,6 +175,11 @@
                     unstable.opencode
                   ];
 
+                  environment.shellAliases = {
+                    "oc" = "all_proxy='' http_proxy='' https_proxy='' opencode";
+                    "occ" = "oc -c";
+                  };
+
                   services.flatpak.packages = [
                     "org.signal.Signal"
                     "dev.vencord.Vesktop"
