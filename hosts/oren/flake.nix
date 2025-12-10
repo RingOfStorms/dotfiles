@@ -16,8 +16,10 @@
     # hyprland.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/hyprland";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
-    # de_plasma.url = "path:../../flakes/de_plasma";
-    de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
+    de_plasma.url = "path:../../flakes/de_plasma";
+    # de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
+    opencode.url = "path:../../flakes/opencode";
+    # opencode.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/opencode";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -74,6 +76,7 @@
                   ringofstorms-nvim.includeAllRuntimeDependencies = true;
                 }
               )
+              inputs.opencode.nixosModules.default
 
               flatpaks.nixosModules.default
               # hyprland.nixosModules.default

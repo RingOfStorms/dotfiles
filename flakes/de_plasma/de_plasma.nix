@@ -107,18 +107,6 @@ in
       };
       services.desktopManager.plasma6.enable = true;
 
-      # Portals
-      xdg.portal = {
-        enable = true;
-        extraPortals = [
-          pkgs.xdg-desktop-portal-kde
-          pkgs.xdg-desktop-portal-gtk
-        ];
-        config.common.default = [
-          "kde"
-          "gtk"
-        ];
-      };
 
       # Audio / IPC
       services.pipewire = {

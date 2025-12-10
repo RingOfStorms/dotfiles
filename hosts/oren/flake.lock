@@ -122,20 +122,14 @@
         "plasma-manager": "plasma-manager"
       },
       "locked": {
-        "dir": "flakes/de_plasma",
-        "lastModified": 1765154566,
-        "narHash": "sha256-aC4YHMW0Tv0mPZP51IDpcUIucwRy7DrVZOcoLMAHFug=",
-        "ref": "refs/heads/master",
-        "rev": "770d3fb859ee5a4c5f5eeb39fe56757c065822ab",
-        "revCount": 855,
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+        "path": "../../flakes/de_plasma",
+        "type": "path"
       },
       "original": {
-        "dir": "flakes/de_plasma",
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      }
+        "path": "../../flakes/de_plasma",
+        "type": "path"
+      },
+      "parent": []
     },
     "flake-utils": {
       "inputs": {
@@ -321,6 +315,22 @@
     },
     "nixpkgs_4": {
       "locked": {
+        "lastModified": 1765270179,
+        "narHash": "sha256-g2a4MhRKu4ymR4xwo+I+auTknXt/+j37Lnf0Mvfl1rE=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "677fbe97984e7af3175b6c121f3c39ee5c8d62c9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_5": {
+      "locked": {
         "lastModified": 1764776358,
         "narHash": "sha256-MxXSCRiV7DI5U3Ra1UxVJTTUyKsONAE8+8QdSXsGIhA=",
         "owner": "nixos",
@@ -334,7 +344,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_5": {
+    "nixpkgs_6": {
       "locked": {
         "lastModified": 1761672384,
         "narHash": "sha256-o9KF3DJL7g7iYMZq9SWgfS1BFlNbsm6xplRjVlOCkXI=",
@@ -1214,6 +1224,38 @@
         "type": "github"
       }
     },
+    "opencode": {
+      "inputs": {
+        "opencode": "opencode_2"
+      },
+      "locked": {
+        "path": "../../flakes/opencode",
+        "type": "path"
+      },
+      "original": {
+        "path": "../../flakes/opencode",
+        "type": "path"
+      },
+      "parent": []
+    },
+    "opencode_2": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_4"
+      },
+      "locked": {
+        "lastModified": 1765395355,
+        "narHash": "sha256-AT24xCe1h7ltirRqLoHce3bmDu5rFKX7Ww9RcqQPgYM=",
+        "owner": "sst",
+        "repo": "opencode",
+        "rev": "31e6ed6806927d3ffd925d12fe6cd1df14cd6a25",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sst",
+        "repo": "opencode",
+        "type": "github"
+      }
+    },
     "plasma-manager": {
       "inputs": {
         "home-manager": "home-manager",
@@ -1238,7 +1280,7 @@
         "agenix": "agenix",
         "crane": "crane",
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs_5",
+        "nixpkgs": "nixpkgs_6",
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
@@ -1264,13 +1306,14 @@
         "home-manager": "home-manager_2",
         "nixpkgs": "nixpkgs_3",
         "nixpkgs-unstable": "nixpkgs-unstable",
+        "opencode": "opencode",
         "ros_neovim": "ros_neovim",
         "secrets": "secrets"
       }
     },
     "ros_neovim": {
       "inputs": {
-        "nixpkgs": "nixpkgs_4",
+        "nixpkgs": "nixpkgs_5",
         "nvim_plugin-Almo7aya/openingh.nvim": "nvim_plugin-Almo7aya/openingh.nvim",
         "nvim_plugin-CopilotC-Nvim/CopilotChat.nvim": "nvim_plugin-CopilotC-Nvim/CopilotChat.nvim",
         "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring": "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring",

@@ -5,9 +5,6 @@
 
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
-    opencode.url = "github:sst/opencode";
-    opencode.inputs.nixpkgs.follows = "nixpkgs-unstable";
-
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
@@ -19,6 +16,8 @@
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
     # de_plasma.url = "path:../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
+    opencode.url = "path:../../flakes/opencode";
+    # opencode.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/opencode";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -75,6 +74,7 @@
               ({
                 ringofstorms-nvim.includeAllRuntimeDependencies = true;
               })
+              inputs.opencode.nixosModules.default
               flatpaks.nixosModules.default
 
               common.nixosModules.essentials
@@ -176,13 +176,7 @@
                     vlang
                     ttyd
                     pavucontrol
-                    opencode.packages.${pkgs.system}.default
                   ];
-
-                  environment.shellAliases = {
-                    "oc" = "all_proxy='' http_proxy='' https_proxy='' opencode";
-                    "occ" = "oc -c";
-                  };
 
                   services.flatpak.packages = [
                     "org.signal.Signal"
