@@ -5,6 +5,9 @@
 
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
+    opencode.url = "github:sst/opencode";
+    opencode.inputs.nixpkgs.follows = "nixpkgs-unstable";
+
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
@@ -30,6 +33,7 @@
       beszel,
       ros_neovim,
       nixpkgs-unstable,
+      opencode,
       ...
     }@inputs:
     let
@@ -172,7 +176,7 @@
                     vlang
                     ttyd
                     pavucontrol
-                    unstable.opencode
+                    opencode.packages.${pkgs.system}.default
                   ];
 
                   environment.shellAliases = {

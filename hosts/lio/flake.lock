@@ -123,11 +123,11 @@
       },
       "locked": {
         "dir": "flakes/de_plasma",
-        "lastModified": 1765157683,
-        "narHash": "sha256-E8Yu5OylcuwaMyr8YB6LD4hh9YhiDPCeeLP+IKxxotA=",
+        "lastModified": 1765385958,
+        "narHash": "sha256-ywhlFQxXFjKWkMtoAbwezTybRCPi6yCAhskdSqbgiLE=",
         "ref": "refs/heads/master",
-        "rev": "53ad6749e5ecae3f78f2a06fe5c3ae4c5900c651",
-        "revCount": 857,
+        "rev": "9d0648f53c6151e301916148b3c241e174e135a8",
+        "revCount": 864,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -273,11 +273,11 @@
     },
     "nixpkgs-unstable": {
       "locked": {
-        "lastModified": 1764950072,
-        "narHash": "sha256-BmPWzogsG2GsXZtlT+MTcAWeDK5hkbGRZTeZNW42fwA=",
+        "lastModified": 1765186076,
+        "narHash": "sha256-hM20uyap1a0M9d344I692r+ik4gTMyj60cQWO+hAYP8=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "f61125a668a320878494449750330ca58b78c557",
+        "rev": "addf7cf5f383a3101ecfba091b98d0a1263dc9b8",
         "type": "github"
       },
       "original": {
@@ -1214,6 +1214,26 @@
         "type": "github"
       }
     },
+    "opencode": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs-unstable"
+        ]
+      },
+      "locked": {
+        "lastModified": 1765384079,
+        "narHash": "sha256-1x7zd619dgB8Yzd0Jd7zLdeU/FIygy2k0pDxOBTTaNY=",
+        "owner": "sst",
+        "repo": "opencode",
+        "rev": "80d1c628181ecf0254d1b60d2930b0ac007eb333",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sst",
+        "repo": "opencode",
+        "type": "github"
+      }
+    },
     "plasma-manager": {
       "inputs": {
         "home-manager": "home-manager",
@@ -1264,6 +1284,7 @@
         "home-manager": "home-manager_2",
         "nixpkgs": "nixpkgs_3",
         "nixpkgs-unstable": "nixpkgs-unstable",
+        "opencode": "opencode",
         "ros_neovim": "ros_neovim",
         "secrets": "secrets"
       }
