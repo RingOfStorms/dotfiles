@@ -108,8 +108,17 @@ in
       services.desktopManager.plasma6.enable = true;
 
       # Portals
-      xdg.portal.enable = true;
-      xdg.portal.extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
+      xdg.portal = {
+        enable = true;
+        extraPortals = [
+          pkgs.xdg-desktop-portal-kde
+          pkgs.xdg-desktop-portal-gtk
+        ];
+        config.common.default = [
+          "kde"
+          "gtk"
+        ];
+      };
 
       # Audio / IPC
       services.pipewire = {
@@ -134,23 +143,28 @@ in
       # KDEConnect
       programs.kdeconnect.enable = true;
 
-      # Useful KDE packages
-      environment.systemPackages = with pkgs; [
-        # Core KDE tools
-        kdePackages.kde-gtk-config
-        kdePackages.konsole
-        kdePackages.dolphin
-        kdePackages.spectacle
-        kdePackages.plasma-browser-integration
-        # kdePackages.plasma-workspace-wallpapers
+       # Useful KDE packages
+       environment.systemPackages = with pkgs; [
+         # Core KDE tools
+         kdePackages.kde-gtk-config
+         kdePackages.konsole
+         kdePackages.dolphin
+         kdePackages.spectacle
+         kdePackages.plasma-browser-integration
+         # kdePackages.plasma-workspace-wallpapers
+ 
+         # Panel applets required for widgets
+         kdePackages.plasma-nm # org.kde.plasma.networkmanagement
+         kdePackages.bluedevil # org.kde.plasma.bluetooth
+         kdePackages.plasma-pa # org.kde.plasma.volume
+         kdePackages.kdeplasma-addons # extra widgets
+         kdePackages.powerdevil # power management services
+ 
+         # Wayland clipboard helpers
+         wl-clipboard
+         wl-clip-persist
+       ];
 
-        # Panel applets required for widgets
-        kdePackages.plasma-nm # org.kde.plasma.networkmanagement
-        kdePackages.bluedevil # org.kde.plasma.bluetooth
-        kdePackages.plasma-pa # org.kde.plasma.volume
-        kdePackages.kdeplasma-addons # extra widgets
-        kdePackages.powerdevil # power management services
-      ];
 
       # Keyboard like sway/i3
       console.useXkbConfig = true;
