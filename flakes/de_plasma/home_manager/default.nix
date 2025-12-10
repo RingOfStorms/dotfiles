@@ -302,6 +302,7 @@ in
 
       configFile = {
         kwalletrc.Wallet.Enabled = false;
+        plasmanotifyrc.Notifications.PopupPosition = "TopRight";
       };
     };
   };
