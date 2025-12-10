@@ -166,7 +166,7 @@ in
           lengthMode = "fit";
           height = 24;
           opacity = "translucent"; # "adaptive" | "translucent" | "opaque"
-          floating = true;
+          floating = false;
           hiding = "normalpanel";
           screen = "all";
           widgets = [
@@ -191,7 +191,7 @@ in
           lengthMode = "fit";
           height = 24;
           opacity = "translucent"; # "adaptive" | "translucent" | "opaque"
-          floating = true;
+          floating = false;
           hiding = "normalpanel";
           screen = "all";
           widgets = [
@@ -204,7 +204,7 @@ in
           lengthMode = "fit";
           height = 24;
           opacity = "translucent"; # "adaptive" | "translucent" | "opaque"
-          floating = true;
+          floating = false;
           hiding = "normalpanel";
           screen = "all";
           widgets = [
