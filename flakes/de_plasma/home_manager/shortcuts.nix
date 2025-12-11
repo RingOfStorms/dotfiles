@@ -53,7 +53,7 @@ in
         "Lock Session" = "Meta+Shift+L";
       };
 
-      "KDE Keyboard Layout Switcher"."Switch to Next Keyboard Layout" = "Meta+K";
+      # "KDE Keyboard Layout Switcher"."Switch to Next Keyboard Layout" = "Meta+K";
     };
 
     # Custom hotkey commands

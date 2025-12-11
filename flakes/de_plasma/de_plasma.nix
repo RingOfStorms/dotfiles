@@ -107,7 +107,6 @@ in
       };
       services.desktopManager.plasma6.enable = true;
 
-
       # Audio / IPC
       services.pipewire = {
         enable = true;
@@ -131,34 +130,39 @@ in
       # KDEConnect
       programs.kdeconnect.enable = true;
 
-       # Useful KDE packages
-       environment.systemPackages = with pkgs; [
-         # Core KDE tools
-         kdePackages.kde-gtk-config
-         kdePackages.konsole
-         kdePackages.dolphin
-         kdePackages.spectacle
-         kdePackages.plasma-browser-integration
-         # kdePackages.plasma-workspace-wallpapers
- 
-         # Panel applets required for widgets
-         kdePackages.plasma-nm # org.kde.plasma.networkmanagement
-         kdePackages.bluedevil # org.kde.plasma.bluetooth
-         kdePackages.plasma-pa # org.kde.plasma.volume
-         kdePackages.kdeplasma-addons # extra widgets
-         kdePackages.powerdevil # power management services
- 
-         # Wayland clipboard helpers
-         wl-clipboard
-         wl-clip-persist
-       ];
+      # Useful KDE packages
+      environment.systemPackages = with pkgs; [
+        # Core KDE tools
+        kdePackages.kde-gtk-config
+        kdePackages.konsole
+        kdePackages.dolphin
+        kdePackages.spectacle
+        kdePackages.plasma-browser-integration
+        # kdePackages.plasma-workspace-wallpapers
 
+        # Panel applets required for widgets
+        kdePackages.plasma-nm # org.kde.plasma.networkmanagement
+        kdePackages.bluedevil # org.kde.plasma.bluetooth
+        kdePackages.plasma-pa # org.kde.plasma.volume
+        kdePackages.kdeplasma-addons # extra widgets
+        kdePackages.powerdevil # power management services
 
-      # Keyboard like sway/i3
+        # Wayland clipboard helpers
+        wl-clipboard
+        wl-clip-persist
+      ];
+
       console.useXkbConfig = true;
       services.xserver.xkb = {
         layout = "us";
-        options = "caps:escape";
+      };
+      services.keyd = {
+        enable = true;
+        keyboards.default.settings = {
+          main = {
+            capslock = "escape";
+          };
+        };
       };
 
       # Home Manager modules (plasma-manager + our HM layer)
@@ -244,6 +248,30 @@ in
         GBM_BACKEND = "nvidia-drm";
         __GL_GSYNC_ALLOWED = "0";
         __GL_VRR_ALLOWED = "0";
+      };
+    })
+
+    # Japanese
+    ({
+      i18n.inputMethod = {
+        enable = true;
+        type = "fcitx5";
+        fcitx5 = {
+          waylandFrontend = true;
+          ignoreUserConfig = true;
+          addons = with pkgs; [ fcitx5-mozc ];
+          settings = {
+            inputMethod = {
+              "Groups/0" = {
+                Name = "Default";
+                "Default Layout" = "us";
+                DefaultIM = "keyboard-us";
+              };
+              "Groups/0/Items/0".Name = "keyboard-us";
+              "Groups/0/Items/1".Name = "mozc";
+            };
+          };
+        };
       };
     })
 

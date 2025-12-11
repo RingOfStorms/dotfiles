@@ -58,9 +58,7 @@ in
         keyboard = {
           layouts = [
             { layout = "us"; }
-            { layout = "jp"; }
           ];
-          options = [ "caps:escape" ];
         };
         mice = [
           # {
@@ -304,7 +302,9 @@ in
       configFile = {
         kwalletrc.Wallet.Enabled = false;
         plasmanotifyrc.Notifications.PopupPosition = "TopRight";
-
+        ksmserverrc.General.loginMode = "restorePreviousLogout";
+        kwinrc.Wayland.InputMethod =
+          "/run/current-system/sw/share/applications/org.fcitx.Fcitx5.desktop";
       };
     };
   };
