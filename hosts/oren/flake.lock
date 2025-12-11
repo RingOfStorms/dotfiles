@@ -123,11 +123,11 @@
       },
       "locked": {
         "dir": "flakes/de_plasma",
-        "lastModified": 1765399958,
-        "narHash": "sha256-IPFaDFPmIBTJEbiDkiTjBbbUb2iZmfQ8nLQAIWiIehk=",
+        "lastModified": 1765492320,
+        "narHash": "sha256-NxeIX/WPVbJZCzRuZ1Vb/dpmdIm9pQINMiJWBx4EkMU=",
         "ref": "refs/heads/master",
-        "rev": "db74abbb28b226e6ee7c9a2453a44fa127df7027",
-        "revCount": 868,
+        "rev": "73fbe39287fbc13c3ba6c5d9e9466fbcc8f86a53",
+        "revCount": 873,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
