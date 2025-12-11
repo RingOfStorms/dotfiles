@@ -58,6 +58,7 @@ in
         keyboard = {
           layouts = [
             { layout = "us"; }
+            { layout = "jp"; }
           ];
           options = [ "caps:escape" ];
         };
@@ -303,6 +304,7 @@ in
       configFile = {
         kwalletrc.Wallet.Enabled = false;
         plasmanotifyrc.Notifications.PopupPosition = "TopRight";
+
       };
     };
   };

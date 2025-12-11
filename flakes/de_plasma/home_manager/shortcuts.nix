@@ -3,7 +3,13 @@ let
   cfg = osConfig.ringofstorms.dePlasma;
   inherit (lib) mkIf;
   workspaces = builtins.genList (i: i + 1) 9;
-  workspaceLetters = [ "n" "m" "," "." "/" ];
+  workspaceLetters = [
+    "n"
+    "m"
+    ","
+    "."
+    "/"
+  ];
   kwinWorkspace = builtins.listToAttrs (
     map (i: {
       name = "Switch to Desktop ${toString i}";
@@ -12,7 +18,10 @@ let
           idx = i - 1;
         in
         if idx < builtins.length workspaceLetters then
-          [ "Meta+${toString i}" "Meta+${builtins.elemAt workspaceLetters idx}" ]
+          [
+            "Meta+${toString i}"
+            "Meta+${builtins.elemAt workspaceLetters idx}"
+          ]
         else
           "Meta+${toString i}";
     }) workspaces
@@ -43,6 +52,8 @@ in
       ksmserver = {
         "Lock Session" = "Meta+Shift+L";
       };
+
+      "KDE Keyboard Layout Switcher"."Switch to Next Keyboard Layout" = "Meta+K";
     };
 
     # Custom hotkey commands
