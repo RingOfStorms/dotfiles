@@ -263,7 +263,8 @@ in
           settings = {
             globalOptions = {
               "Hotkey/TriggerKeys" = {
-                "0" = "Alt+Space";
+                "0" = "Alt+space";
+                "1" = "Shift+space";
               };
             };
             inputMethod = {
