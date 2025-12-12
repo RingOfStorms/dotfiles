@@ -261,6 +261,11 @@ in
           ignoreUserConfig = true;
           addons = with pkgs; [ fcitx5-mozc ];
           settings = {
+            globalOptions = {
+              "Hotkey/TriggerKeys" = {
+                "0" = "Alt+Space";
+              };
+            };
             inputMethod = {
               "Groups/0" = {
                 Name = "Default";
