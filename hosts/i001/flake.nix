@@ -121,8 +121,12 @@
                         "networkmanager"
                       ];
                       openssh.authorizedKeys.keys = [
+                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH2KFSRkViT+asBTjCgA7LNP3SHnfNCW+jHbV08VUuIi nix2nix"
                       ];
                     };
+                    root.openssh.authorizedKeys.keys = [
+                      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH2KFSRkViT+asBTjCgA7LNP3SHnfNCW+jHbV08VUuIi nix2nix"
+                    ];
                   };
 
                   # Specifics for this machine

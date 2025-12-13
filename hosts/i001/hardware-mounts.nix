@@ -74,8 +74,9 @@ in
     copy_bin_and_libs ${pkgs.bcachefs-tools}/bin/bcachefs
   '';
 
+  # Method 1, prompt user for password on boot
   boot.initrd.preDeviceCommands = ''
-    ${pkgs.bcachefs-tools}/bin/bcachefs unlock /dev/disk/by-uuid/XXXX
+    ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}
   '';
 
   # # Run unlock before devices are scanned/mounted
