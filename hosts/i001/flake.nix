@@ -5,7 +5,7 @@
 
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # de_plasma.url = "path:../../../../flakes/de_plasma";
-    de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
+    # de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
     # impermanence.url = "github:nix-community/impermanence";
@@ -36,18 +36,18 @@
               inputs.home-manager.nixosModules.default
 
               inputs.ros_neovim.nixosModules.default
-              ({
-                ringofstorms-nvim.includeAllRuntimeDependencies = true;
-              })
+              # ({
+              #   ringofstorms-nvim.includeAllRuntimeDependencies = true;
+              # })
 
-              inputs.de_plasma.nixosModules.default
-              ({
-                ringofstorms.dePlasma = {
-                  enable = true;
-                  gpu.intel.enable = true;
-                  sddm.autologinUser = "luser";
-                };
-              })
+              # inputs.de_plasma.nixosModules.default
+              # ({
+              #   ringofstorms.dePlasma = {
+              #     enable = true;
+              #     gpu.intel.enable = true;
+              #     sddm.autologinUser = "luser";
+              #   };
+              # })
 
               inputs.common.nixosModules.essentials
               inputs.common.nixosModules.git
