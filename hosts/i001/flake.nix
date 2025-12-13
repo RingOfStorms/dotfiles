@@ -8,7 +8,7 @@
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
-    impermanence.url = "github:nix-community/impermanence";
+    # impermanence.url = "github:nix-community/impermanence";
   };
 
   outputs =
@@ -20,6 +20,7 @@
       system = "x86_64-linux";
       primaryUser = "luser";
       configLocation = "/home/${primaryUser}/.config/nixos-config/hosts/${configurationName}";
+      stateAndHomeVersion = "25.11";
       lib = inputs.nixpkgs.lib;
     in
     {
@@ -31,7 +32,7 @@
               inherit inputs;
             };
             modules = [
-              inputs.impermanence.nixosModules.impermanence
+              # inputs.impermanence.nixosModules.impermanence
               inputs.home-manager.nixosModules.default
 
               inputs.ros_neovim.nixosModules.default
@@ -61,7 +62,8 @@
               inputs.common.nixosModules.zsh
 
               ./hardware-configuration.nix
-              ./impermanence.nix
+              ./hardware-mounts.nix
+              # ./impermanence.nix
               (
                 {
                   config,
@@ -70,7 +72,7 @@
                   ...
                 }:
                 rec {
-                  system.stateVersion = "25.05";
+                  system.stateVersion = stateAndHomeVersion;
                   # TODO allowing password auth for now
                   services.openssh.settings.PasswordAuthentication = lib.mkForce true;
 
@@ -81,7 +83,7 @@
                     backupFileExtension = "bak";
                     # add all normal users to home manager so it applies to them
                     users = lib.mapAttrs (name: user: {
-                      home.stateVersion = "25.05";
+                      home.stateVersion = stateAndHomeVersion;
                       programs.home-manager.enable = true;
                     }) (lib.filterAttrs (name: user: user.isNormalUser or false) users.users);
 
@@ -106,10 +108,11 @@
                   networking.hostName = configurationName;
                   programs.nh.flake = configLocation;
                   nixpkgs.config.allowUnfree = true;
-                  users.mutableUsers = false;
+                  # users.mutableUsers = false;
                   users.users = {
                     "${primaryUser}" = {
                       isNormalUser = true;
+                      # hashedPassword = ""; # Use if mutable users is false above
                       initialHashedPassword = "$y$j9T$v1QhXiZMRY1pFkPmkLkdp0$451GvQt.XFU2qCAi4EQNd1BEqjM/CH6awU8gjcULps6"; # "test" password
                       extraGroups = [
                         "wheel"

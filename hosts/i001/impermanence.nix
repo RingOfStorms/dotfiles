@@ -14,6 +14,8 @@
 
       "/etc/NetworkManager/system-connections"
       "/var/lib/bluetooth"
+      "/var/lib/NetworkManager"
+      "/var/lib/iwd"
       "/var/lib/fail2ban"
     ];
     files = [
@@ -34,7 +36,6 @@
 
         # KDE
         ".config/kdeconnect"
-        ".local/kwalletd" # TODO remove? I disabled it so we can try removing something here
 
         # Chrome
         ".config/google-chrome"
