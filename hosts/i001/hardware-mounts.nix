@@ -69,15 +69,15 @@ in
   # TODO how to auto unencrypt with options...
   # - USB key
   # - TPM
-  boot.initrd.availableKernelModules = [ "bcachefs" ];
-  boot.initrd.extraUtilsCommands = ''
-    copy_bin_and_libs ${pkgs.bcachefs-tools}/bin/bcachefs
-  '';
-
-  # Method 1, prompt user for password on boot
-  boot.initrd.preDeviceCommands = ''
-    ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}
-  '';
+  # boot.initrd.availableKernelModules = [ "bcachefs" ];
+  # boot.initrd.extraUtilsCommands = ''
+  #   copy_bin_and_libs ${pkgs.bcachefs-tools}/bin/bcachefs
+  # '';
+  #
+  # # Method 1, prompt user for password on boot
+  # boot.initrd.preDeviceCommands = ''
+  #   ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}
+  # '';
 
   # # Run unlock before devices are scanned/mounted
   # boot.initrd.preDeviceCommands = ''
@@ -93,6 +93,49 @@ in
   #   # Replace /dev/disk/by-uuid/XXXX with your actual device
   #   echo "$PASSPHRASE" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock /dev/disk/by-uuid/XXXX
   # '';
+  boot.initrd.systemd.enable = true;
+  boot.supportedFilesystems = [
+    "bcachefs"
+    "vfat"
+  ];
+  boot.initrd.systemd.services.unlock-primary = {
+    description = "Unlock bcachefs root with key";
+    wantedBy = [ "initrd-root-device.target" ];
+    before = [ "initrd-root-device.target" ];
+    unitConfig.DefaultDependencies = "no";
+    serviceConfig = {
+      Type = "oneshot";
+      # Wait for USB disk; you can refine this with udev-based Wants=/Requires=
+      ExecStart = pkgs.writeShellScript "bcachefs-unlock-initrd" ''
+        set -eu
+        echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}
+        exit 0
+
+        # echo "Waiting for USB key with label SECRETKEY..."
+        # for i in $(seq 1 20); do
+        #   if [ -e /dev/disk/by-label/SECRETKEY ]; then
+        #     break
+        #   fi
+        #   sleep 0.5
+        # done
+        #
+        # if [ ! -e /dev/disk/by-label/SECRETKEY ]; then
+        #   echo "USB key not found; failing."
+        #   exit 1
+        # fi
+        #
+        # mkdir -p /mnt-key
+        # mount -t vfat /dev/disk/by-label/SECRETKEY /mnt-key
+        #
+        # echo "Unlocking bcachefs..."
+        # ${pkgs.bcachefs-tools}/bin/bcachefs unlock \
+        #   --keyfile /mnt-key/bcachefs.key \
+        #   /dev/disk/by-uuid/YOUR_BCACHEFS_UUID
+        #
+        # umount /mnt-key
+      '';
+    };
+  };
 
   # Reset root
   # TODO
