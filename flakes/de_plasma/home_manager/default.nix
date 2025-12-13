@@ -259,7 +259,7 @@ in
         general.askForConfirmationOnLogout = false;
         sessionRestore = {
           excludeApplications = [ ];
-          # restoreOpenApplicationsOnLogin = "onLastLogout";
+          # restoreOpenApplicationsOnLogin = "onLastLogout"; # restorePreviousLogout
           restoreOpenApplicationsOnLogin = "startWithEmptySession";
         };
       };
@@ -303,9 +303,7 @@ in
       configFile = {
         kwalletrc.Wallet.Enabled = false;
         plasmanotifyrc.Notifications.PopupPosition = "TopRight";
-        ksmserverrc.General.loginMode = "restorePreviousLogout";
-        kwinrc.Wayland.InputMethod =
-          "/run/current-system/sw/share/applications/org.fcitx.Fcitx5.desktop";
+        kwinrc.Wayland.InputMethod = "/run/current-system/sw/share/applications/org.fcitx.Fcitx5.desktop";
       };
     };
   };
