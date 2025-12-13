@@ -28,6 +28,7 @@ in
     device = PRIMARY;
     fsType = "bcachefs";
     options = [
+      "X-mount.mkdir"
       "X-mount.subdir=@nix"
       "relatime"
     ];
@@ -36,6 +37,7 @@ in
     device = PRIMARY;
     fsType = "bcachefs";
     options = [
+      "X-mount.mkdir"
       "X-mount.subdir=@root"
       "relatime"
     ];
@@ -44,6 +46,7 @@ in
     device = PRIMARY;
     fsType = "bcachefs";
     options = [
+      "X-mount.mkdir"
       "X-mount.subdir=@swap"
       "noatime"
     ];
@@ -53,16 +56,17 @@ in
     device = PRIMARY;
     fsType = "bcachefs";
     options = [
+      "X-mount.mkdir"
       "X-mount.subdir=@persist"
     ];
   };
 
   # SWAP
   swapDevices = [
-    {
-      device = "/.swap/swapfile";
-      size = 8 * 1024; # Creates an 8GB swap file
-    }
+    # {
+    #   device = "/.swap/swapfile";
+    #   size = 8 * 1024; # Creates an 8GB swap file
+    # }
   ];
 
   # PRIMARY unencrypt
@@ -98,6 +102,10 @@ in
     "bcachefs"
     "vfat"
   ];
+  boot.initrd.extraUtilsCommands = ''
+    copy_bin_and_libs ${pkgs.bcachefs-tools}/bin/bcachefs
+    copy_bin_and_libs ${pkgs.keyutils}/bin/keyctl
+  '';
   boot.initrd.systemd.services.unlock-primary = {
     description = "Unlock bcachefs root with key";
     wantedBy = [ "initrd-root-device.target" ];
@@ -108,34 +116,46 @@ in
       # Wait for USB disk; you can refine this with udev-based Wants=/Requires=
       ExecStart = pkgs.writeShellScript "bcachefs-unlock-initrd" ''
         set -eu
+        ${pkgs.keyutils}/bin/keyctl link @u @s
         echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}
         exit 0
-
-        # echo "Waiting for USB key with label SECRETKEY..."
-        # for i in $(seq 1 20); do
-        #   if [ -e /dev/disk/by-label/SECRETKEY ]; then
-        #     break
-        #   fi
-        #   sleep 0.5
-        # done
-        #
-        # if [ ! -e /dev/disk/by-label/SECRETKEY ]; then
-        #   echo "USB key not found; failing."
-        #   exit 1
-        # fi
-        #
-        # mkdir -p /mnt-key
-        # mount -t vfat /dev/disk/by-label/SECRETKEY /mnt-key
-        #
-        # echo "Unlocking bcachefs..."
-        # ${pkgs.bcachefs-tools}/bin/bcachefs unlock \
-        #   --keyfile /mnt-key/bcachefs.key \
-        #   /dev/disk/by-uuid/YOUR_BCACHEFS_UUID
-        #
-        # umount /mnt-key
       '';
     };
   };
+  # boot.initrd.systemd.services.unlock-primary = {
+  #   description = "Unlock bcachefs root with key";
+  #   wantedBy = [ "initrd-root-device.target" ];
+  #   before = [ "initrd-root-device.target" ];
+  #   unitConfig.DefaultDependencies = "no";
+  #   serviceConfig = {
+  #     Type = "oneshot";
+  #     # Wait for USB disk; you can refine this with udev-based Wants=/Requires=
+  #     ExecStart = pkgs.writeShellScript "bcachefs-unlock-initrd" ''
+  #       echo "Waiting for USB key with label SECRETKEY..."
+  #       for i in $(seq 1 20); do
+  #         if [ -e /dev/disk/by-label/SECRETKEY ]; then
+  #           break
+  #         fi
+  #         sleep 0.5
+  #       done
+  #
+  #       if [ ! -e /dev/disk/by-label/SECRETKEY ]; then
+  #         echo "USB key not found; failing."
+  #         exit 1
+  #       fi
+  #
+  #       mkdir -p /mnt-key
+  #       mount -t vfat /dev/disk/by-label/SECRETKEY /mnt-key
+  #
+  #       echo "Unlocking bcachefs..."
+  #       ${pkgs.bcachefs-tools}/bin/bcachefs unlock \
+  #         --keyfile /mnt-key/bcachefs.key \
+  #         /dev/disk/by-uuid/YOUR_BCACHEFS_UUID
+  #
+  #       umount /mnt-key
+  #     '';
+  #   };
+  # };
 
   # Reset root
   # TODO
