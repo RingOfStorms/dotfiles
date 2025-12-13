@@ -1,4 +1,4 @@
-{ ... }:
+{ pkgs, ... }:
 let
   BOOT = "/dev/disk/by-uuid/ABDB-2A38";
   PRIMARY = "/dev/disk/by-uuid/08610781-26d3-456f-9026-35dd4a40846f";
@@ -15,11 +15,6 @@ in
       "dmask=0022"
     ];
   };
-
-  # PRIMARY unencrypt
-  # TODO how to auto unencrypt with options...
-  # - USB key
-  # - TPM
 
   # PRIMARY
   fileSystems."/" = {
@@ -69,6 +64,34 @@ in
       size = 8 * 1024; # Creates an 8GB swap file
     }
   ];
+
+  # PRIMARY unencrypt
+  # TODO how to auto unencrypt with options...
+  # - USB key
+  # - TPM
+  boot.initrd.availableKernelModules = [ "bcachefs" ];
+  boot.initrd.extraUtilsCommands = ''
+    copy_bin_and_libs ${pkgs.bcachefs-tools}/bin/bcachefs
+  '';
+
+  boot.initrd.preDeviceCommands = ''
+    ${pkgs.bcachefs-tools}/bin/bcachefs unlock /dev/disk/by-uuid/XXXX
+  '';
+
+  # # Run unlock before devices are scanned/mounted
+  # boot.initrd.preDeviceCommands = ''
+  #   echo "Unlocking bcachefs..."
+  #   # Example: ask for a passphrase
+  #   /bin/echo -n "Bcachefs passphrase: "
+  #   /bin/stty -echo
+  #   read PASSPHRASE
+  #   /bin/stty echo
+  #   echo
+  #
+  #   # Use the passphrase to unlock the device
+  #   # Replace /dev/disk/by-uuid/XXXX with your actual device
+  #   echo "$PASSPHRASE" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock /dev/disk/by-uuid/XXXX
+  # '';
 
   # Reset root
   # TODO
