@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ lib, pkgs, ... }:
 let
   BOOT = "/dev/disk/by-uuid/ABDB-2A38";
   PRIMARY = "/dev/disk/by-uuid/08610781-26d3-456f-9026-35dd4a40846f";
@@ -24,6 +24,15 @@ in
       "X-mount.subdir=@root"
     ];
   };
+  # TODO optional?
+  # fileSystems."/.old_roots" = {
+  #   device = PRIMARY;
+  #   fsType = "bcachefs";
+  #   options = [
+  #     "X-mount.mkdir"
+  #     "X-mount.subdir=@old_roots"
+  #   ];
+  # };
   fileSystems."/nix" = {
     device = PRIMARY;
     fsType = "bcachefs";
@@ -102,26 +111,26 @@ in
     "bcachefs"
     "vfat"
   ];
-  boot.initrd.extraUtilsCommands = ''
-    copy_bin_and_libs ${pkgs.bcachefs-tools}/bin/bcachefs
-    copy_bin_and_libs ${pkgs.keyutils}/bin/keyctl
-  '';
-  boot.initrd.systemd.services.unlock-primary = {
-    description = "Unlock bcachefs root with key";
-    wantedBy = [ "initrd-root-device.target" ];
-    before = [ "initrd-root-device.target" ];
-    unitConfig.DefaultDependencies = "no";
-    serviceConfig = {
-      Type = "oneshot";
-      # Wait for USB disk; you can refine this with udev-based Wants=/Requires=
-      ExecStart = pkgs.writeShellScript "bcachefs-unlock-initrd" ''
-        set -eu
-        ${pkgs.keyutils}/bin/keyctl link @u @s
-        echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}
-        exit 0
-      '';
-    };
-  };
+  # boot.initrd.extraUtilsCommands = ''
+  #   copy_bin_and_libs ${pkgs.bcachefs-tools}/bin/bcachefs
+  #   copy_bin_and_libs ${pkgs.keyutils}/bin/keyctl
+  # '';
+  # boot.initrd.systemd.services.unlock-primary = {
+  #   description = "Unlock bcachefs root with key";
+  #   wantedBy = [ "initrd-root-device.target" ];
+  #   before = [ "initrd-root-device.target" ];
+  #   unitConfig.DefaultDependencies = "no";
+  #   serviceConfig = {
+  #     Type = "oneshot";
+  #     # Wait for USB disk; you can refine this with udev-based Wants=/Requires=
+  #     ExecStart = pkgs.writeShellScript "bcachefs-unlock-initrd" ''
+  #       set -eu
+  #       ${pkgs.keyutils}/bin/keyctl link @u @s
+  #       echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}
+  #       exit 0
+  #     '';
+  #   };
+  # };
   # boot.initrd.systemd.services.unlock-primary = {
   #   description = "Unlock bcachefs root with key";
   #   wantedBy = [ "initrd-root-device.target" ];
@@ -157,6 +166,28 @@ in
   #   };
   # };
 
+  boot.initrd.postResumeCommands = lib.mkAfter ''
+    echo "test" | bcachefs unlock ${PRIMARY}
+
+    mkdir /primary_tmp
+    mount ${PRIMARY} primary_tmp/
+    if [[ -e /primary_tmp/@root ]]; then
+        mkdir -p /primary_tmp/@old_roots
+        bcachefs set-file-option /primary_tmp/@old_roots --compression=zstd
+
+        timestamp=$(date --date="@$(stat -c %Y /primary_tmp/@root)" "+%Y-%m-%-d_%H:%M:%S")
+        bcachefs subvolume snapshot /primary_tmp/@root "/primary_tmp/@old_roots/$timestamp"
+        bcachefs subvolume delete /primary_tmp/@root
+    fi
+
+    for i in $(find /primary_tmp/old_roots/ -maxdepth 1 -mtime +30); do
+        bcachefs subvolume delete "$i"
+    done
+
+    bcachefs subvolume create /primary_tmp/@root
+    umount /primary_tmp
+  '';
+
   # Reset root
   # TODO
   # boot.initrd.systemd.services.rollback-root = {
@@ -168,7 +199,13 @@ in
   #   unitConfig.DefaultDependencies = false;
   #   serviceConfig = {
   #     Type = "oneshot";
-  #     ExecStart = "/bin/sh -c 'bcachefs subvolume delete /persist/@root; bcachefs subvolume snapshot /persist/@root-blank /persist/@root'";
+  #     ExecStart = """
+  #       ${pkgs.bcachefs-tools}/bin/bcachefs subvolume snapshot @root @snapshots/root_$()
+  #       ${pkgs.bcachefs-tools}/bin/bcachefs subvolume delete @root
+  #       ${pkgs.bcachefs-tools}/bin/bcachefs subvolume create @root
+  #       ${pkgs.bcachefs-tools}/bin/bcachefs unlock
+  #     """;
+  #     "/bin/sh -c 'bcachefs subvolume delete /persist/@root; bcachefs subvolume snapshot /persist/@root-blank /persist/@root'";
   #   };
   # };
 }
