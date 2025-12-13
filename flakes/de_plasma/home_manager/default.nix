@@ -259,7 +259,8 @@ in
         general.askForConfirmationOnLogout = false;
         sessionRestore = {
           excludeApplications = [ ];
-          restoreOpenApplicationsOnLogin = "onLastLogout";
+          # restoreOpenApplicationsOnLogin = "onLastLogout";
+          restoreOpenApplicationsOnLogin = "startWithEmptySession";
         };
       };
 
