@@ -1,7 +1,7 @@
 { ... }:
 let
-  BOOT = "/dev/disk/by-uuid/6E40-637E";
-  PRIMARY = "/dev/disk/by-uuid/ec589da0-4deb-44a3-abcb-9a7016d84519";
+  BOOT = "/dev/disk/by-uuid/ABDB-2A38";
+  PRIMARY = "/dev/disk/by-uuid/08610781-26d3-456f-9026-35dd4a40846f";
 
   USB_KEY = "/dev/disk/by-uuid/9985-EBD1";
 in
@@ -10,6 +10,10 @@ in
   fileSystems."/boot" = {
     device = BOOT;
     fsType = "vfat";
+    options = [
+      "fmask=0022"
+      "dmask=0022"
+    ];
   };
 
   # PRIMARY unencrypt
@@ -33,20 +37,20 @@ in
       "relatime"
     ];
   };
-  fileSystems."/.swap" = {
-    device = PRIMARY;
-    fsType = "bcachefs";
-    options = [
-      "X-mount.subdir=@swap"
-      "noatime"
-    ];
-  };
   fileSystems."/.snapshots" = {
     device = PRIMARY;
     fsType = "bcachefs";
     options = [
       "X-mount.subdir=@root"
       "relatime"
+    ];
+  };
+  fileSystems."/.swap" = {
+    device = PRIMARY;
+    fsType = "bcachefs";
+    options = [
+      "X-mount.subdir=@swap"
+      "noatime"
     ];
   };
   # (optional) for preservation/impermanence
