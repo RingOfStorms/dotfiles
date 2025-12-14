@@ -2,7 +2,7 @@
   description = "NixOS installer ISOs with extra bits I like";
 
   inputs = {
-    stable.url = "github:nixos/nixpkgs/nixos-25.05";
+    stable.url = "github:nixos/nixpkgs/nixos-25.11";
     unstable.url = "github:nixos/nixpkgs/nixos-unstable";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -23,7 +23,7 @@
         unstable = unstable;
       };
 
-      # Build a NixOS system that is an installation ISO with SSH enabled
+      # Build a NixOS system that is an installation ISO with SSH enabled and bcachefs
       minimal =
         { nixpkgs, system }:
         nixpkgs.lib.nixosSystem {
@@ -34,7 +34,7 @@
               { pkgs, modulesPath, ... }:
               {
                 imports = [
-                  (modulesPath + "/installer/cd-dvd/installation-cd-minimal.nix")
+                  (modulesPath + "/installer/cd-dvd/installation-cd-minimal-new-kernel-no-zfs.nix")
                 ];
 
                 nix.settings.experimental-features = [
@@ -45,7 +45,14 @@
                 environment.systemPackages = with pkgs; [
                   fastfetch
                   fzf
+
+                  # bcachefs
+                  # Required as a workaround for bug
+                  # https://github.com/NixOS/nixpkgs/issues/32279
+                  keyutils
                 ];
+                boot.supportedFilesystems = [ "bcachefs" ];
+
                 environment.shellAliases = {
                   n = "nvim";
                 };

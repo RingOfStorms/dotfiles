@@ -6,7 +6,31 @@ let
 
   USB_KEY = "/dev/disk/by-uuid/9985-EBD1";
 
-  escape = lib.mkDefault lib.escapeSystemdPath;
+  inherit (lib)
+    hasPrefix
+    removePrefix
+    removeSuffix
+    replaceStrings
+    stringToCharacters
+    ;
+  inherit (lib.strings) normalizePath escapeC;
+  # FROM  https://github.com/NixOS/nixpkgs/blob/5384341652dc01f8b01a3d227ae29e2dfbe630ba/nixos/lib/utils.nix#L101C1-L120C9
+  escapeSystemdPath =
+    s:
+    let
+      replacePrefix =
+        p: r: s:
+        (if (hasPrefix p s) then r + (removePrefix p s) else s);
+      trim = s: removeSuffix "/" (removePrefix "/" s);
+      normalizedPath = normalizePath s;
+    in
+    replaceStrings [ "/" ] [ "-" ] (
+      replacePrefix "." (escapeC [ "." ] ".") (
+        escapeC (stringToCharacters " !\"#$%&'()*+,;<=>=@[\\]^`{|}~-") (
+          if normalizedPath == "/" then normalizedPath else trim normalizedPath
+        )
+      )
+    );
 in
 {
   # BOOT
@@ -91,12 +115,12 @@ in
   # 1. Disable the automatically generated unlock services
   boot.initrd.systemd.services = {
     # the module creates services named unlock-bcachefs-<escaped-mountpoint>
-    "unlock-bcachefs-${escape "/"}".enable = false;
-    "unlock-bcachefs-${escape "/.old_roots"}".enable = false;
-    "unlock-bcachefs-${escape "/nix"}".enable = false;
-    "unlock-bcachefs-${escape "/.snapshots"}".enable = false;
-    "unlock-bcachefs-${escape "/.swap"}".enable = false;
-    "unlock-bcachefs-${escape "/persist"}".enable = false;
+    "unlock-bcachefs-${escapeSystemdPath "/"}".enable = false;
+    "unlock-bcachefs-${escapeSystemdPath "/.old_roots"}".enable = false;
+    "unlock-bcachefs-${escapeSystemdPath "/nix"}".enable = false;
+    "unlock-bcachefs-${escapeSystemdPath "/.snapshots"}".enable = false;
+    "unlock-bcachefs-${escapeSystemdPath "/.swap"}".enable = false;
+    "unlock-bcachefs-${escapeSystemdPath "/persist"}".enable = false;
 
     # 2. Your single custom unlock unit
     unlock-bcachefs-custom = {
@@ -120,7 +144,7 @@ in
         #     cat /key/bcachefs.key | ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}'
         # '';
 
-# We inline a script that roughly mimics tryUnlock + openCommand behavior,
+        # We inline a script that roughly mimics tryUnlock + openCommand behavior,
         # but uses a key file from the USB stick instead of systemd-ask-password.
         ExecStart = ''
           /bin/sh -eu

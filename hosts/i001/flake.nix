@@ -42,14 +42,14 @@
                 ringofstorms-nvim.includeAllRuntimeDependencies = true;
               })
 
-              inputs.de_plasma.nixosModules.default
-              ({
-                ringofstorms.dePlasma = {
-                  enable = true;
-                  gpu.intel.enable = true;
-                  sddm.autologinUser = "luser";
-                };
-              })
+              # inputs.de_plasma.nixosModules.default
+              # ({
+              #   ringofstorms.dePlasma = {
+              #     enable = true;
+              #     gpu.intel.enable = true;
+              #     sddm.autologinUser = "luser";
+              #   };
+              # })
 
               inputs.common.nixosModules.essentials
               inputs.common.nixosModules.git

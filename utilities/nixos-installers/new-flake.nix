@@ -1,7 +1,9 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
-    home-manager.url = "github:rycee/home-manager/release-25.05";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
+    home-manager.url = "github:rycee/home-manager/release-25.11";
+
+    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
@@ -16,8 +18,7 @@
     let
       configurationName = "MACHINE_HOST_NAME";
       primaryUser = "luser";
-      configLocation = "/etc/nixos";
-      # configLocation = "/home/${primaryUser}/.config/nixos-config/hosts/${configurationName}";
+      configLocation = "/home/${primaryUser}/.config/nixos-config/hosts/${configurationName}";
       lib = inputs.nixpkgs.lib;
     in
     {
@@ -28,6 +29,27 @@
               inherit inputs;
             };
             modules = [
+              ({
+                nixpkgs.overlays = [
+                  (final: prev: {
+                    unstable = import inputs.nixpkgs-unstable {
+                      inherit (final) system config;
+                    };
+                  })
+                ];
+              })
+
+              # Bcachefs test, #TODO move to a module
+              (
+                { pkgs, ... }:
+                {
+                  boot.supportedFilesystems = [ "bcachefs" ];
+                  environment.systemPackages = with pkgs; [
+                    keyutils
+                  ];
+                }
+              )
+
               # inputs.impermanence.nixosModules.impermanence
               inputs.home-manager.nixosModules.default
 
@@ -58,13 +80,16 @@
                 {
                   config,
                   pkgs,
-                  upkgs,
                   lib,
                   ...
                 }:
                 rec {
                   # TODO ensure matches configuration.nix, and add anything else from there that is needed
-                  system.stateVersion = "25.05";
+                  system.stateVersion = "25.11";
+                  # TODO get latest or use linuxPackages_latest
+                  # not sure what I should 
+                  # boot.kernelPackages = pkgs.linuxPackages_6_18;
+
                   # No ssh pub keys setup yet, allow password login, TODO remove
                   services.openssh.settings.PasswordAuthentication = lib.mkForce true;
 
@@ -75,7 +100,7 @@
                     backupFileExtension = "bak";
                     # add all normal users to home manager so it applies to them
                     users = lib.mapAttrs (name: user: {
-                      home.stateVersion = "25.05";
+                      home.stateVersion = "25.11";
                       programs.home-manager.enable = true;
                     }) (lib.filterAttrs (name: user: user.isNormalUser or false) users.users);
 
@@ -92,7 +117,6 @@
 
                     extraSpecialArgs = {
                       inherit inputs;
-                      inherit upkgs;
                     };
                   };
 
