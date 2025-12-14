@@ -96,9 +96,10 @@ in
   ];
 
   systemd.services = {
-    "unlock-bcachefs-${escapeSystemdPath "/"}".enable = false;
+    # NOTE that neededForBoot fs's dont end up in this list
+    # "unlock-bcachefs-${escapeSystemdPath "/"}".enable = false;
     "unlock-bcachefs-${escapeSystemdPath "/.old_roots"}".enable = false;
-    "unlock-bcachefs-${escapeSystemdPath "/nix"}".enable = false;
+    # "unlock-bcachefs-${escapeSystemdPath "/nix"}".enable = false;
     "unlock-bcachefs-${escapeSystemdPath "/.snapshots"}".enable = false;
     "unlock-bcachefs-${escapeSystemdPath "/.swap"}".enable = false;
     "unlock-bcachefs-${escapeSystemdPath "/persist"}".enable = false;
@@ -106,13 +107,14 @@ in
 
   # 1. Disable the automatically generated unlock services
   boot.initrd.systemd.services = {
+    "unlock-bcachefs-${escapeSystemdPath "/sysroot"}".enable = false; # special always on one
     # the module creates services named unlock-bcachefs-<escaped-mountpoint>
     "unlock-bcachefs-${escapeSystemdPath "/"}".enable = false;
-    "unlock-bcachefs-${escapeSystemdPath "/.old_roots"}".enable = false;
+    # "unlock-bcachefs-${escapeSystemdPath "/.old_roots"}".enable = false;
     "unlock-bcachefs-${escapeSystemdPath "/nix"}".enable = false;
-    "unlock-bcachefs-${escapeSystemdPath "/.snapshots"}".enable = false;
-    "unlock-bcachefs-${escapeSystemdPath "/.swap"}".enable = false;
-    "unlock-bcachefs-${escapeSystemdPath "/persist"}".enable = false;
+    # "unlock-bcachefs-${escapeSystemdPath "/.snapshots"}".enable = false;
+    # "unlock-bcachefs-${escapeSystemdPath "/.swap"}".enable = false;
+    # "unlock-bcachefs-${escapeSystemdPath "/persist"}".enable = false;
 
     # 2. Your single custom unlock unit
     unlock-bcachefs-custom = {
