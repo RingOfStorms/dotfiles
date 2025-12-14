@@ -106,7 +106,7 @@ in
   #   # Replace /dev/disk/by-uuid/XXXX with your actual device
   #   echo "$PASSPHRASE" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock /dev/disk/by-uuid/XXXX
   # '';
-  boot.initrd.systemd.enable = true;
+  # boot.initrd.systemd.enable = true;
   boot.supportedFilesystems = [
     "bcachefs"
     "vfat"
@@ -167,7 +167,6 @@ in
   # };
 
   boot.initrd.postResumeCommands = lib.mkAfter ''
-    keyctl link @u @s
     echo "test" | bcachefs unlock -k session ${PRIMARY}
   '';
 
