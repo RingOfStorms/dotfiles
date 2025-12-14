@@ -95,6 +95,15 @@ in
     "vfat"
   ];
 
+  systemd.services = {
+    "unlock-bcachefs-${escapeSystemdPath "/"}".enable = false;
+    "unlock-bcachefs-${escapeSystemdPath "/.old_roots"}".enable = false;
+    "unlock-bcachefs-${escapeSystemdPath "/nix"}".enable = false;
+    "unlock-bcachefs-${escapeSystemdPath "/.snapshots"}".enable = false;
+    "unlock-bcachefs-${escapeSystemdPath "/.swap"}".enable = false;
+    "unlock-bcachefs-${escapeSystemdPath "/persist"}".enable = false;
+  };
+
   # 1. Disable the automatically generated unlock services
   boot.initrd.systemd.services = {
     # the module creates services named unlock-bcachefs-<escaped-mountpoint>
