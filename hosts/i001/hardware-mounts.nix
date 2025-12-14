@@ -1,9 +1,12 @@
 { lib, pkgs, ... }:
 let
   BOOT = "/dev/disk/by-uuid/ABDB-2A38";
-  PRIMARY = "/dev/disk/by-uuid/08610781-26d3-456f-9026-35dd4a40846f";
+  PRIMARY_UUID = "08610781-26d3-456f-9026-35dd4a40846f";
+  PRIMARY = "/dev/disk/by-uuid/${PRIMARY_UUID}";
 
   USB_KEY = "/dev/disk/by-uuid/9985-EBD1";
+
+  escape = lib.mkDefault lib.escapeSystemdPath;
 in
 {
   # BOOT
@@ -79,96 +82,107 @@ in
   ];
 
   # PRIMARY unencrypt
-  # TODO how to auto unencrypt with options...
-  # - USB key
-  # - TPM
-  # boot.initrd.availableKernelModules = [ "bcachefs" ];
-  # boot.initrd.extraUtilsCommands = ''
-  #   copy_bin_and_libs ${pkgs.bcachefs-tools}/bin/bcachefs
-  # '';
-  #
-  # # Method 1, prompt user for password on boot
-  # boot.initrd.preDeviceCommands = ''
-  #   ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}
-  # '';
-
-  # # Run unlock before devices are scanned/mounted
-  # boot.initrd.preDeviceCommands = ''
-  #   echo "Unlocking bcachefs..."
-  #   # Example: ask for a passphrase
-  #   /bin/echo -n "Bcachefs passphrase: "
-  #   /bin/stty -echo
-  #   read PASSPHRASE
-  #   /bin/stty echo
-  #   echo
-  #
-  #   # Use the passphrase to unlock the device
-  #   # Replace /dev/disk/by-uuid/XXXX with your actual device
-  #   echo "$PASSPHRASE" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock /dev/disk/by-uuid/XXXX
-  # '';
-  # boot.initrd.systemd.enable = true;
+  boot.initrd.systemd.enable = true;
   boot.supportedFilesystems = [
     "bcachefs"
     "vfat"
   ];
-  boot.initrd.extraUtilsCommands = ''
-    copy_bin_and_libs ${pkgs.bcachefs-tools}/bin/bcachefs
-    copy_bin_and_libs ${pkgs.keyutils}/bin/keyctl
-  '';
-  # boot.initrd.systemd.services.unlock-primary = {
-  #   description = "Unlock bcachefs root with key";
-  #   wantedBy = [ "initrd-root-device.target" ];
-  #   before = [ "initrd-root-device.target" ];
-  #   unitConfig.DefaultDependencies = "no";
-  #   serviceConfig = {
-  #     Type = "oneshot";
-  #     # Wait for USB disk; you can refine this with udev-based Wants=/Requires=
-  #     ExecStart = pkgs.writeShellScript "bcachefs-unlock-initrd" ''
-  #       set -eu
-  #       ${pkgs.keyutils}/bin/keyctl link @u @s
-  #       echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}
-  #       exit 0
-  #     '';
-  #   };
-  # };
-  # boot.initrd.systemd.services.unlock-primary = {
-  #   description = "Unlock bcachefs root with key";
-  #   wantedBy = [ "initrd-root-device.target" ];
-  #   before = [ "initrd-root-device.target" ];
-  #   unitConfig.DefaultDependencies = "no";
-  #   serviceConfig = {
-  #     Type = "oneshot";
-  #     # Wait for USB disk; you can refine this with udev-based Wants=/Requires=
-  #     ExecStart = pkgs.writeShellScript "bcachefs-unlock-initrd" ''
-  #       echo "Waiting for USB key with label SECRETKEY..."
-  #       for i in $(seq 1 20); do
-  #         if [ -e /dev/disk/by-label/SECRETKEY ]; then
-  #           break
-  #         fi
-  #         sleep 0.5
-  #       done
-  #
-  #       if [ ! -e /dev/disk/by-label/SECRETKEY ]; then
-  #         echo "USB key not found; failing."
-  #         exit 1
-  #       fi
-  #
-  #       mkdir -p /mnt-key
-  #       mount -t vfat /dev/disk/by-label/SECRETKEY /mnt-key
-  #
-  #       echo "Unlocking bcachefs..."
-  #       ${pkgs.bcachefs-tools}/bin/bcachefs unlock \
-  #         --keyfile /mnt-key/bcachefs.key \
-  #         /dev/disk/by-uuid/YOUR_BCACHEFS_UUID
-  #
-  #       umount /mnt-key
-  #     '';
-  #   };
-  # };
 
-  boot.initrd.postResumeCommands = lib.mkAfter ''
-    echo "test" | bcachefs unlock -k session ${PRIMARY}
-  '';
+  # 1. Disable the automatically generated unlock services
+  boot.initrd.systemd.services = {
+    # the module creates services named unlock-bcachefs-<escaped-mountpoint>
+    "unlock-bcachefs-${escape "/"}".enable = false;
+    "unlock-bcachefs-${escape "/.old_roots"}".enable = false;
+    "unlock-bcachefs-${escape "/nix"}".enable = false;
+    "unlock-bcachefs-${escape "/.snapshots"}".enable = false;
+    "unlock-bcachefs-${escape "/.swap"}".enable = false;
+    "unlock-bcachefs-${escape "/persist"}".enable = false;
+
+    # 2. Your single custom unlock unit
+    unlock-bcachefs-custom = {
+      description = "Custom single bcachefs unlock for all subvolumes";
+
+      wantedBy = [ "initrd.target" ];
+      before = [ "sysroot.mount" ];
+
+      # Wait for udev so the /dev/disk/by-uuid path and the USB key appear
+      requires = [ "systemd-udev-settle.service" ];
+      after = [ "systemd-udev-settle.service" ];
+
+      serviceConfig = {
+        Type = "oneshot";
+        # NOTE: put the real password here, or better: read it from USB_KEY
+        # ExecStart = ''
+        #   /bin/sh -c 'echo "password" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}'
+        # '';
+        # ExecStart = ''
+        #   /bin/sh -c 'mount -o ro ${USB_KEY} /key && \
+        #     cat /key/bcachefs.key | ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}'
+        # '';
+
+# We inline a script that roughly mimics tryUnlock + openCommand behavior,
+        # but uses a key file from the USB stick instead of systemd-ask-password.
+        ExecStart = ''
+          /bin/sh -eu
+
+          DEVICE="${PRIMARY_UUID}"
+          UUID="${PRIMARY_UUID}" 
+
+          echo "waiting for device to appear ''${DEVICE}"
+          success=false
+          target=""
+
+          # approximate tryUnlock loop from the module
+          for try in $(seq 10); do
+            if [ -e "''${DEVICE}" ]; then
+              target="$(readlink -f "''${DEVICE}")"
+              success=true
+              break
+            else
+              # try to resolve by uuid via blkid
+              if target="$(blkid --uuid "''${UUID}" 2>/dev/null)"; then
+                success=true
+                break
+              fi
+            fi
+            echo -n "."
+            sleep 1
+          done
+          echo
+
+          if [ "''${success}" != true ]; then
+            echo "Cannot find device ''${DEVICE} (UUID=''${UUID})" >&2
+            exit 1
+          fi
+
+          DEVICE="''${target}"
+
+          # pre-check: is it encrypted / already unlocked?
+          if ! ${pkgs.bcachefs-tools}/bin/bcachefs unlock -c "''${DEVICE}" > /dev/null 2>&1; then
+            echo "Device ''${DEVICE} is not encrypted or cannot be probed with -c" >&2
+            exit 1
+          fi
+
+          # mount USB, read key, unlock – adjust paths as you like
+          # mkdir -p /key
+          # mount -o ro "${USB_KEY}" /key
+          #
+          # if [ ! -f /key/bcachefs.key ]; then
+          #   echo "Missing /key/bcachefs.key on USB; cannot unlock" >&2
+          #   umount /key || true
+          #   exit 1
+          # fi
+
+          # cat /key/bcachefs.key | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "''${DEVICE}"
+          echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "''${DEVICE}"
+
+          # umount /key || true
+
+          echo "bcachefs unlock successful for ''${DEVICE}"
+        '';
+      };
+    };
+  };
 
   # TODO this works for resetting root!
   # boot.initrd.postResumeCommands = lib.mkAfter ''
