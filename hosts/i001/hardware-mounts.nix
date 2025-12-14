@@ -89,7 +89,7 @@ in
 
   # PRIMARY unencrypt
   boot.initrd.systemd.enable = true;
-  boot.initrd.systemd.packages = [ pkgs.keyutils ];
+  boot.initrd.systemd.storePaths = [ pkgs.keyutils ];
   boot.supportedFilesystems = [
     "bcachefs"
     "vfat"
@@ -128,7 +128,7 @@ in
       # but uses a key file from the USB stick instead of systemd-ask-password.
       script = ''
         echo "Using test password..."
-        keyctl link @u @s
+        ${pkgs.keyutils}/bin/keyctl link @u @s
         echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock -k session "${PRIMARY}"
         echo "bcachefs unlock successful for ${PRIMARY}"
       '';
