@@ -89,6 +89,7 @@ in
 
   # PRIMARY unencrypt
   boot.initrd.systemd.enable = true;
+  boot.initrd.systemd.packages = [ pkgs.keyutils ];
   boot.supportedFilesystems = [
     "bcachefs"
     "vfat"
@@ -128,8 +129,7 @@ in
       script = ''
         echo "Using test password..."
         keyctl link @u @s
-        # echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock -k session "${PRIMARY}"
-        echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"
+        echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock -k session "${PRIMARY}"
         echo "bcachefs unlock successful for ${PRIMARY}"
       '';
 
