@@ -1,4 +1,8 @@
-{ lib, pkgs, ... }:
+{
+  utils,
+  pkgs,
+  ...
+}:
 let
   BOOT = "/dev/disk/by-uuid/ABDB-2A38";
   PRIMARY_UUID = "08610781-26d3-456f-9026-35dd4a40846f";
@@ -6,31 +10,7 @@ let
 
   USB_KEY = "/dev/disk/by-uuid/9985-EBD1";
 
-  inherit (lib)
-    hasPrefix
-    removePrefix
-    removeSuffix
-    replaceStrings
-    stringToCharacters
-    ;
-  inherit (lib.strings) normalizePath escapeC;
-  # FROM  https://github.com/NixOS/nixpkgs/blob/5384341652dc01f8b01a3d227ae29e2dfbe630ba/nixos/lib/utils.nix#L101C1-L120C9
-  escapeSystemdPath =
-    s:
-    let
-      replacePrefix =
-        p: r: s:
-        (if (hasPrefix p s) then r + (removePrefix p s) else s);
-      trim = s: removeSuffix "/" (removePrefix "/" s);
-      normalizedPath = normalizePath s;
-    in
-    replaceStrings [ "/" ] [ "-" ] (
-      replacePrefix "." (escapeC [ "." ] ".") (
-        escapeC (stringToCharacters " !\"#$%&'()*+,;<=>=@[\\]^`{|}~-") (
-          if normalizedPath == "/" then normalizedPath else trim normalizedPath
-        )
-      )
-    );
+  inherit (utils) escapeSystemdPath;
 in
 {
   # BOOT
