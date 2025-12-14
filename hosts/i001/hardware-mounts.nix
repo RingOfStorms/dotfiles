@@ -11,6 +11,8 @@ let
   USB_KEY = "/dev/disk/by-uuid/9985-EBD1";
 
   inherit (utils) escapeSystemdPath;
+
+  primaryDeviceUnit = "${escapeSystemdPath PRIMARY}.device";
 in
 {
   # BOOT
@@ -109,30 +111,26 @@ in
       wantedBy = [ "initrd.target" ];
       before = [ "sysroot.mount" ];
 
-      # Wait for udev so the /dev/disk/by-uuid path and the USB key appear
-      requires = [ "systemd-udev-settle.service" ];
-      after = [ "systemd-udev-settle.service" ];
+      requires = [ primaryDeviceUnit ];
+      after = [ primaryDeviceUnit ];
 
-      serviceConfig = {
-        Type = "oneshot";
-        # NOTE: put the real password here, or better: read it from USB_KEY
-        # ExecStart = ''
-        #   /bin/sh -c 'echo "password" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}'
-        # '';
-        # ExecStart = ''
-        #   /bin/sh -c 'mount -o ro ${USB_KEY} /key && \
-        #     cat /key/bcachefs.key | ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}'
-        # '';
+      # NOTE: put the real password here, or better: read it from USB_KEY
+      # ExecStart = ''
+      #   /bin/sh -c 'echo "password" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}'
+      # '';
+      # ExecStart = ''
+      #   /bin/sh -c 'mount -o ro ${USB_KEY} /key && \
+      #     cat /key/bcachefs.key | ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}'
+      # '';
 
-        # We inline a script that roughly mimics tryUnlock + openCommand behavior,
-        # but uses a key file from the USB stick instead of systemd-ask-password.
-        ExecStart = ''
-          /bin/sh -eu
-          echo "Using test password..."
-          echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"
-          echo "bcachefs unlock successful for ''${DEVICE}"
-        '';
-      };
+      # We inline a script that roughly mimics tryUnlock + openCommand behavior,
+      # but uses a key file from the USB stick instead of systemd-ask-password.
+      script = ''
+        echo "Using test password..."
+        echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"
+        echo "bcachefs unlock successful for ${PRIMARY}"
+      '';
+
     };
   };
 
