@@ -127,7 +127,8 @@ in
       # but uses a key file from the USB stick instead of systemd-ask-password.
       script = ''
         echo "Using test password..."
-        echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"
+        # keyctl link @u @s
+        echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock -k session "${PRIMARY}"
         echo "bcachefs unlock successful for ${PRIMARY}"
       '';
 
