@@ -128,60 +128,8 @@ in
         # but uses a key file from the USB stick instead of systemd-ask-password.
         ExecStart = ''
           /bin/sh -eu
-
-          DEVICE="${PRIMARY_UUID}"
-          UUID="${PRIMARY_UUID}" 
-
-          echo "waiting for device to appear ''${DEVICE}"
-          success=false
-          target=""
-
-          # approximate tryUnlock loop from the module
-          for try in $(seq 10); do
-            if [ -e "''${DEVICE}" ]; then
-              target="$(readlink -f "''${DEVICE}")"
-              success=true
-              break
-            else
-              # try to resolve by uuid via blkid
-              if target="$(blkid --uuid "''${UUID}" 2>/dev/null)"; then
-                success=true
-                break
-              fi
-            fi
-            echo -n "."
-            sleep 1
-          done
-          echo
-
-          if [ "''${success}" != true ]; then
-            echo "Cannot find device ''${DEVICE} (UUID=''${UUID})" >&2
-            exit 1
-          fi
-
-          DEVICE="''${target}"
-
-          # pre-check: is it encrypted / already unlocked?
-          if ! ${pkgs.bcachefs-tools}/bin/bcachefs unlock -c "''${DEVICE}" > /dev/null 2>&1; then
-            echo "Device ''${DEVICE} is not encrypted or cannot be probed with -c" >&2
-            exit 1
-          fi
-
-          # mount USB, read key, unlock – adjust paths as you like
-          # mkdir -p /key
-          # mount -o ro "${USB_KEY}" /key
-          #
-          # if [ ! -f /key/bcachefs.key ]; then
-          #   echo "Missing /key/bcachefs.key on USB; cannot unlock" >&2
-          #   umount /key || true
-          #   exit 1
-          # fi
-
-          # cat /key/bcachefs.key | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "''${DEVICE}"
-          echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "''${DEVICE}"
-
-          # umount /key || true
-
+          echo "Using test password..."
+          echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"
           echo "bcachefs unlock successful for ''${DEVICE}"
         '';
       };
