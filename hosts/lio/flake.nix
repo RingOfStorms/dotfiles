@@ -100,6 +100,9 @@
                   listen = "${overlayIp}:45876";
                   token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
                 };
+                services.beszel.agent.environment = {
+                  EXTRA_FILESYSTEMS = "nvme0n1__nvme1tb";
+                };
               })
 
               ./configuration.nix
