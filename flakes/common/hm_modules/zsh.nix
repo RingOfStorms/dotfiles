@@ -28,6 +28,9 @@
       bindkey "\e[4~" end-of-line
       bindkey '^[[1;5D' emacs-backward-word
       bindkey '^[[1;5C' emacs-forward-word
+      # Also support Ctrl+h/l for word movement
+      bindkey '^H' emacs-backward-word
+      bindkey '^L' emacs-forward-word
 
       # Auto completion/suggestions/and case insensitivity
       autoload -Uz compinit && compinit
