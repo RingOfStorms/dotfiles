@@ -14,7 +14,10 @@ DEVICE=sda
 parted /dev/$DEVICE -- mklabel gpt
 parted /dev/$DEVICE -- mkpart ESP fat32 1MB 2GB
 parted /dev/$DEVICE -- set 1 esp on
-# TODO make swap partition instead here? Bcachefs not working with swapfile
+
+parted /dev/$DEVICE -- mkpart PRIMARY 2GB -8GB
+parted /dev/$DEVICE -- mkpart SWAP linux-swap -8GB 100%
+
 parted /dev/$DEVICE -- mkpart PRIMARY 2GB 100%
 ```
 
@@ -31,16 +34,23 @@ mkfs.fat -F 32 -n BOOT /dev/$BOOT
 
 ```sh
 PRIMARY=sda2
-keyctl link @u @s
+# keyctl link @u @s
 bcachefs format --label=nixos --encrypted /dev/$PRIMARY
 bcachefs unlock /dev/$PRIMARY
+```
+
+- swap (optional)
+
+```sh
+SWAP=sda3
+mkswap /dev/$SWAP
+swapon /dev/$SWAP
 ```
 
 ### Setup subvolumes
 
 ```sh
 # keyctl link @u @s
-# TODO check this is it 7 or 8 for print?
 U=$(lsblk -o fsType,uuid | grep bcachefs | awk '{print $2}')
 echo $U
 mount /dev/disk/by-uuid/$U /mnt
@@ -50,8 +60,6 @@ bcachefs subvolume create /mnt/@nix
 bcachefs set-file-option /mnt/@nix --compression=zstd
 bcachefs subvolume create /mnt/@snapshots
 bcachefs set-file-option /mnt/@snapshots --compression=zstd
-bcachefs subvolume create /mnt/@swap
-bcachefs set-file-option /mnt/@swap --nocow
 bcachefs subvolume create /mnt/@persist
 
 umount /mnt
@@ -64,13 +72,12 @@ umount /mnt
 ### Mount subvolumes
 
 ```sh
-DEV_B="/dev/disk/by-uuid/"$(lsblk -o NAME,UUID | grep $BOOT | awk '{print $2}')
-DEV_P="/dev/disk/by-uuid/"$(lsblk -o NAME,UUID | grep $PRIMARY | awk '{print $2}')
+DEV_B="/dev/disk/by-uuid/"$(lsblk -o name,uuid | grep $BOOT | awk '{print $2}')
+DEV_P="/dev/disk/by-uuid/"$(lsblk -o name,uuid | grep $PRIMARY | awk '{print $2}')
 mount -t bcachefs -o X-mount.subdir=@root $DEV_P /mnt
 mount -t vfat $DEV_B /mnt/boot --mkdir
 mount -t bcachefs -o X-mount.mkdir,X-mount.subdir=@nix,relatime $DEV_P /mnt/nix
 mount -t bcachefs -o X-mount.mkdir,X-mount.subdir=@snapshots,relatime $DEV_P /mnt/.snapshots
-mount -t bcachefs -o X-mount.mkdir,X-mount.subdir=@swap,noatime $DEV_P /mnt/.swap
 mount -t bcachefs -o X-mount.mkdir,X-mount.subdir=@persist $DEV_P /mnt/persist
 ```
 
@@ -80,7 +87,7 @@ mount -t bcachefs -o X-mount.mkdir,X-mount.subdir=@persist $DEV_P /mnt/persist
 nixos-generate-config --root /mnt
 ```
 
-- Copy useful bits out into real config in repo
+- Copy useful bits out into real config in repo (primarily swap/kernel modules)
 - Run nixos-install
 
 ```sh
@@ -94,3 +101,20 @@ or from host machine? TODO haven't tried this fully
 NIX_SSHOPTS="-i /run/agenix/nix2nix" sudo nixos-rebuild switch --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/i001#i001" --target-host luser@10.12.14.157 --build-host localhost
 
 ```
+
+## USB Key
+
+```sh
+DEVICE=sdc
+parted /dev/$DEVICE -- mklabel gpt
+parted /dev/$DEVICE -- mkpart KEY fat32 1MB 100%
+DEVICE=$DEVICE"1"
+bcachefs format /dev/$DEVICE
+UUID=$(lsblk -o name,uuid | grep $DEVICE | awk '{print $2}')
+echo For setting up in config: $UUID
+# TODO mount and write key to /key
+mount -t bcachefs --mkdir /dev/$DEVICE /usb_key
+echo "test" > /usb_key/key
+umount /usb_key && rmdir /usb_key
+```
+

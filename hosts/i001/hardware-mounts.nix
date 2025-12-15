@@ -4,11 +4,11 @@
   ...
 }:
 let
+  USB_KEY = "/dev/disk/by-uuid/63a7bd87-d644-43ea-83ba-547c03012fb6";
+
   BOOT = "/dev/disk/by-uuid/ABDB-2A38";
   PRIMARY_UUID = "08610781-26d3-456f-9026-35dd4a40846f";
   PRIMARY = "/dev/disk/by-uuid/${PRIMARY_UUID}";
-
-  USB_KEY = "/dev/disk/by-uuid/9985-EBD1";
 
   inherit (utils) escapeSystemdPath;
 
@@ -60,15 +60,6 @@ in
       "relatime"
     ];
   };
-  fileSystems."/.swap" = {
-    device = PRIMARY;
-    fsType = "bcachefs";
-    options = [
-      "X-mount.mkdir"
-      "X-mount.subdir=@swap"
-      "noatime"
-    ];
-  };
   # (optional) for preservation/impermanence
   fileSystems."/persist" = {
     device = PRIMARY;
@@ -87,7 +78,7 @@ in
     # }
   ];
 
-  # PRIMARY unencrypt
+  # PRIMARY Bcache utilities
   boot.initrd.systemd.enable = true;
   boot.supportedFilesystems = [
     "bcachefs"
@@ -123,17 +114,20 @@ in
       #   /bin/sh -c 'echo "password" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}'
       # '';
       # ExecStart = ''
-      #   /bin/sh -c 'mount -o ro ${USB_KEY} /key && \
+      #   /bin/sh -c 'mount --mkdir -o ro ${USB_KEY} /key  && \
       #     cat /key/bcachefs.key | ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}'
       # '';
 
       # We inline a script that roughly mimics tryUnlock + openCommand behavior,
       # but uses a key file from the USB stick instead of systemd-ask-password.
       script = ''
-        echo "Using test password..."
-        echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"
+        echo "Using USB key for bcachefs unlock: ${USB_KEY}"
+        mount -t bcachefs --mkdir "${USB_KEY}" /usb_key
+        ${pkgs.bcachefs-tools}/bin/bcachefs unlock -f /usb_key/key "${PRIMARY}"
         echo "bcachefs unlock successful for ${PRIMARY}"
       '';
+      # Hard code password (useless in real env)
+      # echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"
 
     };
   };
