@@ -6,10 +6,10 @@
   ...
 }:
 let
-  BOOT = "/dev/disk/by-uuid/B053-15C4";
-  PRIMARY = "/dev/disk/by-uuid/983e060c-e939-4abb-8703-137930bceaed";
+  BOOT = "/dev/disk/by-uuid/438E-D948";
+  PRIMARY = "/dev/disk/by-uuid/91768dc5-ad41-42ce-bd46-0652580db180";
 
-  SWAP = "/dev/disk/by-uuid/e4b53a74-6fde-4e72-b925-be3a249e37be";
+  SWAP = "/dev/disk/by-uuid/b88c02e8-715d-4ad1-b82e-eb31caea256e";
 
   USB_KEY = "/dev/disk/by-uuid/63a7bd87-d644-43ea-83ba-547c03012fb6";
 

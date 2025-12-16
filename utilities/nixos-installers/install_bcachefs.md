@@ -17,7 +17,7 @@ parted /dev/$DEVICE -- set 1 esp on
 
 parted /dev/$DEVICE -- mkpart PRIMARY 2GB -8GB
 parted /dev/$DEVICE -- mkpart SWAP linux-swap -8GB 100%
-
+# OR
 parted /dev/$DEVICE -- mkpart PRIMARY 2GB 100%
 ```
 
