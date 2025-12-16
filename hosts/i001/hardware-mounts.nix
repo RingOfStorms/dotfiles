@@ -225,7 +225,7 @@ lib.mkMerge [
     # TODO rotate root
   }
   # Reset root for erase your darlings/impermanence/preservation
-  (lib.mkIf false {
+  (lib.mkIf true {
     boot.initrd.systemd.services.bcachefs-reset-root = {
       description = "Reset bcachefs root subvolume before pivot";
 
@@ -261,45 +261,56 @@ lib.mkMerge [
       };
 
       script = ''
-        # 1. Safety check: Try to see if we can read the device. 
-        # If the unlock script failed (or user hasn't typed password yet), this mount will fail.
-        # We should probably exit non-zero to stop the boot or loop here?
-        # Actually, if we fail here, the boot continues to sysroot.mount, which will prompt for password,
-        # BUT we will have skipped the reset. This is a trade-off.
+        # 1. Enable Debugging
+        # This will print every command to the journal so you can see exactly where it fails
+        # View logs with: journalctl -u bcachefs-reset-root -b
+        set -x
+
+        # 2. Define Cleanup Trap
+        # This guarantees unmount runs even if the script crashes or fails halfway
+        cleanup() {
+            if mountpoint -q /primary_tmp; then
+                echo "Cleaning up: Unmounting /primary_tmp"
+                umount /primary_tmp
+            fi
+        }
+        trap cleanup EXIT
 
         mkdir -p /primary_tmp
 
-        # Try mounting. If locked, this fails.
+        # 3. Mount
+        # If this fails, we exit 0 to allow the boot to proceed (skipping reset)
         if ! mount "${PRIMARY}" /primary_tmp; then
-            echo "bcachefs-reset-root: Failed to mount ${PRIMARY}. Drive might be locked."
-            echo "Skipping root reset."
+            echo "Failed to mount ${PRIMARY}. Drive locked or unavailable."
             exit 0
         fi
 
-        # 2. Perform the Snapshot & Reset
+        # 4. Reset Logic
         if [[ -e /primary_tmp/@root ]]; then
+          # Ensure parent dirs exist
           mkdir -p /primary_tmp/@snapshots/old_roots
           
-          # Format: YYYY-MM-DD_HH:MM:SS
-          timestamp=$(date --date="@$(stat -c %Y /primary_tmp/@root)" "+%Y-%m-%-d_%H:%M:%S")
+          # Use safe date format (underscores instead of colons) to avoid filesystem quirks
+          timestamp=$(date --date="@$(stat -c %Y /primary_tmp/@root)" "+%Y-%m-%d_%H-%M-%S")
           
-          echo "Snapshotting old root to @snapshots/old_roots/$timestamp"
+          echo "Snapshotting @root to @snapshots/old_roots/$timestamp"
           bcachefs subvolume snapshot /primary_tmp/@root "/primary_tmp/@snapshots/old_roots/$timestamp"
           
           echo "Deleting current @root"
           bcachefs subvolume delete /primary_tmp/@root
 
           # Cleanup old snapshots (>30 days)
-          echo "Cleaning up old snapshots..."
-          find /primary_tmp/@snapshots/old_roots/ -maxdepth 1 -mtime +30 -print0 | xargs -0 -r -I {} sh -c 'echo "Deleting {}"; bcachefs subvolume delete "{}"'
+          # We use 'find' with -print0 and 'xargs -0 -r' to handle filenames safely
+          echo "Pruning old snapshots..."
+          find /primary_tmp/@snapshots/old_roots/ -maxdepth 1 -mtime +30 -print0 | \
+            xargs -0 -r -I {} sh -c 'echo "Deleting {}"; bcachefs subvolume delete "{}"'
         fi
 
-        # 3. Create fresh root
-        echo "Creating fresh @root subvolume"
+        # 5. Create Fresh Root
+        echo "Creating empty @root subvolume"
         bcachefs subvolume create /primary_tmp/@root
 
-        # 4. Cleanup
-        umount /primary_tmp
+        # Trap will handle the unmount automatically on exit
       '';
     };
   })

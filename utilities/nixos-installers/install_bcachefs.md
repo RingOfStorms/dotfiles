@@ -94,6 +94,12 @@ nixos-install --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=
 # nh os switch "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/i001#i001"
 ```
 
+```sh
+cd ~/.config
+git clone https://git.joshuabell.xyz/ringofstorms/dotfiles nixos-config
+cd ~/.config/nixos-config/hosts/i001
+```
+
 or from host machine? TODO haven't tried this fully
 
 ```sh
