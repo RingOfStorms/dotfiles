@@ -6,8 +6,8 @@
   ...
 }:
 let
-  BOOT = "/dev/disk/by-uuid/ABDB-2A38";
-  PRIMARY = "/dev/disk/by-uuid/08610781-26d3-456f-9026-35dd4a40846f";
+  BOOT = "/dev/disk/by-uuid/B053-15C4";
+  PRIMARY = "/dev/disk/by-uuid/983e060c-e939-4abb-8703-137930bceaed";
 
   SWAP = "/dev/disk/by-uuid/e4b53a74-6fde-4e72-b925-be3a249e37be";
 

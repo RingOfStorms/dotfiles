@@ -87,7 +87,7 @@
                   # TODO ensure matches configuration.nix, and add anything else from there that is needed
                   system.stateVersion = "25.11";
                   # TODO get latest or use linuxPackages_latest
-                  # not sure what I should 
+                  # not sure what I should
                   # boot.kernelPackages = pkgs.linuxPackages_6_18;
 
                   # No ssh pub keys setup yet, allow password login, TODO remove
@@ -134,7 +134,8 @@
                         "networkmanager"
                       ];
                       openssh.authorizedKeys.keys = [
-                        # TODO set a public key for access
+                        # TODO setup public keys
+                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH2KFSRkViT+asBTjCgA7LNP3SHnfNCW+jHbV08VUuIi nix2nix"
                       ];
                     };
                   };

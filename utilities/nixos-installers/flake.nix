@@ -74,10 +74,16 @@
                 users.users.nixos = {
                   password = "password";
                   initialHashedPassword = lib.mkForce null;
+                  openssh.authorizedKeys.keys = [
+                    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH2KFSRkViT+asBTjCgA7LNP3SHnfNCW+jHbV08VUuIi nix2nix"
+                  ];
                 };
                 users.users.root = {
                   password = "password";
                   initialHashedPassword = lib.mkForce null;
+                  openssh.authorizedKeys.keys = [
+                    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH2KFSRkViT+asBTjCgA7LNP3SHnfNCW+jHbV08VUuIi nix2nix"
+                  ];
                 };
               }
             )
