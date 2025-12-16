@@ -122,3 +122,22 @@ echo "test" > /usb_key/key
 umount /usb_key && rmdir /usb_key
 ```
 
+
+
+## TODO remove notes
+
+```sh
+BOOT=sda1
+PRIMARY=sda2
+SWAP=sda3
+swapon /dev/$SWAP
+keyctl link @u @s
+DEV_B="/dev/disk/by-uuid/"$(lsblk -o name,uuid | grep $BOOT | awk '{print $2}')
+DEV_P="/dev/disk/by-uuid/"$(lsblk -o name,uuid | grep $PRIMARY | awk '{print $2}')
+mount -t bcachefs -o X-mount.subdir=@root $DEV_P /mnt
+mount -t vfat $DEV_B /mnt/boot --mkdir
+mount -t bcachefs -o X-mount.mkdir,X-mount.subdir=@nix,relatime $DEV_P /mnt/nix
+mount -t bcachefs -o X-mount.mkdir,X-mount.subdir=@snapshots,relatime $DEV_P /mnt/.snapshots
+mount -t bcachefs -o X-mount.mkdir,X-mount.subdir=@persist $DEV_P /mnt/persist
+nixos-install --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/i001#i001"
+```
