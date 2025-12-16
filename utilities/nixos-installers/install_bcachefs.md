@@ -99,7 +99,6 @@ or from host machine? TODO haven't tried this fully
 
 ```sh
 NIX_SSHOPTS="-i /run/agenix/nix2nix" sudo nixos-rebuild switch --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/i001#i001" --target-host luser@10.12.14.157 --build-host localhost
-
 ```
 
 ## USB Key

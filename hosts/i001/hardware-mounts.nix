@@ -1,6 +1,8 @@
 {
+  config,
   utils,
   pkgs,
+  lib,
   ...
 }:
 let
@@ -14,93 +16,124 @@ let
 
   primaryDeviceUnit = "${escapeSystemdPath PRIMARY}.device";
 in
-{
-  # BOOT
-  fileSystems."/boot" = {
-    device = BOOT;
-    fsType = "vfat";
-    options = [
-      "fmask=0022"
-      "dmask=0022"
-    ];
-  };
+lib.mkMerge [
+  # Main filesystems
+  {
+    # BOOT
+    fileSystems."/boot" = {
+      device = BOOT;
+      fsType = "vfat";
+      options = [
+        "fmask=0022"
+        "dmask=0022"
+      ];
+    };
 
-  # PRIMARY
-  fileSystems."/" = {
-    device = PRIMARY;
-    fsType = "bcachefs";
-    options = [
-      "X-mount.subdir=@root"
-    ];
-  };
-  fileSystems."/.old_roots" = {
-    device = PRIMARY;
-    fsType = "bcachefs";
-    options = [
-      "nofail" # this may not exist yet just skip it
-      "X-mount.mkdir"
-      "X-mount.subdir=@old_roots"
-    ];
-  };
-  fileSystems."/nix" = {
-    device = PRIMARY;
-    fsType = "bcachefs";
-    options = [
-      "X-mount.mkdir"
-      "X-mount.subdir=@nix"
-      "relatime"
-    ];
-  };
-  fileSystems."/.snapshots" = {
-    device = PRIMARY;
-    fsType = "bcachefs";
-    options = [
-      "X-mount.mkdir"
-      "X-mount.subdir=@root"
-      "relatime"
-    ];
-  };
-  # (optional) for preservation/impermanence
-  fileSystems."/persist" = {
-    device = PRIMARY;
-    fsType = "bcachefs";
-    options = [
-      "X-mount.mkdir"
-      "X-mount.subdir=@persist"
-    ];
-  };
-
+    # PRIMARY
+    fileSystems."/" = {
+      device = PRIMARY;
+      fsType = "bcachefs";
+      options = [
+        "X-mount.subdir=@root"
+      ];
+    };
+    fileSystems."/.old_roots" = {
+      device = PRIMARY;
+      fsType = "bcachefs";
+      options = [
+        "nofail" # this may not exist yet just skip it
+        "X-mount.mkdir"
+        "X-mount.subdir=@old_roots"
+      ];
+    };
+    fileSystems."/nix" = {
+      device = PRIMARY;
+      fsType = "bcachefs";
+      options = [
+        "X-mount.mkdir"
+        "X-mount.subdir=@nix"
+        "relatime"
+      ];
+    };
+    fileSystems."/.snapshots" = {
+      device = PRIMARY;
+      fsType = "bcachefs";
+      options = [
+        "X-mount.mkdir"
+        "X-mount.subdir=@root"
+        "relatime"
+      ];
+    };
+    # (optional) for preservation/impermanence
+    fileSystems."/persist" = {
+      device = PRIMARY;
+      fsType = "bcachefs";
+      options = [
+        "X-mount.mkdir"
+        "X-mount.subdir=@persist"
+      ];
+    };
+  }
   # SWAP
-  swapDevices = [
-    # {
-    #   device = "/.swap/swapfile";
-    #   size = 8 * 1024; # Creates an 8GB swap file
-    # }
-  ];
+  {
+    swapDevices = [
+      # {
+      #   device = "/.swap/swapfile";
+      #   size = 8 * 1024; # Creates an 8GB swap file
+      # }
+    ];
+  }
+  # Disable bcachefs built in password prompts for all mounts (which asks for every single subdir mount above
+  {
+    boot.initrd.systemd.enable = true;
 
-  # PRIMARY Bcache utilities
-  boot.initrd.systemd.enable = true;
-  boot.supportedFilesystems = [
-    "bcachefs"
-    "vfat"
-  ];
+    # https://github.com/NixOS/nixpkgs/blob/6cdf2f456a57164282ede1c97fc5532d9dba1ee0/nixos/modules/tasks/filesystems/bcachefs.nix#L254-L259
+    systemd.services =
+      # let
+      #   isSystemdNonBootBcache = v: (v.fsType == "bcachefs") && (!utils.fsNeededForBoot v);
+      #   bcacheNonBoots = lib.filterAttrs (k: v: isSystemdNonBootBcache v) config.fileSystems;
+      # in
+      # (lib.mapAttrs (k: v: { enable = false; }) bcacheNonBoots);
+      {
+        # NOTE that neededForBoot fs's dont end up in this list
+        "unlock-bcachefs-${escapeSystemdPath "/.old_roots"}".enable = false;
+        "unlock-bcachefs-${escapeSystemdPath "/.snapshots"}".enable = false;
+        "unlock-bcachefs-${escapeSystemdPath "/.swap"}".enable = false;
+        "unlock-bcachefs-${escapeSystemdPath "/persist"}".enable = false;
+      };
 
-  systemd.services = {
-    # NOTE that neededForBoot fs's dont end up in this list
-    "unlock-bcachefs-${escapeSystemdPath "/.old_roots"}".enable = false;
-    "unlock-bcachefs-${escapeSystemdPath "/.snapshots"}".enable = false;
-    "unlock-bcachefs-${escapeSystemdPath "/.swap"}".enable = false;
-    "unlock-bcachefs-${escapeSystemdPath "/persist"}".enable = false;
-  };
+    # https://github.com/NixOS/nixpkgs/blob/6cdf2f456a57164282ede1c97fc5532d9dba1ee0/nixos/modules/tasks/filesystems/bcachefs.nix#L291
+    boot.initrd.systemd.services =
+      # let
+      #   isSystemdBootBcache = v: (v.fsType == "bcachefs") && (utils.fsNeededForBoot v);
+      #   bcacheBoots = lib.filterAttrs (k: v: isSystemdBootBcache v) config.fileSystems;
+      # in
+      # (lib.mapAttrs (k: v: { enable = false; }) bcacheBoots);
+      {
+        "unlock-bcachefs-${escapeSystemdPath "/sysroot"}".enable = false;
+        "unlock-bcachefs-${escapeSystemdPath "/"}".enable = false;
+        "unlock-bcachefs-${escapeSystemdPath "/nix"}".enable = false;
+      };
+  }
+  # Bcachefs auto decryption
+  {
+    boot.supportedFilesystems = [
+      "bcachefs"
+    ];
 
-  # 1. Disable the automatically generated unlock services
-  boot.initrd.systemd.services = {
-    "unlock-bcachefs-${escapeSystemdPath "/sysroot"}".enable = false; # special always on one
-    "unlock-bcachefs-${escapeSystemdPath "/"}".enable = false;
-    "unlock-bcachefs-${escapeSystemdPath "/nix"}".enable = false;
-
-    # 2. Your single custom unlock unit
-    unlock-bcachefs-custom = {
+    # boot.initrd.systemd.mounts = [
+    #   {
+    #     what = USB_KEY;
+    #     type = "bcachefs";
+    #     where = "/usb_key";
+    #     options = "ro";
+    #     description = "key";
+    #     wantedBy = [
+    #       "initrd.target"
+    #     ];
+    #   }
+    # ];
+    boot.initrd.systemd.services.unlock-bcachefs-custom = {
       description = "Custom single bcachefs unlock for all subvolumes";
 
       wantedBy = [ "initrd.target" ];
@@ -108,50 +141,79 @@ in
 
       requires = [ primaryDeviceUnit ];
       after = [ primaryDeviceUnit ];
-
-      # NOTE: put the real password here, or better: read it from USB_KEY
-      # ExecStart = ''
-      #   /bin/sh -c 'echo "password" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}'
-      # '';
-      # ExecStart = ''
-      #   /bin/sh -c 'mount --mkdir -o ro ${USB_KEY} /key  && \
-      #     cat /key/bcachefs.key | ${pkgs.bcachefs-tools}/bin/bcachefs unlock ${PRIMARY}'
-      # '';
-
-      # We inline a script that roughly mimics tryUnlock + openCommand behavior,
-      # but uses a key file from the USB stick instead of systemd-ask-password.
       script = ''
-        echo "Using USB key for bcachefs unlock: ${USB_KEY}"
-        mount -t bcachefs --mkdir "${USB_KEY}" /usb_key
-        ${pkgs.bcachefs-tools}/bin/bcachefs unlock -f /usb_key/key "${PRIMARY}"
+        echo "Using test password..."
+        echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"
         echo "bcachefs unlock successful for ${PRIMARY}"
       '';
-      # Hard code password (useless in real env)
-      # echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"
-
+      # script = ''
+      #   echo "Using USB key for bcachefs unlock: ${USB_KEY}"
+      #
+      #   echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"
+      #   echo "done...."
+      #   exit 0
+      #
+      #   # only try mount if the node exists
+      #   if [ ! -e "${USB_KEY}" ]; then
+      #     echo "USB key device ${USB_KEY} not present in initrd"
+      #     exit 1
+      #   fi
+      #   ${pkgs.bcachefs-tools}/bin/bcachefs unlock -f /usb_key/key "${PRIMARY}"
+      #   echo "bcachefs unlock successful for ${PRIMARY}"
+      # '';
     };
-  };
 
-  # TODO this works for resetting root!
-  # boot.initrd.postResumeCommands = lib.mkAfter ''
-  #   echo "test" | bcachefs unlock ${PRIMARY}
-  #
-  #   mkdir /primary_tmp
-  #   mount ${PRIMARY} primary_tmp/
-  #   if [[ -e /primary_tmp/@root ]]; then
-  #       mkdir -p /primary_tmp/@old_roots
-  #       bcachefs set-file-option /primary_tmp/@old_roots --compression=zstd
-  #
-  #       timestamp=$(date --date="@$(stat -c %Y /primary_tmp/@root)" "+%Y-%m-%-d_%H:%M:%S")
-  #       bcachefs subvolume snapshot /primary_tmp/@root "/primary_tmp/@old_roots/$timestamp"
-  #       bcachefs subvolume delete /primary_tmp/@root
-  #   fi
-  #
-  #   for i in $(find /primary_tmp/old_roots/ -maxdepth 1 -mtime +30); do
-  #       bcachefs subvolume delete "$i"
-  #   done
-  #
-  #   bcachefs subvolume create /primary_tmp/@root
-  #   umount /primary_tmp
-  # '';
-}
+    # TODO rotate root
+  }
+  # Reset root for erase your darlings/impermanence/preservation
+  {
+    # boot.initrd.systemd.services.bcachefs-reset-root = {
+    #   description = "Reset bcachefs root subvolume before pivot";
+    #   wantedBy = [ "initrd.target" ];
+    #
+    #   after = [
+    #     "initrd-root-device.target"
+    #     "cryptsetup.target"
+    #     "unlock-bcachefs-custom"
+    #   ];
+    #   requires = [ primaryDeviceUnit ];
+    #
+    #   serviceConfig = {
+    #     Type = "oneshot";
+    #     # initrd has a minimal PATH; set one explicitly
+    #     Environment = "PATH=/bin:/sbin:/usr/bin:/usr/sbin";
+    #     # If tools are in /usr, this helps ensure it's in the initrd
+    #     # (you may also need environment.systemPackages + boot.initrd.includeDefaultModules)
+    #     ExecStart = pkgs.writeShellScript "bcachefs-reset-root" ''
+    #       set -euo pipefail
+    #
+    #       PRIMARY=${PRIMARY}
+    #
+    #       echo "Unlocking bcachefs volume ${PRIMARY}..."
+    #       echo "test" | bcachefs unlock "''${PRIMARY}"
+    #
+    #       mkdir -p /primary_tmp
+    #       mount "''${PRIMARY}" /primary_tmp
+    #
+    #       if [[ -e /primary_tmp/@root ]]; then
+    #         mkdir -p /primary_tmp/@old_roots
+    #         bcachefs set-file-option /primary_tmp/@old_roots --compression=zstd
+    #
+    #         timestamp=$(date --date="@$(stat -c %Y /primary_tmp/@root)" "+%Y-%m-%-d_%H:%M:%S")
+    #         bcachefs subvolume snapshot /primary_tmp/@root "/primary_tmp/@old_roots/$timestamp"
+    #         bcachefs subvolume delete /primary_tmp/@root
+    #
+    #         # Cleanup old snapshots (>30 days)
+    #         # Note: path was /primary_tmp/old_roots in your snippet; using @old_roots for consistency
+    #         for i in $(find /primary_tmp/@old_roots/ -maxdepth 1 -mtime +30); do
+    #           bcachefs subvolume delete "$i"
+    #         done
+    #       fi
+    #
+    #       bcachefs subvolume create /primary_tmp/@root
+    #       umount /primary_tmp
+    #     '';
+    #   };
+    # };
+  }
+]
