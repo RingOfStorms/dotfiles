@@ -260,9 +260,9 @@ lib.mkMerge [
           lib.makeBinPath [
             pkgs.coreutils
             pkgs.util-linux
-            # pkgs.findutils
-            # pkgs.gawk
-            # pkgs.bcachefs-tools
+            pkgs.findutils
+            pkgs.gawk
+            pkgs.bcachefs-tools
           ]
         }:/bin:/sbin";
       };
