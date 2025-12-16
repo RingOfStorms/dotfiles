@@ -84,68 +84,133 @@ lib.mkMerge [
     ];
   }
   # Disable bcachefs built in password prompts for all mounts (which asks for every single subdir mount above
-  {
-    boot.initrd.systemd.enable = true;
-
-    # https://github.com/NixOS/nixpkgs/blob/6cdf2f456a57164282ede1c97fc5532d9dba1ee0/nixos/modules/tasks/filesystems/bcachefs.nix#L254-L259
-    systemd.services =
-      # let
-      #   isSystemdNonBootBcache = v: (v.fsType == "bcachefs") && (!utils.fsNeededForBoot v);
-      #   bcacheNonBoots = lib.filterAttrs (k: v: isSystemdNonBootBcache v) config.fileSystems;
-      # in
-      # (lib.mapAttrs (k: v: { enable = false; }) bcacheNonBoots);
-      {
-        # NOTE that neededForBoot fs's dont end up in this list
-        "unlock-bcachefs-${escapeSystemdPath "/.old_roots"}".enable = false;
-        "unlock-bcachefs-${escapeSystemdPath "/.snapshots"}".enable = false;
-        "unlock-bcachefs-${escapeSystemdPath "/.swap"}".enable = false;
-        "unlock-bcachefs-${escapeSystemdPath "/persist"}".enable = false;
+  (
+    let
+      disableFs = fs: {
+        name = "unlock-bcachefs-${utils.escapeSystemdPath fs.mountPoint}";
+        value = {
+          enable = false;
+        };
       };
+    in
+    {
+      boot.initrd.systemd.enable = true;
 
-    # https://github.com/NixOS/nixpkgs/blob/6cdf2f456a57164282ede1c97fc5532d9dba1ee0/nixos/modules/tasks/filesystems/bcachefs.nix#L291
-    boot.initrd.systemd.services =
-      # let
-      #   isSystemdBootBcache = v: (v.fsType == "bcachefs") && (utils.fsNeededForBoot v);
-      #   bcacheBoots = lib.filterAttrs (k: v: isSystemdBootBcache v) config.fileSystems;
-      # in
-      # (lib.mapAttrs (k: v: { enable = false; }) bcacheBoots);
-      {
-        "unlock-bcachefs-${escapeSystemdPath "/sysroot"}".enable = false;
-        "unlock-bcachefs-${escapeSystemdPath "/"}".enable = false;
-        "unlock-bcachefs-${escapeSystemdPath "/nix"}".enable = false;
-      };
-  }
+      # https://github.com/NixOS/nixpkgs/blob/6cdf2f456a57164282ede1c97fc5532d9dba1ee0/nixos/modules/tasks/filesystems/bcachefs.nix#L254-L259
+      systemd.services =
+        let
+          isSystemdNonBootBcache = fs: (fs.fsType == "bcachefs") && (!utils.fsNeededForBoot fs);
+          bcacheNonBoots = lib.filterAttrs (k: fs: isSystemdNonBootBcache fs) config.fileSystems;
+        in
+        (lib.mapAttrs' (k: disableFs) bcacheNonBoots);
+      # The above auto generates these...
+      # {
+      #   "unlock-bcachefs-${escapeSystemdPath "/.old_roots"}".enable = false;
+      #   "unlock-bcachefs-${escapeSystemdPath "/.snapshots"}".enable = false;
+      #   "unlock-bcachefs-${escapeSystemdPath "/.swap"}".enable = false;
+      #   "unlock-bcachefs-${escapeSystemdPath "/persist"}".enable = false;
+      # };
+
+      # https://github.com/NixOS/nixpkgs/blob/6cdf2f456a57164282ede1c97fc5532d9dba1ee0/nixos/modules/tasks/filesystems/bcachefs.nix#L291
+      boot.initrd.systemd.services =
+        let
+          isSystemdBootBcache = fs: (fs.fsType == "bcachefs") && (utils.fsNeededForBoot fs);
+          bcacheBoots = lib.filterAttrs (k: fs: isSystemdBootBcache fs) config.fileSystems;
+        in
+        (lib.mapAttrs' (k: disableFs) bcacheBoots);
+      # same with that above
+      # {
+      #   "unlock-bcachefs-${escapeSystemdPath "/sysroot"}".enable = false;
+      #   "unlock-bcachefs-${escapeSystemdPath "/"}".enable = false;
+      #   "unlock-bcachefs-${escapeSystemdPath "/nix"}".enable = false;
+      # };
+    }
+  )
   # Bcachefs auto decryption
   {
     boot.supportedFilesystems = [
       "bcachefs"
     ];
 
-    # boot.initrd.systemd.mounts = [
-    #   {
-    #     what = USB_KEY;
-    #     type = "bcachefs";
-    #     where = "/usb_key";
-    #     options = "ro";
-    #     description = "key";
-    #     wantedBy = [
-    #       "initrd.target"
-    #     ];
-    #   }
-    # ];
+    boot.initrd.systemd.mounts = [
+      {
+        what = USB_KEY;
+        type = "bcachefs";
+        where = "/usb_key";
+        options = "ro";
+        description = "key";
+        wantedBy = [
+          "initrd.target"
+          "initrd-root-fs.target"
+        ];
+      }
+    ];
+    boot.initrd.systemd.services."sysroot.mount" = {
+      unitConfig = {
+        Requires = [ "unlock-bcachefs-custom.service" ];
+        After = [ "unlock-bcachefs-custom.service" ];
+      };
+    };
     boot.initrd.systemd.services.unlock-bcachefs-custom = {
       description = "Custom single bcachefs unlock for all subvolumes";
 
-      wantedBy = [ "initrd.target" ];
-      before = [ "sysroot.mount" ];
+      # Make this part of the root-fs chain, not just initrd.target
+      wantedBy = [
+        # "initrd.target"
+        "sysroot.mount"
+        "initrd-root-fs.target"
+      ];
+      # Stronger than wantedBy if you want it absolutely required:
+      requiredBy = [
+        "sysroot.mount"
+        "initrd-root-fs.target"
+      ];
 
-      requires = [ primaryDeviceUnit ];
-      after = [ primaryDeviceUnit ];
+      before = [
+        "sysroot.mount"
+        "initrd-root-fs.target"
+      ];
+      requires = [
+        "usb_key.mount"
+        primaryDeviceUnit
+      ];
+      after = [
+        "usb_key.mount"
+        primaryDeviceUnit
+        "initrd-root-device.target"
+      ];
+
+      # script = ''
+      #   echo "Using test password..."
+      #
+      #   mkdir -p /usb_key
+      #   # Wait for USB device (optional, to handle slow init)
+      #   for i in $(seq 1 50); do
+      #     if [ -b "${USB_KEY}" ]; then
+      #       break
+      #     fi
+      #     echo "Waiting for USB key ${USB_KEY}..."
+      #     sleep 0.2
+      #   done
+      #
+      #   if [ ! -b "${USB_KEY}" ]; then
+      #     echo "USB key device ${USB_KEY} not present in initrd"
+      #     exit 1
+      #   fi
+      #
+      #   # Mount the key
+      #   mount -t bcachefs -o ro "${USB_KEY}" /usb_key
+      #
+      #   echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"
+      #   echo "bcachefs unlock successful for ${PRIMARY}"
+      # '';
+
       script = ''
         echo "Using test password..."
         echo "test" | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"
         echo "bcachefs unlock successful for ${PRIMARY}"
       '';
+
       # script = ''
       #   echo "Using USB key for bcachefs unlock: ${USB_KEY}"
       #
