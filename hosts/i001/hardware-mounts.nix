@@ -138,21 +138,21 @@ lib.mkMerge [
       # Make this part of the root-fs chain, not just initrd.target
       wantedBy = [
         # "initrd.target"
-        "sysroot.mount"
-        "initrd-root-fs.target"
+        # "sysroot.mount"
+        # "initrd-root-fs.target"
       ];
-
       before = [
         "sysroot.mount"
         "initrd-root-fs.target"
       ];
-      requires = [
-        primaryDeviceUnit
-      ];
+
       after = [
         # "usb_key.mount"
-        primaryDeviceUnit
+        # "initrd-root-device.target"
+      ];
+      requires = [
         "initrd-root-device.target"
+        primaryDeviceUnit
       ];
 
       # unitConfig = {
@@ -225,7 +225,7 @@ lib.mkMerge [
     # TODO rotate root
   }
   # Reset root for erase your darlings/impermanence/preservation
-  (lib.mkIf true {
+  (lib.mkIf false {
     boot.initrd.systemd.services.bcachefs-reset-root = {
       description = "Reset bcachefs root subvolume before pivot";
 
@@ -242,8 +242,16 @@ lib.mkMerge [
         "sysroot.mount"
       ];
 
-      requires = [ primaryDeviceUnit ];
-      wantedBy = [ "initrd.target" ];
+      requires = [
+        primaryDeviceUnit
+        "unlock-bcachefs-custom.service"
+      ];
+      wantedBy = [
+
+        "initrd-root-fs.target"
+        "sysroot.mount"
+        "initrd.target"
+      ];
 
       serviceConfig = {
         Type = "oneshot";
