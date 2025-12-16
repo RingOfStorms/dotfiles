@@ -34,7 +34,6 @@ mkfs.fat -F 32 -n BOOT /dev/$BOOT
 
 ```sh
 PRIMARY=sda2
-# keyctl link @u @s
 bcachefs format --label=nixos --encrypted /dev/$PRIMARY
 bcachefs unlock /dev/$PRIMARY
 ```
@@ -50,8 +49,8 @@ swapon /dev/$SWAP
 ### Setup subvolumes
 
 ```sh
-# keyctl link @u @s
-U=$(lsblk -o fsType,uuid | grep bcachefs | awk '{print $2}')
+keyctl link @u @s
+U=$(lsblk -o name,uuid | grep $PRIMARY | awk '{print $2}')
 echo $U
 mount /dev/disk/by-uuid/$U /mnt
 

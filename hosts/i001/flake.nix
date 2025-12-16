@@ -77,6 +77,8 @@
                   system.stateVersion = stateAndHomeVersion;
                   # TODO allowing password auth for now
                   services.openssh.settings.PasswordAuthentication = lib.mkForce true;
+                  # TODO remove this for testbed
+                  security.sudo.wheelNeedsPassword = false;
 
                   # Home Manager
                   home-manager = {
