@@ -256,132 +256,117 @@ lib.mkMerge [
       serviceConfig = {
         Type = "oneshot";
         KeyringMode = "shared";
-        # We need a path that includes standard tools (mkdir, mount, find, date, stat)
-        # and bcachefs tools.
-        # Environment = "PATH=${
-        #   lib.makeBinPath [
-        #     pkgs.coreutils
-        #     pkgs.util-linux
-        #     pkgs.findutils
-        #     pkgs.gawk
-        #     pkgs.bcachefs-tools
-        #     pkgs.gnugrep
-        #   ]
-        # }:/bin:/sbin";
-      };
-
-      script = ''
-        # This forces Nix to include these packages in the initrd closure
-        export PATH="${
+        Environment = "PATH=${
           lib.makeBinPath [
             pkgs.coreutils
             pkgs.util-linux
-            pkgs.findutils
-            pkgs.gawk
-            pkgs.bcachefs-tools
-            pkgs.gnugrep
+            # pkgs.findutils
+            # pkgs.gawk
+            # pkgs.bcachefs-tools
           ]
+        }:/bin:/sbin";
+      };
 
-        }:$PATH"
-            # 1. Enable Debugging
-            set -x
+      script = ''
+        # 1. Enable Debugging
+        set -x
 
-            # 2. Define Cleanup Trap (Robust)
-            cleanup() {
-                # If the script failed before creating the new root, make sure we create it
-                if [[ ! -e /primary_tmp/@root ]]; then
-                    echo "Cleanup: Creating new @root"
-                    bcachefs subvolume create /primary_tmp/@root
-                fi
-                # Robust replacement for 'mountpoint -q'
-                if grep -qs "/primary_tmp " /proc/mounts; then
-                    echo "Cleanup: Unmounting /primary_tmp"
-                    umount /primary_tmp
-                fi
-            }
-            trap cleanup EXIT
-
-            mkdir -p /primary_tmp
-
-            # If unlocked, mounts instantly. If locked, prompts for password on TTY.
-            echo "Mounting ${PRIMARY}..."
-            if ! mount "${PRIMARY}" /primary_tmp; then
-                echo "Mount failed. Cannot reset root."
-                exit 1
+        # 2. Define Cleanup Trap (Robust)
+        cleanup() {
+            # If the script failed before creating the new root, make sure we create it
+            if [[ ! -e /primary_tmp/@root ]]; then
+                echo "Cleanup: Creating new @root"
+                bcachefs subvolume create /primary_tmp/@root
             fi
+            # Robust replacement for 'mountpoint -q'
+            if ls /primary_tmp; then
+                echo "Cleanup: Unmounting /primary_tmp"
+                umount /primary_tmp
+            fi
+        }
+        trap cleanup EXIT
 
-            # 5. Snapshot & Prune Logic
-            if [[ -e /primary_tmp/@root ]]; then
-                mkdir -p /primary_tmp/@snapshots/old_roots
+        mkdir -p /primary_tmp
+
+        # If unlocked, mounts instantly. If locked, prompts for password on TTY.
+        echo "Mounting ${PRIMARY}..."
+        if ! mount "${PRIMARY}" /primary_tmp; then
+            echo "Mount failed. Cannot reset root."
+            exit 1
+        fi
+
+        # 5. Snapshot & Prune Logic
+        if [[ -e /primary_tmp/@root ]]; then
+            mkdir -p /primary_tmp/@snapshots/old_roots
+            
+            # Use safe timestamp format (dashes instead of colons)
+            timestamp=$(date --date="@$(stat -c %Y /primary_tmp/@root)" "+%Y-%m-%d_%H-%M-%S")
+            
+            echo "Snapshotting @root to .../$timestamp"
+            bcachefs subvolume snapshot /primary_tmp/@root "/primary_tmp/@snapshots/old_roots/$timestamp"
+            
+            echo "Deleting current @root"
+            bcachefs subvolume delete /primary_tmp/@root
+            
+            # --- PRUNING LOGIC ---
+            echo "Pruning snapshots..."
+            
+            # Get list of snapshots sorted by name (which effectively sorts by date: YYYY-MM-DD...)
+            # ls -r puts newest first
+            snapshots=$(ls -1Ar /primary_tmp/@snapshots/old_roots)
+            
+            declare -A kept_weeks
+            declare -A kept_months
+            processed_count=0
+            
+            for snap in $snapshots; do
+                keep=false
                 
-                # Use safe timestamp format (dashes instead of colons)
-                timestamp=$(date --date="@$(stat -c %Y /primary_tmp/@root)" "+%Y-%m-%d_%H-%M-%S")
+                # Parse date from filename (Replace _ with space for date command)
+                date_str=$(echo "$snap" | sed 's/_/ /')
                 
-                echo "Snapshotting @root to .../$timestamp"
-                bcachefs subvolume snapshot /primary_tmp/@root "/primary_tmp/@snapshots/old_roots/$timestamp"
+                # Get metadata
+                ts=$(date -d "$date_str" +%s)
+                week_id=$(date -d "$date_str" +%Y-W%U)
+                month_id=$(date -d "$date_str" +%Y-%m)
+                now=$(date +%s)
+                days_old=$(( (now - ts) / 86400 ))
                 
-                echo "Deleting current @root"
-                bcachefs subvolume delete /primary_tmp/@root
+                # RULE 1: Keep 5 most recent (Always)
+                if [ $processed_count -lt 5 ]; then
+                    keep=true
+                fi
                 
-                # --- PRUNING LOGIC ---
-                echo "Pruning snapshots..."
-                
-                # Get list of snapshots sorted by name (which effectively sorts by date: YYYY-MM-DD...)
-                # ls -r puts newest first
-                snapshots=$(ls -1r /primary_tmp/@snapshots/old_roots | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}')
-                
-                declare -A kept_weeks
-                declare -A kept_months
-                processed_count=0
-                
-                for snap in $snapshots; do
-                    keep=false
-                    
-                    # Parse date from filename (Replace _ with space for date command)
-                    date_str=$(echo "$snap" | sed 's/_/ /')
-                    
-                    # Get metadata
-                    ts=$(date -d "$date_str" +%s)
-                    week_id=$(date -d "$date_str" +%Y-W%U)
-                    month_id=$(date -d "$date_str" +%Y-%m)
-                    now=$(date +%s)
-                    days_old=$(( (now - ts) / 86400 ))
-                    
-                    # RULE 1: Keep 5 most recent (Always)
-                    if [ $processed_count -lt 5 ]; then
+                # RULE 2: Weekly for last month (Age < 32 days)
+                # "at least 1 root from each week from the last month"
+                if [ $days_old -le 32 ]; then
+                    if [ -z "''${kept_weeks[$week_id]}" ]; then
                         keep=true
+                        kept_weeks[$week_id]=1
                     fi
-                    
-                    # RULE 2: Weekly for last month (Age < 32 days)
-                    # "at least 1 root from each week from the last month"
-                    if [ $days_old -le 32 ]; then
-                        if [ -z "''${kept_weeks[$week_id]}" ]; then
-                            keep=true
-                            kept_weeks[$week_id]=1
-                        fi
+                fi
+                
+                # RULE 3: Monthly for older snapshots
+                # "at least 1 root from a month ago" (implies monthly retention indefinitely)
+                if [ $days_old -gt 32 ]; then
+                    if [ -z "''${kept_months[$month_id]}" ]; then
+                        keep=true
+                        kept_months[$month_id]=1
                     fi
-                    
-                    # RULE 3: Monthly for older snapshots
-                    # "at least 1 root from a month ago" (implies monthly retention indefinitely)
-                    if [ $days_old -gt 32 ]; then
-                        if [ -z "''${kept_months[$month_id]}" ]; then
-                            keep=true
-                            kept_months[$month_id]=1
-                        fi
-                    fi
-                    
-                    if [ "$keep" = true ]; then
-                        echo "Keeping: $snap"
-                    else
-                        echo "Deleting: $snap"
-                        bcachefs subvolume delete "/primary_tmp/@snapshots/old_roots/$snap"
-                    fi
-                    
-                    processed_count=$((processed_count + 1))
-                done
-            fi
+                fi
+                
+                if [ "$keep" = true ]; then
+                    echo "Keeping: $snap"
+                else
+                    echo "Deleting: $snap"
+                    bcachefs subvolume delete "/primary_tmp/@snapshots/old_roots/$snap"
+                fi
+                
+                processed_count=$((processed_count + 1))
+            done
+        fi
 
-            # Trap handles creating new root and unmount
+        # Trap handles creating new root and unmount
       '';
     };
   })
