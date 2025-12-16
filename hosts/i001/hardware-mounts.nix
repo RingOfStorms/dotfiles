@@ -265,6 +265,7 @@ lib.mkMerge [
             pkgs.findutils
             pkgs.gawk
             pkgs.bcachefs-tools
+            pkgs.gnugrep
           ]
         }:/bin:/sbin";
       };

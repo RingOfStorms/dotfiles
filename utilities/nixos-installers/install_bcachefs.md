@@ -91,9 +91,13 @@ nixos-generate-config --root /mnt
 
 ```sh
 nixos-install --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/i001#i001"
-# nh os switch "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/i001#i001"
 ```
 
+After boot
+```sh
+nh os switch "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/i001#nixosConfigurations.i001"
+```
+or
 ```sh
 cd ~/.config
 git clone https://git.joshuabell.xyz/ringofstorms/dotfiles nixos-config
