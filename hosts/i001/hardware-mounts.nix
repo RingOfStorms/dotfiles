@@ -225,7 +225,7 @@ lib.mkMerge [
     # TODO rotate root
   }
   # Reset root for erase your darlings/impermanence/preservation
-  (lib.mkIf true {
+  (lib.mkIf false {
     boot.initrd.systemd.services.bcachefs-reset-root = {
       description = "Reset bcachefs root subvolume before pivot";
 
