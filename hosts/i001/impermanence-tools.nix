@@ -45,7 +45,14 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    environment.systemPackages = [ bcacheImpermanenceBin ];
+    environment.systemPackages = [
+      bcacheImpermanenceBin
+      pkgs.coreutils
+      pkgs.findutils
+      pkgs.diffutils
+      pkgs.bcachefs-tools
+      pkgs.fzf
+    ];
 
     systemd.services."bcache-impermanence-gc" = lib.mkIf cfg.gc.enable {
       description = "Garbage collect bcachefs impermanence snapshots";
@@ -53,7 +60,6 @@ in
       after = [ "multi-user.target" ];
       serviceConfig = {
         Type = "oneshot";
-        Environment = "PATH=${lib.makeBinPath [ pkgs.coreutils pkgs.findutils pkgs.diffutils pkgs.bcachefs-tools ]}:/run/current-system/sw/bin";
       };
       script = ''
         exec ${bcacheImpermanenceBin}/bin/bcache-impermanence gc \

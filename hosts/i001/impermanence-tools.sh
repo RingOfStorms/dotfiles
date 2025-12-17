@@ -13,13 +13,13 @@ bcache-impermanence - tools for managing impermanence snapshots
 
 Usage:
   bcache-impermanence gc [--snapshot-root DIR] [--keep-per-month N] [--keep-recent-weeks N] [--keep-recent-count N] [--dry-run]
-  bcache-impermanence ls [-n1] [--snapshot-root DIR]
+  bcache-impermanence ls [-nN] [--snapshot-root DIR]
   bcache-impermanence diff [-s SNAPSHOT] [--snapshot-root DIR] [PATH_PREFIX...]
 
 Subcommands:
   gc    Run garbage collection on old root snapshots.
-  ls    List snapshots (newest first). With -n1 prints only latest.
-  diff  Show diff between current system and a snapshot.
+  ls    List snapshots (newest first). With -nN prints N latest.
+  diff  Browse and diff files/dirs between current system and a snapshot.
 
 Options:
   --snapshot-root DIR        Override snapshot root directory (default: /.snapshots/old_roots).
@@ -28,15 +28,6 @@ Options:
   --keep-recent-count N      For gc: always keep at least N most recent snapshots overall.
   --dry-run                  For gc: show what would be deleted.
 EOF
-}
-
-ensure_deps() {
-  for cmd in date sort basename diff bcachefs; do
-    if ! command -v "$cmd" >/dev/null 2>&1; then
-      echo "Missing required command: $cmd" >&2
-      exit 1
-    fi
-  done
 }
 
 list_snapshots_desc() {
@@ -54,11 +45,16 @@ latest_snapshot_name() {
 }
 
 cmd_ls() {
-  local n1=0
+  local count=0
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      -n1)
-        n1=1
+      -n*)
+        # Accept -nN where N is integer; default to 1 if empty.
+        local n="${1#-n}"
+        if [ -z "$n" ]; then
+          n=1
+        fi
+        count="$n"
         ;;
       --snapshot-root)
         shift
@@ -66,7 +62,7 @@ cmd_ls() {
         SNAPSHOT_ROOT="$1"
         ;;
       --help|-h)
-        echo "Usage: bcache-impermanence ls [-n1] [--snapshot-root DIR]" >&2
+        echo "Usage: bcache-impermanence ls [-nN] [--snapshot-root DIR]" >&2
         exit 0
         ;;
       *)
@@ -85,9 +81,9 @@ cmd_ls() {
     exit 1
   fi
 
-  if [ "$n1" -eq 1 ]; then
+  if [ "$count" -gt 0 ] 2>/dev/null; then
     printf '%s
-' "$snaps" | head -n1
+' "$snaps" | head -n "$count"
   else
     printf '%s
 ' "$snaps"
@@ -117,7 +113,6 @@ build_keep_set() {
 
   # Per-month: keep up to KEEP_PER_MONTH newest per month.
   if [ "$KEEP_PER_MONTH" -gt 0 ]; then
-    # Iterate newest -> oldest.
     while read -r snap; do
       [ -n "$snap" ] || continue
       local month
@@ -310,37 +305,128 @@ cmd_diff() {
     set -- /
   fi
 
-  local rc=0
-  while [ "$#" -gt 0 ]; do
-    local path
-    path="$1"
-    shift
+  local prefixes=("$@")
+  local tmp
+  tmp=$(mktemp)
 
-    case "$path" in
+  for prefix in "${prefixes[@]}"; do
+    case "$prefix" in
       /*) : ;;
       *)
-        echo "Path prefix must be absolute: $path" >&2
-        rc=2
+        echo "Path prefix must be absolute: $prefix" >&2
         continue
         ;;
     esac
 
-    local from
-    local to
-    from="$snapshot_dir$path"
-    to="$path"
+    local rel
+    rel="${prefix#/}"
+    [ -z "$rel" ] && rel="."
 
-    echo "--- Diff for $path (snapshot $snapshot_name) ---"
-    if ! diff -ru --new-file "$from" "$to"; then
-      local diff_rc=$?
-      if [ "$diff_rc" -gt 1 ]; then
-        echo "Error running diff for $path" >&2
-        rc=$diff_rc
-      fi
-    fi
+    (
+      cd "$snapshot_dir" && find "$rel" -mindepth 1 -print 2>/dev/null || true
+    ) | sed "s/^/A /" >>"$tmp"
+
+    (
+      cd / && find "$rel" -mindepth 1 -print 2>/dev/null || true
+    ) | sed "s/^/B /" >>"$tmp"
   done
 
-  exit "$rc"
+  if [ ! -s "$tmp" ]; then
+    echo "No files found under specified prefixes" >&2
+    rm -f "$tmp"
+    exit 1
+  fi
+
+  local paths
+  paths=$(cut -d' ' -f2- "$tmp" | sort -u)
+
+  local diff_list
+  diff_list=$(mktemp)
+
+  while read -r rel; do
+    [ -n "$rel" ] || continue
+    local a_path b_path
+    a_path="$snapshot_dir/$rel"
+    b_path="/$rel"
+
+    local status
+    if [ ! -e "$a_path" ] && [ -e "$b_path" ]; then
+      status="added"
+    elif [ -e "$a_path" ] && [ ! -e "$b_path" ]; then
+      status="removed"
+    else
+      if [ -d "$a_path" ] && [ -d "$b_path" ]; then
+        if ! diff -rq "$a_path" "$b_path" >/dev/null 2>&1; then
+          status="changed-dir"
+        else
+          continue
+        fi
+      else
+        if ! diff -q "$a_path" "$b_path" >/dev/null 2>&1; then
+          status="changed"
+        else
+          continue
+        fi
+      fi
+    fi
+
+    echo "$status $rel" >>"$diff_list"
+  done <<<"$paths"
+
+  rm -f "$tmp"
+
+  if [ ! -s "$diff_list" ]; then
+    echo "No differences found between snapshot $snapshot_name and current system" >&2
+    rm -f "$diff_list"
+    exit 0
+  fi
+
+  if ! command -v fzf >/dev/null 2>&1; then
+    echo "fzf is required for diff browsing" >&2
+    rm -f "$diff_list"
+    exit 1
+  fi
+
+  FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS:-} --ansi --preview-window=right:70%:wrap" \
+    fzf --prompt="[bcache-impermanence diff] " --preview '
+      status="$(echo {} | cut -d" " -f1)"
+      rel="$(echo {} | cut -d" " -f2-)"
+      snap_dir="'$snapshot_dir'"
+      a_path="$snap_dir/$rel"
+      b_path="/$rel"
+
+      case "$status" in
+        added)
+          echo "[ADDED] $rel"; echo
+          if [ -d "$b_path" ]; then
+            (cd / && find "${rel}" -maxdepth 3 -print 2>/dev/null || true)
+          else
+            diff -u /dev/null "$b_path" 2>/dev/null || cat "$b_path" 2>/dev/null || true
+          fi
+          ;;
+        removed)
+          echo "[REMOVED] $rel"; echo
+          if [ -d "$a_path" ]; then
+            (cd "$snap_dir" && find "${rel}" -maxdepth 3 -print 2>/dev/null || true)
+          else
+            diff -u "$a_path" /dev/null 2>/dev/null || cat "$a_path" 2>/dev/null || true
+          fi
+          ;;
+        changed-dir)
+          echo "[CHANGED DIR] $rel"; echo
+          diff -ru "$a_path" "$b_path" 2>/dev/null || true
+          ;;
+        changed)
+          echo "[CHANGED] $rel"; echo
+          diff -u "$a_path" "$b_path" 2>/dev/null || true
+          ;;
+        *)
+          echo "Unknown status: $status";
+          ;;
+      esac
+    ' <"$diff_list"
+
+  rm -f "$diff_list"
 }
 
 main() {
@@ -348,8 +434,6 @@ main() {
     usage
     exit 1
   fi
-
-  ensure_deps
 
   local cmd
   cmd="$1"
