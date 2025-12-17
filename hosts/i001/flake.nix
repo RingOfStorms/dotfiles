@@ -68,6 +68,7 @@
               ./hardware-configuration.nix
               ./hardware-mounts.nix
               ./impermanence.nix
+              ./impermanence-tools.nix
               # ./preservation.nix
               (
                 {

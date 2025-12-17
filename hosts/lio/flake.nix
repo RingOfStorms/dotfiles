@@ -148,6 +148,12 @@
                       common.homeManagerModules.starship
                       common.homeManagerModules.zoxide
                       common.homeManagerModules.zsh
+                      (
+                        { ... }:
+                        {
+                          programs.tmux.package = pkgs.unstable.tmux;
+                        }
+                      )
                     ];
 
                     extraSpecialArgs = {
