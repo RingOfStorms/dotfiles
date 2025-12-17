@@ -64,6 +64,8 @@ lib.mkMerge [
         "X-mount.mkdir"
         "X-mount.subdir=@persist"
       ];
+      # NOTE for impermanence
+      neededForBoot = true;
     };
   }
   # SWAP (optional)
@@ -139,10 +141,12 @@ lib.mkMerge [
       wantedBy = [
         # "initrd.target"
         "sysroot.mount"
+        "persist.mount"
         "initrd-root-fs.target"
       ];
       before = [
         "sysroot.mount"
+        "persist.mount"
         "initrd-root-fs.target"
       ];
 
