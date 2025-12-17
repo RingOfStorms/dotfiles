@@ -139,14 +139,11 @@ lib.mkMerge [
 
       # Make this part of the root-fs chain, not just initrd.target
       wantedBy = [
-        # "initrd.target"
         "sysroot.mount"
-        "persist.mount"
         "initrd-root-fs.target"
       ];
       before = [
         "sysroot.mount"
-        "persist.mount"
         "initrd-root-fs.target"
       ];
 
@@ -229,7 +226,7 @@ lib.mkMerge [
     # TODO rotate root
   }
   # Reset root for erase your darlings/impermanence/preservation
-  (lib.mkIf false {
+  (lib.mkIf true {
     boot.initrd.systemd.services.bcachefs-reset-root = {
       description = "Reset bcachefs root subvolume before pivot";
 
@@ -251,7 +248,6 @@ lib.mkMerge [
         "unlock-bcachefs-custom.service"
       ];
       wantedBy = [
-
         "initrd-root-fs.target"
         "sysroot.mount"
         "initrd.target"
@@ -268,15 +264,11 @@ lib.mkMerge [
       };
 
       script = ''
-        # 1. Enable Debugging
-        set -x
-
-        # 2. Define Cleanup Trap (Robust)
         cleanup() {
-            if [[ ! -e /primary_tmp/@root ]]; then
-                echo "Cleanup: Creating new @root"
-                bcachefs subvolume create /primary_tmp/@root
-            fi
+            # if [[ ! -e /primary_tmp/@root ]]; then
+            #     echo "Cleanup: Creating new @root"
+            #     bcachefs subvolume create /primary_tmp/@root
+            # fi
             echo "Cleanup: Unmounting /primary_tmp"
             umount /primary_tmp || true
         }
@@ -288,7 +280,8 @@ lib.mkMerge [
         echo "Mounting ${PRIMARY}..."
         if ! mount "${PRIMARY}" /primary_tmp; then
             echo "Mount failed. Cannot reset root."
-            exit 1
+            # TODO change to exit 1
+            exit 0
         fi
 
         if [[ -e /primary_tmp/@root ]]; then
@@ -300,8 +293,8 @@ lib.mkMerge [
             echo "Snapshotting @root to .../$timestamp"
             bcachefs subvolume snapshot /primary_tmp/@root "/primary_tmp/@snapshots/old_roots/$timestamp"
             
-            echo "Deleting current @root"
-            bcachefs subvolume delete /primary_tmp/@root
+            # echo "Deleting current @root"
+            # bcachefs subvolume delete /primary_tmp/@root
         fi
 
         # Trap handles creating new root and unmount

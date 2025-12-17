@@ -30,8 +30,8 @@
 
         # Files to persist
         files = [
-          # Persist machine-id early (initrd)
-          { file = "/etc/machine-id"; inInitrd = true; }
+          # Persist machine-id early (initrd) via symlink for ConditionFirstBoot compatibility
+          { file = "/etc/machine-id"; inInitrd = true; how = "symlink"; configureParent = true; }
 
           # SSH host keys: ensure correct handling with symlinks
           { file = "/etc/ssh/ssh_host_rsa_key"; how = "symlink"; configureParent = true; }
@@ -71,6 +71,19 @@
 
   # Configure intermediate system-wide directories that may need custom modes
   # (Example: none required beyond defaults here.)
+
+  # Let systemd-machine-id-commit write the transient ID to the persistent volume.
+  # This avoids activation failure when /etc/machine-id is a symlink.
+  systemd.services.systemd-machine-id-commit = {
+    unitConfig.ConditionPathIsMountPoint = [
+      ""
+      "/persist/etc/machine-id"
+    ];
+    serviceConfig.ExecStart = [
+      ""
+      "systemd-machine-id-setup --commit --root /persist"
+    ];
+  };
 
   # If you need custom ownership/modes for parent directories, use tmpfiles:
   # systemd.tmpfiles.settings.preservation = {
