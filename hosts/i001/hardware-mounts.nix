@@ -135,7 +135,6 @@ lib.mkMerge [
 
       # Make this part of the root-fs chain, not just initrd.target
       wantedBy = [
-        # "initrd.target"
         "sysroot.mount"
         "initrd-root-fs.target"
       ];
