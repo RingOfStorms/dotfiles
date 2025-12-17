@@ -6,7 +6,10 @@
     # Preserve system-wide directories and files at /persist
     preserveAt = {
       "/persist" = {
-        hideMounts = true;
+        commonMountOptions = [
+          "x-gvfs-hide"
+          "x-gdu.hide"
+        ];
 
         # Directories to persist (bind-mount by default)
         directories = [
