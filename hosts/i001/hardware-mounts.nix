@@ -65,7 +65,7 @@ lib.mkMerge [
         "X-mount.subdir=@persist"
       ];
       # NOTE for impermanence
-      neededForBoot = true;
+      # neededForBoot = true;
     };
   }
   # SWAP (optional)
