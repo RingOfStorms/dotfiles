@@ -6,6 +6,7 @@ KEEP_PER_MONTH=1
 KEEP_RECENT_WEEKS=4
 KEEP_RECENT_COUNT=5
 DRY_RUN=0
+DIFF_MAX_DEPTH=0
 
 usage() {
   cat <<EOF
@@ -14,7 +15,7 @@ bcache-impermanence - tools for managing impermanence snapshots
 Usage:
   bcache-impermanence gc [--snapshot-root DIR] [--keep-per-month N] [--keep-recent-weeks N] [--keep-recent-count N] [--dry-run]
   bcache-impermanence ls [-nN] [--snapshot-root DIR]
-  bcache-impermanence diff [-s SNAPSHOT] [--snapshot-root DIR] [PATH_PREFIX...]
+  bcache-impermanence diff [-s SNAPSHOT] [--snapshot-root DIR] [--max-depth N] [PATH_PREFIX...]
 
 Subcommands:
   gc    Run garbage collection on old root snapshots.
@@ -252,12 +253,16 @@ EOF_SNAPS
 }
 
 browse_diff_tree() {
-  local snapshot_name snapshot_dir diff_list
+  local snapshot_name snapshot_dir diff_list initial_prefix
   snapshot_name="$1"
   snapshot_dir="$2"
   diff_list="$3"
+  initial_prefix="${4-}"
 
   local current_prefix=""
+  if [ -n "$initial_prefix" ]; then
+    current_prefix="$initial_prefix"
+  fi
 
   while :; do
     local children
@@ -410,8 +415,13 @@ cmd_diff() {
         [ "$#" -gt 0 ] || { echo "--snapshot-root requires a value" >&2; exit 1; }
         SNAPSHOT_ROOT="$1"
         ;;
+      --max-depth)
+        shift
+        [ "$#" -gt 0 ] || { echo "--max-depth requires a value" >&2; exit 1; }
+        DIFF_MAX_DEPTH="$1"
+        ;;
       --help|-h)
-        echo "Usage: bcache-impermanence diff [-s SNAPSHOT] [--snapshot-root DIR] [PATH_PREFIX...]" >&2
+        echo "Usage: bcache-impermanence diff [-s SNAPSHOT] [--snapshot-root DIR] [--max-depth N] [PATH_PREFIX...]" >&2
         exit 0
         ;;
       --*)
@@ -470,14 +480,21 @@ cmd_diff() {
     rel="${prefix#/}"
     [ -z "$rel" ] && rel="."
 
-    (
-      cd "$snapshot_dir" && find "$rel" -mindepth 1 -print 2>/dev/null || true
-    ) | sed "s/^/A /" >>"$tmp"
+    if [ "$DIFF_MAX_DEPTH" -gt 0 ] 2>/dev/null; then
+      (
+        cd "$snapshot_dir" && find "$rel" -mindepth 1 -maxdepth "$DIFF_MAX_DEPTH" -print 2>/dev/null || true
+      ) | sed "s/^/A /" >>"$tmp"
 
-    (
-      cd / && find "$rel" -mindepth 1 -print 2>/dev/null || true
+      (
+        cd / && find "$rel" -mindepth 1 -maxdepth "$DIFF_MAX_DEPTH" -print 2>/dev/null || true
+      ) | sed "s/^/B /" >>"$tmp"
+    else
+      (
+        cd "$snapshot_dir" && find "$rel" -mindepth 1 -print 2>/dev/null || true
     ) | sed "s/^/B /" >>"$tmp"
+    fi
   done
+
 
   if [ ! -s "$tmp" ]; then
     echo "No files found under specified prefixes" >&2
@@ -529,7 +546,13 @@ cmd_diff() {
     exit 0
   fi
 
-  browse_diff_tree "$snapshot_name" "$snapshot_dir" "$diff_list"
+  local initial_prefix=""
+  if [ "$#" -eq 1 ]; then
+    # Single prefix: start tree at that path relative to /
+    initial_prefix="${1#/}"
+  fi
+
+  browse_diff_tree "$snapshot_name" "$snapshot_dir" "$diff_list" "$initial_prefix"
   rm -f "$diff_list"
 }
 
