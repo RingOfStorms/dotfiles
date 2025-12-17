@@ -113,7 +113,7 @@ NIX_SSHOPTS="-i /run/agenix/nix2nix" sudo nixos-rebuild switch --flake "git+http
 ## USB Key
 
 ```sh
-DEVICE=sdc
+DEVICE=sdb
 parted /dev/$DEVICE -- mklabel gpt
 parted /dev/$DEVICE -- mkpart KEY fat32 1MB 100%
 DEVICE=$DEVICE"1"

@@ -6,12 +6,12 @@
   ...
 }:
 let
-  BOOT = "/dev/disk/by-uuid/9D7E-62B8";
-  PRIMARY = "/dev/disk/by-uuid/2a5b6a62-08b5-491b-917b-2e07f919d584";
+  BOOT = "/dev/disk/by-uuid/635D-F0DA";
+  PRIMARY = "/dev/disk/by-uuid/82cb11a7-097a-4e95-b9f0-47dad95de9df";
 
-  SWAP = "/dev/disk/by-uuid/f12c9e5e-a32d-417f-b9d3-8beb9a3ad802";
+  SWAP = "/dev/disk/by-uuid/29c89516-e6ed-4f91-adf7-646451a8e26f";
 
-  USB_KEY = "/dev/disk/by-uuid/63a7bd87-d644-43ea-83ba-547c03012fb6";
+  USB_KEY = "/dev/disk/by-uuid/e9dec4b1-e4e2-431c-9a85-73f7c3ff8b42";
 
   primaryDeviceUnit = "${utils.escapeSystemdPath PRIMARY}.device";
 in
@@ -23,8 +23,8 @@ lib.mkMerge [
       device = BOOT;
       fsType = "vfat";
       options = [
-        "fmask=0022"
-        "dmask=0022"
+        "fmask=0077"
+        "dmask=0077"
       ];
     };
 
