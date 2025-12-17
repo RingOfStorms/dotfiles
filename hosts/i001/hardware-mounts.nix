@@ -115,9 +115,11 @@ lib.mkMerge [
     boot.initrd.systemd.services.create-needed-for-boot-dirs = {
       after = [
         "unlock-bcachefs-custom.service"
+        "bcachefs-reset-root.service"
       ];
       requires = [
         "unlock-bcachefs-custom.service"
+        "bcachefs-reset-root.service"
       ];
       serviceConfig.KeyringMode = "shared";
     };
