@@ -34,8 +34,6 @@ lib.mkMerge [
       fsType = "bcachefs";
       options = [
         "X-mount.subdir=@root"
-        # "x-systemd.requires=unlock-bcachefs-custom.service"
-        # "x-systemd.after=unlock-bcachefs-custom.service"
       ];
     };
     fileSystems."/nix" = {
@@ -225,29 +223,24 @@ lib.mkMerge [
     # TODO rotate root
   }
   # Reset root for erase your darlings/impermanence/preservation
-  (lib.mkIf false {
+  (lib.mkIf true {
     boot.initrd.systemd.services.bcachefs-reset-root = {
       description = "Reset bcachefs root subvolume before pivot";
 
-      # We want this to run after we've ATTEMPTED to unlock,
-      # but strictly BEFORE the real root is mounted at /sysroot
       after = [
         "initrd-root-device.target"
         "cryptsetup.target"
         "unlock-bcachefs-custom.service"
       ];
-
-      # This is the most important part: prevent sysroot from mounting until we are done resetting it
-      before = [
-        "sysroot.mount"
-      ];
-
       requires = [
         primaryDeviceUnit
         "unlock-bcachefs-custom.service"
       ];
-      wantedBy = [
 
+      before = [
+        "sysroot.mount"
+      ];
+      wantedBy = [
         "initrd-root-fs.target"
         "sysroot.mount"
         "initrd.target"
@@ -255,6 +248,7 @@ lib.mkMerge [
 
       serviceConfig = {
         Type = "oneshot";
+        RemainAfterExit = true;
         KeyringMode = "shared";
         # Environment = "PATH=${
         #   lib.makeBinPath [
@@ -264,10 +258,6 @@ lib.mkMerge [
       };
 
       script = ''
-        # 1. Enable Debugging
-        set -x
-
-        # 2. Define Cleanup Trap (Robust)
         cleanup() {
             if [[ ! -e /primary_tmp/@root ]]; then
                 echo "Cleanup: Creating new @root"
@@ -291,10 +281,10 @@ lib.mkMerge [
             mkdir -p /primary_tmp/@snapshots/old_roots
             
             # Use safe timestamp format (dashes instead of colons)
-            timestamp=$(date --date="@$(stat -c %Y /primary_tmp/@root)" "+%Y-%m-%d_%H-%M-%S")
-            
-            echo "Snapshotting @root to .../$timestamp"
-            bcachefs subvolume snapshot /primary_tmp/@root "/primary_tmp/@snapshots/old_roots/$timestamp"
+            timestamp=$(date "+%Y-%m-%d_%H-%M-%S")
+            snap="/primary_tmp/@snapshots/old_roots/$timestamp"
+            echo "Snapshotting @root to $snap"
+            bcachefs subvolume snapshot /primary_tmp/@root "$snap"
             
             echo "Deleting current @root"
             bcachefs subvolume delete /primary_tmp/@root
