@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.impermanence.tools;
 
@@ -9,7 +14,7 @@ let
 in
 {
   options.impermanence.tools = {
-    enable = lib.mkEnableOption "bcachefs impermanence tools (GC + CLI)";
+    # enable = lib.mkEnableOption "bcachefs impermanence tools (GC + CLI)";
 
     snapshotRoot = lib.mkOption {
       type = lib.types.str;
@@ -44,7 +49,8 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
+  config = {
+    # config = lib.mkIf cfg.enable {
     environment.systemPackages = [
       bcacheImpermanenceBin
       pkgs.coreutils

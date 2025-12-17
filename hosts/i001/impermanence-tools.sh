@@ -82,11 +82,9 @@ cmd_ls() {
   fi
 
   if [ "$count" -gt 0 ] 2>/dev/null; then
-    printf '%s
-' "$snaps" | head -n "$count"
+    printf '%s\n' "$snaps" | head -n "$count"
   else
-    printf '%s
-' "$snaps"
+    printf '%s\n' "$snaps"
   fi
 }
 
@@ -107,8 +105,7 @@ build_keep_set() {
 
   # Always keep newest KEEP_RECENT_COUNT snapshots.
   if [ "$KEEP_RECENT_COUNT" -gt 0 ]; then
-    printf '%s
-' "$snaps" | head -n "$KEEP_RECENT_COUNT" >"$tmpdir/keep_recent"
+    printf '%s\n' "$snaps" | head -n "$KEEP_RECENT_COUNT" >"$tmpdir/keep_recent"
   fi
 
   # Per-month: keep up to KEEP_PER_MONTH newest per month.
@@ -254,6 +251,150 @@ EOF_SNAPS
   echo "GC complete; deleted $deleted snapshots"
 }
 
+browse_diff_tree() {
+  local snapshot_name snapshot_dir diff_list
+  snapshot_name="$1"
+  snapshot_dir="$2"
+  diff_list="$3"
+
+  local current_prefix=""
+
+  while :; do
+    local children
+    children=$(mktemp)
+    local seen
+    seen=$(mktemp)
+
+    # Optional parent entry
+    if [ -n "$current_prefix" ]; then
+      echo "dir .." >"$children"
+    fi
+
+    # Build immediate children under current_prefix.
+    while read -r st rel; do
+      [ -n "$rel" ] || continue
+      local sub
+      if [ -n "$current_prefix" ]; then
+        case "$rel" in
+          "$current_prefix")
+            # Exact match at this level; treat as leaf, not a separate child.
+            continue
+            ;;
+          "$current_prefix"/*)
+            sub="${rel#"$current_prefix"/}"
+            ;;
+          *)
+            continue
+            ;;
+        esac
+      else
+        sub="$rel"
+      fi
+
+      [ -n "$sub" ] || continue
+
+      local child
+      child="${sub%%/*}"
+      local child_rel
+      if [ -n "$current_prefix" ]; then
+        child_rel="$current_prefix/$child"
+      else
+        child_rel="$child"
+      fi
+
+      if grep -qx "$child_rel" "$seen" 2>/dev/null; then
+        continue
+      fi
+
+      echo "$st $child_rel" >>"$children"
+      echo "$child_rel" >>"$seen"
+    done <"$diff_list"
+
+    rm -f "$seen"
+
+    if [ ! -s "$children" ]; then
+      echo "No further differences under ${current_prefix:-/}" >&2
+      rm -f "$children"
+      break
+    fi
+
+    if ! command -v fzf >/dev/null 2>&1; then
+      echo "fzf is required for diff browsing" >&2
+      rm -f "$children"
+      break
+    fi
+
+    local preview_cmd
+    preview_cmd='sel_rel=$(printf "%s\n" {} | cut -d" " -f2-)
+if [ "$sel_rel" = ".." ]; then
+  echo "[UP] .."
+  exit 0
+fi
+snap_dir="'"$snapshot_dir"'"
+a_path="$snap_dir/$sel_rel"
+b_path="/$sel_rel"
+
+if [ ! -e "$a_path" ] && [ -e "$b_path" ]; then
+  echo "[ADDED] /$sel_rel"; echo
+  if [ -d "$b_path" ]; then
+    (cd / && find "$sel_rel" -maxdepth 3 -print 2>/dev/null || true)
+  else
+    diff -u /dev/null "$b_path" 2>/dev/null || cat "$b_path" 2>/dev/null || true
+  fi
+elif [ -e "$a_path" ] && [ ! -e "$b_path" ]; then
+  echo "[REMOVED] /$sel_rel"; echo
+  if [ -d "$a_path" ]; then
+    (cd "$snap_dir" && find "$sel_rel" -maxdepth 3 -print 2>/dev/null || true)
+  else
+    diff -u "$a_path" /dev/null 2>/dev/null || cat "$a_path" 2>/dev/null || true
+  fi
+else
+  if [ -d "$a_path" ] && [ -d "$b_path" ]; then
+    echo "[CHANGED DIR] /$sel_rel"; echo
+    diff -ru "$a_path" "$b_path" 2>/dev/null || true
+  else
+    echo "[CHANGED] /$sel_rel"; echo
+    diff -u "$a_path" "$b_path" 2>/dev/null || true
+  fi
+fi
+'
+
+    local selection
+    selection=$(FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS:-} --ansi --preview-window=right:70%:wrap" \
+      fzf --prompt="[bcache-impermanence diff ${current_prefix:-/}] " \
+          --preview "$preview_cmd" <"$children") || {
+      rm -f "$children"
+      break
+    }
+
+    rm -f "$children"
+
+    local sel_rel
+    sel_rel=$(printf "%s\n" "$selection" | cut -d" " -f2-)
+
+    if [ "$sel_rel" = ".." ]; then
+      if [ -z "$current_prefix" ]; then
+        break
+      fi
+      if printf "%s" "$current_prefix" | grep -q '/'; then
+        current_prefix="${current_prefix%/*}"
+      else
+        current_prefix=""
+      fi
+      continue
+    fi
+
+    # If this selection has descendants, drill down; otherwise treat as leaf and exit.
+    if grep -q " $sel_rel/" "$diff_list"; then
+      current_prefix="$sel_rel"
+      continue
+    else
+      # Leaf: user already saw diff in preview; exit.
+      break
+    fi
+  done
+}
+
 cmd_diff() {
   local snapshot_name=""
 
@@ -305,7 +446,14 @@ cmd_diff() {
     set -- /
   fi
 
-  local prefixes=("$@")
+  if ! command -v fzf >/dev/null 2>&1; then
+    echo "fzf is required for diff browsing" >&2
+    exit 1
+  fi
+
+  local prefixes
+  prefixes=("$@")
+
   local tmp
   tmp=$(mktemp)
 
@@ -381,51 +529,7 @@ cmd_diff() {
     exit 0
   fi
 
-  if ! command -v fzf >/dev/null 2>&1; then
-    echo "fzf is required for diff browsing" >&2
-    rm -f "$diff_list"
-    exit 1
-  fi
-
-  FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS:-} --ansi --preview-window=right:70%:wrap" \
-    fzf --prompt="[bcache-impermanence diff] " --preview '
-      status="$(echo {} | cut -d" " -f1)"
-      rel="$(echo {} | cut -d" " -f2-)"
-      snap_dir="'$snapshot_dir'"
-      a_path="$snap_dir/$rel"
-      b_path="/$rel"
-
-      case "$status" in
-        added)
-          echo "[ADDED] $rel"; echo
-          if [ -d "$b_path" ]; then
-            (cd / && find "${rel}" -maxdepth 3 -print 2>/dev/null || true)
-          else
-            diff -u /dev/null "$b_path" 2>/dev/null || cat "$b_path" 2>/dev/null || true
-          fi
-          ;;
-        removed)
-          echo "[REMOVED] $rel"; echo
-          if [ -d "$a_path" ]; then
-            (cd "$snap_dir" && find "${rel}" -maxdepth 3 -print 2>/dev/null || true)
-          else
-            diff -u "$a_path" /dev/null 2>/dev/null || cat "$a_path" 2>/dev/null || true
-          fi
-          ;;
-        changed-dir)
-          echo "[CHANGED DIR] $rel"; echo
-          diff -ru "$a_path" "$b_path" 2>/dev/null || true
-          ;;
-        changed)
-          echo "[CHANGED] $rel"; echo
-          diff -u "$a_path" "$b_path" 2>/dev/null || true
-          ;;
-        *)
-          echo "Unknown status: $status";
-          ;;
-      esac
-    ' <"$diff_list"
-
+  browse_diff_tree "$snapshot_name" "$snapshot_dir" "$diff_list"
   rm -f "$diff_list"
 }
 
