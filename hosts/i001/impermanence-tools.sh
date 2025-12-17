@@ -28,6 +28,7 @@ Options:
   --keep-recent-weeks N      For gc: keep at least one snapshot per ISO week within the last N weeks.
   --keep-recent-count N      For gc: always keep at least N most recent snapshots overall.
   --dry-run                  For gc: show what would be deleted.
+  --max-depth N              For diff: limit scan depth under each prefix.
 EOF
 }
 
@@ -461,6 +462,28 @@ cmd_diff() {
     exit 1
   fi
 
+  # Build list of bind mounts backed by /persist so we can filter them out.
+  local persist_mounts
+  persist_mounts=$(awk '$2 ~ /^\/persist($|\//) { print $2 }' /proc/self/mounts || true)
+
+  is_persist_backed() {
+    local p
+    p="$1"
+    if [ -z "$p" ]; then
+      return 1
+    fi
+    if [ -z "$persist_mounts" ]; then
+      return 1
+    fi
+    local m
+    for m in $persist_mounts; do
+      case "$p" in
+        "$m"|"$m"/*) return 0 ;;
+      esac
+    done
+    return 1
+  }
+
   local prefixes
   prefixes=("$@")
 
@@ -475,6 +498,11 @@ cmd_diff() {
         continue
         ;;
     esac
+
+    # Skip prefixes that are themselves backed by /persist.
+    if is_persist_backed "$prefix"; then
+      continue
+    fi
 
     local rel
     rel="${prefix#/}"
@@ -491,10 +519,13 @@ cmd_diff() {
     else
       (
         cd "$snapshot_dir" && find "$rel" -mindepth 1 -print 2>/dev/null || true
-    ) | sed "s/^/B /" >>"$tmp"
+      ) | sed "s/^/A /" >>"$tmp"
+
+      (
+        cd / && find "$rel" -mindepth 1 -print 2>/dev/null || true
+      ) | sed "s/^/B /" >>"$tmp"
     fi
   done
-
 
   if [ ! -s "$tmp" ]; then
     echo "No files found under specified prefixes" >&2
@@ -514,6 +545,11 @@ cmd_diff() {
     a_path="$snapshot_dir/$rel"
     b_path="/$rel"
 
+    # Skip paths that reside under a /persist-backed mount in the live system.
+    if is_persist_backed "$b_path"; then
+      continue
+    fi
+
     local status
     if [ ! -e "$a_path" ] && [ -e "$b_path" ]; then
       status="added"
@@ -527,7 +563,7 @@ cmd_diff() {
           continue
         fi
       else
-        if ! diff -q "$a_path" "$b_path" >/dev/null 2>&1; then
+        if ! diff -q "$a_path" "$b_path" >/dev/null 2>/dev/null; then
           status="changed"
         else
           continue
@@ -548,43 +584,9 @@ cmd_diff() {
 
   local initial_prefix=""
   if [ "$#" -eq 1 ]; then
-    # Single prefix: start tree at that path relative to /
     initial_prefix="${1#/}"
   fi
 
   browse_diff_tree "$snapshot_name" "$snapshot_dir" "$diff_list" "$initial_prefix"
   rm -f "$diff_list"
 }
-
-main() {
-  if [ "$#" -lt 1 ]; then
-    usage
-    exit 1
-  fi
-
-  local cmd
-  cmd="$1"
-  shift || true
-
-  case "$cmd" in
-    gc)
-      cmd_gc "$@"
-      ;;
-    ls)
-      cmd_ls "$@"
-      ;;
-    diff)
-      cmd_diff "$@"
-      ;;
-    --help|-h|help)
-      usage
-      ;;
-    *)
-      echo "Unknown subcommand: $cmd" >&2
-      usage
-      exit 1
-      ;;
-  esac
-}
-
-main "$@"
