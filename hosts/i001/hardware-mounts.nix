@@ -62,6 +62,7 @@ lib.mkMerge [
         "X-mount.mkdir"
         "X-mount.subdir=@persist"
       ];
+      neededForBoot = true; # NOTE for impermanence only
     };
   }
   # SWAP (optional)
@@ -109,6 +110,18 @@ lib.mkMerge [
       # };
     }
   )
+  {
+    # Impermanence fix
+    boot.initrd.systemd.services.create-needed-for-boot-dirs = {
+      after = [
+        "unlock-bcachefs-custom.service"
+      ];
+      requires = [
+        "unlock-bcachefs-custom.service"
+      ];
+      serviceConfig.KeyringMode = "shared";
+    };
+  }
   # Bcachefs auto decryption
   {
     boot.supportedFilesystems = [
@@ -135,10 +148,12 @@ lib.mkMerge [
 
       # Make this part of the root-fs chain, not just initrd.target
       wantedBy = [
+        "persist.mount"
         "sysroot.mount"
         "initrd-root-fs.target"
       ];
       before = [
+        "persist.mount"
         "sysroot.mount"
         "initrd-root-fs.target"
       ];

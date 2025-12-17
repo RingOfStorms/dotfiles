@@ -10,8 +10,8 @@
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
-    # impermanence.url = "github:nix-community/impermanence";
-    preservation.url = "github:nix-community/preservation";
+    impermanence.url = "github:nix-community/impermanence";
+    # preservation.url = "github:nix-community/preservation";
   };
 
   outputs =
@@ -35,8 +35,8 @@
               inherit inputs;
             };
             modules = [
-              # inputs.impermanence.nixosModules.impermanence
-              inputs.preservation.nixosModules.preservation
+              inputs.impermanence.nixosModules.impermanence
+              # inputs.preservation.nixosModules.preservation
               inputs.home-manager.nixosModules.default
 
               inputs.ros_neovim.nixosModules.default
@@ -67,8 +67,8 @@
 
               ./hardware-configuration.nix
               ./hardware-mounts.nix
-              # ./impermanence.nix
-              ./preservation.nix
+              ./impermanence.nix
+              # ./preservation.nix
               (
                 {
                   config,
