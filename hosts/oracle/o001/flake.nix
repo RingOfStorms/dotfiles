@@ -2,7 +2,6 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
     home-manager.url = "github:rycee/home-manager/release-25.11";
-    deploy-rs.url = "github:serokell/deploy-rs";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
     # Use relative to get current version for testing
@@ -23,7 +22,6 @@
       secrets,
       beszel,
       ros_neovim,
-      deploy-rs,
       ...
     }@inputs:
     let
@@ -34,24 +32,6 @@
       lib = nixpkgs.lib;
     in
     {
-      deploy = {
-        sshUser = "root";
-        sshOpts = [
-          "-i"
-          "/run/agenix/nix2oracle"
-        ];
-        nodes.${configuration_name} = rec {
-          hostname = "64.181.210.7";
-          targetPlatform = "aarch64-linux";
-          profiles.system = {
-            user = "root";
-            path =
-              deploy-rs.lib.${targetPlatform}.activate.nixos
-                self.nixosConfigurations.${configuration_name};
-          };
-        };
-      };
-
       nixosConfigurations = {
         "${configuration_name}" = (
           lib.nixosSystem {

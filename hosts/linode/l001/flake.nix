@@ -2,7 +2,6 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
     home-manager.url = "github:rycee/home-manager/release-25.11";
-    deploy-rs.url = "github:serokell/deploy-rs";
 
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
@@ -15,7 +14,6 @@
       nixpkgs,
       home-manager,
       common,
-      deploy-rs,
       ...
     }@inputs:
     let
@@ -25,21 +23,6 @@
       lib = nixpkgs.lib;
     in
     {
-      deploy = {
-        sshUser = "root";
-        sshOpts = [
-          "-i"
-          "/run/agenix/nix2linode"
-        ];
-        nodes.${configuration_name} = {
-          hostname = "172.236.111.33";
-          profiles.system = {
-            user = "root";
-            path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.${configuration_name};
-          };
-        };
-      };
-
       nixosConfigurations = {
         "${configuration_name}" = (
           lib.nixosSystem {

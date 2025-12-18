@@ -48,6 +48,7 @@
                   enable = true;
                   gpu.intel.enable = true;
                   sddm.autologinUser = "luser";
+                  disableKeyd = true;
                 };
               })
 

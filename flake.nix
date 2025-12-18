@@ -4,58 +4,33 @@
     deploy-rs.url = "github:serokell/deploy-rs";
 
     i001.url = "path:./hosts/i001";
+    l001.url = "path:./hosts/linode/l001";
+    o001.url = "path:./hosts/oracle/o001";
   };
 
   outputs =
     {
-      nixpkgs,
       deploy-rs,
       ...
     }@inputs:
     let
       # Utilities
-      inherit (nixpkgs) lib;
+      inherit (inputs.nixpkgs) lib;
       # Define the systems to support: https://github.com/NixOS/nixpkgs/blob/master/lib/systems/flake-systems.nix
       forAllSystems = lib.genAttrs lib.systems.flakeExposed;
       # Create a mapping from system to corresponding nixpkgs : https://nixos.wiki/wiki/Overlays#In_a_Nix_flake
-      nixpkgsFor = forAllSystems (system: nixpkgs.legacyPackages.${system});
+      nixpkgsFor = forAllSystems (system: inputs.nixpkgs.legacyPackages.${system});
     in
     {
       devShells = forAllSystems (
         system:
         let
           pkgs = nixpkgsFor.${system};
-          deploy_linode = pkgs.writeShellScriptBin "deploy_linode" ''
-            cwd=$(pwd)
-            root=$(git rev-parse --show-toplevel)
-            if [ ! -d "$root/hosts/linode/$1" ]; then
-              echo "Host $1 does not exist"
-              exit 1
-            fi
-            cd "$root/hosts/linode/$1"
-            echo "Deploying linode $(basename "$(pwd)")..."
-            deploy
-            cd "$cwd"
-          '';
-          deploy_oracle = pkgs.writeShellScriptBin "deploy_oracle" ''
-            cwd=$(pwd)
-            root=$(git rev-parse --show-toplevel)
-            if [ ! -d "$root/hosts/oracle/$1" ]; then
-              echo "Host $1 does not exist"
-              exit 1
-            fi
-            cd "$root/hosts/oracle/$1"
-            echo "Deploying oracle $(basename "$(pwd)")..."
-            deploy
-            cd "$cwd"
-          '';
         in
         {
           default = pkgs.mkShell {
             packages = [
-              deploy_oracle
-              deploy_linode
-              pkgs.deploy-rs
+              inputs.deploy-rs.packages.${system}.default
             ];
           };
         }
@@ -74,6 +49,30 @@
             profiles.system = {
               user = "root";
               path = deploy-rs.lib.x86_64-linux.activate.nixos inputs.i001.nixosConfigurations.i001;
+            };
+          };
+
+          l001 = {
+            sshOpts = [
+              "-i"
+              "/run/agenix/nix2linode"
+            ];
+            hostname = "172.236.111.33";
+            profiles.system = {
+              user = "root";
+              path = deploy-rs.lib.x86_64-linux.activate.nixos inputs.l001.nixosConfigurations.l001;
+            };
+          };
+
+          o001 = {
+            sshOpts = [
+              "-i"
+              "/run/agenix/nix2oracle"
+            ];
+            hostname = "64.181.210.7";
+            profiles.system = {
+              user = "root";
+              path = deploy-rs.lib.aarch64-linux.activate.nixos inputs.o001.nixosConfigurations.o001;
             };
           };
         };
