@@ -464,7 +464,7 @@ cmd_diff() {
 
   # Build list of bind mounts backed by /persist so we can filter them out.
   local persist_mounts
-  persist_mounts=$(awk '$2 ~ /^\/persist($|\//) { print $2 }' /proc/self/mounts || true)
+  persist_mounts=$(awk '$2 ~ "^/persist(/|$)" { print $2 }' /proc/self/mounts || true)
 
   is_persist_backed() {
     local p
@@ -590,3 +590,36 @@ cmd_diff() {
   browse_diff_tree "$snapshot_name" "$snapshot_dir" "$diff_list" "$initial_prefix"
   rm -f "$diff_list"
 }
+
+main() {
+  if [ "$#" -lt 1 ]; then
+    usage
+    exit 1
+  fi
+
+  local cmd
+  cmd="$1"
+  shift || true
+
+  case "$cmd" in
+    gc)
+      cmd_gc "$@"
+      ;;
+    ls)
+      cmd_ls "$@"
+      ;;
+    diff)
+      cmd_diff "$@"
+      ;;
+    --help|-h|help)
+      usage
+      ;;
+    *)
+      echo "Unknown subcommand: $cmd" >&2
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

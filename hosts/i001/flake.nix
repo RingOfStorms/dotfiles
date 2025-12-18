@@ -11,7 +11,6 @@
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
     impermanence.url = "github:nix-community/impermanence";
-    # preservation.url = "github:nix-community/preservation";
   };
 
   outputs =
@@ -36,7 +35,6 @@
             };
             modules = [
               inputs.impermanence.nixosModules.impermanence
-              # inputs.preservation.nixosModules.preservation
               inputs.home-manager.nixosModules.default
 
               inputs.ros_neovim.nixosModules.default
@@ -44,14 +42,14 @@
                 ringofstorms-nvim.includeAllRuntimeDependencies = true;
               })
 
-              # inputs.de_plasma.nixosModules.default
-              # ({
-              #   ringofstorms.dePlasma = {
-              #     enable = true;
-              #     gpu.intel.enable = true;
-              #     sddm.autologinUser = "luser";
-              #   };
-              # })
+              inputs.de_plasma.nixosModules.default
+              ({
+                ringofstorms.dePlasma = {
+                  enable = true;
+                  gpu.intel.enable = true;
+                  sddm.autologinUser = "luser";
+                };
+              })
 
               inputs.common.nixosModules.essentials
               inputs.common.nixosModules.git
@@ -69,7 +67,6 @@
               ./hardware-mounts.nix
               ./impermanence.nix
               ./impermanence-tools.nix
-              # ./preservation.nix
               (
                 {
                   config,

@@ -1,13 +1,17 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    deploy-rs.url = "github:serokell/deploy-rs";
+
+    i001.url = "path:./hosts/i001";
   };
 
   outputs =
     {
       nixpkgs,
+      deploy-rs,
       ...
-    }:
+    }@inputs:
     let
       # Utilities
       inherit (nixpkgs) lib;
@@ -48,13 +52,31 @@
         in
         {
           default = pkgs.mkShell {
-            nativeBuildInputs = with pkgs; [
+            packages = [
               deploy_oracle
               deploy_linode
-              deploy-rs
+              pkgs.deploy-rs
             ];
           };
         }
       );
+
+      deploy = {
+        sshUser = "root";
+        sshOpts = [
+          "-i"
+          "/run/agenix/nix2nix"
+        ];
+
+        nodes = {
+          i001 = {
+            hostname = "10.12.14.119"; # NOTE not stable ip check...
+            profiles.system = {
+              user = "root";
+              path = deploy-rs.lib.x86_64-linux.activate.nixos inputs.i001.nixosConfigurations.i001;
+            };
+          };
+        };
+      };
     };
 }

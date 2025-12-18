@@ -5,42 +5,30 @@
 - custom iso installer
   - `nix build .\#packages.x86_64-linux.iso-minimal-stable`
 
-## Format main drive with boot partition
+## Format main drive with boot, bcachefs, & swap
 
-### Partition with GPT
+### Partition with GPT table
 
 ```sh
 DEVICE=sda
 parted /dev/$DEVICE -- mklabel gpt
 parted /dev/$DEVICE -- mkpart ESP fat32 1MB 2GB
 parted /dev/$DEVICE -- set 1 esp on
-
+# with swap
 parted /dev/$DEVICE -- mkpart PRIMARY 2GB -8GB
 parted /dev/$DEVICE -- mkpart SWAP linux-swap -8GB 100%
-# OR
+# OR no swap
 parted /dev/$DEVICE -- mkpart PRIMARY 2GB 100%
 ```
 
 ### Format partitions
 
-- boot
-
 ```sh
 BOOT=sda1
 mkfs.fat -F 32 -n BOOT /dev/$BOOT
-```
-
-- primary
-
-```sh
 PRIMARY=sda2
 bcachefs format --label=nixos --encrypted /dev/$PRIMARY
 bcachefs unlock /dev/$PRIMARY
-```
-
-- swap (optional)
-
-```sh
 SWAP=sda3
 mkswap /dev/$SWAP
 swapon /dev/$SWAP
@@ -90,15 +78,15 @@ nixos-generate-config --root /mnt
 - Run nixos-install
 
 ```sh
+# If setup remotely we can install remotely as well like this
 nixos-install --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/i001#i001"
 ```
 
-After boot
+- After boot
+
 ```sh
 nh os switch "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/i001#nixosConfigurations.i001"
-```
-or
-```sh
+# OR
 cd ~/.config
 git clone https://git.joshuabell.xyz/ringofstorms/dotfiles nixos-config
 cd ~/.config/nixos-config/hosts/i001
@@ -107,7 +95,9 @@ cd ~/.config/nixos-config/hosts/i001
 or from host machine? TODO haven't tried this fully
 
 ```sh
-NIX_SSHOPTS="-i /run/agenix/nix2nix" sudo nixos-rebuild switch --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/i001#i001" --target-host luser@10.12.14.157 --build-host localhost
+NIX_SSHOPTS="-i /run/agenix/nix2nix" sudo nixos-rebuild switch --flake "~/.config/nixos-config/hosts/i001#nixosConfigurations.i001" --target-host luser@10.12.14.119 --build-host localhost
+NIX_SSHOPTS="-i /run/agenix/nix2nix" sudo nixos-rebuild switch --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/i001#i001" --target-host luser@10.12.14.119 --build-host localhost
+nh os switch -H i001 --target-host luser@10.12.14.119 --build-host localhost -n ".config/nixos-config/hosts/i001"
 ```
 
 ## USB Key
