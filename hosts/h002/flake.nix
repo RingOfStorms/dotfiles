@@ -49,9 +49,12 @@
               inputs.common.nixosModules.git
               inputs.common.nixosModules.tmux
               inputs.common.nixosModules.boot_grub
-              ({
-                boot.loader.grub.device = "/dev/sdb";
-              })
+              (
+                { lib, ... }:
+                {
+                  boot.loader.grub.device = lib.mkForce "/dev/sdb";
+                }
+              )
               inputs.common.nixosModules.hardening
               inputs.common.nixosModules.nix_options
               inputs.common.nixosModules.no_sleep
