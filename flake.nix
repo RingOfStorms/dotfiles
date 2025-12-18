@@ -41,6 +41,9 @@
               (pkgs.writeShellScriptBin "deploy_i001" ''
                 NIX_SSHOPTS="-i /run/agenix/nix2nix" nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/i001' --target-host root@10.12.14.119 --use-substitutes --no-reexec switch
               '')
+              (pkgs.writeShellScriptBin "deploy_h002" ''
+                NIX_SSHOPTS="-i /run/agenix/nix2nix" nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/h002' --target-host root@10.12.14.183 --use-substitutes --no-reexec switch
+              '')
             ];
           };
         }

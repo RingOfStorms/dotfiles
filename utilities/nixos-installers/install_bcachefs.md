@@ -83,6 +83,9 @@ nixos-generate-config --root /mnt
 ```sh
 # If setup remotely we can install remotely as well like this
 nixos-install --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/i001#i001"
+nixos-install --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/h002#h002"
+# or push from more powerful machine
+# TODO how do I do this for initial install? nixos-anywhere?
 ```
 
 - After boot
