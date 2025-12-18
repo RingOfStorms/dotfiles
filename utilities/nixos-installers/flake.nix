@@ -47,6 +47,10 @@
                   fastfetch
                   fzf
 
+                  dmidecode # motherboard info
+                  lshw # hardware info
+                  sysbench # testing tools
+
                   # bcachefs
                   # Required as a workaround for bug
                   # https://github.com/NixOS/nixpkgs/issues/32279

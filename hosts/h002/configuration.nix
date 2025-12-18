@@ -34,6 +34,4 @@
     networkmanager
     nvtopPackages.full
   ];
-
-  system.stateVersion = "23.11";
 }

@@ -25,11 +25,14 @@ parted /dev/$DEVICE -- mkpart PRIMARY 2GB 100%
 
 ```sh
 BOOT=sda1
-mkfs.fat -F 32 -n BOOT /dev/$BOOT
 PRIMARY=sda2
+SWAP=sda3
+
+mkfs.fat -F 32 -n BOOT /dev/$BOOT
+
 bcachefs format --label=nixos --encrypted /dev/$PRIMARY
 bcachefs unlock /dev/$PRIMARY
-SWAP=sda3
+
 mkswap /dev/$SWAP
 swapon /dev/$SWAP
 ```

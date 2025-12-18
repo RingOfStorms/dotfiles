@@ -30,7 +30,6 @@
       nixosConfigurations = {
         "${configurationName}" = (
           lib.nixosSystem {
-            inherit system;
             specialArgs = {
               inherit inputs;
             };

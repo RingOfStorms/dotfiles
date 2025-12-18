@@ -111,7 +111,7 @@ lib.mkMerge [
     }
   )
   {
-    # Impermanence fix
+    # Impermanence fix for working with custom unlock and reset with root bcache
     boot.initrd.systemd.services.create-needed-for-boot-dirs = {
       after = [
         "unlock-bcachefs-custom.service"
@@ -169,28 +169,12 @@ lib.mkMerge [
         primaryDeviceUnit
       ];
 
-      # unitConfig = {
-      #   # Ensure this service doesn't time out if USB detection takes a while
-      #   DefaultDependencies = "no";
-      # };
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        KeyringMode = "shared"; # TODO so it shares with reset root below, not needed otherwise
+        # TODO so it shares with reset root below, not needed otherwise
+        KeyringMode = "shared";
       };
-
-      # script = ''
-      #   echo "Using USB key for bcachefs unlock: ${USB_KEY}"
-      #
-      #   # only try mount if the node exists
-      #   if [ ! -e "${USB_KEY}" ]; then
-      #     echo "USB key device ${USB_KEY} not present in initrd"
-      #     exit 1
-      #   fi
-      #
-      #   ${pkgs.bcachefs-tools}/bin/bcachefs unlock -f /usb_key/key "${PRIMARY}"
-      #   echo "bcachefs unlock successful for ${PRIMARY}"
-      # '';
 
       script = ''
         echo "Searching for USB Unlock Key..."
@@ -236,7 +220,6 @@ lib.mkMerge [
       '';
     };
 
-    # TODO rotate root
   }
   # Reset root for erase your darlings/impermanence/preservation
   (lib.mkIf true {
@@ -266,11 +249,6 @@ lib.mkMerge [
         Type = "oneshot";
         RemainAfterExit = true;
         KeyringMode = "shared";
-        # Environment = "PATH=${
-        #   lib.makeBinPath [
-        #     # pkgs.coreutils
-        #   ]
-        # }:/bin:/sbin";
       };
 
       script = ''
@@ -286,7 +264,6 @@ lib.mkMerge [
 
         mkdir -p /primary_tmp
 
-        # If unlocked, mounts instantly. If locked, prompts for password on TTY.
         echo "Mounting ${PRIMARY}..."
         if ! mount "${PRIMARY}" /primary_tmp; then
             echo "Mount failed. Cannot reset root."
