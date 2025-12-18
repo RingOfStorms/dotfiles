@@ -39,6 +39,8 @@ in
       description = "Enable SDDM Wayland and Plasma Wayland session.";
     };
 
+    disableKeyd = lib.mkEnableOption "Disable keyd service for Plasma";
+
     appearance.dark.enable = mkOption {
       type = types.bool;
       default = true;
@@ -156,7 +158,7 @@ in
       services.xserver.xkb = {
         layout = "us";
       };
-      services.keyd = {
+      services.keyd = mkIf (!cfg.disableKeyd) {
         enable = true;
         keyboards.default.settings = {
           main = {
