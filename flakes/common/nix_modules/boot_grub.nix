@@ -1,10 +1,11 @@
 {
+  lib,
   ...
 }:
 
 {
   boot.loader.grub = {
     enable = true;
-    device = "/dev/sda";
+    device = lib.mkDefault "/dev/sda";
   };
 }
