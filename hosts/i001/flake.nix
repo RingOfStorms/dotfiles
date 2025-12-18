@@ -13,6 +13,7 @@
     impermanence.url = "github:nix-community/impermanence";
   };
 
+  # NIX_SSHOPTS="-i /run/agenix/nix2nix" nixos-rebuild --flake ".#i001" --target-host luser@10.12.14.119 switch
   outputs =
     {
       ...

@@ -16,6 +16,15 @@
         dns = {
           magic_dns = true;
           base_domain = "net.joshuabell.xyz";
+          override_local_dns = false;
+          # nameservers.global = [
+          #   "1.1.1.1"
+          #   "1.0.0.1"
+          #   "8.8.8.8"
+          #   "8.8.4.4"
+          #   "9.9.9.9"
+          #   "9.9.9.10"
+          # ];
           extra_records =
             let
               h001ARecord = name: {
@@ -23,7 +32,7 @@
                 name = "${name}.joshuabell.xyz";
                 value = "100.64.0.13";
               };
-              
+
             in
             [
               (h001ARecord "jellyfin")

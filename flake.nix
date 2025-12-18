@@ -1,7 +1,6 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    deploy-rs.url = "github:serokell/deploy-rs";
 
     i001.url = "path:./hosts/i001";
     l001.url = "path:./hosts/linode/l001";
@@ -10,7 +9,6 @@
 
   outputs =
     {
-      deploy-rs,
       ...
     }@inputs:
     let
@@ -30,52 +28,19 @@
         {
           default = pkgs.mkShell {
             packages = [
-              inputs.deploy-rs.packages.${system}.default
+              # Some aliases for building + deploying to some remote systems.
+              (pkgs.writeShellScriptBin "deploy_l001" ''
+                nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/linode/l001' --target-host l001 --use-substitutes --no-reexec switch
+              '')
+              (pkgs.writeShellScriptBin "deploy_o001" ''
+                nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/oracle/o001' --target-host o001 --use-substitutes --no-reexec switch
+              '')
+              (pkgs.writeShellScriptBin "deploy_i001" ''
+                NIX_SSHOPTS="-i /run/agenix/nix2nix" nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/i001' --target-host root@10.12.14.119 --use-substitutes --no-reexec switch
+              '')
             ];
           };
         }
       );
-
-      deploy = {
-        sshUser = "root";
-        sshOpts = [
-          "-i"
-          "/run/agenix/nix2nix"
-        ];
-
-        nodes = {
-          i001 = {
-            hostname = "10.12.14.119"; # NOTE not stable ip check...
-            profiles.system = {
-              user = "root";
-              path = deploy-rs.lib.x86_64-linux.activate.nixos inputs.i001.nixosConfigurations.i001;
-            };
-          };
-
-          l001 = {
-            sshOpts = [
-              "-i"
-              "/run/agenix/nix2linode"
-            ];
-            hostname = "172.236.111.33";
-            profiles.system = {
-              user = "root";
-              path = deploy-rs.lib.x86_64-linux.activate.nixos inputs.l001.nixosConfigurations.l001;
-            };
-          };
-
-          o001 = {
-            sshOpts = [
-              "-i"
-              "/run/agenix/nix2oracle"
-            ];
-            hostname = "64.181.210.7";
-            profiles.system = {
-              user = "root";
-              path = deploy-rs.lib.aarch64-linux.activate.nixos inputs.o001.nixosConfigurations.o001;
-            };
-          };
-        };
-      };
     };
 }

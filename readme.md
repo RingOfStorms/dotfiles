@@ -80,8 +80,6 @@ efi   /EFI/Microsoft/Boot/bootmgfw.efi
 
 # Nix Infrastructure & Automation Improvements
 
-- [ ] **Replace deployment scripts with [`deploy-rs`](https://github.com/serokell/deploy-rs)** for declarative, hands-off host updates.  
-    Remove manual `deploy_linode`/`deploy_oracle` scripts. Use `deploy-rs` to apply updates across one or all hosts, including remote builds.
 - [ ] **Add `isoImage` outputs for every host for instant USB/boot media creation.**  
     Use:  
 
@@ -104,7 +102,6 @@ efi   /EFI/Microsoft/Boot/bootmgfw.efi
 - [ ] **Remote build reliability:**  
   - Parametrize/automate remote builder enable/disable.
   - Add quickstart SSH builder key setup instructions per-host in README.
-  - (Optional) Use deploy-rs's agent forwarding and improve errors if builder can't be reached at deploy time.
 - [ ] **Add [disko](https://github.com/nix-community/disko) to declaratively manage disk/partition creation for new installs and reinstalls.**
 
 - work on secrets pre ragenix, stormd pre install for all the above bootstrapping steps would be ideal

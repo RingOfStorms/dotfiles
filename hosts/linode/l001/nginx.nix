@@ -3,7 +3,7 @@
 }:
 {
   security.acme.acceptTerms = true;
-  security.acme.default.email = "admin@joshuabell.xyz";
+  security.acme.defaults.email = "admin@joshuabell.xyz";
   services.nginx = {
     enable = true;
     recommendedGzipSettings = true;
