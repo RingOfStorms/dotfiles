@@ -35,6 +35,9 @@
               (pkgs.writeShellScriptBin "deploy_o001" ''
                 nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/oracle/o001' --target-host o001 --use-substitutes --no-reexec switch
               '')
+              (pkgs.writeShellScriptBin "deploy_h001" ''
+                nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/h001' --target-host h001 --use-substitutes --no-reexec switch
+              '')
               (pkgs.writeShellScriptBin "deploy_i001" ''
                 NIX_SSHOPTS="-i /run/agenix/nix2nix" nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/i001' --target-host root@10.12.14.119 --use-substitutes --no-reexec switch
               '')

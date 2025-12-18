@@ -5,6 +5,7 @@
   imports = [
     ./litellm.nix
     ./nixarr.nix
+    ./hardware-transcoding.nix
     ./monitoring_hub.nix
     ./pinchflat.nix
     ./openwebui.nix
