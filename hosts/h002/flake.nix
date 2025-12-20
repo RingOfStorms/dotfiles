@@ -9,7 +9,7 @@
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
-    impermanence.url = "github:nix-community/impermanence";
+    # impermanence.url = "github:nix-community/impermanence";
   };
 
   outputs =
@@ -35,7 +35,7 @@
               inherit inputs;
             };
             modules = [
-              inputs.impermanence.nixosModules.impermanence
+              # inputs.impermanence.nixosModules.impermanence
               inputs.home-manager.nixosModules.default
 
               # TODO
@@ -52,7 +52,7 @@
               (
                 { lib, ... }:
                 {
-                  boot.loader.grub.device = lib.mkForce "/dev/disk/by-uuid/ca5d2b4d-8964-46c8-99cd-822ac62ac951";
+                  boot.loader.grub.device = lib.mkForce "/dev/disk/by-uuid/e8d53d2d-bb73-41d7-bc64-93af7d3a5e7b";
                 }
               )
               inputs.common.nixosModules.hardening
@@ -75,9 +75,9 @@
               # )
 
               ./hardware-configuration.nix
-              ./hardware-mounts.nix
-              ./impermanence.nix
-              ./impermanence-tools.nix
+              # ./hardware-mounts.nix
+              # ./impermanence.nix
+              # ./impermanence-tools.nix
               (
                 {
                   config,
