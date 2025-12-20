@@ -4,26 +4,15 @@
   ...
 }:
 let
-  BOOT = "/dev/disk/by-uuid/CC65-4ADF";
-  PRIMARY = "/dev/disk/by-uuid/35c8b82e-de7d-45bc-9cb2-2a422a99ee9c";
+  PRIMARY = "/dev/disk/by-uuid/ca5d2b4d-8964-46c8-99cd-822ac62ac951";
 
-  SWAP = "/dev/disk/by-uuid/85801775-1aad-4cc8-846a-560f9f4b11f4";
+  SWAP = "/dev/disk/by-uuid/8e3a611e-b9a0-4d42-bc1c-cf1df55d9591";
 
   primaryDeviceUnit = "${utils.escapeSystemdPath PRIMARY}.device";
 in
 lib.mkMerge [
   # Main filesystems
   {
-    # BOOT
-    fileSystems."/boot" = {
-      device = BOOT;
-      fsType = "vfat";
-      options = [
-        "fmask=0077"
-        "dmask=0077"
-      ];
-    };
-
     # PRIMARY
     fileSystems."/" = {
       device = PRIMARY;

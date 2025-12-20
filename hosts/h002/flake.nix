@@ -52,7 +52,7 @@
               (
                 { lib, ... }:
                 {
-                  boot.loader.grub.device = lib.mkForce "/dev/sdb";
+                  boot.loader.grub.device = lib.mkForce "/dev/disk/by-uuid/ca5d2b4d-8964-46c8-99cd-822ac62ac951";
                 }
               )
               inputs.common.nixosModules.hardening
