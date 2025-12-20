@@ -8,8 +8,6 @@
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
-
-    # impermanence.url = "github:nix-community/impermanence";
   };
 
   outputs =
@@ -35,7 +33,6 @@
               inherit inputs;
             };
             modules = [
-              # inputs.impermanence.nixosModules.impermanence
               inputs.home-manager.nixosModules.default
 
               # TODO
@@ -52,7 +49,7 @@
               (
                 { lib, ... }:
                 {
-                  boot.loader.grub.device = lib.mkForce "/dev/disk/by-uuid/e8d53d2d-bb73-41d7-bc64-93af7d3a5e7b";
+                  boot.loader.grub.device = lib.mkForce "/dev/disk/by-id/ata-KINGSTON_SV300S37A120G_50026B773C00F8F4";
                 }
               )
               inputs.common.nixosModules.hardening
@@ -75,9 +72,6 @@
               # )
 
               ./hardware-configuration.nix
-              # ./hardware-mounts.nix
-              # ./impermanence.nix
-              # ./impermanence-tools.nix
               (
                 {
                   config,
