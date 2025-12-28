@@ -13,6 +13,7 @@
     (modulesPath + "/installer/scan/not-detected.nix")
   ];
 
+  boot.supportedFilesystems = [ "bcachefs" ];
   boot.initrd.availableKernelModules = [
     "ehci_pci"
     "ahci"

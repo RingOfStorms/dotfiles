@@ -130,6 +130,12 @@
                       common.homeManagerModules.starship
                       common.homeManagerModules.zoxide
                       common.homeManagerModules.zsh
+                      (
+                        { ... }:
+                        {
+                          programs.tmux.package = pkgs.unstable.tmux;
+                        }
+                      )
                     ];
                   };
 
@@ -165,8 +171,6 @@
                     nodejs_24
                     ttyd
                     appimage-run
-
-                    unstable.opencode
                   ];
 
                   services.flatpak.packages = [
