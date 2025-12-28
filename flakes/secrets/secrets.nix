@@ -37,8 +37,8 @@ let
   ];
 
   h002 = [
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB9GW9W3DT9AqTonG5rDta3ziZdYOEEdukh2ErJfHxoP root@h002"
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC60tzOVF0mcyfnYK2V/omzikuyE8Ol0K+yAjGxBV7q4 luser@h002"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDPHNncISukIiuO6rSuoKrV93rfFLcwtnfOYrLmfxYUc root@h002"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ5kbUa0Xih8NZ7pkRtd2/xzMh0KitaSNrKKHjWNAUjI luser@h002"
   ];
 
   h003 = [
