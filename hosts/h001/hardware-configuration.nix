@@ -21,6 +21,7 @@
   boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ "kvm-intel" ];
   boot.extraModulePackages = [ ];
+  boot.supportedFilesystems = [ "apfs" ];
 
   fileSystems."/" = {
     device = "/dev/disk/by-label/NIXROOT";
