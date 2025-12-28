@@ -138,8 +138,13 @@ in
         hostname = "10.12.14.10";
         user = "luser";
       };
-      "h002" = lib.mkIf (hasSecret "nix2h002") {
-        identityFile = age.secrets.nix2h002.path;
+      "h002" = lib.mkIf (hasSecret "nix2nix") {
+        identityFile = age.secrets.nix2nix.path;
+        user = "luser";
+      };
+      "h002_" = lib.mkIf (hasSecret "nix2nix") {
+        identityFile = age.secrets.nix2nix.path;
+        hostname = "10.12.14.183";
         user = "luser";
       };
       "h003" = lib.mkIf (hasSecret "nix2h003") {
