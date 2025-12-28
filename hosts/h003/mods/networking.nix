@@ -197,7 +197,7 @@
       # Static DHCP reservations
       dhcp-host = [
         "00:be:43:b9:f4:e0,H001,10.12.14.10"
-        # TODO add H002 for .11
+        "54:04:a6:32:d1:71,H002,10.12.14.10"
         "c8:c9:a3:2b:7b:19,PRUSA-MK4,10.12.14.21"
         "24:e8:53:73:a3:c6,LGWEBOSTV,10.12.14.30"
         "2c:cf:67:6a:45:47,HOMEASSISTANT,10.12.14.22"
