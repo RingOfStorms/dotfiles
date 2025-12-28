@@ -79,13 +79,13 @@ in
             litellm_params = {
               model = "azure/${m}";
               api_base = "http://100.64.0.8:9010/azure";
-              api_version = "2025-07-01-preview";
+              api_version = "2025-04-01-preview";
               api_key = "na";
             };
           })
           # curl -L "http://100.64.0.8:9010/azure/openai/models?api-version=2025-04-01-preview" | jq '.data.[].id'
           [
-            "gpt-5.2"
+            # "gpt-5.2-2025-12-11"
             "gpt-5.1-2025-11-13"
             "gpt-4o-2024-05-13"
             "gpt-4.1-2025-04-14"
@@ -110,6 +110,7 @@ in
             "gpt-5-mini"
             "gpt-5-nano"
             "gpt-5.1"
+            "gpt-5.2"
             "gpt-5"
             "gpt-4.1"
             "gpt-4.1-mini"
