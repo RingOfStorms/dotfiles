@@ -102,6 +102,7 @@
                       inputs.common.homeManagerModules.starship
                       inputs.common.homeManagerModules.zoxide
                       inputs.common.homeManagerModules.zsh
+                      inputs.common.homeManagerModules.ssh
                     ];
 
                     extraSpecialArgs = {
