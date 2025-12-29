@@ -31,6 +31,7 @@
             options.beszelAgent = {
               listen = lib.mkOption {
                 type = lib.types.str;
+                default = "[::]:45876";
                 description = "The listen:port address for agent";
               };
               token = lib.mkOption {
