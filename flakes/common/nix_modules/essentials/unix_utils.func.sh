@@ -48,7 +48,7 @@ mail_clear() {
   : > /var/mail/$USER
 }
 
-peedtest_fs () {
+speedtest_fs () {
   dir=$(pwd)
   drive=$(df -h "${dir}" | awk 'NR==2 {print $1}')
   echo "Testing filesystem on: ${dir}"
@@ -108,8 +108,19 @@ peedtest_fs () {
       --time_based \
       --runtime="${runtime}" \
       --group_reporting
-}
 
-speedtest_internet () {
-  speedtest-cli
+  echo
+  echo "=== Random read/write test (${runtime}s, 70% reads, 4k blocks) ==="
+  fio --name=randrw \
+      --filename="${test_file}" \
+      --rw=randrw \
+      --rwmixread=70 \
+      --bs=4k \
+      --size="${file_size}" \
+      --iodepth=32 \
+      --direct=1 \
+      --numjobs=4 \
+      --time_based \
+      --runtime="${runtime}" \
+      --group_reporting
 }

@@ -56,6 +56,8 @@ with lib;
     # ripgrep
     rg = "rg --no-ignore";
     rgf = "rg --files --glob '!/nix/store/**' 2>/dev/null | rg";
+
+    speedtest_internet = "speedtest-cli";
   };
 
   environment.shellInit = lib.concatStringsSep "\n\n" [
