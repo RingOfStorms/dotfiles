@@ -36,6 +36,22 @@
     { device = "/dev/disk/by-uuid/f043c171-5d20-4c6c-bc82-6e72139d7cb1"; }
   ];
 
+  fileSystems."/data" = {
+    device =
+      # root@h002:/home/luser/ > bcachefs format --compression=zstd --replicas=2 /dev/sda /dev/sdb /dev/sdc /dev/sde /dev/sdf
+      # External UUID:                             53a26b95-941b-4f41-b049-c166905ed8c2
+      # Internal UUID:                             9d63b280-7b25-46a7-8437-4c6d92e63790
+      # Magic number:                              c68573f6-66ce-90a9-d96a-60cf803df7ef
+      "UUID=53a26b95-941b-4f41-b049-c166905ed8c2";
+    fsType = "bcachefs";
+    options = [
+      "defaults"
+      "compression=zstd"
+      "fsck"
+      "fix_errors"
+    ];
+  };
+
   # Enables DHCP on each ethernet and wireless interface. In case of scripted networking
   # (the default) this is the recommended approach. When using systemd-networkd it's
   # still possible to use this option, but it's recommended to use it in conjunction

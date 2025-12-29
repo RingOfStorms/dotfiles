@@ -4,8 +4,10 @@
     home-manager.url = "github:rycee/home-manager/release-25.11";
 
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # de_plasma.url = "path:../../../../flakes/de_plasma";
-    de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
+    # secrets.url = "path:../../flakes/secrets";
+    secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
+    # beszel.url = "path:../../flakes/beszel";
+    beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -13,7 +15,6 @@
   outputs =
     {
       nixpkgs,
-      common,
       ros_neovim,
       ...
     }@inputs:
@@ -22,7 +23,7 @@
       primaryUser = "luser";
       configLocation = "/home/${primaryUser}/.config/nixos-config/hosts/${configurationName}";
       stateAndHomeVersion = "25.11";
-      # overlayIp = "100.64.0.14";
+      overlayIp = "100.64.0.3";
       lib = inputs.nixpkgs.lib;
     in
     {
@@ -35,8 +36,7 @@
             modules = [
               inputs.home-manager.nixosModules.default
 
-              # TODO
-              # secrets.nixosModules.default
+              inputs.secrets.nixosModules.default
               inputs.ros_neovim.nixosModules.default
               ({
                 ringofstorms-nvim.includeAllRuntimeDependencies = true;
@@ -58,20 +58,20 @@
               inputs.common.nixosModules.timezone_auto
               inputs.common.nixosModules.tty_caps_esc
               inputs.common.nixosModules.zsh
-              # TODO
-              # common.nixosModules.tailnet
-              # beszel.nixosModules.agent
-              # (
-              #   { ... }:
-              #   {
-              #     beszelAgent = {
-              #       listen = "${overlayIp}:45876";
-              #       token = "f8a54c41-486b-487a-a78d-a087385c317b";
-              #     };
-              #   }
-              # )
+              inputs.common.nixosModules.tailnet
+              inputs.beszel.nixosModules.agent
+              ({
+                beszelAgent = {
+                  listen = "${overlayIp}:45876";
+                  token = "11714da6-fd2e-436a-8b83-e0e07ba33a95";
+                };
+                services.beszel.agent.environment = {
+                  EXTRA_FILESYSTEMS = "sdb__Data";
+                };
+              })
 
               ./hardware-configuration.nix
+              ./nfs-data.nix
               (
                 {
                   config,
@@ -102,6 +102,7 @@
                       inputs.common.homeManagerModules.starship
                       inputs.common.homeManagerModules.zoxide
                       inputs.common.homeManagerModules.zsh
+                      inputs.common.homeManagerModules.ssh
                     ];
 
                     extraSpecialArgs = {
