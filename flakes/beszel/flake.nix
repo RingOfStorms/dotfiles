@@ -48,6 +48,11 @@
                 description = "The hub url";
                 default = "http://100.64.0.13:8090";
               };
+              extraFilesystems = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                description = "The EXTRA_FILESYSTEMS variable value";
+                default = null;
+              };
             };
             config = {
               services.beszel.agent = {
@@ -59,6 +64,9 @@
                   HUB_URL = config.beszelAgent.hub;
                   TOKEN = config.beszelAgent.token;
                   KEY = config.beszelAgent.key;
+                  EXTRA_FILESYSTEMS = lib.mkIf (
+                    config.beszelAgent.extraFilesystems != null
+                  ) config.beszelAgent.extraFilesystems;
                 };
               };
             };
