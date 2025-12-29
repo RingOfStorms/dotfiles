@@ -46,9 +46,10 @@
     fsType = "bcachefs";
     options = [
       "defaults"
-      "compression=zstd"
-      "fsck"
-      "fix_errors"
+      # "fsck"
+      # "fix_errors"
+      "x-systemd.device-timeout=600s"
+      "nofail"
     ];
   };
 

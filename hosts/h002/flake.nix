@@ -66,7 +66,7 @@
                   token = "11714da6-fd2e-436a-8b83-e0e07ba33a95";
                 };
                 services.beszel.agent.environment = {
-                  EXTRA_FILESYSTEMS = "sdb__Data";
+                  EXTRA_FILESYSTEMS = "/data__Data";
                 };
               })
 
