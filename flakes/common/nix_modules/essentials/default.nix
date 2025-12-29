@@ -30,6 +30,7 @@ with lib;
     killall
     speedtest-cli
     parted
+    fio
   ];
 
   environment.shellAliases = {

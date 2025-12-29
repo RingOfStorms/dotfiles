@@ -48,16 +48,66 @@ mail_clear() {
   : > /var/mail/$USER
 }
 
-speedtest_fs () {
+peedtest_fs () {
   dir=$(pwd)
-  drive=$(df -h ${dir} | awk 'NR==2 {print $1}')
-  echo Testing read speeds on drive ${drive}
-  sudo hdparm -Tt ${drive}
-  test_file=$(date +%u%m%d)
-  test_file="${dir}/speedtest_fs_${test_file}"
+  drive=$(df -h "${dir}" | awk 'NR==2 {print $1}')
+  echo "Testing filesystem on: ${dir}"
+  echo "Underlying device:     ${drive}"
   echo
-  echo Testing write speeds into test file: ${test_file}
-  dd if=/dev/zero of=${test_file} bs=8k count=10k; rm -f ${test_file}
+
+  test_file="${dir}/speedtest_fs_$(date +%u%m%d).fio"
+  file_size=1G    # size of the test file
+  runtime=5       # seconds per test
+
+  cleanup() {
+    if [ -n "${test_file:-}" ] && [ -f "${test_file}" ]; then
+      echo
+      echo "Cleaning up test file: ${test_file}"
+      rm -f "${test_file}"
+    fi
+  }
+
+  # Ensure cleanup on normal exit, Ctrl+C, etc.
+  trap cleanup EXIT INT TERM
+
+  echo "Creating test file (${file_size}) at: ${test_file}"
+  fio --name=precreate \
+      --filename="${test_file}" \
+      --rw=write \
+      --bs=1M \
+      --size="${file_size}" \
+      --iodepth=16 \
+      --direct=1 \
+      --numjobs=1 \
+      --group_reporting >/dev/null 2>&1
+
+  echo
+  echo "=== Sequential write test (${runtime}s) ==="
+  fio --name=seqwrite \
+      --filename="${test_file}" \
+      --rw=write \
+      --bs=1M \
+      --size="${file_size}" \
+      --iodepth=16 \
+      --direct=1 \
+      --numjobs=1 \
+      --time_based \
+      --runtime="${runtime}" \
+      --group_reporting
+
+  echo
+  echo "=== Sequential read test (${runtime}s) ==="
+  fio --name=seqread \
+      --filename="${test_file}" \
+      --rw=read \
+      --bs=1M \
+      --size="${file_size}" \
+      --iodepth=16 \
+      --direct=1 \
+      --numjobs=1 \
+      --time_based \
+      --runtime="${runtime}" \
+      --group_reporting
 }
 
 speedtest_internet () {
