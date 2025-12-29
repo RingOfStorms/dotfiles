@@ -88,6 +88,7 @@
               ./mods
               ./nginx.nix
               ./containers
+              ./autofs.nix
               (
                 { config, pkgs, ... }:
                 rec {
