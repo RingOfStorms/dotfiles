@@ -185,6 +185,7 @@
                     vlang
                     ttyd
                     pavucontrol
+                    nfs-utils
                   ];
 
                   services.flatpak.packages = [
