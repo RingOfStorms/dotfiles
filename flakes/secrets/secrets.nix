@@ -31,6 +31,11 @@ let
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICauUtSa71+oQAiLxp3GMMbmNXcbr9Mc7eK8b/lqZbbS josh@oren"
   ];
 
+  juni = [
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIArKvehXqt85aOJAuxrL7f6Ifh+HqzFCqQXv0rDVcS2s root@juni"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEYR8RBOLM2bt0wJF3WlwZHgaK9Rd8XywvNJCDJdFQgl josh@juni"
+  ];
+
   h001 = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGTAz6n35c3r8kSuWJM1JzMVx6jK+0EBwpJA5eTIvy3N root@h001"
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICRHer3NrJiklp4oDNRCzDxc9fXpXn5rPAXGFce8ugy2 luser@h001"
@@ -46,7 +51,7 @@ let
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILQLt2Hc+CN6+e7/sf3Fv0FQlp6+yrIbIJ/J9AdnJCjI luser@h003"
   ];
 
-  trustedKeys = authorityKey ++ gpdPocket3 ++ lio ++ joe ++ oren ++ h001 ++ h002 ++ h003;
+  trustedKeys = authorityKey ++ gpdPocket3 ++ lio ++ joe ++ oren ++ juni ++ h001 ++ h002 ++ h003;
 
   o001 = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFrwvahx1x4rue28QHCzyADQndOeTESIv80f7d00NXWT root@o001"

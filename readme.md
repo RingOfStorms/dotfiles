@@ -41,7 +41,7 @@ boot.initrd.luks.devices
 - `cat /etc/ssh/ssh_host_ed25519_key.pub ~/.ssh/id_ed25519.pub`
   - On an already onboarded computer copy these and add them to secrets/secrets.nix file
     - `nix run github:yaxitech/ragenix -- --rules ~/.config/nixos-config/flakes/secrets/secrets.nix -r`
-    - `ragenix -i ~/.ssh/ragenix_authority --rules ~/.config/nixos-config/flakes/secrets/secrets.nix -r`
+    - `ragenix -i ~/.ssh/ragenix_authority --rules ~/.config/nixos-config/flakes/secrets/secrets.nix -r
   - Maybe copy hardware/configs over and setup, otherwise do it on the client machine
 - git clone nixos-config `git clone https://git.joshuabell.xyz/ringofstorms/dotfiles ~/.config/nixos-config`
 - Setup config as needed
