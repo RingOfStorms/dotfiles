@@ -103,6 +103,7 @@ in
               model = "litellm_proxy/${m}";
               api_base = "http://100.64.0.8:9010/air_prd";
               api_key = "na";
+              drop_params = true;
             };
           })
           # curl -L t.net.joshuabell.xyz:9010/air_prd/models | jq '.data.[].id'
