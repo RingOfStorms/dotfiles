@@ -10,8 +10,6 @@
       os_window_class = "kitty";
       remember_window_size = false;
       placement_strategy = "center";
-      initial_window_width = "160c";
-      initial_window_height = "55c";
 
       # Remove window borders
       hide_window_decorations = "yes";
