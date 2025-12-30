@@ -91,6 +91,7 @@
               common.nixosModules.timezone_auto
               common.nixosModules.tty_caps_esc
               common.nixosModules.zsh
+              common.nixosModules.more_filesystems
 
               beszel.nixosModules.agent
               ({
