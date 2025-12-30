@@ -15,7 +15,8 @@ in
   config = {
     nixarr = {
       enable = true;
-      mediaDir = "/drives/wd10/nixarr/media";
+      # mediaDir = "/drives/wd10/nixarr/media";
+      mediaDir = "/nfs/h002/nixarr/media";
       stateDir = "/var/lib/nixarr/state";
 
       vpn = lib.mkIf (hasSecret "us_chi_wg") {
@@ -53,7 +54,7 @@ in
       # recyclarr.enable = true; # not sure how to use this yet
     };
 
-    services.nginx = {
+    services.nginx = lib.mkIf config.nixarr.enable {
       virtualHosts = {
         "jellyfin.joshuabell.xyz" = {
           addSSL = true;

@@ -1,4 +1,9 @@
-{ pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 {
   ############################
   # Intel iGPU / VAAPI / QSV #
@@ -29,7 +34,7 @@
   };
 
   # Optional but can help when services (like jellyfin) run in their own units
-  systemd.services.jellyfin.environment.LIBVA_DRIVER_NAME = "iHD";
+  systemd.services.jellyfin.environment.LIBVA_DRIVER_NAME = lib.mkIf config.nixarr.enable "iHD";
 
   ########################
   # Firmware for the iGPU
