@@ -100,6 +100,8 @@ CLOSURE=$(readlink -f result)
 echo $CLOSURE
 # on target
 nixos-install --system $CLOSURE
+
+# OR fully offline over flash drive...
 ```
 
 - After boot
@@ -110,6 +112,18 @@ nh os switch "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/i00
 cd ~/.config
 git clone https://git.joshuabell.xyz/ringofstorms/dotfiles nixos-config
 cd ~/.config/nixos-config/hosts/i001
+# OR via flashdrive
+HOST=juni
+cd ~/.config/nixos-config/hosts/$HOST
+nixos-rebuild build --flake ".#$HOST"
+CLOSURE="$(readlink -f result)"
+nix-store --export $(nix-store -qR "$CLOSURE") > /run/media/josh/69F7-F789/system.export
+# on target host
+nix-store --import < /path/to/system.export
+# ls -td /nix/store/*-nixos-system-*
+CLOSURE=""
+nix-env -p /nix/var/nix/profiles/system --set "$CLOSURE"
+"$CLOSURE"/bin/switch-to-configuration switch
 ```
 
 or from host machine? TODO haven't tried this fully
