@@ -66,12 +66,12 @@
               })
               inputs.common.nixosModules.jetbrains_font
 
-              # secrets.nixosModules.default
+              inputs.secrets.nixosModules.default
               inputs.ros_neovim.nixosModules.default
               ({
                 ringofstorms-nvim.includeAllRuntimeDependencies = true;
               })
-              # inputs.opencode.nixosModules.default
+              inputs.opencode.nixosModules.default
 
               inputs.flatpaks.nixosModules.default
 
@@ -84,15 +84,15 @@
               inputs.common.nixosModules.timezone_auto
               inputs.common.nixosModules.tty_caps_esc
               inputs.common.nixosModules.zsh
-              # inputs.common.nixosModules.tailnet
+              inputs.common.nixosModules.tailnet
 
-              # beszel.nixosModules.agent
-              # ({
-              #     beszelAgent = {
-              #       token = "f8a54c41-486b-487a-a78d-a087385c317b";
-              #     };
-              #   }
-              # )
+              inputs.beszel.nixosModules.agent
+              ({
+                  beszelAgent = {
+                    token = "2fb5f0a0-24aa-4044-a893-6d0f916cd063";
+                  };
+                }
+              )
 
               ./hardware-configuration.nix
               ./hardware-mounts.nix
@@ -122,7 +122,7 @@
                       inputs.common.homeManagerModules.starship
                       inputs.common.homeManagerModules.zoxide
                       inputs.common.homeManagerModules.zsh
-                      # inputs.common.homeManagerModules.ssh
+                      inputs.common.homeManagerModules.ssh
                       (
                         { ... }:
                         {
