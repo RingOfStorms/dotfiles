@@ -5,9 +5,12 @@
 
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
+    nixos-hardware.url = "github:NixOS/nixos-hardware/master";
+    impermanence.url = "github:nix-community/impermanence";
+
     # Use relative to get current version for testin
-    # inputs.common.url = "path:../../flakes/common";
-    inputs.common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    # common.url = "path:../../flakes/common";
+    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets.url = "path:../../flakes/secrets";
     secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
     # flatpaks.url = "path:../../flakes/flatpaks";
@@ -40,6 +43,8 @@
         "${configuration_name}" = (
           lib.nixosSystem {
             modules = [
+              inputs.nixos-hardware.nixosModules.framework-12-13th-gen-intel
+              inputs.impermanence.nixosModules.impermanence
               ({
                 nixpkgs.overlays = [
                   (final: prev: {
@@ -55,10 +60,11 @@
               ({
                 ringofstorms.dePlasma = {
                   enable = true;
-                  gpu.amd.enable = true;
+                  gpu.intel.enable = true;
                   sddm.autologinUser = "josh";
                 };
               })
+              inputs.common.nixosModules.jetbrains_font
 
               # secrets.nixosModules.default
               inputs.ros_neovim.nixosModules.default
@@ -69,17 +75,16 @@
 
               inputs.flatpaks.nixosModules.default
 
+              inputs.common.nixosModules.boot_systemd
               inputs.common.nixosModules.essentials
               inputs.common.nixosModules.git
               inputs.common.nixosModules.tmux
-              inputs.common.nixosModules.boot_systemd
               inputs.common.nixosModules.hardening
-              inputs.common.nixosModules.jetbrains_font
               inputs.common.nixosModules.nix_options
-              # inputs.common.nixosModules.tailnet
               inputs.common.nixosModules.timezone_auto
               inputs.common.nixosModules.tty_caps_esc
               inputs.common.nixosModules.zsh
+              # inputs.common.nixosModules.tailnet
 
               # beszel.nixosModules.agent
               # ({
@@ -89,8 +94,10 @@
               #   }
               # )
 
-              ./configuration.nix
               ./hardware-configuration.nix
+              ./hardware-mounts.nix
+              ./impermanence-tools.nix
+              (import ./impermanence.nix { inherit primaryUser; })
               (
                 { config, pkgs, ... }:
                 rec {
@@ -112,10 +119,10 @@
                       inputs.common.homeManagerModules.kitty
                       inputs.common.homeManagerModules.git
                       inputs.common.homeManagerModules.postgres_cli_options
-                      inputs.common.homeManagerModules.ssh
                       inputs.common.homeManagerModules.starship
                       inputs.common.homeManagerModules.zoxide
                       inputs.common.homeManagerModules.zsh
+                      # inputs.common.homeManagerModules.ssh
                       (
                         { ... }:
                         {

@@ -37,6 +37,9 @@ mkswap /dev/$SWAP
 swapon /dev/$SWAP
 ```
 
+> TIP: Save encryption password in password manager +
+> Copy the External/Internal/Magic number output UUIDS
+
 ### Setup subvolumes
 
 ```sh
@@ -64,6 +67,7 @@ umount /mnt
 ```sh
 DEV_B="/dev/disk/by-uuid/"$(lsblk -o name,uuid | grep $BOOT | awk '{print $2}')
 DEV_P="/dev/disk/by-uuid/"$(lsblk -o name,uuid | grep $PRIMARY | awk '{print $2}')
+echo $DEV_B && echo $DEV_P
 mount -t bcachefs -o X-mount.subdir=@root $DEV_P /mnt
 mount -t vfat $DEV_B /mnt/boot --mkdir
 mount -t bcachefs -o X-mount.mkdir,X-mount.subdir=@nix,relatime $DEV_P /mnt/nix
@@ -78,14 +82,24 @@ nixos-generate-config --root /mnt
 ```
 
 - Copy useful bits out into real config in repo (primarily swap/kernel modules)
+- Decide on SWAP, USB key unlock, impermanence
+  - Use i001 as an example install with this setup
 - Run nixos-install
 
 ```sh
-# If setup remotely we can install remotely as well like this
-nixos-install --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/i001#i001"
-nixos-install --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/h002#h002"
-# or push from more powerful machine
-# TODO how do I do this for initial install? nixos-anywhere?
+# If setup remotely we can install from pushed up flake like so from the target host
+HOST=i001
+nixos-install --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/$HOST#$HOST"
+
+# NOTE not sure if this works very well, seems to be partially
+# or push from more powerful machine that can build faster, on host
+HOST=juni
+cd hosts/$HOST && nixos-rebuild build --flake ".#$HOST"
+NIX_SSHOPTS="-i /run/agenix/nix2nix" nix-copy-closure --to $HOST --use-substitutes --gzip result
+CLOSURE=$(readlink -f result)
+echo $CLOSURE
+# on target
+nixos-install --system $CLOSURE
 ```
 
 - After boot

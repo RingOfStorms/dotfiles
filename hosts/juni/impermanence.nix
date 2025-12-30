@@ -1,3 +1,4 @@
+{ primaryUser }:
 { ... }:
 {
   environment.persistence."/persist" = {
@@ -14,13 +15,18 @@
 
       "/etc/NetworkManager/system-connections"
       "/var/lib/bluetooth"
+      "/var/lib/NetworkManager"
+      "/var/lib/iwd"
       "/var/lib/fail2ban"
     ];
     files = [
       "/etc/machine-id"
     ];
-    users.luser = {
+    users."${primaryUser}" = {
       directories = [
+        ".ssh"
+        ".gnupg"
+
         "projects"
         ".config/nixos-config"
 
@@ -29,9 +35,13 @@
 
         ".local/share/zoxide"
 
-        # KDE connect specific
+        # KDE
         ".config/kdeconnect"
 
+        # Chrome
+        ".config/google-chrome"
+
+        # neovim ros_neovim
         ".local/state/nvim_ringofstorms_helium"
       ];
       files = [
