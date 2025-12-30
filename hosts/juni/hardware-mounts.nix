@@ -11,9 +11,10 @@ let
 
   SWAP = "/dev/disk/by-uuid/ad0311e2-7eb1-47af-bc4b-6311968cbccf";
 
-  USB_KEY = null;
-
   IMPERMANENCE = true;
+  ENCRYPTED = true;
+
+  USB_KEY = null;
 
   primaryDeviceUnit = "${utils.escapeSystemdPath PRIMARY}.device";
 in
@@ -93,9 +94,9 @@ lib.mkMerge [
         (lib.mapAttrs' (k: disableFs) bcacheBoots);
     }
   )
-  {
+  (lib.mkIf IMPERMANENCE {
     # Impermanence fix for working with custom unlock and reset with root bcache
-    boot.initrd.systemd.services.create-needed-for-boot-dirs = {
+    boot.initrd.systemd.services.create-needed-for-boot-dirs = lib.mkIf ENCRYPTED {
       after = [
         "unlock-bcachefs-custom.service"
         "bcachefs-reset-root.service"
@@ -106,9 +107,81 @@ lib.mkMerge [
       ];
       serviceConfig.KeyringMode = "shared";
     };
-  }
+
+    boot.initrd.systemd.services.bcachefs-reset-root = {
+      description = "Reset bcachefs root subvolume before pivot";
+
+      after = [
+        "initrd-root-device.target"
+        "cryptsetup.target"
+        "unlock-bcachefs-custom.service"
+      ];
+      requires = [
+        primaryDeviceUnit
+        "unlock-bcachefs-custom.service"
+      ];
+
+      before = [
+        "sysroot.mount"
+      ];
+      wantedBy = [
+        "initrd-root-fs.target"
+        "sysroot.mount"
+        "initrd.target"
+      ];
+
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        KeyringMode = "shared";
+      };
+
+      script = ''
+        cleanup() {
+            if [[ ! -e /primary_tmp/@root ]]; then
+                echo "Cleanup: Creating new @root"
+                bcachefs subvolume create /primary_tmp/@root
+            fi
+            echo "Cleanup: Unmounting /primary_tmp"
+            umount /primary_tmp || true
+        }
+        trap cleanup EXIT
+
+        mkdir -p /primary_tmp
+
+        echo "Mounting ${PRIMARY}..."
+        if ! mount "${PRIMARY}" /primary_tmp; then
+            echo "Mount failed. Cannot reset root."
+            exit 1
+        fi
+
+        if [[ -e /primary_tmp/@root ]]; then
+            mkdir -p /primary_tmp/@snapshots/old_roots
+            
+            # Use safe timestamp format (dashes instead of colons)
+            timestamp=$(date "+%Y-%m-%d_%H-%M-%S")
+            snap="/primary_tmp/@snapshots/old_roots/$timestamp"
+            echo "Snapshotting @root to $snap"
+            bcachefs subvolume snapshot /primary_tmp/@root "$snap"
+            
+            echo "Deleting current @root"
+            bcachefs subvolume delete /primary_tmp/@root
+        fi
+
+        # Trap handles creating new root and unmount
+      '';
+    };
+  })
+
+  # If you mess up decruption password this reboots for retry instead of getting stuck
+  (lib.mkIf ENCRYPTED {
+    boot.kernelParams = [
+      "rd.shell=0"
+      "rd.emergency=reboot"
+    ];
+  })
   # Bcachefs auto decryption
-  (lib.mkIf (USB_KEY != null) {
+  (lib.mkIf (ENCRYPTED && USB_KEY != null) {
     boot.supportedFilesystems = [
       "bcachefs"
     ];
@@ -185,69 +258,5 @@ lib.mkMerge [
       '';
     };
   })
-  (lib.mkIf IMPERMANENCE {
-    boot.initrd.systemd.services.bcachefs-reset-root = {
-      description = "Reset bcachefs root subvolume before pivot";
 
-      after = [
-        "initrd-root-device.target"
-        "cryptsetup.target"
-        "unlock-bcachefs-custom.service"
-      ];
-      requires = [
-        primaryDeviceUnit
-        "unlock-bcachefs-custom.service"
-      ];
-
-      before = [
-        "sysroot.mount"
-      ];
-      wantedBy = [
-        "initrd-root-fs.target"
-        "sysroot.mount"
-        "initrd.target"
-      ];
-
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        KeyringMode = "shared";
-      };
-
-      script = ''
-        cleanup() {
-            if [[ ! -e /primary_tmp/@root ]]; then
-                echo "Cleanup: Creating new @root"
-                bcachefs subvolume create /primary_tmp/@root
-            fi
-            echo "Cleanup: Unmounting /primary_tmp"
-            umount /primary_tmp || true
-        }
-        trap cleanup EXIT
-
-        mkdir -p /primary_tmp
-
-        echo "Mounting ${PRIMARY}..."
-        if ! mount "${PRIMARY}" /primary_tmp; then
-            echo "Mount failed. Cannot reset root."
-            exit 1
-        fi
-
-        if [[ -e /primary_tmp/@root ]]; then
-            mkdir -p /primary_tmp/@snapshots/old_roots
-            
-            # Use safe timestamp format (dashes instead of colons)
-            timestamp=$(date "+%Y-%m-%d_%H-%M-%S")
-            snap="/primary_tmp/@snapshots/old_roots/$timestamp"
-            echo "Snapshotting @root to $snap"
-            bcachefs subvolume snapshot /primary_tmp/@root "$snap"
-            
-            echo "Deleting current @root"
-            bcachefs subvolume delete /primary_tmp/@root
-        fi
-
-        # Trap handles creating new root and unmount
-      '';
-    };
-  })
 ]
