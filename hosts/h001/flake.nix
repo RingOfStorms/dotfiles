@@ -42,7 +42,6 @@
       configuration_name = "h001";
       stateVersion = "24.11";
       primaryUser = "luser";
-      overlayIp = "100.64.0.13";
       lib = nixpkgs.lib;
     in
     {
@@ -63,6 +62,7 @@
 
               common.nixosModules.essentials
               common.nixosModules.git
+              common.nixosModules.tmux
               common.nixosModules.boot_systemd
               common.nixosModules.hardening
               common.nixosModules.nix_options
@@ -75,11 +75,8 @@
               beszel.nixosModules.agent
               ({
                 beszelAgent = {
-                  listen = "${overlayIp}:45876";
                   token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
-                };
-                services.beszel.agent.environment = {
-                  EXTRA_FILESYSTEMS = "sda__Media";
+                  extraFilesystems = "sda__Media";
                 };
               })
 
@@ -148,6 +145,7 @@
                     lua
                     sqlite
                     ttyd
+                    rclone
                   ];
                 }
               )

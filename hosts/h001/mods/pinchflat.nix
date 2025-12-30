@@ -1,6 +1,7 @@
 {
   lib,
   inputs,
+  config,
   pkgs,
   ...
 }:
@@ -15,13 +16,14 @@ in
 {
   disabledModules = [ declaration ];
   imports = [ "${nixpkgsPinchflat}/nixos/modules/${declaration}" ];
-  config = {
+  config = lib.mkIf config.nixarr.enable {
     services.pinchflat = {
       package = pkgsPinchflat.pinchflat;
       enable = true;
       port = 8945;
       selfhosted = true;
-      mediaDir = "/drives/wd10/pinchflat/media";
+      mediaDir = "/nfs/h002/pinchflat/media";
+      # mediaDir = "/drives/wd10/pinchflat/media";
       extraConfig = {
         YT_DLP_WORKER_CONCURRENCY = 1;
       };
@@ -49,7 +51,7 @@ in
     ];
 
     systemd.tmpfiles.rules = [
-      "d '/drives/wd10/pinchflat/media' 0775 pinchflat pinchflat - -"
+      "d '${config.services.pinchflat.mediaDir}' 0775 pinchflat pinchflat - -"
     ];
 
     services.nginx = {

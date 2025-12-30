@@ -8,7 +8,7 @@
     autoMaster =
       let
         conf = pkgs.writeText "nfs" ''
-          h002 -fstype=nfs4,rw,nofail,nfsvers=4 h002:/
+          h002 -fstype=nfs4,rw,nofail,nfsvers=4 10.12.14.183:/
         '';
       in
       ''
