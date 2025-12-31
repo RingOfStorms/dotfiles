@@ -6,11 +6,44 @@
 }:
 lib.mkMerge [
   ({
+    users.groups.media = {
+      gid = 2000;
+    };
+
+    # Keep exported paths group-writable for media services.
+    # `2` (setgid) makes new files inherit group `media`.
+    systemd.tmpfiles.rules = [
+      "d /data/nixarr 2775 root media - -"
+      "d /data/nixarr/media 2775 root media - -"
+      "d /data/pinchflat 2775 root media - -"
+      "d /data/pinchflat/media 2775 root media - -"
+    ];
+
+    # One-shot fixup for existing files after migrations/rsync.
+    systemd.services.nfs-media-permissions = {
+      description = "Fix NFS media permissions";
+      after = [ "local-fs.target" ];
+      before = [ "nfs-server.service" ];
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig.Type = "oneshot";
+      path = [ pkgs.coreutils pkgs.findutils ];
+      script = ''
+        set -euo pipefail
+
+        for dir in /data/nixarr/media /data/pinchflat/media; do
+          mkdir -p "$dir"
+          chgrp -R media "$dir" || true
+          chmod -R g+rwX "$dir" || true
+          find "$dir" -type d -print0 | xargs -0 chmod 2775 || true
+        done
+      '';
+    };
+
     services.nfs.server = {
       enable = true;
       exports = ''
-        /data 100.64.0.0/10(rw,sync,no_subtree_check,fsid=0,crossmnt)
-        /data 10.12.14.0/10(rw,sync,no_subtree_check,fsid=0,crossmnt)
+        /data 100.64.0.0/10(rw,sync,no_subtree_check,no_root_squash,fsid=0,crossmnt)
+        /data 10.12.14.0/10(rw,sync,no_subtree_check,no_root_squash,fsid=0,crossmnt)
       '';
     };
 

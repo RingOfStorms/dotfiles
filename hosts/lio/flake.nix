@@ -187,6 +187,7 @@
                     ttyd
                     pavucontrol
                     nfs-utils
+                    jellyfin-media-player
                   ];
 
                   services.flatpak.packages = [

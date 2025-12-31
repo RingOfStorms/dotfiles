@@ -31,11 +31,15 @@ in
 
     users.users.pinchflat.isSystemUser = true;
     users.users.pinchflat.group = "pinchflat";
+    users.users.pinchflat.extraGroups = lib.mkAfter [
+      "media"
+    ];
     users.groups.pinchflat = { };
     systemd.services.pinchflat.serviceConfig = {
       DynamicUser = lib.mkForce false;
       User = "pinchflat";
       Group = "pinchflat";
+      UMask = "0002";
     };
 
     # Use Nixarr vpn
@@ -50,9 +54,6 @@ in
       }
     ];
 
-    systemd.tmpfiles.rules = [
-      "d '${config.services.pinchflat.mediaDir}' 0775 pinchflat pinchflat - -"
-    ];
 
     services.nginx = {
       virtualHosts = {
