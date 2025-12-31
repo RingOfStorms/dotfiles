@@ -36,7 +36,7 @@ lib.mkMerge [
     };
 
     systemd.tmpfiles.rules = [
-      "d '${pinchflatMediaDir}' 0775 pinchflat pinchflat - -"
+      "d '${pinchflatMediaDir}' 0775 ${globals.libraryOwner.user} ${globals.libraryOwner.group} - -"
     ];
   })
   (lib.mkIf audiobookshelf {
