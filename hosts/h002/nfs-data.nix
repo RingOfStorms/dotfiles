@@ -19,28 +19,6 @@ lib.mkMerge [
       "d /data/pinchflat/media 2775 root media - -"
     ];
 
-    # One-shot fixup for existing files after migrations/rsync.
-    # Runs before `nfs-server` so clients always see correct perms.
-    systemd.services.nfs-media-permissions = {
-      description = "Fix NFS media permissions";
-      after = [ "local-fs.target" ];
-      before = [ "nfs-server.service" ];
-      requiredBy = [ "nfs-server.service" ];
-      serviceConfig.Type = "oneshot";
-      path = [ pkgs.coreutils pkgs.findutils pkgs.glibc.bin ];
-      script = ''
-        set -euo pipefail
-
-        getent group media >/dev/null
-
-        for dir in /data/nixarr/media /data/pinchflat/media; do
-          mkdir -p "$dir"
-          chgrp -R media "$dir"
-          chmod -R g+rwX "$dir"
-          find "$dir" -type d -exec chmod 2775 {} +
-        done
-      '';
-    };
 
     services.nfs.server = {
       enable = true;
