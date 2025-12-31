@@ -6,20 +6,6 @@
 }:
 lib.mkMerge [
   ({
-    users.groups.media = {
-      gid = 2000;
-    };
-
-    # Keep exported paths group-writable for media services.
-    # `2` (setgid) makes new files inherit group `media`.
-    systemd.tmpfiles.rules = [
-      "d /data/nixarr 2775 root media - -"
-      "d /data/nixarr/media 2775 root media - -"
-      "d /data/pinchflat 2775 root media - -"
-      "d /data/pinchflat/media 2775 root media - -"
-    ];
-
-
     services.nfs.server = {
       enable = true;
       exports = ''

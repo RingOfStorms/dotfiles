@@ -12,6 +12,9 @@ let
     inherit (pkgs) system;
     config.allowUnfree = true;
   };
+
+  gid = 186;
+  uid = 186;
 in
 {
   disabledModules = [ declaration ];
@@ -29,17 +32,23 @@ in
       };
     };
 
-    users.users.pinchflat.isSystemUser = true;
-    users.users.pinchflat.group = "pinchflat";
-    users.users.pinchflat.extraGroups = lib.mkAfter [
-      "media"
+    users = {
+      groups.pinchflat.gid = gid;
+      users.pinchflat = {
+        isSystemUser = true;
+        group = "pinchflat";
+        uid = uid;
+      };
+    };
+
+    systemd.tmpfiles.rules = [
+      "d '${config.services.pinchflat.mediaDir}' 0775 pinchflat pinchflat - -"
     ];
-    users.groups.pinchflat = { };
+
     systemd.services.pinchflat.serviceConfig = {
       DynamicUser = lib.mkForce false;
       User = "pinchflat";
       Group = "pinchflat";
-      UMask = "0002";
     };
 
     # Use Nixarr vpn
@@ -53,7 +62,6 @@ in
         to = 8945;
       }
     ];
-
 
     services.nginx = {
       virtualHosts = {

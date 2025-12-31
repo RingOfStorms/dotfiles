@@ -13,32 +13,6 @@ let
 in
 {
   config = {
-    users.groups.media.gid = lib.mkForce 2000;
-
-    # Make sure enabled media services can write to the NFS mediaDir.
-    users.users.sonarr.extraGroups = lib.mkIf config.nixarr.sonarr.enable (lib.mkAfter [ "media" ]);
-    users.users.radarr.extraGroups = lib.mkIf config.nixarr.radarr.enable (lib.mkAfter [ "media" ]);
-    users.users.bazarr.extraGroups = lib.mkIf config.nixarr.bazarr.enable (lib.mkAfter [ "media" ]);
-    users.users.prowlarr.extraGroups = lib.mkIf config.nixarr.prowlarr.enable (lib.mkAfter [ "media" ]);
-    users.users.lidarr.extraGroups = lib.mkIf config.nixarr.lidarr.enable (lib.mkAfter [ "media" ]);
-    users.users.jellyfin.extraGroups = lib.mkIf config.nixarr.jellyfin.enable (lib.mkAfter [ "media" ]);
-    users.users.jellyseerr.extraGroups = lib.mkIf config.nixarr.jellyseerr.enable (lib.mkAfter [ "media" ]);
-    users.users.sabnzbd.extraGroups = lib.mkIf config.nixarr.sabnzbd.enable (lib.mkAfter [ "media" ]);
-    users.users.transmission.extraGroups = lib.mkIf config.nixarr.transmission.enable (lib.mkAfter [ "media" ]);
-
-    users.users.pinchflat.extraGroups = lib.mkAfter [ "media" ];
-    systemd.services.pinchflat.serviceConfig.UMask = "0002";
-
-    systemd.services.sonarr.serviceConfig.UMask = lib.mkIf config.nixarr.sonarr.enable "0002";
-    systemd.services.radarr.serviceConfig.UMask = lib.mkIf config.nixarr.radarr.enable "0002";
-    systemd.services.bazarr.serviceConfig.UMask = lib.mkIf config.nixarr.bazarr.enable "0002";
-    systemd.services.prowlarr.serviceConfig.UMask = lib.mkIf config.nixarr.prowlarr.enable "0002";
-    systemd.services.lidarr.serviceConfig.UMask = lib.mkIf config.nixarr.lidarr.enable "0002";
-    systemd.services.jellyfin.serviceConfig.UMask = lib.mkIf config.nixarr.jellyfin.enable "0002";
-    systemd.services.jellyseerr.serviceConfig.UMask = lib.mkIf config.nixarr.jellyseerr.enable "0002";
-    systemd.services.sabnzbd.serviceConfig.UMask = lib.mkIf config.nixarr.sabnzbd.enable "0002";
-    systemd.services.transmission.serviceConfig.UMask = lib.mkIf config.nixarr.transmission.enable "0002";
-
     nixarr = {
       enable = true;
       # mediaDir = "/drives/wd10/nixarr/media";
@@ -104,3 +78,4 @@ in
     };
   };
 }
+

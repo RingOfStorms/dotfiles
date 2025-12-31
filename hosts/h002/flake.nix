@@ -10,6 +10,8 @@
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
+
+    nixarr.url = "github:rasmus-kirk/nixarr";
   };
 
   outputs =
@@ -70,8 +72,10 @@
                 };
               })
 
+              inputs.nixarr.nixosModules.default
               ./hardware-configuration.nix
               ./nfs-data.nix
+              ./nfs-data-users-nixarr.nix
               (
                 {
                   config,
