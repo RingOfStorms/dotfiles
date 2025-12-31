@@ -27,7 +27,7 @@ lib.mkMerge [
       before = [ "nfs-server.service" ];
       requiredBy = [ "nfs-server.service" ];
       serviceConfig.Type = "oneshot";
-      path = [ pkgs.coreutils pkgs.findutils ];
+      path = [ pkgs.coreutils pkgs.findutils pkgs.glibc.bin ];
       script = ''
         set -euo pipefail
 
