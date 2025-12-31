@@ -13,9 +13,7 @@ let
 in
 {
   config = {
-    users.groups.media = {
-      gid = 2000;
-    };
+    users.groups.media.gid = lib.mkForce 2000;
 
     # Make sure all media services can write to NFS mediaDir.
     users.users.sonarr.extraGroups = lib.mkAfter [ "media" ];
