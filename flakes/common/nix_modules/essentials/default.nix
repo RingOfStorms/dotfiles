@@ -64,5 +64,6 @@ with lib;
     (builtins.readFile ./unix_utils.func.sh)
     (builtins.readFile ./nixpkg.func.sh)
     (builtins.readFile ./envrc-import.func.sh)
+    (builtins.readFile ./flake.func.sh)
   ];
 }
