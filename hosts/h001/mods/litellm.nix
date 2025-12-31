@@ -41,6 +41,7 @@ in
         litellm_settings = {
           check_provider_endpoints = true;
           drop_params = true;
+          modify_params = true;
         };
         model_list = [
         ]
