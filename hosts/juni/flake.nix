@@ -11,8 +11,10 @@
     # Use relative to get current version for testin
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # secrets.url = "path:../../flakes/secrets";
-    secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
+    # secrets-bao.url = "path:../../flakes/secrets-bao";
+    # NOTE: using an absolute path so this works before you commit/push.
+    # After you add `flakes/secrets-bao` to the repo, switch to a git URL like your other flakes.
+    secrets-bao.url = "path:/home/josh/.config/nixos-config/flakes/secrets-bao";
     # flatpaks.url = "path:../../flakes/flatpaks";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     # beszel.url = "path:../../flakes/beszel";
@@ -66,7 +68,7 @@
               })
               inputs.common.nixosModules.jetbrains_font
 
-              inputs.secrets.nixosModules.default
+              inputs.secrets-bao.nixosModules.default
               inputs.ros_neovim.nixosModules.default
               ({
                 ringofstorms-nvim.includeAllRuntimeDependencies = true;
@@ -84,15 +86,66 @@
               inputs.common.nixosModules.timezone_auto
               inputs.common.nixosModules.tty_caps_esc
               inputs.common.nixosModules.zsh
-              inputs.common.nixosModules.tailnet
+              # inputs.common.nixosModules.tailnet
 
-              inputs.beszel.nixosModules.agent
               ({
-                  beszelAgent = {
-                    token = "2fb5f0a0-24aa-4044-a893-6d0f916cd063";
+                ringofstorms.secretsBao = {
+                  enable = true;
+                  zitadelKeyPath = "/machine-key.json";
+                  openBaoAddr = "https://sec.joshuabell.xyz";
+                  jwtAuthMountPath = "auth/zitadel-jwt";
+                  openBaoRole = "machines";
+                  secrets = {
+                    headscale_auth = {
+                      path = "/run/secrets/headscale_auth";
+                      kvPath = "kv/data/machines/home_roaming/headscale_auth";
+                      field = "value";
+                    };
+
+                    nix2github = {
+                      path = "/run/secrets/nix2github";
+                      owner = "josh";
+                      group = "users";
+                      kvPath = "kv/data/machines/home_roaming/nix2github";
+                      field = "private_key";
+                    };
+                    nix2bitbucket = {
+                      path = "/run/secrets/nix2bitbucket";
+                      owner = "josh";
+                      group = "users";
+                      kvPath = "kv/data/machines/home_roaming/nix2bitbucket";
+                      field = "private_key";
+                    };
+                    nix2gitforgejo = {
+                      path = "/run/secrets/nix2gitforgejo";
+                      owner = "josh";
+                      group = "users";
+                      kvPath = "kv/data/machines/home_roaming/nix2gitforgejo";
+                      field = "private_key";
+                    };
+                    nix2lio = {
+                      path = "/run/secrets/nix2lio";
+                      owner = "josh";
+                      group = "users";
+                      kvPath = "kv/data/machines/home_roaming/nix2lio";
+                      field = "private_key";
+                    };
                   };
-                }
-              )
+                };
+
+                systemd.services.tailscaled = {
+                  after = [ "openbao-secret-headscale_auth.service" ];
+                  requires = [ "openbao-secret-headscale_auth.service" ];
+                };
+              })
+
+              # inputs.beszel.nixosModules.agent
+              # ({
+              #     beszelAgent = {
+              #       token = "2fb5f0a0-24aa-4044-a893-6d0f916cd063";
+              #     };
+              #   }
+              # )
 
               ./hardware-configuration.nix
               ./hardware-mounts.nix
@@ -122,7 +175,7 @@
                       inputs.common.homeManagerModules.starship
                       inputs.common.homeManagerModules.zoxide
                       inputs.common.homeManagerModules.zsh
-                      inputs.common.homeManagerModules.ssh
+                      # inputs.common.homeManagerModules.ssh
                       (
                         { ... }:
                         {
