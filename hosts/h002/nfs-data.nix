@@ -9,8 +9,8 @@ lib.mkMerge [
     services.nfs.server = {
       enable = true;
       exports = ''
-        /data 100.64.0.0/10(rw,sync,no_subtree_check,fsid=0,crossmnt)
-        /data 10.12.14.0/10(rw,sync,no_subtree_check,fsid=0,crossmnt)
+        /data 100.64.0.0/10(rw,sync,no_subtree_check,no_root_squash,fsid=0,crossmnt)
+        /data 10.12.14.0/10(rw,sync,no_subtree_check,no_root_squash,fsid=0,crossmnt)
       '';
     };
 

@@ -12,6 +12,9 @@ let
     inherit (pkgs) system;
     config.allowUnfree = true;
   };
+
+  gid = 186;
+  uid = 186;
 in
 {
   disabledModules = [ declaration ];
@@ -29,9 +32,19 @@ in
       };
     };
 
-    users.users.pinchflat.isSystemUser = true;
-    users.users.pinchflat.group = "pinchflat";
-    users.groups.pinchflat = { };
+    users = {
+      groups.pinchflat.gid = gid;
+      users.pinchflat = {
+        isSystemUser = true;
+        group = "pinchflat";
+        uid = uid;
+      };
+    };
+
+    systemd.tmpfiles.rules = [
+      "d '${config.services.pinchflat.mediaDir}' 0775 pinchflat pinchflat - -"
+    ];
+
     systemd.services.pinchflat.serviceConfig = {
       DynamicUser = lib.mkForce false;
       User = "pinchflat";
@@ -48,10 +61,6 @@ in
         from = 8945;
         to = 8945;
       }
-    ];
-
-    systemd.tmpfiles.rules = [
-      "d '${config.services.pinchflat.mediaDir}' 0775 pinchflat pinchflat - -"
     ];
 
     services.nginx = {

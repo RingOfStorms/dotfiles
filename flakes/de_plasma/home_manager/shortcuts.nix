@@ -29,7 +29,17 @@ let
   kwinMoveWorkspace = builtins.listToAttrs (
     map (i: {
       name = "Window to Desktop ${toString i}";
-      value = "Meta+Shift+${toString i}";
+      value =
+        let
+          idx = i - 1;
+        in
+        if idx < builtins.length workspaceLetters then
+          [
+            "Meta+Shift+${toString i}"
+            "Meta+Shift+${builtins.elemAt workspaceLetters idx}"
+          ]
+        else
+          "Meta+Shift+${toString i}";
     }) workspaces
   );
 in
@@ -41,6 +51,21 @@ in
       kwin = {
         "Window Close" = "Meta+Q";
         "Overview" = "Meta";
+
+        # Vim-style focus move
+        "Switch Window Left" = "Meta+H";
+        "Switch Window Down" = "Meta+J";
+        "Switch Window Up" = "Meta+K";
+        "Switch Window Right" = "Meta+L";
+
+        # Vim-style snap/maximize/restore
+        "Window Quick Tile Left" = "Meta+Shift+H";
+        "Window Quick Tile Right" = "Meta+Shift+L";
+
+        # No dedicated "unsnap" action; this reliably breaks quick-tiling.
+        "Window Move Center" = "Meta+Shift+J";
+
+        "Window Maximize" = "Meta+Shift+K";
       }
       // kwinWorkspace
       // kwinMoveWorkspace;
@@ -50,7 +75,7 @@ in
       };
 
       ksmserver = {
-        "Lock Session" = "Meta+Shift+L";
+        "Lock Session" = "none";
       };
 
       # "KDE Keyboard Layout Switcher"."Switch to Next Keyboard Layout" = "Meta+K";
