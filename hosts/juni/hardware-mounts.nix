@@ -98,12 +98,16 @@ lib.mkMerge [
     # Impermanence fix for working with custom unlock and reset with root bcache
     boot.initrd.systemd.services.create-needed-for-boot-dirs = lib.mkIf ENCRYPTED {
       after = [
-        "unlock-bcachefs-custom.service"
         "bcachefs-reset-root.service"
+      ]
+      ++ lib.optionals (USB_KEY != null) [
+        "unlock-bcachefs-custom.service"
       ];
       requires = [
-        "unlock-bcachefs-custom.service"
         "bcachefs-reset-root.service"
+      ]
+      ++ lib.optionals (USB_KEY != null) [
+        "unlock-bcachefs-custom.service"
       ];
       serviceConfig.KeyringMode = "shared";
     };
@@ -114,10 +118,15 @@ lib.mkMerge [
       after = [
         "initrd-root-device.target"
         "cryptsetup.target"
+      ]
+      ++ lib.optionals (USB_KEY != null) [
         "unlock-bcachefs-custom.service"
       ];
+
       requires = [
         primaryDeviceUnit
+      ]
+      ++ lib.optionals (USB_KEY != null) [
         "unlock-bcachefs-custom.service"
       ];
 
@@ -126,8 +135,6 @@ lib.mkMerge [
       ];
       wantedBy = [
         "initrd-root-fs.target"
-        "sysroot.mount"
-        "initrd.target"
       ];
 
       serviceConfig = {
@@ -172,7 +179,6 @@ lib.mkMerge [
       '';
     };
   })
-
   # If you mess up decruption password this reboots for retry instead of getting stuck
   (lib.mkIf ENCRYPTED {
     boot.kernelParams = [
@@ -258,5 +264,4 @@ lib.mkMerge [
       '';
     };
   })
-
 ]

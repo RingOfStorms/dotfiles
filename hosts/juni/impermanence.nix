@@ -12,6 +12,7 @@
 
       "/etc/nixos"
       "/etc/ssh"
+      "/etc/shadow" # keep passwords
 
       "/etc/NetworkManager/system-connections"
       "/var/lib/bluetooth"
