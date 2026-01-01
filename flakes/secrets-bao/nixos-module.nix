@@ -231,7 +231,7 @@ in
         zitadel-mint-jwt = {
           description = "Mint Zitadel access token (JWT) for OpenBao";
           wantedBy = [ "multi-user.target" ];
-          after = [ "network-online.target" ];
+          after = [ "network-online.target" "nss-lookup.target" ];
           wants = [ "network-online.target" ];
 
           serviceConfig = {
@@ -249,7 +249,33 @@ in
                 exit 1
               fi
 
-              jwt="$(${mkJwtMintScript})"
+              # Wait for DNS + routing to be up.
+              for i in {1..60}; do
+                if ${pkgs.glibc}/bin/getent hosts sso.joshuabell.xyz >/dev/null; then
+                  break
+                fi
+                sleep 1
+              done
+
+              if ! ${pkgs.glibc}/bin/getent hosts sso.joshuabell.xyz >/dev/null; then
+                echo "DNS still not ready for sso.joshuabell.xyz" >&2
+                exit 1
+              fi
+
+              # Mint token (retry a bit for transient network issues).
+              jwt=""
+              for i in {1..10}; do
+                if jwt="$(${mkJwtMintScript})"; then
+                  break
+                fi
+                sleep 2
+              done
+
+              if [ -z "$jwt" ] || [ "$jwt" = "null" ]; then
+                echo "Failed to mint Zitadel access token" >&2
+                exit 1
+              fi
+
               ${pkgs.coreutils}/bin/printf '%s' "$jwt" > "${cfg.zitadelJwtPath}"
             '';
           };
