@@ -16,6 +16,8 @@ let
 
   USB_KEY = null;
 
+  USB_KEY_PATH = if USB_KEY == null then "" else USB_KEY;
+
   primaryDeviceUnit = "${utils.escapeSystemdPath PRIMARY}.device";
 in
 lib.mkMerge [
@@ -99,14 +101,10 @@ lib.mkMerge [
     boot.initrd.systemd.services.create-needed-for-boot-dirs = lib.mkIf ENCRYPTED {
       after = [
         "bcachefs-reset-root.service"
-      ]
-      ++ lib.optionals (USB_KEY != null) [
         "unlock-bcachefs-custom.service"
       ];
       requires = [
         "bcachefs-reset-root.service"
-      ]
-      ++ lib.optionals (USB_KEY != null) [
         "unlock-bcachefs-custom.service"
       ];
       serviceConfig.KeyringMode = "shared";
@@ -118,15 +116,11 @@ lib.mkMerge [
       after = [
         "initrd-root-device.target"
         "cryptsetup.target"
-      ]
-      ++ lib.optionals (USB_KEY != null) [
         "unlock-bcachefs-custom.service"
       ];
 
       requires = [
         primaryDeviceUnit
-      ]
-      ++ lib.optionals (USB_KEY != null) [
         "unlock-bcachefs-custom.service"
       ];
 
@@ -186,14 +180,14 @@ lib.mkMerge [
       "rd.emergency=reboot"
     ];
   })
-  # Bcachefs auto decryption
-  (lib.mkIf (ENCRYPTED && USB_KEY != null) {
+  # Bcachefs auto decryption / unlock
+  (lib.mkIf ENCRYPTED {
     boot.supportedFilesystems = [
       "bcachefs"
     ];
 
     boot.initrd.systemd.services.unlock-bcachefs-custom = {
-      description = "Custom single bcachefs unlock for all subvolumes";
+      description = "Custom bcachefs unlock (USB key optional, passphrase retry)";
 
       wantedBy = [
         "persist.mount"
@@ -218,49 +212,76 @@ lib.mkMerge [
         Type = "oneshot";
         RemainAfterExit = true;
         KeyringMode = lib.mkIf IMPERMANENCE "shared";
+        StandardInput = "tty";
+        StandardOutput = "tty";
+        StandardError = "tty";
+        TTYPath = "/dev/console";
+        TTYReset = true;
+        TTYVHangup = true;
+        TTYVTDisallocate = true;
       };
 
       script = ''
-        echo "Searching for USB Unlock Key..."
-        KEY_FOUND=0
-        # 4 second search
-        for i in {1..40}; do
-          if [ -e "${USB_KEY}" ]; then
-            KEY_FOUND=1
-            break
+        unlock_with_usb_key() {
+          if [[ -z "${USB_KEY_PATH}" ]]; then
+            return 2
           fi
-          sleep 0.1
-        done
 
-        if [ "$KEY_FOUND" -eq 1 ]; then
-            echo "USB Key found at ${USB_KEY}. Attempting unlock..."
-            mkdir -p /tmp/usb_key_mount
-            
-            # Mount read-only
-            if mount -t bcachefs -o ro "${USB_KEY}" /tmp/usb_key_mount; then
-                # Attempt unlock
-                ${pkgs.bcachefs-tools}/bin/bcachefs unlock -f /tmp/usb_key_mount/key "${PRIMARY}"
-                UNLOCK_STATUS=$?
-                
-                # Cleanup
-                umount /tmp/usb_key_mount
-                
-                if [ $UNLOCK_STATUS -eq 0 ]; then
-                    echo "Bcachefs unlock successful!"
-                    exit 0
-                else
-                    echo "Failed to unlock with USB key."
-                fi
-            else
-                echo "Failed to mount USB key device."
+          echo "Searching for USB unlock key..."
+          KEY_FOUND=0
+          # 4 second search
+          for i in {1..40}; do
+            if [ -e "${USB_KEY_PATH}" ]; then
+              KEY_FOUND=1
+              break
             fi
-        else
-            echo "USB Key not found within timeout."
+            sleep 0.1
+          done
+
+          if [ "$KEY_FOUND" -ne 1 ]; then
+            echo "USB key not found within timeout."
+            return 2
+          fi
+
+          echo "USB key found at ${USB_KEY_PATH}. Attempting unlock..."
+          mkdir -p /tmp/usb_key_mount
+
+          # Mount read-only
+          if ! mount -t bcachefs -o ro "${USB_KEY_PATH}" /tmp/usb_key_mount; then
+            echo "Failed to mount USB key device."
+            return 1
+          fi
+
+          if ${pkgs.bcachefs-tools}/bin/bcachefs unlock -f /tmp/usb_key_mount/key "${PRIMARY}"; then
+            umount /tmp/usb_key_mount || true
+            echo "Bcachefs unlock successful (USB key)!"
+            return 0
+          fi
+
+          umount /tmp/usb_key_mount || true
+          echo "Failed to unlock with USB key."
+          return 1
+        }
+
+        unlock_with_passphrase_until_success() {
+          echo "Unlocking ${PRIMARY} (will retry on failure)..."
+          while true; do
+            if ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"; then
+              echo "Bcachefs unlock successful (passphrase)!"
+              return 0
+            fi
+            echo "Unlock failed. Try again."
+            sleep 0.2
+          done
+        }
+
+        # 1) Optional USB key unlock attempt (if configured)
+        if unlock_with_usb_key; then
+          exit 0
         fi
 
-        # 3. Fallback
-        echo "Proceeding to standard mount (password prompt will appear if still locked)..."
-        exit 0
+        # 2) If USB key not configured or failed, prompt for passphrase and retry
+        unlock_with_passphrase_until_success
       '';
     };
   })
