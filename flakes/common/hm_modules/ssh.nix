@@ -54,6 +54,11 @@ in
       "lio" = lib.mkIf (hasSecret "nix2lio") {
         identityFile = age.secrets.nix2lio.path;
         user = "josh";
+        extraOptions = {
+          "PubkeyAcceptedKeyTypes" = "ssh-ed25519";
+          "ServerAliveInterval" = 60;
+          "IPQoS" = "throughput";
+        };
       };
       "lio_" = lib.mkIf (hasSecret "nix2lio") {
         identityFile = age.secrets.nix2lio.path;

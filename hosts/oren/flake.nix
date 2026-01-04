@@ -31,7 +31,7 @@
       flatpaks,
       beszel,
       ros_neovim,
-    nixpkgs-unstable,
+      nixpkgs-unstable,
       ...
     }@inputs:
     let
@@ -69,11 +69,9 @@
 
               secrets.nixosModules.default
               ros_neovim.nixosModules.default
-              (
-                {
-                  ringofstorms-nvim.includeAllRuntimeDependencies = true;
-                }
-              )
+              ({
+                ringofstorms-nvim.includeAllRuntimeDependencies = true;
+              })
               inputs.opencode.nixosModules.default
 
               flatpaks.nixosModules.default
@@ -92,15 +90,15 @@
               common.nixosModules.tty_caps_esc
               common.nixosModules.zsh
               common.nixosModules.more_filesystems
+              common.nixosModules.remote_lio_builds
 
               beszel.nixosModules.agent
               ({
-                  beszelAgent = {
-                    listen = "${overlayIp}:45876";
-                    token = "f8a54c41-486b-487a-a78d-a087385c317b";
-                  };
-                }
-              )
+                beszelAgent = {
+                  listen = "${overlayIp}:45876";
+                  token = "f8a54c41-486b-487a-a78d-a087385c317b";
+                };
+              })
 
               ./configuration.nix
               ./hardware-configuration.nix
