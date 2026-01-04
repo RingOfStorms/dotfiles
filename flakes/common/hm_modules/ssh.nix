@@ -56,7 +56,7 @@ in
         user = "josh";
         extraOptions = {
           "PubkeyAcceptedKeyTypes" = "ssh-ed25519";
-          "ServerAliveInterval" = 60;
+          "ServerAliveInterval" = "60";
           "IPQoS" = "throughput";
         };
       };
