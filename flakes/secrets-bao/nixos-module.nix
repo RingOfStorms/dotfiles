@@ -46,13 +46,40 @@ let
     sig="$(${pkgs.coreutils}/bin/printf '%s' "$h64.$p64" | ${pkgs.openssl}/bin/openssl dgst -sha256 -sign "$pem_file" | b64url)"
     assertion="$h64.$p64.$sig"
 
-    ${pkgs.curl}/bin/curl -sS -X POST "${cfg.zitadelTokenEndpoint}" \
+    resp=""
+    if ! resp="$(${pkgs.curl}/bin/curl -sS --fail-with-body -X POST "${cfg.zitadelTokenEndpoint}" \
       -H 'content-type: application/x-www-form-urlencoded' \
       --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer' \
       --data-urlencode "assertion=$assertion" \
       --data-urlencode "scope=${cfg.zitadelScopes}" \
-      | ${pkgs.jq}/bin/jq -r .access_token
+    )"; then
+      echo "Zitadel token endpoint returned error; response:" >&2
+      echo "$resp" >&2
+      exit 1
+    fi
+
+    token="$(${pkgs.jq}/bin/jq -r '.access_token // empty' <<<"$resp" 2>/dev/null || true)"
+    if [ -z "$token" ] || [ "$token" = "null" ]; then
+      echo "Zitadel token mint did not return access_token; response:" >&2
+      echo "$resp" >&2
+      exit 1
+    fi
+
+    # Quick sanity check: JWT should have 2 dots.
+    if ! ${pkgs.gnugrep}/bin/grep -q '\\.' <<<"$token"; then
+      echo "Zitadel access_token does not look like a JWT; response:" >&2
+      echo "$resp" >&2
+      exit 1
+    fi
+
+    ${pkgs.coreutils}/bin/printf '%s' "$token"
   '';
+
+  zitadelHost =
+    let
+      noProto = lib.strings.removePrefix "https://" (lib.strings.removePrefix "http://" cfg.zitadelTokenEndpoint);
+    in
+    builtins.head (lib.strings.splitString "/" noProto);
 
   mkAgentConfig = pkgs.writeText "vault-agent.hcl" ''
     vault {
@@ -231,8 +258,13 @@ in
         zitadel-mint-jwt = {
           description = "Mint Zitadel access token (JWT) for OpenBao";
           wantedBy = [ "multi-user.target" ];
-          after = [ "network-online.target" "nss-lookup.target" ];
-          wants = [ "network-online.target" ];
+          after = [
+            "network-online.target"
+            "nss-lookup.target"
+            "NetworkManager-wait-online.service"
+            "systemd-resolved.service"
+          ];
+          wants = [ "network-online.target" "NetworkManager-wait-online.service" ];
 
           serviceConfig = {
             Type = "oneshot";
@@ -249,16 +281,50 @@ in
                 exit 1
               fi
 
-              # Wait for DNS + routing to be up.
-              for i in {1..60}; do
-                if ${pkgs.glibc}/bin/getent hosts sso.joshuabell.xyz >/dev/null; then
+              echo "zitadel-mint-jwt: starting (host=${zitadelHost})" >&2
+
+              jwt_is_valid() {
+                local token="$1"
+                local payload_b64 payload_json exp now
+
+                payload_b64="$(${pkgs.coreutils}/bin/printf '%s' "$token" | ${pkgs.coreutils}/bin/cut -d. -f2)"
+                payload_b64="$(${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.gnused}/bin/sed -e 's/-/+/g' -e 's/_/\//g')"
+
+                case $((${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.coreutils}/bin/wc -c)) in
+                  *1) payload_b64="$payload_b64=" ;;
+                  *2) payload_b64="$payload_b64==" ;;
+                  *3) : ;;
+                  *0) : ;;
+                esac
+
+                payload_json="$(${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.coreutils}/bin/base64 -d 2>/dev/null || true)"
+                exp="$(${pkgs.jq}/bin/jq -r '.exp // empty' <<<"$payload_json" 2>/dev/null || true)"
+                if [ -z "$exp" ]; then
+                  return 1
+                fi
+
+                now="$(${pkgs.coreutils}/bin/date +%s)"
+                if [ "$exp" -gt $(( now + 60 )) ]; then
+                  return 0
+                fi
+                return 1
+              }
+
+              if [ -s "${cfg.zitadelJwtPath}" ] && jwt_is_valid "$(cat "${cfg.zitadelJwtPath}")"; then
+                echo "zitadel-mint-jwt: existing token still valid; skipping" >&2
+                exit 0
+              fi
+
+              # Wait for DNS to be usable.
+              for i in {1..120}; do
+                if ${pkgs.glibc}/bin/getent hosts ${zitadelHost} >/dev/null; then
                   break
                 fi
                 sleep 1
               done
 
-              if ! ${pkgs.glibc}/bin/getent hosts sso.joshuabell.xyz >/dev/null; then
-                echo "DNS still not ready for sso.joshuabell.xyz" >&2
+              if ! ${pkgs.glibc}/bin/getent hosts ${zitadelHost} >/dev/null; then
+                echo "DNS still not ready for ${zitadelHost}" >&2
                 exit 1
               fi
 
@@ -276,7 +342,10 @@ in
                 exit 1
               fi
 
-              ${pkgs.coreutils}/bin/printf '%s' "$jwt" > "${cfg.zitadelJwtPath}"
+              tmp="$(${pkgs.coreutils}/bin/mktemp)"
+              trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
+              ${pkgs.coreutils}/bin/printf '%s' "$jwt" > "$tmp"
+              ${pkgs.coreutils}/bin/mv -f "$tmp" "${cfg.zitadelJwtPath}"
             '';
           };
         };
@@ -296,7 +365,7 @@ in
             User = "root";
             Group = "root";
             Restart = "on-failure";
-            RestartSec = "2s";
+            RestartSec = "30s";
 
             UMask = "0077";
             ExecStart = "${pkgs.openbao}/bin/bao agent -config=${mkAgentConfig}";
@@ -310,6 +379,8 @@ in
           description = "Wait for OpenBao secret ${name}";
           after = [ "vault-agent.service" ];
           requires = [ "vault-agent.service" ];
+          startLimitIntervalSec = 300;
+          startLimitBurst = 3;
 
           serviceConfig = {
             Type = "oneshot";
