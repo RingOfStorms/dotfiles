@@ -29,6 +29,7 @@ in
           "uid-range" # Often helpful
         ];
         mandatoryFeatures = [ ];
+        sshKey = config.age.secrets.nix2lio.path;
       }
     ];
   };
