@@ -27,6 +27,7 @@ in
           "big-parallel"
           "kvm"
           "uid-range" # Often helpful
+          "recursive-nix"
         ];
         mandatoryFeatures = [ ];
         sshKey = config.age.secrets.nix2lio.path;
