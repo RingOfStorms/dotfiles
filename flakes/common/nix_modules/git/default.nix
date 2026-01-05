@@ -22,6 +22,7 @@ with lib;
     bx = "branchdel";
     b = "branch";
     bs = "branching_setup";
+    gcp = "gcpropose";
   };
 
   environment.shellInit = lib.concatStringsSep "\n\n" [
@@ -30,5 +31,6 @@ with lib;
     (builtins.readFile ./branchd.func.sh)
     (builtins.readFile ./link_ignored.func.sh)
     (builtins.readFile ./branching_setup.func.sh)
+    (builtins.readFile ./gcpropose.func.sh)
   ];
 }

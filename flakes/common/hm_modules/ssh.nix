@@ -33,7 +33,9 @@ in
         controlMaster = "no";
         controlPath = "~/.ssh/master-%r@%n:%p";
         controlPersist = "no";
-        StrictHostKeyChecking = "accept-new";
+        extraOptions = {
+          StrictHostKeyChecking = "accept-new";
+        };
       };
 
       # EXTERNAL
