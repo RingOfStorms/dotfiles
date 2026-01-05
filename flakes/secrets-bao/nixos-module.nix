@@ -264,17 +264,24 @@ in
             "NetworkManager-wait-online.service"
             "systemd-resolved.service"
           ];
-          wants = [ "network-online.target" "NetworkManager-wait-online.service" ];
+          wants = [ "network-online.target" "NetworkManager-wait-online.service" "systemd-resolved.service" ];
 
           serviceConfig = {
             Type = "oneshot";
             User = "root";
             Group = "root";
+            Restart = "on-failure";
+            RestartSec = "30s";
 
             UMask = "0077";
             ExecStart = pkgs.writeShellScript "zitadel-mint-jwt-service" ''
               #!/usr/bin/env bash
               set -euo pipefail
+
+              if [ ! -d "/run/openbao" ]; then
+                ${pkgs.coreutils}/bin/mkdir -p /run/openbao
+                ${pkgs.coreutils}/bin/chmod 0700 /run/openbao
+              fi
 
               if [ ! -f "${cfg.zitadelKeyPath}" ]; then
                 echo "Missing Zitadel key JSON at ${cfg.zitadelKeyPath}" >&2
@@ -315,16 +322,23 @@ in
                 exit 0
               fi
 
+              dns_ok() {
+                ${pkgs.systemd}/bin/resolvectl query ${zitadelHost} >/dev/null 2>&1 && return 0
+                ${pkgs.glibc}/bin/getent hosts ${zitadelHost} >/dev/null 2>&1 && return 0
+                return 1
+              }
+
               # Wait for DNS to be usable.
-              for i in {1..120}; do
-                if ${pkgs.glibc}/bin/getent hosts ${zitadelHost} >/dev/null; then
+              for i in {1..180}; do
+                if dns_ok; then
                   break
                 fi
                 sleep 1
               done
 
-              if ! ${pkgs.glibc}/bin/getent hosts ${zitadelHost} >/dev/null; then
+              if ! dns_ok; then
                 echo "DNS still not ready for ${zitadelHost}" >&2
+                ${pkgs.systemd}/bin/resolvectl status >&2 || true
                 exit 1
               fi
 

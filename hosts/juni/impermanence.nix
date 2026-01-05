@@ -22,14 +22,12 @@
     files = [
       "/machine-key.json"
       "/etc/machine-id"
-      "/etc/resolv.conf" # TODO describe
-      "/etc/shadow" # keep passwords
-      "/etc/group"
-      "/etc/passwd"
-      "/etc/sudoers"
-      "/etc/localtime"
-      "/etc/timezone"
-      "/etc/adjtime"
+      # NOTE: if you want mutable passwords across reboots, persist these,
+      # but you must do a one-time migration (see notes in chat).
+      # "/etc/shadow"
+      # "/etc/group"
+      # "/etc/passwd"
+      # "/etc/sudoers"
     ];
     users."${primaryUser}" = {
       directories = [

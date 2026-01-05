@@ -14,7 +14,7 @@
     # secrets-bao.url = "path:../../flakes/secrets-bao";
     # NOTE: using an absolute path so this works before you commit/push.
     # After you add `flakes/secrets-bao` to the repo, switch to a git URL like your other flakes.
-    secrets-bao.url = "path:/home/josh/.config/nixos-config/flakes/secrets-bao";
+    secrets-bao.url = "path:../../flakes/secrets-bao";
     # flatpaks.url = "path:../../flakes/flatpaks";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     # beszel.url = "path:../../flakes/beszel";
@@ -191,10 +191,11 @@
                   networking.hostName = configuration_name;
                   programs.nh.flake = "/home/${primaryUser}/.config/nixos-config/hosts/${config.networking.hostName}";
                   nixpkgs.config.allowUnfree = true;
+                  users.mutableUsers = false;
                   users.users = {
                     "${primaryUser}" = {
                       isNormalUser = true;
-                      initialPassword = "password1";
+                      hashedPassword = "$y$j9T$b66ZAxtTo75paZx.mnXyK.$ej0eKS3Wx4488qDfjUJSP0nsUe5TBzw31VbXR19XrQ4";
                       extraGroups = [
                         "wheel"
                         "networkmanager"

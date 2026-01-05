@@ -1310,8 +1310,8 @@
     },
     "secrets-bao": {
       "locked": {
-        "lastModified": 1767587118,
-        "narHash": "sha256-O6QCLO/csAiO8e5ejB43m7PQc7+EePWkX39Z2CZdqZ4=",
+        "lastModified": 1767590305,
+        "narHash": "sha256-yXJ0TpPqsKznLn6bHpDpeSzIvL7T1lWxxhZ6cmAjqhQ=",
         "path": "/home/josh/.config/nixos-config/flakes/secrets-bao",
         "type": "path"
       },
