@@ -253,6 +253,7 @@ in
 
     systemd.tmpfiles.rules = [
       "d /run/openbao 0700 root root - -"
+      "f /run/openbao/zitadel.jwt 0400 root root - -"
       "d /run/secrets 0711 root root - -"
     ];
 
@@ -267,16 +268,99 @@ in
             "NetworkManager-wait-online.service"
             "systemd-resolved.service"
           ];
-          wants = [ "network-online.target" "NetworkManager-wait-online.service" "systemd-resolved.service" ];
+          wants = [
+            "network-online.target"
+            "NetworkManager-wait-online.service"
+            "systemd-resolved.service"
+          ];
 
           serviceConfig = {
             Type = "oneshot";
             User = "root";
             Group = "root";
             Restart = "on-failure";
+            RestartSec = "30s";
+            TimeoutStartSec = "2min";
+            UMask = "0077";
+
+            ExecStart = pkgs.writeShellScript "zitadel-mint-jwt-service" ''
+              #!/usr/bin/env bash
+              set -euo pipefail
+
+              if [ ! -d "/run/openbao" ]; then
+                ${pkgs.coreutils}/bin/mkdir -p /run/openbao
+                ${pkgs.coreutils}/bin/chmod 0700 /run/openbao
+              fi
+
+              if [ ! -f "${cfg.zitadelKeyPath}" ]; then
+                echo "Missing Zitadel key JSON at ${cfg.zitadelKeyPath}" >&2
+                exit 1
+              fi
+
+              echo "zitadel-mint-jwt: starting (host=${zitadelHost})" >&2
+
+              jwt_is_valid() {
+                local token="$1"
+                local payload_b64 payload_json exp now
+
+                payload_b64="$(${pkgs.coreutils}/bin/printf '%s' "$token" | ${pkgs.coreutils}/bin/cut -d. -f2)"
+                payload_b64="$(${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.gnused}/bin/sed -e 's/-/+/g' -e 's/_/\//g')"
+
+                case $((${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.coreutils}/bin/wc -c)) in
+                  *1) payload_b64="$payload_b64=" ;;
+                  *2) payload_b64="$payload_b64==" ;;
+                  *3) : ;;
+                  *0) : ;;
+                esac
+
+                payload_json="$(${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.coreutils}/bin/base64 -d 2>/dev/null || true)"
+                exp="$(${pkgs.jq}/bin/jq -r '.exp // empty' <<<"$payload_json" 2>/dev/null || true)"
+                if [ -z "$exp" ]; then
+                  return 1
+                fi
+
+                now="$(${pkgs.coreutils}/bin/date +%s)"
+                if [ "$exp" -gt $(( now + 60 )) ]; then
+                  return 0
+                fi
+                return 1
+              }
+
+              if [ -s "${cfg.zitadelJwtPath}" ] && jwt_is_valid "$(cat "${cfg.zitadelJwtPath}")"; then
+                echo "zitadel-mint-jwt: existing token still valid; skipping" >&2
+                exit 0
+              fi
+
+              jwt="$(${mkJwtMintScript})"
+
+              if [ -z "$jwt" ] || [ "$jwt" = "null" ]; then
+                echo "Failed to mint Zitadel access token" >&2
+                exit 1
+              fi
+
+              tmp="$(${pkgs.coreutils}/bin/mktemp)"
+              trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
+              ${pkgs.coreutils}/bin/printf '%s' "$jwt" > "$tmp"
+
+              # In-place update so the agent's file watcher sees changes.
+              ${pkgs.coreutils}/bin/cat "$tmp" > "${cfg.zitadelJwtPath}"
+              ${pkgs.coreutils}/bin/chmod 0400 "${cfg.zitadelJwtPath}" || true
+            '';
+          };
+        };
+
+        vault-agent = {
+          description = "OpenBao agent for rendering secrets";
+          wantedBy = [ "multi-user.target" ];
+          after = [ "network-online.target" "zitadel-mint-jwt.service" ];
+          wants = [ "network-online.target" "zitadel-mint-jwt.service" ];
+
+          serviceConfig = {
+            Type = "simple";
+            User = "root";
+            Group = "root";
+            Restart = "on-failure";
             RestartSec = "10s";
-
-
             TimeoutStartSec = "30s";
             UMask = "0077";
             ExecStart = "${pkgs.openbao}/bin/bao agent -log-level=debug -config=${mkAgentConfig}";
