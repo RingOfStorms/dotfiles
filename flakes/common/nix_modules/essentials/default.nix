@@ -31,6 +31,7 @@ with lib;
     speedtest-cli
     parted
     fio
+    vipe
   ];
 
   environment.shellAliases = {
