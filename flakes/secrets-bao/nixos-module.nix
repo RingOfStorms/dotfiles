@@ -47,7 +47,10 @@ let
     assertion="$h64.$p64.$sig"
 
     resp=""
-    if ! resp="$(${pkgs.curl}/bin/curl -sS --fail-with-body -X POST "${cfg.zitadelTokenEndpoint}" \
+    if ! resp="$(${pkgs.curl}/bin/curl -sS --fail-with-body \
+      --connect-timeout 5 --max-time 30 \
+      --retry 20 --retry-delay 2 --retry-all-errors \
+      -X POST "${cfg.zitadelTokenEndpoint}" \
       -H 'content-type: application/x-www-form-urlencoded' \
       --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer' \
       --data-urlencode "assertion=$assertion" \
@@ -271,145 +274,12 @@ in
             User = "root";
             Group = "root";
             Restart = "on-failure";
-            RestartSec = "30s";
+            RestartSec = "10s";
 
+
+            TimeoutStartSec = "30s";
             UMask = "0077";
-            ExecStart = pkgs.writeShellScript "zitadel-mint-jwt-service" ''
-              #!/usr/bin/env bash
-              set -euo pipefail
-
-              if [ ! -d "/run/openbao" ]; then
-                ${pkgs.coreutils}/bin/mkdir -p /run/openbao
-                ${pkgs.coreutils}/bin/chmod 0700 /run/openbao
-              fi
-
-              if [ ! -f "${cfg.zitadelKeyPath}" ]; then
-                echo "Missing Zitadel key JSON at ${cfg.zitadelKeyPath}" >&2
-                exit 1
-              fi
-
-              echo "zitadel-mint-jwt: starting (host=${zitadelHost})" >&2
-
-              jwt_is_valid() {
-                local token="$1"
-                local payload_b64 payload_json exp now
-
-                payload_b64="$(${pkgs.coreutils}/bin/printf '%s' "$token" | ${pkgs.coreutils}/bin/cut -d. -f2)"
-                payload_b64="$(${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.gnused}/bin/sed -e 's/-/+/g' -e 's/_/\//g')"
-
-                case $((${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.coreutils}/bin/wc -c)) in
-                  *1) payload_b64="$payload_b64=" ;;
-                  *2) payload_b64="$payload_b64==" ;;
-                  *3) : ;;
-                  *0) : ;;
-                esac
-
-                payload_json="$(${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.coreutils}/bin/base64 -d 2>/dev/null || true)"
-                exp="$(${pkgs.jq}/bin/jq -r '.exp // empty' <<<"$payload_json" 2>/dev/null || true)"
-                if [ -z "$exp" ]; then
-                  return 1
-                fi
-
-                now="$(${pkgs.coreutils}/bin/date +%s)"
-                if [ "$exp" -gt $(( now + 60 )) ]; then
-                  return 0
-                fi
-                return 1
-              }
-
-              if [ -s "${cfg.zitadelJwtPath}" ] && jwt_is_valid "$(cat "${cfg.zitadelJwtPath}")"; then
-                echo "zitadel-mint-jwt: existing token still valid; skipping" >&2
-                exit 0
-              fi
-
-              dns_ok() {
-                ${pkgs.systemd}/bin/resolvectl query ${zitadelHost} >/dev/null 2>&1 && return 0
-                ${pkgs.glibc}/bin/getent hosts ${zitadelHost} >/dev/null 2>&1 && return 0
-                return 1
-              }
-
-              # Wait for DNS to be usable.
-              for i in {1..180}; do
-                if dns_ok; then
-                  break
-                fi
-                sleep 1
-              done
-
-              if ! dns_ok; then
-                echo "DNS still not ready for ${zitadelHost}" >&2
-                ${pkgs.systemd}/bin/resolvectl status >&2 || true
-                exit 1
-              fi
-
-              # Mint token (retry a bit for transient network issues).
-              jwt=""
-              for i in {1..10}; do
-                if jwt="$(${mkJwtMintScript})"; then
-                  break
-                fi
-                sleep 2
-              done
-
-              if [ -z "$jwt" ] || [ "$jwt" = "null" ]; then
-                echo "Failed to mint Zitadel access token" >&2
-                exit 1
-              fi
-
-              tmp="$(${pkgs.coreutils}/bin/mktemp)"
-              trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
-              ${pkgs.coreutils}/bin/printf '%s' "$jwt" > "$tmp"
-              ${pkgs.coreutils}/bin/mv -f "$tmp" "${cfg.zitadelJwtPath}"
-            '';
-          };
-        };
-
-        vault-agent = {
-          description = "OpenBao agent for rendering secrets";
-          wantedBy = [ "multi-user.target" ];
-          after = [
-            "network-online.target"
-            "zitadel-mint-jwt.service"
-          ];
-          wants = [
-            "network-online.target"
-            "zitadel-mint-jwt.service"
-          ];
-
-          serviceConfig = {
-            Type = "simple";
-            User = "root";
-            Group = "root";
-            Restart = "on-failure";
-            RestartSec = "30s";
-
-            TimeoutStartSec = "5min";
-            UMask = "0077";
-            ExecStartPre = pkgs.writeShellScript "openbao-wait-jwt" ''
-              #!/usr/bin/env bash
-              set -euo pipefail
-
-              for i in {1..240}; do
-                if [ -s "${cfg.zitadelJwtPath}" ]; then
-                  jwt="$(cat "${cfg.zitadelJwtPath}")"
-                  # very cheap sanity check: JWT has at least 2 dots
-                  if ${pkgs.gnugrep}/bin/grep -q '\\..*\\.' <<<"$jwt"; then
-                    exit 0
-                  fi
-                fi
-
-                if [ $((i % 30)) -eq 0 ]; then
-                  echo "vault-agent: waiting for ${cfg.zitadelJwtPath} (t=${"$"}i s)" >&2
-                fi
-
-                sleep 1
-              done
-
-              echo "Missing or invalid Zitadel JWT at ${cfg.zitadelJwtPath}" >&2
-              exit 1
-            '';
-
-            ExecStart = "${pkgs.openbao}/bin/bao agent -config=${mkAgentConfig}";
+            ExecStart = "${pkgs.openbao}/bin/bao agent -log-level=debug -config=${mkAgentConfig}";
           };
         };
       }
