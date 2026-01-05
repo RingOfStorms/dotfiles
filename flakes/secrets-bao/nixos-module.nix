@@ -93,8 +93,8 @@ let
       method "jwt" {
         mount_path = "${cfg.jwtAuthMountPath}"
         config = {
-          role     = "${cfg.openBaoRole}"
-          jwt_file = "${cfg.zitadelJwtPath}"
+          role = "${cfg.openBaoRole}"
+          path = "${cfg.zitadelJwtPath}"
         }
       }
 
