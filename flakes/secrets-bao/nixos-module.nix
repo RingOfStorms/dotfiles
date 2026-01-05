@@ -371,8 +371,10 @@ in
             "network-online.target"
             "zitadel-mint-jwt.service"
           ];
-          wants = [ "network-online.target" ];
-          requires = [ "zitadel-mint-jwt.service" ];
+          wants = [
+            "network-online.target"
+            "zitadel-mint-jwt.service"
+          ];
 
           serviceConfig = {
             Type = "simple";
@@ -382,6 +384,25 @@ in
             RestartSec = "30s";
 
             UMask = "0077";
+            ExecStartPre = pkgs.writeShellScript "openbao-wait-jwt" ''
+              #!/usr/bin/env bash
+              set -euo pipefail
+
+              for i in {1..180}; do
+                if [ -s "${cfg.zitadelJwtPath}" ]; then
+                  jwt="$(cat "${cfg.zitadelJwtPath}")"
+                  # very cheap sanity check: JWT has at least 2 dots
+                  if ${pkgs.gnugrep}/bin/grep -q '\\..*\\.' <<<"$jwt"; then
+                    exit 0
+                  fi
+                fi
+                sleep 1
+              done
+
+              echo "Missing or invalid Zitadel JWT at ${cfg.zitadelJwtPath}" >&2
+              exit 1
+            '';
+
             ExecStart = "${pkgs.openbao}/bin/bao agent -config=${mkAgentConfig}";
           };
         };
