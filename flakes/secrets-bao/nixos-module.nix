@@ -383,12 +383,13 @@ in
             Restart = "on-failure";
             RestartSec = "30s";
 
+            TimeoutStartSec = "5min";
             UMask = "0077";
             ExecStartPre = pkgs.writeShellScript "openbao-wait-jwt" ''
               #!/usr/bin/env bash
               set -euo pipefail
 
-              for i in {1..180}; do
+              for i in {1..240}; do
                 if [ -s "${cfg.zitadelJwtPath}" ]; then
                   jwt="$(cat "${cfg.zitadelJwtPath}")"
                   # very cheap sanity check: JWT has at least 2 dots
@@ -396,6 +397,11 @@ in
                     exit 0
                   fi
                 fi
+
+                if [ $((i % 30)) -eq 0 ]; then
+                  echo "vault-agent: waiting for ${cfg.zitadelJwtPath} (t=${"$"}i s)" >&2
+                fi
+
                 sleep 1
               done
 
