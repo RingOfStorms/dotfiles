@@ -12,7 +12,6 @@
 
       "/etc/nixos"
       "/etc/ssh"
-      "/etc/shadow" # keep passwords
 
       "/etc/NetworkManager/system-connections"
       "/var/lib/bluetooth"
@@ -21,7 +20,16 @@
       "/var/lib/fail2ban"
     ];
     files = [
+      "/machine-key.json"
       "/etc/machine-id"
+      "/etc/resolv.conf" # TODO describe
+      "/etc/shadow" # keep passwords
+      "/etc/group"
+      "/etc/passwd"
+      "/etc/sudoers"
+      "/etc/localtime"
+      "/etc/timezone"
+      "/etc/adjtime"
     ];
     users."${primaryUser}" = {
       directories = [
