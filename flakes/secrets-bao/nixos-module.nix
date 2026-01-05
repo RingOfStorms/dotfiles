@@ -7,11 +7,27 @@
 let
   cfg = config.ringofstorms.secretsBao;
 
-  mkJwtMintScript = pkgs.writeShellScript "zitadel-mint-jwt" ''
+  mkJwtMintScript = pkgs.writeShellScript "zitadel-mint-jwt-impl" ''
     #!/usr/bin/env bash
     set -euo pipefail
 
     key_json="${cfg.zitadelKeyPath}"
+    token_endpoint="${cfg.zitadelTokenEndpoint}"
+    issuer="${cfg.zitadelIssuer}"
+
+    debug_enabled="${if cfg.debugMint then "true" else "false"}"
+    request_roles="${if cfg.requestProjectRoles then "true" else "false"}"
+
+    debug() {
+      if [ "$debug_enabled" = "true" ] || [ -n "${DEBUG:-}" ]; then
+        echo "[zitadel-mint] $*" >&2
+      fi
+    }
+
+    if [ ! -f "$key_json" ]; then
+      echo "KEY_JSON not found: $key_json" >&2
+      exit 1
+    fi
 
     kid="$(${pkgs.jq}/bin/jq -r .keyId "$key_json")"
     sub="$(${pkgs.jq}/bin/jq -r .userId "$key_json")"
@@ -26,11 +42,13 @@ let
     exp="$(( now + ${toString cfg.jwtLifetimeSeconds} ))"
     jti="$(${pkgs.openssl}/bin/openssl rand -hex 16)"
 
+    debug "kid=$kid sub=$sub iss=$sub aud=$issuer iat=$now exp=$exp jti=$jti"
+
     header="$(${pkgs.jq}/bin/jq -cn --arg kid "$kid" '{alg:"RS256",typ:"JWT",kid:$kid}')"
     payload="$(${pkgs.jq}/bin/jq -cn \
       --arg iss "$sub" \
       --arg sub "$sub" \
-      --arg aud "${cfg.zitadelTokenEndpoint}" \
+      --arg aud "$issuer" \
       --arg jti "$jti" \
       --argjson iat "$now" \
       --argjson exp "$exp" \
@@ -46,41 +64,135 @@ let
     sig="$(${pkgs.coreutils}/bin/printf '%s' "$h64.$p64" | ${pkgs.openssl}/bin/openssl dgst -sha256 -sign "$pem_file" | b64url)"
     assertion="$h64.$p64.$sig"
 
-    resp=""
-    if ! resp="$(${pkgs.curl}/bin/curl -sS --fail-with-body \
-      --connect-timeout 5 --max-time 30 \
-      --retry 20 --retry-delay 2 --retry-all-errors \
-      -X POST "${cfg.zitadelTokenEndpoint}" \
+    scope="${cfg.zitadelScope}"
+    roles_scope="urn:zitadel:iam:org:projects:roles"
+
+    if [ -z "$scope" ]; then
+      scope="openid urn:zitadel:iam:org:project:id:${cfg.zitadelProjectId}:aud"
+    fi
+
+    # Always request project roles unless explicitly disabled.
+    if [ "$request_roles" = "true" ]; then
+      if [[ " $scope " != *" $roles_scope "* ]]; then
+        scope="$scope $roles_scope"
+      fi
+    fi
+
+    debug "token_endpoint=$token_endpoint"
+    debug "scope=$scope"
+
+    response_with_status="$(${pkgs.curl}/bin/curl -sS --fail-with-body \
+      --connect-timeout 3 --max-time 15 \
+      --retry 8 --retry-delay 2 --retry-max-time 60 --retry-all-errors \
+      -X POST "$token_endpoint" \
       -H 'content-type: application/x-www-form-urlencoded' \
+      -w $'\n%{http_code}' \
       --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer' \
       --data-urlencode "assertion=$assertion" \
-      --data-urlencode "scope=${cfg.zitadelScopes}" \
-    )"; then
-      echo "Zitadel token endpoint returned error; response:" >&2
-      echo "$resp" >&2
+      --data-urlencode "scope=$scope" \
+    )"
+
+    http_status="${"$"}{response_with_status##*$'\n'}"
+    response_body="${"$"}{response_with_status%$'\n'*}"
+
+    if [ "$http_status" != "200" ]; then
+      echo "token endpoint failed (HTTP $http_status):" >&2
+      echo "$response_body" >&2
       exit 1
     fi
 
-    token="$(${pkgs.jq}/bin/jq -r '.access_token // empty' <<<"$resp" 2>/dev/null || true)"
-    if [ -z "$token" ] || [ "$token" = "null" ]; then
-      echo "Zitadel token mint did not return access_token; response:" >&2
-      echo "$resp" >&2
+    if [ "${toString cfg.debugMint}" = "true" ]; then
+      debug "token endpoint response: $response_body"
+    fi
+
+    access_token="$(${pkgs.coreutils}/bin/printf '%s' "$response_body" | ${pkgs.jq}/bin/jq -r '.access_token // empty')"
+    id_token="$(${pkgs.coreutils}/bin/printf '%s' "$response_body" | ${pkgs.jq}/bin/jq -r '.id_token // empty')"
+
+    decode_payload() {
+      local token="$1"
+      local payload_b64 payload_json
+
+      payload_b64="$(${pkgs.coreutils}/bin/printf '%s' "$token" | ${pkgs.coreutils}/bin/cut -d. -f2)"
+      payload_json="$(${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.jq}/bin/jq -Rr '
+        gsub("-"; "+")
+        | gsub("_"; "/")
+        | . + ("=" * ((4 - (length % 4)) % 4))
+        | @base64d
+      ' 2>/dev/null || true)"
+
+      ${pkgs.coreutils}/bin/printf '%s' "$payload_json"
+    }
+
+    has_roles_claim() {
+      local token="$1"
+      local payload
+      payload="$(decode_payload "$token")"
+      if [ -z "$payload" ]; then
+        return 1
+      fi
+      ${pkgs.jq}/bin/jq -e 'has("urn:zitadel:iam:org:projects:roles") or has("urn:zitadel:iam:org:project:roles") or has("flatRolesClaim")' <<<"$payload" >/dev/null 2>&1
+    }
+
+    token=""
+    token_source=""
+
+    if [[ "$access_token" == *.*.* ]] && has_roles_claim "$access_token"; then
+      token="$access_token"
+      token_source="access_token(with_roles)"
+    elif [[ "$id_token" == *.*.* ]] && has_roles_claim "$id_token"; then
+      token="$id_token"
+      token_source="id_token(with_roles)"
+    elif [[ "$access_token" == *.*.* ]]; then
+      token="$access_token"
+      token_source="access_token"
+    elif [[ "$id_token" == *.*.* ]]; then
+      token="$id_token"
+      token_source="id_token"
+    else
+      echo "no JWT found in response (.access_token/.id_token)." >&2
+      echo "Response was:" >&2
+      echo "$response_body" >&2
       exit 1
     fi
 
-    # Quick sanity check: JWT should have 2 dots.
-    if ! ${pkgs.gnugrep}/bin/grep -q '\\.' <<<"$token"; then
-      echo "Zitadel access_token does not look like a JWT; response:" >&2
-      echo "$resp" >&2
-      exit 1
+    debug "selected=$token_source"
+
+    if [ "${toString cfg.debugMint}" = "true" ] || [ -n "${DEBUG:-}" ]; then
+      payload="$(decode_payload "$token")"
+      if [ -n "$payload" ]; then
+        debug "jwt.payload=$(echo "$payload" | ${pkgs.jq}/bin/jq -c '.')"
+      else
+        debug "jwt.payload=<decode_failed>"
+      fi
     fi
 
     ${pkgs.coreutils}/bin/printf '%s' "$token"
   '';
 
+  zitadelMintJwt = pkgs.writeShellScriptBin "zitadel-mint-jwt" ''
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Keep behavior consistent between CLI + systemd.
+    export KEY_JSON="${cfg.zitadelKeyPath}"
+    export TOKEN_ENDPOINT="${cfg.zitadelTokenEndpoint}"
+    export ZITADEL_ISSUER="${cfg.zitadelIssuer}"
+    export ZITADEL_PROJECT_ID="${cfg.zitadelProjectId}"
+    export ZITADEL_SCOPE="${cfg.zitadelScope}"
+    export ZITADEL_REQUEST_PROJECT_ROLES="${if cfg.requestProjectRoles then "true" else "false"}"
+
+    if [ "${toString cfg.debugMint}" = "true" ]; then
+      export DEBUG=1
+    fi
+
+    exec ${mkJwtMintScript}
+  '';
+
   zitadelHost =
     let
-      noProto = lib.strings.removePrefix "https://" (lib.strings.removePrefix "http://" cfg.zitadelTokenEndpoint);
+      noProto = lib.strings.removePrefix "https://" (
+        lib.strings.removePrefix "http://" cfg.zitadelTokenEndpoint
+      );
     in
     builtins.head (lib.strings.splitString "/" noProto);
 
@@ -95,6 +207,7 @@ let
         config = {
           role = "${cfg.openBaoRole}"
           path = "${cfg.zitadelJwtPath}"
+          remove_jwt_after_reading = false
         }
       }
 
@@ -152,9 +265,34 @@ in
       default = "https://sso.joshuabell.xyz/oauth/v2/token";
     };
 
-    zitadelScopes = lib.mkOption {
+    # If empty, the mint script will build a scope.
+    zitadelScope = lib.mkOption {
       type = lib.types.str;
-      default = "openid profile email";
+      default = "";
+    };
+
+    zitadelIssuer = lib.mkOption {
+      type = lib.types.str;
+      default = "https://sso.joshuabell.xyz";
+      description = "Issuer / audience for the JWT bearer assertion (base URL, not /oauth/*).";
+    };
+
+    zitadelProjectId = lib.mkOption {
+      type = lib.types.str;
+      default = "";
+      description = "Zitadel Project -> Resource ID (used to request aud scope).";
+    };
+
+    requestProjectRoles = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Request urn:zitadel:iam:org:projects:roles in scope.";
+    };
+
+    debugMint = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Enable verbose mint logs (stderr).";
     };
 
     jwtLifetimeSeconds = lib.mkOption {
@@ -226,6 +364,18 @@ in
                 description = "Field under .Data.data to render.";
               };
 
+              dependencies = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "Systemd service names to restart after this secret is rendered.";
+              };
+
+              configChanges = lib.mkOption {
+                type = lib.types.functionTo lib.types.attrs;
+                default = { path, ... }: { };
+                description = "Function that returns extra config given { path = secret.path; }.";
+              };
+
               template = lib.mkOption {
                 type = lib.types.nullOr lib.types.lines;
                 default = null;
@@ -239,16 +389,19 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    assertions = lib.mapAttrsToList (name: s: {
-      assertion = (s.template != null) || (s.kvPath != null);
-      message = "ringofstorms.secretsBao.secrets.${name} must set either template or kvPath";
-    }) cfg.secrets;
-    environment.systemPackages = [
+  config = lib.mkIf cfg.enable (lib.mkMerge [
+    {
+      assertions = lib.mapAttrsToList (name: s: {
+        assertion = (s.template != null) || (s.kvPath != null);
+        message = "ringofstorms.secretsBao.secrets.${name} must set either template or kvPath";
+      }) cfg.secrets;
+
+      environment.systemPackages = [
       pkgs.jq
       pkgs.curl
       pkgs.openssl
       pkgs.openbao
+      zitadelMintJwt
     ];
 
     systemd.tmpfiles.rules = [
@@ -267,6 +420,7 @@ in
             "nss-lookup.target"
             "NetworkManager-wait-online.service"
             "systemd-resolved.service"
+            "time-sync.target"
           ];
           wants = [
             "network-online.target"
@@ -298,6 +452,21 @@ in
               fi
 
               echo "zitadel-mint-jwt: starting (host=${zitadelHost})" >&2
+
+              # Best-effort: wait briefly for time sync + DNS.
+              for i in {1..10}; do
+                if ${pkgs.systemd}/bin/timedatectl show -p NTPSynchronized --value 2>/dev/null | ${pkgs.gnugrep}/bin/grep -qi true; then
+                  break
+                fi
+                sleep 1
+              done
+
+              for i in {1..10}; do
+                if ${pkgs.systemd}/bin/resolvectl query ${zitadelHost} >/dev/null 2>&1; then
+                  break
+                fi
+                sleep 1
+              done
 
               jwt_is_valid() {
                 local token="$1"
@@ -331,7 +500,7 @@ in
                 exit 0
               fi
 
-              jwt="$(${mkJwtMintScript})"
+              jwt="$(${zitadelMintJwt}/bin/zitadel-mint-jwt)"
 
               if [ -z "$jwt" ] || [ "$jwt" = "null" ]; then
                 echo "Failed to mint Zitadel access token" >&2
@@ -352,8 +521,14 @@ in
         vault-agent = {
           description = "OpenBao agent for rendering secrets";
           wantedBy = [ "multi-user.target" ];
-          after = [ "network-online.target" "zitadel-mint-jwt.service" ];
-          wants = [ "network-online.target" "zitadel-mint-jwt.service" ];
+          after = [
+            "network-online.target"
+            "zitadel-mint-jwt.service"
+          ];
+          wants = [
+            "network-online.target"
+            "zitadel-mint-jwt.service"
+          ];
 
           serviceConfig = {
             Type = "simple";
@@ -374,6 +549,7 @@ in
           description = "Wait for OpenBao secret ${name}";
           after = [ "vault-agent.service" ];
           requires = [ "vault-agent.service" ];
+          wantedBy = map (svc: "${svc}.service") secret.dependencies;
           startLimitIntervalSec = 300;
           startLimitBurst = 3;
 
@@ -390,26 +566,33 @@ in
 
               for i in {1..60}; do
                 if [ -s "$p" ]; then
-                  exit 0
+                  break
                 fi
                 sleep 1
               done
 
-              echo "Secret file not rendered: $p" >&2
-              exit 1
+              if [ ! -s "$p" ]; then
+                echo "Secret file not rendered: $p" >&2
+                exit 1
+              fi
+
+              ${lib.concatStringsSep "\n" (map (svc: ''
+                echo "Restarting ${svc} due to secret ${name}" >&2
+                systemctl try-restart ${lib.escapeShellArg (svc + ".service")} || true
+              '') secret.dependencies)}
             '';
           };
         }
       ) cfg.secrets)
     ];
 
-    age.secrets = lib.mapAttrs' (
-      name: secret:
-      lib.nameValuePair name {
-        file = null;
-        path = secret.path;
-      }
-    ) cfg.secrets;
-  };
+      age.secrets = lib.mapAttrs' (
+        name: secret:
+        lib.nameValuePair name {
+          file = null;
+          path = secret.path;
+        }
+      ) cfg.secrets;
+    }
+  ]);
 }
-

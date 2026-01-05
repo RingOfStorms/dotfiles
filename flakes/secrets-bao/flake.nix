@@ -6,7 +6,12 @@
   outputs = { ... }:
     {
       nixosModules = {
-        default = import ./nixos-module.nix;
+        default = {
+          imports = [
+            (import ./nixos-module.nix)
+            (import ./nixos-configchanges.nix)
+          ];
+        };
       };
     };
 }

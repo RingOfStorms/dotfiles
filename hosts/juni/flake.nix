@@ -86,59 +86,60 @@
               inputs.common.nixosModules.timezone_auto
               inputs.common.nixosModules.tty_caps_esc
               inputs.common.nixosModules.zsh
-              # inputs.common.nixosModules.tailnet
+              inputs.common.nixosModules.tailnet
               inputs.common.nixosModules.remote_lio_builds
 
-              ({
-                ringofstorms.secretsBao = {
-                  enable = true;
-                  zitadelKeyPath = "/machine-key.json";
-                  openBaoAddr = "https://sec.joshuabell.xyz";
-                  jwtAuthMountPath = "auth/zitadel-jwt";
-                  openBaoRole = "machines";
-                  secrets = {
-                    headscale_auth = {
-                      path = "/run/secrets/headscale_auth";
-                      kvPath = "kv/data/machines/home_roaming/headscale_auth";
-                      field = "value";
-                    };
+              (
+                { config, ... }:
+                {
 
-                    nix2github = {
-                      path = "/run/secrets/nix2github";
-                      owner = "josh";
-                      group = "users";
-                      kvPath = "kv/data/machines/home_roaming/nix2github";
-                      field = "private_key";
-                    };
-                    nix2bitbucket = {
-                      path = "/run/secrets/nix2bitbucket";
-                      owner = "josh";
-                      group = "users";
-                      kvPath = "kv/data/machines/home_roaming/nix2bitbucket";
-                      field = "private_key";
-                    };
-                    nix2gitforgejo = {
-                      path = "/run/secrets/nix2gitforgejo";
-                      owner = "josh";
-                      group = "users";
-                      kvPath = "kv/data/machines/home_roaming/nix2gitforgejo";
-                      field = "private_key";
-                    };
-                    nix2lio = {
-                      path = "/run/secrets/nix2lio";
-                      owner = "josh";
-                      group = "users";
-                      kvPath = "kv/data/machines/home_roaming/nix2lio";
-                      field = "private_key";
+                  ringofstorms.secretsBao = {
+                    enable = true;
+                    zitadelKeyPath = "/machine-key.json";
+                    openBaoAddr = "https://sec.joshuabell.xyz";
+                    jwtAuthMountPath = "auth/zitadel-jwt";
+                    openBaoRole = "machines";
+                    zitadelIssuer = "https://sso.joshuabell.xyz";
+                    zitadelProjectId = "344379162166820867";
+                    debugMint = true;
+                    secrets = {
+                      headscale_auth = {
+                        kvPath = "kv/data/machines/home_roaming/headscale_auth";
+                        dependencies = [ "tailscaled" ];
+                        configChanges = { path, ... }: {
+                          services.tailscale.authKeyFile = path;
+                        };
+                      };
+
+                      nix2github = {
+                        owner = "josh";
+                        group = "users";
+                        kvPath = "kv/data/machines/home_roaming/nix2github";
+                      };
+                      nix2bitbucket = {
+                        owner = "josh";
+                        group = "users";
+                        kvPath = "kv/data/machines/home_roaming/nix2bitbucket";
+                      };
+                      nix2gitforgejo = {
+                        owner = "josh";
+                        group = "users";
+                        kvPath = "kv/data/machines/home_roaming/nix2gitforgejo";
+                      };
+                      nix2lio = {
+                        owner = "josh";
+                        group = "users";
+                        kvPath = "kv/data/machines/home_roaming/nix2lio";
+                      };
                     };
                   };
-                };
 
-                systemd.services.tailscaled = {
-                  after = [ "openbao-secret-headscale_auth.service" ];
-                  requires = [ "openbao-secret-headscale_auth.service" ];
-                };
-              })
+                  systemd.services.tailscaled = {
+                    after = [ "openbao-secret-headscale_auth.service" ];
+                    requires = [ "openbao-secret-headscale_auth.service" ];
+                  };
+                }
+              )
 
               # inputs.beszel.nixosModules.agent
               # ({
