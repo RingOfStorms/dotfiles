@@ -34,6 +34,7 @@
   users.users.root.openssh.authorizedKeys.keys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJN2nsLmAlF6zj5dEBkNSJaqcCya+aB6I0imY8Q5Ew0S nix2lio"
   ];
+  nix.distributedBuilds = true;
   # Allow emulation of aarch64-linux binaries for cross compiling
   boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
 
