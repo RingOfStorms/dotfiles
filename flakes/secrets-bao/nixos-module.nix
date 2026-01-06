@@ -19,7 +19,7 @@ let
     request_roles="${if cfg.requestProjectRoles then "true" else "false"}"
 
     debug() {
-      if [ "$debug_enabled" = "true" ] || [ -n "${DEBUG:-}" ]; then
+      if [ "$debug_enabled" = "true" ] || [ -n "${"DEBUG:-"}" ]; then
         echo "[zitadel-mint] $*" >&2
       fi
     }
@@ -157,7 +157,7 @@ let
 
     debug "selected=$token_source"
 
-    if [ "${toString cfg.debugMint}" = "true" ] || [ -n "${DEBUG:-}" ]; then
+    if [ "${toString cfg.debugMint}" = "true" ] || [ -n "${"DEBUG:-"}" ]; then
       payload="$(decode_payload "$token")"
       if [ -n "$payload" ]; then
         debug "jwt.payload=$(echo "$payload" | ${pkgs.jq}/bin/jq -c '.')"
@@ -354,7 +354,7 @@ in
 
               kvPath = lib.mkOption {
                 type = lib.types.nullOr lib.types.str;
-                default = null;
+                default = "kv/data/machines/home_roaming/${name}";
                 description = "KV v2 secret API path (ex: kv/data/machines/home_roaming/nix2github).";
               };
 
@@ -373,7 +373,13 @@ in
               configChanges = lib.mkOption {
                 type = lib.types.attrs;
                 default = { };
-                description = "Extra config applied when enabled; supports '$SECRET_PATH' string substitution.";
+                description = "Extra NixOS config applied when enabled; supports '$SECRET_PATH' string substitution.";
+              };
+
+              hmChanges = lib.mkOption {
+                type = lib.types.attrs;
+                default = { };
+                description = "Extra Home Manager config applied when enabled; supports '$SECRET_PATH' string substitution.";
               };
 
               template = lib.mkOption {
@@ -396,7 +402,6 @@ in
           assertion = (s.template != null) || (s.kvPath != null);
           message = "ringofstorms.secretsBao.secrets.${name} must set either template or kvPath";
         }) cfg.secrets;
-
 
         environment.systemPackages = [
           pkgs.jq
@@ -578,10 +583,12 @@ in
                     exit 1
                   fi
 
-                  ${lib.concatStringsSep "\n" (map (svc: ''
-                    echo "Restarting ${svc} due to secret ${name}" >&2
-                    systemctl try-restart ${lib.escapeShellArg (svc + ".service")} || true
-                  '') secret.dependencies)}
+                  ${lib.concatStringsSep "\n" (
+                    map (svc: ''
+                      echo "Restarting ${svc} due to secret ${name}" >&2
+                      systemctl try-restart ${lib.escapeShellArg (svc + ".service")} || true
+                    '') secret.dependencies
+                  )}
                 '';
               };
             }

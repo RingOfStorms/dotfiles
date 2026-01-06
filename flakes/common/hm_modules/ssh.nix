@@ -16,10 +16,6 @@ in
   # TODO can I put all IP's in the flake.nix top level settings and pull them in here instead?
   programs.ssh = {
     enable = true;
-    extraConfig = ''
-      Host *
-        SetEnv TERM=xterm-256color
-    '';
     enableDefaultConfig = false;
     matchBlocks = {
       "*" = {
@@ -36,6 +32,9 @@ in
         extraOptions = {
           StrictHostKeyChecking = "accept-new";
         };
+        setEnv = {
+          TERM = "xterm-256color";
+        };
       };
 
       # EXTERNAL
@@ -45,43 +44,30 @@ in
       "bitbucket.org" = lib.mkIf (hasSecret "nix2bitbucket") {
         identityFile = age.secrets.nix2bitbucket.path;
       };
-      # "git.joshuabell.xyz" =  lib.mkIf (hasSecret "nix2gitjosh") { # TODO remove old
-      #   identityFile = age.secrets.nix2gitjosh.path;
-      #   user = "git";
-      # };
-      "git.joshuabell.xyz" = lib.mkIf (hasSecret "nix2gitforgejo") {
-        identityFile = age.secrets.nix2gitforgejo.path;
+      "git.joshuabell.xyz" = {
+        identityFile = lib.mkIf (hasSecret "nix2gitforgejo") age.secrets.nix2gitforgejo.path;
         user = "git";
       };
       # PERSONAL DEVICES
-      "lio" = lib.mkIf (hasSecret "nix2lio") {
-        identityFile = age.secrets.nix2lio.path;
+      "lio" = {
+        identityFile = lib.mkIf (hasSecret "nix2lio") age.secrets.nix2lio.path;
         user = "josh";
-        extraOptions = {
-          "PubkeyAcceptedKeyTypes" = "ssh-ed25519";
-          "ServerAliveInterval" = "60";
-          "IPQoS" = "throughput";
-        };
       };
-      "lio_" = lib.mkIf (hasSecret "nix2lio") {
-        identityFile = age.secrets.nix2lio.path;
+      "lio_" = {
+        identityFile = lib.mkIf (hasSecret "nix2lio") age.secrets.nix2lio.path;
         hostname = "10.12.14.116";
         user = "josh";
       };
-      "oren" = lib.mkIf (hasSecret "nix2oren") {
-        identityFile = age.secrets.nix2oren.path;
+      "oren" = {
+        identityFile = lib.mkIf (hasSecret "nix2oren") age.secrets.nix2oren.path;
         user = "josh";
       };
-      "joe" = lib.mkIf (hasSecret "nix2joe") {
-        identityFile = age.secrets.nix2joe.path;
-        user = "ringo";
-      };
-      "gp3" = lib.mkIf (hasSecret "nix2gpdPocket3") {
-        identityFile = age.secrets.nix2gpdPocket3.path;
+      "gp3" = {
+        identityFile = lib.mkIf (hasSecret "nix2gpdPocket3") age.secrets.nix2gpdPocket3.path;
         user = "josh";
       };
-      "t" = lib.mkIf (hasSecret "nix2t") {
-        identityFile = age.secrets.nix2t.path;
+      "t" = {
+        identityFile = lib.mkIf (hasSecret "nix2t") age.secrets.nix2t.path;
         user = "joshua.bell";
         localForwards = [
           {
@@ -94,8 +80,8 @@ in
           TERM = "vt100";
         };
       };
-      "t_" = lib.mkIf (hasSecret "nix2t") {
-        identityFile = age.secrets.nix2t.path;
+      "t_" = {
+        identityFile = lib.mkIf (hasSecret "nix2t") age.secrets.nix2t.path;
         hostname = "10.12.14.181";
         user = "joshua.bell";
         localForwards = [
@@ -108,33 +94,6 @@ in
         setEnv = {
           TERM = "vt100";
         };
-      };
-      "mbptv" = lib.mkIf (hasSecret "nix2gpdPocket3") {
-        identityFile = age.secrets.nix2gpdPocket3.path;
-        user = "waka";
-        setEnv = {
-          TERM = "vt100";
-        };
-      };
-      "mbptv_" = lib.mkIf (hasSecret "nix2gpdPocket3") {
-        identityFile = age.secrets.nix2gpdPocket3.path;
-        hostname = "10.12.14.30";
-        user = "waka";
-        setEnv = {
-          TERM = "vt100";
-        };
-      };
-      "nothing1" = lib.mkIf (hasSecret "nix2gpdPocket3") {
-        identityFile = age.secrets.nix2gpdPocket3.path;
-        user = "TODO";
-      };
-      "tab1" = lib.mkIf (hasSecret "nix2gpdPocket3") {
-        identityFile = age.secrets.nix2gpdPocket3.path;
-        user = "TODO";
-      };
-      "pixel6" = lib.mkIf (hasSecret "nix2gpdPocket3") {
-        identityFile = age.secrets.nix2gpdPocket3.path;
-        user = "TODO";
       };
       # HOME SERVERS
       "h001" = lib.mkIf (hasSecret "nix2h001") {
