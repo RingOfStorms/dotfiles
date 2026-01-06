@@ -66,9 +66,16 @@ in
         "Window Move Center" = "Meta+Shift+J";
 
         "Window Maximize" = "Meta+Shift+K";
+
+        "Window On All Desktops" = "Meta+P";
       }
       // kwinWorkspace
       // kwinMoveWorkspace;
+
+      "org.kde.kscreen.desktop" = {
+        # Unbind default (Display / Meta+P) so Meta+P can be used by KWin.
+        "ShowOSD" = "none";
+      };
 
       plasmashell = {
         "activate application launcher widget" = [ ];
