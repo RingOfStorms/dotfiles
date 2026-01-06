@@ -160,6 +160,7 @@ in
       };
       services.keyd = mkIf (!cfg.disableKeyd) {
         enable = true;
+        users.groups.keyd = { };
         keyboards.default.settings = {
           main = {
             capslock = "escape";
