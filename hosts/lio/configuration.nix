@@ -28,6 +28,15 @@
       #   STOP_CHARGE_THRESH_BAT0 = 95;
       # };
     };
+
+    # Binary cache server (drop-in nix-serve replacement)
+    nix-serve = {
+      enable = true;
+      package = pkgs.nix-serve-ng;
+      port = 5000;
+      openFirewall = true;
+      secretKeyFile = "/var/lib/nix-serve/cache-priv-key.pem";
+    };
   };
 
   # Also allow this key to work for root user, this will let us use this as a remote builder easier

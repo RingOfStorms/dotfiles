@@ -14,6 +14,13 @@ in
 {
   nix = lib.mkIf (hasSecret "nix2lio") {
     distributedBuilds = true;
+
+    # Prefer pulling from lio's binary cache when available.
+    settings = {
+      substituters = lib.mkAfter [ "http://lio:5000" ];
+      trusted-public-keys = lib.mkAfter [ "lio:9jKQ2xJyZjD0AWFzMcLe5dg3s8vOJ3uffujbUkBg4ms=" ];
+    };
+
     buildMachines = [
       {
         hostName = "lio";
