@@ -18,6 +18,8 @@
       "/var/lib/NetworkManager"
       "/var/lib/iwd"
       "/var/lib/fail2ban"
+
+      "/var/lib/tailscale"
     ];
     files = [
       "/machine-key.json"
