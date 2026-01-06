@@ -7,6 +7,7 @@ KEEP_RECENT_WEEKS=4
 KEEP_RECENT_COUNT=5
 DRY_RUN=0
 DIFF_MAX_DEPTH=0
+IGNORE_FILE="${BCACHE_IMPERMANENCE_IGNORE_FILE-}"
 
 usage() {
   cat <<EOF
@@ -466,6 +467,13 @@ cmd_diff() {
   local persist_mounts
   persist_mounts=$(awk '$2 ~ "^/persist(/|$)" { print $2 }' /proc/self/mounts || true)
 
+  # Optional ignore list file generated from `environment.persistence`.
+  local ignore_list
+  ignore_list=""
+  if [ -n "$IGNORE_FILE" ] && [ -f "$IGNORE_FILE" ]; then
+    ignore_list=$(grep -vE '^[[:space:]]*($|#)' "$IGNORE_FILE" | sed 's/[[:space:]]*$//' || true)
+  fi
+
   is_persist_backed() {
     local p
     p="$1"
@@ -481,6 +489,34 @@ cmd_diff() {
         "$m"|"$m"/*) return 0 ;;
       esac
     done
+    return 1
+  }
+
+  is_ignored_path() {
+    local p
+    p="$1"
+
+    if [ -z "$p" ] || [ "$p" = "/" ]; then
+      return 1
+    fi
+
+    if [ -z "$ignore_list" ]; then
+      return 1
+    fi
+
+    local ign
+    while read -r ign; do
+      [ -n "$ign" ] || continue
+      case "$ign" in
+        /*) : ;;
+        *) continue ;;
+      esac
+
+      case "$p" in
+        "$ign"|"$ign"/*) return 0 ;;
+      esac
+    done <<<"$ignore_list"
+
     return 1
   }
 
@@ -501,6 +537,11 @@ cmd_diff() {
 
     # Skip prefixes that are themselves backed by /persist.
     if is_persist_backed "$prefix"; then
+      continue
+    fi
+
+    # Skip prefixes explicitly persisted via `environment.persistence`.
+    if is_ignored_path "$prefix"; then
       continue
     fi
 
@@ -547,6 +588,11 @@ cmd_diff() {
 
     # Skip paths that reside under a /persist-backed mount in the live system.
     if is_persist_backed "$b_path"; then
+      continue
+    fi
+
+    # Skip paths explicitly persisted via `environment.persistence`.
+    if is_ignored_path "$b_path"; then
       continue
     fi
 
