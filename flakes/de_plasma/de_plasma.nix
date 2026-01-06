@@ -39,8 +39,6 @@ in
       description = "Enable SDDM Wayland and Plasma Wayland session.";
     };
 
-    disableKeyd = lib.mkEnableOption "Disable keyd service for Plasma";
-
     appearance.dark.enable = mkOption {
       type = types.bool;
       default = true;
@@ -159,20 +157,8 @@ in
         layout = "us";
       };
 
-      users.groups.keyd = mkIf (!cfg.disableKeyd) { };
-      services.keyd = mkIf (!cfg.disableKeyd) {
-        enable = true;
-        keyboards.default.settings = {
-          main = {
-            capslock = "escape";
-          };
-        };
-      };
-
-      # `keyd` drops privileges via `setgid(2)`, but the upstream unit
-      # uses `RestrictSUIDSGID=yes`, which blocks that and causes:
-      # "setgid: Operation not permitted".
-      systemd.services.keyd.serviceConfig.RestrictSUIDSGID = mkIf (!cfg.disableKeyd) false;
+      # CapsLock → Escape remap (works on Plasma Wayland)
+      services.xserver.xkb.options = lib.mkDefault "caps:escape";
 
       # Home Manager modules (plasma-manager + our HM layer)
       home-manager.sharedModules = [
