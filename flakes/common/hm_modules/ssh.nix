@@ -62,6 +62,10 @@ in
         identityFile = lib.mkIf (hasSecret "nix2oren") age.secrets.nix2oren.path;
         user = "josh";
       };
+      "juni" = {
+        identityFile = lib.mkIf (hasSecret "nix2nix") age.secrets.nix2oren.path;
+        user = "josh";
+      };
       "gp3" = {
         identityFile = lib.mkIf (hasSecret "nix2gpdPocket3") age.secrets.nix2gpdPocket3.path;
         user = "josh";
