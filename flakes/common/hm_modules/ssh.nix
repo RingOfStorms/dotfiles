@@ -63,7 +63,7 @@ in
         user = "josh";
       };
       "juni" = {
-        identityFile = lib.mkIf (hasSecret "nix2nix") age.secrets.nix2oren.path;
+        identityFile = lib.mkIf (hasSecret "nix2nix") age.secrets.nix2nix.path;
         user = "josh";
       };
       "gp3" = {
