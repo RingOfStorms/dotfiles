@@ -69,6 +69,11 @@
                   ) config.beszelAgent.extraFilesystems;
                 };
               };
+
+              systemd.services.beszel-agent = {
+                requires = [ "tailscaled" ];
+                after = [ "tailscaled" ];
+              };
             };
           };
       };
