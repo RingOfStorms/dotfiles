@@ -43,9 +43,9 @@
     {
       nixosConfigurations = {
         "${configuration_name}" = (
-           lib.nixosSystem {
-             specialArgs = { inherit inputs; };
-             modules = [
+          lib.nixosSystem {
+            specialArgs = { inherit inputs; };
+            modules = [
               inputs.nixos-hardware.nixosModules.framework-12-13th-gen-intel
               inputs.impermanence.nixosModules.impermanence
               ({
@@ -69,7 +69,7 @@
               })
               inputs.common.nixosModules.jetbrains_font
 
-               inputs.secrets-bao.nixosModules.default
+              inputs.secrets-bao.nixosModules.default
               inputs.ros_neovim.nixosModules.default
               ({
                 ringofstorms-nvim.includeAllRuntimeDependencies = true;
@@ -90,63 +90,81 @@
               inputs.common.nixosModules.tailnet
               inputs.common.nixosModules.remote_lio_builds
 
-               (
-                 { inputs, lib, ... }:
-                 let
-                   secrets = {
-                     headscale_auth = {
-                       kvPath = "kv/data/machines/home_roaming/headscale_auth";
-                       dependencies = [ "tailscaled" ];
-                       configChanges = {
-                         services.tailscale.authKeyFile = "$SECRET_PATH";
-                       };
-                     };
-                     nix2github = {
-                       owner = "josh";
-                       group = "users";
-                       kvPath = "kv/data/machines/home_roaming/nix2github";
-                     };
-                     nix2bitbucket = {
-                       owner = "josh";
-                       group = "users";
-                       kvPath = "kv/data/machines/home_roaming/nix2bitbucket";
-                     };
-                     nix2gitforgejo = {
-                       owner = "josh";
-                       group = "users";
-                       kvPath = "kv/data/machines/home_roaming/nix2gitforgejo";
-                     };
-                     nix2lio = {
-                       owner = "josh";
-                       group = "users";
-                       kvPath = "kv/data/machines/home_roaming/nix2lio";
-                     };
-                   };
-                 in
-                 lib.mkMerge [
-                   {
-                     ringofstorms.secretsBao = {
-                       enable = true;
-                       zitadelKeyPath = "/machine-key.json";
-                       openBaoAddr = "https://sec.joshuabell.xyz";
-                       jwtAuthMountPath = "auth/zitadel-jwt";
-                       openBaoRole = "machines";
-                       zitadelIssuer = "https://sso.joshuabell.xyz";
-                       zitadelProjectId = "344379162166820867";
-                       inherit secrets;
-                     };
-                   }
-                   (inputs.secrets-bao.lib.applyConfigChanges secrets)
-                 ]
-               )
+              (
+                { inputs, lib, ... }:
+                let
+                  secrets = {
+                    headscale_auth = {
+                      kvPath = "kv/data/machines/home_roaming/headscale_auth";
+                      dependencies = [ "tailscaled" ];
+                      configChanges.services.tailscale.authKeyFile = "$SECRET_PATH";
+                    };
+                    nix2github = {
+                      owner = "josh";
+                      group = "users";
+                      hmChanges.programs.ssh.matchBlocks."github.com".identityFile = "$SECRET_PATH";
+                    };
+                    nix2bitbucket = {
+                      owner = "josh";
+                      group = "users";
+                      hmChanges.programs.ssh.matchBlocks."bitbucket.com".identityFile = "$SECRET_PATH";
+                    };
+                    nix2gitforgejo = {
+                      owner = "josh";
+                      group = "users";
+                      hmChanges.programs.ssh.matchBlocks."git.joshuabell.xyz".identityFile = "$SECRET_PATH";
+                    };
+                    nix2lio = {
+                      owner = "josh";
+                      group = "users";
+                      hmChanges.programs.ssh.matchBlocks = lib.genAttrs [ "lio" "lio_" ] (_: {
+                        identityFile = "$SECRET_PATH";
+                      });
+                    };
+                    nix2oren = {
+                      owner = "josh";
+                      group = "users";
+                      hmChanges.programs.ssh.matchBlocks.oren.identityFile = "$SECRET_PATH";
+                    };
+                    nix2gpdPocket3 = {
+                      owner = "josh";
+                      group = "users";
+                      hmChanges.programs.ssh.matchBlocks.gp3.identityFile = "$SECRET_PATH";
+                    };
+                    nix2t = {
+                      owner = "josh";
+                      group = "users";
+                      hmChanges.programs.ssh.matchBlocks = lib.genAttrs [ "t" "t_" ] (_: {
+                        identityFile = "$SECRET_PATH";
+                      });
+                    };
+                  };
+                in
+                lib.mkMerge [
+                  {
+                    ringofstorms.secretsBao = {
+                      enable = true;
+                      zitadelKeyPath = "/machine-key.json";
+                      openBaoAddr = "https://sec.joshuabell.xyz";
+                      jwtAuthMountPath = "auth/zitadel-jwt";
+                      openBaoRole = "machines";
+                      zitadelIssuer = "https://sso.joshuabell.xyz";
+                      zitadelProjectId = "344379162166820867";
+                      inherit secrets;
+                    };
+                  }
+                  (inputs.secrets-bao.lib.applyConfigChanges secrets)
+                  (inputs.secrets-bao.lib.applyHmChanges secrets)
+                ]
+              )
 
-              # inputs.beszel.nixosModules.agent
-              # ({
-              #     beszelAgent = {
-              #       token = "2fb5f0a0-24aa-4044-a893-6d0f916cd063";
-              #     };
-              #   }
-              # )
+              inputs.beszel.nixosModules.agent
+              ({
+                  beszelAgent = {
+                    token = "2fb5f0a0-24aa-4044-a893-6d0f916cd063";
+                  };
+                }
+              )
 
               ./hardware-configuration.nix
               ./hardware-mounts.nix
@@ -176,7 +194,7 @@
                       inputs.common.homeManagerModules.starship
                       inputs.common.homeManagerModules.zoxide
                       inputs.common.homeManagerModules.zsh
-                      # inputs.common.homeManagerModules.ssh
+                      inputs.common.homeManagerModules.ssh
                       (
                         { ... }:
                         {
