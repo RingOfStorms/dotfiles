@@ -96,55 +96,55 @@ in
         };
       };
       # HOME SERVERS
-      "h001" = lib.mkIf (hasSecret "nix2h001") {
-        identityFile = age.secrets.nix2h001.path;
+      "h001" = {
+        identityFile = lib.mkIf (hasSecret "nix2h001") age.secrets.nix2h001.path;
         user = "luser";
       };
-      "h001_" = lib.mkIf (hasSecret "nix2h001") {
-        identityFile = age.secrets.nix2h001.path;
+      "h001_" = {
+        identityFile = lib.mkIf (hasSecret "nix2h001") age.secrets.nix2h001.path;
         hostname = "10.12.14.10";
         user = "luser";
       };
-      "h002" = lib.mkIf (hasSecret "nix2nix") {
-        identityFile = age.secrets.nix2nix.path;
+      "h002" = {
+        identityFile = lib.mkIf (hasSecret "nix2nix") age.secrets.nix2nix.path;
         user = "luser";
       };
-      "h002_" = lib.mkIf (hasSecret "nix2nix") {
-        identityFile = age.secrets.nix2nix.path;
+      "h002_" = {
+        identityFile = lib.mkIf (hasSecret "nix2nix") age.secrets.nix2nix.path;
         hostname = "10.12.14.183";
         user = "luser";
       };
-      "h003" = lib.mkIf (hasSecret "nix2h003") {
-        identityFile = age.secrets.nix2h003.path;
+      "h003" = {
+        identityFile = lib.mkIf (hasSecret "nix2h003") age.secrets.nix2h003.path;
         hostname = "10.12.14.1";
         user = "luser";
       };
-      "h003_" = lib.mkIf (hasSecret "nix2h003") {
-        identityFile = age.secrets.nix2h003.path;
+      "h003_" = {
+        identityFile = lib.mkIf (hasSecret "nix2h003") age.secrets.nix2h003.path;
         user = "luser";
       };
       # LINODE SERVERS
-      "l001" = lib.mkIf (hasSecret "nix2linode") {
-        identityFile = age.secrets.nix2linode.path;
+      "l001" = {
+        identityFile = lib.mkIf (hasSecret "nix2linode") age.secrets.nix2linode.path;
         hostname = "172.236.111.33"; # Not on the tailscale network it is the primary host
         user = "root";
       };
-      "l002_" = lib.mkIf (hasSecret "nix2linode") {
-        identityFile = age.secrets.nix2linode.path;
+      "l002_" = {
+        identityFile = lib.mkIf (hasSecret "nix2linode") age.secrets.nix2linode.path;
         hostname = "172.234.26.141";
         user = "root";
       };
-      "l002" = lib.mkIf (hasSecret "nix2linode") {
-        identityFile = age.secrets.nix2linode.path;
+      "l002" = {
+        identityFile = lib.mkIf (hasSecret "nix2linode") age.secrets.nix2linode.path;
         user = "root";
       };
       # ORACLE SERVERS
-      "o001" = lib.mkIf (hasSecret "nix2oracle") {
-        identityFile = age.secrets.nix2oracle.path;
+      "o001" = {
+        identityFile = lib.mkIf (hasSecret "nix2oracle") age.secrets.nix2oracle.path;
         user = "root";
       };
-      "o001_" = lib.mkIf (hasSecret "nix2oracle") {
-        identityFile = age.secrets.nix2oracle.path;
+      "o001_" = {
+        identityFile = lib.mkIf (hasSecret "nix2oracle") age.secrets.nix2oracle.path;
         hostname = "64.181.210.7";
         user = "root";
       };

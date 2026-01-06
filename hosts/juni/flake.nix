@@ -138,6 +138,41 @@
                         identityFile = "$SECRET_PATH";
                       });
                     };
+                    nix2h001 = {
+                      owner = "josh";
+                      group = "users";
+                      hmChanges.programs.ssh.matchBlocks = lib.genAttrs [ "h001" "h001_" ] (_: {
+                        identityFile = "$SECRET_PATH";
+                      });
+                    };
+                    nix2h002 = {
+                      owner = "josh";
+                      group = "users";
+                      hmChanges.programs.ssh.matchBlocks = lib.genAttrs [ "h002" "h002_" ] (_: {
+                        identityFile = "$SECRET_PATH";
+                      });
+                    };
+                    nix2h003 = {
+                      owner = "josh";
+                      group = "users";
+                      hmChanges.programs.ssh.matchBlocks = lib.genAttrs [ "h003" "h003_" ] (_: {
+                        identityFile = "$SECRET_PATH";
+                      });
+                    };
+                    nix2linode = {
+                      owner = "josh";
+                      group = "users";
+                      hmChanges.programs.ssh.matchBlocks = lib.genAttrs [ "l001" "l002" "l002_" ] (_: {
+                        identityFile = "$SECRET_PATH";
+                      });
+                    };
+                    nix2oracle = {
+                      owner = "josh";
+                      group = "users";
+                      hmChanges.programs.ssh.matchBlocks = lib.genAttrs [ "o001" "o001_" ] (_: {
+                        identityFile = "$SECRET_PATH";
+                      });
+                    };
                   };
                 in
                 lib.mkMerge [
@@ -160,11 +195,10 @@
 
               inputs.beszel.nixosModules.agent
               ({
-                  beszelAgent = {
-                    token = "2fb5f0a0-24aa-4044-a893-6d0f916cd063";
-                  };
-                }
-              )
+                beszelAgent = {
+                  token = "2fb5f0a0-24aa-4044-a893-6d0f916cd063";
+                };
+              })
 
               ./hardware-configuration.nix
               ./hardware-mounts.nix
