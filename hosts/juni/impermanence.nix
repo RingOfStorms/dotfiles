@@ -22,6 +22,8 @@
       "/var/lib/tailscale"
 
       "/var/lib/upower"
+
+      "/var/lib/flatpak"
     ];
     files = [
       "/machine-key.json"
@@ -54,6 +56,9 @@
 
         # neovim ros_neovim
         ".local/state/nvim_ringofstorms_helium"
+
+        ".local/share/flatpak"
+        ".var/app"
       ];
       files = [
 
