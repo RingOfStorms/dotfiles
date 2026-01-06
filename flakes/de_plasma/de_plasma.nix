@@ -158,9 +158,10 @@ in
       services.xserver.xkb = {
         layout = "us";
       };
+
+      users.groups.keyd = mkIf (!cfg.disableKeyd) { };
       services.keyd = mkIf (!cfg.disableKeyd) {
         enable = true;
-        users.groups.keyd = { };
         keyboards.default.settings = {
           main = {
             capslock = "escape";
