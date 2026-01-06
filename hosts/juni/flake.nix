@@ -88,6 +88,31 @@
               inputs.common.nixosModules.tty_caps_esc
               inputs.common.nixosModules.zsh
               inputs.common.nixosModules.tailnet
+              (
+                { pkgs, lib, ... }:
+                {
+                  # Some boots come up without `/dev/net/tun` until `modprobe tun`.
+                  # This makes `tailscaled` reliable by forcing the module load
+                  # before it starts.
+                  systemd.services.ensure-tun = {
+                    description = "Ensure tun module is loaded";
+                    wantedBy = [ "tailscaled.service" ];
+                    before = [ "tailscaled.service" ];
+                    after = [ "systemd-modules-load.service" ];
+                    serviceConfig = {
+                      Type = "oneshot";
+                      RemainAfterExit = true;
+                      ExecStart = "${pkgs.kmod}/bin/modprobe tun";
+                    };
+                  };
+
+                  systemd.services.tailscaled = {
+                    after = lib.mkAfter [ "ensure-tun.service" ];
+                    wants = lib.mkAfter [ "ensure-tun.service" ];
+                    requires = lib.mkAfter [ "ensure-tun.service" ];
+                  };
+                }
+              )
               inputs.common.nixosModules.remote_lio_builds
 
               (
