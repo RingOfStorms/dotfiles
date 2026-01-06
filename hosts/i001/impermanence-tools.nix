@@ -7,9 +7,64 @@
 let
   cfg = config.impermanence.tools;
 
-  bcacheImpermanenceBin = pkgs.writeShellScriptBin "bcache-impermanence" (
+  persistence = config.environment.persistence or { };
+
+  normalizePath = v:
+    if builtins.isString v then
+      v
+    else if v ? dirPath then
+      v.dirPath
+    else if v ? filePath then
+      v.filePath
+    else
+      null;
+
+  pathsFromList = f: xs: lib.filter (p: p != null) (map f xs);
+
+  userPersistencePaths = users:
+    lib.flatten (
+      lib.mapAttrsToList (
+        userName: userCfg:
+        let
+          home = (config.users.users.${userName} or { }).home or "/home/${userName}";
+          normalizeUserPath = v:
+            if builtins.isString v then
+              if lib.hasPrefix "/" v then v else "${home}/${v}"
+            else
+              normalizePath v;
+        in
+        (pathsFromList normalizeUserPath (userCfg.directories or [ ]))
+        ++ (pathsFromList normalizeUserPath (userCfg.files or [ ]))
+      ) users
+    );
+
+  ignorePaths =
+    lib.unique (
+      lib.filter (p: p != null && p != "" && p != "/") (
+        lib.flatten (
+          lib.mapAttrsToList (
+            persistRoot: persistCfg:
+            [ persistRoot ]
+            ++ (pathsFromList normalizePath (persistCfg.directories or [ ]))
+            ++ (pathsFromList normalizePath (persistCfg.files or [ ]))
+            ++ (userPersistencePaths (persistCfg.users or { }))
+          ) persistence
+        )
+      )
+    );
+
+  ignoreFile = pkgs.writeText "bcache-impermanence-ignore-paths" (
+    lib.concatStringsSep "\n" ignorePaths + "\n"
+  );
+
+  scriptFile = pkgs.writeText "bcache-impermanence.sh" (
     builtins.readFile ./impermanence-tools.sh
   );
+
+  bcacheImpermanenceBin = pkgs.writeShellScriptBin "bcache-impermanence" ''
+    export BCACHE_IMPERMANENCE_IGNORE_FILE="${ignoreFile}"
+    exec ${pkgs.bash}/bin/bash "${scriptFile}" "$@"
+  '';
 in
 {
   options.impermanence.tools = {
