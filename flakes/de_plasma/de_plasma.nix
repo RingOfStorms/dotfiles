@@ -169,6 +169,11 @@ in
         };
       };
 
+      # `keyd` drops privileges via `setgid(2)`, but the upstream unit
+      # uses `RestrictSUIDSGID=yes`, which blocks that and causes:
+      # "setgid: Operation not permitted".
+      systemd.services.keyd.serviceConfig.RestrictSUIDSGID = mkIf (!cfg.disableKeyd) false;
+
       # Home Manager modules (plasma-manager + our HM layer)
       home-manager.sharedModules = [
         plasma-manager.homeModules.plasma-manager
