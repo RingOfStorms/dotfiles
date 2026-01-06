@@ -1,3 +1,11 @@
+gcamp() {
+  VISUAL=vi EDITOR=vi gcam "$(gcpropose -a | vipe)"
+}
+
+gcmp() {
+  VISUAL=vi EDITOR=vi gcm "$(gcpropose | vipe)"
+}
+
 gcpropose() {
   local LITELLM_BASE_URL="http://h001.net.joshuabell.xyz:8094"
   local LITELLM_MODEL="azure-gpt-5-mini-2025-08-07"
@@ -41,9 +49,9 @@ EOF
 
   local diff
   if [ "$mode" = "all" ]; then
-    diff=$(git diff HEAD)
+    diff=$(git diff --no-color --no-ext-diff --unified=0 HEAD | sed '/^ /d')
   else
-    diff=$(git diff --staged)
+    diff=$(git diff --no-color --no-ext-diff --unified=0 --staged | sed '/^ /d')
   fi
 
   if [ -z "$diff" ]; then
