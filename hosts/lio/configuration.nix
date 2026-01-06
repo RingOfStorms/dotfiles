@@ -34,7 +34,7 @@
       enable = true;
       package = pkgs.nix-serve-ng;
       port = 5000;
-      openFirewall = true;
+      # openFirewall = true;
       secretKeyFile = "/var/lib/nix-serve/cache-priv-key.pem";
     };
   };
