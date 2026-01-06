@@ -43,8 +43,9 @@
     {
       nixosConfigurations = {
         "${configuration_name}" = (
-          lib.nixosSystem {
-            modules = [
+           lib.nixosSystem {
+             specialArgs = { inherit inputs; };
+             modules = [
               inputs.nixos-hardware.nixosModules.framework-12-13th-gen-intel
               inputs.impermanence.nixosModules.impermanence
               ({
@@ -68,7 +69,7 @@
               })
               inputs.common.nixosModules.jetbrains_font
 
-              inputs.secrets-bao.nixosModules.default
+               inputs.secrets-bao.nixosModules.default
               inputs.ros_neovim.nixosModules.default
               ({
                 ringofstorms-nvim.includeAllRuntimeDependencies = true;
@@ -89,57 +90,55 @@
               inputs.common.nixosModules.tailnet
               inputs.common.nixosModules.remote_lio_builds
 
-              (
-                { config, ... }:
-                {
-
-                  ringofstorms.secretsBao = {
-                    enable = true;
-                    zitadelKeyPath = "/machine-key.json";
-                    openBaoAddr = "https://sec.joshuabell.xyz";
-                    jwtAuthMountPath = "auth/zitadel-jwt";
-                    openBaoRole = "machines";
-                    zitadelIssuer = "https://sso.joshuabell.xyz";
-                    zitadelProjectId = "344379162166820867";
-                    debugMint = true;
-                    secrets = {
-                      headscale_auth = {
-                        kvPath = "kv/data/machines/home_roaming/headscale_auth";
-                        dependencies = [ "tailscaled" ];
-                        configChanges = { path, ... }: {
-                          services.tailscale.authKeyFile = path;
-                        };
-                      };
-
-                      nix2github = {
-                        owner = "josh";
-                        group = "users";
-                        kvPath = "kv/data/machines/home_roaming/nix2github";
-                      };
-                      nix2bitbucket = {
-                        owner = "josh";
-                        group = "users";
-                        kvPath = "kv/data/machines/home_roaming/nix2bitbucket";
-                      };
-                      nix2gitforgejo = {
-                        owner = "josh";
-                        group = "users";
-                        kvPath = "kv/data/machines/home_roaming/nix2gitforgejo";
-                      };
-                      nix2lio = {
-                        owner = "josh";
-                        group = "users";
-                        kvPath = "kv/data/machines/home_roaming/nix2lio";
-                      };
-                    };
-                  };
-
-                  systemd.services.tailscaled = {
-                    after = [ "openbao-secret-headscale_auth.service" ];
-                    requires = [ "openbao-secret-headscale_auth.service" ];
-                  };
-                }
-              )
+               (
+                 { inputs, lib, ... }:
+                 let
+                   secrets = {
+                     headscale_auth = {
+                       kvPath = "kv/data/machines/home_roaming/headscale_auth";
+                       dependencies = [ "tailscaled" ];
+                       configChanges = {
+                         services.tailscale.authKeyFile = "$SECRET_PATH";
+                       };
+                     };
+                     nix2github = {
+                       owner = "josh";
+                       group = "users";
+                       kvPath = "kv/data/machines/home_roaming/nix2github";
+                     };
+                     nix2bitbucket = {
+                       owner = "josh";
+                       group = "users";
+                       kvPath = "kv/data/machines/home_roaming/nix2bitbucket";
+                     };
+                     nix2gitforgejo = {
+                       owner = "josh";
+                       group = "users";
+                       kvPath = "kv/data/machines/home_roaming/nix2gitforgejo";
+                     };
+                     nix2lio = {
+                       owner = "josh";
+                       group = "users";
+                       kvPath = "kv/data/machines/home_roaming/nix2lio";
+                     };
+                   };
+                 in
+                 lib.mkMerge [
+                   {
+                     ringofstorms.secretsBao = {
+                       enable = true;
+                       zitadelKeyPath = "/machine-key.json";
+                       openBaoAddr = "https://sec.joshuabell.xyz";
+                       jwtAuthMountPath = "auth/zitadel-jwt";
+                       openBaoRole = "machines";
+                       zitadelIssuer = "https://sso.joshuabell.xyz";
+                       zitadelProjectId = "344379162166820867";
+                       inherit secrets;
+                     };
+                   }
+                   (inputs.secrets-bao.lib.applyConfigChanges secrets)
+                 ]
+               )
 
               # inputs.beszel.nixosModules.agent
               # ({

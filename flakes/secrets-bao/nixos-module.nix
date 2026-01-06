@@ -371,9 +371,9 @@ in
               };
 
               configChanges = lib.mkOption {
-                type = lib.types.functionTo lib.types.attrs;
-                default = { path, ... }: { };
-                description = "Function that returns extra config given { path = secret.path; }.";
+                type = lib.types.attrs;
+                default = { };
+                description = "Extra config applied when enabled; supports '$SECRET_PATH' string substitution.";
               };
 
               template = lib.mkOption {
@@ -389,210 +389,214 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable (lib.mkMerge [
-    {
-      assertions = lib.mapAttrsToList (name: s: {
-        assertion = (s.template != null) || (s.kvPath != null);
-        message = "ringofstorms.secretsBao.secrets.${name} must set either template or kvPath";
-      }) cfg.secrets;
-
-      environment.systemPackages = [
-      pkgs.jq
-      pkgs.curl
-      pkgs.openssl
-      pkgs.openbao
-      zitadelMintJwt
-    ];
-
-    systemd.tmpfiles.rules = [
-      "d /run/openbao 0700 root root - -"
-      "f /run/openbao/zitadel.jwt 0400 root root - -"
-      "d /run/secrets 0711 root root - -"
-    ];
-
-    systemd.services = lib.mkMerge [
+  config = lib.mkIf cfg.enable (
+    lib.mkMerge [
       {
-        zitadel-mint-jwt = {
-          description = "Mint Zitadel access token (JWT) for OpenBao";
-          wantedBy = [ "multi-user.target" ];
-          after = [
-            "network-online.target"
-            "nss-lookup.target"
-            "NetworkManager-wait-online.service"
-            "systemd-resolved.service"
-            "time-sync.target"
-          ];
-          wants = [
-            "network-online.target"
-            "NetworkManager-wait-online.service"
-            "systemd-resolved.service"
-          ];
+        assertions = lib.mapAttrsToList (name: s: {
+          assertion = (s.template != null) || (s.kvPath != null);
+          message = "ringofstorms.secretsBao.secrets.${name} must set either template or kvPath";
+        }) cfg.secrets;
 
-          serviceConfig = {
-            Type = "oneshot";
-            User = "root";
-            Group = "root";
-            Restart = "on-failure";
-            RestartSec = "30s";
-            TimeoutStartSec = "2min";
-            UMask = "0077";
 
-            ExecStart = pkgs.writeShellScript "zitadel-mint-jwt-service" ''
-              #!/usr/bin/env bash
-              set -euo pipefail
+        environment.systemPackages = [
+          pkgs.jq
+          pkgs.curl
+          pkgs.openssl
+          pkgs.openbao
+          zitadelMintJwt
+        ];
 
-              if [ ! -d "/run/openbao" ]; then
-                ${pkgs.coreutils}/bin/mkdir -p /run/openbao
-                ${pkgs.coreutils}/bin/chmod 0700 /run/openbao
-              fi
+        systemd.tmpfiles.rules = [
+          "d /run/openbao 0700 root root - -"
+          "f /run/openbao/zitadel.jwt 0400 root root - -"
+          "d /run/secrets 0711 root root - -"
+        ];
 
-              if [ ! -f "${cfg.zitadelKeyPath}" ]; then
-                echo "Missing Zitadel key JSON at ${cfg.zitadelKeyPath}" >&2
-                exit 1
-              fi
+        systemd.services = lib.mkMerge [
+          {
+            zitadel-mint-jwt = {
+              description = "Mint Zitadel access token (JWT) for OpenBao";
+              wantedBy = [ "multi-user.target" ];
+              after = [
+                "network-online.target"
+                "nss-lookup.target"
+                "NetworkManager-wait-online.service"
+                "systemd-resolved.service"
+                "time-sync.target"
+              ];
+              wants = [
+                "network-online.target"
+                "NetworkManager-wait-online.service"
+                "systemd-resolved.service"
+              ];
 
-              echo "zitadel-mint-jwt: starting (host=${zitadelHost})" >&2
+              serviceConfig = {
+                Type = "oneshot";
+                User = "root";
+                Group = "root";
+                Restart = "on-failure";
+                RestartSec = "30s";
+                TimeoutStartSec = "2min";
+                UMask = "0077";
 
-              # Best-effort: wait briefly for time sync + DNS.
-              for i in {1..10}; do
-                if ${pkgs.systemd}/bin/timedatectl show -p NTPSynchronized --value 2>/dev/null | ${pkgs.gnugrep}/bin/grep -qi true; then
-                  break
-                fi
-                sleep 1
-              done
+                ExecStart = pkgs.writeShellScript "zitadel-mint-jwt-service" ''
+                  #!/usr/bin/env bash
+                  set -euo pipefail
 
-              for i in {1..10}; do
-                if ${pkgs.systemd}/bin/resolvectl query ${zitadelHost} >/dev/null 2>&1; then
-                  break
-                fi
-                sleep 1
-              done
+                  if [ ! -d "/run/openbao" ]; then
+                    ${pkgs.coreutils}/bin/mkdir -p /run/openbao
+                    ${pkgs.coreutils}/bin/chmod 0700 /run/openbao
+                  fi
 
-              jwt_is_valid() {
-                local token="$1"
-                local payload_b64 payload_json exp now
+                  if [ ! -f "${cfg.zitadelKeyPath}" ]; then
+                    echo "Missing Zitadel key JSON at ${cfg.zitadelKeyPath}" >&2
+                    exit 1
+                  fi
 
-                payload_b64="$(${pkgs.coreutils}/bin/printf '%s' "$token" | ${pkgs.coreutils}/bin/cut -d. -f2)"
-                payload_b64="$(${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.gnused}/bin/sed -e 's/-/+/g' -e 's/_/\//g')"
+                  echo "zitadel-mint-jwt: starting (host=${zitadelHost})" >&2
 
-                case $((${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.coreutils}/bin/wc -c)) in
-                  *1) payload_b64="$payload_b64=" ;;
-                  *2) payload_b64="$payload_b64==" ;;
-                  *3) : ;;
-                  *0) : ;;
-                esac
+                  # Best-effort: wait briefly for time sync + DNS.
+                  for i in {1..10}; do
+                    if ${pkgs.systemd}/bin/timedatectl show -p NTPSynchronized --value 2>/dev/null | ${pkgs.gnugrep}/bin/grep -qi true; then
+                      break
+                    fi
+                    sleep 1
+                  done
 
-                payload_json="$(${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.coreutils}/bin/base64 -d 2>/dev/null || true)"
-                exp="$(${pkgs.jq}/bin/jq -r '.exp // empty' <<<"$payload_json" 2>/dev/null || true)"
-                if [ -z "$exp" ]; then
-                  return 1
-                fi
+                  for i in {1..10}; do
+                    if ${pkgs.systemd}/bin/resolvectl query ${zitadelHost} >/dev/null 2>&1; then
+                      break
+                    fi
+                    sleep 1
+                  done
 
-                now="$(${pkgs.coreutils}/bin/date +%s)"
-                if [ "$exp" -gt $(( now + 60 )) ]; then
-                  return 0
-                fi
-                return 1
-              }
+                  jwt_is_valid() {
+                    local token="$1"
+                    local payload_b64 payload_json exp now
 
-              if [ -s "${cfg.zitadelJwtPath}" ] && jwt_is_valid "$(cat "${cfg.zitadelJwtPath}")"; then
-                echo "zitadel-mint-jwt: existing token still valid; skipping" >&2
-                exit 0
-              fi
+                    payload_b64="$(${pkgs.coreutils}/bin/printf '%s' "$token" | ${pkgs.coreutils}/bin/cut -d. -f2)"
+                    payload_b64="$(${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.gnused}/bin/sed -e 's/-/+/g' -e 's/_/\//g')"
 
-              jwt="$(${zitadelMintJwt}/bin/zitadel-mint-jwt)"
+                    case $((${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.coreutils}/bin/wc -c)) in
+                      *1) payload_b64="$payload_b64=" ;;
+                      *2) payload_b64="$payload_b64==" ;;
+                      *3) : ;;
+                      *0) : ;;
+                    esac
 
-              if [ -z "$jwt" ] || [ "$jwt" = "null" ]; then
-                echo "Failed to mint Zitadel access token" >&2
-                exit 1
-              fi
+                    payload_json="$(${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.coreutils}/bin/base64 -d 2>/dev/null || true)"
+                    exp="$(${pkgs.jq}/bin/jq -r '.exp // empty' <<<"$payload_json" 2>/dev/null || true)"
+                    if [ -z "$exp" ]; then
+                      return 1
+                    fi
 
-              tmp="$(${pkgs.coreutils}/bin/mktemp)"
-              trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
-              ${pkgs.coreutils}/bin/printf '%s' "$jwt" > "$tmp"
+                    now="$(${pkgs.coreutils}/bin/date +%s)"
+                    if [ "$exp" -gt $(( now + 60 )) ]; then
+                      return 0
+                    fi
+                    return 1
+                  }
 
-              # In-place update so the agent's file watcher sees changes.
-              ${pkgs.coreutils}/bin/cat "$tmp" > "${cfg.zitadelJwtPath}"
-              ${pkgs.coreutils}/bin/chmod 0400 "${cfg.zitadelJwtPath}" || true
-            '';
-          };
-        };
+                  if [ -s "${cfg.zitadelJwtPath}" ] && jwt_is_valid "$(cat "${cfg.zitadelJwtPath}")"; then
+                    echo "zitadel-mint-jwt: existing token still valid; skipping" >&2
+                    exit 0
+                  fi
 
-        vault-agent = {
-          description = "OpenBao agent for rendering secrets";
-          wantedBy = [ "multi-user.target" ];
-          after = [
-            "network-online.target"
-            "zitadel-mint-jwt.service"
-          ];
-          wants = [
-            "network-online.target"
-            "zitadel-mint-jwt.service"
-          ];
+                  jwt="$(${zitadelMintJwt}/bin/zitadel-mint-jwt)"
 
-          serviceConfig = {
-            Type = "simple";
-            User = "root";
-            Group = "root";
-            Restart = "on-failure";
-            RestartSec = "10s";
-            TimeoutStartSec = "30s";
-            UMask = "0077";
-            ExecStart = "${pkgs.openbao}/bin/bao agent -log-level=debug -config=${mkAgentConfig}";
-          };
-        };
+                  if [ -z "$jwt" ] || [ "$jwt" = "null" ]; then
+                    echo "Failed to mint Zitadel access token" >&2
+                    exit 1
+                  fi
+
+                  tmp="$(${pkgs.coreutils}/bin/mktemp)"
+                  trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
+                  ${pkgs.coreutils}/bin/printf '%s' "$jwt" > "$tmp"
+
+                  # In-place update so the agent's file watcher sees changes.
+                  ${pkgs.coreutils}/bin/cat "$tmp" > "${cfg.zitadelJwtPath}"
+                  ${pkgs.coreutils}/bin/chmod 0400 "${cfg.zitadelJwtPath}" || true
+                '';
+              };
+            };
+
+            vault-agent = {
+              description = "OpenBao agent for rendering secrets";
+              wantedBy = [ "multi-user.target" ];
+              after = [
+                "network-online.target"
+                "zitadel-mint-jwt.service"
+              ];
+              wants = [
+                "network-online.target"
+                "zitadel-mint-jwt.service"
+              ];
+
+              serviceConfig = {
+                Type = "simple";
+                User = "root";
+                Group = "root";
+                Restart = "on-failure";
+                RestartSec = "10s";
+                TimeoutStartSec = "30s";
+                UMask = "0077";
+                ExecStart = "${pkgs.openbao}/bin/bao agent -log-level=debug -config=${mkAgentConfig}";
+              };
+            };
+          }
+
+          (lib.mapAttrs' (
+            name: secret:
+            lib.nameValuePair "openbao-secret-${name}" {
+              description = "Wait for OpenBao secret ${name}";
+              after = [ "vault-agent.service" ];
+              requires = [ "vault-agent.service" ];
+              wantedBy = map (svc: "${svc}.service") secret.dependencies;
+              startLimitIntervalSec = 300;
+              startLimitBurst = 3;
+
+              serviceConfig = {
+                Type = "oneshot";
+                User = "root";
+                Group = "root";
+                UMask = "0077";
+                ExecStart = pkgs.writeShellScript "openbao-wait-secret-${name}" ''
+                  #!/usr/bin/env bash
+                  set -euo pipefail
+
+                  p=${lib.escapeShellArg secret.path}
+
+                  for i in {1..60}; do
+                    if [ -s "$p" ]; then
+                      break
+                    fi
+                    sleep 1
+                  done
+
+                  if [ ! -s "$p" ]; then
+                    echo "Secret file not rendered: $p" >&2
+                    exit 1
+                  fi
+
+                  ${lib.concatStringsSep "\n" (map (svc: ''
+                    echo "Restarting ${svc} due to secret ${name}" >&2
+                    systemctl try-restart ${lib.escapeShellArg (svc + ".service")} || true
+                  '') secret.dependencies)}
+                '';
+              };
+            }
+          ) cfg.secrets)
+        ];
+
+        age.secrets = lib.mapAttrs' (
+          name: secret:
+          lib.nameValuePair name {
+            file = null;
+            path = secret.path;
+          }
+        ) cfg.secrets;
       }
 
-      (lib.mapAttrs' (
-        name: secret:
-        lib.nameValuePair "openbao-secret-${name}" {
-          description = "Wait for OpenBao secret ${name}";
-          after = [ "vault-agent.service" ];
-          requires = [ "vault-agent.service" ];
-          wantedBy = map (svc: "${svc}.service") secret.dependencies;
-          startLimitIntervalSec = 300;
-          startLimitBurst = 3;
-
-          serviceConfig = {
-            Type = "oneshot";
-            User = "root";
-            Group = "root";
-            UMask = "0077";
-            ExecStart = pkgs.writeShellScript "openbao-wait-secret-${name}" ''
-              #!/usr/bin/env bash
-              set -euo pipefail
-
-              p=${lib.escapeShellArg secret.path}
-
-              for i in {1..60}; do
-                if [ -s "$p" ]; then
-                  break
-                fi
-                sleep 1
-              done
-
-              if [ ! -s "$p" ]; then
-                echo "Secret file not rendered: $p" >&2
-                exit 1
-              fi
-
-              ${lib.concatStringsSep "\n" (map (svc: ''
-                echo "Restarting ${svc} due to secret ${name}" >&2
-                systemctl try-restart ${lib.escapeShellArg (svc + ".service")} || true
-              '') secret.dependencies)}
-            '';
-          };
-        }
-      ) cfg.secrets)
-    ];
-
-      age.secrets = lib.mapAttrs' (
-        name: secret:
-        lib.nameValuePair name {
-          file = null;
-          path = secret.path;
-        }
-      ) cfg.secrets;
-    }
-  ]);
+    ]
+  );
 }
