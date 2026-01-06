@@ -6,6 +6,8 @@
 }:
 {
   environment.systemPackages = with pkgs; [ tailscale ];
+  boot.kernelModules = [ "tun" ];
+
   services.tailscale = {
     enable = true;
     openFirewall = true;
