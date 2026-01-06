@@ -71,8 +71,8 @@
               };
 
               systemd.services.beszel-agent = {
-                requires = [ "tailscaled" ];
-                after = [ "tailscaled" ];
+                requires = [ "tailscaled.service" ];
+                after = [ "tailscaled.service" ];
               };
             };
           };
