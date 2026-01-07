@@ -27,6 +27,7 @@ in
       host = "0.0.0.0";
       openFirewall = false;
       package = pkgsLitellm.litellm;
+      environmentFile = "/run/secrets/litellm.env";
       environment = {
         SCARF_NO_ANALYTICS = "True";
         DO_NOT_TRACK = "True";
@@ -37,10 +38,6 @@ in
       settings = {
         environment_variables = {
           LITELLM_PROXY_API_KEY = "na";
-
-          # TODO get from openbao secrets somehow
-          OPENROUTER_API_KEY = "kv/data/machines/home/openrouter api-key";
-          ANTHROPIC_API_KEY = "kv/data/machines/home/anthropic-claude api-key";
         };
         litellm_settings = {
           check_provider_endpoints = true;

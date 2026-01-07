@@ -21,6 +21,7 @@
     secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
+    secrets-bao.url = "path:../../flakes/secrets-bao";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
@@ -79,6 +80,42 @@
                   extraFilesystems = "sda__Media";
                 };
               })
+
+              inputs.secrets-bao.nixosModules.default
+              (
+                { inputs, lib, ... }:
+                let
+                  secrets = {
+                    litellm-env = {
+                      owner = "root";
+                      group = "root";
+                      mode = "0400";
+                      path = "/run/secrets/litellm.env";
+                      softDepend = [ "litellm" ];
+                      template = ''
+                        {{- with secret "kv/data/machines/home/openrouter" -}}OPENROUTER_API_KEY={{ .Data.data.api-key }}{{ end }}
+                        {{- with secret "kv/data/machines/home/anthropic-claude" -}}
+                        ANTHROPIC_API_KEY={{ .Data.data.api-key }}{{ end -}}
+                      '';
+                    };
+                  };
+                in
+                lib.mkMerge [
+                  {
+                    ringofstorms.secretsBao = {
+                      enable = true;
+                      zitadelKeyPath = "/machine-key.json";
+                      openBaoAddr = "https://sec.joshuabell.xyz";
+                      jwtAuthMountPath = "auth/zitadel-jwt";
+                      openBaoRole = "machines";
+                      zitadelIssuer = "https://sso.joshuabell.xyz";
+                      zitadelProjectId = "344379162166820867";
+                      inherit secrets;
+                    };
+                  }
+                  (inputs.secrets-bao.lib.applyConfigChanges secrets)
+                ]
+              )
 
               nixarr.nixosModules.default
               ./hardware-configuration.nix
