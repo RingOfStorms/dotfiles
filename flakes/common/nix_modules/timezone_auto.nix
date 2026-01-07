@@ -1,6 +1,7 @@
 { lib, ... }:
 {
   services.dbus.enable = lib.mkDefault true;
+  services.geoclue2.enable = true;
 
   time.timeZone = null;
   services.automatic-timezoned.enable = true;

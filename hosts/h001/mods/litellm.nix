@@ -37,6 +37,10 @@ in
       settings = {
         environment_variables = {
           LITELLM_PROXY_API_KEY = "na";
+
+          # TODO get from openbao secrets somehow
+          OPENROUTER_API_KEY = "kv/data/machines/home/openrouter api-key";
+          ANTHROPIC_API_KEY = "kv/data/machines/home/anthropic-claude api-key";
         };
         litellm_settings = {
           check_provider_endpoints = true;
@@ -44,6 +48,20 @@ in
           modify_params = true;
         };
         model_list = [
+          # Anthropic (direct)
+          {
+            model_name = "anthropic/*";
+            litellm_params = {
+              model = "anthropic/*";
+            };
+          }
+          # OpenRouter
+          {
+            model_name = "openrouter/*";
+            litellm_params = {
+              model = "openrouter/*";
+            };
+          }
         ]
         # Copilot
         ++ (builtins.map
@@ -142,3 +160,4 @@ in
     };
   };
 }
+
