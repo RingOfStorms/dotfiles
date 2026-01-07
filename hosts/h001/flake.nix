@@ -93,9 +93,12 @@
                       path = "/run/secrets/litellm.env";
                       softDepend = [ "litellm" ];
                       template = ''
-                        {{- with secret "kv/data/machines/home/openrouter" -}}OPENROUTER_API_KEY={{ .Data.data.api-key }}{{ end }}
+                        {{- with secret "kv/data/machines/home/openrouter" -}}
+                        OPENROUTER_API_KEY={{ index .Data.data "api-key" }}
+                        {{ end -}}
                         {{- with secret "kv/data/machines/home/anthropic-claude" -}}
-                        ANTHROPIC_API_KEY={{ .Data.data.api-key }}{{ end -}}
+                        ANTHROPIC_API_KEY={{ index .Data.data "api-key" }}
+                        {{- end -}}
                       '';
                     };
                   };
@@ -192,3 +195,4 @@
       };
     };
 }
+

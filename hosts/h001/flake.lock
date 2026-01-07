@@ -1291,6 +1291,7 @@
         "pinchflat-nixpkgs": "pinchflat-nixpkgs",
         "ros_neovim": "ros_neovim",
         "secrets": "secrets",
+        "secrets-bao": "secrets-bao",
         "trilium-nixpkgs": "trilium-nixpkgs",
         "zitadel-nixpkgs": "zitadel-nixpkgs"
       }
@@ -1430,6 +1431,17 @@
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       }
+    },
+    "secrets-bao": {
+      "locked": {
+        "path": "../../flakes/secrets-bao",
+        "type": "path"
+      },
+      "original": {
+        "path": "../../flakes/secrets-bao",
+        "type": "path"
+      },
+      "parent": []
     },
     "systems": {
       "locked": {
