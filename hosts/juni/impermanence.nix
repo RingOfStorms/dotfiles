@@ -48,6 +48,8 @@
 
         ".local/share/zoxide"
 
+        ".config/opencode"
+
         # KDE
         ".config/kdeconnect"
 
