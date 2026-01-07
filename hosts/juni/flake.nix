@@ -139,7 +139,7 @@
                     nix2bitbucket = {
                       owner = "josh";
                       group = "users";
-                      hmChanges.programs.ssh.matchBlocks."bitbucket.com".identityFile = "$SECRET_PATH";
+                      hmChanges.programs.ssh.matchBlocks."bitbucket.org".identityFile = "$SECRET_PATH";
                     };
                     nix2gitforgejo = {
                       owner = "josh";

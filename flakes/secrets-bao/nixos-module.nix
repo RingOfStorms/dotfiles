@@ -390,6 +390,12 @@ in
       default = "/run/openbao/vault-agent.token";
     };
 
+    vaultAgentLogLevel = lib.mkOption {
+      type = lib.types.str;
+      default = "info";
+      description = "Log level for `bao agent` (debug is very noisy).";
+    };
+
     secrets = lib.mkOption {
       type = lib.types.attrsOf (
         lib.types.submodule (
@@ -502,41 +508,39 @@ in
            }
          ) cfg.secrets;
 
-         systemd.services = lib.mkMerge [
-           (
-             lib.mkMerge (
-               lib.concatLists (
-                 lib.mapAttrsToList (
-                   secretName: secret:
-                   map (
-                     svc:
-                     {
-                       systemd.services.${svc} = {
-                         unitConfig.ConditionPathExists = secret.path;
-                         wants = lib.mkAfter [ "openbao-secret-${secretName}.path" ];
-                         after = lib.mkAfter [ "openbao-secret-${secretName}.path" ];
-                       };
-                     }
-                   ) secret.hardDepend
-                 ) cfg.secrets
-               )
-             )
-           )
-           {
-             systemd.timers.zitadel-mint-jwt = {
-               description = "Refresh Zitadel JWT for OpenBao";
-               wantedBy = [ "timers.target" ];
-               timerConfig = {
-                 OnBootSec = "30s";
-                 OnUnitActiveSec = "2m";
-                 Unit = "zitadel-mint-jwt.service";
-               };
-             };
+          systemd.timers.zitadel-mint-jwt = {
+            description = "Refresh Zitadel JWT for OpenBao";
+            wantedBy = [ "timers.target" ];
+            timerConfig = {
+              OnBootSec = "1min";
+              OnUnitActiveSec = "10min";
+              Unit = "zitadel-mint-jwt.service";
+            };
+          };
 
+          systemd.services = lib.mkMerge [
+            (
+              lib.mkMerge (
+                lib.concatLists (
+                  lib.mapAttrsToList (
+                    secretName: secret:
+                    map (
+                      svc: {
+                        ${svc} = {
+                          unitConfig.ConditionPathExists = secret.path;
+                          wants = lib.mkAfter [ "openbao-secret-${secretName}.path" ];
+                          after = lib.mkAfter [ "openbao-secret-${secretName}.path" ];
+                        };
+                      }
+                    ) secret.hardDepend
+                  ) cfg.secrets
+                )
+              )
+            )
+            {
+              zitadel-mint-jwt = {
+                description = "Mint Zitadel access token (JWT) for OpenBao";
 
-
-             zitadel-mint-jwt = {
-               description = "Mint Zitadel access token (JWT) for OpenBao";
 
               after = [
                 "network-online.target"
@@ -634,7 +638,12 @@ in
                   trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
                   ${pkgs.coreutils}/bin/printf '%s' "$jwt" > "$tmp"
 
-                  # In-place update so the agent's file watcher sees changes.
+                  if [ -s "${cfg.zitadelJwtPath}" ] && ${pkgs.coreutils}/bin/cmp -s "$tmp" "${cfg.zitadelJwtPath}"; then
+                    echo "zitadel-mint-jwt: token unchanged; skipping" >&2
+                    exit 0
+                  fi
+
+                  # Update the token file (the agent watches it).
                   ${pkgs.coreutils}/bin/cat "$tmp" > "${cfg.zitadelJwtPath}"
                   ${pkgs.coreutils}/bin/chmod 0400 "${cfg.zitadelJwtPath}" || true
                 '';
@@ -660,7 +669,7 @@ in
                 RestartSec = "10s";
                 TimeoutStartSec = "30s";
                 UMask = "0077";
-                ExecStart = "${pkgs.openbao}/bin/bao agent -log-level=debug -config=${mkAgentConfig}";
+                ExecStart = "${pkgs.openbao}/bin/bao agent -log-level=${lib.escapeShellArg cfg.vaultAgentLogLevel} -config=${mkAgentConfig}";
               };
             };
           }
@@ -693,14 +702,14 @@ in
                   ${lib.concatStringsSep "\n" (
                     map (svc: ''
                       echo "Trying restart of ${svc} due to secret ${name}" >&2
-                      systemctl try-restart ${lib.escapeShellArg (svc + ".service")} || true
+                      systemctl try-restart --no-block ${lib.escapeShellArg (svc + ".service")} || true
                     '') secret.softDepend
                   )}
 
                   ${lib.concatStringsSep "\n" (
                     map (svc: ''
                       echo "Starting ${svc} due to secret ${name}" >&2
-                      systemctl start ${lib.escapeShellArg (svc + ".service")} || true
+                      systemctl start --no-block ${lib.escapeShellArg (svc + ".service")} || true
                     '') secret.hardDepend
                   )}
                 '';
