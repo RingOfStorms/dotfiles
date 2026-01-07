@@ -78,6 +78,7 @@ in
           })
           # List from https://github.com/settings/copilot/features enabled models
           [
+            "claude-opus-4.5"
             "claude-sonnet-3.5"
             "claude-sonnet-4"
             "claude-sonnet-4.5"
