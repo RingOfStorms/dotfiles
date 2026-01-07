@@ -14,7 +14,7 @@ let
   IMPERMANENCE = true;
   ENCRYPTED = true;
 
-  USB_KEY = "/dev/disk/by-uuid/ea3e20f6-c7f2-407c-b9a2-00b4ac000178";
+  USB_KEY = null;
 
   primaryDeviceUnit = "${utils.escapeSystemdPath PRIMARY}.device";
 in
