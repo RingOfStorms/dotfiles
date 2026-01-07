@@ -28,6 +28,7 @@
     files = [
       "/machine-key.json"
       "/etc/machine-id"
+      "/etc/localtime"
       # NOTE: if you want mutable passwords across reboots, persist these,
       # but you must do a one-time migration (see notes in chat).
       # "/etc/shadow"
