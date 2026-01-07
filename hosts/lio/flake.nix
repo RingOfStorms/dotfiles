@@ -6,10 +6,12 @@
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
-    # common.url = "path:../../flakes/common";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    common.url = "path:../../flakes/common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets.url = "path:../../flakes/secrets";
     secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
+    secrets-bao.url = "path:../../flakes/secrets-bao";
+    # secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
     # flatpaks.url = "path:../../flakes/flatpaks";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     # beszel.url = "path:../../flakes/beszel";
@@ -94,6 +96,36 @@
               common.nixosModules.tty_caps_esc
               common.nixosModules.zsh
               common.nixosModules.more_filesystems
+
+              inputs.secrets-bao.nixosModules.default
+              (
+                { inputs, lib, ... }:
+                let
+                  secrets = {
+                    headscale_auth = {
+                      kvPath = "kv/data/machines/home_roaming/headscale_auth";
+                      # dependencies = [ "tailscaled" ];
+                      # configChanges.services.tailscale.authKeyFile = "$SECRET_PATH"; # TODO remove secrets and enable this
+                    };
+                  };
+                in
+                lib.mkMerge [
+                  {
+                    ringofstorms.secretsBao = {
+                      enable = true;
+                      zitadelKeyPath = "/machine-key.json";
+                      openBaoAddr = "https://sec.joshuabell.xyz";
+                      jwtAuthMountPath = "auth/zitadel-jwt";
+                      openBaoRole = "machines";
+                      zitadelIssuer = "https://sso.joshuabell.xyz";
+                      zitadelProjectId = "344379162166820867";
+                      inherit secrets;
+                    };
+                  }
+                  (inputs.secrets-bao.lib.applyConfigChanges secrets)
+                  (inputs.secrets-bao.lib.applyHmChanges secrets)
+                ]
+              )
 
               beszel.nixosModules.agent
               ({

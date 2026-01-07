@@ -196,6 +196,76 @@ let
     in
     builtins.head (lib.strings.splitString "/" noProto);
 
+  sec = pkgs.writeShellScriptBin "sec" ''
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [ "$(${pkgs.coreutils}/bin/id -u)" -ne 0 ]; then
+      exec ${pkgs.sudo}/bin/sudo "$0" "$@"
+    fi
+
+    vault_addr=${lib.escapeShellArg cfg.openBaoAddr}
+    jwt_mount_path=${lib.escapeShellArg cfg.jwtAuthMountPath}
+    role=${lib.escapeShellArg cfg.openBaoRole}
+    jwt_path=${lib.escapeShellArg cfg.zitadelJwtPath}
+    token_path=${lib.escapeShellArg cfg.vaultAgentTokenPath}
+
+    usage() {
+      echo "usage: sec <kv-path> [field]" >&2
+      echo "  examples:" >&2
+      echo "    sec machines/home_roaming/test value" >&2
+      echo "    sec kv/data/machines/home_roaming/test value" >&2
+    }
+
+    die() {
+      echo "sec: $*" >&2
+      exit 1
+    }
+
+    kv_path="''${1-}"
+    field="''${2:-value}"
+
+    if [ -z "$kv_path" ] || [ "$kv_path" = "-h" ] || [ "$kv_path" = "--help" ]; then
+      usage
+      exit 2
+    fi
+
+    export VAULT_ADDR="$vault_addr"
+
+    token=""
+
+    if [ -r "$token_path" ] && [ -s "$token_path" ]; then
+      token="$(cat "$token_path")"
+    else
+      if [ ! -r "$jwt_path" ] || [ ! -s "$jwt_path" ]; then
+        die "Missing JWT at $jwt_path (try: systemctl start zitadel-mint-jwt)"
+      fi
+
+      token="$(${pkgs.openbao}/bin/bao write -field=token "$jwt_mount_path/login" role="$role" jwt="$(cat "$jwt_path")")"
+    fi
+
+    if [ -z "$token" ] || [ "$token" = "null" ]; then
+      die "Failed to get OpenBao token"
+    fi
+
+    export VAULT_TOKEN="$token"
+
+    # Accept either KV v2 logical paths (machines/foo/bar) or raw API paths (kv/data/machines/foo/bar).
+    if [[ "$kv_path" == kv/data/* ]]; then
+      json="$(${pkgs.openbao}/bin/bao read -format=json "$kv_path")"
+    else
+      json="$(${pkgs.openbao}/bin/bao kv get -format=json -mount=kv "$kv_path")"
+    fi
+
+    value="$(${pkgs.jq}/bin/jq -er --arg field "$field" '.data.data[$field]' <<<"$json" 2>/dev/null || true)"
+
+    if [ -z "$value" ] || [ "$value" = "null" ]; then
+      die "Field not found: $field"
+    fi
+
+    printf '%s\n' "$value"
+  '';
+
   mkAgentConfig = pkgs.writeText "vault-agent.hcl" ''
     vault {
       address = "${cfg.openBaoAddr}"
@@ -245,12 +315,6 @@ let
 
 in
 {
-  options.age.secrets = lib.mkOption {
-    type = lib.types.attrsOf lib.types.anything;
-    default = { };
-    description = "Compatibility shim for modules that expect config.age.secrets.<name>.path.";
-  };
-
   options.ringofstorms.secretsBao = {
     enable = lib.mkEnableOption "Fetch runtime secrets via OpenBao";
 
@@ -409,6 +473,7 @@ in
           pkgs.openssl
           pkgs.openbao
           zitadelMintJwt
+          sec
         ];
 
         systemd.tmpfiles.rules = [
@@ -594,16 +659,7 @@ in
             }
           ) cfg.secrets)
         ];
-
-        age.secrets = lib.mapAttrs' (
-          name: secret:
-          lib.nameValuePair name {
-            file = null;
-            path = secret.path;
-          }
-        ) cfg.secrets;
       }
-
     ]
   );
 }

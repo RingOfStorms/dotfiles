@@ -69,7 +69,6 @@
               })
               inputs.common.nixosModules.jetbrains_font
 
-              inputs.secrets-bao.nixosModules.default
               inputs.ros_neovim.nixosModules.default
               ({
                 ringofstorms-nvim.includeAllRuntimeDependencies = true;
@@ -115,6 +114,7 @@
               )
               inputs.common.nixosModules.remote_lio_builds
 
+              inputs.secrets-bao.nixosModules.default
               (
                 { inputs, lib, ... }:
                 let
@@ -123,6 +123,12 @@
                       kvPath = "kv/data/machines/home_roaming/headscale_auth";
                       dependencies = [ "tailscaled" ];
                       configChanges.services.tailscale.authKeyFile = "$SECRET_PATH";
+                    };
+                    "atuin-key-josh" = {
+                      owner = "josh";
+                      group = "users";
+                      mode = "0400";
+                      template = ''{{- with secret "kv/data/machines/home_roaming/atuin-key-josh" -}}{{ printf "%s\n%s\n%s" .Data.data.user .Data.data.password .Data.data.value }}{{- end -}}'';
                     };
                     nix2github = {
                       owner = "josh";
@@ -295,6 +301,50 @@
                     "com.spotify.Client"
                     "com.bitwarden.desktop"
                   ];
+
+                  systemd.services.atuin-autologin = {
+                    description = "Auto-login to Atuin (if logged out)";
+                    wantedBy = [ "multi-user.target" ];
+                    after = [ "network-online.target" "openbao-secret-atuin-key-josh.service" ];
+                    wants = [ "network-online.target" "openbao-secret-atuin-key-josh.service" ];
+                    requires = [ "openbao-secret-atuin-key-josh.service" ];
+
+                    serviceConfig = {
+                      Type = "oneshot";
+                      User = "josh";
+                      Group = "users";
+                      Environment = [
+                        "HOME=/home/josh"
+                        "XDG_CONFIG_HOME=/home/josh/.config"
+                        "XDG_DATA_HOME=/home/josh/.local/share"
+                      ];
+
+                      ExecStart = pkgs.writeShellScript "atuin-autologin" ''
+                        #!/usr/bin/env bash
+                        set -euo pipefail
+
+                        secret="/run/secrets/atuin-key-josh"
+                        if [ ! -s "$secret" ]; then
+                          echo "Missing atuin secret at $secret" >&2
+                          exit 1
+                        fi
+
+                        # status exits non-zero when logged out.
+                        out="$(${pkgs.atuin}/bin/atuin status 2>&1)" && exit 0
+
+                        if [[ "$out" != *"You are not logged in"* ]]; then
+                          echo "$out" >&2
+                          exit 1
+                        fi
+
+                        username="$(${pkgs.coreutils}/bin/sed -n '1p' "$secret")"
+                        password="$(${pkgs.coreutils}/bin/sed -n '2p' "$secret")"
+                        key="$(${pkgs.coreutils}/bin/sed -n '3p' "$secret")"
+
+                        exec ${pkgs.atuin}/bin/atuin login --username "$username" --password "$password" --key "$key"
+                      '';
+                    };
+                  };
                 }
               )
             ];
