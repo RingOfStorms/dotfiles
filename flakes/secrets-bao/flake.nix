@@ -18,6 +18,27 @@
               else
                 value;
 
+            deepMerge = a: b:
+              if builtins.isAttrs a && builtins.isAttrs b then
+                builtins.foldl'
+                  (acc: key:
+                    let
+                      newVal = builtins.getAttr key b;
+                      mergedVal =
+                        if builtins.hasAttr key acc then
+                          deepMerge (builtins.getAttr key acc) newVal
+                        else
+                          newVal;
+                    in
+                    acc // (builtins.listToAttrs [ { name = key; value = mergedVal; } ])
+                  )
+                  a
+                  (builtins.attrNames b)
+              else if builtins.isList a && builtins.isList b then
+                a ++ b
+              else
+                b;
+
             fragments = builtins.attrValues (builtins.mapAttrs (
               name: s:
               let
@@ -26,7 +47,7 @@
               substitute secretPath (s.configChanges or { })
             ) secrets);
           in
-          builtins.foldl' (acc: v: acc // v) { } fragments;
+          builtins.foldl' deepMerge { } fragments;
 
         applyHmChanges = secrets:
           let
@@ -40,6 +61,27 @@
               else
                 value;
 
+            deepMerge = a: b:
+              if builtins.isAttrs a && builtins.isAttrs b then
+                builtins.foldl'
+                  (acc: key:
+                    let
+                      newVal = builtins.getAttr key b;
+                      mergedVal =
+                        if builtins.hasAttr key acc then
+                          deepMerge (builtins.getAttr key acc) newVal
+                        else
+                          newVal;
+                    in
+                    acc // (builtins.listToAttrs [ { name = key; value = mergedVal; } ])
+                  )
+                  a
+                  (builtins.attrNames b)
+              else if builtins.isList a && builtins.isList b then
+                a ++ b
+              else
+                b;
+
             fragments = builtins.attrValues (builtins.mapAttrs (
               name: s:
               let
@@ -48,7 +90,7 @@
               substitute secretPath (s.hmChanges or { })
             ) secrets);
 
-            merged = builtins.foldl' (acc: v: acc // v) { } fragments;
+            merged = builtins.foldl' deepMerge { } fragments;
           in
           if merged == { } then
             { }
