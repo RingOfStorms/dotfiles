@@ -502,8 +502,9 @@ in
 
              pathConfig = {
                PathChanged = secret.path;
-               PathExists = secret.path;
                Unit = "openbao-secret-changed-${name}.service";
+               TriggerLimitIntervalSec = 30;
+               TriggerLimitBurst = 3;
              };
            }
          ) cfg.secrets;
