@@ -9,8 +9,8 @@
     impermanence.url = "github:nix-community/impermanence";
 
     # Use relative to get current version for testin
-    # common.url = "path:../../flakes/common";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    common.url = "path:../../flakes/common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets-bao.url = "path:../../flakes/secrets-bao";
     # NOTE: using an absolute path so this works before you commit/push.
     # After you add `flakes/secrets-bao` to the repo, switch to a git URL like your other flakes.
