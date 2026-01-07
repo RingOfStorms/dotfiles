@@ -1231,11 +1231,11 @@
       },
       "locked": {
         "dir": "flakes/opencode",
-        "lastModified": 1767740224,
-        "narHash": "sha256-7yUQUw/7IMTBHy2EtuDggE8+NwUN3vDH5fwiTQDIrsI=",
+        "lastModified": 1767824427,
+        "narHash": "sha256-DIe2X3sIuH3KJThL6xQ6sW3+c11DbvMMiCueM/8K7nU=",
         "ref": "refs/heads/master",
-        "rev": "4bc645061b8c3108fdb3ee92a61dbe3e98ecdaea",
-        "revCount": 1082,
+        "rev": "bcf5891fc4aaaa249af532124683f9bdb0d6cd10",
+        "revCount": 1107,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -1250,11 +1250,11 @@
         "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1767719914,
-        "narHash": "sha256-xAQhyRB/tDIH7nkWdJVYCP6xFFfHoOP29RF8T6bmYDI=",
+        "lastModified": 1767823467,
+        "narHash": "sha256-RLTgTjLdPpekYWaNxXRQPBS3phnfBK1LvjSgieKcrfs=",
         "owner": "sst",
         "repo": "opencode",
-        "rev": "1016a52cf1c28656ddd5c66689cf97b6d028c2f6",
+        "rev": "361a96267334fcfc524cc5377dbbfd7d92254f62",
         "type": "github"
       },
       "original": {
