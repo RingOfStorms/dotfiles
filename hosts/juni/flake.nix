@@ -121,13 +121,14 @@
                   secrets = {
                     headscale_auth = {
                       kvPath = "kv/data/machines/home_roaming/headscale_auth";
-                      dependencies = [ "tailscaled" ];
+                      softDepend = [ "tailscaled" ];
                       configChanges.services.tailscale.authKeyFile = "$SECRET_PATH";
                     };
                     "atuin-key-josh" = {
                       owner = "josh";
                       group = "users";
                       mode = "0400";
+                      hardDepend = [ "atuin-autologin" ];
                       template = ''{{- with secret "kv/data/machines/home_roaming/atuin-key-josh" -}}{{ printf "%s\n%s\n%s" .Data.data.user .Data.data.password .Data.data.value }}{{- end -}}'';
                     };
                     nix2github = {
@@ -305,9 +306,8 @@
                   systemd.services.atuin-autologin = {
                     description = "Auto-login to Atuin (if logged out)";
                     wantedBy = [ "multi-user.target" ];
-                    after = [ "network-online.target" "openbao-secret-atuin-key-josh.service" ];
-                    wants = [ "network-online.target" "openbao-secret-atuin-key-josh.service" ];
-                    requires = [ "openbao-secret-atuin-key-josh.service" ];
+                    after = [ "network-online.target" ];
+                    wants = [ "network-online.target" ];
 
                     serviceConfig = {
                       Type = "oneshot";
@@ -337,9 +337,9 @@
                           exit 1
                         fi
 
-                        username="$(${pkgs.coreutils}/bin/sed -n '1p' "$secret")"
-                        password="$(${pkgs.coreutils}/bin/sed -n '2p' "$secret")"
-                        key="$(${pkgs.coreutils}/bin/sed -n '3p' "$secret")"
+                        username="$(${pkgs.gnused}/bin/sed -n '1p' "$secret")"
+                        password="$(${pkgs.gnused}/bin/sed -n '2p' "$secret")"
+                        key="$(${pkgs.gnused}/bin/sed -n '3p' "$secret")"
 
                         exec ${pkgs.atuin}/bin/atuin login --username "$username" --password "$password" --key "$key"
                       '';

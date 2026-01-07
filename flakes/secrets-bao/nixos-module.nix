@@ -428,10 +428,16 @@ in
                 description = "Field under .Data.data to render.";
               };
 
-              dependencies = lib.mkOption {
+              softDepend = lib.mkOption {
                 type = lib.types.listOf lib.types.str;
                 default = [ ];
-                description = "Systemd service names to restart after this secret is rendered.";
+                description = "Systemd service names to try-restart when this secret changes (does not block startup).";
+              };
+
+              hardDepend = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "Systemd service names that should only start when this secret exists; started when the secret changes.";
               };
 
               configChanges = lib.mkOption {
@@ -476,17 +482,62 @@ in
           sec
         ];
 
-        systemd.tmpfiles.rules = [
-          "d /run/openbao 0700 root root - -"
-          "f /run/openbao/zitadel.jwt 0400 root root - -"
-          "d /run/secrets 0711 root root - -"
-        ];
+         systemd.tmpfiles.rules = [
+           "d /run/openbao 0700 root root - -"
+           "f /run/openbao/zitadel.jwt 0400 root root - -"
+           "d /run/secrets 0711 root root - -"
+         ];
 
-        systemd.services = lib.mkMerge [
-          {
-            zitadel-mint-jwt = {
-              description = "Mint Zitadel access token (JWT) for OpenBao";
-              wantedBy = [ "multi-user.target" ];
+         systemd.paths = lib.mapAttrs' (
+           name: secret:
+           lib.nameValuePair "openbao-secret-${name}" {
+             description = "Path unit for OpenBao secret ${name}";
+             wantedBy = [ "multi-user.target" ];
+
+             pathConfig = {
+               PathChanged = secret.path;
+               PathExists = secret.path;
+               Unit = "openbao-secret-changed-${name}.service";
+             };
+           }
+         ) cfg.secrets;
+
+         systemd.services = lib.mkMerge [
+           (
+             lib.mkMerge (
+               lib.concatLists (
+                 lib.mapAttrsToList (
+                   secretName: secret:
+                   map (
+                     svc:
+                     {
+                       systemd.services.${svc} = {
+                         unitConfig.ConditionPathExists = secret.path;
+                         wants = lib.mkAfter [ "openbao-secret-${secretName}.path" ];
+                         after = lib.mkAfter [ "openbao-secret-${secretName}.path" ];
+                       };
+                     }
+                   ) secret.hardDepend
+                 ) cfg.secrets
+               )
+             )
+           )
+           {
+             systemd.timers.zitadel-mint-jwt = {
+               description = "Refresh Zitadel JWT for OpenBao";
+               wantedBy = [ "timers.target" ];
+               timerConfig = {
+                 OnBootSec = "30s";
+                 OnUnitActiveSec = "2m";
+                 Unit = "zitadel-mint-jwt.service";
+               };
+             };
+
+
+
+             zitadel-mint-jwt = {
+               description = "Mint Zitadel access token (JWT) for OpenBao";
+
               after = [
                 "network-online.target"
                 "nss-lookup.target"
@@ -590,17 +641,16 @@ in
               };
             };
 
-            vault-agent = {
-              description = "OpenBao agent for rendering secrets";
-              wantedBy = [ "multi-user.target" ];
-              after = [
-                "network-online.target"
-                "zitadel-mint-jwt.service"
-              ];
-              wants = [
-                "network-online.target"
-                "zitadel-mint-jwt.service"
-              ];
+             vault-agent = {
+               description = "OpenBao agent for rendering secrets";
+               wantedBy = [ "multi-user.target" ];
+               after = [
+                 "network-online.target"
+               ];
+               wants = [
+                 "network-online.target"
+                 "zitadel-mint-jwt.service"
+               ];
 
               serviceConfig = {
                 Type = "simple";
@@ -617,47 +667,47 @@ in
 
           (lib.mapAttrs' (
             name: secret:
-            lib.nameValuePair "openbao-secret-${name}" {
-              description = "Wait for OpenBao secret ${name}";
+            lib.nameValuePair "openbao-secret-changed-${name}" {
+              description = "React to OpenBao secret ${name} changes";
+              wants = [ "vault-agent.service" ];
               after = [ "vault-agent.service" ];
-              requires = [ "vault-agent.service" ];
-              wantedBy = map (svc: "${svc}.service") secret.dependencies;
               startLimitIntervalSec = 300;
-              startLimitBurst = 3;
+              startLimitBurst = 6;
 
               serviceConfig = {
                 Type = "oneshot";
                 User = "root";
                 Group = "root";
                 UMask = "0077";
-                ExecStart = pkgs.writeShellScript "openbao-wait-secret-${name}" ''
+                ExecStart = pkgs.writeShellScript "openbao-secret-changed-${name}" ''
                   #!/usr/bin/env bash
                   set -euo pipefail
 
                   p=${lib.escapeShellArg secret.path}
 
-                  for i in {1..60}; do
-                    if [ -s "$p" ]; then
-                      break
-                    fi
-                    sleep 1
-                  done
-
                   if [ ! -s "$p" ]; then
-                    echo "Secret file not rendered: $p" >&2
-                    exit 1
+                    echo "Secret not present (skipping): $p" >&2
+                    exit 0
                   fi
 
                   ${lib.concatStringsSep "\n" (
                     map (svc: ''
-                      echo "Restarting ${svc} due to secret ${name}" >&2
+                      echo "Trying restart of ${svc} due to secret ${name}" >&2
                       systemctl try-restart ${lib.escapeShellArg (svc + ".service")} || true
-                    '') secret.dependencies
+                    '') secret.softDepend
+                  )}
+
+                  ${lib.concatStringsSep "\n" (
+                    map (svc: ''
+                      echo "Starting ${svc} due to secret ${name}" >&2
+                      systemctl start ${lib.escapeShellArg (svc + ".service")} || true
+                    '') secret.hardDepend
                   )}
                 '';
               };
             }
           ) cfg.secrets)
+
         ];
       }
     ]
