@@ -1,9 +1,11 @@
 gcamp() {
-  VISUAL=vi EDITOR=vi git commit -a -m "$(gcpropose -a | vipe)"
+  export VISUAL=vi EDITOR=vi
+  git commit -a -m "$(gcpropose -a | vipe)"
 }
 
 gcmp() {
-  VISUAL=vi EDITOR=vi git commit -m "$(gcpropose | vipe)"
+  export VISUAL=vi EDITOR=vi
+  git commit -m "$(gcpropose | vipe)"
 }
 
 gcpropose() {
