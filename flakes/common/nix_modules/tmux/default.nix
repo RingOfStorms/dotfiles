@@ -9,7 +9,7 @@
   ];
 
   environment.shellAliases = {
-    tat = "tmux attach-session";
+    tat = "tmux attach-session || tmux new-session";
     t = "tmux";
   };
 
