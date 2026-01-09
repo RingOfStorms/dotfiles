@@ -323,6 +323,11 @@
                         #!/usr/bin/env bash
                         set -euo pipefail
 
+                        if ! ${pkgs.iputils}/bin/ping -c1 -W2 1.1.1.1 &>/dev/null; then
+                          echo "No network access, skipping atuin login"
+                          exit 0
+                        fi
+
                         secret="/run/secrets/atuin-key-josh"
                         if [ ! -s "$secret" ]; then
                           echo "Missing atuin secret at $secret" >&2
