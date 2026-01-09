@@ -21,9 +21,8 @@
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
     de_plasma.url = "path:../../flakes/de_plasma";
     # de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
-    # opencode.url = "path:../../flakes/opencode";
-    opencode.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/opencode";
 
+    opencode.url = "github:sst/opencode";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
 
@@ -73,7 +72,6 @@
               ({
                 ringofstorms-nvim.includeAllRuntimeDependencies = true;
               })
-              inputs.opencode.nixosModules.default
 
               inputs.flatpaks.nixosModules.default
 
@@ -87,6 +85,18 @@
               inputs.common.nixosModules.tty_caps_esc
               inputs.common.nixosModules.zsh
               inputs.common.nixosModules.tailnet
+              (
+                { pkgs, ... }:
+                {
+                  environment.systemPackages = [
+                    inputs.opencode.packages.${pkgs.system}.default
+                  ];
+                  environment.shellAliases = {
+                    "oc" = "all_proxy='' http_proxy='' https_proxy='' opencode";
+                    "occ" = "oc -c";
+                  };
+                }
+              )
               (
                 { pkgs, lib, ... }:
                 {

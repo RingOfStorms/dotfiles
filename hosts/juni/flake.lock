@@ -6,11 +6,11 @@
       },
       "locked": {
         "dir": "flakes/beszel",
-        "lastModified": 1767760069,
-        "narHash": "sha256-wNt+AACETzVAEXUd0pYVLjRS2NSP+uaFdo0Rnvaz3Cc=",
+        "lastModified": 1768000280,
+        "narHash": "sha256-JegPSldfsBcANqnV53mEAQOx/Fv22hUd0G2VTZGUR8Y=",
         "ref": "refs/heads/master",
-        "rev": "ee6fa6cd9b7507d04ef232e794bf0e82f60d50e6",
-        "revCount": 1094,
+        "rev": "a4e2cc00d86d2f3401918cfdf9f0643939871a42",
+        "revCount": 1115,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -67,11 +67,11 @@
       },
       "locked": {
         "dir": "flakes/flatpaks",
-        "lastModified": 1767760069,
-        "narHash": "sha256-wNt+AACETzVAEXUd0pYVLjRS2NSP+uaFdo0Rnvaz3Cc=",
+        "lastModified": 1768000280,
+        "narHash": "sha256-JegPSldfsBcANqnV53mEAQOx/Fv22hUd0G2VTZGUR8Y=",
         "ref": "refs/heads/master",
-        "rev": "ee6fa6cd9b7507d04ef232e794bf0e82f60d50e6",
-        "revCount": 1094,
+        "rev": "a4e2cc00d86d2f3401918cfdf9f0643939871a42",
+        "revCount": 1115,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -108,11 +108,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1767619900,
-        "narHash": "sha256-KpoCBPvwHz3gAQtIUkohE2InRBFK3r0/FM6z5SPWfvM=",
+        "lastModified": 1767910483,
+        "narHash": "sha256-MOU5YdVu4DVwuT5ztXgQpPuRRBjSjUGIdUzOQr9iQOY=",
         "owner": "rycee",
         "repo": "home-manager",
-        "rev": "6bd04da47cfb48dfd15eabf08364b78ad894f5b2",
+        "rev": "82fb7dedaad83e5e279127a38ef410bcfac6d77c",
         "type": "github"
       },
       "original": {
@@ -122,13 +122,38 @@
         "type": "github"
       }
     },
-    "impermanence": {
+    "home-manager_3": {
+      "inputs": {
+        "nixpkgs": [
+          "impermanence",
+          "nixpkgs"
+        ]
+      },
       "locked": {
-        "lastModified": 1737831083,
-        "narHash": "sha256-LJggUHbpyeDvNagTUrdhe/pRVp4pnS6wVKALS782gRI=",
+        "lastModified": 1747978958,
+        "narHash": "sha256-pQQnbxWpY3IiZqgelXHIe/OAE/Yv4NSQq7fch7M6nXQ=",
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "rev": "7419250703fd5eb50e99bdfb07a86671939103ea",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "type": "github"
+      }
+    },
+    "impermanence": {
+      "inputs": {
+        "home-manager": "home-manager_3",
+        "nixpkgs": "nixpkgs_3"
+      },
+      "locked": {
+        "lastModified": 1767822991,
+        "narHash": "sha256-iyrn9AcPZCoyxX4OT8eMkBsjG7SRUQXXS/V1JzxS7rA=",
         "owner": "nix-community",
         "repo": "impermanence",
-        "rev": "4b3e914cdf97a5b536a889e939fb2fd2b043a170",
+        "rev": "82e5bc4508cab9e8d5a136626276eb5bbce5e9c5",
         "type": "github"
       },
       "original": {
@@ -187,11 +212,11 @@
     },
     "nixpkgs-unstable": {
       "locked": {
-        "lastModified": 1767640445,
-        "narHash": "sha256-UWYqmD7JFBEDBHWYcqE6s6c77pWdcU/i+bwD6XxMb8A=",
+        "lastModified": 1767892417,
+        "narHash": "sha256-dhhvQY67aboBk8b0/u0XB6vwHdgbROZT3fJAjyNh5Ww=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "9f0c42f8bc7151b8e7e5840fb3bd454ad850d8c5",
+        "rev": "3497aa5c9457a9d88d71fa93a4a8368816fbeeba",
         "type": "github"
       },
       "original": {
@@ -203,11 +228,11 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1767325753,
-        "narHash": "sha256-yA/CuWyqm+AQo2ivGy6PlYrjZBQm7jfbe461+4HF2fo=",
+        "lastModified": 1767799921,
+        "narHash": "sha256-r4GVX+FToWVE2My8VVZH4V0pTIpnu2ZE8/Z4uxGEMBE=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "64049ca74d63e971b627b5f3178d95642e61cedd",
+        "rev": "d351d0653aeb7877273920cd3e823994e7579b0b",
         "type": "github"
       },
       "original": {
@@ -219,11 +244,27 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1767634882,
-        "narHash": "sha256-2GffSfQxe3sedHzK+sTKlYo/NTIAGzbFCIsNMUPAAnk=",
+        "lastModified": 1748026106,
+        "narHash": "sha256-6m1Y3/4pVw1RWTsrkAK2VMYSzG4MMIj7sqUy7o8th1o=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "3c9db02515ef1d9b6b709fc60ba9a540957f661c",
+        "rev": "063f43f2dbdef86376cc29ad646c45c46e93234c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_4": {
+      "locked": {
+        "lastModified": 1767799921,
+        "narHash": "sha256-r4GVX+FToWVE2My8VVZH4V0pTIpnu2ZE8/Z4uxGEMBE=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "d351d0653aeb7877273920cd3e823994e7579b0b",
         "type": "github"
       },
       "original": {
@@ -233,7 +274,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_4": {
+    "nixpkgs_5": {
       "locked": {
         "lastModified": 1767364772,
         "narHash": "sha256-fFUnEYMla8b7UKjijLnMe+oVFOz6HjijGGNS1l7dYaQ=",
@@ -249,7 +290,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_5": {
+    "nixpkgs_6": {
       "locked": {
         "lastModified": 1766309749,
         "narHash": "sha256-3xY8CZ4rSnQ0NqGhMKAy5vgC+2IVK0NoVEzDoOh4DA4=",
@@ -1131,34 +1172,14 @@
     },
     "opencode": {
       "inputs": {
-        "opencode": "opencode_2"
+        "nixpkgs": "nixpkgs_5"
       },
       "locked": {
-        "dir": "flakes/opencode",
-        "lastModified": 1767760069,
-        "narHash": "sha256-wNt+AACETzVAEXUd0pYVLjRS2NSP+uaFdo0Rnvaz3Cc=",
-        "ref": "refs/heads/master",
-        "rev": "ee6fa6cd9b7507d04ef232e794bf0e82f60d50e6",
-        "revCount": 1094,
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      },
-      "original": {
-        "dir": "flakes/opencode",
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      }
-    },
-    "opencode_2": {
-      "inputs": {
-        "nixpkgs": "nixpkgs_4"
-      },
-      "locked": {
-        "lastModified": 1767719914,
-        "narHash": "sha256-xAQhyRB/tDIH7nkWdJVYCP6xFFfHoOP29RF8T6bmYDI=",
+        "lastModified": 1767994684,
+        "narHash": "sha256-UIijTI9ndnvhRC4tJDiSc19iMxeZZbDjkYTnfCbJpV8=",
         "owner": "sst",
         "repo": "opencode",
-        "rev": "1016a52cf1c28656ddd5c66689cf97b6d028c2f6",
+        "rev": "563b4c33f2bace782403de88e60de4f9167a3c93",
         "type": "github"
       },
       "original": {
@@ -1195,7 +1216,7 @@
         "home-manager": "home-manager_2",
         "impermanence": "impermanence",
         "nixos-hardware": "nixos-hardware",
-        "nixpkgs": "nixpkgs_3",
+        "nixpkgs": "nixpkgs_4",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "opencode": "opencode",
         "ros_neovim": "ros_neovim",
@@ -1204,7 +1225,7 @@
     },
     "ros_neovim": {
       "inputs": {
-        "nixpkgs": "nixpkgs_5",
+        "nixpkgs": "nixpkgs_6",
         "nvim_plugin-Almo7aya/openingh.nvim": "nvim_plugin-Almo7aya/openingh.nvim",
         "nvim_plugin-CopilotC-Nvim/CopilotChat.nvim": "nvim_plugin-CopilotC-Nvim/CopilotChat.nvim",
         "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring": "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring",
@@ -1262,11 +1283,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1767195473,
-        "narHash": "sha256-xL3DZSWiNSvW58LsJwFIpQ9i3Vs5uaYUjbL60rpFxPk=",
+        "lastModified": 1767816828,
+        "narHash": "sha256-5V1nbL52dBUNs8VzxB7MxfVtNYmT71LpPwb2ccmSvOE=",
         "ref": "refs/heads/master",
-        "rev": "88e86b5a7d40697ade905f534dcd5372a67b8102",
-        "revCount": 328,
+        "rev": "3517caecde71f96305a3eec2880daeed18881d5b",
+        "revCount": 329,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/nvim"
       },
