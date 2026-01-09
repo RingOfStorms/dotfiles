@@ -102,7 +102,7 @@ in
           })
           # curl -L "http://100.64.0.8:9010/azure/openai/models?api-version=2025-04-01-preview" | jq '.data.[].id'
           [
-            # "gpt-5.2-2025-12-11"
+            "gpt-5.2-2025-12-11"
             "gpt-5.1-2025-11-13"
             "gpt-4o-2024-05-13"
             "gpt-4.1-2025-04-14"
@@ -111,6 +111,16 @@ in
             "gpt-5-mini-2025-08-07"
             "gpt-5-2025-08-07"
           ]
+          #curl "http://100.64.0.8:9010/azure/openai/deployments/gpt-5.2-2025-12-11/chat/completions?api-version=2025-04-01-preview" \
+          # -H "Content-Type: application/json" \
+          # -H "api-key: na" \
+          # -d '{
+          #   "messages": [
+          #     {"role": "system", "content": "You are a helpful assistant."},
+          #     {"role": "user", "content": "write a haiku?"}
+          #   ],
+          #   "temperature": 0.7
+          # }' | jq
         )
         # 宙 Proxy
         ++ (builtins.map
@@ -153,9 +163,24 @@ in
             "text-embedding-large-exp-03-07"
             "text-embedding-005"
           ]
+        )
+        ++ (builtins.map
+          (m: {
+            model_name = "air_dev-${m}";
+            litellm_params = {
+              model = "litellm_proxy/${m}";
+              api_base = "http://100.64.0.8:9010/air_prd";
+              api_key = "na";
+              drop_params = true;
+            };
+          })
+          # curl -L t.net.joshuabell.xyz:9010/air_alp/models | jq '.data.[].id'
+          [
+            "gemini-3-pro-preview"
+            "claude-sonnet-4.5"
+          ]
         );
       };
     };
   };
 }
-
