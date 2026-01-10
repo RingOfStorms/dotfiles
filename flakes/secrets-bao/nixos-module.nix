@@ -488,11 +488,31 @@ in
           sec
         ];
 
-         systemd.tmpfiles.rules = [
-           "d /run/openbao 0700 root root - -"
-           "f /run/openbao/zitadel.jwt 0400 root root - -"
-           "d /run/secrets 0711 root root - -"
-         ];
+         systemd.tmpfiles.rules =
+           [
+             "d /run/openbao 0700 root root - -"
+             "f /run/openbao/zitadel.jwt 0400 root root - -"
+             "d /run/secrets 0711 root root - -"
+           ]
+           # Create empty placeholder files for all secret destinations so
+           # services that reference env files don't fail when offline.
+           ++ (lib.unique (
+             lib.concatLists (
+               lib.mapAttrsToList (
+                 _: secret:
+                 let
+                   dir = builtins.dirOf secret.path;
+                 in
+                 # Ensure the parent dir exists if a custom path is used.
+                 [ "d ${dir} 0755 root root - -" ]
+               ) cfg.secrets
+             )
+           ))
+           ++ (lib.mapAttrsToList (
+             _: secret:
+             "f ${secret.path} ${secret.mode} ${secret.owner} ${secret.group} - -"
+           ) cfg.secrets);
+
 
          systemd.paths =
            (lib.mapAttrs' (
