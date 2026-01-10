@@ -494,78 +494,155 @@ in
            "d /run/secrets 0711 root root - -"
          ];
 
-         systemd.paths = lib.mapAttrs' (
-           name: secret:
-           lib.nameValuePair "openbao-secret-${name}" {
-             description = "Path unit for OpenBao secret ${name}";
-             wantedBy = [ "multi-user.target" ];
+         systemd.paths =
+           (lib.mapAttrs' (
+             name: secret:
+             lib.nameValuePair "openbao-secret-${name}" {
+               description = "Path unit for OpenBao secret ${name}";
+               wantedBy = [ "multi-user.target" ];
 
-             pathConfig = {
-               PathChanged = secret.path;
-               Unit = "openbao-secret-changed-${name}.service";
-               TriggerLimitIntervalSec = 30;
-               TriggerLimitBurst = 3;
+               pathConfig = {
+                 PathChanged = secret.path;
+                 Unit = "openbao-secret-changed-${name}.service";
+                 TriggerLimitIntervalSec = 30;
+                 TriggerLimitBurst = 3;
+               };
+             }
+           ) cfg.secrets)
+           // {
+             openbao-zitadel-jwt = {
+               description = "React to Zitadel JWT changes (restart vault-agent)";
+               wantedBy = [ "multi-user.target" ];
+
+               pathConfig = {
+                 PathChanged = cfg.zitadelJwtPath;
+                 Unit = "openbao-jwt-changed.service";
+                 TriggerLimitIntervalSec = 30;
+                 TriggerLimitBurst = 3;
+               };
              };
-           }
-         ) cfg.secrets;
+
+             openbao-secrets-ready = {
+               description = "Re-check OpenBao secrets readiness";
+               wantedBy = [ "multi-user.target" ];
+
+               pathConfig = {
+                 PathChanged = "/run/secrets";
+                 Unit = "openbao-secrets-ready.service";
+                 TriggerLimitIntervalSec = 30;
+                 TriggerLimitBurst = 3;
+               };
+             };
+           };
 
           systemd.timers.zitadel-mint-jwt = {
             description = "Refresh Zitadel JWT for OpenBao";
             wantedBy = [ "timers.target" ];
             timerConfig = {
-              OnBootSec = "1min";
-              OnUnitActiveSec = "10min";
+              OnBootSec = "30s";
+              OnUnitInactiveSec = "10min";
               Unit = "zitadel-mint-jwt.service";
             };
           };
 
-          systemd.services = lib.mkMerge [
-            (
-              lib.mkMerge (
-                lib.concatLists (
-                  lib.mapAttrsToList (
-                    secretName: secret:
-                    map (
-                      svc: {
-                        ${svc} = {
-                          unitConfig.ConditionPathExists = secret.path;
-                          wants = lib.mkAfter [ "openbao-secret-${secretName}.path" ];
-                          after = lib.mkAfter [ "openbao-secret-${secretName}.path" ];
-                        };
-                      }
-                    ) secret.hardDepend
-                  ) cfg.secrets
-                )
-              )
-            )
-            {
-              zitadel-mint-jwt = {
-                description = "Mint Zitadel access token (JWT) for OpenBao";
+         systemd.services = lib.mkMerge [
+             (
+               lib.mkMerge (
+                 lib.concatLists (
+                   lib.mapAttrsToList (
+                     secretName: secret:
+                     map (
+                       svc: {
+                         ${svc} = {
+                           unitConfig.ConditionPathExists = secret.path;
+                           wants = lib.mkAfter [ "openbao-secret-${secretName}.path" ];
+                           after = lib.mkAfter [ "openbao-secret-${secretName}.path" ];
+                           partOf = lib.mkAfter [ "openbao-secret-changed-${secretName}.service" ];
+                         };
+                       }
+                     ) secret.hardDepend
+                   ) cfg.secrets
+                 )
+               )
+             )
+             {
+               openbao-secrets-ready = {
+                 description = "OpenBao: all configured secrets present";
+                 wantedBy = [ "multi-user.target" ];
+                 wants = [ "vault-agent.service" ];
+                 after = [ "vault-agent.service" ];
+
+                 serviceConfig = {
+                   Type = "oneshot";
+                   RemainAfterExit = true;
+                   User = "root";
+                   Group = "root";
+                   UMask = "0077";
+                   ExecStart = pkgs.writeShellScript "openbao-secrets-ready" ''
+                     #!/usr/bin/env bash
+                     set -euo pipefail
+
+                     ${lib.concatStringsSep "\n" (
+                       lib.mapAttrsToList (name: secret: ''
+                         if [ ! -s ${lib.escapeShellArg secret.path} ]; then
+                           echo "Missing secret: ${secret.path}" >&2
+                           exit 1
+                         fi
+                       '') cfg.secrets
+                     )}
+
+                     echo "All configured OpenBao secrets present." >&2
+                   '';
+                 };
+               };
+
+               openbao-jwt-changed = {
+                 description = "Restart vault-agent after Zitadel JWT refresh";
+                 wants = [ "vault-agent.service" ];
+                 after = [ "vault-agent.service" ];
+
+                 serviceConfig = {
+                   Type = "oneshot";
+                   User = "root";
+                   Group = "root";
+                   UMask = "0077";
+                   ExecStart = pkgs.writeShellScript "openbao-jwt-changed" ''
+                     #!/usr/bin/env bash
+                     set -euo pipefail
+                     systemctl try-restart --no-block vault-agent.service || true
+                   '';
+                 };
+               };
+
+               zitadel-mint-jwt = {
+                 description = "Mint Zitadel access token (JWT) for OpenBao";
+
+                 after = [
+                   "network-online.target"
+                   "nss-lookup.target"
+                   "NetworkManager-wait-online.service"
+                   "systemd-resolved.service"
+                   "time-sync.target"
+                 ];
+                 wants = [
+                   "network-online.target"
+                   "NetworkManager-wait-online.service"
+                   "systemd-resolved.service"
+                 ];
+
+               serviceConfig = {
+                 Type = "oneshot";
+                 User = "root";
+                 Group = "root";
+                 Restart = "on-failure";
+                 RestartSec = "30s";
+                 TimeoutStartSec = "2min";
+                 UMask = "0077";
+                 StartLimitIntervalSec = 0;
 
 
-              after = [
-                "network-online.target"
-                "nss-lookup.target"
-                "NetworkManager-wait-online.service"
-                "systemd-resolved.service"
-                "time-sync.target"
-              ];
-              wants = [
-                "network-online.target"
-                "NetworkManager-wait-online.service"
-                "systemd-resolved.service"
-              ];
+                   ExecStart = pkgs.writeShellScript "zitadel-mint-jwt-service" ''
 
-              serviceConfig = {
-                Type = "oneshot";
-                User = "root";
-                Group = "root";
-                Restart = "on-failure";
-                RestartSec = "30s";
-                TimeoutStartSec = "2min";
-                UMask = "0077";
-
-                ExecStart = pkgs.writeShellScript "zitadel-mint-jwt-service" ''
                   #!/usr/bin/env bash
                   set -euo pipefail
 
@@ -651,28 +728,33 @@ in
               };
             };
 
-             vault-agent = {
-               description = "OpenBao agent for rendering secrets";
-               wantedBy = [ "multi-user.target" ];
-               after = [
-                 "network-online.target"
-               ];
-               wants = [
-                 "network-online.target"
-                 "zitadel-mint-jwt.service"
-               ];
+              vault-agent = {
+                description = "OpenBao agent for rendering secrets";
+                wantedBy = [ "multi-user.target" ];
 
-              serviceConfig = {
-                Type = "simple";
-                User = "root";
-                Group = "root";
-                Restart = "on-failure";
-                RestartSec = "10s";
-                TimeoutStartSec = "30s";
-                UMask = "0077";
-                ExecStart = "${pkgs.openbao}/bin/bao agent -log-level=${lib.escapeShellArg cfg.vaultAgentLogLevel} -config=${mkAgentConfig}";
-              };
-            };
+                after = [
+                  "network-online.target"
+                  "zitadel-mint-jwt.service"
+                ];
+                wants = [
+                  "network-online.target"
+                  "zitadel-mint-jwt.service"
+                ];
+
+                serviceConfig = {
+                  Type = "simple";
+                  User = "root";
+                  Group = "root";
+                  Restart = "always";
+                  RestartSec = "10s";
+                  TimeoutStartSec = "30s";
+                  UMask = "0077";
+                  StartLimitIntervalSec = 0;
+                  ExecStart = "${pkgs.openbao}/bin/bao agent -log-level=${lib.escapeShellArg cfg.vaultAgentLogLevel} -config=${mkAgentConfig}";
+                };
+
+             };
+
           }
 
           (lib.mapAttrs' (
@@ -713,6 +795,9 @@ in
                       systemctl start --no-block ${lib.escapeShellArg (svc + ".service")} || true
                     '') secret.hardDepend
                   )}
+
+                  # Mark overall readiness when all secrets exist.
+                  systemctl try-restart --no-block openbao-secrets-ready.service || true
                 '';
               };
             }
