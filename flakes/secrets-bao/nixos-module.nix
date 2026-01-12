@@ -574,7 +574,7 @@ in
                      map (
                        svc: {
                          ${svc} = {
-                           unitConfig.ConditionPathExists = secret.path;
+                            unitConfig.ConditionFileNotEmpty = secret.path;
                            wants = lib.mkAfter [ "openbao-secret-${secretName}.path" ];
                            after = lib.mkAfter [ "openbao-secret-${secretName}.path" ];
                            partOf = lib.mkAfter [ "openbao-secret-changed-${secretName}.service" ];
@@ -634,34 +634,36 @@ in
                  };
                };
 
-               zitadel-mint-jwt = {
-                 description = "Mint Zitadel access token (JWT) for OpenBao";
+                zitadel-mint-jwt = {
+                  description = "Mint Zitadel access token (JWT) for OpenBao";
 
-                 after = [
-                   "network-online.target"
-                   "nss-lookup.target"
-                   "NetworkManager-wait-online.service"
-                   "systemd-resolved.service"
-                   "time-sync.target"
-                 ];
-                 wants = [
-                   "network-online.target"
-                   "NetworkManager-wait-online.service"
-                   "systemd-resolved.service"
-                 ];
+                  startLimitIntervalSec = 0;
 
-               serviceConfig = {
-                 Type = "oneshot";
-                 User = "root";
-                 Group = "root";
-                 Restart = "on-failure";
-                 RestartSec = "30s";
-                 TimeoutStartSec = "2min";
-                 UMask = "0077";
-                 StartLimitIntervalSec = 0;
+                  after = [
+                    "network-online.target"
+                    "nss-lookup.target"
+                    "NetworkManager-wait-online.service"
+                    "systemd-resolved.service"
+                    "time-sync.target"
+                  ];
+                  wants = [
+                    "network-online.target"
+                    "NetworkManager-wait-online.service"
+                    "systemd-resolved.service"
+                  ];
+
+                serviceConfig = {
+                  Type = "oneshot";
+                  User = "root";
+                  Group = "root";
+                  Restart = "on-failure";
+                  RestartSec = "30s";
+                  TimeoutStartSec = "2min";
+                  UMask = "0077";
 
 
-                   ExecStart = pkgs.writeShellScript "zitadel-mint-jwt-service" ''
+                    ExecStart = pkgs.writeShellScript "zitadel-mint-jwt-service" ''
+
 
                   #!/usr/bin/env bash
                   set -euo pipefail
@@ -698,14 +700,16 @@ in
                     local payload_b64 payload_json exp now
 
                     payload_b64="$(${pkgs.coreutils}/bin/printf '%s' "$token" | ${pkgs.coreutils}/bin/cut -d. -f2)"
-                    payload_b64="$(${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.gnused}/bin/sed -e 's/-/+/g' -e 's/_/\//g')"
 
-                    case $((${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.coreutils}/bin/wc -c)) in
-                      *1) payload_b64="$payload_b64=" ;;
-                      *2) payload_b64="$payload_b64==" ;;
-                      *3) : ;;
-                      *0) : ;;
-                    esac
+                    if [ -z "$payload_b64" ]; then
+                      return 1
+                    fi
+
+                    # base64url -> base64 (+ padding)
+                    payload_b64="$(${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.gnused}/bin/sed -e 's/-/+/g' -e 's/_/\//g')"
+                    while [ $(( ''${#payload_b64} % 4 )) -ne 0 ]; do
+                      payload_b64="''${payload_b64}="
+                    done
 
                     payload_json="$(${pkgs.coreutils}/bin/printf '%s' "$payload_b64" | ${pkgs.coreutils}/bin/base64 -d 2>/dev/null || true)"
                     exp="$(${pkgs.jq}/bin/jq -r '.exp // empty' <<<"$payload_json" 2>/dev/null || true)"
@@ -736,7 +740,7 @@ in
                   trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
                   ${pkgs.coreutils}/bin/printf '%s' "$jwt" > "$tmp"
 
-                  if [ -s "${cfg.zitadelJwtPath}" ] && ${pkgs.coreutils}/bin/cmp -s "$tmp" "${cfg.zitadelJwtPath}"; then
+                   if [ -s "${cfg.zitadelJwtPath}" ] && ${pkgs.diffutils}/bin/cmp -s "$tmp" "${cfg.zitadelJwtPath}"; then
                     echo "zitadel-mint-jwt: token unchanged; skipping" >&2
                     exit 0
                   fi
@@ -748,32 +752,34 @@ in
               };
             };
 
-              vault-agent = {
-                description = "OpenBao agent for rendering secrets";
-                wantedBy = [ "multi-user.target" ];
+               vault-agent = {
+                 description = "OpenBao agent for rendering secrets";
+                 wantedBy = [ "multi-user.target" ];
 
-                after = [
-                  "network-online.target"
-                  "zitadel-mint-jwt.service"
-                ];
-                wants = [
-                  "network-online.target"
-                  "zitadel-mint-jwt.service"
-                ];
+                 startLimitIntervalSec = 0;
 
-                serviceConfig = {
-                  Type = "simple";
-                  User = "root";
-                  Group = "root";
-                  Restart = "always";
-                  RestartSec = "10s";
-                  TimeoutStartSec = "30s";
-                  UMask = "0077";
-                  StartLimitIntervalSec = 0;
-                  ExecStart = "${pkgs.openbao}/bin/bao agent -log-level=${lib.escapeShellArg cfg.vaultAgentLogLevel} -config=${mkAgentConfig}";
-                };
+                 after = [
+                   "network-online.target"
+                   "zitadel-mint-jwt.service"
+                 ];
+                 wants = [
+                   "network-online.target"
+                   "zitadel-mint-jwt.service"
+                 ];
 
-             };
+                 serviceConfig = {
+                   Type = "simple";
+                   User = "root";
+                   Group = "root";
+                   Restart = "always";
+                   RestartSec = "10s";
+                   TimeoutStartSec = "30s";
+                   UMask = "0077";
+                   ExecStart = "${pkgs.openbao}/bin/bao agent -log-level=${lib.escapeShellArg cfg.vaultAgentLogLevel} -config=${mkAgentConfig}";
+                 };
+
+              };
+
 
           }
 
