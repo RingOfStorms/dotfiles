@@ -278,6 +278,8 @@
                     ];
                   };
 
+                  security.sudo.wheelNeedsPassword = false;
+
                   # System configuration
                   system.stateVersion = stateVersion;
                   networking.hostName = configuration_name;

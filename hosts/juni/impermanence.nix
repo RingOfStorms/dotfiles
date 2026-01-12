@@ -24,6 +24,10 @@
       "/var/lib/upower"
 
       "/var/lib/flatpak"
+
+      # bao secrets
+      "/run/openbao"
+      "/run/secrets"
     ];
     files = [
       "/machine-key.json"
