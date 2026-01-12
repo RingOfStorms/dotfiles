@@ -6,9 +6,9 @@ let
   workspaceLetters = [
     "n"
     "m"
-    ","
-    "."
-    "/"
+    "Comma"
+    "Period"
+    "Slash"
   ];
   kwinWorkspace = builtins.listToAttrs (
     map (i: {
