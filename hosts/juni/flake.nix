@@ -62,6 +62,10 @@
                   enable = true;
                   gpu.intel.enable = true;
                   sddm.autologinUser = "josh";
+                  wallpapers = [
+                    ../../_shared_assets/wallpapers/pixel_neon.png
+                    ../../_shared_assets/wallpapers/pixel_neon_v.png
+                  ];
                 };
               })
               inputs.common.nixosModules.jetbrains_font

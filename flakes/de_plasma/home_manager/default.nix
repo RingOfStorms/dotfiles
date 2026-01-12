@@ -294,10 +294,6 @@ in
         lookAndFeel = "org.kde.breezedark.desktop";
         theme = "breeze-dark";
         cursor.theme = "breeze_cursors";
-        wallpaper = [
-          ../../../hosts/_shared_assets/wallpapers/pixel_neon.png
-          ../../../hosts/_shared_assets/wallpapers/pixel_neon_v.png
-        ];
       };
 
       configFile = {

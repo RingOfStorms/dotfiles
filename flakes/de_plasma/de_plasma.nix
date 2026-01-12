@@ -45,6 +45,15 @@ in
       description = "Enable Breeze Dark, GTK Breeze-Dark, and dark cursors.";
     };
 
+    wallpapers = mkOption {
+      type = types.listOf types.path;
+      default = [
+        ../../hosts/_shared_assets/wallpapers/pixel_neon.png
+        ../../hosts/_shared_assets/wallpapers/pixel_neon_v.png
+      ];
+      description = "List of wallpaper paths to set system-wide for immediate loading.";
+    };
+
     sddm.autologinUser = mkOption {
       type = types.nullOr types.str;
       default = null;
@@ -195,6 +204,17 @@ in
         [Theme]
         cursorTheme=breeze_cursors
       '';
+    })
+
+    (mkIf ((length cfg.wallpapers) > 0) {
+      environment.etc."xdg/plasma-org.kde.plasma.desktop-appletsrc".text =
+        let
+          wallpaperPath = builtins.head cfg.wallpapers;
+        in
+        ''
+          [Containments][1][Wallpaper][org.kde.image][General]
+          Image=file://${wallpaperPath}
+        '';
     })
 
     # GPU blocks

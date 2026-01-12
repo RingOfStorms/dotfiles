@@ -16,7 +16,7 @@
         name = "RingOfStorms (Joshua Bell)";
       };
       core.pager = "bat";
-      core.editor = "nano";
+      core.editor = "vi";
 
       pull.rebase = false;
 
