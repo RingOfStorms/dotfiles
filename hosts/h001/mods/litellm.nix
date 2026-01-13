@@ -208,7 +208,7 @@ in
             model_name = "air_dev-${m}";
             litellm_params = {
               model = "litellm_proxy/${m}";
-              api_base = "http://100.64.0.8:9010/air_prd";
+              api_base = "http://100.64.0.8:9010/air_alp";
               api_key = "na";
               drop_params = true;
             };
