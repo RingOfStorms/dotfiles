@@ -5,7 +5,9 @@
 }:
 let
   cfg = osConfig.ringofstorms.dePlasma;
-  inherit (lib) mkIf;
+  inherit (lib) mkIf optionalAttrs;
+  # Get the first wallpaper from the list if available
+  wallpaper = if (builtins.length cfg.wallpapers) > 0 then builtins.head cfg.wallpapers else null;
 in
 {
   imports = [
@@ -294,6 +296,8 @@ in
         lookAndFeel = "org.kde.breezedark.desktop";
         theme = "breeze-dark";
         cursor.theme = "breeze_cursors";
+      } // optionalAttrs (wallpaper != null) {
+        wallpaper = wallpaper;
       };
 
       configFile = {

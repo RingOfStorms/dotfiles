@@ -206,16 +206,6 @@ in
       '';
     })
 
-    (mkIf ((length cfg.wallpapers) > 0) {
-      environment.etc."xdg/plasma-org.kde.plasma.desktop-appletsrc".text =
-        let
-          wallpaperPath = builtins.head cfg.wallpapers;
-        in
-        ''
-          [Containments][1][Wallpaper][org.kde.image][General]
-          Image=file://${wallpaperPath}
-        '';
-    })
 
     # GPU blocks
     (mkIf cfg.gpu.amd.enable {
