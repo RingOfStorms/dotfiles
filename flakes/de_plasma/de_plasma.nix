@@ -149,6 +149,9 @@ in
         kdePackages.plasma-browser-integration
         # kdePackages.plasma-workspace-wallpapers
 
+        # On-screen keyboard (Plasma Wayland)
+        kdePackages.plasma-keyboard
+
         # Panel applets required for widgets
         kdePackages.plasma-nm # org.kde.plasma.networkmanagement
         kdePackages.bluedevil # org.kde.plasma.bluetooth

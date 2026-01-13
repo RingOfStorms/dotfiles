@@ -1,0 +1,50 @@
+[package]
+name = "stt-stream"
+version = "0.1.0"
+edition = "2021"
+description = "Local speech-to-text streaming CLI for Fcitx5 integration"
+license = "MIT"
+
+[dependencies]
+# Audio capture
+cpal = "0.15"
+# Resampling (48k -> 16k)
+rubato = "0.15"
+# Whisper inference
+whisper-rs = "0.12"
+# Voice activity detection
+# Using silero via ONNX (reserved for future use)
+# ort = { version = "2.0.0-rc.9", default-features = false, features = ["load-dynamic"] }
+# ndarray = "0.16"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Serialization for IPC protocol
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+anyhow = "1"
+thiserror = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Ring buffer for audio (reserved for future use)
+# ringbuf = "0.4"
+
+# For downloading models
+hf-hub = "0.3"
+
+[features]
+default = []
+cuda = ["whisper-rs/cuda"]
+
+[profile.release]
+lto = true
+codegen-units = 1
