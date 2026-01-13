@@ -84,7 +84,6 @@
               inputs.common.nixosModules.hardening
               inputs.common.nixosModules.nix_options
               inputs.common.nixosModules.timezone_auto
-              ({ services.automatic-timezoned.persistDir = "/persist/var/lib/timezone-persist"; })
               inputs.common.nixosModules.tty_caps_esc
               inputs.common.nixosModules.zsh
               inputs.common.nixosModules.tailnet
