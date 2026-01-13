@@ -38,40 +38,28 @@
     },
     "common": {
       "locked": {
-        "dir": "flakes/common",
-        "lastModified": 1768255305,
-        "narHash": "sha256-XcXl5M0WNYhCCqE9qc9Aj2/2Jb/T0NHZnu2ZuVBvlHw=",
-        "ref": "refs/heads/master",
-        "rev": "15769eda748f6fcc6fdab04f79f14ed9b1ffc548",
-        "revCount": 1125,
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+        "path": "../../flakes/common",
+        "type": "path"
       },
       "original": {
-        "dir": "flakes/common",
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      }
+        "path": "../../flakes/common",
+        "type": "path"
+      },
+      "parent": []
     },
     "de_plasma": {
       "inputs": {
         "plasma-manager": "plasma-manager"
       },
       "locked": {
-        "dir": "flakes/de_plasma",
-        "lastModified": 1768255305,
-        "narHash": "sha256-XcXl5M0WNYhCCqE9qc9Aj2/2Jb/T0NHZnu2ZuVBvlHw=",
-        "ref": "refs/heads/master",
-        "rev": "15769eda748f6fcc6fdab04f79f14ed9b1ffc548",
-        "revCount": 1125,
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+        "path": "../../flakes/de_plasma",
+        "type": "path"
       },
       "original": {
-        "dir": "flakes/de_plasma",
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      }
+        "path": "../../flakes/de_plasma",
+        "type": "path"
+      },
+      "parent": []
     },
     "flatpaks": {
       "inputs": {
