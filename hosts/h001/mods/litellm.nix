@@ -122,6 +122,45 @@ in
           #   "temperature": 0.7
           # }' | jq
         )
+        # Azure reasoning aliases
+        ++ [
+          {
+            model_name = "azure-gpt-5.2-low";
+            litellm_params = {
+              model = "azure/gpt-5.2-2025-12-11";
+              api_base = "http://100.64.0.8:9010/azure";
+              api_version = "2025-04-01-preview";
+              api_key = "na";
+              extra_body = {
+                reasoning_effort = "low";
+              };
+            };
+          }
+          {
+            model_name = "azure-gpt-5.2-medium";
+            litellm_params = {
+              model = "azure/gpt-5.2-2025-12-11";
+              api_base = "http://100.64.0.8:9010/azure";
+              api_version = "2025-04-01-preview";
+              api_key = "na";
+              extra_body = {
+                reasoning_effort = "medium";
+              };
+            };
+          }
+          {
+            model_name = "azure-gpt-5.2-high";
+            litellm_params = {
+              model = "azure/gpt-5.2-2025-12-11";
+              api_base = "http://100.64.0.8:9010/azure";
+              api_version = "2025-04-01-preview";
+              api_key = "na";
+              extra_body = {
+                reasoning_effort = "high";
+              };
+            };
+          }
+        ]
         # 宙 Proxy
         ++ (builtins.map
           (m: {
@@ -169,13 +208,14 @@ in
             model_name = "air_dev-${m}";
             litellm_params = {
               model = "litellm_proxy/${m}";
-              api_base = "http://100.64.0.8:9010/air_prd";
+              api_base = "http://100.64.0.8:9010/air_alp";
               api_key = "na";
               drop_params = true;
             };
           })
           # curl -L t.net.joshuabell.xyz:9010/air_alp/models | jq '.data.[].id'
           [
+            "claude-opus-4.5"
             "gemini-3-pro-preview"
             "claude-sonnet-4.5"
           ]

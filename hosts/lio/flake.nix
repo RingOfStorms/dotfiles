@@ -19,7 +19,7 @@
     # de_plasma.url = "path:../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
 
-    opencode.url = "github:sst/opencode";
+    opencode.url = "github:sst/opencode?ref=latest";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
 
