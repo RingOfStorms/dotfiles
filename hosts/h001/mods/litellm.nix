@@ -215,6 +215,7 @@ in
           })
           # curl -L t.net.joshuabell.xyz:9010/air_alp/models | jq '.data.[].id'
           [
+            "claude-opus-4.5"
             "gemini-3-pro-preview"
             "claude-sonnet-4.5"
           ]
