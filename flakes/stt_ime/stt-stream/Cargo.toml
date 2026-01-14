@@ -11,7 +11,7 @@ cpal = "0.15"
 # Resampling (48k -> 16k)
 rubato = "0.15"
 # Whisper inference
-whisper-rs = "0.12"
+whisper-rs = "0.15"
 # Voice activity detection
 # Using silero via ONNX (reserved for future use)
 # ort = { version = "2.0.0-rc.9", default-features = false, features = ["load-dynamic"] }
@@ -44,6 +44,8 @@ hf-hub = "0.3"
 [features]
 default = []
 cuda = ["whisper-rs/cuda"]
+hipblas = ["whisper-rs/hipblas"]
+metal = ["whisper-rs/metal"]
 
 [profile.release]
 lto = true

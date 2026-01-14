@@ -75,6 +75,7 @@
               ({
                 ringofstorms.sttIme = {
                   enable = true;
+                  gpuBackend = "hip"; # Use AMD ROCm/HIP acceleration
                   useGpu = true;
                 };
               })
