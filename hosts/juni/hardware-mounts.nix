@@ -108,6 +108,7 @@ lib.mkMerge [
       serviceConfig.KeyringMode = "shared";
     };
 
+    # Resets my root to a fresh snapshot. I do this my simply moving root to an old snapshots directory
     boot.initrd.systemd.services.bcachefs-reset-root = {
       description = "Reset bcachefs root subvolume before pivot";
 
@@ -171,14 +172,8 @@ lib.mkMerge [
       '';
     };
   })
-  # If you mess up decruption password this reboots for retry instead of getting stuck
-  (lib.mkIf ENCRYPTED {
-    boot.kernelParams = [
-      "rd.shell=0"
-      "rd.emergency=reboot"
-    ];
-  })
-  # Bcachefs auto decryption / unlock
+  # Bcachefs auto decryption / unlock (will use usb key if provided above, else just prompts password)
+  # We use this for password instead of the default one because default doesn't let you retry if you misstype the password
   (lib.mkIf ENCRYPTED {
     boot.supportedFilesystems = [
       "bcachefs"
