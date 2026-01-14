@@ -159,7 +159,7 @@ private:
     std::string readBuffer_;
 
     // Mode
-    SttMode mode_ = SttMode::Manual;
+    SttMode mode_ = SttMode::Oneshot;
 
     // Current state
     bool ready_ = false;

@@ -39,4 +39,4 @@ set_target_properties(stt PROPERTIES PREFIX "")
 # Install targets - use standard paths, Nix postInstall will handle fcitx5 paths
 install(TARGETS stt DESTINATION lib/fcitx5)
 install(FILES data/stt.conf DESTINATION share/fcitx5/addon)
-install(FILES data/stt-im.conf DESTINATION share/fcitx5/inputmethod)
+install(FILES data/stt-inputmethod.conf DESTINATION share/fcitx5/inputmethod RENAME stt.conf)

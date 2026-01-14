@@ -55,6 +55,27 @@ impl ModelSize {
         }
     }
 
+    fn parse(input: &str) -> Option<Self> {
+        let normalized = input
+            .trim()
+            .to_lowercase()
+            .replace('.', "-")
+            .replace('_', "-");
+
+        match normalized.as_str() {
+            "tiny" => Some(ModelSize::Tiny),
+            "tiny-en" => Some(ModelSize::TinyEn),
+            "base" => Some(ModelSize::Base),
+            "base-en" => Some(ModelSize::BaseEn),
+            "small" => Some(ModelSize::Small),
+            "small-en" => Some(ModelSize::SmallEn),
+            "medium" => Some(ModelSize::Medium),
+            "medium-en" => Some(ModelSize::MediumEn),
+            "large-v3" => Some(ModelSize::LargeV3),
+            _ => None,
+        }
+    }
+
     fn hf_repo(&self) -> &'static str {
         "ggerganov/whisper.cpp"
     }
@@ -210,6 +231,8 @@ struct AudioState {
     silence_samples: usize,
     /// Last partial emission time
     last_partial: std::time::Instant,
+    /// Manual mode: stop requested, finalize next tick
+    pending_finalize: bool,
 }
 
 impl AudioState {
@@ -220,6 +243,7 @@ impl AudioState {
             speech_detected: false,
             silence_samples: 0,
             last_partial: std::time::Instant::now(),
+            pending_finalize: false,
         }
     }
 
@@ -227,6 +251,7 @@ impl AudioState {
         self.buffer.clear();
         self.speech_detected = false;
         self.silence_samples = 0;
+        self.pending_finalize = false;
     }
 }
 
@@ -241,7 +266,22 @@ async fn main() -> Result<()> {
         .with_writer(std::io::stderr)
         .init();
 
-    let args = Args::parse();
+    let mut args = Args::parse();
+
+    // Allow Nix/session configuration via env vars.
+    // Precedence: explicit CLI args > env vars > defaults.
+    //
+    // `ringofstorms.sttIme.model` uses dot notation (e.g. "tiny.en"),
+    // while clap's value enum expects kebab-case (e.g. "tiny-en").
+    let cli_has_model_flag = std::env::args().any(|a| a == "--model" || a == "-M");
+    if !cli_has_model_flag && args.model_path.is_none() {
+        if let Ok(model) = std::env::var("STT_STREAM_MODEL") {
+            if let Some(parsed) = ModelSize::parse(&model) {
+                args.model = parsed;
+            }
+        }
+    }
+
     info!("Starting stt-stream with mode: {:?}", args.mode);
 
     // Load Whisper model
@@ -380,6 +420,7 @@ async fn main() -> Result<()> {
                 SttCommand::Stop => {
                     if let Ok(mut state) = audio_state_stdin.lock() {
                         state.is_recording = false;
+                        state.pending_finalize = true;
                         emit_event(&SttEvent::RecordingStopped);
                     }
                 }
@@ -434,7 +475,10 @@ async fn main() -> Result<()> {
         // Mode-specific behavior
         match current_mode {
             Mode::Manual => {
-                if !state.is_recording {
+                // In manual mode we normally ignore audio unless explicitly recording.
+                // Exception: after receiving a "stop" command, we need one more tick
+                // to finalize and emit the transcript.
+                if !state.is_recording && !state.pending_finalize {
                     continue;
                 }
             }
@@ -489,7 +533,7 @@ async fn main() -> Result<()> {
 
         // Check for end of utterance
         let should_finalize = match current_mode {
-            Mode::Manual => !state.is_recording && state.speech_detected,
+            Mode::Manual => state.pending_finalize && state.speech_detected,
             Mode::Oneshot | Mode::Continuous => {
                 state.speech_detected && state.silence_samples > silence_samples_threshold
             }

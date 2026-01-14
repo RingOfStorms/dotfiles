@@ -53,6 +53,9 @@
 
         ".local/share/zoxide"
 
+        # Hugging Face cache (e.g. whisper.cpp models via hf-hub)
+        ".cache/huggingface"
+
         ".config/opencode"
 
         # KDE
