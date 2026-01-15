@@ -283,6 +283,21 @@ in
               "Groups/0/Items/0".Name = "keyboard-us";
               "Groups/0/Items/1".Name = "mozc";
             };
+            # Disable emoji picker to prevent Super+. conflict with desktop shortcuts
+            addons = {
+              keyboard = {
+                globalSection = {
+                  EnableEmoji = "False";
+                  EnableQuickPhraseEmoji = "False";
+                };
+              };
+              unicode = {
+                globalSection = {
+                  # Disable unicode picker trigger key
+                  TriggerKey = "";
+                };
+              };
+            };
           };
         };
       };
