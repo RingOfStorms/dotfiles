@@ -22,7 +22,7 @@
     stt_ime.url = "path:../../flakes/stt_ime";
     # stt_ime.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/stt_ime";
 
-    opencode.url = "github:sst/opencode";
+    opencode.url = "github:anomalyco/opencode";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
 

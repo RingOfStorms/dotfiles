@@ -66,12 +66,14 @@
 
         # neovim ros_neovim
         ".local/state/nvim_ringofstorms_helium"
+        ".local/state/opencode"
 
         ".local/share/flatpak"
         ".var/app"
       ];
       files = [
-
+        # ".config/kglobalshortcutsrc"
+        # ".config/plasma-org.kde.plasma.desktop-appletsrc"
       ];
     };
   };
