@@ -194,7 +194,9 @@ in
             "gemini-2.5-flash-image"
             "claude-opus-4.1"
             "claude-opus-4"
+            "claude-opus-4.5"
             "claude-sonnet-4"
+            "claude-sonnet-4.5"
             "claude-3.7-sonnet"
             "text-embedding-3-small"
             "text-embedding-3-large"
@@ -216,8 +218,8 @@ in
           # curl -L t.net.joshuabell.xyz:9010/air_alp/models | jq '.data.[].id'
           [
             "claude-opus-4.5"
-            "gemini-3-pro-preview"
             "claude-sonnet-4.5"
+            "gemini-3-pro-preview"
           ]
         );
       };
