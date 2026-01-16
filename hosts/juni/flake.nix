@@ -9,18 +9,20 @@
     impermanence.url = "github:nix-community/impermanence";
 
     # Use relative to get current version for testin
-    # common.url = "path:../../flakes/common";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    common.url = "path:../../flakes/common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets-bao.url = "path:../../flakes/secrets-bao";
     secrets-bao.url = "path:../../flakes/secrets-bao";
     # flatpaks.url = "path:../../flakes/flatpaks";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
-    # de_plasma.url = "path:../../flakes/de_plasma";
-    de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
+    de_plasma.url = "path:../../flakes/de_plasma";
+    # de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
+    stt_ime.url = "path:../../flakes/stt_ime";
+    # stt_ime.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/stt_ime";
 
-    opencode.url = "github:sst/opencode";
+    opencode.url = "github:anomalyco/opencode";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
 
@@ -63,12 +65,19 @@
                   gpu.intel.enable = true;
                   sddm.autologinUser = "josh";
                   wallpapers = [
-                    ../../_shared_assets/wallpapers/pixel_neon.png
-                    ../../_shared_assets/wallpapers/pixel_neon_v.png
+                    ../../hosts/_shared_assets/wallpapers/pixel_neon.png
+                    ../../hosts/_shared_assets/wallpapers/pixel_neon_v.png
                   ];
                 };
               })
               inputs.common.nixosModules.jetbrains_font
+              inputs.stt_ime.nixosModules.default
+              ({
+                ringofstorms.sttIme = {
+                  enable = true;
+                  model = "tiny.en";
+                };
+              })
 
               inputs.ros_neovim.nixosModules.default
               ({

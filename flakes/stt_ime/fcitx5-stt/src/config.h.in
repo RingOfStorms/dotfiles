@@ -1,0 +1,4 @@
+#pragma once
+
+// Path to stt-stream binary
+#define STT_STREAM_PATH "@STT_STREAM_PATH@"

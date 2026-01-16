@@ -32,8 +32,6 @@
     files = [
       "/machine-key.json"
       "/etc/machine-id"
-      "/etc/localtime"
-      "/etc/timezone"
       "/etc/adjtime"
       # NOTE: if you want mutable passwords across reboots, persist these,
       # but you must do a one-time migration (see notes in chat).
@@ -55,6 +53,9 @@
 
         ".local/share/zoxide"
 
+        # Hugging Face cache (e.g. whisper.cpp models via hf-hub)
+        ".cache/huggingface"
+
         ".config/opencode"
 
         # KDE
@@ -65,12 +66,14 @@
 
         # neovim ros_neovim
         ".local/state/nvim_ringofstorms_helium"
+        ".local/state/opencode"
 
         ".local/share/flatpak"
         ".var/app"
       ];
       files = [
-
+        # ".config/kglobalshortcutsrc"
+        # ".config/plasma-org.kde.plasma.desktop-appletsrc"
       ];
     };
   };

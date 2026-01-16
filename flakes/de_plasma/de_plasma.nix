@@ -149,6 +149,9 @@ in
         kdePackages.plasma-browser-integration
         # kdePackages.plasma-workspace-wallpapers
 
+        # On-screen keyboard (Plasma Wayland)
+        kdePackages.plasma-keyboard
+
         # Panel applets required for widgets
         kdePackages.plasma-nm # org.kde.plasma.networkmanagement
         kdePackages.bluedevil # org.kde.plasma.bluetooth
@@ -206,16 +209,6 @@ in
       '';
     })
 
-    (mkIf ((length cfg.wallpapers) > 0) {
-      environment.etc."xdg/plasma-org.kde.plasma.desktop-appletsrc".text =
-        let
-          wallpaperPath = builtins.head cfg.wallpapers;
-        in
-        ''
-          [Containments][1][Wallpaper][org.kde.image][General]
-          Image=file://${wallpaperPath}
-        '';
-    })
 
     # GPU blocks
     (mkIf cfg.gpu.amd.enable {
@@ -289,6 +282,21 @@ in
               };
               "Groups/0/Items/0".Name = "keyboard-us";
               "Groups/0/Items/1".Name = "mozc";
+            };
+            # Disable emoji picker to prevent Super+. conflict with desktop shortcuts
+            addons = {
+              keyboard = {
+                globalSection = {
+                  EnableEmoji = "False";
+                  EnableQuickPhraseEmoji = "False";
+                };
+              };
+              unicode = {
+                globalSection = {
+                  # Disable unicode picker trigger key
+                  TriggerKey = "";
+                };
+              };
             };
           };
         };
