@@ -12,8 +12,8 @@
     # TODO make configurable
     settings = {
       user = {
-        email = "ringofstorms@gmail.com";
-        name = "RingOfStorms (Joshua Bell)";
+        email = "abc@joshuabell.xyz";
+        name = "Joshua Bell";
       };
       core.pager = "bat";
       core.editor = "vi";

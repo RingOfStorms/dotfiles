@@ -6,9 +6,9 @@ let
   workspaceLetters = [
     "n"
     "m"
-    "Comma"
-    "Period"
-    "Slash"
+    ","
+    "."
+    "/"
   ];
   kwinWorkspace = builtins.listToAttrs (
     map (i: {
@@ -83,6 +83,12 @@ in
 
       ksmserver = {
         "Lock Session" = "none";
+      };
+
+      # Disable Plasma emojier shortcuts which conflict with workspace switching
+      # (Meta+. is bound by default in org.kde.plasma.emojier.desktop)
+      "org.kde.plasma.emojier.desktop" = {
+        "_launch" = [ ];
       };
 
       # "KDE Keyboard Layout Switcher"."Switch to Next Keyboard Layout" = "Meta+K";

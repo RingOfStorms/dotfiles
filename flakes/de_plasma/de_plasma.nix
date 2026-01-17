@@ -150,7 +150,7 @@ in
         # kdePackages.plasma-workspace-wallpapers
 
         # On-screen keyboard (Plasma Wayland)
-        kdePackages.plasma-keyboard
+        # kdePackages.plasma-keyboard
 
         # Panel applets required for widgets
         kdePackages.plasma-nm # org.kde.plasma.networkmanagement
