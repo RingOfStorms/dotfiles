@@ -289,7 +289,7 @@ in
 
       workspace = {
         enableMiddleClickPaste = true;
-        clickItemTo = "open";
+        clickItemTo = "select";
         colorScheme = "BreezeDark";
         lookAndFeel = "org.kde.breezedark.desktop";
         theme = "breeze-dark";
