@@ -125,7 +125,9 @@ in
           # curl -L t.net.joshuabell.xyz:9010/air_prd/models | jq '.data.[].id'
           [
             "gemini-2.5-pro"
+            "gemini-2.0-flash"
             "gemini-2.5-flash"
+            "gemini-2.0-flash-lite"
             "gemini-2.5-flash-lite"
             "gemini-2.5-flash-image"
             "claude-opus-4.1"
@@ -135,8 +137,7 @@ in
             "claude-sonnet-4.5"
             "claude-3.7-sonnet"
           ]
-        )
-      ;
+        );
     };
   };
 }
