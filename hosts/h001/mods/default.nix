@@ -4,6 +4,7 @@
 {
   imports = [
     ./litellm.nix
+    ./litellm-public.nix
     ./nixarr.nix
     ./hardware-transcoding.nix
     ./monitoring_hub.nix

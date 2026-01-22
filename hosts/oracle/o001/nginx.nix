@@ -1,6 +1,10 @@
 {
+  config,
   ...
 }:
+let
+  apiKeyFile = config.age.secrets.litellm_public_api_key.path;
+in
 {
   # JUST A TEST TODO remove
   containers.wasabi = {
@@ -234,6 +238,10 @@
           locations."/" = {
             proxyWebsockets = true;
             proxyPass = "http://100.64.0.13:8095";
+            extraConfig = ''
+              # API key auth - secret file contains: if ($http_authorization != "Bearer sk-xxx") { return 401; }
+              include ${apiKeyFile};
+            '';
           };
         };
 

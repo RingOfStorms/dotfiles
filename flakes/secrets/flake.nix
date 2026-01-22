@@ -52,6 +52,7 @@
                   "zitadel_master_key"
                   "openwebui_env"
                   "vaultwarden_env"
+                  "litellm_public_api_key"
                 ];
 
                 # Keep only secrets intended for this host (or that include the authority key)
