@@ -35,6 +35,11 @@ in
     recommendedProxySettings = true;
     recommendedTlsSettings = true;
     clientMaxBodySize = "500m";
+    commonHttpConfig = ''
+      log_format noauth '$remote_addr - $remote_user [$time_local] '
+                        '"$request" $status $body_bytes_sent '
+                        '"$http_referer" "$http_user_agent"';
+    '';
     virtualHosts =
       let
         tailnetConfig = {
@@ -235,6 +240,9 @@ in
         "llm.joshuabell.xyz" = {
           enableACME = true;
           forceSSL = true;
+          extraConfig = ''
+            access_log /var/log/nginx/llm.access.log noauth;
+          '';
           locations."/" = {
             proxyWebsockets = true;
             proxyPass = "http://100.64.0.13:8095";
@@ -262,6 +270,34 @@ in
       }
     '';
   };
+
+  services.fail2ban = {
+    enable = true;
+    maxretry = 5;
+    bantime = "1h";
+    bantime-increment = {
+      enable = true;
+      maxtime = "168h";
+      factor = "4";
+    };
+    jails = {
+      nginx-llm-auth.settings = {
+        enabled = true;
+        filter = "nginx-llm-auth";
+        backend = "polling";
+        logpath = "/var/log/nginx/llm.access.log";
+        maxretry = 5;
+        findtime = "10m";
+        bantime = "1h";
+      };
+    };
+  };
+
+  environment.etc."fail2ban/filter.d/nginx-llm-auth.conf".text = ''
+    [Definition]
+    failregex = ^<HOST> .* "(GET|POST|PUT|DELETE|PATCH|OPTIONS) .* HTTP/[0-9.]+" 401
+    ignoreregex =
+  '';
 
   # NOTE Oracle also has security rules that must expose these ports so this alone will not work! See readme
   networking.firewall.allowedTCPPorts = [
