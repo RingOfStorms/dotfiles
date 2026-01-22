@@ -4,6 +4,7 @@
 {
   imports = [
     ./forgejo.nix
+    ./litellm-public.nix
     ./opengist.nix
     ./zitadel.nix
   ];

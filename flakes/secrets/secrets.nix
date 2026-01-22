@@ -134,6 +134,9 @@ in
   "openwebui_env.age" = {
     publicKeys = authorityKey ++ h001;
   };
+  "litellm_public_master_key.age" = {
+    publicKeys = authorityKey ++ h001;
+  };
   "vaultwarden_env.age" = {
     publicKeys = authorityKey ++ o001;
   };

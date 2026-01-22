@@ -228,6 +228,14 @@
             proxyPass = "http://100.64.0.13";
           };
         };
+        "llm.joshuabell.xyz" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyWebsockets = true;
+            proxyPass = "http://100.64.0.13:8095";
+          };
+        };
 
         "_" = {
           rejectSSL = true;
