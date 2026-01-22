@@ -46,14 +46,18 @@
           version = "0.1.0";
           src = craneLib.cleanCargoSource ./stt-stream;
 
-          nativeBuildInputs = commonNativeBuildInputs ++ (with pkgs; [
-            clang
-            llvmPackages.libclang
-          ]);
+          nativeBuildInputs =
+            commonNativeBuildInputs
+            ++ (with pkgs; [
+              clang
+              llvmPackages.libclang
+            ]);
 
-          buildInputs = commonBuildInputs ++ (with pkgs; [
-            openblas
-          ]);
+          buildInputs =
+            commonBuildInputs
+            ++ (with pkgs; [
+              openblas
+            ]);
 
           # For bindgen to find libclang
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
@@ -65,22 +69,26 @@
           version = "0.1.0";
           src = craneLib.cleanCargoSource ./stt-stream;
 
-          nativeBuildInputs = commonNativeBuildInputs ++ (with pkgs; [
-            # ROCm toolchain - clr contains the properly wrapped hipcc
-            rocmPackages.clr
-            # rocminfo provides rocm_agent_enumerator which hipcc needs
-            rocmPackages.rocminfo
-          ]);
+          nativeBuildInputs =
+            commonNativeBuildInputs
+            ++ (with pkgs; [
+              # ROCm toolchain - clr contains the properly wrapped hipcc
+              rocmPackages.clr
+              # rocminfo provides rocm_agent_enumerator which hipcc needs
+              rocmPackages.rocminfo
+            ]);
 
-          buildInputs = commonBuildInputs ++ (with pkgs; [
-            # ROCm/HIP libraries needed at link time
-            rocmPackages.clr # HIP runtime
-            rocmPackages.hipblas
-            rocmPackages.rocblas
-            rocmPackages.rocm-runtime
-            rocmPackages.rocm-device-libs
-            rocmPackages.rocm-comgr
-          ]);
+          buildInputs =
+            commonBuildInputs
+            ++ (with pkgs; [
+              # ROCm/HIP libraries needed at link time
+              rocmPackages.clr # HIP runtime
+              rocmPackages.hipblas
+              rocmPackages.rocblas
+              rocmPackages.rocm-runtime
+              rocmPackages.rocm-device-libs
+              rocmPackages.rocm-comgr
+            ]);
 
           # Enable hipblas feature
           cargoExtraArgs = "--features hipblas";
@@ -150,7 +158,12 @@
       in
       {
         packages = {
-          inherit stt-stream stt-stream-hip fcitx5-stt fcitx5-stt-hip;
+          inherit
+            stt-stream
+            stt-stream-hip
+            fcitx5-stt
+            fcitx5-stt-hip
+            ;
           default = fcitx5-stt;
         };
 
@@ -207,13 +220,9 @@
           sttPkgs = self.packages.${pkgs.stdenv.hostPlatform.system};
 
           # Select the appropriate package variant based on GPU backend
-          sttStreamPkg =
-            if cfg.gpuBackend == "hip" then sttPkgs.stt-stream-hip
-            else sttPkgs.stt-stream;
+          sttStreamPkg = if cfg.gpuBackend == "hip" then sttPkgs.stt-stream-hip else sttPkgs.stt-stream;
 
-          fcitx5SttPkg =
-            if cfg.gpuBackend == "hip" then sttPkgs.fcitx5-stt-hip
-            else sttPkgs.fcitx5-stt;
+          fcitx5SttPkg = if cfg.gpuBackend == "hip" then sttPkgs.fcitx5-stt-hip else sttPkgs.fcitx5-stt;
         in
         {
           options.ringofstorms.sttIme = {
@@ -226,7 +235,10 @@
             };
 
             gpuBackend = lib.mkOption {
-              type = lib.types.enum [ "cpu" "hip" ];
+              type = lib.types.enum [
+                "cpu"
+                "hip"
+              ];
               default = "cpu";
               description = ''
                 GPU backend to use for acceleration:
