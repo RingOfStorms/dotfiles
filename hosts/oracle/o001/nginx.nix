@@ -275,6 +275,10 @@ in
     enable = true;
     maxretry = 5;
     bantime = "1h";
+    ignoreIP = [
+      "127.0.0.1/8"
+      "24.16.158.91" # Jason's ip
+    ];
     bantime-increment = {
       enable = true;
       maxtime = "168h";
