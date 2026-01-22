@@ -30,7 +30,7 @@ in
     networking.firewall.interfaces."tailscale0".allowedTCPPorts = [ port ];
 
     systemd.services.litellm-public = {
-      description = "LiteLLM Public Proxy (Azure models only)";
+      description = "LiteLLM Exposed Proxy (limited model set)";
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
 
@@ -38,8 +38,7 @@ in
         SCARF_NO_ANALYTICS = "True";
         DO_NOT_TRACK = "True";
         ANONYMIZED_TELEMETRY = "False";
-        # Sharing login with main instance
-        GITHUB_COPILOT_TOKEN_DIR = "/var/lib/litellm/github_copilot";
+        GITHUB_COPILOT_TOKEN_DIR = "/var/lib/litellm-public/github_copilot";
         XDG_CONFIG_HOME = "/var/lib/litellm-public/.config";
       };
 
