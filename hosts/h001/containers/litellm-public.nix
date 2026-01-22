@@ -136,7 +136,7 @@ in
   config = {
     networking.firewall.interfaces."tailscale0".allowedTCPPorts = [ externalPort ];
 
-    services.nginx.virtualHosts."litellm-public" = {
+    services.nginx.virtualHosts."llm.joshuabell.xyz" = {
       listen = [
         {
           addr = "0.0.0.0";
