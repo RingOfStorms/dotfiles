@@ -4,11 +4,9 @@
   lib,
   ...
 }:
+# NOTE this won't work on its own without the main litellm.nix file this is sort of a side car
 let
-  declaration = "services/misc/litellm.nix";
   nixpkgsLitellm = inputs.litellm-nixpkgs;
-  # Replace "claude" with "cl4ude" in model names to avoid special handling in other apps
-  sanitizeModelName = s: builtins.replaceStrings [ "claude" ] [ "cl4ude" ] s;
   pkgsLitellm = import nixpkgsLitellm {
     inherit (pkgs) system;
     config.allowUnfree = true;
@@ -40,6 +38,9 @@ in
         SCARF_NO_ANALYTICS = "True";
         DO_NOT_TRACK = "True";
         ANONYMIZED_TELEMETRY = "False";
+        # Sharing login with main instance
+        GITHUB_COPILOT_TOKEN_DIR = "/var/lib/litellm/github_copilot";
+        XDG_CONFIG_HOME = "/var/lib/litellm-public/.config";
       };
 
       serviceConfig = {
@@ -113,31 +114,33 @@ in
             };
           }
         ]
-        # 宙 Proxy
+        # Copilot (note: need to check logs so it can log in)
         ++ (builtins.map
           (m: {
-            model_name = "air-${sanitizeModelName m}";
+            model_name = "copilot-${m}";
             litellm_params = {
-              model = "litellm_proxy/${m}";
-              api_base = "http://100.64.0.8:9010/air_prd";
-              api_key = "na";
-              drop_params = true;
+              model = "github_copilot/${m}";
+              extra_headers = {
+                editor-version = "vscode/${pkgsLitellm.vscode.version}";
+                editor-plugin-version = "copilot/${pkgsLitellm.vscode-extensions.github.copilot.version}";
+                Copilot-Integration-Id = "vscode-chat";
+                Copilot-Vision-Request = "true";
+                user-agent = "GithubCopilot/${pkgsLitellm.vscode-extensions.github.copilot.version}";
+              };
             };
+
           })
-          # curl -L t.net.joshuabell.xyz:9010/air_prd/models | jq '.data.[].id'
+          # List from https://github.com/settings/copilot/features enabled models
           [
-            "gemini-2.5-pro"
-            "gemini-2.0-flash"
-            "gemini-2.5-flash"
-            "gemini-2.0-flash-lite"
-            "gemini-2.5-flash-lite"
-            "gemini-2.5-flash-image"
-            "claude-opus-4.1"
-            "claude-opus-4"
             "claude-opus-4.5"
+            "claude-sonnet-3.5"
             "claude-sonnet-4"
             "claude-sonnet-4.5"
-            "claude-3.7-sonnet"
+            "claude-haiku-4.5"
+            "gemini-2.5-pro"
+            "openai-gpt-5"
+            "openai-gpt-5-mini"
+            "grok-code-fast-1"
           ]
         );
     };
