@@ -7,6 +7,8 @@
 let
   declaration = "services/misc/litellm.nix";
   nixpkgsLitellm = inputs.litellm-nixpkgs;
+  # Replace "claude" with "cl4ude" in model names to avoid special handling in other apps
+  sanitizeModelName = s: builtins.replaceStrings [ "claude" ] [ "cl4ude" ] s;
   pkgsLitellm = import nixpkgsLitellm {
     inherit (pkgs) system;
     config.allowUnfree = true;
@@ -114,7 +116,7 @@ in
         # 宙 Proxy
         ++ (builtins.map
           (m: {
-            model_name = "air-${m}";
+            model_name = "air-${sanitizeModelName m}";
             litellm_params = {
               model = "litellm_proxy/${m}";
               api_base = "http://100.64.0.8:9010/air_prd";
