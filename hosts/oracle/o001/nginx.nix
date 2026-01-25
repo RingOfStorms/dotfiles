@@ -278,6 +278,8 @@ in
     ignoreIP = [
       "127.0.0.1/8"
       "24.16.158.91" # Jason's ip
+      "98.193.92.231" # my ip
+      "24.164.16.22" # aarons ip
     ];
     bantime-increment = {
       enable = true;
