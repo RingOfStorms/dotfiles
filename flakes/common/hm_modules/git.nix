@@ -62,6 +62,9 @@
 
       # local only files
       "*.local"
+
+      # opencode
+      ".sisyphus"
     ];
   };
 }
