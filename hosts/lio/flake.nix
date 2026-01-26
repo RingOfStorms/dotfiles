@@ -23,6 +23,7 @@
 
     opencode.url = "github:anomalyco/opencode";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
+    qvm.url = "git+https://git.joshuabell.xyz/ringofstorms/qvm";
   };
 
   outputs =
@@ -77,6 +78,7 @@
                   enable = true;
                   gpuBackend = "hip"; # Use AMD ROCm/HIP acceleration
                   useGpu = true;
+                  model = "large";
                 };
               })
 
@@ -84,6 +86,13 @@
               ros_neovim.nixosModules.default
               ({
                 ringofstorms-nvim.includeAllRuntimeDependencies = true;
+              })
+              inputs.qvm.nixosModules.default
+              ({
+                programs.qvm = {
+                  memory = "30G";
+                  cpus = 30;
+                };
               })
               flatpaks.nixosModules.default
 
