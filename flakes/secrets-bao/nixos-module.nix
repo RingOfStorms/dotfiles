@@ -318,6 +318,12 @@ in
   options.ringofstorms.secretsBao = {
     enable = lib.mkEnableOption "Fetch runtime secrets via OpenBao";
 
+    secretsBasePath = lib.mkOption {
+      type = lib.types.str;
+      default = "/var/lib/openbao-secrets";
+      description = "Base directory for rendered secrets. Use /var/lib/openbao-secrets for persistence across reboots, or /run/secrets for ephemeral.";
+    };
+
     zitadelKeyPath = lib.mkOption {
       type = lib.types.str;
       default = "/machine-key.json";
@@ -404,7 +410,7 @@ in
             options = {
               path = lib.mkOption {
                 type = lib.types.str;
-                default = "/run/secrets/${name}";
+                default = "${cfg.secretsBasePath}/${name}";
               };
 
               owner = lib.mkOption {
@@ -488,30 +494,35 @@ in
           sec
         ];
 
-         systemd.tmpfiles.rules =
-           [
-             "d /run/openbao 0700 root root - -"
-             "f /run/openbao/zitadel.jwt 0400 root root - -"
-             "d /run/secrets 0711 root root - -"
-           ]
-           # Create empty placeholder files for all secret destinations so
-           # services that reference env files don't fail when offline.
-           ++ (lib.unique (
-             lib.concatLists (
-               lib.mapAttrsToList (
-                 _: secret:
-                 let
-                   dir = builtins.dirOf secret.path;
-                 in
-                 # Ensure the parent dir exists if a custom path is used.
-                 [ "d ${dir} 0755 root root - -" ]
-               ) cfg.secrets
-             )
-           ))
-           ++ (lib.mapAttrsToList (
-             _: secret:
-             "f ${secret.path} ${secret.mode} ${secret.owner} ${secret.group} - -"
-           ) cfg.secrets);
+        # Persistent secrets directory - survives reboots
+        systemd.tmpfiles.rules =
+          [
+            "d /run/openbao 0700 root root - -"
+            "f /run/openbao/zitadel.jwt 0400 root root - -"
+            # Create base secrets directory (persistent by default)
+            "d ${cfg.secretsBasePath} 0711 root root - -"
+          ]
+          # Create empty placeholder files for all secret destinations so
+          # services that reference env files don't fail when offline.
+          # Important: we do NOT recreate files that already have content (the '-' at end)
+          ++ (lib.unique (
+            lib.concatLists (
+              lib.mapAttrsToList (
+                _: secret:
+                let
+                  dir = builtins.dirOf secret.path;
+                in
+                # Ensure the parent dir exists if a custom path is used.
+                [ "d ${dir} 0755 root root - -" ]
+              ) cfg.secrets
+            )
+          ))
+          # Only create placeholder if file doesn't exist (preserves persisted secrets)
+          # Using 'f' with '-' for argument means create if not exists, don't truncate if exists
+          ++ (lib.mapAttrsToList (
+            _: secret:
+            "f ${secret.path} ${secret.mode} ${secret.owner} ${secret.group} - -"
+          ) cfg.secrets);
 
 
          systemd.paths =
@@ -542,17 +553,17 @@ in
                };
              };
 
-             openbao-secrets-ready = {
-               description = "Re-check OpenBao secrets readiness";
-               wantedBy = [ "multi-user.target" ];
+              openbao-secrets-ready = {
+                description = "Re-check OpenBao secrets readiness";
+                wantedBy = [ "multi-user.target" ];
 
-               pathConfig = {
-                 PathChanged = "/run/secrets";
-                 Unit = "openbao-secrets-ready.service";
-                 TriggerLimitIntervalSec = 30;
-                 TriggerLimitBurst = 3;
-               };
-             };
+                pathConfig = {
+                  PathChanged = cfg.secretsBasePath;
+                  Unit = "openbao-secrets-ready.service";
+                  TriggerLimitIntervalSec = 30;
+                  TriggerLimitBurst = 3;
+                };
+              };
            };
 
           systemd.timers.zitadel-mint-jwt = {
@@ -586,35 +597,43 @@ in
                )
              )
              {
-               openbao-secrets-ready = {
-                 description = "OpenBao: all configured secrets present";
-                 wantedBy = [ "multi-user.target" ];
-                 wants = [ "vault-agent.service" ];
-                 after = [ "vault-agent.service" ];
+                openbao-secrets-ready = {
+                  description = "OpenBao: all configured secrets present (informational)";
+                  # NOT in wantedBy - this is a passive check, not a startup requirement
+                  # It gets triggered by path units when secrets change
+                  wants = [ "vault-agent.service" ];
+                  after = [ "vault-agent.service" ];
 
-                 serviceConfig = {
-                   Type = "oneshot";
-                   RemainAfterExit = true;
-                   User = "root";
-                   Group = "root";
-                   UMask = "0077";
-                   ExecStart = pkgs.writeShellScript "openbao-secrets-ready" ''
-                     #!/usr/bin/env bash
-                     set -euo pipefail
+                  serviceConfig = {
+                    Type = "oneshot";
+                    RemainAfterExit = true;
+                    User = "root";
+                    Group = "root";
+                    UMask = "0077";
+                    ExecStart = pkgs.writeShellScript "openbao-secrets-ready" ''
+                      #!/usr/bin/env bash
+                      set -uo pipefail
 
-                     ${lib.concatStringsSep "\n" (
-                       lib.mapAttrsToList (name: secret: ''
-                         if [ ! -s ${lib.escapeShellArg secret.path} ]; then
-                           echo "Missing secret: ${secret.path}" >&2
-                           exit 1
-                         fi
-                       '') cfg.secrets
-                     )}
+                      missing=0
+                      ${lib.concatStringsSep "\n" (
+                        lib.mapAttrsToList (name: secret: ''
+                          if [ ! -s ${lib.escapeShellArg secret.path} ]; then
+                            echo "Missing secret: ${secret.path}" >&2
+                            missing=1
+                          fi
+                        '') cfg.secrets
+                      )}
 
-                     echo "All configured OpenBao secrets present." >&2
-                   '';
-                 };
-               };
+                      if [ "$missing" -eq 1 ]; then
+                        echo "Some secrets are missing (may be stale or not yet fetched)" >&2
+                        # Don't exit 1 - this is informational only
+                      else
+                        echo "All configured OpenBao secrets present." >&2
+                      fi
+                      exit 0
+                    '';
+                  };
+                };
 
                openbao-jwt-changed = {
                  description = "Restart vault-agent after Zitadel JWT refresh";
@@ -637,6 +656,9 @@ in
                 zitadel-mint-jwt = {
                   description = "Mint Zitadel access token (JWT) for OpenBao";
 
+                  # Non-blocking: don't add to wantedBy, let timer handle it
+                  # The timer is wantedBy timers.target, so this runs periodically
+
                   startLimitIntervalSec = 0;
 
                   after = [
@@ -656,17 +678,15 @@ in
                   Type = "oneshot";
                   User = "root";
                   Group = "root";
-                  Restart = "on-failure";
-                  RestartSec = "30s";
+                  # Don't restart on failure - timer will retry later
+                  # This prevents blocking activation if Zitadel is down
                   TimeoutStartSec = "2min";
                   UMask = "0077";
 
 
                     ExecStart = pkgs.writeShellScript "zitadel-mint-jwt-service" ''
-
-
                   #!/usr/bin/env bash
-                  set -euo pipefail
+                  set -uo pipefail
 
                   if [ ! -d "/run/openbao" ]; then
                     ${pkgs.coreutils}/bin/mkdir -p /run/openbao
@@ -724,30 +744,46 @@ in
                     return 1
                   }
 
+                  # Check if existing token is still valid
                   if [ -s "${cfg.zitadelJwtPath}" ] && jwt_is_valid "$(cat "${cfg.zitadelJwtPath}")"; then
                     echo "zitadel-mint-jwt: existing token still valid; skipping" >&2
                     exit 0
                   fi
 
-                  jwt="$(${zitadelMintJwt}/bin/zitadel-mint-jwt)"
+                  # Try to mint a new token
+                  jwt=""
+                  if jwt="$(${zitadelMintJwt}/bin/zitadel-mint-jwt 2>&1)"; then
+                    if [ -n "$jwt" ] && [ "$jwt" != "null" ]; then
+                      tmp="$(${pkgs.coreutils}/bin/mktemp)"
+                      trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
+                      ${pkgs.coreutils}/bin/printf '%s' "$jwt" > "$tmp"
 
-                  if [ -z "$jwt" ] || [ "$jwt" = "null" ]; then
-                    echo "Failed to mint Zitadel access token" >&2
-                    exit 1
+                      if [ -s "${cfg.zitadelJwtPath}" ] && ${pkgs.diffutils}/bin/cmp -s "$tmp" "${cfg.zitadelJwtPath}"; then
+                        echo "zitadel-mint-jwt: token unchanged; skipping" >&2
+                        exit 0
+                      fi
+
+                      # Update the token file (the agent watches it).
+                      ${pkgs.coreutils}/bin/cat "$tmp" > "${cfg.zitadelJwtPath}"
+                      ${pkgs.coreutils}/bin/chmod 0400 "${cfg.zitadelJwtPath}" || true
+                      echo "zitadel-mint-jwt: successfully refreshed token" >&2
+                      exit 0
+                    fi
                   fi
 
-                  tmp="$(${pkgs.coreutils}/bin/mktemp)"
-                  trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
-                  ${pkgs.coreutils}/bin/printf '%s' "$jwt" > "$tmp"
-
-                   if [ -s "${cfg.zitadelJwtPath}" ] && ${pkgs.diffutils}/bin/cmp -s "$tmp" "${cfg.zitadelJwtPath}"; then
-                    echo "zitadel-mint-jwt: token unchanged; skipping" >&2
+                  # Failed to mint new token - check if we have a stale but existing token
+                  if [ -s "${cfg.zitadelJwtPath}" ]; then
+                    echo "zitadel-mint-jwt: failed to refresh, but existing token present (may be stale)" >&2
+                    echo "zitadel-mint-jwt: continuing with stale token; will retry on next timer" >&2
+                    # Exit 0 so we don't block activation - timer will retry
                     exit 0
                   fi
 
-                  # Update the token file (the agent watches it).
-                  ${pkgs.coreutils}/bin/cat "$tmp" > "${cfg.zitadelJwtPath}"
-                  ${pkgs.coreutils}/bin/chmod 0400 "${cfg.zitadelJwtPath}" || true
+                  # No existing token and failed to mint - this is a problem but don't block
+                  echo "zitadel-mint-jwt: failed to mint token and no existing token available" >&2
+                  echo "zitadel-mint-jwt: services requiring secrets will wait; timer will retry" >&2
+                  # Exit 0 to not block activation - the timer will keep retrying
+                  exit 0
                 '';
               };
             };
@@ -775,6 +811,8 @@ in
                    RestartSec = "10s";
                    TimeoutStartSec = "30s";
                    UMask = "0077";
+                   # Only start if JWT exists (path unit will trigger us when it appears)
+                   ExecCondition = "${pkgs.coreutils}/bin/test -s ${cfg.zitadelJwtPath}";
                    ExecStart = "${pkgs.openbao}/bin/bao agent -log-level=${lib.escapeShellArg cfg.vaultAgentLogLevel} -config=${mkAgentConfig}";
                  };
 

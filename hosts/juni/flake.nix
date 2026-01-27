@@ -349,7 +349,7 @@
                           exit 0
                         fi
 
-                        secret="/run/secrets/atuin-key-josh"
+                        secret="/var/lib/openbao-secrets/atuin-key-josh"
                         if [ ! -s "$secret" ]; then
                           echo "Missing atuin secret at $secret" >&2
                           exit 1

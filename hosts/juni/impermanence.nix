@@ -27,7 +27,7 @@
 
       # bao secrets
       "/run/openbao"
-      "/run/secrets"
+      "/var/lib/openbao-secrets"
     ];
     files = [
       "/machine-key.json"

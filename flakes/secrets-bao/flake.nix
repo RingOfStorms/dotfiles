@@ -42,7 +42,7 @@
             fragments = builtins.attrValues (builtins.mapAttrs (
               name: s:
               let
-                secretPath = s.path or ("/run/secrets/" + name);
+                secretPath = s.path or ("/var/lib/openbao-secrets/" + name);
               in
               substitute secretPath (s.configChanges or { })
             ) secrets);
@@ -85,7 +85,7 @@
             fragments = builtins.attrValues (builtins.mapAttrs (
               name: s:
               let
-                secretPath = s.path or ("/run/secrets/" + name);
+                secretPath = s.path or ("/var/lib/openbao-secrets/" + name);
               in
               substitute secretPath (s.hmChanges or { })
             ) secrets);

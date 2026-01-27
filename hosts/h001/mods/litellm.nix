@@ -29,7 +29,7 @@ in
       host = "0.0.0.0";
       openFirewall = false;
       package = pkgsLitellm.litellm;
-      environmentFile = "/run/secrets/litellm.env";
+      environmentFile = "/var/lib/openbao-secrets/litellm-env";
       environment = {
         SCARF_NO_ANALYTICS = "True";
         DO_NOT_TRACK = "True";

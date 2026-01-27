@@ -90,7 +90,7 @@
                       owner = "root";
                       group = "root";
                       mode = "0400";
-                      path = "/run/secrets/litellm.env";
+                      # Uses default: /var/lib/openbao-secrets/litellm-env
                       softDepend = [ "litellm" ];
                       template = ''
                         {{- with secret "kv/data/machines/home/openrouter" -}}
