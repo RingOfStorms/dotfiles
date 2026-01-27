@@ -55,6 +55,11 @@
     nodejs_24
     foot
     vlc
-    google-chrome
+    (google-chrome.override {
+      commandLineArgs = [
+        "--remote-debugging-port=9222"
+        "--remote-allow-origins=*"
+      ];
+    })
   ];
 }

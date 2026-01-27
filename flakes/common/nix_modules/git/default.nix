@@ -7,6 +7,7 @@ with lib;
 {
   environment.systemPackages = with pkgs; [
     git
+    gh
   ];
 
   environment.shellAliases = {
@@ -32,5 +33,6 @@ with lib;
     (builtins.readFile ./link_ignored.func.sh)
     (builtins.readFile ./branching_setup.func.sh)
     (builtins.readFile ./gcpropose.func.sh)
+    (builtins.readFile ./gpr.func.sh)
   ];
 }
