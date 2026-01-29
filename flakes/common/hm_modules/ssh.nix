@@ -72,13 +72,6 @@ in
       "t" = {
         identityFile = lib.mkIf (hasSecret "nix2t") osConfig.age.secrets.nix2t.path;
         user = "joshua.bell";
-        localForwards = [
-          {
-            bind.port = 3002;
-            host.port = 3002;
-            host.address = "localhost";
-          }
-        ];
         setEnv = {
           TERM = "vt100";
         };
@@ -87,13 +80,6 @@ in
         identityFile = lib.mkIf (hasSecret "nix2t") osConfig.age.secrets.nix2t.path;
         hostname = "10.12.14.181";
         user = "joshua.bell";
-        localForwards = [
-          {
-            bind.port = 3002;
-            host.port = 3002;
-            host.address = "localhost";
-          }
-        ];
         setEnv = {
           TERM = "vt100";
         };
