@@ -1303,11 +1303,11 @@
         "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1769556375,
-        "narHash": "sha256-Ne2wFTs2fPyyDUIqy/XiYUmnqs6aaNE8/JA6BVBP+Ow=",
+        "lastModified": 1769663859,
+        "narHash": "sha256-5otcBVNOhDtHjHoDzRSf1iN2/wToLGRgNppx44tlRj4=",
         "owner": "anomalyco",
         "repo": "opencode",
-        "rev": "15ffd3cba1d3bd7d4d84c6911623a9c1d19e6647",
+        "rev": "41ea4694db7636ba184d238fd2a00deb770f9c0b",
         "type": "github"
       },
       "original": {
