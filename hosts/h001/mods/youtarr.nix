@@ -82,7 +82,7 @@ in
 
     vpnNamespaces.wg.portMappings = [
       {
-        from = port;
+        from = internalPort;
         to = internalPort;
       }
     ];
@@ -99,7 +99,7 @@ in
           ];
           locations."/" = {
             proxyWebsockets = true;
-            proxyPass = "http://192.168.15.1:${toString port}";
+            proxyPass = "http://192.168.15.1:${toString internalPort}";
           };
         };
       };
