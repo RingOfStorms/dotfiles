@@ -18,7 +18,6 @@ in
     virtualisation.oci-containers.containers = {
       "${name}" = {
         image = "dialmaster/youtarr:latest";
-        # No ports here - using shared network from DB container
         volumes = [
           "${hostDataDir}/config:/config"
           "${mediaDir}:/downloads"
@@ -32,7 +31,7 @@ in
           DB_PASSWORD = "123qweasd";
           DB_NAME = name;
         };
-        extraOptions = [ "--network=container:${name}-db" ];
+        extraOptions = [ "--network=host" ];
         dependsOn = [ "${name}-db" ];
       };
 
@@ -45,6 +44,7 @@ in
           MYSQL_ROOT_PASSWORD = "123qweasd";
           MYSQL_DATABASE = name;
         };
+        extraOptions = [ "--network=host" ];
         cmd = [
           "--port=${toString dbPort}"
           "--character-set-server=utf8mb4"
