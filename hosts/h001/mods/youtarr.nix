@@ -27,7 +27,7 @@ in
         environment = {
           PUID = toString uid;
           PGID = toString gid;
-          DB_HOST = "${name}-db";
+          DB_HOST = "192.168.15.1";
           DB_PORT = toString dbPort;
           DB_USER = "root";
           DB_PASSWORD = "123qweasd";
@@ -82,6 +82,10 @@ in
       {
         from = port;
         to = port;
+      }
+      {
+        from = dbPort;
+        to = dbPort;
       }
     ];
 
