@@ -17,9 +17,7 @@ in
     virtualisation.oci-containers.containers = {
       "${name}" = {
         image = "dialmaster/youtarr:latest";
-        ports = [
-          "${toString port}:${toString port}"
-        ];
+        # No ports here - using shared network from DB container
         volumes = [
           "${hostDataDir}/config:/config"
           "${mediaDir}:/downloads"
@@ -33,12 +31,14 @@ in
           DB_PASSWORD = "123qweasd";
           DB_NAME = name;
         };
+        extraOptions = [ "--network=container:${name}-db" ];
         dependsOn = [ "${name}-db" ];
       };
 
       "${name}-db" = {
         image = "mariadb:10.3";
         ports = [
+          "${toString port}:${toString port}"
           "${toString dbPort}:${toString dbPort}"
         ];
         volumes = [
