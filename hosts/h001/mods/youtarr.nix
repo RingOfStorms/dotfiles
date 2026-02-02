@@ -19,8 +19,10 @@ in
       "${name}" = {
         image = "dialmaster/youtarr:latest";
         volumes = [
-          "${hostDataDir}/config:/config"
-          "${mediaDir}:/downloads"
+          "${hostDataDir}/config:/app/config"
+          "${hostDataDir}/images:/app/server/images"
+          "${hostDataDir}/jobs:/app/jobs"
+          "${mediaDir}:/usr/src/app/data"
         ];
         environment = {
           PUID = toString uid;
@@ -65,6 +67,8 @@ in
     systemd.tmpfiles.rules = [
       "d '${hostDataDir}' 0775 ${name} ${name} - -"
       "d '${hostDataDir}/config' 0775 ${name} ${name} - -"
+      "d '${hostDataDir}/images' 0775 ${name} ${name} - -"
+      "d '${hostDataDir}/jobs' 0775 ${name} ${name} - -"
       "d '${hostDataDir}/database' 0775 999 999 - -"
       "d '${mediaDir}' 0775 ${name} ${name} - -"
     ];
