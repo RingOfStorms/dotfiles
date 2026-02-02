@@ -8,6 +8,7 @@ let
   gid = 187;
   uid = 187;
   port = 3087;
+  internalPort = 3011;
   dbPort = 3321;
   hostDataDir = "/var/lib/${name}";
   mediaDir = "/nfs/h002/${name}/media";
@@ -38,7 +39,7 @@ in
       "${name}-db" = {
         image = "mariadb:10.3";
         ports = [
-          "${toString port}:${toString port}"
+          "${toString port}:${toString internalPort}"
           "${toString dbPort}:${toString dbPort}"
         ];
         volumes = [
