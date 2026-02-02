@@ -27,7 +27,7 @@ in
         environment = {
           PUID = toString uid;
           PGID = toString gid;
-          DB_HOST = "192.168.15.1";
+          DB_HOST = "127.0.0.1";
           DB_PORT = toString dbPort;
           DB_USER = "root";
           DB_PASSWORD = "123qweasd";
@@ -72,8 +72,13 @@ in
       "d '${mediaDir}' 0775 ${name} ${name} - -"
     ];
 
-    # Use Nixarr vpn
+    # Both containers run in the VPN namespace so they share localhost
     systemd.services.podman-youtarr.vpnconfinement = {
+      enable = true;
+      vpnnamespace = "wg";
+    };
+
+    systemd.services.podman-youtarr-db.vpnconfinement = {
       enable = true;
       vpnnamespace = "wg";
     };
@@ -82,10 +87,6 @@ in
       {
         from = port;
         to = port;
-      }
-      {
-        from = dbPort;
-        to = dbPort;
       }
     ];
 
