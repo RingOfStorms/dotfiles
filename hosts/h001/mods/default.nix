@@ -9,6 +9,7 @@
     ./hardware-transcoding.nix
     ./monitoring_hub.nix
     ./pinchflat.nix
+    ./youtarr.nix
     ./openwebui.nix
     ./trilium.nix
     ./oauth2-proxy.nix
