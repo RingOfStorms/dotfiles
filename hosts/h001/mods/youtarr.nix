@@ -38,10 +38,6 @@ in
 
       "${name}-db" = {
         image = "mariadb:10.3";
-        ports = [
-          "${toString port}:${toString internalPort}"
-          "${toString dbPort}:${toString dbPort}"
-        ];
         volumes = [
           "${hostDataDir}/database:/var/lib/mysql"
         ];
@@ -87,7 +83,7 @@ in
     vpnNamespaces.wg.portMappings = [
       {
         from = port;
-        to = port;
+        to = internalPort;
       }
     ];
 
