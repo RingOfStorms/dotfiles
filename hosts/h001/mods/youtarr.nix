@@ -8,7 +8,8 @@ let
   gid = 187;
   uid = 187;
   port = 3087;
-  hostConfigDir = "/var/lib/${name}";
+  dbPort = 3321;
+  hostDataDir = "/var/lib/${name}";
   mediaDir = "/nfs/h002/${name}/media";
 in
 {
@@ -20,13 +21,38 @@ in
           "${toString port}:${toString port}"
         ];
         volumes = [
-          "${hostConfigDir}:/config"
+          "${hostDataDir}/config:/config"
           "${mediaDir}:/downloads"
         ];
         environment = {
           PUID = toString uid;
           PGID = toString gid;
+          DB_HOST = "${name}-db";
+          DB_PORT = toString dbPort;
+          DB_USER = "root";
+          DB_PASSWORD = "123qweasd";
+          DB_NAME = name;
         };
+        dependsOn = [ "${name}-db" ];
+      };
+
+      "${name}-db" = {
+        image = "mariadb:10.3";
+        ports = [
+          "${toString dbPort}:${toString dbPort}"
+        ];
+        volumes = [
+          "${hostDataDir}/database:/var/lib/mysql"
+        ];
+        environment = {
+          MYSQL_ROOT_PASSWORD = "123qweasd";
+          MYSQL_DATABASE = name;
+        };
+        cmd = [
+          "--port=${toString dbPort}"
+          "--character-set-server=utf8mb4"
+          "--collation-server=utf8mb4_unicode_ci"
+        ];
       };
     };
 
@@ -40,7 +66,9 @@ in
     };
 
     systemd.tmpfiles.rules = [
-      "d '${hostConfigDir}' 0775 ${name} ${name} - -"
+      "d '${hostDataDir}' 0775 ${name} ${name} - -"
+      "d '${hostDataDir}/config' 0775 ${name} ${name} - -"
+      "d '${hostDataDir}/database' 0775 999 999 - -"
       "d '${mediaDir}' 0775 ${name} ${name} - -"
     ];
 
