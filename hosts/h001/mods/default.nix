@@ -8,7 +8,7 @@
     ./nixarr.nix
     ./hardware-transcoding.nix
     ./monitoring_hub.nix
-    ./pinchflat.nix
+    # ./pinchflat.nix
     ./youtarr.nix
     ./openwebui.nix
     ./trilium.nix
