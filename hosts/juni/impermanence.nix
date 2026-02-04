@@ -42,6 +42,13 @@
     ];
     users."${primaryUser}" = {
       directories = [
+        "Downloads"
+        "Documents"
+        "Desktop"
+        "Public"
+        "Videos"
+        "Pictures"
+
         ".ssh"
         ".gnupg"
 
