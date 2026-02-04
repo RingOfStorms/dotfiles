@@ -93,6 +93,13 @@ in
             };
           }
           {
+            "Youtarr" = {
+              description = "YouTube Automation";
+              href = "http://h001.net.joshuabell.xyz:3087";
+              icon = "youtarr";
+            };
+          }
+          {
             "Radarr" = {
               description = "Movie Automation";
               href = "http://h001.net.joshuabell.xyz:7878";
