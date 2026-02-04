@@ -70,6 +70,9 @@
 
         ".local/share/flatpak"
         ".var/app"
+
+        # work profile chrome
+        ".config/google-chrome-tempus"
       ];
       files = [
         # ".config/kglobalshortcutsrc"
