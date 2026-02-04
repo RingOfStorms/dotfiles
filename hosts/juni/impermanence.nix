@@ -53,6 +53,9 @@
 
         ".local/share/zoxide"
 
+        # tmux resurrect session persistence
+        ".local/share/tmux"
+
         # Hugging Face cache (e.g. whisper.cpp models via hf-hub)
         ".cache/huggingface"
 
