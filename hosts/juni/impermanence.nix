@@ -42,6 +42,13 @@
     ];
     users."${primaryUser}" = {
       directories = [
+        "Downloads"
+        "Documents"
+        "Desktop"
+        "Public"
+        "Videos"
+        "Pictures"
+
         ".ssh"
         ".gnupg"
 
@@ -52,6 +59,9 @@
         ".local/share/atuin"
 
         ".local/share/zoxide"
+
+        # tmux resurrect session persistence
+        ".local/share/tmux"
 
         # Hugging Face cache (e.g. whisper.cpp models via hf-hub)
         ".cache/huggingface"
@@ -70,6 +80,9 @@
 
         ".local/share/flatpak"
         ".var/app"
+
+        # work profile chrome
+        ".config/google-chrome-tempus"
       ];
       files = [
         # ".config/kglobalshortcutsrc"
