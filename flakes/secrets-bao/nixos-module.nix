@@ -541,17 +541,17 @@ in
              }
            ) cfg.secrets)
            // {
-             openbao-zitadel-jwt = {
-               description = "React to Zitadel JWT changes (restart vault-agent)";
-               wantedBy = [ "multi-user.target" ];
+              openbao-zitadel-jwt = {
+                description = "React to Zitadel JWT changes (restart vault-agent)";
+                wantedBy = [ "multi-user.target" ];
 
-               pathConfig = {
-                 PathChanged = cfg.zitadelJwtPath;
-                 Unit = "openbao-jwt-changed.service";
-                 TriggerLimitIntervalSec = 30;
-                 TriggerLimitBurst = 3;
-               };
-             };
+                pathConfig = {
+                  PathModified = cfg.zitadelJwtPath;
+                  Unit = "openbao-jwt-changed.service";
+                  TriggerLimitIntervalSec = 30;
+                  TriggerLimitBurst = 3;
+                };
+              };
 
               openbao-secrets-ready = {
                 description = "Re-check OpenBao secrets readiness";
