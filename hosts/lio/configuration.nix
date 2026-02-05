@@ -9,10 +9,19 @@
 
   # Connectivity
   networking.networkmanager.enable = true;
+  services.resolved.enable = true;
   hardware.bluetooth.enable = true;
 
   # System76
   hardware.system76.enableAll = true;
+
+  # Hardware watchdog for freeze detection and recovery
+  boot.kernelParams = [ "nmi_watchdog=1" ];
+  systemd.watchdog = {
+    runtimeTime = "30s";      # Reboot if system hangs for 30 seconds
+    rebootTime = "10m";       # Timeout for reboot to complete
+    kexecTime = "10m";        # Timeout for kexec to complete
+  };
 
   services = {
     # https://discourse.nixos.org/t/very-high-fan-noises-on-nixos-using-a-system76-thelio/23875/10
