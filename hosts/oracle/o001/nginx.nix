@@ -237,6 +237,13 @@ in
             proxyPass = "http://100.64.0.13";
           };
         };
+        "puzzles.joshuabell.xyz" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyPass = "http://100.64.0.13";
+          };
+        };
         "llm.joshuabell.xyz" = {
           enableACME = true;
           forceSSL = true;

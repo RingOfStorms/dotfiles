@@ -18,5 +18,6 @@
     ./openbao.nix
     ./homepage-dashboard.nix
     # ./vault.nix
+    ./puzzles.nix
   ];
 }

@@ -123,19 +123,6 @@
               )
 
               inputs.puzzles.nixosModules.default
-              (
-                { pkgs, ... }:
-                {
-                  services.puzzles-server = {
-                    enable = true;
-                    package = inputs.puzzles.packages.${pkgs.system}.default;
-                    settings = {
-                      http = "0.0.0.0:8093";
-                    };
-                  };
-                }
-              )
-
               nixarr.nixosModules.default
               ./hardware-configuration.nix
               ./mods
