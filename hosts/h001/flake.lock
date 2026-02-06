@@ -311,6 +311,22 @@
     },
     "nixpkgs_4": {
       "locked": {
+        "lastModified": 1769861202,
+        "narHash": "sha256-JwhbEHmbFFH754loOPbpjPHf9EAi+oMm2RsFXnlbt1g=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "f214de98544a6acf0d9917ba265ac50849048fcb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_5": {
+      "locked": {
         "lastModified": 1769018530,
         "narHash": "sha256-MJ27Cy2NtBEV5tsK+YraYr2g851f3Fl1LpNHDzDX15c=",
         "owner": "nixos",
@@ -325,7 +341,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_5": {
+    "nixpkgs_6": {
       "locked": {
         "lastModified": 1761672384,
         "narHash": "sha256-o9KF3DJL7g7iYMZq9SWgfS1BFlNbsm6xplRjVlOCkXI=",
@@ -1237,12 +1253,30 @@
         "type": "github"
       }
     },
+    "puzzles": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_4"
+      },
+      "locked": {
+        "lastModified": 1770412970,
+        "narHash": "sha256-rVssToH3nMbODLMOVR7q7K9z4z3F4EpsY7AdEwJPO7Y=",
+        "ref": "refs/heads/main",
+        "rev": "b287418a1f74f0fbb9d1367701d93880d7a9eebe",
+        "revCount": 43,
+        "type": "git",
+        "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/puzzles.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/puzzles.git"
+      }
+    },
     "ragenix": {
       "inputs": {
         "agenix": "agenix",
         "crane": "crane",
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs_5",
+        "nixpkgs": "nixpkgs_6",
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
@@ -1273,6 +1307,7 @@
         "oauth2-proxy-nixpkgs": "oauth2-proxy-nixpkgs",
         "open-webui-nixpkgs": "open-webui-nixpkgs",
         "pinchflat-nixpkgs": "pinchflat-nixpkgs",
+        "puzzles": "puzzles",
         "ros_neovim": "ros_neovim",
         "secrets": "secrets",
         "secrets-bao": "secrets-bao",
@@ -1282,7 +1317,7 @@
     },
     "ros_neovim": {
       "inputs": {
-        "nixpkgs": "nixpkgs_4",
+        "nixpkgs": "nixpkgs_5",
         "nvim_plugin-Almo7aya/openingh.nvim": "nvim_plugin-Almo7aya/openingh.nvim",
         "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring": "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring",
         "nvim_plugin-L3MON4D3/LuaSnip": "nvim_plugin-L3MON4D3/LuaSnip",
