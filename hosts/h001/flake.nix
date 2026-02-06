@@ -25,6 +25,8 @@
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
+    puzzles.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/puzzles.git";
+
     nixarr.url = "github:rasmus-kirk/nixarr";
   };
 
@@ -120,6 +122,16 @@
                 ]
               )
 
+              inputs.puzzles.nixosModules.default
+              ({
+                services.puzzles-server = {
+                  enable = true;
+                  settings = {
+                    http = "0.0.0.0:8090";
+                  };
+                };
+              })
+
               nixarr.nixosModules.default
               ./hardware-configuration.nix
               ./mods
@@ -195,4 +207,3 @@
       };
     };
 }
-
