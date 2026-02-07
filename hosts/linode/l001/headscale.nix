@@ -47,7 +47,6 @@
               (h001ARecord "gist")
               (h001ARecord "git")
               (h001ARecord "blog")
-              (h001ARecord "etebase")
             ];
         };
       };
