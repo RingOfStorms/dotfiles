@@ -173,7 +173,8 @@
       # [/media.joshuabell.xyz/]127.0.0.1:9053
       # [/jellyfin.joshuabell.xyz/]127.0.0.1:9053
       host-record = [
-        # DNS splitting
+        # DNS splitting on local network
+        # Basically these are intercepted and resolve to local IP's when anyone is connected to home network
         "media.joshuabell.xyz,10.12.14.10"
         "jellyfin.joshuabell.xyz,10.12.14.10"
       ];

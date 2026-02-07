@@ -27,12 +27,13 @@
           # ];
           extra_records =
             let
+              # DNS splitting at the tailscale network level. We intercept these domains
+              # when connected to tailscale and skip my global/internet facing DNS proxy
               h001ARecord = name: {
                 type = "A";
                 name = "${name}.joshuabell.xyz";
                 value = "100.64.0.13";
               };
-
             in
             [
               (h001ARecord "jellyfin")
@@ -46,6 +47,7 @@
               (h001ARecord "gist")
               (h001ARecord "git")
               (h001ARecord "blog")
+              (h001ARecord "etebase")
             ];
         };
       };
