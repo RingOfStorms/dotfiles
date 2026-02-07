@@ -19,5 +19,6 @@
     ./homepage-dashboard.nix
     # ./vault.nix
     ./puzzles.nix
+    ./etebase.nix
   ];
 }
