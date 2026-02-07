@@ -244,6 +244,17 @@ in
             proxyPass = "http://100.64.0.13";
           };
         };
+        "etebase.joshuabell.xyz" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyWebsockets = true;
+            proxyPass = "http://100.64.0.13";
+            extraConfig = ''
+              client_max_body_size 75M;
+            '';
+          };
+        };
         "llm.joshuabell.xyz" = {
           enableACME = true;
           forceSSL = true;
