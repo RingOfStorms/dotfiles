@@ -1258,11 +1258,11 @@
         "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1770492121,
-        "narHash": "sha256-uQXMdrYZq/cZYlFhtoeiCIuvaCG8P6X+BhQHewd85AY=",
+        "lastModified": 1770506920,
+        "narHash": "sha256-KabBFvk3L+5yBPfQ/Iv4+4F2W9addWA1EFxhjSEbda0=",
         "ref": "refs/heads/main",
-        "rev": "28306bd19e49bf38cb801a105378e1721a70fc37",
-        "revCount": 47,
+        "rev": "ac94be0e23c739ebe82898d49741c297550303fa",
+        "revCount": 48,
         "type": "git",
         "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/puzzles.git"
       },
