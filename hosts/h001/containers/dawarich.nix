@@ -87,15 +87,28 @@ let
       }) uniqueUsers
     );
   };
+
+  # Secret file path (if using secrets)
+  hasSecret =
+    secret:
+    let
+      secrets = config.age.secrets or { };
+    in
+    secrets ? ${secret} && secrets.${secret} != null;
 in
 {
   options = { };
 
   config = {
-    services.nginx.virtualHosts."${domain}" = {
-      addSSL = true;
-      sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
-      sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
+    services.nginx.virtualHosts."${domain}" = lib.mkIf (hasSecret "linode_rw_domains") {
+      forceSSL = true;
+      useACMEHost = "joshuabell.xyz";
+      extraConfig = ''
+        client_max_body_size 50G;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+        send_timeout 600s;
+      '';
       locations = {
         "/" = {
           proxyWebsockets = true;
@@ -232,6 +245,8 @@ in
 
               # Environment variables for additional configuration
               environment = {
+                # Enable registration for initial setup (set to "true" to disable after creating accounts)
+                DISABLE_REGISTRATION = "false";
                 # Set timezone if needed
                 # TIME_ZONE = "America/Chicago";
               };
