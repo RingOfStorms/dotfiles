@@ -54,12 +54,11 @@ let
       gid = 977;
     }
     # Secret key base file - manual setup
-    # Uncomment when you have created the secret file
-    # {
-    #   host = "${hostDataDir}/secrets/secret_key_base";
-    #   container = "/var/secrets/secret_key_base";
-    #   readOnly = true;
-    # }
+    {
+      host = "${hostDataDir}/secrets/secret_key_base";
+      container = "/var/secrets/secret_key_base";
+      readOnly = true;
+    }
   ];
 
   bindsWithUsers = lib.filter (b: b ? user) binds;
