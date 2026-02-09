@@ -133,6 +133,22 @@
         "type": "github"
       }
     },
+    "dawarich-nixpkgs": {
+      "locked": {
+        "lastModified": 1770562336,
+        "narHash": "sha256-ub1gpAONMFsT/GU2hV6ZWJjur8rJ6kKxdm9IlCT0j84=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "d6c71932130818840fc8fe9509cf50be8c64634f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "flake-utils": {
       "inputs": {
         "systems": "systems_2"
@@ -206,6 +222,22 @@
       "original": {
         "owner": "nix-community",
         "repo": "home-manager",
+        "type": "github"
+      }
+    },
+    "immich-nixpkgs": {
+      "locked": {
+        "lastModified": 1770562336,
+        "narHash": "sha256-ub1gpAONMFsT/GU2hV6ZWJjur8rJ6kKxdm9IlCT0j84=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "d6c71932130818840fc8fe9509cf50be8c64634f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
         "type": "github"
       }
     },
@@ -1298,8 +1330,10 @@
         "beszel": "beszel",
         "beszel-nixpkgs": "beszel-nixpkgs_2",
         "common": "common",
+        "dawarich-nixpkgs": "dawarich-nixpkgs",
         "forgejo-nixpkgs": "forgejo-nixpkgs",
         "home-manager": "home-manager",
+        "immich-nixpkgs": "immich-nixpkgs",
         "litellm-nixpkgs": "litellm-nixpkgs",
         "n8n-nixpkgs": "n8n-nixpkgs",
         "nixarr": "nixarr",
