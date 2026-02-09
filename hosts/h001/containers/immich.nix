@@ -91,9 +91,10 @@ in
 {
   options = { };
   config = {
-    services.nginx.virtualHosts."photos.joshuabell.xyz" = lib.mkIf (hasSecret "linode_rw_domains") {
-      forceSSL = true;
-      useACMEHost = "joshuabell.xyz";
+    services.nginx.virtualHosts."photos.joshuabell.xyz" = {
+      addSSL = true;
+      sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
+      sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
       extraConfig = ''
         client_max_body_size 50G;
         proxy_read_timeout 600s;
