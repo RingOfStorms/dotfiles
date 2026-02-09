@@ -96,7 +96,7 @@ in
       sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
       sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
       extraConfig = ''
-        client_max_body_size 50G;
+        client_max_body_size 100G;
         proxy_read_timeout 600s;
         proxy_send_timeout 600s;
         send_timeout 600s;

@@ -261,6 +261,9 @@ in
           locations."/" = {
             proxyWebsockets = true;
             proxyPass = "http://100.64.0.13";
+            extraConfig = ''
+              client_max_body_size 50G;
+            '';
           };
         };
         "photos.joshuabell.xyz" = {
@@ -269,6 +272,9 @@ in
           locations."/" = {
             proxyWebsockets = true;
             proxyPass = "http://100.64.0.13";
+            extraConfig = ''
+              client_max_body_size 100G;
+            '';
           };
         };
         "llm.joshuabell.xyz" = {
