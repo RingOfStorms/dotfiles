@@ -182,6 +182,11 @@ in
                 host all all fc00::1/128 trust
               '';
               ensureDatabases = [ "dawarich" ];
+              # Pre-create postgis extension as superuser (dawarich user can't create extensions)
+              initialScript = pkgs.writeText "dawarich-pg-init.sql" ''
+                \connect dawarich
+                CREATE EXTENSION IF NOT EXISTS postgis;
+              '';
               ensureUsers = [
                 {
                   name = "dawarich";
