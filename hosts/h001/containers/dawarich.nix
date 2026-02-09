@@ -237,15 +237,23 @@ in
               };
             };
 
-            systemd.services.dawarich = {
-              requires = [
-                "postgresql.service"
-                "redis-dawarich.service"
-              ];
-              after = [
-                "postgresql.service"
-                "redis-dawarich.service"
-              ];
+            # Ensure postgis extension exists before dawarich-init-db runs
+            # (initialScript only runs on first cluster creation)
+            systemd.services.dawarich-postgis-init = {
+              description = "Initialize PostGIS extension for Dawarich";
+              requires = [ "postgresql.service" ];
+              after = [ "postgresql.service" ];
+              before = [ "dawarich-init-db.service" ];
+              requiredBy = [ "dawarich-init-db.service" ];
+              serviceConfig = {
+                Type = "oneshot";
+                RemainAfterExit = true;
+                User = "postgres";
+                Group = "postgres";
+                ExecStart = pkgs.writeShellScript "dawarich-postgis-init" ''
+                  ${config.services.postgresql.package}/bin/psql -d dawarich -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+                '';
+              };
             };
           };
         };

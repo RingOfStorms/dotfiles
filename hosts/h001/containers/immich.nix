@@ -91,20 +91,18 @@ in
 {
   options = { };
   config = {
-    services.nginx.virtualHosts."photos.joshuabell.xyz" = {
-      addSSL = true;
-      sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
-      sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
-      locations = {
-        "/" = {
-          proxyWebsockets = true;
-          recommendedProxySettings = true;
-          proxyPass = "http://${containerAddress}:2283";
-          extraConfig = ''
-            proxy_set_header X-Forwarded-Proto https;
-            client_max_body_size 50G;
-          '';
-        };
+    services.nginx.virtualHosts."photos.joshuabell.xyz" = lib.mkIf (hasSecret "linode_rw_domains") {
+      forceSSL = true;
+      useACMEHost = "joshuabell.xyz";
+      extraConfig = ''
+        client_max_body_size 50G;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+        send_timeout 600s;
+      '';
+      locations."/" = {
+        proxyWebsockets = true;
+        proxyPass = "http://${containerAddress}:2283";
       };
     };
 
