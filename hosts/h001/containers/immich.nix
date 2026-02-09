@@ -32,7 +32,7 @@ let
     {
       host = "${hostVarLibDir}/postgres";
       # Adjust based on container postgres data dir
-      container = "/var/lib/postgresql/17";
+      container = "/var/lib/postgresql/16";
       user = "postgres";
       uid = config.ids.uids.postgres;
       gid = config.ids.gids.postgres;
@@ -171,7 +171,7 @@ in
 
               services.postgresql = {
                 enable = true;
-                package = pkgs.postgresql_17.withPackages (ps: [ ps.pgvecto-rs ]);
+                package = pkgs.postgresql_16.withPackages (ps: [ ps.pgvecto-rs ]);
                 enableJIT = true;
                 authentication = ''
                   local all all trust
