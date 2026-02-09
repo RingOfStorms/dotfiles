@@ -7,7 +7,7 @@
     services.headscale = {
       enable = true;
       settings = {
-        server_url = "https://nexus.joshuabell.xyz";
+        server_url = "https://headscale.joshuabell.xyz";
         database.type = "sqlite3";
         derp = {
           auto_update_enable = true;
@@ -48,6 +48,8 @@
               (h001ARecord "git")
               (h001ARecord "blog")
               (h001ARecord "etebase")
+              (h001ARecord "photos")
+              (h001ARecord "location")
             ];
         };
       };

@@ -11,9 +11,9 @@ let
   hostDataDir = "/drives/wd10/${name}";
 
   hostAddress = "10.0.0.1";
-  containerAddress = "10.0.0.4";
+  containerAddress = "10.0.0.5";
   hostAddress6 = "fc00::1";
-  containerAddress6 = "fc00::4";
+  containerAddress6 = "fc00::5";
 
   dawarichNixpkgs = inputs.dawarich-nixpkgs;
 
@@ -53,10 +53,11 @@ let
       uid = 977;
       gid = 977;
     }
-    # Secret key base file - manual setup
+    # Secret key base file - must match the path the dawarich module expects
+    # The module uses systemd LoadCredential from /var/lib/dawarich/secrets/secret-key-base
     {
-      host = "${hostDataDir}/secrets/secret_key_base";
-      container = "/var/secrets/secret_key_base";
+      host = "${hostDataDir}/secrets/secret-key-base";
+      container = "/var/lib/dawarich/secrets/secret-key-base";
       readOnly = true;
     }
   ];
@@ -170,8 +171,10 @@ in
 
             services.postgresql = {
               enable = true;
-              package = pkgs.postgresql_17.withJIT;
+              # Dawarich requires PostGIS for geospatial features
+              package = pkgs.postgresql_17.withPackages (p: [ p.postgis ]);
               enableJIT = true;
+              extraPlugins = ps: [ ps.postgis ];
               authentication = ''
                 local all all trust
                 host all all 127.0.0.1/8 trust
@@ -212,8 +215,9 @@ in
                 createLocally = true;
               };
 
-              # Secret key base
-              secretKeyBaseFile = "/var/secrets/secret_key_base";
+              # Secret key base - path must match what the module expects
+              # The secret file is bind-mounted to /var/lib/dawarich/secrets/secret-key-base
+              secretKeyBaseFile = "/var/lib/dawarich/secrets/secret-key-base";
 
               # Enable automatic migrations
               automaticMigrations = true;
