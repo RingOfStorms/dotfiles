@@ -212,10 +212,8 @@ in
                 createLocally = true;
               };
 
-              # Secret key base - create this file manually:
-              # Generate with: openssl rand -hex 64 > /drives/wd10/dawarich/secrets/secret_key_base
-              # Then update bind mount above to include it
-              # secretKeyBaseFile = "/var/secrets/secret_key_base";
+              # Secret key base
+              secretKeyBaseFile = "/var/secrets/secret_key_base";
 
               # Enable automatic migrations
               automaticMigrations = true;
