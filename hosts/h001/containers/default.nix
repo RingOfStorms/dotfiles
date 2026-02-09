@@ -3,7 +3,9 @@
 }:
 {
   imports = [
+    ./dawarich.nix
     ./forgejo.nix
+    ./immich.nix
     ./opengist.nix
     ./zitadel.nix
   ];
