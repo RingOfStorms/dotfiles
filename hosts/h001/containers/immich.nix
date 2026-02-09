@@ -149,81 +149,84 @@ in
           ...
         }:
         {
-          config = {
-            system.stateVersion = "25.05";
+          config = lib.mkMerge [
+            {
+              system.stateVersion = "25.05";
 
-            networking = {
-              firewall = {
+              networking = {
+                firewall = {
+                  enable = true;
+                  allowedTCPPorts = [
+                    2283
+                  ];
+                };
+                # Use systemd-resolved inside the container
+                # Workaround for bug https://github.com/NixOS/nixpkgs/issues/162686
+                useHostResolvConf = lib.mkForce false;
+              };
+              services.resolved.enable = true;
+
+              # Ensure users exist on container
+              inherit users;
+
+              services.postgresql = {
                 enable = true;
-                allowedTCPPorts = [
-                  2283
+                package = pkgs.postgresql_17.withPackages (ps: [ ps.pgvecto-rs ]);
+                enableJIT = true;
+                authentication = ''
+                  local all all trust
+                  host all all 127.0.0.1/8 trust
+                  host all all ::1/128 trust
+                  host all all fc00::1/128 trust
+                '';
+                ensureDatabases = [ "immich" ];
+                ensureUsers = [
+                  {
+                    name = "immich";
+                    ensureDBOwnership = true;
+                    ensureClauses.login = true;
+                  }
                 ];
+                settings = {
+                  shared_preload_libraries = [ "vectors.so" ];
+                };
               };
-              # Use systemd-resolved inside the container
-              # Workaround for bug https://github.com/NixOS/nixpkgs/issues/162686
-              useHostResolvConf = lib.mkForce false;
-            };
-            services.resolved.enable = true;
 
-            # Ensure users exist on container
-            inherit users;
-
-            services.postgresql = {
-              enable = true;
-              package = pkgs.postgresql_17.withPackages (ps: [ ps.pgvecto-rs ]);
-              enableJIT = true;
-              authentication = ''
-                local all all trust
-                host all all 127.0.0.1/8 trust
-                host all all ::1/128 trust
-                host all all fc00::1/128 trust
-              '';
-              ensureDatabases = [ "immich" ];
-              ensureUsers = [
-                {
-                  name = "immich";
-                  ensureDBOwnership = true;
-                  ensureClauses.login = true;
-                }
-              ];
-              settings = {
-                shared_preload_libraries = [ "vectors.so" ];
-              };
-            };
-
-            # Backup database
-            services.postgresqlBackup = {
-              enable = true;
-            };
-
-            services.immich = {
-              enable = true;
-              host = "0.0.0.0";
-              port = 2283;
-              openFirewall = true;
-              mediaLocation = "/var/lib/immich";
-              database = {
+              # Backup database
+              services.postgresqlBackup = {
                 enable = true;
-                createDB = false; # We create it manually above
-                name = "immich";
-                user = "immich";
               };
-              redis.enable = true;
-              machine-learning.enable = true;
-              settings = {
-                server.externalDomain = "https://photos.joshuabell.xyz";
-                newVersionCheck.enabled = false;
+
+              services.immich = {
+                enable = true;
+                host = "0.0.0.0";
+                port = 2283;
+                openFirewall = true;
+                mediaLocation = "/var/lib/immich";
+                database = {
+                  enable = true;
+                  createDB = false; # We create it manually above
+                  name = "immich";
+                  user = "immich";
+                };
+                redis.enable = true;
+                machine-learning.enable = true;
+                settings = {
+                  server.externalDomain = "https://photos.joshuabell.xyz";
+                  newVersionCheck.enabled = false;
+                };
               };
-            };
 
-            systemd.services.immich-server = {
-              requires = [ "postgresql.service" ];
-              after = [ "postgresql.service" ];
-            };
-
-            # Allow Immich user to access the media directory
-            users.users.immich.extraGroups = [ "video" "render" ];
-          };
+              systemd.services.immich-server = {
+                requires = [ "postgresql.service" ];
+                after = [ "postgresql.service" ];
+              };
+            }
+            {
+              # Allow Immich user to access the media directory for hardware transcoding
+              users.users.immich.extraGroups = [ "video" "render" ];
+            }
+          ];
         };
     };
   };
