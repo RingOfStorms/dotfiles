@@ -20,6 +20,8 @@
     "etebase"
     "photos"
     "location"
+    "matrix"
+    "element"
   ];
 
   # Base domain
