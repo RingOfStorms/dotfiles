@@ -1,4 +1,7 @@
 { pkgs, ... }:
+let
+  h001Dns = import ../../../flakes/common/nix_modules/tailnet/h001_dns.nix;
+in
 {
   config = {
     # TODO backup /var/lib/headscale data
@@ -17,40 +20,11 @@
           magic_dns = true;
           base_domain = "net.joshuabell.xyz";
           override_local_dns = false;
-          # nameservers.global = [
-          #   "1.1.1.1"
-          #   "1.0.0.1"
-          #   "8.8.8.8"
-          #   "8.8.4.4"
-          #   "9.9.9.9"
-          #   "9.9.9.10"
-          # ];
-          extra_records =
-            let
-              # DNS splitting at the tailscale network level. We intercept these domains
-              # when connected to tailscale and skip my global/internet facing DNS proxy
-              h001ARecord = name: {
-                type = "A";
-                name = "${name}.joshuabell.xyz";
-                value = "100.64.0.13";
-              };
-            in
-            [
-              (h001ARecord "jellyfin")
-              (h001ARecord "media")
-              (h001ARecord "notes")
-              (h001ARecord "chat")
-              (h001ARecord "sso-proxy")
-              (h001ARecord "n8n")
-              (h001ARecord "sec")
-              (h001ARecord "sso")
-              (h001ARecord "gist")
-              (h001ARecord "git")
-              (h001ARecord "blog")
-              (h001ARecord "etebase")
-              (h001ARecord "photos")
-              (h001ARecord "location")
-            ];
+          extra_records = map (name: {
+            type = "A";
+            name = "${name}.${h001Dns.baseDomain}";
+            value = h001Dns.ip;
+          }) h001Dns.subdomains;
         };
       };
     };
