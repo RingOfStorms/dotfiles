@@ -316,6 +316,8 @@
                   environment.systemPackages = with pkgs; [
                     vlc
                     google-chrome
+                    jellyfin-media-player
+                    ttyd
                   ];
 
                   services.flatpak.packages = [
