@@ -175,6 +175,7 @@
               # ./sway_customizations.nix
               # ./i3_customizations.nix
               ./vms.nix
+              ./ttyd.nix
               (
                 {
                   config,

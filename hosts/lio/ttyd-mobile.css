@@ -1,0 +1,38 @@
+/* Mobile-friendly TTYD styles */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+#terminal-container, .terminal, .xterm {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  height: 100vh !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.xterm-viewport {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+/* Prevent horizontal scroll on mobile */
+.xterm-screen {
+  max-width: 100vw !important;
+}
+
+/* Better touch scrolling */
+.xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+}
+
+/* Ensure proper viewport on iOS */
+@supports (-webkit-touch-callout: none) {
+  #terminal-container, .terminal, .xterm {
+    height: -webkit-fill-available !important;
+  }
+}
