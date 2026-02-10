@@ -6,7 +6,7 @@
     ./dawarich.nix
     ./forgejo.nix
     ./immich.nix
-    ./matrix.nix
+    # ./matrix.nix
     ./opengist.nix
     ./zitadel.nix
   ];

@@ -219,6 +219,9 @@ in
 
         services.resolved.enable = true;
 
+        # Add dendrite to PATH for admin tools (create-account, etc.)
+        environment.systemPackages = [ pkgs.dendrite ];
+
         # PostgreSQL for Dendrite and mautrix-gmessages
         services.postgresql = {
           enable = true;
