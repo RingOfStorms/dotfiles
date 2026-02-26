@@ -80,6 +80,7 @@ in
           })
           # List from https://github.com/settings/copilot/features enabled models
           [
+            "claude-opus-4.6"
             "claude-opus-4.5"
             "claude-sonnet-3.5"
             "claude-sonnet-4"
@@ -88,6 +89,12 @@ in
             "gemini-2.5-pro"
             "openai-gpt-5"
             "openai-gpt-5-mini"
+            "openai-gpt-5.1-mini"
+            "openai-gpt-5.1"
+            "openai-gpt-5.1-codex"
+            "openai-gpt-5.1-codex-max"
+            "openai-gpt-5.2"
+            "openai-gpt-5.2-codex"
             "grok-code-fast-1"
           ]
         )
@@ -196,9 +203,12 @@ in
             "gemini-2.0-flash-lite"
             "gemini-2.5-flash-lite"
             "gemini-2.5-flash-image"
+            "claude-haiku-4.5"
+            "claude-opus-4.6"
+            "claude-opus-4.5"
             "claude-opus-4.1"
             "claude-opus-4"
-            "claude-opus-4.5"
+            "claude-sonnet-4.6"
             "claude-sonnet-4"
             "claude-sonnet-4.5"
             "claude-3.7-sonnet"
@@ -209,23 +219,24 @@ in
             "text-embedding-005"
           ]
         )
-        ++ (builtins.map
-          (m: {
-            model_name = "air_dev-${sanitizeModelName m}";
-            litellm_params = {
-              model = "litellm_proxy/${m}";
-              api_base = "http://100.64.0.8:9010/air_alp";
-              api_key = "na";
-              drop_params = true;
-            };
-          })
-          # curl -L t.net.joshuabell.xyz:9010/air_alp/models | jq '.data.[].id'
-          [
-            "claude-opus-4.5"
-            "claude-sonnet-4.5"
-            "gemini-3-pro-preview"
-          ]
-        );
+        # ++ (builtins.map
+        #   (m: {
+        #     model_name = "air_dev-${sanitizeModelName m}";
+        #     litellm_params = {
+        #       model = "litellm_proxy/${m}";
+        #       api_base = "http://100.64.0.8:9010/air_alp";
+        #       api_key = "na";
+        #       drop_params = true;
+        #     };
+        #   })
+        #   # curl -L t.net.joshuabell.xyz:9010/air_alp/models | jq '.data.[].id'
+        #   [
+        #     "claude-opus-4.5"
+        #     "claude-sonnet-4.5"
+        #     "gemini-3-pro-preview"
+        #   ]
+        # )
+        ;
       };
     };
   };
