@@ -34,6 +34,11 @@
 
       # Auto completion/suggestions/and case insensitivity
       autoload -Uz compinit && compinit
+
+      # Register completions for functions defined in environment.shellInit
+      # (which runs before compinit, so compdef calls there are too early)
+      compdef _flake_complete flake 2>/dev/null || true
+
       setopt correct
       setopt extendedglob
       setopt nocaseglob
