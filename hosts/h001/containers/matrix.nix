@@ -473,13 +473,13 @@ in
                 .bridge.sync_direct_chat_list = true |
                 .logging.min_level = "warn" |
                 .logging.writers = [{"type": "stdout", "format": "pretty-colored"}] |
-                .initial_chat_sync_count = -1
+                .network.initial_chat_sync_count = 99999
               ' "$CONFIG_FILE"
             fi
 
             # Ensure settings that may have been added after initial config generation
             ${pkgs.yq-go}/bin/yq -i '
-              .initial_chat_sync_count = -1
+              .network.initial_chat_sync_count = 99999
             ' "$CONFIG_FILE"
 
             # Generate registration file if none exists
