@@ -637,7 +637,6 @@ in
 
                openbao-jwt-changed = {
                  description = "Restart vault-agent after Zitadel JWT refresh";
-                 wants = [ "vault-agent.service" ];
                  after = [ "vault-agent.service" ];
 
                  serviceConfig = {
@@ -648,6 +647,8 @@ in
                    ExecStart = pkgs.writeShellScript "openbao-jwt-changed" ''
                      #!/usr/bin/env bash
                      set -euo pipefail
+                     # Small delay to let the JWT file settle before restarting
+                     sleep 2
                      systemctl try-restart --no-block vault-agent.service || true
                    '';
                  };
@@ -800,7 +801,6 @@ in
                  ];
                  wants = [
                    "network-online.target"
-                   "zitadel-mint-jwt.service"
                  ];
 
                  serviceConfig = {
