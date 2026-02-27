@@ -307,6 +307,21 @@ in
             enable_registration = false;
             allow_guest_access = false;
 
+            # Auto-join invited rooms for local users. Saves having to
+            # manually accept every bridge room invitation.
+            auto_join_rooms = [ ];
+            "auto_join_mxid_localpart" = "admin";
+            modules = [
+              {
+                module = "synapse.module_api.auto_accept_invite.InviteAutoAccepter";
+                config = {
+                  worker_to_run_on = null;
+                  accept_invites_only_for_direct_messages = false;
+                  accept_invites_only_from_local_users = true;
+                };
+              }
+            ];
+
             # No stats reporting
             report_stats = false;
 
@@ -461,9 +476,15 @@ in
                 .bridge.delivery_receipts = true |
                 .bridge.sync_direct_chat_list = true |
                 .logging.min_level = "warn" |
-                .logging.writers = [{"type": "stdout", "format": "pretty-colored"}]
+                .logging.writers = [{"type": "stdout", "format": "pretty-colored"}] |
+                .initial_chat_sync_count = -1
               ' "$CONFIG_FILE"
             fi
+
+            # Ensure settings that may have been added after initial config generation
+            ${pkgs.yq-go}/bin/yq -i '
+              .initial_chat_sync_count = -1
+            ' "$CONFIG_FILE"
 
             # Generate registration file if none exists
             # -g = generate registration, -c = config path, -r = registration output path
