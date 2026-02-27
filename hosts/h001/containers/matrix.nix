@@ -307,17 +307,6 @@ in
             enable_registration = false;
             allow_guest_access = false;
 
-            # Auto-join invited rooms for local users. Saves having to
-            # manually accept every bridge room invitation.
-            auto_join_rooms = [ ];
-            "auto_join_mxid_localpart" = "admin";
-            auto_accept_invites = {
-              enabled = true;
-              only_for_direct_messages = false;
-              only_from_local_users = true;
-              worker_to_run_on = null;
-            };
-
             # No stats reporting
             report_stats = false;
 
@@ -488,6 +477,15 @@ in
             if [ ! -f "$REG_FILE" ]; then
               ${pkgs.mautrix-gmessages}/bin/mautrix-gmessages -g -c "$CONFIG_FILE" -r "$REG_FILE"
               chmod 640 "$REG_FILE"
+            fi
+
+            # Ensure registration allows the appservice to masquerade as Josh.
+            # The default namespace only matches @gmessages_.* which blocks
+            # impersonation for backfill/sent-message injection.
+            if ! ${pkgs.yq-go}/bin/yq -e '.namespaces.users[] | select(.regex == "@josh:${lib.strings.escape ["."] serverName}")' "$REG_FILE" > /dev/null 2>&1; then
+              ${pkgs.yq-go}/bin/yq -i '
+                .namespaces.users += [{"regex": "@josh:${lib.strings.escape ["."] serverName}", "exclusive": false}]
+              ' "$REG_FILE"
             fi
           '';
         };
