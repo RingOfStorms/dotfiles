@@ -255,6 +255,14 @@ in
             '';
           };
         };
+        "pim.joshuabell.xyz" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyWebsockets = true;
+            proxyPass = "http://100.64.0.13";
+          };
+        };
         "location.joshuabell.xyz" = {
           enableACME = true;
           forceSSL = true;

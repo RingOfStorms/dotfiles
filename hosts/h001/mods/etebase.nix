@@ -10,7 +10,7 @@ let
   # EteSync Web - static SPA for calendar/contacts
   etesyncWeb = pkgs.fetchzip {
     url = "https://pim.etesync.com/etesync-web.tgz";
-    hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    hash = "sha256-I6rbDAklznByAYtslBT0gGGbZXaGzrtX7WpC0Wh8Qxk=";
   };
 in
 {
