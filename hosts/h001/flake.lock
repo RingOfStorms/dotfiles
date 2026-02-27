@@ -31,11 +31,11 @@
       },
       "locked": {
         "dir": "flakes/beszel",
-        "lastModified": 1769456676,
-        "narHash": "sha256-KnNd530H/nglh3jSfFbh7VY637QtqeluBABgP2LDWGw=",
+        "lastModified": 1772210636,
+        "narHash": "sha256-CKsGnMEXai4J3gOT0b/T+167GTQfUR/o1xwqvCdT7Hw=",
         "ref": "refs/heads/master",
-        "rev": "ec2e093a24dfbb9e3a5f8c450b9931777cf8d991",
-        "revCount": 1177,
+        "rev": "a6abc0343a30fd60eb10a110a81cdfc0dee52686",
+        "revCount": 1273,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -47,11 +47,11 @@
     },
     "beszel-nixpkgs": {
       "locked": {
-        "lastModified": 1767379071,
-        "narHash": "sha256-EgE0pxsrW9jp9YFMkHL9JMXxcqi/OoumPJYwf+Okucw=",
+        "lastModified": 1771848320,
+        "narHash": "sha256-0MAd+0mun3K/Ns8JATeHT1sX28faLII5hVLq0L3BdZU=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "fb7944c166a3b630f177938e478f0378e64ce108",
+        "rev": "2fc6539b481e1d2569f25f8799236694180c0993",
         "type": "github"
       },
       "original": {
@@ -80,11 +80,11 @@
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1770702882,
-        "narHash": "sha256-IrNAJIl5Pzpr9pZjHEEuVmJNawK9k2vFUgfTbw7zin4=",
+        "lastModified": 1772210636,
+        "narHash": "sha256-CKsGnMEXai4J3gOT0b/T+167GTQfUR/o1xwqvCdT7Hw=",
         "ref": "refs/heads/master",
-        "rev": "b5fd37ef8cade4cd833bc62f59bed44e23a281ac",
-        "revCount": 1253,
+        "rev": "a6abc0343a30fd60eb10a110a81cdfc0dee52686",
+        "revCount": 1273,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -296,11 +296,11 @@
         "website-builder": "website-builder"
       },
       "locked": {
-        "lastModified": 1765731404,
-        "narHash": "sha256-eIEh60iK0L4X7UHj7dOZWZEkmWRA1H7ovjVJsfrPavQ=",
+        "lastModified": 1770542066,
+        "narHash": "sha256-RTyyeuvK84WqFah0qUoyq28o2oM7yBfkFIHjFu5h0hc=",
         "owner": "rasmus-kirk",
         "repo": "nixarr",
-        "rev": "204da9209ad4e921c3562a6bca5ac8ad5b6ed9bc",
+        "rev": "7cc521933dc6800ae81ecfc91fe36237476e4ffb",
         "type": "github"
       },
       "original": {
@@ -343,11 +343,11 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1771903837,
-        "narHash": "sha256-sdaqdnsQCv3iifzxwB22tUwN/fSHoN7j2myFW5EIkGk=",
+        "lastModified": 1772047000,
+        "narHash": "sha256-7DaQVv4R97cii/Qdfy4tmDZMB2xxtyIvNGSwXBBhSmo=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "e764fc9a405871f1f6ca3d1394fb422e0a0c3951",
+        "rev": "1267bb4920d0fc06ea916734c11b0bf004bbe17e",
         "type": "github"
       },
       "original": {
@@ -1425,11 +1425,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1769125736,
-        "narHash": "sha256-anQb65WdwbW+r/elOicrhDAhF+pjZBnur5ei9/rhq2s=",
+        "lastModified": 1770320527,
+        "narHash": "sha256-ymqBCxLUSulGi04XTjhl6HgeQlygFAJfsJmY1Q8dyLY=",
         "ref": "refs/heads/master",
-        "rev": "fedaece7199f49d1317856fe22f20b7467639409",
-        "revCount": 332,
+        "rev": "fed799030f5560eb5e4fdb7b007db1c173e67ddf",
+        "revCount": 334,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/nvim"
       },
@@ -1487,11 +1487,11 @@
       },
       "locked": {
         "dir": "flakes/secrets",
-        "lastModified": 1769456676,
-        "narHash": "sha256-KnNd530H/nglh3jSfFbh7VY637QtqeluBABgP2LDWGw=",
+        "lastModified": 1772210636,
+        "narHash": "sha256-CKsGnMEXai4J3gOT0b/T+167GTQfUR/o1xwqvCdT7Hw=",
         "ref": "refs/heads/master",
-        "rev": "ec2e093a24dfbb9e3a5f8c450b9931777cf8d991",
-        "revCount": 1177,
+        "rev": "a6abc0343a30fd60eb10a110a81cdfc0dee52686",
+        "revCount": 1273,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
