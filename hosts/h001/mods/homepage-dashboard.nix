@@ -86,13 +86,6 @@ in
             };
           }
           {
-            "Pinchflat" = {
-              description = "YouTube Automation";
-              href = "http://h001.net.joshuabell.xyz:8945";
-              icon = "pinchflat";
-            };
-          }
-          {
             "Youtarr" = {
               description = "YouTube Automation";
               href = "http://h001.net.joshuabell.xyz:3087";
