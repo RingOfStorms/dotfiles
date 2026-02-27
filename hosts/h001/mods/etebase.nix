@@ -8,10 +8,24 @@ let
   socketPath = "/run/etebase-server/etebase-server.sock";
 
   # EteSync Web - static SPA for calendar/contacts
-  etesyncWeb = pkgs.fetchzip {
+  etesyncWebSrc = pkgs.fetchzip {
     url = "https://pim.etesync.com/etesync-web.tgz";
     hash = "sha256-I6rbDAklznByAYtslBT0gGGbZXaGzrtX7WpC0Wh8Qxk=";
   };
+
+  # Patch the default API URL in the JS bundle at build time so the app
+  # points at our self-hosted etebase instance without manual configuration.
+  defaultApiUrl = "https://api.etebase.com/partner/etesync/";
+  selfHostedApiUrl = "https://etebase.joshuabell.xyz/";
+
+  etesyncWeb = pkgs.runCommand "etesync-web-patched" { } ''
+    cp -r ${etesyncWebSrc} $out
+    chmod -R u+w $out
+    for jsFile in $out/static/js/*.js; do
+      substituteInPlace "$jsFile" \
+        --replace-quiet '${defaultApiUrl}' '${selfHostedApiUrl}'
+    done
+  '';
 in
 {
   # Generate a secret file for Django's SECRET_KEY if it doesn't exist
@@ -89,8 +103,7 @@ in
     };
 
     # EteSync Web - static SPA for calendar/contacts management
-    # Rewrites the default API URL in the JS bundle so users don't need
-    # to toggle advanced settings and manually enter the server URL.
+    # JS bundle is patched at build time to default to our etebase instance.
     "pim.joshuabell.xyz" = {
       addSSL = true;
       sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
@@ -99,15 +112,6 @@ in
       locations = {
         "/" = {
           tryFiles = "$uri $uri/ /index.html";
-        };
-        # Rewrite the hardcoded default API URL in JS chunks to point
-        # at our self-hosted etebase instance instead.
-        "~* \\.js$" = {
-          extraConfig = ''
-            sub_filter 'https://api.etebase.com/partner/etesync/' 'https://etebase.joshuabell.xyz/';
-            sub_filter_once on;
-            sub_filter_types application/javascript;
-          '';
         };
       };
     };
