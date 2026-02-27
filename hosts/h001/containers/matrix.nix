@@ -311,16 +311,12 @@ in
             # manually accept every bridge room invitation.
             auto_join_rooms = [ ];
             "auto_join_mxid_localpart" = "admin";
-            modules = [
-              {
-                module = "synapse.module_api.auto_accept_invite.InviteAutoAccepter";
-                config = {
-                  worker_to_run_on = null;
-                  accept_invites_only_for_direct_messages = false;
-                  accept_invites_only_from_local_users = true;
-                };
-              }
-            ];
+            auto_accept_invites = {
+              enabled = true;
+              only_for_direct_messages = false;
+              only_from_local_users = true;
+              worker_to_run_on = null;
+            };
 
             # No stats reporting
             report_stats = false;
