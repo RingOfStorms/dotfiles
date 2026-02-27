@@ -6,6 +6,12 @@
 let
   dataDir = "/var/lib/etebase-server";
   socketPath = "/run/etebase-server/etebase-server.sock";
+
+  # EteSync Web - static SPA for calendar/contacts
+  etesyncWeb = pkgs.fetchzip {
+    url = "https://pim.etesync.com/etesync-web.tgz";
+    hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+  };
 in
 {
   # Generate a secret file for Django's SECRET_KEY if it doesn't exist
@@ -78,6 +84,20 @@ in
           extraConfig = ''
             client_max_body_size 75M;
           '';
+        };
+      };
+    };
+
+    # EteSync Web - static SPA for calendar/contacts management
+    # Users configure which Etebase server to connect to in the app
+    "pim.joshuabell.xyz" = {
+      addSSL = true;
+      sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
+      sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
+      root = etesyncWeb;
+      locations = {
+        "/" = {
+          tryFiles = "$uri $uri/ /index.html";
         };
       };
     };
