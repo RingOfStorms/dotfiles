@@ -89,7 +89,8 @@ in
     };
 
     # EteSync Web - static SPA for calendar/contacts management
-    # Users configure which Etebase server to connect to in the app
+    # Rewrites the default API URL in the JS bundle so users don't need
+    # to toggle advanced settings and manually enter the server URL.
     "pim.joshuabell.xyz" = {
       addSSL = true;
       sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
@@ -98,6 +99,15 @@ in
       locations = {
         "/" = {
           tryFiles = "$uri $uri/ /index.html";
+        };
+        # Rewrite the hardcoded default API URL in JS chunks to point
+        # at our self-hosted etebase instance instead.
+        "~* \\.js$" = {
+          extraConfig = ''
+            sub_filter 'https://api.etebase.com/partner/etesync/' 'https://etebase.joshuabell.xyz/';
+            sub_filter_once on;
+            sub_filter_types application/javascript;
+          '';
         };
       };
     };
