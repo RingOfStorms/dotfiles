@@ -753,10 +753,12 @@ in
 
                   # Try to mint a new token
                   jwt=""
-                  if jwt="$(${zitadelMintJwt}/bin/zitadel-mint-jwt 2>&1)"; then
+                  mint_stderr="$(${pkgs.coreutils}/bin/mktemp)"
+                  trap '${pkgs.coreutils}/bin/rm -f "$mint_stderr"' EXIT
+                  if jwt="$(${zitadelMintJwt}/bin/zitadel-mint-jwt 2>"$mint_stderr")"; then
                     if [ -n "$jwt" ] && [ "$jwt" != "null" ]; then
                       tmp="$(${pkgs.coreutils}/bin/mktemp)"
-                      trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
+                      trap '${pkgs.coreutils}/bin/rm -f "$tmp" "$mint_stderr"' EXIT
                       ${pkgs.coreutils}/bin/printf '%s' "$jwt" > "$tmp"
 
                       if [ -s "${cfg.zitadelJwtPath}" ] && ${pkgs.diffutils}/bin/cmp -s "$tmp" "${cfg.zitadelJwtPath}"; then
@@ -770,6 +772,12 @@ in
                       echo "zitadel-mint-jwt: successfully refreshed token" >&2
                       exit 0
                     fi
+                  fi
+
+                  # Failed to mint new token - log stderr for diagnostics
+                  if [ -s "$mint_stderr" ]; then
+                    echo "zitadel-mint-jwt: mint stderr output:" >&2
+                    ${pkgs.coreutils}/bin/cat "$mint_stderr" >&2
                   fi
 
                   # Failed to mint new token - check if we have a stale but existing token
