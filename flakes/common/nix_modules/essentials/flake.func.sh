@@ -34,7 +34,31 @@ flake() {
       root="$(_flake_root)" || {
         echo "Error: not in a flake directory (missing flake.nix)" >&2
         return 1
-      }
+}
+
+_flake_complete() {
+  local root lock_file
+  root="$(_flake_root 2>/dev/null)" || return
+  lock_file="$root/flake.lock"
+  [ -f "$lock_file" ] || return
+
+  local inputs
+  inputs="$(jq -r '.nodes.root.inputs | keys[]' "$lock_file" 2>/dev/null)"
+  [ -n "$inputs" ] || return
+
+  # Get current word and previous words
+  local cur="${COMP_WORDS[$COMP_CWORD]}"
+  local subcmd="${COMP_WORDS[1]:-}"
+
+  # Only complete after "flake update"
+  if [ "$subcmd" = "update" ] && [ "$COMP_CWORD" -ge 2 ]; then
+    COMPREPLY=($(compgen -W "$inputs" -- "$cur"))
+  elif [ "$COMP_CWORD" -eq 1 ]; then
+    COMPREPLY=($(compgen -W "update help" -- "$cur"))
+  fi
+}
+
+complete -F _flake_complete flake
 
       local lock_file
       lock_file="$root/flake.lock"
@@ -131,3 +155,29 @@ flake() {
       ;;
   esac
 }
+
+_flake_complete() {
+  local root lock_file
+  root="$(_flake_root 2>/dev/null)" || return
+  lock_file="$root/flake.lock"
+  [ -f "$lock_file" ] || return
+
+  local -a input_list
+  input_list=("${(@f)$(jq -r '.nodes.root.inputs | keys[]' "$lock_file" 2>/dev/null)}")
+  [ ${#input_list} -gt 0 ] || return
+
+  case "$words[2]" in
+    update)
+      if (( CURRENT >= 3 )); then
+        compadd -a input_list
+      fi
+      ;;
+    *)
+      if (( CURRENT == 2 )); then
+        compadd update help
+      fi
+      ;;
+  esac
+}
+
+compdef _flake_complete flake
