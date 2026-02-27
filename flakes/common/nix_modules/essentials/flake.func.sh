@@ -180,4 +180,4 @@ _flake_complete() {
   esac
 }
 
-compdef _flake_complete flake
+compdef _flake_complete flake 2>/dev/null || true
