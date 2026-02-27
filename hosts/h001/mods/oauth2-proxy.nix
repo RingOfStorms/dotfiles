@@ -9,7 +9,7 @@ let
   declaration = "services/security/oauth2-proxy.nix";
   nixpkgsOauth2Proxy = inputs.oauth2-proxy-nixpkgs;
   pkgsOauth2Proxy = import nixpkgsOauth2Proxy {
-    inherit (pkgs) system;
+    inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
   hasSecret =

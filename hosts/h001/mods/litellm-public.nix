@@ -8,7 +8,7 @@
 let
   nixpkgsLitellm = inputs.litellm-nixpkgs;
   pkgsLitellm = import nixpkgsLitellm {
-    inherit (pkgs) system;
+    inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
   port = 8095;

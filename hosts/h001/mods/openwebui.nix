@@ -9,7 +9,7 @@ let
   declaration = "services/misc/open-webui.nix";
   nixpkgsOpenWebui = inputs.open-webui-nixpkgs;
   pkgsOpenWebui = import nixpkgsOpenWebui {
-    inherit (pkgs) system;
+    inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
   hasSecret =

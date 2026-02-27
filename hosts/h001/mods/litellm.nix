@@ -9,7 +9,7 @@ let
   # Replace "claude" with "cl4ude" in model names to avoid special handling in other apps
   sanitizeModelName = s: builtins.replaceStrings [ "claude" ] [ "cl4ude" ] s;
   pkgsLitellm = import nixpkgsLitellm {
-    inherit (pkgs) system;
+    inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
   port = 8094;

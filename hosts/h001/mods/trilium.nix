@@ -7,7 +7,7 @@ let
   declaration = "services/web-apps/trilium.nix";
   nixpkgsTrilium = inputs.trilium-nixpkgs;
   pkgsTrilium = import nixpkgsTrilium {
-    inherit (pkgs) system;
+    inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
 in

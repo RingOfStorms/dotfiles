@@ -7,7 +7,7 @@ let
   declaration = "services/monitoring/beszel-hub.nix";
   nixpkgsBeszel = inputs.beszel-nixpkgs;
   pkgsBeszel = import nixpkgsBeszel {
-    inherit (pkgs) system;
+    inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
 in

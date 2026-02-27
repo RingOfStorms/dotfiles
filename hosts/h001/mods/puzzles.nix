@@ -16,7 +16,7 @@
   };
   services.puzzles-server = {
     enable = true;
-    package = inputs.puzzles.packages.${pkgs.system}.default;
+    package = inputs.puzzles.packages.${pkgs.stdenv.hostPlatform.system}.default;
     settings = {
       http = "127.0.0.1:8093";
     };

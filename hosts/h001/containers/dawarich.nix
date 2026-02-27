@@ -188,7 +188,7 @@ in
               # Dawarich requires PostGIS for geospatial features
               package = pkgs.postgresql_17.withPackages (p: [ p.postgis ]);
               enableJIT = true;
-              extraPlugins = ps: [ ps.postgis ];
+              extensions = ps: [ ps.postgis ];
               authentication = ''
                 local all all trust
                 host all all 127.0.0.1/8 trust

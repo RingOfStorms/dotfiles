@@ -261,13 +261,11 @@ in
           enable = true;
           httpPort = 8008;
 
-          # Load signing key from file (generated on first boot)
-          loadCredential = [ "signing_key:/var/lib/dendrite/matrix_key.pem" ];
-
+          # Use the key directly from the data directory (not LoadCredential)
           settings = {
             global = {
               server_name = serverName;
-              private_key = "$CREDENTIALS_DIRECTORY/signing_key";
+              private_key = "/var/lib/dendrite/matrix_key.pem";
 
               # Security: Disable federation to keep messages private
               # Set to true if you want to chat with users on other Matrix servers
@@ -366,6 +364,16 @@ in
           };
         };
 
+        # Override dendrite service: disable DynamicUser since we use bind-mounted
+        # state directory with a static user
+        systemd.services.dendrite = {
+          serviceConfig = {
+            DynamicUser = lib.mkForce false;
+            User = "dendrite";
+            Group = "dendrite";
+          };
+        };
+
         # Generate Dendrite signing key if it doesn't exist
         systemd.services.dendrite-keygen = {
           description = "Generate Dendrite signing key";
@@ -373,13 +381,12 @@ in
           before = [ "dendrite.service" ];
           serviceConfig = {
             Type = "oneshot";
-            User = "dendrite";
-            Group = "dendrite";
             RemainAfterExit = true;
           };
           script = ''
             if [ ! -f /var/lib/dendrite/matrix_key.pem ]; then
               ${pkgs.dendrite}/bin/generate-keys --private-key /var/lib/dendrite/matrix_key.pem
+              chown dendrite:dendrite /var/lib/dendrite/matrix_key.pem
               chmod 600 /var/lib/dendrite/matrix_key.pem
             fi
           '';
@@ -474,6 +481,19 @@ in
         };
 
         users.groups.mautrix_gmessages = { };
+
+        # Static dendrite user (the NixOS module uses DynamicUser which conflicts
+        # with bind-mounted state directories)
+        users.users.dendrite = {
+          isSystemUser = true;
+          group = "dendrite";
+          home = "/var/lib/dendrite";
+          uid = 993;
+        };
+
+        users.groups.dendrite = {
+          gid = 993;
+        };
 
         # nginx inside container for Element Web
         services.nginx = {

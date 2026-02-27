@@ -8,7 +8,7 @@ let
   declaration = "services/misc/n8n.nix";
   nixpkgsN8n = inputs.n8n-nixpkgs;
   pkgsN8n = import nixpkgsN8n {
-    inherit (pkgs) system;
+    inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
 in
