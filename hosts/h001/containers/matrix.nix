@@ -139,6 +139,15 @@ let
   serverName = "matrix.joshuabell.xyz";
   elementDomain = "element.joshuabell.xyz";
 
+  # Bridge toggles — enable/disable individual bridges
+  enableGmessages = true;
+  enableSignal = true;
+  enableInstagram = false;
+  enableFacebook = false;
+  enableWhatsapp = false;
+  enableDiscord = false;
+  enableTelegram = true;
+
   # Bind mount definitions following forgejo.nix pattern
   binds = [
     {
@@ -165,6 +174,8 @@ let
       uid = 198;
       gid = 198;
     }
+  ]
+  ++ lib.optionals enableGmessages [
     {
       host = "${hostDataDir}/gmessages";
       container = "/var/lib/mautrix_gmessages";
@@ -173,6 +184,8 @@ let
       uid = 992;
       gid = 992;
     }
+  ]
+  ++ lib.optionals enableSignal [
     {
       host = "${hostDataDir}/signal";
       container = "/var/lib/mautrix-signal";
@@ -181,6 +194,8 @@ let
       uid = 991;
       gid = 991;
     }
+  ]
+  ++ lib.optionals enableInstagram [
     {
       host = "${hostDataDir}/meta-instagram";
       container = "/var/lib/mautrix-meta-instagram";
@@ -189,6 +204,8 @@ let
       uid = 990;
       gid = 985;
     }
+  ]
+  ++ lib.optionals enableFacebook [
     {
       host = "${hostDataDir}/meta-facebook";
       container = "/var/lib/mautrix-meta-facebook";
@@ -197,6 +214,8 @@ let
       uid = 989;
       gid = 985;
     }
+  ]
+  ++ lib.optionals enableWhatsapp [
     {
       host = "${hostDataDir}/whatsapp";
       container = "/var/lib/mautrix-whatsapp";
@@ -205,6 +224,8 @@ let
       uid = 988;
       gid = 988;
     }
+  ]
+  ++ lib.optionals enableDiscord [
     {
       host = "${hostDataDir}/discord";
       container = "/var/lib/mautrix-discord";
@@ -213,6 +234,8 @@ let
       uid = 987;
       gid = 987;
     }
+  ]
+  ++ lib.optionals enableTelegram [
     {
       host = "${hostDataDir}/telegram";
       container = "/var/lib/mautrix-telegram";
@@ -399,48 +422,27 @@ in
           package = pkgs.postgresql_17;
           ensureDatabases = [
             "matrix-synapse"
-            "mautrix_gmessages"
-            "mautrix-signal"
-            "mautrix-meta-instagram"
-            "mautrix-meta-facebook"
-            "mautrix-whatsapp"
-            "mautrix-discord"
-            "mautrix-telegram"
-          ];
+          ]
+          ++ lib.optionals enableGmessages [ "mautrix_gmessages" ]
+          ++ lib.optionals enableSignal [ "mautrix-signal" ]
+          ++ lib.optionals enableInstagram [ "mautrix-meta-instagram" ]
+          ++ lib.optionals enableFacebook [ "mautrix-meta-facebook" ]
+          ++ lib.optionals enableWhatsapp [ "mautrix-whatsapp" ]
+          ++ lib.optionals enableDiscord [ "mautrix-discord" ]
+          ++ lib.optionals enableTelegram [ "mautrix-telegram" ];
           ensureUsers = [
             {
               name = "matrix-synapse";
               ensureDBOwnership = true;
             }
-            {
-              name = "mautrix_gmessages";
-              ensureDBOwnership = true;
-            }
-            {
-              name = "mautrix-signal";
-              ensureDBOwnership = true;
-            }
-            {
-              name = "mautrix-meta-instagram";
-              ensureDBOwnership = true;
-            }
-            {
-              name = "mautrix-meta-facebook";
-              ensureDBOwnership = true;
-            }
-            {
-              name = "mautrix-whatsapp";
-              ensureDBOwnership = true;
-            }
-            {
-              name = "mautrix-discord";
-              ensureDBOwnership = true;
-            }
-            {
-              name = "mautrix-telegram";
-              ensureDBOwnership = true;
-            }
-          ];
+          ]
+          ++ lib.optionals enableGmessages [{ name = "mautrix_gmessages"; ensureDBOwnership = true; }]
+          ++ lib.optionals enableSignal [{ name = "mautrix-signal"; ensureDBOwnership = true; }]
+          ++ lib.optionals enableInstagram [{ name = "mautrix-meta-instagram"; ensureDBOwnership = true; }]
+          ++ lib.optionals enableFacebook [{ name = "mautrix-meta-facebook"; ensureDBOwnership = true; }]
+          ++ lib.optionals enableWhatsapp [{ name = "mautrix-whatsapp"; ensureDBOwnership = true; }]
+          ++ lib.optionals enableDiscord [{ name = "mautrix-discord"; ensureDBOwnership = true; }]
+          ++ lib.optionals enableTelegram [{ name = "mautrix-telegram"; ensureDBOwnership = true; }];
           # Only allow local connections - no network access
           enableTCPIP = false;
           authentication = ''
@@ -459,14 +461,14 @@ in
           enable = true;
           databases = [
             "matrix-synapse"
-            "mautrix_gmessages"
-            "mautrix-signal"
-            "mautrix-meta-instagram"
-            "mautrix-meta-facebook"
-            "mautrix-whatsapp"
-            "mautrix-discord"
-            "mautrix-telegram"
-          ];
+          ]
+          ++ lib.optionals enableGmessages [ "mautrix_gmessages" ]
+          ++ lib.optionals enableSignal [ "mautrix-signal" ]
+          ++ lib.optionals enableInstagram [ "mautrix-meta-instagram" ]
+          ++ lib.optionals enableFacebook [ "mautrix-meta-facebook" ]
+          ++ lib.optionals enableWhatsapp [ "mautrix-whatsapp" ]
+          ++ lib.optionals enableDiscord [ "mautrix-discord" ]
+          ++ lib.optionals enableTelegram [ "mautrix-telegram" ];
         };
 
         # Synapse Matrix homeserver
@@ -537,10 +539,10 @@ in
             # Media config
             max_upload_size = "50M";
 
-            # App services (bridges)
-            app_service_config_files = [
-              "/var/lib/mautrix_gmessages/registration.yaml"
-            ];
+            # App services (bridges) — only gmessages needs manual registration;
+            # others use registerToSynapse which adds their files automatically.
+            app_service_config_files =
+              lib.optionals enableGmessages [ "/var/lib/mautrix_gmessages/registration.yaml" ];
 
             # URL previews
             url_preview_enabled = true;
@@ -567,7 +569,7 @@ in
         # All other bridges (signal, meta, whatsapp, discord, telegram) handle
         # their own Synapse integration automatically via registerToSynapse —
         # adds registration files, SupplementaryGroups, and service dependencies.
-        systemd.services.matrix-synapse = {
+        systemd.services.matrix-synapse = lib.mkIf enableGmessages {
           after = [ "mautrix-gmessages-init.service" ];
           wants = [ "mautrix-gmessages-init.service" ];
           serviceConfig = {
@@ -600,7 +602,7 @@ in
         };
 
         # mautrix-gmessages bridge (manual service - no NixOS module exists)
-        systemd.services.mautrix-gmessages = {
+        systemd.services.mautrix-gmessages = lib.mkIf enableGmessages {
           description = "mautrix-gmessages Matrix-Google Messages bridge";
           after = [
             "network.target"
@@ -629,7 +631,7 @@ in
         };
 
         # Generate mautrix-gmessages config if it doesn't exist
-        systemd.services.mautrix-gmessages-init = {
+        systemd.services.mautrix-gmessages-init = lib.mkIf enableGmessages {
           description = "Initialize mautrix-gmessages configuration";
           wantedBy = [ "mautrix-gmessages.service" ];
           before = [
@@ -702,21 +704,21 @@ in
         };
 
         # Create user/group for mautrix_gmessages
-        users.users.mautrix_gmessages = {
+        users.users.mautrix_gmessages = lib.mkIf enableGmessages {
           isSystemUser = true;
           group = "mautrix_gmessages";
           home = "/var/lib/mautrix_gmessages";
           uid = 992;
         };
 
-        users.groups.mautrix_gmessages = {
+        users.groups.mautrix_gmessages = lib.mkIf enableGmessages {
           gid = 992;
         };
 
         # mautrix-signal bridge (uses NixOS module — handles registration,
         # Synapse integration, config generation, and systemd service)
         services.mautrix-signal = {
-          enable = true;
+          enable = enableSignal;
           serviceDependencies = [
             "matrix-synapse.service"
             "postgresql.service"
@@ -761,11 +763,11 @@ in
         # Fix uid/gid for mautrix-signal user — the NixOS module auto-creates
         # the user but with auto-assigned uid. We need stable ids for the bind
         # mount from the host.
-        users.users.mautrix-signal = {
+        users.users.mautrix-signal = lib.mkIf enableSignal {
           uid = lib.mkForce 991;
         };
 
-        users.groups.mautrix-signal = {
+        users.groups.mautrix-signal = lib.mkIf enableSignal {
           gid = lib.mkForce 991;
         };
 
@@ -775,7 +777,7 @@ in
         # registerToSynapse handles appservice registration automatically.
         services.mautrix-meta.instances = {
           instagram = {
-            enable = true;
+            enable = enableInstagram;
             serviceDependencies = [
               "matrix-synapse.service"
               "postgresql.service"
@@ -820,7 +822,7 @@ in
           };
 
           facebook = {
-            enable = true;
+            enable = enableFacebook;
             serviceDependencies = [
               "matrix-synapse.service"
               "postgresql.service"
@@ -868,19 +870,19 @@ in
         # Fix uid/gid for mautrix-meta users — the NixOS module auto-creates
         # per-instance users with shared mautrix-meta group. We need stable ids
         # for the bind mounts from the host.
-        users.users.mautrix-meta-instagram = {
+        users.users.mautrix-meta-instagram = lib.mkIf enableInstagram {
           uid = lib.mkForce 990;
         };
-        users.users.mautrix-meta-facebook = {
+        users.users.mautrix-meta-facebook = lib.mkIf enableFacebook {
           uid = lib.mkForce 989;
         };
-        users.groups.mautrix-meta = {
+        users.groups.mautrix-meta = lib.mkIf (enableInstagram || enableFacebook) {
           gid = lib.mkForce 985;
         };
 
         # mautrix-whatsapp bridge
         services.mautrix-whatsapp = {
-          enable = true;
+          enable = enableWhatsapp;
           serviceDependencies = [
             "matrix-synapse.service"
             "postgresql.service"
@@ -921,16 +923,16 @@ in
           };
         };
 
-        users.users.mautrix-whatsapp = {
+        users.users.mautrix-whatsapp = lib.mkIf enableWhatsapp {
           uid = lib.mkForce 988;
         };
-        users.groups.mautrix-whatsapp = {
+        users.groups.mautrix-whatsapp = lib.mkIf enableWhatsapp {
           gid = lib.mkForce 988;
         };
 
         # mautrix-discord bridge
         services.mautrix-discord = {
-          enable = true;
+          enable = enableDiscord;
           serviceDependencies = [
             "matrix-synapse.service"
             "postgresql.service"
@@ -974,10 +976,10 @@ in
           };
         };
 
-        users.users.mautrix-discord = {
+        users.users.mautrix-discord = lib.mkIf enableDiscord {
           uid = lib.mkForce 987;
         };
-        users.groups.mautrix-discord = {
+        users.groups.mautrix-discord = lib.mkIf enableDiscord {
           gid = lib.mkForce 987;
         };
 
@@ -985,7 +987,7 @@ in
         # Uses SQLAlchemy-style connection strings instead of type/uri objects.
         # Requires Telegram API keys — defaults from mautrix-telegram are used.
         services.mautrix-telegram = {
-          enable = true;
+          enable = enableTelegram;
           serviceDependencies = [
             "matrix-synapse.service"
             "postgresql.service"
@@ -1016,10 +1018,10 @@ in
           };
         };
 
-        users.users.mautrix-telegram = {
+        users.users.mautrix-telegram = lib.mkIf enableTelegram {
           uid = lib.mkForce 986;
         };
-        users.groups.mautrix-telegram = {
+        users.groups.mautrix-telegram = lib.mkIf enableTelegram {
           gid = lib.mkForce 986;
         };
 
@@ -1043,14 +1045,14 @@ in
         # Ensure directories exist with proper permissions
         systemd.tmpfiles.rules = [
           "d /var/lib/matrix-synapse 0750 matrix-synapse matrix-synapse -"
-          "d /var/lib/mautrix_gmessages 0750 mautrix_gmessages mautrix_gmessages -"
-          "d /var/lib/mautrix-signal 0750 mautrix-signal mautrix-signal -"
-          "d /var/lib/mautrix-meta-instagram 0750 mautrix-meta-instagram mautrix-meta -"
-          "d /var/lib/mautrix-meta-facebook 0750 mautrix-meta-facebook mautrix-meta -"
-          "d /var/lib/mautrix-whatsapp 0750 mautrix-whatsapp mautrix-whatsapp -"
-          "d /var/lib/mautrix-discord 0750 mautrix-discord mautrix-discord -"
-          "d /var/lib/mautrix-telegram 0750 mautrix-telegram mautrix-telegram -"
-        ];
+        ]
+        ++ lib.optionals enableGmessages [ "d /var/lib/mautrix_gmessages 0750 mautrix_gmessages mautrix_gmessages -" ]
+        ++ lib.optionals enableSignal [ "d /var/lib/mautrix-signal 0750 mautrix-signal mautrix-signal -" ]
+        ++ lib.optionals enableInstagram [ "d /var/lib/mautrix-meta-instagram 0750 mautrix-meta-instagram mautrix-meta -" ]
+        ++ lib.optionals enableFacebook [ "d /var/lib/mautrix-meta-facebook 0750 mautrix-meta-facebook mautrix-meta -" ]
+        ++ lib.optionals enableWhatsapp [ "d /var/lib/mautrix-whatsapp 0750 mautrix-whatsapp mautrix-whatsapp -" ]
+        ++ lib.optionals enableDiscord [ "d /var/lib/mautrix-discord 0750 mautrix-discord mautrix-discord -" ]
+        ++ lib.optionals enableTelegram [ "d /var/lib/mautrix-telegram 0750 mautrix-telegram mautrix-telegram -" ];
       };
   };
 }
