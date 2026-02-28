@@ -1,11 +1,83 @@
 # SETUP
-# 1. Rebuild and wait for container to start
+# 1. Rebuild and wait for container to start:
+#      sudo nixos-rebuild switch
+#
 # 2. Create accounts:
-#    sudo nixos-container run matrix -- matrix-synapse-register_new_matrix_user -c /var/lib/matrix-synapse/secrets.yaml -u admin -a
-#    sudo nixos-container run matrix -- matrix-synapse-register_new_matrix_user -c /var/lib/matrix-synapse/secrets.yaml -u josh --no-admin
+#      sudo nixos-container run matrix -- matrix-synapse-register_new_matrix_user \
+#        -c /var/lib/matrix-synapse/secrets.yaml -u admin -a
+#      sudo nixos-container run matrix -- matrix-synapse-register_new_matrix_user \
+#        -c /var/lib/matrix-synapse/secrets.yaml -u josh --no-admin
+#
 # 3. Login at https://element.joshuabell.xyz
-# 4. DM @gmessagesbot:matrix.joshuabell.xyz and send "login qr" to pair Google Messages
-# 7. 
+#
+# 4. Pair the bridge:
+#    - DM @gmessagesbot:matrix.joshuabell.xyz and send "login qr"
+#    - Scan QR code with Google Messages on your phone
+#    - Wait for all conversations to sync (network.initial_chat_sync_count = 99999)
+#
+# 5. Login as admin and josh via API (use external URL to avoid container rate limits):
+#      ADMIN_TOKEN=$(jq -n --arg pass '<ADMIN_PASS>' \
+#        '{type:"m.login.password",user:"admin",password:$pass}' | \
+#        curl -s -X POST 'https://matrix.joshuabell.xyz/_matrix/client/v3/login' \
+#        -H 'Content-Type: application/json' -d @- | jq -r '.access_token')
+#
+#      JOSH_TOKEN=$(jq -n --arg pass '<JOSH_PASS>' \
+#        '{type:"m.login.password",user:"josh",password:$pass}' | \
+#        curl -s -X POST 'https://matrix.joshuabell.xyz/_matrix/client/v3/login' \
+#        -H 'Content-Type: application/json' -d @- | jq -r '.access_token')
+#
+# 6. Disable rate limiting for josh (as admin):
+#      curl -s -X POST 'https://matrix.joshuabell.xyz/_synapse/admin/v1/users/@josh:matrix.joshuabell.xyz/override_ratelimit' \
+#        -H "Authorization: Bearer $ADMIN_TOKEN" \
+#        -H 'Content-Type: application/json' \
+#        -d '{"messages_per_second": 0, "burst_count": 0}'
+#
+# 7. Join all pending bridge room invites:
+#      Run scripts/matrix-join-all.sh (prompts for credentials, joins all invited rooms)
+#
+# 8. SMS/MMS Backfill (optional — injects historical messages from Android SMS export):
+#    a. Export SMS from Android using "SMS Backup & Restore" app, copy XML to h001:
+#         scp sms-export.xml h001:/tmp/sms-export.xml
+#
+#    b. Get the appservice token:
+#         sudo nixos-container run matrix -- cat /var/lib/mautrix_gmessages/registration.yaml | grep as_token
+#
+#    c. Generate room map (maps phone numbers to bridge portal rooms):
+#         Build: nix-shell -p go --run 'cd scripts/sms-backfill && go build -o /tmp/generate-room-map-bin ./cmd/generate-room-map'
+#         Run:   /tmp/generate-room-map-bin --admin-token $ADMIN_TOKEN --homeserver https://matrix.joshuabell.xyz > /tmp/room-map.json
+#
+#    d. Stop the bridge before backfilling:
+#         sudo nixos-container run matrix -- systemctl stop mautrix-gmessages
+#
+#    e. Dry run (verify matches, no API calls):
+#         Build: nix-shell -p go --run 'cd scripts/sms-backfill && go build -o /tmp/sms-backfill-bin ./cmd/backfill'
+#         Run:   /tmp/sms-backfill-bin \
+#                  --file /tmp/sms-export.xml \
+#                  --room-map /tmp/room-map.json \
+#                  --homeserver https://matrix.joshuabell.xyz \
+#                  --josh-phone +17202362288 \
+#                  --dry-run
+#
+#    f. Run the actual backfill:
+#         /tmp/sms-backfill-bin \
+#           --file /tmp/sms-export.xml \
+#           --room-map /tmp/room-map.json \
+#           --homeserver https://matrix.joshuabell.xyz \
+#           --josh-phone +17202362288 \
+#           --as-token <AS_TOKEN>
+#       Outgoing messages are sent as the bridge bot (@gmessagesbot) to avoid
+#       the bridge relaying them as real SMS texts.
+#       Groups are matched by sorted comma-separated phone numbers (with Josh's
+#       own number stripped). Conversations without a bridge portal are skipped.
+#
+#    g. Restart the bridge:
+#         sudo nixos-container run matrix -- systemctl start mautrix-gmessages
+#
+# NUCLEAR RESET (wipe everything and start over):
+#   sudo nixos-container stop matrix
+#   sudo rm -rf /var/lib/matrix/*
+#   sudo nixos-rebuild switch
+#   Then redo from step 2.
 {
   config,
   pkgs,
