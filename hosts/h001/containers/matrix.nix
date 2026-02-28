@@ -10,18 +10,51 @@
 #
 # 3. Login at https://element.joshuabell.xyz
 #
-# 4. Pair the Google Messages bridge:
-#    - DM @gmessagesbot:matrix.joshuabell.xyz and send "login qr"
-#    - Scan QR code with Google Messages on your phone
-#    - Wait for all conversations to sync (network.initial_chat_sync_count = 99999)
+# 4. Pair bridges — DM each bot and follow its login flow:
 #
-# 4b. Pair the Signal bridge:
-#    - DM @signalbot:matrix.joshuabell.xyz and send "login"
-#    - The bot responds with a QR code
-#    - On your phone: Signal → Settings → Linked Devices → Link New Device
-#    - Scan the QR code
-#    - Signal will ask if you want to transfer message history — accept for backfill
-#    - Wait for conversations to sync
+#    Google Messages (@gmessagesbot):
+#      - Send "login qr", scan QR with Google Messages on your phone
+#      - Wait for conversations to sync (initial_chat_sync_count = 99999)
+#
+#    Signal (@signalbot):
+#      - Send "login", bot shows QR code
+#      - Phone: Signal → Settings → Linked Devices → Link New Device → scan QR
+#      - Accept message history transfer for backfill
+#
+#    WhatsApp (@whatsappbot):
+#      - Send "login", bot shows QR code
+#      - Phone: WhatsApp → Settings → Linked Devices → Link a Device → scan QR
+#      - Phone must stay online; linked device disconnects after ~2 weeks offline
+#
+#    Instagram (@instagrambot):
+#      - Send "login-cookie"
+#      - In a browser, log into instagram.com, open DevTools (F12) → Network tab
+#      - Make any request, right-click → Copy as cURL
+#      - Paste the full cURL command to the bot
+#      - Meta may flag suspicious activity — use 2FA to reduce risk
+#
+#    Facebook Messenger (@facebookbot):
+#      - Send "login-cookie"
+#      - In a browser, log into messenger.com, open DevTools (F12) → Network tab
+#      - Make any request, right-click → Copy as cURL
+#      - Paste the full cURL command to the bot
+#      - Same cookie-based auth as Instagram; sessions can expire
+#
+#    Discord (@discordbot):
+#      - Send "login-qr", scan QR with Discord mobile app
+#      - OR send "login-token", then paste your Discord auth token
+#        (DevTools → Network → any request → Authorization header)
+#      - Note: user account bridging technically violates Discord ToS
+#      - For guild/server bridging: send "guilds" after login to list servers,
+#        then "guilds bridge <id>" to bridge specific servers
+#
+#    Telegram (@telegrambot):
+#      - Send "login"
+#      - Bot asks for your phone number (international format, e.g. +1234567890)
+#      - Enter the verification code Telegram sends you
+#      - Enter 2FA password if enabled
+#      - Note: Telegram API keys are configured in the bridge config, not at
+#        login time. Default keys from mautrix-telegram are used.
 #
 # 5. Login as admin and josh via API (use external URL to avoid container rate limits):
 #      ADMIN_TOKEN=$(jq -n --arg pass '<ADMIN_PASS>' \
@@ -112,6 +145,7 @@ let
       host = "${hostDataDir}/postgres";
       container = "/var/lib/postgresql/17";
       user = "postgres";
+      group = "postgres";
       uid = 71;
       gid = 71;
     }
@@ -119,6 +153,7 @@ let
       host = "${hostDataDir}/backups";
       container = "/var/backup/postgresql";
       user = "postgres";
+      group = "postgres";
       uid = 71;
       gid = 71;
     }
@@ -126,6 +161,7 @@ let
       host = "${hostDataDir}/synapse";
       container = "/var/lib/matrix-synapse";
       user = "matrix-synapse";
+      group = "matrix-synapse";
       uid = 198;
       gid = 198;
     }
@@ -133,6 +169,7 @@ let
       host = "${hostDataDir}/gmessages";
       container = "/var/lib/mautrix_gmessages";
       user = "mautrix_gmessages";
+      group = "mautrix_gmessages";
       uid = 992;
       gid = 992;
     }
@@ -140,12 +177,54 @@ let
       host = "${hostDataDir}/signal";
       container = "/var/lib/mautrix-signal";
       user = "mautrix-signal";
+      group = "mautrix-signal";
       uid = 991;
       gid = 991;
     }
+    {
+      host = "${hostDataDir}/meta-instagram";
+      container = "/var/lib/mautrix-meta-instagram";
+      user = "mautrix-meta-instagram";
+      group = "mautrix-meta";
+      uid = 990;
+      gid = 985;
+    }
+    {
+      host = "${hostDataDir}/meta-facebook";
+      container = "/var/lib/mautrix-meta-facebook";
+      user = "mautrix-meta-facebook";
+      group = "mautrix-meta";
+      uid = 989;
+      gid = 985;
+    }
+    {
+      host = "${hostDataDir}/whatsapp";
+      container = "/var/lib/mautrix-whatsapp";
+      user = "mautrix-whatsapp";
+      group = "mautrix-whatsapp";
+      uid = 988;
+      gid = 988;
+    }
+    {
+      host = "${hostDataDir}/discord";
+      container = "/var/lib/mautrix-discord";
+      user = "mautrix-discord";
+      group = "mautrix-discord";
+      uid = 987;
+      gid = 987;
+    }
+    {
+      host = "${hostDataDir}/telegram";
+      container = "/var/lib/mautrix-telegram";
+      user = "mautrix-telegram";
+      group = "mautrix-telegram";
+      uid = 986;
+      gid = 986;
+    }
   ];
 
-  uniqueUsers = lib.unique (map (b: { inherit (b) user uid gid; }) binds);
+  uniqueUsers = lib.unique (map (b: { inherit (b) user uid group gid; }) binds);
+  uniqueGroups = lib.unique (map (b: { inherit (b) group gid; }) binds);
 
   # Element Web configuration - points to our server, registration disabled
   elementConfig = {
@@ -198,18 +277,18 @@ in
       value = {
         isSystemUser = true;
         uid = u.uid;
-        group = u.user;
+        group = u.group;
       };
     }) (lib.filter (u: u.user != "postgres") uniqueUsers)
   );
 
   users.groups = lib.listToAttrs (
-    map (u: {
-      name = u.user;
+    map (g: {
+      name = g.group;
       value = {
-        gid = u.gid;
+        gid = g.gid;
       };
-    }) (lib.filter (u: u.user != "postgres") uniqueUsers)
+    }) (lib.filter (g: g.group != "postgres") uniqueGroups)
   );
 
   # nginx reverse proxy on host
@@ -322,6 +401,11 @@ in
             "matrix-synapse"
             "mautrix_gmessages"
             "mautrix-signal"
+            "mautrix-meta-instagram"
+            "mautrix-meta-facebook"
+            "mautrix-whatsapp"
+            "mautrix-discord"
+            "mautrix-telegram"
           ];
           ensureUsers = [
             {
@@ -334,6 +418,26 @@ in
             }
             {
               name = "mautrix-signal";
+              ensureDBOwnership = true;
+            }
+            {
+              name = "mautrix-meta-instagram";
+              ensureDBOwnership = true;
+            }
+            {
+              name = "mautrix-meta-facebook";
+              ensureDBOwnership = true;
+            }
+            {
+              name = "mautrix-whatsapp";
+              ensureDBOwnership = true;
+            }
+            {
+              name = "mautrix-discord";
+              ensureDBOwnership = true;
+            }
+            {
+              name = "mautrix-telegram";
               ensureDBOwnership = true;
             }
           ];
@@ -357,6 +461,11 @@ in
             "matrix-synapse"
             "mautrix_gmessages"
             "mautrix-signal"
+            "mautrix-meta-instagram"
+            "mautrix-meta-facebook"
+            "mautrix-whatsapp"
+            "mautrix-discord"
+            "mautrix-telegram"
           ];
         };
 
@@ -455,9 +564,9 @@ in
         };
 
         # Ensure Synapse waits for gmessages bridge registration and has access.
-        # (mautrix-signal's NixOS module handles its own Synapse integration
-        # automatically via registerToSynapse — adds registration file,
-        # SupplementaryGroups, and service dependencies.)
+        # All other bridges (signal, meta, whatsapp, discord, telegram) handle
+        # their own Synapse integration automatically via registerToSynapse —
+        # adds registration files, SupplementaryGroups, and service dependencies.
         systemd.services.matrix-synapse = {
           after = [ "mautrix-gmessages-init.service" ];
           wants = [ "mautrix-gmessages-init.service" ];
@@ -660,6 +769,260 @@ in
           gid = lib.mkForce 991;
         };
 
+        # mautrix-meta bridges (Instagram + Facebook Messenger)
+        # Uses multi-instance design: services.mautrix-meta.instances.<name>
+        # Pre-configured "instagram" and "facebook" instances with sane defaults.
+        # registerToSynapse handles appservice registration automatically.
+        services.mautrix-meta.instances = {
+          instagram = {
+            enable = true;
+            serviceDependencies = [
+              "matrix-synapse.service"
+              "postgresql.service"
+            ];
+
+            settings = {
+              homeserver.address = "http://localhost:8008";
+              homeserver.domain = serverName;
+
+              database = {
+                type = "postgres";
+                uri = "postgresql:///mautrix-meta-instagram?host=/run/postgresql";
+              };
+
+              appservice = {
+                hostname = "127.0.0.1";
+                port = 29320;
+                id = "meta-instagram";
+                bot.username = "instagrambot";
+                bot.displayname = "Instagram Bridge";
+              };
+
+              bridge = {
+                permissions = {
+                  "${serverName}" = "user";
+                  "@josh:${serverName}" = "admin";
+                };
+              };
+
+              network.mode = "instagram";
+
+              logging = {
+                min_level = "warn";
+                writers = [
+                  {
+                    type = "stdout";
+                    format = "pretty-colored";
+                  }
+                ];
+              };
+            };
+          };
+
+          facebook = {
+            enable = true;
+            serviceDependencies = [
+              "matrix-synapse.service"
+              "postgresql.service"
+            ];
+
+            settings = {
+              homeserver.address = "http://localhost:8008";
+              homeserver.domain = serverName;
+
+              database = {
+                type = "postgres";
+                uri = "postgresql:///mautrix-meta-facebook?host=/run/postgresql";
+              };
+
+              appservice = {
+                hostname = "127.0.0.1";
+                port = 29321;
+                id = "meta-facebook";
+                bot.username = "facebookbot";
+                bot.displayname = "Facebook Messenger Bridge";
+              };
+
+              bridge = {
+                permissions = {
+                  "${serverName}" = "user";
+                  "@josh:${serverName}" = "admin";
+                };
+              };
+
+              network.mode = "messenger";
+
+              logging = {
+                min_level = "warn";
+                writers = [
+                  {
+                    type = "stdout";
+                    format = "pretty-colored";
+                  }
+                ];
+              };
+            };
+          };
+        };
+
+        # Fix uid/gid for mautrix-meta users — the NixOS module auto-creates
+        # per-instance users with shared mautrix-meta group. We need stable ids
+        # for the bind mounts from the host.
+        users.users.mautrix-meta-instagram = {
+          uid = lib.mkForce 990;
+        };
+        users.users.mautrix-meta-facebook = {
+          uid = lib.mkForce 989;
+        };
+        users.groups.mautrix-meta = {
+          gid = lib.mkForce 985;
+        };
+
+        # mautrix-whatsapp bridge
+        services.mautrix-whatsapp = {
+          enable = true;
+          serviceDependencies = [
+            "matrix-synapse.service"
+            "postgresql.service"
+          ];
+
+          settings = {
+            homeserver.address = "http://localhost:8008";
+            homeserver.domain = serverName;
+
+            database = {
+              type = "postgres";
+              uri = "postgresql:///mautrix-whatsapp?host=/run/postgresql";
+            };
+
+            appservice = {
+              hostname = "127.0.0.1";
+              port = 29318;
+              bot.username = "whatsappbot";
+              bot.displayname = "WhatsApp Bridge";
+            };
+
+            bridge = {
+              permissions = {
+                "${serverName}" = "user";
+                "@josh:${serverName}" = "admin";
+              };
+            };
+
+            logging = {
+              min_level = "warn";
+              writers = [
+                {
+                  type = "stdout";
+                  format = "pretty-colored";
+                }
+              ];
+            };
+          };
+        };
+
+        users.users.mautrix-whatsapp = {
+          uid = lib.mkForce 988;
+        };
+        users.groups.mautrix-whatsapp = {
+          gid = lib.mkForce 988;
+        };
+
+        # mautrix-discord bridge
+        services.mautrix-discord = {
+          enable = true;
+          serviceDependencies = [
+            "matrix-synapse.service"
+            "postgresql.service"
+          ];
+
+          settings = {
+            homeserver = {
+              address = "http://localhost:8008";
+              domain = serverName;
+            };
+
+            appservice = {
+              hostname = "127.0.0.1";
+              port = 29334;
+              bot = {
+                username = "discordbot";
+                displayname = "Discord Bridge";
+              };
+              database = {
+                type = "postgres";
+                uri = "postgresql:///mautrix-discord?host=/run/postgresql";
+              };
+            };
+
+            bridge = {
+              permissions = {
+                "${serverName}" = "user";
+                "@josh:${serverName}" = "admin";
+              };
+            };
+
+            logging = {
+              min_level = "warn";
+              writers = [
+                {
+                  type = "stdout";
+                  format = "pretty-colored";
+                }
+              ];
+            };
+          };
+        };
+
+        users.users.mautrix-discord = {
+          uid = lib.mkForce 987;
+        };
+        users.groups.mautrix-discord = {
+          gid = lib.mkForce 987;
+        };
+
+        # mautrix-telegram bridge (Python-based, different config format)
+        # Uses SQLAlchemy-style connection strings instead of type/uri objects.
+        # Requires Telegram API keys — defaults from mautrix-telegram are used.
+        services.mautrix-telegram = {
+          enable = true;
+          serviceDependencies = [
+            "matrix-synapse.service"
+            "postgresql.service"
+          ];
+
+          settings = {
+            homeserver = {
+              address = "http://localhost:8008";
+              domain = serverName;
+            };
+
+            appservice = {
+              hostname = "127.0.0.1";
+              port = 29317;
+              database = "postgresql:///mautrix-telegram?host=/run/postgresql";
+              bot_username = "telegrambot";
+              bot_displayname = "Telegram Bridge";
+            };
+
+            bridge = {
+              permissions = {
+                "${serverName}" = "full";
+                "@josh:${serverName}" = "admin";
+              };
+              # Telegram bridge uses "full" instead of "user" for regular access
+              # (relaybot, user, full, admin are the permission levels)
+            };
+          };
+        };
+
+        users.users.mautrix-telegram = {
+          uid = lib.mkForce 986;
+        };
+        users.groups.mautrix-telegram = {
+          gid = lib.mkForce 986;
+        };
+
         # nginx inside container for Element Web
         services.nginx = {
           enable = true;
@@ -682,6 +1045,11 @@ in
           "d /var/lib/matrix-synapse 0750 matrix-synapse matrix-synapse -"
           "d /var/lib/mautrix_gmessages 0750 mautrix_gmessages mautrix_gmessages -"
           "d /var/lib/mautrix-signal 0750 mautrix-signal mautrix-signal -"
+          "d /var/lib/mautrix-meta-instagram 0750 mautrix-meta-instagram mautrix-meta -"
+          "d /var/lib/mautrix-meta-facebook 0750 mautrix-meta-facebook mautrix-meta -"
+          "d /var/lib/mautrix-whatsapp 0750 mautrix-whatsapp mautrix-whatsapp -"
+          "d /var/lib/mautrix-discord 0750 mautrix-discord mautrix-discord -"
+          "d /var/lib/mautrix-telegram 0750 mautrix-telegram mautrix-telegram -"
         ];
       };
   };
