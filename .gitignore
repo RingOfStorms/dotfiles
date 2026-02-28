@@ -5,3 +5,4 @@ modules/
 **/result
 *.qcow
 **/target
+hosts/h001/_scripts/sms-backfill/sms-backfill

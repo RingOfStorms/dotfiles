@@ -1,10 +1,11 @@
 # SETUP
 # 1. Rebuild and wait for container to start
 # 2. Create accounts:
-#    sudo nixos-container run matrix -- register_new_matrix_user -c /var/lib/matrix-synapse/secrets.yaml http://localhost:8008 -u admin -p <password> -a
-#    sudo nixos-container run matrix -- register_new_matrix_user -c /var/lib/matrix-synapse/secrets.yaml http://localhost:8008 -u josh -p <password> --no-admin
+#    sudo nixos-container run matrix -- matrix-synapse-register_new_matrix_user -c /var/lib/matrix-synapse/secrets.yaml -u admin -a
+#    sudo nixos-container run matrix -- matrix-synapse-register_new_matrix_user -c /var/lib/matrix-synapse/secrets.yaml -u josh --no-admin
 # 3. Login at https://element.joshuabell.xyz
-# 4. DM @gmessagesbot:matrix.joshuabell.xyz and send "login" to pair Google Messages
+# 4. DM @gmessagesbot:matrix.joshuabell.xyz and send "login qr" to pair Google Messages
+# 7. 
 {
   config,
   pkgs,
@@ -325,6 +326,11 @@ in
               remote = { per_second = 100; burst_count = 200; };
             };
             rc_messages = { per_second = 100; burst_count = 200; };
+            rc_login = {
+              address = { per_second = 100; burst_count = 200; };
+              account = { per_second = 100; burst_count = 200; };
+              failed_attempts = { per_second = 100; burst_count = 200; };
+            };
 
             # Media config
             max_upload_size = "50M";
