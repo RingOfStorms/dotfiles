@@ -10,10 +10,18 @@
 #
 # 3. Login at https://element.joshuabell.xyz
 #
-# 4. Pair the bridge:
+# 4. Pair the Google Messages bridge:
 #    - DM @gmessagesbot:matrix.joshuabell.xyz and send "login qr"
 #    - Scan QR code with Google Messages on your phone
 #    - Wait for all conversations to sync (network.initial_chat_sync_count = 99999)
+#
+# 4b. Pair the Signal bridge:
+#    - DM @signalbot:matrix.joshuabell.xyz and send "login"
+#    - The bot responds with a QR code
+#    - On your phone: Signal → Settings → Linked Devices → Link New Device
+#    - Scan the QR code
+#    - Signal will ask if you want to transfer message history — accept for backfill
+#    - Wait for conversations to sync
 #
 # 5. Login as admin and josh via API (use external URL to avoid container rate limits):
 #      ADMIN_TOKEN=$(jq -n --arg pass '<ADMIN_PASS>' \
@@ -127,6 +135,13 @@ let
       user = "mautrix_gmessages";
       uid = 992;
       gid = 992;
+    }
+    {
+      host = "${hostDataDir}/signal";
+      container = "/var/lib/mautrix-signal";
+      user = "mautrix-signal";
+      uid = 991;
+      gid = 991;
     }
   ];
 
@@ -279,9 +294,9 @@ in
       {
         system.stateVersion = "24.11";
 
-        # Allow olm - required by mautrix-gmessages. The security issues are
+        # Allow olm - required by mautrix bridges. The security issues are
         # side-channel attacks on E2EE crypto, but SMS/RCS isn't E2EE through
-        # the bridge anyway (RCS encryption is handled by Google Messages).
+        # the bridge anyway, and Signal E2EE is handled on Signal's side.
         nixpkgs.config.permittedInsecurePackages = [
           "olm-3.2.16"
         ];
@@ -299,13 +314,14 @@ in
 
         services.resolved.enable = true;
 
-        # PostgreSQL for Synapse and mautrix-gmessages
+        # PostgreSQL for Synapse and mautrix bridges
         services.postgresql = {
           enable = true;
           package = pkgs.postgresql_17;
           ensureDatabases = [
             "matrix-synapse"
             "mautrix_gmessages"
+            "mautrix-signal"
           ];
           ensureUsers = [
             {
@@ -314,6 +330,10 @@ in
             }
             {
               name = "mautrix_gmessages";
+              ensureDBOwnership = true;
+            }
+            {
+              name = "mautrix-signal";
               ensureDBOwnership = true;
             }
           ];
@@ -336,6 +356,7 @@ in
           databases = [
             "matrix-synapse"
             "mautrix_gmessages"
+            "mautrix-signal"
           ];
         };
 
@@ -433,7 +454,10 @@ in
           ];
         };
 
-        # Ensure Synapse waits for bridge registration and has access to it
+        # Ensure Synapse waits for gmessages bridge registration and has access.
+        # (mautrix-signal's NixOS module handles its own Synapse integration
+        # automatically via registerToSynapse — adds registration file,
+        # SupplementaryGroups, and service dependencies.)
         systemd.services.matrix-synapse = {
           after = [ "mautrix-gmessages-init.service" ];
           wants = [ "mautrix-gmessages-init.service" ];
@@ -580,6 +604,62 @@ in
           gid = 992;
         };
 
+        # mautrix-signal bridge (uses NixOS module — handles registration,
+        # Synapse integration, config generation, and systemd service)
+        services.mautrix-signal = {
+          enable = true;
+          serviceDependencies = [
+            "matrix-synapse.service"
+            "postgresql.service"
+          ];
+
+          settings = {
+            homeserver.address = "http://localhost:8008";
+            homeserver.domain = serverName;
+
+            database = {
+              type = "postgres";
+              uri = "postgresql:///mautrix-signal?host=/run/postgresql";
+            };
+
+            appservice = {
+              hostname = "127.0.0.1";
+              port = 29328;
+            };
+
+            bridge = {
+              permissions = {
+                "${serverName}" = "user";
+                "@josh:${serverName}" = "admin";
+              };
+              relay.enabled = false;
+            };
+
+            backfill.enabled = true;
+
+            logging = {
+              min_level = "warn";
+              writers = [
+                {
+                  type = "stdout";
+                  format = "pretty-colored";
+                }
+              ];
+            };
+          };
+        };
+
+        # Fix uid/gid for mautrix-signal user — the NixOS module auto-creates
+        # the user but with auto-assigned uid. We need stable ids for the bind
+        # mount from the host.
+        users.users.mautrix-signal = {
+          uid = lib.mkForce 991;
+        };
+
+        users.groups.mautrix-signal = {
+          gid = lib.mkForce 991;
+        };
+
         # nginx inside container for Element Web
         services.nginx = {
           enable = true;
@@ -601,6 +681,7 @@ in
         systemd.tmpfiles.rules = [
           "d /var/lib/matrix-synapse 0750 matrix-synapse matrix-synapse -"
           "d /var/lib/mautrix_gmessages 0750 mautrix_gmessages mautrix_gmessages -"
+          "d /var/lib/mautrix-signal 0750 mautrix-signal mautrix-signal -"
         ];
       };
   };
