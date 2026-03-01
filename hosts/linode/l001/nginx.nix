@@ -1,9 +1,13 @@
 {
+  constants,
   ...
 }:
+let
+  hs = constants.services.headscale;
+in
 {
   security.acme.acceptTerms = true;
-  security.acme.defaults.email = "admin@joshuabell.xyz";
+  security.acme.defaults.email = constants.host.acmeEmail;
   services.nginx = {
     enable = true;
     recommendedGzipSettings = true;
@@ -21,12 +25,12 @@
       #     return = "444";
       #   };
       # };
-      "headscale.joshuabell.xyz" = {
+      "${hs.domain}" = {
         enableACME = true;
         forceSSL = true;
         locations."/" = {
           proxyWebsockets = true;
-          proxyPass = "http://localhost:8080"; # headscale
+          proxyPass = "http://localhost:${toString hs.port}"; # headscale
         };
       };
       "_" = {

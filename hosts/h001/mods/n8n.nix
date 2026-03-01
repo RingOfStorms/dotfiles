@@ -2,6 +2,7 @@
   inputs,
   pkgs,
   lib,
+  constants,
   ...
 }:
 let
@@ -11,6 +12,7 @@ let
     inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
+  c = constants.services.n8n;
 in
 {
   disabledModules = [ declaration ];
@@ -18,7 +20,7 @@ in
   options = { };
   config = {
     services.nginx.virtualHosts = {
-      "n8n.joshuabell.xyz" = {
+      "${c.domain}" = {
         addSSL = true;
         sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
         sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
@@ -26,7 +28,7 @@ in
           "/" = {
             proxyWebsockets = true;
             recommendedProxySettings = true;
-            proxyPass = "http://127.0.0.1:5678";
+            proxyPass = "http://127.0.0.1:${toString c.port}";
           };
         };
       };
@@ -40,9 +42,9 @@ in
     systemd.services.n8n.environment = {
       # N8N_SECURE_COOKIE = "false";
       N8N_LISTEN_ADDRESS = "127.0.0.1";
-      N8N_EDITOR_BASE_URL = "https://n8n.joshuabell.xyz/";
-      N8N_HOST = "n8n.joshuabell.xyz";
-      VUE_APP_URL_BASE_API = "https://n8n.joshuabell.xyz/";
+      N8N_EDITOR_BASE_URL = "https://${c.domain}/";
+      N8N_HOST = c.domain;
+      VUE_APP_URL_BASE_API = "https://${c.domain}/";
       N8N_HIRING_BANNER_ENABLED = "false";
       # N8N_PUBLIC_API_DISABLED = "true";
       # N8N_PUBLIC_API_SWAGGERUI_DISABLED = "true";

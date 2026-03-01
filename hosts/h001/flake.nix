@@ -45,9 +45,10 @@
       ...
     }@inputs:
     let
-      configuration_name = "h001";
-      stateVersion = "24.11";
-      primaryUser = "luser";
+      constants = import ./_constants.nix;
+      configuration_name = constants.host.name;
+      stateVersion = constants.host.stateVersion;
+      primaryUser = constants.host.primaryUser;
       lib = nixpkgs.lib;
     in
     {
@@ -55,7 +56,7 @@
         "${configuration_name}" = (
           lib.nixosSystem {
             specialArgs = {
-              inherit inputs;
+              inherit inputs constants;
             };
             modules = [
               home-manager.nixosModules.default

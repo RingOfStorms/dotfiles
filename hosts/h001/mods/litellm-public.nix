@@ -2,6 +2,7 @@
   inputs,
   pkgs,
   lib,
+  constants,
   ...
 }:
 # NOTE this won't work on its own without the main litellm.nix file this is sort of a side car
@@ -11,7 +12,7 @@ let
     inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
-  port = 8095;
+  c = constants.services.litellmPublic;
 
   azureModels = [
     "gpt-5.2-2025-12-11"
@@ -27,7 +28,7 @@ in
 {
   options = { };
   config = {
-    networking.firewall.interfaces."tailscale0".allowedTCPPorts = [ port ];
+    networking.firewall.interfaces."tailscale0".allowedTCPPorts = [ c.port ];
 
     systemd.services.litellm-public = {
       description = "LiteLLM Exposed Proxy (limited model set)";
@@ -38,8 +39,8 @@ in
         SCARF_NO_ANALYTICS = "True";
         DO_NOT_TRACK = "True";
         ANONYMIZED_TELEMETRY = "False";
-        GITHUB_COPILOT_TOKEN_DIR = "/var/lib/litellm-public/github_copilot";
-        XDG_CONFIG_HOME = "/var/lib/litellm-public/.config";
+        GITHUB_COPILOT_TOKEN_DIR = "${c.dataDir}/github_copilot";
+        XDG_CONFIG_HOME = "${c.dataDir}/.config";
       };
 
       serviceConfig = {
@@ -47,7 +48,7 @@ in
         User = "litellm-public";
         Group = "litellm-public";
         StateDirectory = "litellm-public";
-        ExecStart = "${pkgsLitellm.litellm}/bin/litellm --config /etc/litellm-public/config.yaml --host 0.0.0.0 --port ${toString port}";
+        ExecStart = "${pkgsLitellm.litellm}/bin/litellm --config /etc/litellm-public/config.yaml --host 0.0.0.0 --port ${toString c.port}";
         Restart = "always";
         RestartSec = 5;
       };

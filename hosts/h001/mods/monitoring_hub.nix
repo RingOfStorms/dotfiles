@@ -1,6 +1,7 @@
 {
   inputs,
   pkgs,
+  constants,
   ...
 }:
 let
@@ -10,6 +11,8 @@ let
     inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
+  c = constants.services.beszelHub;
+  overlayIp = constants.host.overlayIp;
 in
 {
   disabledModules = [ declaration ];
@@ -18,8 +21,8 @@ in
     services.beszel.hub = {
       package = pkgsBeszel.beszel;
       enable = true;
-      port = 8090;
-      host = "100.64.0.13";
+      port = c.port;
+      host = overlayIp;
       environment = {
         # DISABLE_PASSWORD_AUTH = "true"; # Once sso is setup
       };

@@ -2,26 +2,16 @@
   config,
   pkgs,
   lib,
+  constants,
   ...
 }:
 let
+  ups = constants.services.ups;
+
   # Remote hosts to shut down before this machine, in order.
   # Each entry specifies the SSH connection details explicitly so the
   # shutdown script works as root without depending on any user's SSH config.
-  remoteHosts = [
-    {
-      name = "h001";
-      host = "10.12.14.10";
-      user = "luser";
-      keyFile = "/run/agenix/nix2h001";
-    }
-    {
-      name = "h002";
-      host = "10.12.14.183";
-      user = "luser";
-      keyFile = "/run/agenix/nix2nix";
-    }
-  ];
+  remoteHosts = ups.remoteShutdownHosts;
 
   shutdownScript = pkgs.writeShellScript "ups-shutdown" ''
     export PATH="${lib.makeBinPath (with pkgs; [ openssh coreutils systemd ])}:$PATH"
@@ -74,12 +64,12 @@ in
     mode = "standalone";
 
     ups.apc = {
-      driver = "usbhid-ups";
+      driver = ups.driver;
       port = "auto";
-      description = "APC Back-UPS XS 1500M";
+      description = ups.description;
       directives = [
-        "vendorid = 051D"
-        "productid = 0002"
+        "vendorid = ${ups.vendorId}"
+        "productid = ${ups.productId}"
         "pollinterv = 15"
       ];
     };
@@ -156,6 +146,6 @@ in
 
   # Ensure NUT can access the USB device
   services.udev.extraRules = ''
-    SUBSYSTEM=="usb", ATTR{idVendor}=="051d", ATTR{idProduct}=="0002", MODE="0660", GROUP="nut"
+    SUBSYSTEM=="usb", ATTR{idVendor}=="${lib.toLower ups.vendorId}", ATTR{idProduct}=="${lib.toLower ups.productId}", MODE="0660", GROUP="nut"
   '';
 }

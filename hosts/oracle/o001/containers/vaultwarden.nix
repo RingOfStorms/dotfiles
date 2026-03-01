@@ -1,15 +1,17 @@
 {
   config,
+  constants,
   lib,
   ...
 }:
 let
+  vw = constants.services.vaultwarden;
   name = "vaultwarden";
   user = name;
-  uid = 114;
-  hostDataDir = "/var/lib/${name}";
+  uid = vw.uid;
+  hostDataDir = vw.dataDir;
 
-  v_port = 8222;
+  v_port = vw.port;
   
   hasSecret =
     secret:
@@ -71,7 +73,7 @@ in
           backupDir = "/var/lib/backups/vaultwarden";
           environmentFile = "/var/secrets/vaultwarden.env";
           config = {
-            DOMAIN = "https://vault.joshuabell.xyz";
+            DOMAIN = "https://${vw.domain}";
             SIGNUPS_ALLOWED = false;
             ROCKET_PORT = builtins.toString v_port;
             ROCKET_ADDRESS = "127.0.0.1";
@@ -80,7 +82,7 @@ in
       };
   };
 
-  services.nginx.virtualHosts."vault.joshuabell.xyz" = lib.mkIf (hasSecret "vaultwarden_env") {
+  services.nginx.virtualHosts."${vw.domain}" = lib.mkIf (hasSecret "vaultwarden_env") {
     enableACME = true;
     forceSSL = true;
     locations = {

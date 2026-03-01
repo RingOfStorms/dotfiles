@@ -1,11 +1,13 @@
 {
+  constants,
   ...
 }:
 let
   name = "opengist";
-  hostDataDir = "/var/lib/${name}";
+  c = constants.services.opengist;
+  hostDataDir = c.dataDir;
 
-  v_port = 6157;
+  v_port = c.port;
 in
 {
   virtualisation.oci-containers.containers = {
@@ -28,7 +30,7 @@ in
     chmod -R 777 ${hostDataDir}
   '';
 
-  services.nginx.virtualHosts."gist.joshuabell.xyz" = {
+  services.nginx.virtualHosts."${c.domain}" = {
     addSSL = true;
     sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
     sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";

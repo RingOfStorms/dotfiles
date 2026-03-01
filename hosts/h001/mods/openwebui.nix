@@ -3,6 +3,7 @@
   config,
   pkgs,
   lib,
+  constants,
   ...
 }:
 let
@@ -18,13 +19,15 @@ let
       secrets = config.age.secrets or { };
     in
     secrets ? ${secret} && secrets.${secret} != null;
+  c = constants.services.openWebui;
+  zitadel = constants.services.zitadel;
 in
 {
   disabledModules = [ declaration ];
   imports = [ "${nixpkgsOpenWebui}/nixos/modules/${declaration}" ];
   options = { };
   config = lib.mkIf (hasSecret "openwebui_env") {
-    services.nginx.virtualHosts."chat.joshuabell.xyz" = {
+    services.nginx.virtualHosts."${c.domain}" = {
       addSSL = true;
       sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
       sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
@@ -32,7 +35,7 @@ in
         "/" = {
           proxyWebsockets = true;
           recommendedProxySettings = true;
-          proxyPass = "http://127.0.0.1:8084";
+          proxyPass = "http://127.0.0.1:${toString c.port}";
           extraConfig = ''
             proxy_set_header X-Forwarded-Proto https;
           '';
@@ -42,7 +45,7 @@ in
 
     services.open-webui = {
       enable = true;
-      port = 8084;
+      port = c.port;
       host = "127.0.0.1";
       openFirewall = false;
       package = pkgsOpenWebui.open-webui;
@@ -52,7 +55,7 @@ in
         # ENABLE_PERSISTENT_CONFIG = "False";
         # ENABLE_OAUTH_PERSISTENT_CONFIG = "False";
 
-        WEBUI_URL = "https://chat.joshuabell.xyz";
+        WEBUI_URL = "https://${c.domain}";
         CUSTOM_NAME = "Josh AI";
         ENV = "prod";
 
@@ -66,9 +69,9 @@ in
         # https://self-hosted.tools/p/openwebui-with-zitadel-oidc/
         # OAUTH_CLIENT_ID = ""; provided in the secret file
         # OAUTH_CLIENT_SECRET = "";
-        OPENID_PROVIDER_URL = "https://sso.joshuabell.xyz/.well-known/openid-configuration";
+        OPENID_PROVIDER_URL = "https://${zitadel.domain}/.well-known/openid-configuration";
         OAUTH_PROVIDER_NAME = "SSO";
-        OPENID_REDIRECT_URI = "https://chat.joshuabell.xyz/oauth/oidc/callback";
+        OPENID_REDIRECT_URI = "https://${c.domain}/oauth/oidc/callback";
         OAUTH_SCOPES = "openid email profiles";
         ENABLE_OAUTH_ROLE_MANAGEMENT = "true";
         OAUTH_ROLES_CLAIM = "flatRolesClaim";

@@ -1,12 +1,15 @@
 {
   config,
   lib,
+  constants,
   ...
 }:
 let
+  c = constants.host;
+  homepagePort = constants.services.homepage.port;
   homepage = {
     proxyWebsockets = true;
-    proxyPass = "http://localhost:8082";
+    proxyPass = "http://localhost:${toString homepagePort}";
   };
   hasSecret =
     secret:
@@ -20,10 +23,10 @@ in
   # Will I ever get rate limited by lets encrypt with both doing their own?
   security.acme = lib.mkIf (hasSecret "linode_rw_domains") {
     acceptTerms = true;
-    defaults.email = "admin@joshuabell.xyz";
-    certs."joshuabell.xyz" = {
-      domain = "joshuabell.xyz";
-      extraDomainNames = [ "*.joshuabell.xyz" ];
+    defaults.email = c.acmeEmail;
+    certs."${c.domain}" = {
+      domain = c.domain;
+      extraDomainNames = [ "*.${c.domain}" ];
       credentialFiles = {
         LINODE_TOKEN_FILE = config.age.secrets.linode_rw_domains.path;
       };
@@ -40,24 +43,24 @@ in
     recommendedTlsSettings = true;
     clientMaxBodySize = "500m";
     virtualHosts = {
-      "10.12.14.10" = {
+      "${c.lanIp}" = {
         locations = {
           "/" = {
-            return = "301 http://h001.local.joshuabell.xyz";
+            return = "301 http://h001.local.${c.domain}";
           };
         };
       };
-      "h001.local.joshuabell.xyz" = {
+      "h001.local.${c.domain}" = {
         locations = {
           "/" = homepage;
         };
       };
-      "100.64.0.13" = {
+      "${c.overlayIp}" = {
         locations."/" = {
-          return = "301 http://h001.net.joshuabell.xyz";
+          return = "301 http://h001.net.${c.domain}";
         };
       };
-      "h001.net.joshuabell.xyz" = {
+      "h001.net.${c.domain}" = {
         locations = {
           "/" = homepage;
         };

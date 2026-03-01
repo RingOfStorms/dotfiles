@@ -1,6 +1,12 @@
 {
+  constants,
   ...
 }:
+let
+  net = constants.containerNetwork;
+  wasabi = constants.services.wasabi;
+  ntest = constants.services.ntest;
+in
 {
   imports = [
     ./dawarich.nix
@@ -27,8 +33,8 @@
       ephemeral = true;
       autoStart = true;
       privateNetwork = true;
-      hostAddress = "10.0.0.1";
-      localAddress = "10.0.0.111";
+      hostAddress = net.hostAddress;
+      localAddress = wasabi.containerIp;
       config =
         { config, pkgs, ... }:
         {
@@ -46,7 +52,7 @@
       ntest = {
         image = "nginx:alpine";
         ports = [
-          "127.0.0.1:8085:80"
+          "127.0.0.1:${toString ntest.port}:80"
         ];
       };
     };
@@ -57,7 +63,7 @@
       virtualHosts = {
         "localhost" = {
           locations."/" = {
-            proxyPass = "http://10.0.0.111";
+            proxyPass = "http://${wasabi.containerIp}";
           };
         };
       };

@@ -1,7 +1,11 @@
 {
   pkgs,
+  constants,
   ...
 }:
+let
+  nixServe = constants.services.nixServe;
+in
 {
   system.stateVersion = "23.11";
 
@@ -42,9 +46,9 @@
     nix-serve = {
       enable = true;
       package = pkgs.nix-serve-ng;
-      port = 5000;
+      port = nixServe.port;
       # openFirewall = true;
-      secretKeyFile = "/var/lib/nix-serve/cache-priv-key.pem";
+      secretKeyFile = nixServe.secretKeyFile;
     };
   };
 

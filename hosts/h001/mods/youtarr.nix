@@ -1,17 +1,12 @@
 {
   lib,
   config,
+  constants,
   ...
 }:
 let
   name = "youtarr";
-  gid = 187;
-  uid = 187;
-  port = 3087;
-  internalPort = 3011;
-  dbPort = 3321;
-  hostDataDir = "/var/lib/${name}";
-  mediaDir = "/nfs/h002/${name}/media";
+  c = constants.services.youtarr;
 in
 {
   config = lib.mkIf config.nixarr.enable {
@@ -19,16 +14,16 @@ in
       "${name}" = {
         image = "dialmaster/youtarr:latest";
         volumes = [
-          "${hostDataDir}/config:/app/config"
-          "${hostDataDir}/images:/app/server/images"
-          "${hostDataDir}/jobs:/app/jobs"
-          "${mediaDir}:/usr/src/app/data"
+          "${c.dataDir}/config:/app/config"
+          "${c.dataDir}/images:/app/server/images"
+          "${c.dataDir}/jobs:/app/jobs"
+          "${c.mediaDir}:/usr/src/app/data"
         ];
         environment = {
-          PUID = toString uid;
-          PGID = toString gid;
+          PUID = toString c.uid;
+          PGID = toString c.gid;
           DB_HOST = "127.0.0.1";
-          DB_PORT = toString dbPort;
+          DB_PORT = toString c.dbPort;
           DB_USER = "root";
           DB_PASSWORD = "123qweasd";
           DB_NAME = name;
@@ -40,7 +35,7 @@ in
       "${name}-db" = {
         image = "mariadb:10.3";
         volumes = [
-          "${hostDataDir}/database:/var/lib/mysql"
+          "${c.dataDir}/database:/var/lib/mysql"
         ];
         environment = {
           MYSQL_ROOT_PASSWORD = "123qweasd";
@@ -48,7 +43,7 @@ in
         };
         extraOptions = [ "--network=host" ];
         cmd = [
-          "--port=${toString dbPort}"
+          "--port=${toString c.dbPort}"
           "--character-set-server=utf8mb4"
           "--collation-server=utf8mb4_unicode_ci"
         ];
@@ -56,21 +51,21 @@ in
     };
 
     users = {
-      groups.${name}.gid = gid;
+      groups.${name}.gid = c.gid;
       users.${name} = {
         isSystemUser = true;
         group = name;
-        uid = uid;
+        uid = c.uid;
       };
     };
 
     systemd.tmpfiles.rules = [
-      "d '${hostDataDir}' 0775 ${name} ${name} - -"
-      "d '${hostDataDir}/config' 0775 ${name} ${name} - -"
-      "d '${hostDataDir}/images' 0775 ${name} ${name} - -"
-      "d '${hostDataDir}/jobs' 0775 ${name} ${name} - -"
-      "d '${hostDataDir}/database' 0775 999 999 - -"
-      "d '${mediaDir}' 0775 ${name} ${name} - -"
+      "d '${c.dataDir}' 0775 ${name} ${name} - -"
+      "d '${c.dataDir}/config' 0775 ${name} ${name} - -"
+      "d '${c.dataDir}/images' 0775 ${name} ${name} - -"
+      "d '${c.dataDir}/jobs' 0775 ${name} ${name} - -"
+      "d '${c.dataDir}/database' 0775 999 999 - -"
+      "d '${c.mediaDir}' 0775 ${name} ${name} - -"
     ];
 
     # Both containers run in the VPN namespace so they share localhost
@@ -86,8 +81,8 @@ in
 
     vpnNamespaces.wg.portMappings = [
       {
-        from = internalPort;
-        to = internalPort;
+        from = c.internalPort;
+        to = c.internalPort;
       }
     ];
 
@@ -97,13 +92,13 @@ in
           serverName = "h001.net.joshuabell.xyz";
           listen = [
             {
-              port = port;
+              port = c.externalPort;
               addr = "0.0.0.0";
             }
           ];
           locations."/" = {
             proxyWebsockets = true;
-            proxyPass = "http://192.168.15.1:${toString internalPort}";
+            proxyPass = "http://192.168.15.1:${toString c.internalPort}";
           };
         };
       };

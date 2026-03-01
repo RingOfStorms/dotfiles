@@ -35,16 +35,20 @@
       ...
     }@inputs:
     let
-      configuration_name = "oren";
-      stateVersion = "25.05";
-      primaryUser = "josh";
-      overlayIp = "100.64.0.5";
+      constants = import ./_constants.nix;
+      configuration_name = constants.host.name;
+      stateVersion = constants.host.stateVersion;
+      primaryUser = constants.host.primaryUser;
+      overlayIp = constants.host.overlayIp;
       lib = nixpkgs.lib;
     in
     {
       nixosConfigurations = {
         "${configuration_name}" = (
           lib.nixosSystem {
+            specialArgs = {
+              inherit inputs constants;
+            };
             modules = [
               ({
                 nixpkgs.overlays = [

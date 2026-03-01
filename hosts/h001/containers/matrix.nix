@@ -120,6 +120,7 @@
 #   sudo nixos-rebuild switch
 #   Then redo from step 2.
 {
+  constants,
   config,
   pkgs,
   lib,
@@ -128,25 +129,29 @@
 }:
 let
   name = "matrix";
-  hostDataDir = "/var/lib/${name}";
-  hostAddress = "10.0.0.1";
-  containerAddress = "10.0.0.6";
+  c = constants.services.matrix;
+  net = constants.containerNetwork;
+  bridges = c.bridges;
+
+  hostDataDir = c.dataDir;
+  hostAddress = net.hostAddress;
+  containerAddress = c.containerIp;
 
   # Use unstable nixpkgs for the container (mautrix-gmessages not in stable)
   matrixNixpkgs = inputs.matrix-nixpkgs;
 
   # Matrix server configuration
-  serverName = "matrix.joshuabell.xyz";
-  elementDomain = "element.joshuabell.xyz";
+  serverName = c.serverName;
+  elementDomain = c.elementDomain;
 
   # Bridge toggles — enable/disable individual bridges
-  enableGmessages = true;
-  enableSignal = true;
-  enableInstagram = false;
-  enableFacebook = false;
-  enableWhatsapp = false;
-  enableDiscord = true;
-  enableTelegram = false;  # requires telegram.api_id/api_hash from https://my.telegram.org
+  enableGmessages = bridges.gmessages.enabled;
+  enableSignal = bridges.signal.enabled;
+  enableInstagram = bridges.instagram.enabled;
+  enableFacebook = bridges.facebook.enabled;
+  enableWhatsapp = bridges.whatsapp.enabled;
+  enableDiscord = bridges.discord.enabled;
+  enableTelegram = bridges.telegram.enabled;
 
   # Bind mount definitions following forgejo.nix pattern
   binds = [
@@ -155,24 +160,24 @@ let
       container = "/var/lib/postgresql/17";
       user = "postgres";
       group = "postgres";
-      uid = 71;
-      gid = 71;
+      uid = c.postgresUid;
+      gid = c.postgresGid;
     }
     {
       host = "${hostDataDir}/backups";
       container = "/var/backup/postgresql";
       user = "postgres";
       group = "postgres";
-      uid = 71;
-      gid = 71;
+      uid = c.postgresUid;
+      gid = c.postgresGid;
     }
     {
       host = "${hostDataDir}/synapse";
       container = "/var/lib/matrix-synapse";
       user = "matrix-synapse";
       group = "matrix-synapse";
-      uid = 198;
-      gid = 198;
+      uid = c.synapseUid;
+      gid = c.synapseGid;
     }
   ]
   ++ lib.optionals enableGmessages [
@@ -181,8 +186,8 @@ let
       container = "/var/lib/mautrix_gmessages";
       user = "mautrix_gmessages";
       group = "mautrix_gmessages";
-      uid = 992;
-      gid = 992;
+      uid = bridges.gmessages.uid;
+      gid = bridges.gmessages.gid;
     }
   ]
   ++ lib.optionals enableSignal [
@@ -191,8 +196,8 @@ let
       container = "/var/lib/mautrix-signal";
       user = "mautrix-signal";
       group = "mautrix-signal";
-      uid = 991;
-      gid = 991;
+      uid = bridges.signal.uid;
+      gid = bridges.signal.gid;
     }
   ]
   ++ lib.optionals enableInstagram [
@@ -201,8 +206,8 @@ let
       container = "/var/lib/mautrix-meta-instagram";
       user = "mautrix-meta-instagram";
       group = "mautrix-meta";
-      uid = 990;
-      gid = 985;
+      uid = bridges.instagram.uid;
+      gid = bridges.instagram.gid;
     }
   ]
   ++ lib.optionals enableFacebook [
@@ -211,8 +216,8 @@ let
       container = "/var/lib/mautrix-meta-facebook";
       user = "mautrix-meta-facebook";
       group = "mautrix-meta";
-      uid = 989;
-      gid = 985;
+      uid = bridges.facebook.uid;
+      gid = bridges.facebook.gid;
     }
   ]
   ++ lib.optionals enableWhatsapp [
@@ -221,8 +226,8 @@ let
       container = "/var/lib/mautrix-whatsapp";
       user = "mautrix-whatsapp";
       group = "mautrix-whatsapp";
-      uid = 988;
-      gid = 988;
+      uid = bridges.whatsapp.uid;
+      gid = bridges.whatsapp.gid;
     }
   ]
   ++ lib.optionals enableDiscord [
@@ -231,8 +236,8 @@ let
       container = "/var/lib/mautrix-discord";
       user = "mautrix-discord";
       group = "mautrix-discord";
-      uid = 987;
-      gid = 987;
+      uid = bridges.discord.uid;
+      gid = bridges.discord.gid;
     }
   ]
   ++ lib.optionals enableTelegram [
@@ -241,8 +246,8 @@ let
       container = "/var/lib/mautrix-telegram";
       user = "mautrix-telegram";
       group = "mautrix-telegram";
-      uid = 986;
-      gid = 986;
+      uid = bridges.telegram.uid;
+      gid = bridges.telegram.gid;
     }
   ];
 
@@ -340,7 +345,7 @@ in
 
       # Matrix client API
       locations."/_matrix" = {
-        proxyPass = "http://${containerAddress}:8008";
+        proxyPass = "http://${containerAddress}:${toString c.synapsePort}";
         proxyWebsockets = true;
         extraConfig = ''
           proxy_read_timeout 600s;
@@ -350,7 +355,7 @@ in
 
       # Synapse admin API
       locations."/_synapse" = {
-        proxyPass = "http://${containerAddress}:8008";
+        proxyPass = "http://${containerAddress}:${toString c.synapsePort}";
         proxyWebsockets = true;
       };
 
@@ -366,7 +371,7 @@ in
       useACMEHost = "joshuabell.xyz";
 
       locations."/" = {
-        proxyPass = "http://${containerAddress}:80";
+        proxyPass = "http://${containerAddress}:${toString c.elementPort}";
         proxyWebsockets = true;
       };
     };
@@ -431,8 +436,8 @@ in
           firewall = {
             enable = true;
             allowedTCPPorts = [
-              8008 # Synapse Matrix API
-              80 # Element Web (nginx)
+              c.synapsePort # Synapse Matrix API
+              c.elementPort # Element Web (nginx)
             ];
           };
           useHostResolvConf = lib.mkForce false;
@@ -506,7 +511,7 @@ in
             # Listeners - client only, no federation
             listeners = [
               {
-                port = 8008;
+                port = c.synapsePort;
                 bind_addresses = [ "0.0.0.0" ];
                 type = "http";
                 tls = false;
@@ -684,12 +689,12 @@ in
 
               # Patch the generated config with our settings using bridgev2 field paths
               ${pkgs.yq-go}/bin/yq -i '
-                .homeserver.address = "http://localhost:8008" |
+                .homeserver.address = "http://localhost:${toString c.synapsePort}" |
                 .homeserver.domain = "${serverName}" |
                 .database.type = "postgres" |
                 .database.uri = "postgresql:///mautrix_gmessages?host=/run/postgresql" |
                 .appservice.hostname = "127.0.0.1" |
-                .appservice.port = 29336 |
+                .appservice.port = ${toString bridges.gmessages.port} |
                 .appservice.id = "gmessages" |
                 .appservice.bot.username = "gmessagesbot" |
                 .appservice.bot.displayname = "Google Messages Bridge" |
@@ -732,11 +737,11 @@ in
           isSystemUser = true;
           group = "mautrix_gmessages";
           home = "/var/lib/mautrix_gmessages";
-          uid = 992;
+          uid = bridges.gmessages.uid;
         };
 
         users.groups.mautrix_gmessages = lib.mkIf enableGmessages {
-          gid = 992;
+          gid = bridges.gmessages.gid;
         };
 
         # mautrix-signal bridge (uses NixOS module — handles registration,
@@ -749,7 +754,7 @@ in
           ];
 
           settings = {
-            homeserver.address = "http://localhost:8008";
+            homeserver.address = "http://localhost:${toString c.synapsePort}";
             homeserver.domain = serverName;
 
             database = {
@@ -759,7 +764,7 @@ in
 
             appservice = {
               hostname = "127.0.0.1";
-              port = 29328;
+              port = bridges.signal.port;
             };
 
             bridge = {
@@ -788,11 +793,11 @@ in
         # the user but with auto-assigned uid. We need stable ids for the bind
         # mount from the host.
         users.users.mautrix-signal = lib.mkIf enableSignal {
-          uid = lib.mkForce 991;
+          uid = lib.mkForce bridges.signal.uid;
         };
 
         users.groups.mautrix-signal = lib.mkIf enableSignal {
-          gid = lib.mkForce 991;
+          gid = lib.mkForce bridges.signal.gid;
         };
 
         # mautrix-meta bridges (Instagram + Facebook Messenger)
@@ -808,7 +813,7 @@ in
             ];
 
             settings = {
-              homeserver.address = "http://localhost:8008";
+              homeserver.address = "http://localhost:${toString c.synapsePort}";
               homeserver.domain = serverName;
 
               database = {
@@ -818,7 +823,7 @@ in
 
               appservice = {
                 hostname = "127.0.0.1";
-                port = 29320;
+                port = bridges.instagram.port;
                 id = "meta-instagram";
                 bot.username = "instagrambot";
                 bot.displayname = "Instagram Bridge";
@@ -853,7 +858,7 @@ in
             ];
 
             settings = {
-              homeserver.address = "http://localhost:8008";
+              homeserver.address = "http://localhost:${toString c.synapsePort}";
               homeserver.domain = serverName;
 
               database = {
@@ -863,7 +868,7 @@ in
 
               appservice = {
                 hostname = "127.0.0.1";
-                port = 29321;
+                port = bridges.facebook.port;
                 id = "meta-facebook";
                 bot.username = "facebookbot";
                 bot.displayname = "Facebook Messenger Bridge";
@@ -895,13 +900,13 @@ in
         # per-instance users with shared mautrix-meta group. We need stable ids
         # for the bind mounts from the host.
         users.users.mautrix-meta-instagram = lib.mkIf enableInstagram {
-          uid = lib.mkForce 990;
+          uid = lib.mkForce bridges.instagram.uid;
         };
         users.users.mautrix-meta-facebook = lib.mkIf enableFacebook {
-          uid = lib.mkForce 989;
+          uid = lib.mkForce bridges.facebook.uid;
         };
         users.groups.mautrix-meta = lib.mkIf (enableInstagram || enableFacebook) {
-          gid = lib.mkForce 985;
+          gid = lib.mkForce bridges.instagram.gid;
         };
 
         # mautrix-whatsapp bridge
@@ -913,7 +918,7 @@ in
           ];
 
           settings = {
-            homeserver.address = "http://localhost:8008";
+            homeserver.address = "http://localhost:${toString c.synapsePort}";
             homeserver.domain = serverName;
 
             database = {
@@ -923,7 +928,7 @@ in
 
             appservice = {
               hostname = "127.0.0.1";
-              port = 29318;
+              port = bridges.whatsapp.port;
               bot.username = "whatsappbot";
               bot.displayname = "WhatsApp Bridge";
             };
@@ -948,10 +953,10 @@ in
         };
 
         users.users.mautrix-whatsapp = lib.mkIf enableWhatsapp {
-          uid = lib.mkForce 988;
+          uid = lib.mkForce bridges.whatsapp.uid;
         };
         users.groups.mautrix-whatsapp = lib.mkIf enableWhatsapp {
-          gid = lib.mkForce 988;
+          gid = lib.mkForce bridges.whatsapp.gid;
         };
 
         # mautrix-discord bridge
@@ -964,13 +969,13 @@ in
 
           settings = {
             homeserver = {
-              address = "http://localhost:8008";
+              address = "http://localhost:${toString c.synapsePort}";
               domain = serverName;
             };
 
             appservice = {
               hostname = "127.0.0.1";
-              port = 29334;
+              port = bridges.discord.port;
               bot = {
                 username = "discordbot";
                 displayname = "Discord Bridge";
@@ -1001,10 +1006,10 @@ in
         };
 
         users.users.mautrix-discord = lib.mkIf enableDiscord {
-          uid = lib.mkForce 987;
+          uid = lib.mkForce bridges.discord.uid;
         };
         users.groups.mautrix-discord = lib.mkIf enableDiscord {
-          gid = lib.mkForce 987;
+          gid = lib.mkForce bridges.discord.gid;
         };
 
         # mautrix-telegram bridge (Python-based, different config format)
@@ -1019,13 +1024,13 @@ in
 
           settings = {
             homeserver = {
-              address = "http://localhost:8008";
+              address = "http://localhost:${toString c.synapsePort}";
               domain = serverName;
             };
 
             appservice = {
               hostname = "127.0.0.1";
-              port = 29317;
+              port = bridges.telegram.port;
               database = "postgresql:///mautrix-telegram?host=/run/postgresql";
               bot_username = "telegrambot";
               bot_displayname = "Telegram Bridge";
@@ -1043,10 +1048,10 @@ in
         };
 
         users.users.mautrix-telegram = lib.mkIf enableTelegram {
-          uid = lib.mkForce 986;
+          uid = lib.mkForce bridges.telegram.uid;
         };
         users.groups.mautrix-telegram = lib.mkIf enableTelegram {
-          gid = lib.mkForce 986;
+          gid = lib.mkForce bridges.telegram.gid;
         };
 
         # nginx inside container for Element Web
@@ -1056,7 +1061,7 @@ in
             listen = [
               {
                 addr = "0.0.0.0";
-                port = 80;
+                port = c.elementPort;
               }
             ];
             root = elementWebCustom;

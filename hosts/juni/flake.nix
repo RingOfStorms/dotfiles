@@ -34,16 +34,17 @@
       ...
     }@inputs:
     let
-      configuration_name = "juni";
-      stateVersion = "25.11";
-      primaryUser = "josh";
+      constants = import ./_constants.nix;
+      configuration_name = constants.host.name;
+      stateVersion = constants.host.stateVersion;
+      primaryUser = constants.host.primaryUser;
       lib = nixpkgs.lib;
     in
     {
       nixosConfigurations = {
         "${configuration_name}" = (
           lib.nixosSystem {
-            specialArgs = { inherit inputs; };
+            specialArgs = { inherit inputs constants; };
             modules = [
               inputs.nixos-hardware.nixosModules.framework-12-13th-gen-intel
               inputs.impermanence.nixosModules.impermanence

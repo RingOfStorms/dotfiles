@@ -1,4 +1,5 @@
 {
+  constants,
   config,
   lib,
   inputs,
@@ -6,19 +7,21 @@
 }:
 let
   name = "dawarich";
+  c = constants.services.dawarich;
+  net = constants.containerNetwork;
 
   # Data stored on the wd10 drive as requested
-  hostDataDir = "/drives/wd10/${name}";
+  hostDataDir = c.dataDir;
 
-  hostAddress = "10.0.0.1";
-  containerAddress = "10.0.0.5";
-  hostAddress6 = "fc00::1";
-  containerAddress6 = "fc00::5";
+  hostAddress = net.hostAddress;
+  containerAddress = c.containerIp;
+  hostAddress6 = net.hostAddress6;
+  containerAddress6 = c.containerIp6;
 
   dawarichNixpkgs = inputs.dawarich-nixpkgs;
 
-  domain = "location.joshuabell.xyz";
-  webPort = 3001;
+  domain = c.domain;
+  webPort = c.port;
 
   binds = [
     # Postgres data, must use postgres user in container and host
@@ -42,16 +45,16 @@ let
       host = "${hostDataDir}/redis";
       container = "/var/lib/redis-dawarich";
       user = "redis-dawarich";
-      uid = 976;
-      gid = 976;
+      uid = c.redisUid;
+      gid = c.redisGid;
     }
     # Dawarich app data (uploads, cache, etc.)
     {
       host = "${hostDataDir}/data";
       container = "/var/lib/dawarich";
       user = "dawarich";
-      uid = 977;
-      gid = 977;
+      uid = c.uid;
+      gid = c.gid;
     }
     # Secret key base file - must match the path the dawarich module expects
     # The module uses systemd LoadCredential from /var/lib/dawarich/secrets/secret-key-base

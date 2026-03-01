@@ -1,16 +1,18 @@
 {
+  constants,
   ...
 }:
 let
+  rd = constants.services.rustdesk;
   TailscaleInterface = "tailscale0";
   TCPPorts = [
-    21115
-    21116
-    21117
-    21118
-    21119
+    rd.ports.signal
+    rd.ports.relay
+    rd.ports.relayHbbs
+    rd.ports.tcp4
+    rd.ports.tcp5
   ];
-  UDPPorts = [ 21116 ];
+  UDPPorts = [ rd.ports.relay ];
 in
 {
   services = {

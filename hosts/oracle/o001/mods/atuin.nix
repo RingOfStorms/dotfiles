@@ -1,17 +1,21 @@
 {
   config,
+  constants,
   ...
 }:
+let
+  atuin = constants.services.atuin;
+in
 {
   services.atuin = {
     enable = true;
     openRegistration = false;
     openFirewall = false;
     host = "127.0.0.1";
-    port = 8888;
+    port = atuin.port;
   };
 
-  services.nginx.virtualHosts."atuin.joshuabell.xyz" = {
+  services.nginx.virtualHosts."${atuin.domain}" = {
     enableACME = true;
     forceSSL = true;
     locations = {

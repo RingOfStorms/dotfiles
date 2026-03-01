@@ -1,8 +1,11 @@
 {
   config,
+  constants,
   ...
 }:
 let
+  c = constants;
+  upstream = c.upstreamHost;
   apiKeyFile = config.age.secrets.litellm_public_api_key.path;
 in
 {
@@ -11,8 +14,8 @@ in
     ephemeral = true;
     autoStart = true;
     privateNetwork = true;
-    hostAddress = "192.168.100.2";
-    localAddress = "192.168.100.11";
+    hostAddress = c.services.wasabi.hostAddress;
+    localAddress = c.services.wasabi.containerIp;
     config =
       { config, pkgs, ... }:
       {
@@ -27,7 +30,7 @@ in
   };
 
   security.acme.acceptTerms = true;
-  security.acme.defaults.email = "admin@joshuabell.xyz";
+  security.acme.defaults.email = c.host.acmeEmail;
   services.nginx = {
     enable = true;
     recommendedGzipSettings = true;
@@ -65,7 +68,7 @@ in
           };
         };
 
-        "100.64.0.11" = tailnetConfig;
+        "${c.host.overlayIp}" = tailnetConfig;
         "o001.net.joshuabell.xyz" = tailnetConfig;
 
         "www.joshuabell.xyz" = {
@@ -109,7 +112,7 @@ in
             #   '';
             # };
             "/wasabi" = {
-              proxyPass = "http://192.168.100.11/";
+              proxyPass = "http://${c.services.wasabi.containerIp}/";
               extraConfig = ''
                 rewrite ^/wasabi/(.*) /$1 break;
               '';
@@ -155,21 +158,21 @@ in
           forceSSL = true;
           locations."/" = {
             proxyWebsockets = true;
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
           };
         };
         "gist.joshuabell.xyz" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
           };
         };
         "git.joshuabell.xyz" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
           };
         };
         "n8n.joshuabell.xyz" = {
@@ -177,7 +180,7 @@ in
           forceSSL = true;
           locations."/" = {
             proxyWebsockets = true;
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
           };
         };
         "notes.joshuabell.xyz" = {
@@ -185,7 +188,7 @@ in
           forceSSL = true;
           locations."/" = {
             proxyWebsockets = true;
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
           };
         };
         "blog.joshuabell.xyz" = {
@@ -193,21 +196,21 @@ in
           forceSSL = true;
           locations."/" = {
             proxyWebsockets = true;
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
           };
         };
         "sec.joshuabell.xyz" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
           };
         };
         "sso.joshuabell.xyz" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
             extraConfig = ''
               proxy_set_header X-Forwarded-Proto https;
             '';
@@ -217,7 +220,7 @@ in
           enableACME = true;
           forceSSL = true;
           locations."/" = {
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
             extraConfig = ''
               proxy_set_header X-Forwarded-Proto https;
             '';
@@ -227,21 +230,21 @@ in
           enableACME = true;
           forceSSL = true;
           locations."/" = {
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
           };
         };
         "media.joshuabell.xyz" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
           };
         };
         "puzzles.joshuabell.xyz" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
           };
         };
         "etebase.joshuabell.xyz" = {
@@ -249,7 +252,7 @@ in
           forceSSL = true;
           locations."/" = {
             proxyWebsockets = true;
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
             extraConfig = ''
               client_max_body_size 75M;
             '';
@@ -260,7 +263,7 @@ in
           forceSSL = true;
           locations."/" = {
             proxyWebsockets = true;
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
           };
         };
         "location.joshuabell.xyz" = {
@@ -268,7 +271,7 @@ in
           forceSSL = true;
           locations."/" = {
             proxyWebsockets = true;
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
             extraConfig = ''
               client_max_body_size 50G;
             '';
@@ -279,7 +282,7 @@ in
           forceSSL = true;
           locations."/" = {
             proxyWebsockets = true;
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
             extraConfig = ''
               client_max_body_size 100G;
             '';
@@ -293,7 +296,7 @@ in
           '';
           locations."/" = {
             proxyWebsockets = true;
-            proxyPass = "http://100.64.0.13:8095";
+            proxyPass = "http://${upstream}:8095";
             extraConfig = ''
               # API key auth - secret file contains: if ($http_authorization != "Bearer sk-xxx") { return 401; }
               include ${apiKeyFile};
@@ -308,7 +311,7 @@ in
           enableACME = true;
           forceSSL = true;
           locations."/" = {
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
             proxyWebsockets = true;
             extraConfig = ''
               proxy_read_timeout 600s;
@@ -322,7 +325,7 @@ in
           enableACME = true;
           forceSSL = true;
           locations."/" = {
-            proxyPass = "http://100.64.0.13";
+            proxyPass = "http://${upstream}";
             proxyWebsockets = true;
           };
         };
@@ -340,7 +343,7 @@ in
     streamConfig = ''
       server {
         listen 3032;
-        proxy_pass 100.64.0.13:3032;
+        proxy_pass ${upstream}:3032;
       }
     '';
   };

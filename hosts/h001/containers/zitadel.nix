@@ -1,4 +1,5 @@
 {
+  constants,
   config,
   lib,
   inputs,
@@ -6,13 +7,15 @@
 }:
 let
   name = "zitadel";
+  c = constants.services.zitadel;
+  net = constants.containerNetwork;
 
-  hostDataDir = "/var/lib/${name}";
+  hostDataDir = c.dataDir;
 
-  hostAddress = "10.0.0.1";
-  containerAddress = "10.0.0.3";
-  hostAddress6 = "fc00::1";
-  containerAddress6 = "fc00::3";
+  hostAddress = net.hostAddress;
+  containerAddress = c.containerIp;
+  hostAddress6 = net.hostAddress6;
+  containerAddress6 = c.containerIp6;
 
   zitadelNixpkgs = inputs.zitadel-nixpkgs;
 
@@ -79,7 +82,7 @@ in
 {
   options = { };
   config = {
-    services.nginx.virtualHosts."sso.joshuabell.xyz" = {
+    services.nginx.virtualHosts."${c.domain}" = {
       addSSL = true;
       sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
       sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
@@ -87,7 +90,7 @@ in
         "/" = {
           proxyWebsockets = true;
           recommendedProxySettings = true;
-          proxyPass = "http://${containerAddress}:8080";
+          proxyPass = "http://${containerAddress}:${toString c.port}";
           extraConfig = ''
             proxy_set_header X-Forwarded-Proto https;
           '';
@@ -143,7 +146,7 @@ in
               firewall = {
                 enable = true;
                 allowedTCPPorts = [
-                  8080
+                  c.port
                 ];
               };
               # Use systemd-resolved inside the container
@@ -185,7 +188,7 @@ in
               enable = true;
               masterKeyFile = "/var/secrets/zitadel_master_key.age";
               settings = {
-                Port = 8080;
+                Port = c.port;
                 Database.postgres = {
                   Host = "/var/run/postgresql/";
                   Port = 5432;
@@ -200,7 +203,7 @@ in
                     ExistingDatabase = "zitadel";
                   };
                 };
-                ExternalDomain = "sso.joshuabell.xyz";
+                ExternalDomain = c.domain;
                 ExternalPort = 443;
                 ExternalSecure = true;
               };
@@ -212,7 +215,7 @@ in
                     UserName = "admin@joshuabell.xyz";
                     FirstName = "admin";
                     LastName = "admin";
-                    Email.Address = "admin@joshuabell.xuz";
+                    Email.Address = "admin@joshuabell.xyz";
                     Email.Verified = true;
                     Password = "Password1!";
                     PasswordChangeRequired = true;

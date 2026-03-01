@@ -25,10 +25,11 @@
       ...
     }@inputs:
     let
-      configuration_name = "o001";
-      stateVersion = "23.11";
-      primaryUser = "root";
-      overlayIp = "100.64.0.11";
+      constants = import ./_constants.nix;
+      configuration_name = constants.host.name;
+      stateVersion = constants.host.stateVersion;
+      primaryUser = constants.host.primaryUser;
+      overlayIp = constants.host.overlayIp;
       lib = nixpkgs.lib;
     in
     {
@@ -36,7 +37,7 @@
         "${configuration_name}" = (
           lib.nixosSystem {
             specialArgs = {
-              inherit inputs;
+              inherit inputs constants;
             };
             modules = [
               home-manager.nixosModules.default

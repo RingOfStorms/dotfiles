@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  constants,
   ...
 }:
 let
@@ -10,14 +11,15 @@ let
       secrets = config.age.secrets or { };
     in
     secrets ? ${secret} && secrets.${secret} != null;
+  c = constants.services.nixarr;
 in
 {
   config = {
     nixarr = {
       enable = true;
       # mediaDir = "/drives/wd10/nixarr/media";
-      mediaDir = "/nfs/h002/nixarr/media";
-      stateDir = "/var/lib/nixarr/state";
+      mediaDir = c.mediaDir;
+      stateDir = c.stateDir;
 
       vpn = lib.mkIf (hasSecret "us_chi_wg") {
         enable = true;
@@ -32,7 +34,7 @@ in
       transmission = {
         enable = true; # Torrent downloader
         vpn.enable = true;
-        peerPort = 51820;
+        peerPort = c.transmissionPeerPort;
         extraAllowedIps = [
           "100.64.0.0/10"
         ];
@@ -56,26 +58,25 @@ in
 
     services.nginx = lib.mkIf config.nixarr.enable {
       virtualHosts = {
-        "jellyfin.joshuabell.xyz" = {
+        "${c.jellyfinDomain}" = {
           addSSL = true;
           sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
           sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
           locations."/" = {
             proxyWebsockets = true;
-            proxyPass = "http://localhost:8096";
+            proxyPass = "http://localhost:${toString c.jellyfinPort}";
           };
         };
-        "media.joshuabell.xyz" = {
+        "${c.jellyseerrDomain}" = {
           addSSL = true;
           sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
           sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
           locations."/" = {
             proxyWebsockets = true;
-            proxyPass = "http://localhost:5055";
+            proxyPass = "http://localhost:${toString c.jellyseerrPort}";
           };
         };
       };
     };
   };
 }
-

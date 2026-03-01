@@ -1,10 +1,11 @@
 {
   config,
   pkgs,
+  constants,
   ...
 }:
 let
-  dataDir = "/var/lib/etebase-server";
+  c = constants.services.etebase;
   socketPath = "/run/etebase-server/etebase-server.sock";
 
   # EteSync Web - static SPA for calendar/contacts
@@ -16,7 +17,7 @@ let
   # Patch the default API URL in the JS bundle at build time so the app
   # points at our self-hosted etebase instance without manual configuration.
   defaultApiUrl = "https://api.etebase.com/partner/etesync/";
-  selfHostedApiUrl = "https://etebase.joshuabell.xyz/";
+  selfHostedApiUrl = "https://${c.domain}/";
 
   etesyncWeb = pkgs.runCommand "etesync-web-patched" { } ''
     cp -r ${etesyncWebSrc} $out
@@ -33,7 +34,7 @@ in
     description = "Generate Etebase server secret";
     wantedBy = [ "etebase-server.service" ];
     before = [ "etebase-server.service" ];
-    unitConfig.ConditionPathExists = "!${dataDir}/secret.txt";
+    unitConfig.ConditionPathExists = "!${c.dataDir}/secret.txt";
     serviceConfig = {
       Type = "oneshot";
       User = "etebase-server";
@@ -41,8 +42,8 @@ in
       UMask = "0077";
     };
     script = ''
-      ${pkgs.openssl}/bin/openssl rand -base64 64 | tr -d '\n' > ${dataDir}/secret.txt
-      chmod 600 ${dataDir}/secret.txt
+      ${pkgs.openssl}/bin/openssl rand -base64 64 | tr -d '\n' > ${c.dataDir}/secret.txt
+      chmod 600 ${c.dataDir}/secret.txt
     '';
   };
 
@@ -50,13 +51,13 @@ in
   users.users.etebase-server = {
     isSystemUser = true;
     group = "etebase-server";
-    home = dataDir;
+    home = c.dataDir;
   };
   users.groups.etebase-server = { };
 
   # Pre-create data directory with correct permissions
   systemd.tmpfiles.rules = [
-    "d '${dataDir}' 0750 etebase-server etebase-server - -"
+    "d '${c.dataDir}' 0750 etebase-server etebase-server - -"
   ];
 
   services.etebase-server = {
@@ -66,25 +67,25 @@ in
     settings = {
       global = {
         debug = false;
-        secret_file = "${dataDir}/secret.txt";
-        static_root = "${dataDir}/static";
-        media_root = "${dataDir}/media";
+        secret_file = "${c.dataDir}/secret.txt";
+        static_root = "${c.dataDir}/static";
+        media_root = "${c.dataDir}/media";
       };
       allowed_hosts = {
-        allowed_host1 = "etebase.joshuabell.xyz";
+        allowed_host1 = c.domain;
       };
     };
   };
 
   services.nginx.virtualHosts = {
-    "etebase.joshuabell.xyz" = {
+    "${c.domain}" = {
       addSSL = true;
       sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
       sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
       locations = {
         # Serve static files directly via nginx (better performance)
         "/static/" = {
-          alias = "${dataDir}/static/";
+          alias = "${c.dataDir}/static/";
           extraConfig = ''
             expires 30d;
             add_header Cache-Control "public, immutable";
@@ -104,7 +105,7 @@ in
 
     # EteSync Web - static SPA for calendar/contacts management
     # JS bundle is patched at build time to default to our etebase instance.
-    "pim.joshuabell.xyz" = {
+    "${c.webDomain}" = {
       addSSL = true;
       sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
       sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";

@@ -3,6 +3,7 @@
   config,
   pkgs,
   lib,
+  constants,
   ...
 }:
 let
@@ -18,6 +19,9 @@ let
       secrets = config.age.secrets or { };
     in
     secrets ? ${secret} && secrets.${secret} != null;
+  c = constants.services.oauth2Proxy;
+  zitadel = constants.services.zitadel;
+  domain = constants.host.domain;
 in
 {
   disabledModules = [ declaration ];
@@ -25,19 +29,19 @@ in
   config = lib.mkIf (hasSecret "oauth2_proxy_key_file") {
     services.oauth2-proxy = {
       enable = true;
-      httpAddress = "http://127.0.0.1:4180";
+      httpAddress = "http://127.0.0.1:${toString c.port}";
       package = pkgsOauth2Proxy.oauth2-proxy;
       provider = "oidc";
       reverseProxy = true;
-      redirectURL = "https://sso-proxy.joshuabell.xyz/oauth2/callback";
-      validateURL = "https://sso.joshuabell.xyz/oauth2/";
-      oidcIssuerUrl = "https://sso.joshuabell.xyz";
+      redirectURL = "https://${c.domain}/oauth2/callback";
+      validateURL = "https://${zitadel.domain}/oauth2/";
+      oidcIssuerUrl = "https://${zitadel.domain}";
       keyFile = config.age.secrets.oauth2_proxy_key_file.path;
-      nginx.domain = "sso-proxy.joshuabell.xyz";
+      nginx.domain = c.domain;
       email.domains = [ "*" ];
       extraConfig = {
-        whitelist-domain = "*.joshuabell.xyz";
-        cookie-domain = ".joshuabell.xyz";
+        whitelist-domain = "*.${domain}";
+        cookie-domain = ".${domain}";
         oidc-groups-claim = "flatRolesClaim";
         # scope = "openid email profiles";
 
@@ -52,14 +56,14 @@ in
       # setXauthrequest = true;
     };
 
-    services.nginx.virtualHosts."sso-proxy.joshuabell.xyz" = {
+    services.nginx.virtualHosts."${c.domain}" = {
       addSSL = true;
       sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
       sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
       locations = {
         "/" = {
           proxyWebsockets = true;
-          proxyPass = "http://127.0.0.1:4180";
+          proxyPass = "http://127.0.0.1:${toString c.port}";
           extraConfig = ''
             proxy_set_header X-Forwarded-Proto https;
           '';

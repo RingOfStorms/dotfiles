@@ -1,4 +1,5 @@
 {
+  constants,
   config,
   lib,
   inputs,
@@ -6,16 +7,19 @@
 }:
 let
   name = "immich";
+  c = constants.services.immich;
+  net = constants.containerNetwork;
+  postgresVersion = "16";
 
   # Data stored on the wd10 drive
-  hostDataDir = "/drives/wd10/immich";
+  hostDataDir = c.dataDir;
   # Var lib for postgres and other state
-  hostVarLibDir = "/var/lib/${name}";
+  hostVarLibDir = c.varLibDir;
 
-  hostAddress = "10.0.0.1";
-  containerAddress = "10.0.0.4";
-  hostAddress6 = "fc00::1";
-  containerAddress6 = "fc00::4";
+  hostAddress = net.hostAddress;
+  containerAddress = c.containerIp;
+  hostAddress6 = net.hostAddress6;
+  containerAddress6 = c.containerIp6;
 
   immichNixpkgs = inputs.immich-nixpkgs;
 
@@ -32,7 +36,7 @@ let
     {
       host = "${hostVarLibDir}/postgres";
       # Adjust based on container postgres data dir
-      container = "/var/lib/postgresql/16";
+      container = "/var/lib/postgresql/${postgresVersion}";
       user = "postgres";
       uid = config.ids.uids.postgres;
       gid = config.ids.gids.postgres;
@@ -50,16 +54,16 @@ let
       host = "${hostDataDir}/media";
       container = "/var/lib/immich";
       user = "immich";
-      uid = 916;
-      gid = 916;
+      uid = c.uid;
+      gid = c.gid;
     }
     # Immich machine learning cache
     {
       host = "${hostVarLibDir}/ml-cache";
       container = "/var/cache/immich";
       user = "immich";
-      uid = 916;
-      gid = 916;
+      uid = c.uid;
+      gid = c.gid;
     }
   ];
 
@@ -91,7 +95,7 @@ in
 {
   options = { };
   config = {
-    services.nginx.virtualHosts."photos.joshuabell.xyz" = {
+    services.nginx.virtualHosts."${c.domain}" = {
       addSSL = true;
       sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
       sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
@@ -103,7 +107,7 @@ in
       '';
       locations."/" = {
         proxyWebsockets = true;
-        proxyPass = "http://${containerAddress}:2283";
+        proxyPass = "http://${containerAddress}:${toString c.port}";
       };
     };
 
@@ -156,7 +160,7 @@ in
                 firewall = {
                   enable = true;
                   allowedTCPPorts = [
-                    2283
+                    c.port
                   ];
                 };
                 # Use systemd-resolved inside the container
@@ -170,7 +174,7 @@ in
 
               services.postgresql = {
                 enable = true;
-                package = pkgs.postgresql_16.withPackages (ps: [ ps.pgvecto-rs ]);
+                package = pkgs.${"postgresql_${postgresVersion}"}.withPackages (ps: [ ps.pgvecto-rs ]);
                 enableJIT = true;
                 authentication = ''
                   local all all trust
@@ -199,7 +203,7 @@ in
               services.immich = {
                 enable = true;
                 host = "0.0.0.0";
-                port = 2283;
+                port = c.port;
                 openFirewall = true;
                 mediaLocation = "/var/lib/immich";
                 database = {
@@ -211,7 +215,7 @@ in
                 redis.enable = true;
                 machine-learning.enable = true;
                 settings = {
-                  server.externalDomain = "https://photos.joshuabell.xyz";
+                  server.externalDomain = "https://${c.domain}";
                   newVersionCheck.enabled = false;
                 };
               };

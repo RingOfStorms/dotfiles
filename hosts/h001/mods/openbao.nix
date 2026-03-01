@@ -1,22 +1,26 @@
 {
   pkgs,
+  constants,
   ...
 }:
+let
+  c = constants.services.openbao;
+in
 {
   environment.variables = {
     # For CLI
-    BAO_ADDR = "http://127.0.0.1:8200";
+    BAO_ADDR = "http://127.0.0.1:${toString c.port}";
   };
 
   services.nginx = {
     virtualHosts = {
-      "sec.joshuabell.xyz" = {
+      "${c.domain}" = {
         addSSL = true;
         sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
         sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
         locations."/" = {
           proxyWebsockets = true;
-          proxyPass = "http://localhost:8200";
+          proxyPass = "http://localhost:${toString c.port}";
           recommendedProxySettings = true;
         };
       };
@@ -32,12 +36,12 @@
 
       listener.default = {
         type = "tcp";
-        address = "127.0.0.1:8200";
+        address = "127.0.0.1:${toString c.port}";
         tls_disable = true; # nginx will handle TLS
       };
 
       storage.file = {
-        path = "/var/lib/openbao";
+        path = c.dataDir;
       };
 
       # Disable mlock requirement for development
@@ -48,7 +52,7 @@
 
   # Ensure the data directory exists with proper permissions
   # systemd.tmpfiles.rules = [
-  #   "d /var/lib/openbao 0700 openbao openbao - -"
+  #   "d ${c.dataDir} 0700 openbao openbao - -"
   # ];
 
   # Additional systemd service hardening
@@ -59,7 +63,7 @@
       PrivateTmp = true;
       ProtectSystem = "strict";
       ProtectHome = true;
-      ReadWritePaths = [ "/var/lib/openbao" ];
+      ReadWritePaths = [ c.dataDir ];
 
       # Resource limits
       LimitNOFILE = 65536;
@@ -79,7 +83,7 @@
       pkgs.gnugrep
     ];
     environment = {
-      BAO_ADDR = "http://127.0.0.1:8200";
+      BAO_ADDR = "http://127.0.0.1:${toString c.port}";
     };
 
     serviceConfig = {
@@ -90,7 +94,7 @@
       PrivateTmp = true;
       ProtectSystem = "strict";
       ProtectHome = true;
-      ReadOnlyPaths = [ "/bao-keys" ];
+      ReadOnlyPaths = [ c.keysDir ];
       NoNewPrivileges = true;
 
       ExecStart = pkgs.writeShellScript "openbao-auto-unseal" ''
@@ -127,7 +131,7 @@
         echo "OpenBao is sealed; applying unseal key shares"
 
         # Apply each unseal key share; ignore "already unsealed" errors
-        for key in /bao-keys/openbao-unseal-*; do
+        for key in ${c.keysDir}/openbao-unseal-*; do
           if [ -f "$key" ]; then
             echo "Unsealing with key $key"
             bao operator unseal "$(cat "$key")" || true

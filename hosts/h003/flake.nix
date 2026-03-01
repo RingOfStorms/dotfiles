@@ -25,10 +25,11 @@
       ...
     }@inputs:
     let
-      configurationName = "h003";
-      stateVersion = "25.05";
-      primaryUser = "luser";
-      overlayIp = "100.64.0.14";
+      constants = import ./_constants.nix;
+      configurationName = constants.host.name;
+      stateVersion = constants.host.stateVersion;
+      primaryUser = constants.host.primaryUser;
+      overlayIp = constants.host.overlayIp;
       lib = nixpkgs.lib;
     in
     {
@@ -36,7 +37,7 @@
         "${configurationName}" = (
           lib.nixosSystem {
             specialArgs = {
-              inherit inputs;
+              inherit inputs constants;
             };
             modules = [
               home-manager.nixosModules.default
@@ -115,12 +116,14 @@
                       ];
                       openssh.authorizedKeys.keys = [
                         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA3riAQ8RP5JXj2eO87JpjbM/9SrfFHcN5pEJwQpRcOl nix2h003"
+                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA3riAQ8RP5JXj2eO87JpjbM/9SrfFHcN5pEJwQpRcOl nix2nix"
                       ];
                     };
                     root = {
                       shell = pkgs.zsh;
                       openssh.authorizedKeys.keys = [
                         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA3riAQ8RP5JXj2eO87JpjbM/9SrfFHcN5pEJwQpRcOl nix2h003"
+                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA3riAQ8RP5JXj2eO87JpjbM/9SrfFHcN5pEJwQpRcOl nix2nix"
                       ];
                     };
                   };

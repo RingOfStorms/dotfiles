@@ -1,4 +1,5 @@
 {
+  constants,
   config,
   lib,
   inputs,
@@ -6,13 +7,15 @@
 }:
 let
   name = "forgejo";
+  c = constants.services.forgejo;
+  net = constants.containerNetwork;
 
-  hostDataDir = "/var/lib/${name}";
+  hostDataDir = c.dataDir;
 
-  hostAddress = "10.0.0.1";
-  containerAddress = "10.0.0.2";
-  hostAddress6 = "fc00::1";
-  containerAddress6 = "fc00::2";
+  hostAddress = net.hostAddress;
+  containerAddress = c.containerIp;
+  hostAddress6 = net.hostAddress6;
+  containerAddress6 = c.containerIp6;
 
   forgejoNixpkgs = inputs.forgejo-nixpkgs;
 
@@ -39,8 +42,8 @@ let
       host = "${hostDataDir}/data";
       container = "/var/lib/forgejo";
       user = "forgejo";
-      uid = 115;
-      gid = 115;
+      uid = c.uid;
+      gid = c.gid;
     }
   ];
   uniqueUsers = lib.foldl' (
@@ -71,12 +74,12 @@ in
   services.nginx = {
     virtualHosts = {
       # forgejo http traffic
-      "git.joshuabell.xyz" = {
+      "${c.domain}" = {
         addSSL = true;
         sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
         sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
         locations."/" = {
-          proxyPass = "http://10.0.0.2:3000";
+          proxyPass = "http://${containerAddress}:${toString c.port}";
         };
       };
     };
@@ -84,8 +87,8 @@ in
     # Forgejo ssh
     streamConfig = ''
       server {
-        listen 3032;
-        proxy_pass 10.0.0.2:3032;
+        listen ${toString c.sshPort};
+        proxy_pass ${containerAddress}:${toString c.sshPort};
       }
     '';
   };
@@ -132,8 +135,8 @@ in
           firewall = {
             enable = true;
             allowedTCPPorts = [
-              3000
-              3032
+              c.port
+              c.sshPort
             ];
           };
           # Use systemd-resolved inside the container
@@ -177,15 +180,15 @@ in
             };
             server = {
               PROTOCOL = "http";
-              DOMAIN = "git.joshuabell.xyz";
+              DOMAIN = c.domain;
               HTTP_ADDR = "0.0.0.0";
-              HTTP_PORT = 3000;
+              HTTP_PORT = c.port;
 
               START_SSH_SERVER = true;
-              SSH_DOMAIN = "git.joshuabell.xyz";
+              SSH_DOMAIN = c.domain;
               SSH_LISTEN_HOST = "0.0.0.0";
-              SSH_LISTEN_PORT = 3032; # actual listen port
-              SSH_PORT = 3032; # used in UI
+              SSH_LISTEN_PORT = c.sshPort; # actual listen port
+              SSH_PORT = c.sshPort; # used in UI
               BUILTIN_SSH_SERVER_USER = "git";
               SSH_SERVER_KEY_EXCHANGES = "mlkem768x25519-sha256";
 

@@ -1,14 +1,14 @@
-{ lib, config, ... }:
+{ lib, config, constants, ... }:
 # This file sets up perms for MEDIA only (not state dirs) on this system since we are running nixarr on another host but NFS mounting the data drive from here.
 let
   globals = config.util-nixarr.globals;
   nixarr = {
-    mediaDir = "/data/nixarr/media";
+    mediaDir = constants.services.nixarr.mediaDir;
   };
 
-  pinchflatMediaDir = "/data/pinchflat/media";
+  pinchflatMediaDir = constants.services.pinchflat.mediaDir;
   pinchflat = true;
-  pinchflatId = 186;
+  pinchflatId = constants.services.pinchflat.uid;
 
   # Matches up to my h001/mods/nixarr|pinchflat.nix files
   audiobookshelf = false;
@@ -27,7 +27,7 @@ in
 lib.mkMerge [
   (lib.mkIf pinchflat {
     users = {
-      groups.pinchflat.gid = pinchflatId;
+      groups.pinchflat.gid = constants.services.pinchflat.gid;
       users.pinchflat = {
         isSystemUser = true;
         group = "pinchflat";

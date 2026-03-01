@@ -1,7 +1,9 @@
+{ constants, ... }:
 let
   section1 = "a. Public Apps";
   section2 = "b. Media*rrs";
   section3 = "c. Network";
+  s = constants.services;
 in
 {
   services.homepage-dashboard = {
@@ -41,29 +43,21 @@ in
           {
             "Git" = {
               description = "Forgejo";
-              href = "https://git.joshuabell.xyz";
+              href = "https://${s.forgejo.domain}";
               icon = "forgejo";
-              # widgets = [
-              #   {
-              #     type = "gitea";
-              #     url = "https://git.joshuabell.xyz";
-              #     key = "TODO";
-              #     hideErrors = true;
-              #   }
-              # ];
             };
           }
           {
             "Gist" = {
               description = "Opengist";
-              href = "https://gist.joshuabell.xyz";
+              href = "https://${s.opengist.domain}";
               icon = "opengist";
             };
           }
           {
             "Open WebUI" = {
               description = "LLM Chats";
-              href = "https://chat.joshuabell.xyz";
+              href = "https://${s.openWebui.domain}";
               icon = "openai";
             };
           }
@@ -74,21 +68,21 @@ in
           {
             "Jellyfin" = {
               description = "Media Streaming";
-              href = "https://jellyfin.joshuabell.xyz";
+              href = "https://${s.nixarr.jellyfinDomain}";
               icon = "jellyfin";
             };
           }
           {
             "Jellyseerr" = {
               description = "Media Requests";
-              href = "https://media.joshuabell.xyz";
+              href = "https://${s.nixarr.jellyseerrDomain}";
               icon = "jellyseerr";
             };
           }
           {
             "Youtarr" = {
               description = "YouTube Automation";
-              href = "http://h001.net.joshuabell.xyz:3087";
+              href = "http://h001.net.joshuabell.xyz:${toString s.youtarr.externalPort}";
               icon = "youtarr";
             };
           }
@@ -157,7 +151,7 @@ in
           {
             "Beszel" = {
               description = "Server Metrics";
-              href = "http://h001.net.joshuabell.xyz:8090";
+              href = "http://h001.net.joshuabell.xyz:${toString s.beszelHub.port}";
               icon = "beszel";
             };
           }

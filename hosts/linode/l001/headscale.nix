@@ -1,5 +1,6 @@
-{ pkgs, ... }:
+{ pkgs, constants, ... }:
 let
+  hs = constants.services.headscale;
   h001Dns = import ../../../flakes/common/nix_modules/tailnet/h001_dns.nix;
 in
 {
@@ -10,7 +11,7 @@ in
     services.headscale = {
       enable = true;
       settings = {
-        server_url = "https://headscale.joshuabell.xyz";
+        server_url = "https://${hs.domain}";
         database.type = "sqlite3";
         derp = {
           auto_update_enable = true;
@@ -18,7 +19,7 @@ in
         };
         dns = {
           magic_dns = true;
-          base_domain = "net.joshuabell.xyz";
+          base_domain = hs.baseDomain;
           override_local_dns = false;
           extra_records = map (name: {
             type = "A";

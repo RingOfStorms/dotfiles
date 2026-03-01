@@ -1,6 +1,7 @@
 {
   inputs,
   pkgs,
+  constants,
   ...
 }:
 let
@@ -12,7 +13,7 @@ let
     inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
-  port = 8094;
+  c = constants.services.litellm;
 in
 {
   disabledModules = [ declaration ];
@@ -21,11 +22,11 @@ in
   config = {
     networking.firewall.enable = true;
     # Expose litellm to my overlay network as well
-    networking.firewall.interfaces."tailscale0".allowedTCPPorts = [ port ];
+    networking.firewall.interfaces."tailscale0".allowedTCPPorts = [ c.port ];
 
     services.litellm = {
       enable = true;
-      inherit port;
+      port = c.port;
       host = "0.0.0.0";
       openFirewall = false;
       package = pkgsLitellm.litellm;
@@ -34,8 +35,8 @@ in
         SCARF_NO_ANALYTICS = "True";
         DO_NOT_TRACK = "True";
         ANONYMIZED_TELEMETRY = "False";
-        GITHUB_COPILOT_TOKEN_DIR = "/var/lib/litellm/github_copilot";
-        XDG_CONFIG_HOME = "/var/lib/litellm/.config";
+        GITHUB_COPILOT_TOKEN_DIR = "${c.dataDir}/github_copilot";
+        XDG_CONFIG_HOME = "${c.dataDir}/.config";
       };
       settings = {
         environment_variables = {

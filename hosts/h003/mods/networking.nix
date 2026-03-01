@@ -1,23 +1,29 @@
 {
   config,
   lib,
+  constants,
   ...
 }:
+let
+  net = constants.network;
+  mng = net.vlans.management;
+  lan = net.vlans.lan;
+in
 {
   networking = {
     # My Switch seems to not let me change management vlan so this is assume native default here for proper routing
 
     # Configure VLANs on the trunk interface (enp2s0)
     vlans = {
-      vlan10 = {
+      ${mng.name} = {
         # management
-        id = 10;
-        interface = "enp2s0";
+        id = mng.id;
+        interface = net.trunkInterface;
       };
-      vlan20 = {
+      ${lan.name} = {
         # normal devices
-        id = 20;
-        interface = "enp2s0";
+        id = lan.id;
+        interface = net.trunkInterface;
       };
     };
 
@@ -27,37 +33,37 @@
     # Interface configuration
     interfaces = {
       # WAN interface (physical enp1s0 - to modem)
-      enp1s0 = {
+      ${net.wanInterface} = {
         useDHCP = true; # Get IP from modem/ISP
         tempAddress = lib.mkIf config.networking.enableIPv6 "disabled"; # For IPv6 privacy
       };
       # LAN interface (VLAN 20 - main network)
-      vlan20 = {
+      ${lan.name} = {
         ipv4.addresses = [
           {
-            address = "10.12.14.1";
-            prefixLength = 24;
+            address = lan.ipv4;
+            prefixLength = lan.ipv4Prefix;
           }
         ];
         ipv6.addresses = lib.mkIf config.networking.enableIPv6 [
           {
-            address = "fd12:14:0::1"; # ULA prefix only
-            prefixLength = 64;
+            address = lan.ipv6; # ULA prefix only
+            prefixLength = lan.ipv6Prefix;
           }
         ];
       };
       # Management VLAN 10
-      vlan10 = {
+      ${mng.name} = {
         ipv4.addresses = [
           {
-            address = "10.12.16.1"; # Management network
-            prefixLength = 24;
+            address = mng.ipv4; # Management network
+            prefixLength = mng.ipv4Prefix;
           }
         ];
         ipv6.addresses = lib.mkIf config.networking.enableIPv6 [
           {
-            address = "fd12:14:1::1";
-            prefixLength = 64;
+            address = mng.ipv6;
+            prefixLength = mng.ipv6Prefix;
           }
         ];
       };
@@ -66,10 +72,10 @@
     # NAT configuration
     nat = {
       enable = true;
-      externalInterface = "enp1s0"; # WAN (physical)
+      externalInterface = net.wanInterface; # WAN (physical)
       internalInterfaces = [
-        "vlan10"
-        "vlan20"
+        mng.name
+        lan.name
       ]; # LAN/Management
       enableIPv6 = lib.mkIf config.networking.enableIPv6 true; # Enable IPv6 NAT
     };
@@ -90,12 +96,12 @@
 
         # --- Inter-VLAN Security ---
         # Block any NEW connection attempts between LAN and Management
-        iifname "vlan20" oifname "vlan10" drop
-        iifname "vlan10" oifname "vlan20" drop
+        iifname "${lan.name}" oifname "${mng.name}" drop
+        iifname "${mng.name}" oifname "${lan.name}" drop
 
         # Explicitly allow LAN and Management to go to the WAN
-        oifname "enp1s0" accept
-        oifname "vlan10" accept
+        oifname "${net.wanInterface}" accept
+        oifname "${mng.name}" accept
 
         # Drop any other forwarding attempts between internal networks
         drop
@@ -103,13 +109,13 @@
 
       interfaces = {
         # WAN interface - allow nothing inbound by default
-        enp1s0 = {
+        ${net.wanInterface} = {
           # Block all WAN
           allowedTCPPorts = [ ];
           allowedUDPPorts = [ ];
         };
 
-        vlan10 = {
+        ${mng.name} = {
           allowedTCPPorts = [
             22 # SSH (for remote admin access)
             53 # DNS
@@ -124,7 +130,7 @@
         };
 
         # LAN interface (VLAN 20) - FULL SERVICE
-        vlan20 = {
+        ${lan.name} = {
           allowedTCPPorts = [
             22 # SSH (if you want to SSH to your router from LAN devices)
             53 # DNS queries
@@ -157,8 +163,8 @@
     settings = {
       # Listen only on LAN interface
       interface = [
-        "vlan10"
-        "vlan20"
+        mng.name
+        lan.name
       ];
       bind-interfaces = true;
 
@@ -166,56 +172,41 @@
       # We are using ./adguardhome.nix for DNS and we still run this one for reverse name lookups
       # Note in Ad GuardHome in DNS Settings add localhost:9053 to Private reverse DNS servers and enable them
       listen-address = "127.0.0.1";
-      port = 9053;
+      port = constants.services.dnsmasq.dnsPort;
       # NOTE these make it so my other devices don't hit the open net to stream movies
       # while on the local network. Note that this is being paired with stateful settings
       # in Adguardhome upstream dns servers:
       # [/media.joshuabell.xyz/]127.0.0.1:9053
       # [/jellyfin.joshuabell.xyz/]127.0.0.1:9053
-      host-record = [
+      host-record =
         # DNS splitting on local network
         # Basically these are intercepted and resolve to local IP's when anyone is connected to home network
-        "media.joshuabell.xyz,10.12.14.10"
-        "jellyfin.joshuabell.xyz,10.12.14.10"
-      ];
+        map (r: "${r.hostname},${r.ip}") net.localDnsRecords;
 
       # DHCP range and settings
       dhcp-range = [
-        "set:mng,10.12.16.100,10.12.16.200,1h" # Management devices
-        "set:lan,10.12.14.100,10.12.14.200,1h"
+        "set:mng,${mng.dhcpRange.start},${mng.dhcpRange.end},${mng.dhcpRange.lease}" # Management devices
+        "set:lan,${lan.dhcpRange.start},${lan.dhcpRange.end},${lan.dhcpRange.lease}"
       ]
       ++ lib.optionals config.networking.enableIPv6 [
-        "set:mng,fd12:14:1::100,fd12:14:1::200,64,6h" # For Management
-        "set:lan,fd12:14::100,fd12:14::200,64,6h"
+        "set:mng,${mng.dhcpRange.ipv6Start},${mng.dhcpRange.ipv6End},${toString mng.ipv6Prefix},${mng.dhcpRange.ipv6Lease}" # For Management
+        "set:lan,${lan.dhcpRange.ipv6Start},${lan.dhcpRange.ipv6End},${toString lan.ipv6Prefix},${lan.dhcpRange.ipv6Lease}"
       ];
       dhcp-option = [
-        "tag:mng,option:router,10.12.16.1"
-        "tag:lan,option:router,10.12.14.1"
-        "tag:mng,option:dns-server,10.12.16.1"
-        "tag:lan,option:dns-server,10.12.14.1"
+        "tag:mng,option:router,${mng.ipv4}"
+        "tag:lan,option:router,${lan.ipv4}"
+        "tag:mng,option:dns-server,${mng.ipv4}"
+        "tag:lan,option:dns-server,${lan.ipv4}"
       ];
 
       # Static DHCP reservations
-      dhcp-host = [
-        "00:be:43:b9:f4:e0,H001,10.12.14.10"
-        "54:04:a6:32:d1:71,H002,10.12.14.183"
-        "c8:c9:a3:2b:7b:19,PRUSA-MK4,10.12.14.21"
-        "24:e8:53:73:a3:c6,LGWEBOSTV,10.12.14.30"
-        "2c:cf:67:6a:45:47,HOMEASSISTANT,10.12.14.22"
-        "2a:d0:ec:fa:b9:7e,PIXEL-6,10.12.14.31"
-        "a8:29:48:94:23:dd,TL-SG1428PE,10.12.16.2"
-        # Ellas work laptop
-        "38:18:68:49:3c:48,ellawork-w,10.12.14.122"
-        "d4:a2:cd:39:4e:f0,ellawork-e,10.12.14.132"
-        # Josh Work laptop
-        "00:23:a4:0b:3b:be,TMREM00004335,10.12.14.181"
-      ];
+      dhcp-host = map (l: "${l.mac},${l.name},${l.ip}") net.staticLeases;
 
       enable-ra = lib.mkIf config.networking.enableIPv6 true;
       # interface, min interval, max interval
       ra-param = lib.mkIf config.networking.enableIPv6 [
-        "vlan10,60,120"
-        "vlan20,60,120"
+        "${mng.name},60,120"
+        "${lan.name},60,120"
       ];
 
       # DNS settings (not needed since we use adguard for dns)

@@ -42,9 +42,10 @@
       ...
     }@inputs:
     let
-      configuration_name = "lio";
-      primaryUser = "josh";
-      overlayIp = "100.64.0.1";
+      constants = import ./_constants.nix;
+      configuration_name = constants.host.name;
+      primaryUser = constants.host.primaryUser;
+      overlayIp = constants.host.overlayIp;
       lib = nixpkgs.lib;
     in
     {
@@ -52,7 +53,7 @@
         "${configuration_name}" = (
           lib.nixosSystem {
             specialArgs = {
-              inherit inputs;
+              inherit inputs constants;
             };
             modules = [
               ({
@@ -178,7 +179,6 @@
               # ./sway_customizations.nix
               # ./i3_customizations.nix
               ./vms.nix
-              ./ttyd.nix
               (
                 {
                   config,

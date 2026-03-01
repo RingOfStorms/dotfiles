@@ -2,15 +2,19 @@
   pkgs,
   config,
   lib,
+  constants,
   ...
 }:
+let
+  nfs = constants.services.nfs;
+in
 lib.mkMerge [
   ({
     services.nfs.server = {
       enable = true;
       exports = ''
-        /data 100.64.0.0/10(rw,sync,no_subtree_check,no_root_squash,fsid=0,crossmnt)
-        /data 10.12.14.0/10(rw,sync,no_subtree_check,no_root_squash,fsid=0,crossmnt)
+        ${nfs.exportRoot} 100.64.0.0/10(rw,sync,no_subtree_check,no_root_squash,fsid=0,crossmnt)
+        ${nfs.exportRoot} 10.12.14.0/10(rw,sync,no_subtree_check,no_root_squash,fsid=0,crossmnt)
       '';
     };
 
@@ -21,24 +25,24 @@ lib.mkMerge [
   # Open ports and expose so local network works
   (lib.mkIf config.networking.firewall.enable {
     services.rpcbind.enable = true;
-    services.nfs.server.lockdPort = 32803;
-    services.nfs.server.mountdPort = 892;
-    services.nfs.server.statdPort = 662;
+    services.nfs.server.lockdPort = nfs.lockdPort;
+    services.nfs.server.mountdPort = nfs.mountdPort;
+    services.nfs.server.statdPort = nfs.statdPort;
 
     networking.firewall = {
       allowedTCPPorts = [
-        2049
-        111
-        892
-        32803
-        662
+        nfs.nfsPort
+        nfs.rpcbindPort
+        nfs.mountdPort
+        nfs.lockdPort
+        nfs.statdPort
       ];
       allowedUDPPorts = [
-        2049
-        111
-        892
-        32803
-        662
+        nfs.nfsPort
+        nfs.rpcbindPort
+        nfs.mountdPort
+        nfs.lockdPort
+        nfs.statdPort
       ];
     };
 
