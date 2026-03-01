@@ -253,6 +253,7 @@
                     pavucontrol
                     nfs-utils
                     jellyfin-media-player
+                    element-desktop
                   ];
 
                   services.flatpak.packages = [

@@ -145,8 +145,8 @@ let
   enableInstagram = false;
   enableFacebook = false;
   enableWhatsapp = false;
-  enableDiscord = false;
-  enableTelegram = true;
+  enableDiscord = true;
+  enableTelegram = false;  # requires telegram.api_id/api_hash from https://my.telegram.org
 
   # Bind mount definitions following forgejo.nix pattern
   binds = [
@@ -401,6 +401,30 @@ in
         # the bridge anyway, and Signal E2EE is handled on Signal's side.
         nixpkgs.config.permittedInsecurePackages = [
           "olm-3.2.16"
+        ];
+
+        # TODO: override mautrix-signal once nixpkgs has >= v26.02.1
+        # (fixes "sync message sent destination is nil" with Signal Android 8.x)
+        # See: https://github.com/mautrix/signal/issues/637
+        # For now, update matrix-nixpkgs input to get v26.02 + libsignal-ffi 0.87.1,
+        # then apply the fix patches on top.
+        nixpkgs.overlays = [
+          (final: prev: {
+            mautrix-signal = prev.mautrix-signal.override {
+              buildGoModule = args: prev.buildGoModule (args // {
+                version = "26.02.1-pre";
+                src = final.fetchFromGitHub {
+                  owner = "mautrix";
+                  repo = "signal";
+                  rev = "09ba9d04b2b1f9e6d44fa93cbabc009ec8851962";
+                  hash = "sha256-tUAWWowl4tGMlx5MmembawWpdo2hhmooQHZf5A3rWtg=";
+                };
+                vendorHash = "sha256-TFz5P8czj8J9+QTFHjffCldw8Je2+DiM49W7jv5rY/I=";
+                doCheck = false;
+                doInstallCheck = false;
+              });
+            };
+          })
         ];
 
         networking = {
