@@ -119,8 +119,8 @@ in
       ${lib.concatStringsSep "\n" (
         lib.map (bind: ''
           mkdir -p ${bind.host}
-          chown -R ${toString bind.uid}:${toString bind.gid} ${bind.host}
-          chmod -R 750 ${bind.host}
+          chown ${toString bind.uid}:${toString bind.gid} ${bind.host}
+          chmod 750 ${bind.host}
         '') bindsWithUsers
       )}
     '';

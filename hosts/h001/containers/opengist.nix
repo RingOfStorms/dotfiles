@@ -26,8 +26,8 @@ in
   };
   system.activationScripts."${name}_directories" = ''
     mkdir -p ${hostDataDir}
-    chown -R root:root ${hostDataDir}
-    chmod -R 777 ${hostDataDir}
+    chown root:root ${hostDataDir}
+    chmod 777 ${hostDataDir}
   '';
 
   services.nginx.virtualHosts."${c.domain}" = {
