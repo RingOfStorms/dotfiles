@@ -71,6 +71,8 @@
               (
                 { config, pkgs, ... }:
                 rec {
+                  security.sudo.wheelNeedsPassword = false;
+
                   # Home Manager
                   home-manager = {
                     useUserPackages = true;
