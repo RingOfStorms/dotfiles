@@ -35,6 +35,12 @@ in
     };
   };
 
+  # nginx listens on overlay IP, needs tailscale interface up
+  systemd.services.nginx = {
+    wants = [ "network-online.target" ];
+    after = [ "network-online.target" "tailscaled.service" ];
+  };
+
   services.nginx = {
     enable = true;
     recommendedGzipSettings = true;

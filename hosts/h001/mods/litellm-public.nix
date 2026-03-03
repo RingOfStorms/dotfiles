@@ -32,7 +32,8 @@ in
 
     systemd.services.litellm-public = {
       description = "LiteLLM Exposed Proxy (limited model set)";
-      after = [ "network.target" ];
+      wants = [ "network-online.target" ];
+      after = [ "network-online.target" "tailscaled.service" ];
       wantedBy = [ "multi-user.target" ];
 
       environment = {

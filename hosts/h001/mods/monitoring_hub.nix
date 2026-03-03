@@ -18,6 +18,12 @@ in
   disabledModules = [ declaration ];
   imports = [ "${nixpkgsBeszel}/nixos/modules/${declaration}" ];
   config = {
+    # beszel-hub binds to overlay IP, needs tailscale interface up
+    systemd.services.beszel-hub = {
+      wants = [ "network-online.target" ];
+      after = [ "network-online.target" "tailscaled.service" ];
+    };
+
     services.beszel.hub = {
       package = pkgsBeszel.beszel;
       enable = true;

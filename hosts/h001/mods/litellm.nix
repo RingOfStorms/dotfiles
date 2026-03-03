@@ -22,6 +22,13 @@ in
     # Expose litellm to my overlay network as well
     networking.firewall.interfaces."tailscale0".allowedTCPPorts = [ c.port ];
 
+    # Ensure litellm starts after DNS is available and tailscale is up
+    # (copilot models need to reach github, air/azure models need tailscale network)
+    systemd.services.litellm = {
+      wants = [ "network-online.target" ];
+      after = [ "network-online.target" "tailscaled.service" ];
+    };
+
     services.litellm = {
       enable = true;
       port = c.port;

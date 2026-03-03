@@ -29,6 +29,12 @@ in
       };
   };
 
+  # nginx proxies to tailscale overlay IPs and binds on overlayIp
+  systemd.services.nginx = {
+    wants = [ "network-online.target" ];
+    after = [ "network-online.target" "tailscaled.service" ];
+  };
+
   security.acme.acceptTerms = true;
   security.acme.defaults.email = c.host.acmeEmail;
   services.nginx = {
