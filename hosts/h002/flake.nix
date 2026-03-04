@@ -58,7 +58,7 @@
               inputs.common.nixosModules.hardening
               inputs.common.nixosModules.nix_options
               inputs.common.nixosModules.no_sleep
-              inputs.common.nixosModules.timezone_auto
+              inputs.common.nixosModules.timezone_chi
               inputs.common.nixosModules.tty_caps_esc
               inputs.common.nixosModules.zsh
               inputs.common.nixosModules.tailnet

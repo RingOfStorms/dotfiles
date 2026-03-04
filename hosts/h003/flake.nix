@@ -52,7 +52,7 @@
               common.nixosModules.nix_options
               common.nixosModules.podman
               common.nixosModules.tailnet
-              common.nixosModules.timezone_auto
+              common.nixosModules.timezone_chi
               common.nixosModules.tty_caps_esc
               common.nixosModules.zsh
 
