@@ -594,6 +594,14 @@ in
           ];
         };
 
+        # Pin matrix-synapse UID/GID to match host bind mount ownership
+        users.users.matrix-synapse = {
+          uid = lib.mkForce c.synapseUid;
+        };
+        users.groups.matrix-synapse = {
+          gid = lib.mkForce c.synapseGid;
+        };
+
         # Ensure Synapse waits for gmessages bridge registration and has access.
         # All other bridges (signal, meta, whatsapp, discord, telegram) handle
         # their own Synapse integration automatically via registerToSynapse —
