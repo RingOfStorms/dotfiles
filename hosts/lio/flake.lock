@@ -322,22 +322,6 @@
         "type": "github"
       }
     },
-    "nixpkgs-bun-latest": {
-      "locked": {
-        "lastModified": 1772091128,
-        "narHash": "sha256-TnrYykX8Mf/Ugtkix6V+PjW7miU2yClA6uqWl/v6KWM=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "3f0336406035444b4a24b942788334af5f906259",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "3f0336406035444b4a24b942788334af5f906259",
-        "type": "github"
-      }
-    },
     "nixpkgs-unstable": {
       "locked": {
         "lastModified": 1771848320,
@@ -388,6 +372,22 @@
     },
     "nixpkgs_4": {
       "locked": {
+        "lastModified": 1772091128,
+        "narHash": "sha256-TnrYykX8Mf/Ugtkix6V+PjW7miU2yClA6uqWl/v6KWM=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "3f0336406035444b4a24b942788334af5f906259",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_5": {
+      "locked": {
         "lastModified": 1769170682,
         "narHash": "sha256-oMmN1lVQU0F0W2k6OI3bgdzp2YOHWYUAw79qzDSjenU=",
         "owner": "NixOS",
@@ -402,7 +402,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_5": {
+    "nixpkgs_6": {
       "locked": {
         "lastModified": 1769018530,
         "narHash": "sha256-MJ27Cy2NtBEV5tsK+YraYr2g851f3Fl1LpNHDzDX15c=",
@@ -418,7 +418,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_6": {
+    "nixpkgs_7": {
       "locked": {
         "lastModified": 1761672384,
         "narHash": "sha256-o9KF3DJL7g7iYMZq9SWgfS1BFlNbsm6xplRjVlOCkXI=",
@@ -434,7 +434,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_7": {
+    "nixpkgs_8": {
       "locked": {
         "lastModified": 1771848320,
         "narHash": "sha256-0MAd+0mun3K/Ns8JATeHT1sX28faLII5hVLq0L3BdZU=",
@@ -1300,21 +1300,20 @@
     },
     "opencode": {
       "inputs": {
-        "nixpkgs": [
-          "nixpkgs-bun-latest"
-        ]
+        "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1772573724,
-        "narHash": "sha256-oFNT4AiW7dm04gMpcfTejIy2iSInjK7dN6unGJz5nyY=",
+        "lastModified": 1772782174,
+        "narHash": "sha256-FBmF7/uwZYY/qY1252Hz+XhXdE+Qp5axySAy5Jw7XUQ=",
         "owner": "anomalyco",
         "repo": "opencode",
-        "rev": "9a4292726875e89f3614ba70f27d4cac1c153eed",
+        "rev": "6c7d968c4423a0cd6c85099c9377a6066313fa0a",
         "type": "github"
       },
       "original": {
         "owner": "anomalyco",
         "repo": "opencode",
+        "rev": "6c7d968c4423a0cd6c85099c9377a6066313fa0a",
         "type": "github"
       }
     },
@@ -1340,7 +1339,7 @@
     "qvm": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs_4"
+        "nixpkgs": "nixpkgs_5"
       },
       "locked": {
         "lastModified": 1770187578,
@@ -1361,7 +1360,7 @@
         "agenix": "agenix",
         "crane": "crane",
         "flake-utils": "flake-utils_2",
-        "nixpkgs": "nixpkgs_6",
+        "nixpkgs": "nixpkgs_7",
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
@@ -1386,7 +1385,6 @@
         "flatpaks": "flatpaks",
         "home-manager": "home-manager_2",
         "nixpkgs": "nixpkgs_3",
-        "nixpkgs-bun-latest": "nixpkgs-bun-latest",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "opencode": "opencode",
         "qvm": "qvm",
@@ -1398,7 +1396,7 @@
     },
     "ros_neovim": {
       "inputs": {
-        "nixpkgs": "nixpkgs_5",
+        "nixpkgs": "nixpkgs_6",
         "nvim_plugin-Almo7aya/openingh.nvim": "nvim_plugin-Almo7aya/openingh.nvim",
         "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring": "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring",
         "nvim_plugin-L3MON4D3/LuaSnip": "nvim_plugin-L3MON4D3/LuaSnip",
@@ -1552,7 +1550,7 @@
       "inputs": {
         "crane": "crane_2",
         "flake-utils": "flake-utils_3",
-        "nixpkgs": "nixpkgs_7"
+        "nixpkgs": "nixpkgs_8"
       },
       "locked": {
         "dir": "flakes/stt_ime",

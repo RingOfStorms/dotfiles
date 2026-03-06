@@ -21,9 +21,7 @@
     # stt_ime.url = "path:../../flakes/stt_ime";
     stt_ime.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/stt_ime";
 
-    opencode.url = "github:anomalyco/opencode";
-    nixpkgs-bun-latest.url = "github:NixOS/nixpkgs/3f0336406035444b4a24b942788334af5f906259";
-    opencode.inputs.nixpkgs.follows = "nixpkgs-bun-latest";
+    opencode.url = "github:anomalyco/opencode/6c7d968c4423a0cd6c85099c9377a6066313fa0a";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
     qvm.url = "git+https://git.joshuabell.xyz/ringofstorms/qvm";
