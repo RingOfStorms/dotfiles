@@ -117,6 +117,8 @@ in
           })
           # curl -L "http://100.64.0.8:9010/azure/openai/models?api-version=2025-04-01-preview" | jq '.data.[].id'
           [
+            "gpt-5.4-2026-03-05"
+            "gpt-5.3-codex-2026-02-24"
             "gpt-5.2-2025-12-11"
             "gpt-5.1-2025-11-13"
             "gpt-4o-2024-05-13"
