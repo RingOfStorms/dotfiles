@@ -458,6 +458,35 @@ in
       };
     })
 
+    # ── Fix /var/run symlink ──────────────────────────────────────────────
+    # On a fresh root, /var/run may be created as a real directory before
+    # NixOS activation gets to create the expected /var/run -> /run symlink.
+    # Many services (e.g. automatic-timezoned) expect /var/run/dbus/... to
+    # resolve to /run/dbus/.... This ensures /var/run is always a symlink.
+    {
+      systemd.services.fix-var-run-symlink = {
+        description = "Ensure /var/run is a symlink to /run";
+        wantedBy = [ "sysinit.target" ];
+        before = [ "sysinit.target" "dbus.socket" "dbus.service" ];
+        after = [ "local-fs.target" ];
+        unitConfig.DefaultDependencies = false;
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = pkgs.writeShellScript "fix-var-run" ''
+            if [ -d /var/run ] && [ ! -L /var/run ]; then
+              # Move any existing contents into /run
+              ${pkgs.coreutils}/bin/cp -a /var/run/. /run/ 2>/dev/null || true
+              ${pkgs.coreutils}/bin/rm -rf /var/run
+              ${pkgs.coreutils}/bin/ln -sfn /run /var/run
+            elif [ ! -e /var/run ]; then
+              ${pkgs.coreutils}/bin/ln -sfn /run /var/run
+            fi
+          '';
+        };
+      };
+    }
+
     # ── Impermanence tools CLI + GC service ────────────────────────────────
     {
       environment.systemPackages = [
