@@ -17,6 +17,12 @@ in
         ];
         scriptDelayMs = 500;
       };
+      diskMonitor.sensors = [
+        { name = "disk/NIXROOT/usedPercent"; color = "180,190,254"; label = "/"; }
+        { name = "disk/NIXBOOT/usedPercent"; color = "166,227,161"; label = "/boot"; }
+        # Uses UUID since fstab mounts by-uuid
+        { name = "disk/7ddb48bd-160c-4049-a4fa-a5ac2b6a5402/usedPercent"; color = "249,226,175"; label = "/mnt/nvme1tb"; }
+      ];
       sddm.autologinUser = null;
       # GPU vendor left unset; set per machine if needed TODO
     };

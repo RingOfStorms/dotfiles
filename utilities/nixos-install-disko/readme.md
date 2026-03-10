@@ -324,51 +324,11 @@ authenticate and fetch secrets. This is a one-time setup per host.
 
 ### USB Key for Auto-Unlock (Optional)
 
-If `usbKey = true` in the impermanence config, format a USB stick as bcachefs
-and write the disk passphrase as the key. The unlock service scans all USB block
-devices for a bcachefs partition with a `/key` file at boot.
+If `usbKey = true` in the impermanence config, a USB stick with a bcachefs
+filesystem containing a `/key` file can auto-unlock the disk at boot. The USB
+drive can optionally be encrypted with `usbKeyPassword`.
 
-#### Unencrypted USB key (simplest)
-
-```sh
-DEVICE=sdX1
-bcachefs format /dev/$DEVICE
-mount -t bcachefs --mkdir /dev/$DEVICE /tmp/usb_key
-# Write the same passphrase used during disko encryption
-echo -n 'your-passphrase' > /tmp/usb_key/key
-umount /tmp/usb_key
-```
-
-#### Encrypted USB key (recommended)
-
-If `usbKeyPassword` is also set in the config, the USB drive itself can be
-encrypted. This prevents trivial exposure of the disk passphrase if the USB key
-is lost separately from the machine. The password is a publicly-known secret
-baked into the NixOS config -- it only adds a thin layer against casual reads.
-
-```nix
-ringofstorms.impermanence = {
-  usbKey = true;
-  usbKeyPassword = "some-known-password";
-};
-```
-
-Format the USB stick with encryption:
-
-```sh
-DEVICE=sdX1
-echo -n 'some-known-password' > /tmp/usb.key
-bcachefs format --encrypted --passphrase_file=/tmp/usb.key /dev/$DEVICE
-bcachefs unlock -f /tmp/usb.key /dev/$DEVICE
-mount -t bcachefs --mkdir /dev/$DEVICE /tmp/usb_key
-echo -n 'your-disk-passphrase' > /tmp/usb_key/key
-umount /tmp/usb_key
-rm /tmp/usb.key
-```
-
-The unlock service tries unencrypted mounts first, then attempts the configured
-`usbKeyPassword` on any drives that fail to mount. If no USB key is found, it
-falls back to an interactive passphrase prompt as usual.
+See [usb_key.md](usb_key.md) for full instructions on formatting and setup.
 
 ## Summary: Steps for a New Impermanence Host
 

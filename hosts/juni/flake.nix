@@ -86,6 +86,12 @@
                     ../../hosts/_shared_assets/wallpapers/pixel_neon.png
                     ../../hosts/_shared_assets/wallpapers/pixel_neon_v.png
                   ];
+                  diskMonitor.sensors = [
+                    { name = "disk/3bfd6e57-5e0f-4742-99e3-e69891ae2431/usedPercent"; color = "180,190,254"; label = "/"; }
+                    { name = "disk/F5C0-5585/usedPercent"; color = "166,227,161"; label = "/boot"; }
+                    { name = "disk/nix/usedPercent"; color = "249,226,175"; label = "/nix"; }
+                    { name = "disk/persist/usedPercent"; color = "203,166,247"; label = "/persist"; }
+                  ];
                 };
               })
               inputs.common.nixosModules.jetbrains_font

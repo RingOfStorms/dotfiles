@@ -137,20 +137,14 @@
         "plasma-manager": "plasma-manager"
       },
       "locked": {
-        "dir": "flakes/de_plasma",
-        "lastModified": 1772202625,
-        "narHash": "sha256-c6z+wnm1tiO8KEHv0XAenkgix/qRYnvN6isftmE6rDU=",
-        "ref": "refs/heads/master",
-        "rev": "efd84ba6351d35c130a633eee7639e685566a54f",
-        "revCount": 1267,
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+        "path": "../../flakes/de_plasma",
+        "type": "path"
       },
       "original": {
-        "dir": "flakes/de_plasma",
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      }
+        "path": "../../flakes/de_plasma",
+        "type": "path"
+      },
+      "parent": []
     },
     "flake-utils": {
       "inputs": {

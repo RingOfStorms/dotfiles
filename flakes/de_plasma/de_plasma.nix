@@ -60,6 +60,27 @@ in
       description = "Set an autologin user for SDDM (optional).";
     };
 
+    diskMonitor.sensors = mkOption {
+      type = types.listOf (types.submodule {
+        options = {
+          name = mkOption {
+            type = types.str;
+            description = "ksystemstats sensor ID, e.g. disk/NIXROOT/usedPercent.";
+          };
+          color = mkOption {
+            type = types.str;
+            description = "RGB color string, e.g. 180,190,254.";
+          };
+          label = mkOption {
+            type = types.str;
+            description = "Human-readable label shown in the widget, e.g. /.";
+          };
+        };
+      });
+      default = [ ];
+      description = "Per-host disk sensors for the panel system monitor widget. Leave empty to hide the widget.";
+    };
+
     gpu = {
       enable32Bit = mkOption {
         type = types.bool;

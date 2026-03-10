@@ -5,7 +5,21 @@
 }:
 let
   cfg = osConfig.ringofstorms.dePlasma;
-  inherit (lib) mkIf optionalAttrs;
+  inherit (lib) mkIf optionalAttrs optional;
+
+  hasDiskSensors = cfg.diskMonitor.sensors != [ ];
+
+  diskMonitorWidget = {
+    systemMonitor = {
+      title = "Disks";
+      showTitle = false;
+      displayStyle = "org.kde.ksysguard.textonly";
+      sensors = map (s: {
+        inherit (s) name color label;
+      }) cfg.diskMonitor.sensors;
+      totalSensors = [ "disk/all/usedPercent" ];
+    };
+  };
 in
 {
   imports = [
@@ -195,7 +209,7 @@ in
           screen = "all";
           widgets = [
             "org.kde.plasma.digitalclock"
-          ];
+          ] ++ optional hasDiskSensors diskMonitorWidget;
         }
         {
           location = "top";
