@@ -1303,17 +1303,17 @@
         "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1772906439,
-        "narHash": "sha256-XCf0ijRZZjp16YS9V65ZMoQzTWYRUrle3L4vWIxvy3M=",
+        "lastModified": 1773072574,
+        "narHash": "sha256-smGIc6lYWSjfmGAikoYpP7GbB6mWacrPWrRtp/+HJ3E=",
         "owner": "anomalyco",
         "repo": "opencode",
-        "rev": "a52d640c8c56a5d9fb4623a1c601046c3d9a37b7",
+        "rev": "c6262f9d4002d86a1f1795c306aa329d45361d12",
         "type": "github"
       },
       "original": {
         "owner": "anomalyco",
         "repo": "opencode",
-        "rev": "a52d640c8c56a5d9fb4623a1c601046c3d9a37b7",
+        "rev": "c6262f9d4002d86a1f1795c306aa329d45361d12",
         "type": "github"
       }
     },
@@ -1342,11 +1342,11 @@
         "nixpkgs": "nixpkgs_5"
       },
       "locked": {
-        "lastModified": 1770187578,
-        "narHash": "sha256-xeufX4vewoO93VRkkbIy5x/z7leMLuqa5VP/u5t1zHM=",
+        "lastModified": 1773116659,
+        "narHash": "sha256-fJ8x8NW16fowrKjUZ/KONLBInOX6R3+tS0bWtSjCDVw=",
         "ref": "refs/heads/main",
-        "rev": "cbe9b7241abcfde107b1f2c96a0eff3805c6b7dc",
-        "revCount": 24,
+        "rev": "08236f04a0b57d82adeb648080f25c8bbdbca3ff",
+        "revCount": 25,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/qvm"
       },
