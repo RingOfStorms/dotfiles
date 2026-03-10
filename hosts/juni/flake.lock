@@ -38,20 +38,14 @@
     },
     "common": {
       "locked": {
-        "dir": "flakes/common",
-        "lastModified": 1773170868,
-        "narHash": "sha256-pNuVjR0+MLqmiTzmz4dwZEq5vuoUBWolgouByFh4pxU=",
-        "ref": "refs/heads/master",
-        "rev": "426d8a3224c69810724b653886628290676db15e",
-        "revCount": 1317,
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+        "path": "../../flakes/common",
+        "type": "path"
       },
       "original": {
-        "dir": "flakes/common",
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      }
+        "path": "../../flakes/common",
+        "type": "path"
+      },
+      "parent": []
     },
     "crane": {
       "locked": {
@@ -74,11 +68,11 @@
       },
       "locked": {
         "dir": "flakes/de_plasma",
-        "lastModified": 1773170868,
-        "narHash": "sha256-pNuVjR0+MLqmiTzmz4dwZEq5vuoUBWolgouByFh4pxU=",
+        "lastModified": 1773173637,
+        "narHash": "sha256-yjmhfkuZITutVHzcuwGBAaIgK9Aq4CCqRAh0TvmETiQ=",
         "ref": "refs/heads/master",
-        "rev": "426d8a3224c69810724b653886628290676db15e",
-        "revCount": 1317,
+        "rev": "d2279136bfc1a31a94e43c8e9db825b8db4d6b1d",
+        "revCount": 1319,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -214,20 +208,14 @@
         "impermanence": "impermanence_2"
       },
       "locked": {
-        "dir": "flakes/impermanence",
-        "lastModified": 1773170868,
-        "narHash": "sha256-pNuVjR0+MLqmiTzmz4dwZEq5vuoUBWolgouByFh4pxU=",
-        "ref": "refs/heads/master",
-        "rev": "426d8a3224c69810724b653886628290676db15e",
-        "revCount": 1317,
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+        "path": "../../flakes/impermanence",
+        "type": "path"
       },
       "original": {
-        "dir": "flakes/impermanence",
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      }
+        "path": "../../flakes/impermanence",
+        "type": "path"
+      },
+      "parent": []
     },
     "impermanence_2": {
       "inputs": {

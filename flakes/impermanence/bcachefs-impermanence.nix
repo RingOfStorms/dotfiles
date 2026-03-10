@@ -349,13 +349,14 @@ in
           Type = "oneshot";
           RemainAfterExit = true;
           KeyringMode = "shared";
+          # TTY access is needed for passphrase fallback prompt
           StandardInput = "tty";
           StandardOutput = "tty";
           StandardError = "tty";
           TTYPath = "/dev/console";
-          TTYReset = true;
-          TTYVHangup = true;
-          TTYVTDisallocate = true;
+          TTYReset = "no";
+          TTYVHangup = "no";
+          TTYVTDisallocate = "no";
         };
 
         script =
@@ -365,32 +366,49 @@ in
             PRIMARY = cfg.disk.primary;
           in
           ''
+            log() { echo "[usb-unlock] $*"; }
+
             try_mount_and_read_key() {
               local dev="$1"
               local mount_point="$2"
 
-              # Try unencrypted mount first
-              if mount -t bcachefs -o ro "$dev" "$mount_point" 2>/dev/null; then
+              # Try unencrypted bcachefs mount first
+              log "  Trying unencrypted bcachefs mount of $dev..."
+              local mount_err
+              if mount_err=$(mount -t bcachefs -o ro "$dev" "$mount_point" 2>&1); then
+                log "  Mounted $dev (unencrypted bcachefs)"
                 if [ -f "$mount_point/key" ]; then
+                  log "  Found key file on $dev"
                   return 0
                 fi
+                log "  No key file found on $dev, unmounting"
                 umount "$mount_point" || true
                 return 1
+              else
+                log "  Unencrypted mount failed: $mount_err"
               fi
 
               # If a USB key password is configured, try unlocking encrypted drives
               if [[ -n "${USB_KEY_PASSWORD}" ]]; then
-                echo "Attempting encrypted unlock of $dev..."
+                log "  Trying encrypted bcachefs unlock of $dev..."
                 echo -n "${USB_KEY_PASSWORD}" > /tmp/usb_key_passphrase
-                if ${pkgs.bcachefs-tools}/bin/bcachefs unlock -f /tmp/usb_key_passphrase "$dev" 2>/dev/null; then
+                local unlock_err
+                if unlock_err=$(${pkgs.bcachefs-tools}/bin/bcachefs unlock -f /tmp/usb_key_passphrase "$dev" 2>&1); then
                   rm -f /tmp/usb_key_passphrase
-                  if mount -t bcachefs -o ro "$dev" "$mount_point" 2>/dev/null; then
+                  log "  Encrypted unlock succeeded, mounting..."
+                  if mount_err=$(mount -t bcachefs -o ro "$dev" "$mount_point" 2>&1); then
                     if [ -f "$mount_point/key" ]; then
+                      log "  Found key file on $dev (after encrypted unlock)"
                       return 0
                     fi
+                    log "  No key file on $dev after encrypted unlock"
                     umount "$mount_point" || true
                     return 1
+                  else
+                    log "  Mount after encrypted unlock failed: $mount_err"
                   fi
+                else
+                  log "  Encrypted unlock failed: $unlock_err"
                 fi
                 rm -f /tmp/usb_key_passphrase
               fi
@@ -403,43 +421,99 @@ in
                 return 2
               fi
 
-              echo "Scanning for USB unlock key (bcachefs with /key file)..."
+              log "Scanning for USB unlock key (bcachefs with /key file)..."
               mkdir -p /tmp/usb_key_mount
 
-              # Wait up to 4 seconds for USB devices to appear
-              for attempt in {1..40}; do
-                for dev in /dev/sd*; do
-                  # Only try whole-disk devices and partitions that are block devices
-                  [ -b "$dev" ] || continue
+              # Resolve primary device path once outside the loop
+              real_primary="$(readlink -f "${PRIMARY}" 2>/dev/null || echo "${PRIMARY}")"
+              log "Primary device resolves to: $real_primary"
 
-                  # Skip if already the primary device
-                  real_primary="$(readlink -f "${PRIMARY}" 2>/dev/null || echo "${PRIMARY}")"
+              # Trigger udev and wait for USB devices to settle
+              udevadm trigger --subsystem-match=block
+              udevadm settle --timeout=10 || true
+
+              # Wait up to 15 seconds for USB devices to appear
+              local max_wait=15
+              local waited=0
+              local found_any_sd=0
+
+              while [ "$waited" -lt "$max_wait" ]; do
+                # Check what block devices exist right now
+                local devs_found=0
+                for dev in /dev/sd*; do
+                  [ -b "$dev" ] || continue
+                  devs_found=1
+
+                  # Skip the primary device
+                  local real_dev
                   real_dev="$(readlink -f "$dev" 2>/dev/null || echo "$dev")"
-                  [ "$real_dev" = "$real_primary" ] && continue
+                  if [ "$real_dev" = "$real_primary" ]; then
+                    log "Skipping $dev (is primary device)"
+                    continue
+                  fi
+
+                  # Skip whole-disk devices if they have partitions
+                  # (e.g. skip /dev/sda if /dev/sda1 exists)
+                  if [[ "$dev" =~ ^/dev/sd[a-z]+$ ]]; then
+                    local has_parts=0
+                    for part in "''${dev}"[0-9]*; do
+                      if [ -b "$part" ]; then
+                        has_parts=1
+                        break
+                      fi
+                    done
+                    if [ "$has_parts" -eq 1 ]; then
+                      log "Skipping whole-disk $dev (has partitions, will try them instead)"
+                      continue
+                    fi
+                  fi
+
+                  found_any_sd=1
+                  log "Trying device: $dev"
 
                   if try_mount_and_read_key "$dev" /tmp/usb_key_mount; then
-                    echo "Found key on $dev. Attempting unlock..."
-                    if ${pkgs.bcachefs-tools}/bin/bcachefs unlock -f /tmp/usb_key_mount/key "${PRIMARY}"; then
+                    log "Found key on $dev. Attempting to unlock primary..."
+                    local primary_err
+                    if primary_err=$(${pkgs.bcachefs-tools}/bin/bcachefs unlock -f /tmp/usb_key_mount/key "${PRIMARY}" 2>&1); then
                       umount /tmp/usb_key_mount || true
-                      echo "Bcachefs unlock successful (USB key on $dev)!"
+                      log "Bcachefs unlock successful (USB key on $dev)!"
                       return 0
                     fi
-                    echo "Key on $dev failed to unlock."
+                    log "Key on $dev failed to unlock primary: $primary_err"
                     umount /tmp/usb_key_mount || true
                   fi
                 done
-                sleep 0.1
+
+                if [ "$devs_found" -eq 0 ]; then
+                  log "No /dev/sd* devices found yet (waited ''${waited}s)..."
+                elif [ "$found_any_sd" -eq 1 ]; then
+                  # We found and tried all available USB devices, no point
+                  # in busy-looping. Wait a bit then do one more pass in case
+                  # a slow device shows up.
+                  log "Tried all available devices, waiting for new ones (''${waited}s)..."
+                fi
+
+                sleep 1
+                waited=$((waited + 1))
+
+                # Re-trigger udev every few seconds in case new devices appeared
+                if [ $((waited % 3)) -eq 0 ]; then
+                  udevadm trigger --subsystem-match=block 2>/dev/null || true
+                  udevadm settle --timeout=3 || true
+                fi
               done
 
-              echo "No USB key found within timeout."
+              log "No USB key found within ''${max_wait}s timeout."
+              log "Devices seen during scan:"
+              ls -la /dev/sd* 2>/dev/null || log "  (none)"
               return 2
             }
 
             unlock_with_passphrase_until_success() {
-              echo "Unlocking ${PRIMARY} (will retry on failure)..."
+              log "Falling back to passphrase unlock for ${PRIMARY}..."
               while true; do
                 if ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"; then
-                  echo "Bcachefs unlock successful (passphrase)!"
+                  log "Bcachefs unlock successful (passphrase)!"
                   return 0
                 fi
                 echo "Unlock failed. Try again."

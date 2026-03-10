@@ -33,6 +33,7 @@
       "/machine-key.json"
       "/etc/machine-id"
       "/etc/adjtime"
+      "/etc/localtime"
       # NOTE: if you want mutable passwords across reboots, persist these,
       # but you must do a one-time migration (see notes in chat).
       # "/etc/shadow"
@@ -66,13 +67,19 @@
         # Hugging Face cache (e.g. whisper.cpp models via hf-hub)
         ".cache/huggingface"
 
+        ".config/pulse"
+        ".config/direnv"
         ".config/opencode"
+        ".local/share/opencode"
 
         # KDE
         ".config/kdeconnect"
 
         # Chrome
         ".config/google-chrome"
+
+        ".local/share/baloo"
+        ".local/state/wireplumber"
 
         # neovim ros_neovim
         ".local/state/nvim_ringofstorms_helium"
