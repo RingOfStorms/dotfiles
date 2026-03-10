@@ -17,6 +17,9 @@
       "/var/lib/NetworkManager"
       "/var/lib/iwd"
       "/var/lib/fail2ban"
+
+      # cached timezone name for offline restore
+      "/var/lib/timezone-cache"
     ];
     files = [
       "/etc/machine-id"

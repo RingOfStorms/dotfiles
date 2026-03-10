@@ -372,11 +372,33 @@ in
               local dev="$1"
               local mount_point="$2"
 
-              # Try unencrypted bcachefs mount first
-              log "  Trying unencrypted bcachefs mount of $dev..."
+              # Check if this bcachefs device is encrypted before attempting mount,
+              # because mount on an encrypted drive will block waiting for a key.
+              if ${pkgs.bcachefs-tools}/bin/bcachefs unlock -c "$dev" 2>/dev/null; then
+                # Device IS encrypted
+                if [[ -n "${USB_KEY_PASSWORD}" ]]; then
+                  log "  $dev is encrypted, trying configured password..."
+                  echo -n "${USB_KEY_PASSWORD}" > /tmp/usb_key_passphrase
+                  local unlock_err
+                  if unlock_err=$(${pkgs.bcachefs-tools}/bin/bcachefs unlock -f /tmp/usb_key_passphrase "$dev" 2>&1); then
+                    rm -f /tmp/usb_key_passphrase
+                    log "  Unlocked $dev"
+                  else
+                    rm -f /tmp/usb_key_passphrase
+                    log "  Failed to unlock $dev: $unlock_err"
+                    return 1
+                  fi
+                else
+                  log "  $dev is encrypted but no USB key password configured, skipping"
+                  return 1
+                fi
+              fi
+
+              # Device is either unencrypted or was just unlocked -- mount it
+              log "  Mounting $dev..."
               local mount_err
-              if mount_err=$(mount -t bcachefs -o ro "$dev" "$mount_point" 2>&1); then
-                log "  Mounted $dev (unencrypted bcachefs)"
+              if mount_err=$(mount -t bcachefs -o ro "$dev" "$mount_point" </dev/null 2>&1); then
+                log "  Mounted $dev"
                 if [ -f "$mount_point/key" ]; then
                   log "  Found key file on $dev"
                   return 0
@@ -385,32 +407,7 @@ in
                 umount "$mount_point" || true
                 return 1
               else
-                log "  Unencrypted mount failed: $mount_err"
-              fi
-
-              # If a USB key password is configured, try unlocking encrypted drives
-              if [[ -n "${USB_KEY_PASSWORD}" ]]; then
-                log "  Trying encrypted bcachefs unlock of $dev..."
-                echo -n "${USB_KEY_PASSWORD}" > /tmp/usb_key_passphrase
-                local unlock_err
-                if unlock_err=$(${pkgs.bcachefs-tools}/bin/bcachefs unlock -f /tmp/usb_key_passphrase "$dev" 2>&1); then
-                  rm -f /tmp/usb_key_passphrase
-                  log "  Encrypted unlock succeeded, mounting..."
-                  if mount_err=$(mount -t bcachefs -o ro "$dev" "$mount_point" 2>&1); then
-                    if [ -f "$mount_point/key" ]; then
-                      log "  Found key file on $dev (after encrypted unlock)"
-                      return 0
-                    fi
-                    log "  No key file on $dev after encrypted unlock"
-                    umount "$mount_point" || true
-                    return 1
-                  else
-                    log "  Mount after encrypted unlock failed: $mount_err"
-                  fi
-                else
-                  log "  Encrypted unlock failed: $unlock_err"
-                fi
-                rm -f /tmp/usb_key_passphrase
+                log "  Mount of $dev failed: $mount_err"
               fi
 
               return 1
@@ -432,8 +429,8 @@ in
               udevadm trigger --subsystem-match=block
               udevadm settle --timeout=10 || true
 
-              # Wait up to 15 seconds for USB devices to appear
-              local max_wait=15
+              # Wait up to 6 seconds for USB devices to appear
+              local max_wait=6
               local waited=0
               local found_any_sd=0
 

@@ -23,6 +23,9 @@
 
       "/var/lib/upower"
 
+      # cached timezone name for offline restore
+      "/var/lib/timezone-cache"
+
       "/var/lib/flatpak"
 
       # bao secrets
@@ -33,7 +36,6 @@
       "/machine-key.json"
       "/etc/machine-id"
       "/etc/adjtime"
-      "/etc/localtime"
       # NOTE: if you want mutable passwords across reboots, persist these,
       # but you must do a one-time migration (see notes in chat).
       # "/etc/shadow"
