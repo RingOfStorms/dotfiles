@@ -10,7 +10,8 @@
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
-    impermanence.url = "github:nix-community/impermanence";
+    # impermanence_mod.url = "path:../../flakes/impermanence";
+    impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
   };
 
   # NIX_SSHOPTS="-i /run/agenix/nix2nix" nixos-rebuild --flake ".#i001" --target-host luser@10.12.14.119 switch
@@ -34,7 +35,19 @@
               inherit inputs;
             };
             modules = [
-              inputs.impermanence.nixosModules.impermanence
+              inputs.impermanence_mod.nixosModules.default
+              ({
+                ringofstorms.impermanence = {
+                  enable = true;
+                  disk = {
+                    boot = "/dev/disk/by-uuid/635D-F0DA";
+                    primary = "/dev/disk/by-uuid/82cb11a7-097a-4e95-b9f0-47dad95de9df";
+                    swap = "/dev/disk/by-uuid/29c89516-e6ed-4f91-adf7-646451a8e26f";
+                  };
+                  encrypted = true;
+                  usbKey = true;
+                };
+              })
               inputs.home-manager.nixosModules.default
 
               inputs.ros_neovim.nixosModules.default
@@ -65,9 +78,7 @@
               inputs.common.nixosModules.zsh
 
               ./hardware-configuration.nix
-              ./hardware-mounts.nix
               ./impermanence.nix
-              ./impermanence-tools.nix
               (
                 {
                   config,

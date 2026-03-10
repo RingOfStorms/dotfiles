@@ -6,21 +6,22 @@
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
-    impermanence.url = "github:nix-community/impermanence";
 
-    # Use relative to get current version for testin
-    common.url = "path:../../flakes/common";
-    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    # Use relative to get current version for testing
+    # impermanence_mod.url = "path:../../flakes/impermanence";
+    impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
+    # common.url = "path:../../flakes/common";
+    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets-bao.url = "path:../../flakes/secrets-bao";
     secrets-bao.url = "path:../../flakes/secrets-bao";
     # flatpaks.url = "path:../../flakes/flatpaks";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
-    de_plasma.url = "path:../../flakes/de_plasma";
-    # de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
-    stt_ime.url = "path:../../flakes/stt_ime";
-    # stt_ime.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/stt_ime";
+    # de_plasma.url = "path:../../flakes/de_plasma";
+    de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
+    # stt_ime.url = "path:../../flakes/stt_ime";
+    stt_ime.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/stt_ime";
 
     opencode.url = "github:anomalyco/opencode";
     nixpkgs-bun-latest.url = "github:NixOS/nixpkgs/3f0336406035444b4a24b942788334af5f906259";
@@ -50,7 +51,20 @@
             specialArgs = { inherit inputs constants; };
             modules = [
               inputs.nixos-hardware.nixosModules.framework-12-13th-gen-intel
-              inputs.impermanence.nixosModules.impermanence
+              inputs.impermanence.nixosModules.default
+              ({
+                ringofstorms.impermanence = {
+                  enable = true;
+                  disk = {
+                    boot = "/dev/disk/by-uuid/F5C0-5585";
+                    primary = "/dev/disk/by-uuid/3bfd6e57-5e0f-4742-99e3-e69891ae2431";
+                    swap = "/dev/disk/by-uuid/ad0311e2-7eb1-47af-bc4b-6311968cbccf";
+                  };
+                  encrypted = true;
+                  usbKey = true;
+                  usbKeyPassword = "expend-scarf-pebble";
+                };
+              })
               ({
                 nixpkgs.overlays = [
                   (final: prev: {
@@ -258,8 +272,6 @@
               })
 
               ./hardware-configuration.nix
-              ./hardware-mounts.nix
-              ./impermanence-tools.nix
               (import ./impermanence.nix { inherit primaryUser; })
               (
                 { config, pkgs, ... }:
