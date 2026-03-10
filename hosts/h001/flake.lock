@@ -243,11 +243,11 @@
     },
     "litellm-nixpkgs": {
       "locked": {
-        "lastModified": 1772542754,
-        "narHash": "sha256-WGV2hy+VIeQsYXpsLjdr4GvHv5eECMISX1zKLTedhdg=",
+        "lastModified": 1772963539,
+        "narHash": "sha256-9jVDGZnvCckTGdYT53d/EfznygLskyLQXYwJLKMPsZs=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "8c809a146a140c5c8806f13399592dbcb1bb5dc4",
+        "rev": "9dcb002ca1690658be4a04645215baea8b95f31d",
         "type": "github"
       },
       "original": {
@@ -1306,11 +1306,11 @@
         "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1772471909,
-        "narHash": "sha256-QrH0pKMS1mc96f87RBtq8kQhRAK2KrbSQDybWbwuEeE=",
+        "lastModified": 1772835576,
+        "narHash": "sha256-rR3jl1PPoDJVk7xkiukydSKgvQPZ3TNDLijGUNKCNzk=",
         "ref": "refs/heads/main",
-        "rev": "de166fe9bc6ac54e3535cf14f8928e3fe7bdd075",
-        "revCount": 57,
+        "rev": "9ef24e1c0b9a3fd36128a1a69503d4e948ca56d4",
+        "revCount": 62,
         "type": "git",
         "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/puzzles.git"
       },
