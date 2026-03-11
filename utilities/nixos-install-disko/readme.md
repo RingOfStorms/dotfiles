@@ -56,6 +56,14 @@ in `flakes/impermanence/disko-bcachefs.nix` and creates:
 - **Partition 3**: bcachefs (rest of disk, optionally encrypted)
   - Subvolumes: `@root`, `@nix`, `@snapshots`, `@persist`
 
+First, fetch the disko config onto the target:
+
+```sh
+mkdir -p /etc/nixos
+curl -o /etc/nixos/disko-bcachefs.nix \
+  https://git.joshuabell.xyz/ringofstorms/dotfiles/raw/branch/master/flakes/impermanence/disko-bcachefs.nix
+```
+
 #### Encrypted (recommended)
 
 ```sh
@@ -72,13 +80,6 @@ nix run github:nix-community/disko/latest -- \
 
 # Clean up the key file
 rm /tmp/bcachefs.key
-```
-
-If fetching the file from the repo directly:
-
-```sh
-curl -o /etc/nixos/disko-bcachefs.nix \
-  https://git.joshuabell.xyz/ringofstorms/dotfiles/raw/branch/master/flakes/impermanence/disko-bcachefs.nix
 ```
 
 #### Unencrypted
