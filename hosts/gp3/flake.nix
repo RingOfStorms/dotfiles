@@ -12,6 +12,8 @@
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # de_plasma.url = "path:../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
+    # flatpaks.url = "path:../../flakes/flatpaks";
+    flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
 
     opencode.url = "github:anomalyco/opencode/c6262f9d4002d86a1f1795c306aa329d45361d12";
 
@@ -23,6 +25,7 @@
       nixpkgs,
       home-manager,
       common,
+      flatpaks,
       ros_neovim,
       ...
     }@inputs:
@@ -72,6 +75,7 @@
               ({
                 ringofstorms-nvim.includeAllRuntimeDependencies = true;
               })
+              flatpaks.nixosModules.default
 
               common.nixosModules.essentials
               common.nixosModules.tmux
@@ -165,6 +169,11 @@
                     google-chrome
                     jellyfin-media-player
                     ffmpeg-full
+                  ];
+
+                  services.flatpak.packages = [
+                    "com.spotify.Client"
+                    "com.bitwarden.desktop"
                   ];
                 }
               )

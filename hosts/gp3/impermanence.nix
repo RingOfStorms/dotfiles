@@ -30,7 +30,6 @@
       "/var/lib/steam"
     ];
     files = [
-      "/machine-key.json"
       "/etc/machine-id"
       "/etc/adjtime"
     ];

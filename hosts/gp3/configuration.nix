@@ -62,6 +62,7 @@
   };
 
   environment.systemPackages = with pkgs; [
+    git
     mangohud
     brightnessctl
     acpi # Battery status
