@@ -4,7 +4,7 @@
 {
   host = {
     name = "gp3";
-    primaryUser = "josh";
-    stateVersion = "25.11";
+    primaryUser = "luser";
+    stateVersion = "26.05";
   };
 }

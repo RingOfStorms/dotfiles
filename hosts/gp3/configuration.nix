@@ -1,7 +1,5 @@
 { pkgs, lib, config, ... }:
 {
-  system.stateVersion = "25.11";
-
   hardware.enableAllFirmware = true;
 
   # Connectivity

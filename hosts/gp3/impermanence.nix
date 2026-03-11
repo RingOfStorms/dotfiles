@@ -23,10 +23,14 @@
 
       "/var/lib/upower"
 
+      # cached timezone name for offline restore
+      "/var/lib/timezone-cache"
+
       # Steam persists its own library, config, and compatdata here
       "/var/lib/steam"
     ];
     files = [
+      "/machine-key.json"
       "/etc/machine-id"
       "/etc/adjtime"
     ];
@@ -53,13 +57,19 @@
         # tmux resurrect session persistence
         ".local/share/tmux"
 
+        ".config/pulse"
+        ".config/direnv"
         ".config/opencode"
+        ".local/share/opencode"
 
         # KDE
         ".config/kdeconnect"
 
         # Chrome
         ".config/google-chrome"
+
+        ".local/share/baloo"
+        ".local/state/wireplumber"
 
         # neovim
         ".local/state/nvim_ringofstorms_helium"

@@ -47,9 +47,9 @@
                 ringofstorms.impermanence = {
                   enable = true;
                   disk = {
-                    boot = "/dev/disk/by-uuid/TODO-BOOT-UUID";
-                    primary = "/dev/disk/by-uuid/TODO-PRIMARY-UUID";
-                    swap = "/dev/disk/by-uuid/TODO-SWAP-UUID";
+                    boot = "/dev/disk/by-uuid/D1C3-B6B2";
+                    primary = "/dev/disk/by-uuid/0d6e4079-e367-03eb-d37c-00722f5891d2";
+                    swap = "/dev/disk/by-uuid/4b56d370-63e8-4613-bf46-c3fc4ad2aa70";
                   };
                   encrypted = true;
                 };
@@ -62,7 +62,7 @@
                 ringofstorms.dePlasma = {
                   enable = true;
                   gpu.intel.enable = true;
-                  sddm.autologinUser = "josh"; # Media box, auto-login
+                  sddm.autologinUser = primaryUser; # Media box, auto-login
                 };
               })
 
@@ -125,7 +125,6 @@
                       common.homeManagerModules.kitty
                       common.homeManagerModules.launcher_rofi
                       common.homeManagerModules.postgres_cli_options
-                      common.homeManagerModules.slicer
                       common.homeManagerModules.starship
                       common.homeManagerModules.zoxide
                       common.homeManagerModules.zsh
@@ -154,7 +153,7 @@
                         "gamemode"
                       ];
                       openssh.authorizedKeys.keys = [
-                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDa0MUnXwRzHPTDakjzLTmye2GTFbRno+KVs0DSeIPb7 nix2gpdpocket3"
+                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH2KFSRkViT+asBTjCgA7LNP3SHnfNCW+jHbV08VUuIi nix2nix"
                       ];
                     };
                   };

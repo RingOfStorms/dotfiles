@@ -5,38 +5,53 @@ encrypted bcachefs, impermanence, and secrets-bao.
 
 ## Prerequisites
 
-- A USB stick flashed with the [NixOS minimal ISO](https://nixos.org/download/#nixos-iso)
-  (any recent release, stable or unstable)
 - Network access (Ethernet recommended, or `nmtui` for Wi-Fi)
 - Your host config already committed in the dotfiles repo under `hosts/<name>/`
+- A USB stick flashed with a **custom NixOS ISO** that includes bcachefs kernel
+  support (neither the stable nor unstable stock ISOs include it)
 
-## Step 1: Boot the ISO & Enable SSH
+### Building the ISO
 
-Boot the target machine from the NixOS minimal USB.
+From your workstation, build the installer ISO from this directory's flake:
 
 ```sh
-# Set root password so you can SSH in from another machine
-passwd
+# Stable channel (nixos-25.11):
+nix build "./utilities/nixos-install-disko#iso-stable"
 
-# Check the IP
+# Unstable channel:
+nix build "./utilities/nixos-install-disko#iso-unstable"
+```
+
+The ISO will be at `result/iso/nixos-*.iso`.
+
+### Flashing to USB
+
+```sh
+DEVICE=/dev/sdX  # double-check with lsblk!
+sudo dd if=result/iso/nixos-*.iso of="$DEVICE" bs=4M status=progress oflag=sync
+```
+
+The ISO includes bcachefs kernel + userspace tools, flakes enabled, SSH with
+password auth, zsh, starship, neovim, and parted. Default password for both
+`nixos` and `root` is `password`.
+
+## Step 1: Boot the ISO & SSH In
+
+Boot the target machine from the USB.
+```sh
 ip a
 ```
 
-From your workstation (lio, oren, etc.), SSH in:
+From your workstation, SSH in:
 
 ```sh
-ssh nixos@<IP>
+IP=10.12.14.125
+ssh root@$IP -i /run/agenix/nix2nix
 ```
 
-## Step 2: Enable Flakes + bcachefs
+Flakes and bcachefs are already enabled on the ISO -- no setup needed.
 
-Run this one-liner on the target to enable flakes and bcachefs for the session:
-
-```sh
-export NIX_CONFIG="experimental-features = nix-command flakes"
-```
-
-## Step 3: Partition & Mount
+## Step 2: Partition & Format
 
 Pick **one** of the two approaches below. Disko is the quick path for simple
 single-drive machines. For multi-drive arrays or unusual layouts, use the manual
@@ -46,22 +61,24 @@ approach.
 lsblk
 ```
 
-### Step 3a: Disko (single-drive)
+### Step 2a: Disko (single-drive)
 
-Best for typical desktops/laptops with one NVMe or SSD. The disko config lives
-in `flakes/impermanence/disko-bcachefs.nix` and creates:
+Best for typical desktops/laptops with one NVMe or SSD. The ISO includes a
+`disko_format` command with disko and the bcachefs partition config pre-bundled.
 
-- **Partition 1**: EFI System Partition (FAT32, 1GB)
+It creates:
+
+- **Partition 1**: EFI System Partition (FAT32, 3GB)
 - **Partition 2**: Swap (configurable, default 8G)
 - **Partition 3**: bcachefs (rest of disk, optionally encrypted)
   - Subvolumes: `@root`, `@nix`, `@snapshots`, `@persist`
 
-First, fetch the disko config onto the target:
+Identify the target disk and swap size:
 
 ```sh
-mkdir -p /etc/nixos
-curl -o /etc/nixos/disko-bcachefs.nix \
-  https://git.joshuabell.xyz/ringofstorms/dotfiles/raw/branch/master/flakes/impermanence/disko-bcachefs.nix
+lsblk
+DISK=/dev/nvme0n1  # or /dev/sda, etc.
+SWAP=16G           # swap partition size
 ```
 
 #### Encrypted (recommended)
@@ -70,13 +87,7 @@ curl -o /etc/nixos/disko-bcachefs.nix \
 # Write your disk encryption passphrase to a temp file
 echo -n 'your-passphrase' > /tmp/bcachefs.key
 
-# Run disko -- replace /dev/nvme0n1 and 16G with your values
-nix run github:nix-community/disko/latest -- \
-  --mode destroy,format,mount \
-  /etc/nixos/disko-bcachefs.nix \
-  --arg disk '"/dev/nvme0n1"' \
-  --arg swapSize '"16G"' \
-  --arg encrypted true
+disko_format "$DISK" "$SWAP" --encrypted
 
 # Clean up the key file
 rm /tmp/bcachefs.key
@@ -85,16 +96,13 @@ rm /tmp/bcachefs.key
 #### Unencrypted
 
 ```sh
-nix run github:nix-community/disko/latest -- \
-  --mode destroy,format,mount \
-  /etc/nixos/disko-bcachefs.nix \
-  --arg disk '"/dev/nvme0n1"' \
-  --arg swapSize '"16G"'
+disko_format "$DISK" "$SWAP"
 ```
 
-After disko completes, everything is mounted under `/mnt`.
+Disko may or may not mount the subvolumes correctly. Check with `mount | grep mnt`
+and proceed to Step 3 to verify/fix the mounts.
 
-### Step 3b: Manual partitioning (multi-drive / custom layouts)
+### Step 2b: Manual partitioning (multi-drive / custom layouts)
 
 For machines with multi-disk arrays, mixed filesystems, or other layouts that
 don't fit the single-drive disko template (e.g. h002's 5-disk bcachefs array
@@ -108,13 +116,13 @@ DISK=/dev/nvme0n1  # or /dev/sda, etc.
 # Create GPT table
 parted -s "$DISK" mklabel gpt
 
-# EFI System Partition (1GB)
-parted -s "$DISK" mkpart ESP fat32 1MiB 1GiB
+# EFI System Partition (3GB)
+parted -s "$DISK" mkpart ESP fat32 1MiB 3GiB
 parted -s "$DISK" set 1 esp on
 mkfs.fat -F32 "${DISK}p1"
 
 # Swap (adjust size as needed)
-parted -s "$DISK" mkpart swap linux-swap 1GiB 17GiB
+parted -s "$DISK" mkpart swap linux-swap 3GiB 19GiB
 mkswap "${DISK}p2"
 swapon "${DISK}p2"
 
@@ -162,27 +170,44 @@ umount /mnt
 
 Skip the subvolumes if impermanence is not being used (e.g. a data-only array).
 
-#### 4. Mount everything under /mnt
+## Step 3: Mount Everything Under /mnt
+
+Whether you used disko or manual partitioning, verify the mounts are correct
+before proceeding. If disko already mounted everything, check with:
 
 ```sh
+mount | grep /mnt
+```
+
+If the subvolumes are not mounted (or you used manual partitioning), mount them
+now. Set the partition variables to match your layout:
+
+```sh
+DISK=/dev/nvme0n1    # set this if not already set from Step 2
+PART="${DISK}p3"     # bcachefs partition (may be ${DISK}3 for /dev/sda)
+BOOT="${DISK}p1"     # EFI partition
+
+# Unlock if encrypted and not already unlocked
+# bcachefs unlock "$PART"
+
 # Root subvolume
-mount -t bcachefs -o subvol=@root "${DISK}p3" /mnt
+mount -t bcachefs -o subvol=@root "$PART" /mnt
 
 # Boot
 mkdir -p /mnt/boot
-mount "${DISK}p1" /mnt/boot
+mount "$BOOT" /mnt/boot
 
 # Nix store
 mkdir -p /mnt/nix
-mount -t bcachefs -o subvol=@nix "${DISK}p3" /mnt/nix
+mount -t bcachefs -o subvol=@nix "$PART" /mnt/nix
 
 # Persist
 mkdir -p /mnt/persist
-mount -t bcachefs -o subvol=@persist "${DISK}p3" /mnt/persist
+mount -t bcachefs -o subvol=@persist "$PART" /mnt/persist
 
 # Snapshots
-mkdir -p /mnt/snapshots
-mount -t bcachefs -o subvol=@snapshots "${DISK}p3" /mnt/snapshots
+mkdir -p /mnt/.snapshots
+mount -t bcachefs -o subvol=@snapshots "$PART" /mnt/.snapshots
 ```
 
 For non-impermanence drives (e.g. a data array), mount them where they belong:
@@ -192,7 +217,11 @@ mkdir -p /mnt/data
 mount -t bcachefs UUID=<ARRAY-UUID> /mnt/data
 ```
 
-After all mounts are in place under `/mnt`, continue to Step 4.
+Verify everything is in place:
+
+```sh
+findmnt -R /mnt
+```
 
 ## Step 4: Generate Hardware Config
 
@@ -335,10 +364,11 @@ See [usb_key.md](usb_key.md) for full instructions on formatting and setup.
 
 | # | What | Where | Time |
 |---|------|-------|------|
-| 1 | Boot NixOS ISO, set passwd, SSH in | Target | 2 min |
-| 2 | `export NIX_CONFIG=...` | Target | 5 sec |
-| 3a | Disko (single-drive: partition + format + mount) | Target | 1 min |
-| 3b | Manual (multi-drive / custom: partition, format, mount) | Target | 5-10 min |
+| 0 | Build custom ISO, flash to USB | Workstation | 10-20 min |
+| 1 | Boot ISO, SSH in | Target | 2 min |
+| 2a | Disko (single-drive: partition + format) | Target | 1 min |
+| 2b | Manual (multi-drive / custom: partition, format, subvolumes) | Target | 5-10 min |
+| 3 | Mount everything under `/mnt` (verify/fix) | Target | 1 min |
 | 4 | `nixos-generate-config`, copy hardware-config | Target + Workstation | 2 min |
 | 5 | Record UUIDs, update host config, push | Workstation | 3 min |
 | 6 | `nixos-install --flake ...` | Target | 5-15 min |
