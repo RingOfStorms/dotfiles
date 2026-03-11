@@ -23,6 +23,9 @@
 
       "/var/lib/upower"
 
+      # cached timezone name for offline restore
+      "/var/lib/timezone-cache"
+
       "/var/lib/flatpak"
 
       # bao secrets
@@ -66,13 +69,19 @@
         # Hugging Face cache (e.g. whisper.cpp models via hf-hub)
         ".cache/huggingface"
 
+        ".config/pulse"
+        ".config/direnv"
         ".config/opencode"
+        ".local/share/opencode"
 
         # KDE
         ".config/kdeconnect"
 
         # Chrome
         ".config/google-chrome"
+
+        ".local/share/baloo"
+        ".local/state/wireplumber"
 
         # neovim ros_neovim
         ".local/state/nvim_ringofstorms_helium"

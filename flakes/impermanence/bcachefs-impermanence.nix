@@ -349,13 +349,14 @@ in
           Type = "oneshot";
           RemainAfterExit = true;
           KeyringMode = "shared";
+          # TTY access is needed for passphrase fallback prompt
           StandardInput = "tty";
           StandardOutput = "tty";
           StandardError = "tty";
           TTYPath = "/dev/console";
-          TTYReset = true;
-          TTYVHangup = true;
-          TTYVTDisallocate = true;
+          TTYReset = "no";
+          TTYVHangup = "no";
+          TTYVTDisallocate = "no";
         };
 
         script =
@@ -365,34 +366,48 @@ in
             PRIMARY = cfg.disk.primary;
           in
           ''
+            log() { echo "[usb-unlock] $*"; }
+
             try_mount_and_read_key() {
               local dev="$1"
               local mount_point="$2"
 
-              # Try unencrypted mount first
-              if mount -t bcachefs -o ro "$dev" "$mount_point" 2>/dev/null; then
-                if [ -f "$mount_point/key" ]; then
-                  return 0
-                fi
-                umount "$mount_point" || true
-                return 1
-              fi
-
-              # If a USB key password is configured, try unlocking encrypted drives
-              if [[ -n "${USB_KEY_PASSWORD}" ]]; then
-                echo "Attempting encrypted unlock of $dev..."
-                echo -n "${USB_KEY_PASSWORD}" > /tmp/usb_key_passphrase
-                if ${pkgs.bcachefs-tools}/bin/bcachefs unlock -f /tmp/usb_key_passphrase "$dev" 2>/dev/null; then
-                  rm -f /tmp/usb_key_passphrase
-                  if mount -t bcachefs -o ro "$dev" "$mount_point" 2>/dev/null; then
-                    if [ -f "$mount_point/key" ]; then
-                      return 0
-                    fi
-                    umount "$mount_point" || true
+              # Check if this bcachefs device is encrypted before attempting mount,
+              # because mount on an encrypted drive will block waiting for a key.
+              if ${pkgs.bcachefs-tools}/bin/bcachefs unlock -c "$dev" 2>/dev/null; then
+                # Device IS encrypted
+                if [[ -n "${USB_KEY_PASSWORD}" ]]; then
+                  log "  $dev is encrypted, trying configured password..."
+                  echo -n "${USB_KEY_PASSWORD}" > /tmp/usb_key_passphrase
+                  local unlock_err
+                  if unlock_err=$(${pkgs.bcachefs-tools}/bin/bcachefs unlock -f /tmp/usb_key_passphrase "$dev" 2>&1); then
+                    rm -f /tmp/usb_key_passphrase
+                    log "  Unlocked $dev"
+                  else
+                    rm -f /tmp/usb_key_passphrase
+                    log "  Failed to unlock $dev: $unlock_err"
                     return 1
                   fi
+                else
+                  log "  $dev is encrypted but no USB key password configured, skipping"
+                  return 1
                 fi
-                rm -f /tmp/usb_key_passphrase
+              fi
+
+              # Device is either unencrypted or was just unlocked -- mount it
+              log "  Mounting $dev..."
+              local mount_err
+              if mount_err=$(mount -t bcachefs -o ro "$dev" "$mount_point" </dev/null 2>&1); then
+                log "  Mounted $dev"
+                if [ -f "$mount_point/key" ]; then
+                  log "  Found key file on $dev"
+                  return 0
+                fi
+                log "  No key file found on $dev, unmounting"
+                umount "$mount_point" || true
+                return 1
+              else
+                log "  Mount of $dev failed: $mount_err"
               fi
 
               return 1
@@ -403,43 +418,99 @@ in
                 return 2
               fi
 
-              echo "Scanning for USB unlock key (bcachefs with /key file)..."
+              log "Scanning for USB unlock key (bcachefs with /key file)..."
               mkdir -p /tmp/usb_key_mount
 
-              # Wait up to 4 seconds for USB devices to appear
-              for attempt in {1..40}; do
-                for dev in /dev/sd*; do
-                  # Only try whole-disk devices and partitions that are block devices
-                  [ -b "$dev" ] || continue
+              # Resolve primary device path once outside the loop
+              real_primary="$(readlink -f "${PRIMARY}" 2>/dev/null || echo "${PRIMARY}")"
+              log "Primary device resolves to: $real_primary"
 
-                  # Skip if already the primary device
-                  real_primary="$(readlink -f "${PRIMARY}" 2>/dev/null || echo "${PRIMARY}")"
+              # Trigger udev and wait for USB devices to settle
+              udevadm trigger --subsystem-match=block
+              udevadm settle --timeout=10 || true
+
+              # Wait up to 6 seconds for USB devices to appear
+              local max_wait=6
+              local waited=0
+              local found_any_sd=0
+
+              while [ "$waited" -lt "$max_wait" ]; do
+                # Check what block devices exist right now
+                local devs_found=0
+                for dev in /dev/sd*; do
+                  [ -b "$dev" ] || continue
+                  devs_found=1
+
+                  # Skip the primary device
+                  local real_dev
                   real_dev="$(readlink -f "$dev" 2>/dev/null || echo "$dev")"
-                  [ "$real_dev" = "$real_primary" ] && continue
+                  if [ "$real_dev" = "$real_primary" ]; then
+                    log "Skipping $dev (is primary device)"
+                    continue
+                  fi
+
+                  # Skip whole-disk devices if they have partitions
+                  # (e.g. skip /dev/sda if /dev/sda1 exists)
+                  if [[ "$dev" =~ ^/dev/sd[a-z]+$ ]]; then
+                    local has_parts=0
+                    for part in "''${dev}"[0-9]*; do
+                      if [ -b "$part" ]; then
+                        has_parts=1
+                        break
+                      fi
+                    done
+                    if [ "$has_parts" -eq 1 ]; then
+                      log "Skipping whole-disk $dev (has partitions, will try them instead)"
+                      continue
+                    fi
+                  fi
+
+                  found_any_sd=1
+                  log "Trying device: $dev"
 
                   if try_mount_and_read_key "$dev" /tmp/usb_key_mount; then
-                    echo "Found key on $dev. Attempting unlock..."
-                    if ${pkgs.bcachefs-tools}/bin/bcachefs unlock -f /tmp/usb_key_mount/key "${PRIMARY}"; then
+                    log "Found key on $dev. Attempting to unlock primary..."
+                    local primary_err
+                    if primary_err=$(${pkgs.bcachefs-tools}/bin/bcachefs unlock -f /tmp/usb_key_mount/key "${PRIMARY}" 2>&1); then
                       umount /tmp/usb_key_mount || true
-                      echo "Bcachefs unlock successful (USB key on $dev)!"
+                      log "Bcachefs unlock successful (USB key on $dev)!"
                       return 0
                     fi
-                    echo "Key on $dev failed to unlock."
+                    log "Key on $dev failed to unlock primary: $primary_err"
                     umount /tmp/usb_key_mount || true
                   fi
                 done
-                sleep 0.1
+
+                if [ "$devs_found" -eq 0 ]; then
+                  log "No /dev/sd* devices found yet (waited ''${waited}s)..."
+                elif [ "$found_any_sd" -eq 1 ]; then
+                  # We found and tried all available USB devices, no point
+                  # in busy-looping. Wait a bit then do one more pass in case
+                  # a slow device shows up.
+                  log "Tried all available devices, waiting for new ones (''${waited}s)..."
+                fi
+
+                sleep 1
+                waited=$((waited + 1))
+
+                # Re-trigger udev every few seconds in case new devices appeared
+                if [ $((waited % 3)) -eq 0 ]; then
+                  udevadm trigger --subsystem-match=block 2>/dev/null || true
+                  udevadm settle --timeout=3 || true
+                fi
               done
 
-              echo "No USB key found within timeout."
+              log "No USB key found within ''${max_wait}s timeout."
+              log "Devices seen during scan:"
+              ls -la /dev/sd* 2>/dev/null || log "  (none)"
               return 2
             }
 
             unlock_with_passphrase_until_success() {
-              echo "Unlocking ${PRIMARY} (will retry on failure)..."
+              log "Falling back to passphrase unlock for ${PRIMARY}..."
               while true; do
                 if ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"; then
-                  echo "Bcachefs unlock successful (passphrase)!"
+                  log "Bcachefs unlock successful (passphrase)!"
                   return 0
                 fi
                 echo "Unlock failed. Try again."
@@ -457,6 +528,35 @@ in
           '';
       };
     })
+
+    # ── Fix /var/run symlink ──────────────────────────────────────────────
+    # On a fresh root, /var/run may be created as a real directory before
+    # NixOS activation gets to create the expected /var/run -> /run symlink.
+    # Many services (e.g. automatic-timezoned) expect /var/run/dbus/... to
+    # resolve to /run/dbus/.... This ensures /var/run is always a symlink.
+    {
+      systemd.services.fix-var-run-symlink = {
+        description = "Ensure /var/run is a symlink to /run";
+        wantedBy = [ "sysinit.target" ];
+        before = [ "sysinit.target" "dbus.socket" "dbus.service" ];
+        after = [ "local-fs.target" ];
+        unitConfig.DefaultDependencies = false;
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = pkgs.writeShellScript "fix-var-run" ''
+            if [ -d /var/run ] && [ ! -L /var/run ]; then
+              # Move any existing contents into /run
+              ${pkgs.coreutils}/bin/cp -a /var/run/. /run/ 2>/dev/null || true
+              ${pkgs.coreutils}/bin/rm -rf /var/run
+              ${pkgs.coreutils}/bin/ln -sfn /run /var/run
+            elif [ ! -e /var/run ]; then
+              ${pkgs.coreutils}/bin/ln -sfn /run /var/run
+            fi
+          '';
+        };
+      };
+    }
 
     # ── Impermanence tools CLI + GC service ────────────────────────────────
     {

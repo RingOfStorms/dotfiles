@@ -8,10 +8,10 @@
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
     # Use relative to get current version for testing
-    # impermanence_mod.url = "path:../../flakes/impermanence";
-    impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
-    # common.url = "path:../../flakes/common";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    impermanence.url = "path:../../flakes/impermanence";
+    # impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
+    common.url = "path:../../flakes/common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets-bao.url = "path:../../flakes/secrets-bao";
     secrets-bao.url = "path:../../flakes/secrets-bao";
     # flatpaks.url = "path:../../flakes/flatpaks";
@@ -282,6 +282,8 @@
               (
                 { config, pkgs, ... }:
                 rec {
+                  security.sudo.wheelNeedsPassword = false;
+
                   # Home Manager
                   home-manager = {
                     useUserPackages = true;
