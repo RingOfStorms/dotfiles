@@ -78,6 +78,7 @@
               flatpaks.nixosModules.default
 
               common.nixosModules.essentials
+              common.nixosModules.git
               common.nixosModules.tmux
               common.nixosModules.boot_systemd
               common.nixosModules.hardening
