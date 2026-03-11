@@ -33,11 +33,11 @@ Anyone with physical access to the USB stick can read the key.
 sudo bcachefs format "$DEVICE"
 
 mkdir -p /tmp/usb_key
-mount -t bcachefs "$DEVICE" /tmp/usb_key
+sudo mount -t bcachefs "$DEVICE" /tmp/usb_key
 
-echo -n 'your-disk-passphrase' > /tmp/usb_key/key
+sudo $EDITOR /tmp/usb_key/key
 
-umount /tmp/usb_key
+sudo umount /tmp/usb_key
 ```
 
 ## Option B: Encrypted USB Key

@@ -22,7 +22,8 @@
   hardware.sensor.iio.enable = true;
 
   # Brightness control
-  programs.light.enable = true;
+  # Brightness control (light was removed from nixpkgs)
+  hardware.acpilight.enable = true;
 
   # SSD trim
   services.fstrim.enable = true;
@@ -62,6 +63,7 @@
 
   environment.systemPackages = with pkgs; [
     mangohud
+    brightnessctl
     acpi # Battery status
   ];
 

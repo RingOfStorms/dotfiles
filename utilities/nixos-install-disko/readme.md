@@ -286,7 +286,8 @@ Commit and push.
 
 ```sh
 # On the target, install from the git repo:
-HOST=gp3
+HOST=gp3 
+nix flake metadata "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/$HOST" --refresh
 nixos-install --no-root-password \
   --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/$HOST#$HOST"
 ```
