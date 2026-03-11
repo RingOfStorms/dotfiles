@@ -77,6 +77,9 @@
         # Steam user data (saves, configs, shader caches, compatdata)
         ".local/share/Steam"
         ".steam"
+
+        # Jellyfin Media Player (server list, login, settings)
+        ".local/share/jellyfinmediaplayer"
       ];
     };
   };
