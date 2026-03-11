@@ -52,6 +52,8 @@
                     swap = "/dev/disk/by-uuid/4b56d370-63e8-4613-bf46-c3fc4ad2aa70";
                   };
                   encrypted = true;
+                  usbKey = true;
+                  usbKeyPassword = "brought-upside-twentieth";
                 };
               })
 
