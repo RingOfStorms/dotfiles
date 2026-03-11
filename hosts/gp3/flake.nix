@@ -146,7 +146,7 @@
                   users.users = {
                     "${primaryUser}" = {
                       isNormalUser = true;
-                      hashedPassword = "TODO"; # Generate with: mkpasswd -m yescrypt
+                      hashedPassword = "$y$j9T$XLpiC8tE5WjaeAQ.qIvoe0$2UXH2k8FtLvP7mIVdVuab103EA6LEOXB8XEWdPeX0y3"; # Generate with: mkpasswd -m yescrypt
                       extraGroups = [
                         "wheel"
                         "networkmanager"
