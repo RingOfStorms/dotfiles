@@ -28,6 +28,9 @@
 
       # Steam persists its own library, config, and compatdata here
       "/var/lib/steam"
+
+      # Flatpak (system-wide installs and runtime data)
+      "/var/lib/flatpak"
     ];
     files = [
       "/etc/machine-id"
@@ -80,6 +83,10 @@
 
         # Jellyfin Media Player (server list, login, settings)
         ".local/share/jellyfinmediaplayer"
+
+        # Flatpak (user installs and app data)
+        ".local/share/flatpak"
+        ".var/app"
       ];
     };
   };
