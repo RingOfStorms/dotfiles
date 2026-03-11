@@ -20,6 +20,7 @@
   disk ? "/dev/sda",
   swapSize ? "8G",
   encrypted ? false,
+  ...
 }:
 {
   disko.devices = {
