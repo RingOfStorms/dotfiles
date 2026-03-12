@@ -10,6 +10,10 @@
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
     # de_plasma.url = "path:../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
+    # flatpaks.url = "path:../../flakes/flatpaks";
+    flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
+    # impermanence_mod.url = "path:../../flakes/impermanence";
+    impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
 
     opencode.url = "github:anomalyco/opencode/c6262f9d4002d86a1f1795c306aa329d45361d12";
 
@@ -21,6 +25,7 @@
       nixpkgs,
       home-manager,
       common,
+      flatpaks,
       beszel,
       ros_neovim,
       ...
@@ -29,6 +34,7 @@
       constants = import ./_constants.nix;
       configuration_name = constants.host.name;
       primaryUser = constants.host.primaryUser;
+      stateVersion = constants.host.stateVersion;
       overlayIp = constants.host.overlayIp;
       lib = nixpkgs.lib;
     in
@@ -40,6 +46,21 @@
               inherit inputs constants;
             };
             modules = [
+              inputs.impermanence_mod.nixosModules.default
+              ({
+                ringofstorms.impermanence = {
+                  enable = true;
+                  disk = {
+                    boot = "/dev/disk/by-uuid/989B-F1AB";
+                    primary = "/dev/disk/by-uuid/0d6e4079-e367-03eb-d37c-00722f5891d2";
+                    swap = "/dev/disk/by-uuid/ee0ae363-e28c-47ec-8224-6aae026f586f";
+                  };
+                  encrypted = true;
+                  usbKey = true;
+                  usbKeyPassword = "Unbiased-Blissful2-Fretted";
+                };
+              })
+
               home-manager.nixosModules.default
 
               inputs.de_plasma.nixosModules.default
@@ -93,8 +114,11 @@
                 };
               })
 
+              flatpaks.nixosModules.default
+
               ./configuration.nix
               ./hardware-configuration.nix
+              (import ./impermanence.nix { inherit primaryUser; })
               (
                 {
                   config,
@@ -110,7 +134,7 @@
                     backupFileExtension = "bak";
                     # add all normal users to home manager so it applies to them
                     users = lib.mapAttrs (name: user: {
-                      home.stateVersion = "25.11";
+                      home.stateVersion = stateVersion;
                       programs.home-manager.enable = true;
                     }) (lib.filterAttrs (name: user: user.isNormalUser or false) users.users);
 
@@ -136,13 +160,15 @@
                   };
 
                   # System configuration
+                  system.stateVersion = stateVersion;
                   networking.hostName = configuration_name;
                   programs.nh.flake = "/home/${primaryUser}/.config/nixos-config/hosts/${config.networking.hostName}";
                   nixpkgs.config.allowUnfree = true;
+                  users.mutableUsers = false;
                   users.users = {
                     "${primaryUser}" = {
                       isNormalUser = true;
-                      initialPassword = "password1";
+                      hashedPassword = "$y$j9T$XLpiC8tE5WjaeAQ.qIvoe0$2UXH2k8FtLvP7mIVdVuab103EA6LEOXB8XEWdPeX0y3"; # Generate with: mkpasswd -m yescrypt
                       extraGroups = [
                         "wheel"
                         "networkmanager"
@@ -159,7 +185,13 @@
                   environment.systemPackages = with pkgs; [
                     google-chrome
                     vlc
+                    jellyfin-media-player
                     ffmpeg-full
+                  ];
+
+                  services.flatpak.packages = [
+                    "com.spotify.Client"
+                    "com.bitwarden.desktop"
                   ];
                 }
               )

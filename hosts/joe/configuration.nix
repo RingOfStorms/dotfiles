@@ -1,7 +1,5 @@
 { pkgs, ... }:
 {
-  system.stateVersion = "25.11";
-
   hardware.enableAllFirmware = true;
 
   # Use Zen kernel for lower latency desktop/gaming performance
@@ -11,6 +9,9 @@
   networking.networkmanager.enable = true;
   services.resolved.enable = true;
   hardware.bluetooth.enable = true;
+
+  # SSD trim
+  services.fstrim.enable = true;
 
   # ── Steam ──────────────────────────────────────────────────────────────────
   programs.steam = {
