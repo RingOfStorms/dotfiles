@@ -85,7 +85,7 @@ SWAP=16G           # swap partition size
 
 ```sh
 # Write your disk encryption passphrase to a temp file
-echo -n 'your-passphrase' > /tmp/bcachefs.key
+sudo $EDITOR /tmp/bcachefs.key
 
 disko_format "$DISK" "$SWAP" --encrypted
 

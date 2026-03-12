@@ -25,22 +25,7 @@ simpler than targeting a partition.
 DEVICE=/dev/sdX
 ```
 
-## Option A: Unencrypted USB Key
-
-Anyone with physical access to the USB stick can read the key.
-
-```sh
-sudo bcachefs format "$DEVICE"
-
-mkdir -p /tmp/usb_key
-sudo mount -t bcachefs "$DEVICE" /tmp/usb_key
-
-sudo $EDITOR /tmp/usb_key/key
-
-sudo umount /tmp/usb_key
-```
-
-## Option B: Encrypted USB Key
+## Option A: Encrypted USB Key
 
 The drive is encrypted with a password matching `usbKeyPassword` in the NixOS
 config. Not strong security -- the password is in the config -- but it prevents
@@ -54,6 +39,21 @@ sudo bcachefs format --encrypted "$DEVICE"
 sudo bcachefs unlock "$DEVICE"
 
 sudo mkdir -p /tmp/usb_key && sudo mount -t bcachefs "$DEVICE" /tmp/usb_key
+sudo $EDITOR /tmp/usb_key/key
+
+sudo umount /tmp/usb_key
+```
+
+## Option B: Unencrypted USB Key
+
+Anyone with physical access to the USB stick can read the key.
+
+```sh
+sudo bcachefs format "$DEVICE"
+
+mkdir -p /tmp/usb_key
+sudo mount -t bcachefs "$DEVICE" /tmp/usb_key
+
 sudo $EDITOR /tmp/usb_key/key
 
 sudo umount /tmp/usb_key

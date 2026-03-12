@@ -529,6 +529,29 @@ in
       };
     })
 
+    # ── SSH host key ordering fix ────────────────────────────────────────
+    # sshd can race ahead of the impermanence bind mounts for /etc/ssh,
+    # causing it to fail to find host keys on a fresh root. Point sshd at
+    # the persist paths directly and ensure the persist mount is ready.
+    # See: https://github.com/nix-community/impermanence/issues/192
+    {
+      services.openssh.hostKeys = [
+        {
+          path = "/persist/etc/ssh/ssh_host_ed25519_key";
+          type = "ed25519";
+        }
+        {
+          path = "/persist/etc/ssh/ssh_host_rsa_key";
+          type = "rsa";
+          bits = 4096;
+        }
+      ];
+      systemd.services.sshd = {
+        after = [ "persist.mount" ];
+        unitConfig.RequiresMountsFor = "/persist";
+      };
+    }
+
     # ── Fix /var/run symlink ──────────────────────────────────────────────
     # On a fresh root, /var/run may be created as a real directory before
     # NixOS activation gets to create the expected /var/run -> /run symlink.
