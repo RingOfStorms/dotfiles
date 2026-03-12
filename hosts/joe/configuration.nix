@@ -3,8 +3,9 @@
   hardware.enableAllFirmware = true;
 
   # TODO: Switch to pkgs.linuxPackages_zen when nixpkgs-unstable syncs zen with NVIDIA
-  # (zen stuck at 6.18.13, NVIDIA needs 6.18.16 as of 2026-03-12)
-  boot.kernelPackages = pkgs.linuxPackages_latest;
+  # (zen stuck at 6.18.13, latest at 6.19.6, NVIDIA needs 6.18.16 as of 2026-03-12)
+  # Using default linuxPackages (6.18.16) which matches the NVIDIA driver.
+  # boot.kernelPackages = pkgs.linuxPackages_zen;
 
   # Connectivity
   networking.networkmanager.enable = true;
