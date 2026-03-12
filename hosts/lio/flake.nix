@@ -177,6 +177,7 @@
               # ./sway_customizations.nix
               # ./i3_customizations.nix
               ./vms.nix
+              ./nono.nix
               (
                 {
                   config,
