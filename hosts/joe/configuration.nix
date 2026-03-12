@@ -2,8 +2,9 @@
 {
   hardware.enableAllFirmware = true;
 
-  # Use Zen kernel for lower latency desktop/gaming performance
-  boot.kernelPackages = pkgs.linuxPackages_zen;
+  # TODO: Switch to pkgs.linuxPackages_zen when nixpkgs-unstable syncs zen with NVIDIA
+  # (zen stuck at 6.18.13, NVIDIA needs 6.18.16 as of 2026-03-12)
+  boot.kernelPackages = pkgs.linuxPackages_latest;
 
   # Connectivity
   networking.networkmanager.enable = true;
