@@ -1,49 +1,13 @@
 {
   "nodes": {
-    "beszel": {
-      "inputs": {
-        "beszel-nixpkgs": "beszel-nixpkgs"
-      },
-      "locked": {
-        "dir": "flakes/beszel",
-        "lastModified": 1773350322,
-        "narHash": "sha256-ODKhz9OBsM0w5xYs2p6DtBcEZPV+q/Kc0OjqI+XGeJw=",
-        "ref": "refs/heads/master",
-        "rev": "10bb3cd13d1fce6bb31f61416d34926454ebb327",
-        "revCount": 1338,
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      },
-      "original": {
-        "dir": "flakes/beszel",
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      }
-    },
-    "beszel-nixpkgs": {
-      "locked": {
-        "lastModified": 1771848320,
-        "narHash": "sha256-0MAd+0mun3K/Ns8JATeHT1sX28faLII5hVLq0L3BdZU=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "2fc6539b481e1d2569f25f8799236694180c0993",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1773350653,
-        "narHash": "sha256-UiWju8t/TfNkRTYodT0wOmw5LaY5S17K0SDzh14ehT8=",
+        "lastModified": 1773416284,
+        "narHash": "sha256-BRfzS8/+kFTXTVN/c8/P61ijTHpEzc3c28tTsWsUxso=",
         "ref": "refs/heads/master",
-        "rev": "47e85ace725068a471afba02357488a00b4e9fad",
-        "revCount": 1340,
+        "rev": "ea17fd42f14e360a78633d12ad07f3d0a81ba680",
+        "revCount": 1347,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -59,11 +23,11 @@
       },
       "locked": {
         "dir": "flakes/de_plasma",
-        "lastModified": 1773350322,
-        "narHash": "sha256-ODKhz9OBsM0w5xYs2p6DtBcEZPV+q/Kc0OjqI+XGeJw=",
+        "lastModified": 1773416284,
+        "narHash": "sha256-BRfzS8/+kFTXTVN/c8/P61ijTHpEzc3c28tTsWsUxso=",
         "ref": "refs/heads/master",
-        "rev": "10bb3cd13d1fce6bb31f61416d34926454ebb327",
-        "revCount": 1338,
+        "rev": "ea17fd42f14e360a78633d12ad07f3d0a81ba680",
+        "revCount": 1347,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -98,11 +62,11 @@
       },
       "locked": {
         "dir": "flakes/flatpaks",
-        "lastModified": 1773350322,
-        "narHash": "sha256-ODKhz9OBsM0w5xYs2p6DtBcEZPV+q/Kc0OjqI+XGeJw=",
+        "lastModified": 1773416284,
+        "narHash": "sha256-BRfzS8/+kFTXTVN/c8/P61ijTHpEzc3c28tTsWsUxso=",
         "ref": "refs/heads/master",
-        "rev": "10bb3cd13d1fce6bb31f61416d34926454ebb327",
-        "revCount": 1338,
+        "rev": "ea17fd42f14e360a78633d12ad07f3d0a81ba680",
+        "revCount": 1347,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -139,11 +103,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1773332277,
-        "narHash": "sha256-1V+wRrZD9Sw12AQBUWk9CR+XhDZQ8q6yBE0S3Wjbd1M=",
+        "lastModified": 1773367248,
+        "narHash": "sha256-FFMc1uAwy2GYasd0rdNDVxKyAgzuoJH2M+GglBQbqf0=",
         "owner": "rycee",
         "repo": "home-manager",
-        "rev": "4aeef1941f862fe3a70d1b8264b4e289358c2325",
+        "rev": "be0c641a6a5564caa33982faa1fe2c60d92131c7",
         "type": "github"
       },
       "original": {
@@ -201,11 +165,11 @@
       },
       "locked": {
         "dir": "flakes/impermanence",
-        "lastModified": 1773350322,
-        "narHash": "sha256-ODKhz9OBsM0w5xYs2p6DtBcEZPV+q/Kc0OjqI+XGeJw=",
+        "lastModified": 1773416284,
+        "narHash": "sha256-BRfzS8/+kFTXTVN/c8/P61ijTHpEzc3c28tTsWsUxso=",
         "ref": "refs/heads/master",
-        "rev": "10bb3cd13d1fce6bb31f61416d34926454ebb327",
-        "revCount": 1338,
+        "rev": "ea17fd42f14e360a78633d12ad07f3d0a81ba680",
+        "revCount": 1347,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -297,11 +261,11 @@
     },
     "nixpkgs_5": {
       "locked": {
-        "lastModified": 1773122722,
-        "narHash": "sha256-FIqHByVqxCprNjor1NqF80F2QQoiiyqanNNefdlvOg4=",
+        "lastModified": 1773282481,
+        "narHash": "sha256-b/GV2ysM8mKHhinse2wz+uP37epUrSE+sAKXy/xvBY4=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "62dc67aa6a52b4364dd75994ec00b51fbf474e50",
+        "rev": "fe416aaedd397cacb33a610b33d60ff2b431b127",
         "type": "github"
       },
       "original": {
@@ -312,22 +276,6 @@
       }
     },
     "nixpkgs_6": {
-      "locked": {
-        "lastModified": 1772091128,
-        "narHash": "sha256-TnrYykX8Mf/Ugtkix6V+PjW7miU2yClA6uqWl/v6KWM=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "3f0336406035444b4a24b942788334af5f906259",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "ref": "nixpkgs-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_7": {
       "locked": {
         "lastModified": 1769018530,
         "narHash": "sha256-MJ27Cy2NtBEV5tsK+YraYr2g851f3Fl1LpNHDzDX15c=",
@@ -1191,25 +1139,6 @@
         "type": "github"
       }
     },
-    "opencode": {
-      "inputs": {
-        "nixpkgs": "nixpkgs_6"
-      },
-      "locked": {
-        "lastModified": 1773072574,
-        "narHash": "sha256-smGIc6lYWSjfmGAikoYpP7GbB6mWacrPWrRtp/+HJ3E=",
-        "owner": "anomalyco",
-        "repo": "opencode",
-        "rev": "c6262f9d4002d86a1f1795c306aa329d45361d12",
-        "type": "github"
-      },
-      "original": {
-        "owner": "anomalyco",
-        "repo": "opencode",
-        "rev": "c6262f9d4002d86a1f1795c306aa329d45361d12",
-        "type": "github"
-      }
-    },
     "plasma-manager": {
       "inputs": {
         "home-manager": "home-manager",
@@ -1231,20 +1160,18 @@
     },
     "root": {
       "inputs": {
-        "beszel": "beszel",
         "common": "common",
         "de_plasma": "de_plasma",
         "flatpaks": "flatpaks",
         "home-manager": "home-manager_2",
         "impermanence_mod": "impermanence_mod",
         "nixpkgs": "nixpkgs_5",
-        "opencode": "opencode",
         "ros_neovim": "ros_neovim"
       }
     },
     "ros_neovim": {
       "inputs": {
-        "nixpkgs": "nixpkgs_7",
+        "nixpkgs": "nixpkgs_6",
         "nvim_plugin-Almo7aya/openingh.nvim": "nvim_plugin-Almo7aya/openingh.nvim",
         "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring": "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring",
         "nvim_plugin-L3MON4D3/LuaSnip": "nvim_plugin-L3MON4D3/LuaSnip",

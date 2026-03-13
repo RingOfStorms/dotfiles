@@ -67,7 +67,7 @@
                   enable = true;
                   gpu.nvidia = {
                     enable = true;
-                    open = true; # RTX 3080 (Ampere) -- open kernel modules fully supported
+                    open = false; # Proprietary -- open modules caused device creation failures in DXVK/VKD3D-Proton
                   };
                   sddm.autologinUser = primaryUser;
                   wallpapers = [
