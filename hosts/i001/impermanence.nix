@@ -18,6 +18,9 @@
       "/var/lib/iwd"
       "/var/lib/fail2ban"
 
+      # PipeWire Bluetooth device state (profiles, routing, codec selection)
+      "/var/lib/pipewire"
+
       # cached timezone name for offline restore
       "/var/lib/timezone-cache"
     ];

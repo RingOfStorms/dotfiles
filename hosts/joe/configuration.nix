@@ -31,6 +31,16 @@
   # SSD trim
   services.fstrim.enable = true;
 
+  # ── Steam Remote Play input forwarding ─────────────────────────────────────
+  # Steam creates virtual input devices via /dev/uinput to forward client
+  # keyboard/mouse/gamepad input. The steam-devices uaccess tag doesn't
+  # reliably propagate into Steam's FHS sandbox, so we grant group-level
+  # access instead. User josh is already in the input group.
+  boot.kernelModules = [ "uinput" ];
+  services.udev.extraRules = ''
+    KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0660", GROUP="input"
+  '';
+
   # ── Steam ──────────────────────────────────────────────────────────────────
   programs.steam = {
     enable = true;
@@ -39,6 +49,9 @@
     localNetworkGameTransfers.openFirewall = true;
     gamescopeSession.enable = true;
     protontricks.enable = true;
+    # Translate X11 XTEST calls to uinput events on Wayland -- needed for
+    # Steam Remote Play keyboard/mouse input injection via XWayland
+    extest.enable = true;
     extraCompatPackages = with pkgs; [
       proton-ge-bin
     ];

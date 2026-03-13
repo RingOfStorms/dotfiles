@@ -23,6 +23,9 @@
 
       "/var/lib/upower"
 
+      # PipeWire Bluetooth device state (profiles, routing, codec selection)
+      "/var/lib/pipewire"
+
       # cached timezone name for offline restore
       "/var/lib/timezone-cache"
 
@@ -83,6 +86,9 @@
         ".local/share/baloo"
         ".local/state/wireplumber"
 
+        # KDE Plasma monitor layout (hardware-specific, not declarative)
+        ".local/share/kscreen"
+
         # neovim ros_neovim
         ".local/state/nvim_ringofstorms_helium"
         ".local/state/opencode"
@@ -94,8 +100,8 @@
         ".config/google-chrome-tempus"
       ];
       files = [
-        # ".config/kglobalshortcutsrc"
-        # ".config/plasma-org.kde.plasma.desktop-appletsrc"
+        # Plasma 6 KWin monitor output configuration (hardware-specific)
+        ".config/kwinoutputconfig.json"
       ];
     };
   };

@@ -25,6 +25,9 @@
 
       "/var/lib/upower"
 
+      # PipeWire Bluetooth device state (profiles, routing, codec selection)
+      "/var/lib/pipewire"
+
       # cached timezone name for offline restore
       "/var/lib/timezone-cache"
 
@@ -91,6 +94,7 @@
 
         # Jellyfin Media Player (server list, login, settings)
         ".local/share/jellyfinmediaplayer"
+        ".config/jellyfinmediaplayer"
 
         # Flatpak (user installs and app data)
         ".local/share/flatpak"
