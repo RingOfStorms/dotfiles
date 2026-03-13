@@ -177,14 +177,13 @@
                     vlc
                     jellyfin-media-player
                     ffmpeg-full
-                    vesktop
                     ttyd
                   ];
 
                   services.flatpak.packages = [
                     "com.spotify.Client"
-                    "com.spotify.Client"
                     "com.bitwarden.desktop"
+                    "dev.vencord.Vesktop"
                   ];
                 }
               )

@@ -69,7 +69,7 @@
         # KDE
         ".config/kdeconnect"
 
-        # KDE Plasma monitor layout persistence
+        # KDE Plasma monitor layout (hardware-specific, not declarative)
         ".local/share/kscreen"
 
         # Vesktop (Discord client)
@@ -97,10 +97,8 @@
         ".var/app"
       ];
       files = [
-        # Plasma 6 KWin monitor output configuration
+        # Plasma 6 KWin monitor output configuration (hardware-specific)
         ".config/kwinoutputconfig.json"
-        # Plasma panel config (pinned/favorite taskbar apps, widget layout)
-        ".config/plasma-org.kde.plasma.desktop-appletsrc"
       ];
     };
   };
