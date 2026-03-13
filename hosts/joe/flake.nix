@@ -186,6 +186,7 @@
                     vlc
                     jellyfin-media-player
                     ffmpeg-full
+                    vesktop
                   ];
 
                   services.flatpak.packages = [

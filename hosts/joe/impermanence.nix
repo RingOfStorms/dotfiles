@@ -72,6 +72,9 @@
         # KDE Plasma monitor layout persistence
         ".local/share/kscreen"
 
+        # Vesktop (Discord client)
+        ".config/vesktop"
+
         # Chrome
         ".config/google-chrome"
 
