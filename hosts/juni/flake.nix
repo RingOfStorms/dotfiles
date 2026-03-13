@@ -81,10 +81,9 @@
                 ringofstorms.dePlasma = {
                   enable = true;
                   gpu.intel.enable = true;
-                  sddm.autologinUser = "josh";
+                  sddm.autologinUser = primaryUser;
                   wallpapers = [
                     ../../hosts/_shared_assets/wallpapers/pixel_neon.png
-                    ../../hosts/_shared_assets/wallpapers/pixel_neon_v.png
                   ];
                 };
               })
@@ -344,6 +343,7 @@
                     "com.bitwarden.desktop"
                   ];
 
+                  # TODO move to shared atuin module
                   systemd.services.atuin-autologin = {
                     description = "Auto-login to Atuin (if logged out)";
                     wantedBy = [ "multi-user.target" ];

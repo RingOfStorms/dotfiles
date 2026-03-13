@@ -99,6 +99,8 @@
       files = [
         # Plasma 6 KWin monitor output configuration
         ".config/kwinoutputconfig.json"
+        # Plasma panel config (pinned/favorite taskbar apps, widget layout)
+        ".config/plasma-org.kde.plasma.desktop-appletsrc"
       ];
     };
   };

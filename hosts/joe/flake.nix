@@ -7,15 +7,13 @@
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # beszel.url = "path:../../flakes/beszel";
-    beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
+    # beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
     # de_plasma.url = "path:../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     # flatpaks.url = "path:../../flakes/flatpaks";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     # impermanence_mod.url = "path:../../flakes/impermanence";
     impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
-
-    opencode.url = "github:anomalyco/opencode/c6262f9d4002d86a1f1795c306aa329d45361d12";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -26,7 +24,7 @@
       home-manager,
       common,
       flatpaks,
-      beszel,
+      # beszel,
       ros_neovim,
       ...
     }@inputs:
@@ -71,6 +69,11 @@
                     enable = true;
                     open = true; # RTX 3080 (Ampere) -- open kernel modules fully supported
                   };
+                  sddm.autologinUser = primaryUser;
+                  wallpapers = [
+                    ../../hosts/_shared_assets/wallpapers/pixel_cat_garage.png
+                    ../../hosts/_shared_assets/wallpapers/pixel_cats_v.png
+                  ];
                 };
               })
 
@@ -92,26 +95,14 @@
               common.nixosModules.zsh
               common.nixosModules.more_filesystems
 
-              (
-                { pkgs, ... }:
-                {
-                  environment.systemPackages = [
-                    inputs.opencode.packages.${pkgs.system}.default
-                  ];
-                  environment.shellAliases = {
-                    "oc" = "all_proxy='' http_proxy='' https_proxy='' opencode";
-                    "occ" = "oc -c";
-                  };
-                }
-              )
-
-              beszel.nixosModules.agent
-              ({
-                beszelAgent = {
-                  listen = "${overlayIp}:45876";
-                  token = "TODO"; # Generate and assign a beszel agent token
-                };
-              })
+              # TODO once tailscale is added in low trust we can start pushing these
+              # beszel.nixosModules.agent
+              # ({
+              #   beszelAgent = {
+              #     listen = "${overlayIp}:45876";
+              #     token = "TODO"; # Generate and assign a beszel agent token
+              #   };
+              # })
 
               flatpaks.nixosModules.default
 
@@ -167,7 +158,7 @@
                   users.users = {
                     "${primaryUser}" = {
                       isNormalUser = true;
-                      hashedPassword = "$y$j9T$XLpiC8tE5WjaeAQ.qIvoe0$2UXH2k8FtLvP7mIVdVuab103EA6LEOXB8XEWdPeX0y3"; # Generate with: mkpasswd -m yescrypt
+                      hashedPassword = "$y$j9T$HcgOlwo3O7syvUsSQsuyi.$DSe1Cvg.3mtufGxDCmMiJ80uQpAwxjRmdA4EXi9GoF6"; # Generate with: mkpasswd -m yescrypt
                       extraGroups = [
                         "wheel"
                         "networkmanager"
@@ -176,7 +167,7 @@
                         "gamemode" # Allow user to request GameMode priority
                       ];
                       openssh.authorizedKeys.keys = [
-                        "ssh-ed25519 TODO" # Generate and add SSH key after install
+                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH2KFSRkViT+asBTjCgA7LNP3SHnfNCW+jHbV08VUuIi nix2nix"
                       ];
                     };
                   };
@@ -187,9 +178,11 @@
                     jellyfin-media-player
                     ffmpeg-full
                     vesktop
+                    ttyd
                   ];
 
                   services.flatpak.packages = [
+                    "com.spotify.Client"
                     "com.spotify.Client"
                     "com.bitwarden.desktop"
                   ];
