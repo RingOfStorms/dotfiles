@@ -68,6 +68,9 @@
                   enable = true;
                   gpu.intel.enable = true;
                   sddm.autologinUser = primaryUser; # Media box, auto-login
+                  wallpapers = [
+                    ../../hosts/_shared_assets/wallpapers/pixel_rain.png
+                  ];
                 };
               })
 

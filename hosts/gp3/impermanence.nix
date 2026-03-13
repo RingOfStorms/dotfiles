@@ -13,7 +13,9 @@
       "/var/lib/systemd/timers"
 
       "/etc/nixos"
-      "/etc/ssh"
+      # NOTE: /etc/ssh is NOT persisted here. The impermanence module's SSH fix
+      # points sshd host keys directly at /persist/etc/ssh/. Bind-mounting
+      # /etc/ssh hides the NixOS-generated sshd_config, breaking sshd.
 
       "/etc/NetworkManager/system-connections"
       "/var/lib/bluetooth"
@@ -67,6 +69,9 @@
         # KDE
         ".config/kdeconnect"
 
+        # KDE Plasma monitor layout (hardware-specific, not declarative)
+        ".local/share/kscreen"
+
         # Chrome
         ".config/google-chrome"
 
@@ -87,6 +92,10 @@
         # Flatpak (user installs and app data)
         ".local/share/flatpak"
         ".var/app"
+      ];
+      files = [
+        # Plasma 6 KWin monitor output configuration (hardware-specific)
+        ".config/kwinoutputconfig.json"
       ];
     };
   };
