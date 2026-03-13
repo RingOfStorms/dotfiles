@@ -195,6 +195,19 @@
                     users = lib.mapAttrs (name: user: {
                       home.stateVersion = "25.05";
                       programs.home-manager.enable = true;
+                      # Local network SSH entries for joe and gp3
+                      programs.ssh.matchBlocks = {
+                        "joe_" = {
+                          identityFile = osConfig.age.secrets.nix2nix.path;
+                          hostname = "10.12.14.126";
+                          user = "josh";
+                        };
+                        "gp3_" = {
+                          identityFile = osConfig.age.secrets.nix2nix.path;
+                          hostname = "10.12.14.144";
+                          user = "josh";
+                        };
+                      };
                     }) (lib.filterAttrs (name: user: user.isNormalUser or false) users.users);
 
                     sharedModules = [
