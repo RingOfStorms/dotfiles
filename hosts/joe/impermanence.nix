@@ -93,7 +93,7 @@
         ".steam"
 
         # Jellyfin Media Player (server list, login, settings)
-        ".local/share/jellyfinmediaplayer"
+        ".local/share/jellyfin-desktop"
         ".config/jellyfinmediaplayer"
 
         # Flatpak (user installs and app data)
