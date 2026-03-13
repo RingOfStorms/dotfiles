@@ -128,6 +128,14 @@
                     users = lib.mapAttrs (name: user: {
                       home.stateVersion = stateVersion;
                       programs.home-manager.enable = true;
+                      # Autostart Steam minimized to tray on login
+                      xdg.configFile."autostart/steam.desktop".text = ''
+                        [Desktop Entry]
+                        Type=Application
+                        Name=Steam
+                        Exec=steam -silent
+                        X-KDE-autostart-phase=2
+                      '';
                     }) (lib.filterAttrs (name: user: user.isNormalUser or false) users.users);
 
                     sharedModules = [
