@@ -7,15 +7,19 @@
   # Using default linuxPackages (6.18.16) which matches the NVIDIA driver.
   # boot.kernelPackages = pkgs.linuxPackages_zen;
 
-  # ── NVIDIA early module loading ─────────────────────────────────────────────
+  # ── NVIDIA + uinput early module loading ──────────────────────────────────
   # Force-load all NVIDIA kernel modules at boot (matches Bazzite behavior).
   # nvidia-uvm is critical -- without it, DXVK/VKD3D-Proton can enumerate the
   # GPU adapter but fail at device creation (E_FAIL 0x80004005).
+  # uinput is in initrd (not just boot.kernelModules) because systemd-modules-load
+  # was failing to load it, and Steam needs /dev/uinput to exist before it starts
+  # for Remote Play virtual gamepad/keyboard/mouse input forwarding.
   boot.initrd.kernelModules = [
     "nvidia"
     "nvidia_modeset"
     "nvidia_uvm"
     "nvidia_drm"
+    "uinput"
   ];
 
   # ── Graphics / VA-API ───────────────────────────────────────────────────────
@@ -36,7 +40,6 @@
   # keyboard/mouse/gamepad input. The steam-devices uaccess tag doesn't
   # reliably propagate into Steam's FHS sandbox, so we grant group-level
   # access instead. User josh is already in the input group.
-  boot.kernelModules = [ "uinput" ];
   services.udev.extraRules = ''
     KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0660", GROUP="input"
   '';
