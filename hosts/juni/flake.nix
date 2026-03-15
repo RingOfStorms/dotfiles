@@ -8,12 +8,12 @@
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
     # Use relative to get current version for testing
-    impermanence.url = "path:../../flakes/impermanence";
-    # impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
-    common.url = "path:../../flakes/common";
-    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    # impermanence.url = "path:../../flakes/impermanence";
+    impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
+    # common.url = "path:../../flakes/common";
+    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets-bao.url = "path:../../flakes/secrets-bao";
-    secrets-bao.url = "path:../../flakes/secrets-bao";
+    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
     # flatpaks.url = "path:../../flakes/flatpaks";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     # beszel.url = "path:../../flakes/beszel";
@@ -158,7 +158,7 @@
                 let
                   secrets = {
                     headscale_auth = {
-                      kvPath = "kv/data/machines/home_roaming/headscale_auth";
+                      kvPath = "kv/data/machines/high-trust/headscale_auth";
                       softDepend = [ "tailscaled" ];
                       configChanges.services.tailscale.authKeyFile = "$SECRET_PATH";
                     };
@@ -167,7 +167,7 @@
                       group = "users";
                       mode = "0400";
                       hardDepend = [ "atuin-autologin" ];
-                      template = ''{{- with secret "kv/data/machines/home_roaming/atuin-key-josh" -}}{{ printf "%s\n%s\n%s" .Data.data.user .Data.data.password .Data.data.value }}{{- end -}}'';
+                      template = ''{{- with secret "kv/data/machines/high-trust/atuin-key-josh" -}}{{ printf "%s\n%s\n%s" .Data.data.user .Data.data.password .Data.data.value }}{{- end -}}'';
                     };
                     nix2github = {
                       owner = "josh";

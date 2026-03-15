@@ -59,7 +59,7 @@ This document covers migrating from ragenix (age-encrypted secrets) to OpenBao f
 │     - /machine-key.json → JWT auth to OpenBao                   │
 │                                                                 │
 │  3. vault-agent fetches secrets                                 │
-│     - kv/data/machines/home_roaming/* → /var/lib/openbao-secrets│
+│     - kv/data/machines/high-trust/* → /var/lib/openbao-secrets│
 │                                                                 │
 │  4. systemd dependencies resolve                                │
 │     - secret-watcher completes → hardDepend services start      │
@@ -75,17 +75,14 @@ This document covers migrating from ragenix (age-encrypted secrets) to OpenBao f
 
 ```
 kv/data/machines/
-├── home_roaming/        # Shared across all NixOS machines
+├── high-trust/          # All trusted NixOS machines (h001, juni, lio, etc.)
 │   ├── nix2nix          # SSH key
-│   ├── nix2github       # SSH key  
+│   ├── nix2github       # SSH key
 │   ├── headscale_auth   # Tailscale auth
+│   ├── openrouter       # API key
+│   ├── anthropic-claude # API key
 │   └── ...
-├── home/                # h001-specific (not roaming)
-│   ├── linode_rw_domains
-│   ├── zitadel_master_key
-│   └── ...
-└── oracle/              # o001-specific
-    ├── vaultwarden_env
+└── low-trust/           # Untrusted devices (gp3, future media boxes)
     └── ...
 ```
 
@@ -104,7 +101,7 @@ in {
 **After (OpenBao pattern - zero-config onboarding):**
 ```nix
 ringofstorms.secretsBao.secrets.openwebui_env = {
-  kvPath = "kv/data/machines/home_roaming/openwebui_env";
+  kvPath = "kv/data/machines/high-trust/openwebui_env";
   hardDepend = [ "open-webui" ];  # Service waits for secret at runtime
   configChanges.services.open-webui = {
     enable = true;
@@ -122,7 +119,9 @@ hosts/h001/
 ├── flake.nix            # Imports, basic host config
 ├── nginx.nix            # Pure config (no conditionals)
 └── mods/
-    ├── openbao-policies.nix  # Auto-apply after unseal
+    ├── openbao/              # Declarative server config + reconciler
+    │   ├── openbao-server.nix
+    │   └── openbao-config.nix
     └── ...
 ```
 
@@ -134,8 +133,8 @@ Policies auto-apply after unseal with full reconciliation:
 # openbao-policies.nix
 let
   policies = {
-    machines = ''
-      path "kv/data/machines/home_roaming/*" {
+    machines-high-trust = ''
+      path "kv/data/machines/high-trust/*" {
         capabilities = ["read", "list"]
       }
     '';

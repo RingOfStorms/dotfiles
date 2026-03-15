@@ -16,8 +16,8 @@
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
-    de_plasma.url = "path:../../flakes/de_plasma";
-    # de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
+    # de_plasma.url = "path:../../flakes/de_plasma";
+    de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     # stt_ime.url = "path:../../flakes/stt_ime";
     stt_ime.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/stt_ime";
 
@@ -134,7 +134,7 @@
                 let
                   secrets = {
                     headscale_auth = {
-                      kvPath = "kv/data/machines/home_roaming/headscale_auth";
+                      kvPath = "kv/data/machines/high-trust/headscale_auth";
                       # dependencies = [ "tailscaled" ];
                       # configChanges.services.tailscale.authKeyFile = "$SECRET_PATH"; # TODO remove secrets and enable this
                     };
