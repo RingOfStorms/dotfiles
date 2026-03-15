@@ -102,8 +102,6 @@
               common.nixosModules.git
               common.nixosModules.tmux
               common.nixosModules.boot_systemd
-              # common.nixosModules.de_sway
-              # common.nixosModules.de_i3
               common.nixosModules.hardening
               common.nixosModules.jetbrains_font
               common.nixosModules.nix_options
@@ -116,7 +114,6 @@
               common.nixosModules.zsh
               common.nixosModules.more_filesystems
 
-              inputs.secrets-bao.nixosModules.default
               (
                 { pkgs, ... }:
                 {
@@ -129,14 +126,24 @@
                   };
                 }
               )
+
+              inputs.secrets-bao.nixosModules.default
               (
                 { inputs, lib, ... }:
                 let
                   secrets = {
                     headscale_auth = {
-                      kvPath = "kv/data/machines/high-trust/headscale_auth";
+                      # kvPath = "kv/data/machines/high-trust/headscale_auth";
                       # dependencies = [ "tailscaled" ];
                       # configChanges.services.tailscale.authKeyFile = "$SECRET_PATH"; # TODO remove secrets and enable this
+                    };
+                    nix2nix = {
+                      kvPath = "kv/data/machines/high-trust/nix2nix";
+                      owner = "josh";
+                      group = "users";
+                      hmChanges.programs.ssh.matchBlocks = lib.genAttrs [ "joe_" "gp3_" ] (_: {
+                        identityFile = "$SECRET_PATH";
+                      });
                     };
                   };
                 in
@@ -198,12 +205,10 @@
                       # Local network SSH entries for joe and gp3
                       programs.ssh.matchBlocks = {
                         "joe_" = {
-                          identityFile = osConfig.age.secrets.nix2nix.path;
                           hostname = "10.12.14.126";
                           user = "josh";
                         };
                         "gp3_" = {
-                          identityFile = osConfig.age.secrets.nix2nix.path;
                           hostname = "10.12.14.144";
                           user = "josh";
                         };
