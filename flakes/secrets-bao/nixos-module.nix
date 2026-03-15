@@ -213,8 +213,8 @@ let
     usage() {
       echo "usage: sec <kv-path> [field]" >&2
       echo "  examples:" >&2
-      echo "    sec machines/home_roaming/test value" >&2
-      echo "    sec kv/data/machines/home_roaming/test value" >&2
+      echo "    sec machines/high-trust/test value" >&2
+      echo "    sec kv/data/machines/high-trust/test value" >&2
     }
 
     die() {
@@ -430,8 +430,8 @@ in
 
               kvPath = lib.mkOption {
                 type = lib.types.nullOr lib.types.str;
-                default = "kv/data/machines/home_roaming/${name}";
-                description = "KV v2 secret API path (ex: kv/data/machines/home_roaming/nix2github).";
+                default = "kv/data/machines/high-trust/${name}";
+                description = "KV v2 secret API path (ex: kv/data/machines/high-trust/nix2github).";
               };
 
               field = lib.mkOption {

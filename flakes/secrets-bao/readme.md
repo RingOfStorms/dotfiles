@@ -12,4 +12,4 @@ It reads `/run/openbao/*` files, so it will `sudo` itself if needed.
 
 Example:
 
-- `sec machines/home_roaming/test value`
+- `sec machines/high-trust/test value`

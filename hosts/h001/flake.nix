@@ -99,10 +99,10 @@
                       # Uses default: /var/lib/openbao-secrets/litellm-env
                       softDepend = [ "litellm" ];
                       template = ''
-                        {{- with secret "kv/data/machines/home/openrouter" -}}
+                        {{- with secret "kv/data/machines/high-trust/openrouter" -}}
                         OPENROUTER_API_KEY={{ index .Data.data "api-key" }}
                         {{ end -}}
-                        {{- with secret "kv/data/machines/home/anthropic-claude" -}}
+                        {{- with secret "kv/data/machines/high-trust/anthropic-claude" -}}
                         ANTHROPIC_API_KEY={{ index .Data.data "api-key" }}
                         {{- end -}}
                       '';
