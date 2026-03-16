@@ -151,12 +151,7 @@
                   {
                     ringofstorms.secretsBao = {
                       enable = true;
-                      zitadelKeyPath = "/machine-key.json";
-                      openBaoAddr = "https://sec.joshuabell.xyz";
-                      jwtAuthMountPath = "auth/zitadel-jwt";
-                      openBaoRole = "machines";
-                      zitadelIssuer = "https://sso.joshuabell.xyz";
-                      zitadelProjectId = "344379162166820867";
+                      openBaoRole = "machines-hightrust";
                       inherit secrets;
                     };
                   }

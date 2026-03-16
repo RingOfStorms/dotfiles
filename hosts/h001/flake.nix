@@ -116,7 +116,7 @@
                       zitadelKeyPath = "/machine-key.json";
                       openBaoAddr = "https://sec.joshuabell.xyz";
                       jwtAuthMountPath = "auth/zitadel-jwt";
-                      openBaoRole = "machines";
+                      openBaoRole = "machines-hightrust";
                       zitadelIssuer = "https://sso.joshuabell.xyz";
                       zitadelProjectId = "344379162166820867";
                       inherit secrets;

@@ -36,12 +36,14 @@ let
 
   # ── Roles under auth methods ─────────────────────────────────────────
   # Key format: "auth/<mount>/role/<rolename>"
+  # Zitadel roles: device_high_trust, device_low_trust
   authRoles = {
-    "auth/zitadel-jwt/role/machines" = {
+    "auth/zitadel-jwt/role/machines-hightrust" = {
       role_type = "jwt";
       user_claim = "sub";
       groups_claim = "flatRolesClaim";
       bound_audiences = [ "344379162166820867" ];
+      bound_claims = "flatRolesClaim=device_high_trust";
       token_policies = [
         "machine-base"
         "machines-high-trust"
@@ -53,6 +55,7 @@ let
       user_claim = "sub";
       groups_claim = "flatRolesClaim";
       bound_audiences = [ "344379162166820867" ];
+      bound_claims = "flatRolesClaim=device_low_trust";
       token_policies = [
         "machine-base"
         "machines-low-trust"
@@ -99,40 +102,6 @@ let
         capabilities = ["list", "read"]
       }
     '';
-
-    # Legacy policies from early exploration — kept to preserve state.
-    # Remove entries here to have the reconciler clean them up.
-    devices = ''
-      path "secret/devices/*" {
-        capabilities = ["create", "read", "update", "delete", "list"]
-      }
-
-      path "secret/shared/*" {
-        capabilities = ["read", "list"]
-      }
-    '';
-
-    device-home = ''
-      path "kv/data/hosts/home/*" { capabilities = ["read","list"] }
-    '';
-
-    device-roaming = ''
-      path "kv/data/hosts/roaming/*" { capabilities = ["read","list"] }
-    '';
-
-    device-work = ''
-      path "kv/data/hosts/work/*" { capabilities = ["read","list"] }
-    '';
-
-    users = ''
-      path "secret/users/*" {
-        capabilities = ["create", "read", "update", "delete", "list"]
-      }
-
-      path "secret/shared/*" {
-        capabilities = ["read", "list"]
-      }
-    '';
   };
 
   # ── KV secrets registry ───────────────────────────────────────────────
@@ -143,31 +112,40 @@ let
   #
   # Format: "kv-mount-relative/path" = { fields = { fieldName = "stub"; ... }; }
   # The default field is "value" with stub "TODO:replace_me".
+  #
+  # All secrets use _2026-03-15 date suffix to mark post-rotation versions.
+  # The old undated entries remain in the KV store but are no longer managed
+  # here — they will be manually cleaned up after all hosts are migrated.
   kvSecrets = {
-    # ── high-trust (all trusted machines: h001, juni, lio, etc.) ───────
-    "machines/high-trust/headscale_auth"    = {};
-    "machines/high-trust/atuin-key-josh"    = { fields = { user = "TODO:replace_me"; password = "TODO:replace_me"; value = "TODO:replace_me"; }; };
-    "machines/high-trust/nix2github"        = {};
-    "machines/high-trust/nix2bitbucket"     = {};
-    "machines/high-trust/nix2gitforgejo"    = {};
-    "machines/high-trust/nix2lio"           = {};
-    "machines/high-trust/nix2oren"          = {};
-    "machines/high-trust/nix2gpdPocket3"    = {};
-    "machines/high-trust/nix2t"             = {};
-    "machines/high-trust/nix2h001"          = {};
-    "machines/high-trust/nix2h002"          = {};
-    "machines/high-trust/nix2h003"          = {};
-    "machines/high-trust/nix2linode"        = {};
-    "machines/high-trust/nix2oracle"        = {};
-    "machines/high-trust/nix2nix"           = {};
-    "machines/high-trust/github_read_token" = {};
-    "machines/high-trust/linode_rw_domains" = {};
-    "machines/high-trust/us_chi_wg"         = {};
-    "machines/high-trust/openrouter"        = { fields = { api-key = "TODO:replace_me"; }; };
-    "machines/high-trust/anthropic-claude"  = { fields = { api-key = "TODO:replace_me"; }; };
+    # ── high-trust: SSH keys ──────────────────────────────────────────
+    # Single consolidated inter-machine key replaces all per-host nix2* keys
+    "machines/high-trust/nix2nix_2026-03-15"        = {};
+    # External git service keys (not inter-machine)
+    "machines/high-trust/nix2github_2026-03-15"      = {};
+    "machines/high-trust/nix2gitforgejo_2026-03-15"  = {};
 
-    # ── low-trust (gp3 and future untrusted devices) ──────────────────
-    # Add secrets here as needed for low-trust devices.
+    # ── high-trust: tailnet ───────────────────────────────────────────
+    "machines/high-trust/headscale_auth_2026-03-15"  = {};
+
+    # ── high-trust: nix / build ───────────────────────────────────────
+    "machines/high-trust/github_read_token_2026-03-15" = {};
+
+    # ── high-trust: h001 service secrets ──────────────────────────────
+    "machines/high-trust/linode_rw_domains_2026-03-15"      = {};
+    "machines/high-trust/us_chi_wg_2026-03-15"              = {};
+    "machines/high-trust/zitadel_master_key_2026-03-15"     = {};
+    "machines/high-trust/oauth2_proxy_key_file_2026-03-15"  = {};
+    "machines/high-trust/openwebui_env_2026-03-15"          = {};
+    "machines/high-trust/openrouter_2026-03-15"             = { fields = { api-key = "TODO:replace_me"; }; };
+    "machines/high-trust/anthropic-claude_2026-03-15"       = { fields = { api-key = "TODO:replace_me"; }; };
+
+    # ── high-trust: per-host service secrets ──────────────────────────
+    "machines/high-trust/atuin-key-josh_2026-03-15"         = { fields = { user = "TODO:replace_me"; password = "TODO:replace_me"; value = "TODO:replace_me"; }; };
+    "machines/high-trust/litellm_public_api_key_2026-03-15" = {};
+    "machines/high-trust/vaultwarden_env_2026-03-15"        = {};
+
+    # ── low-trust (gp3, joe, i001) ────────────────────────────────────
+    "machines/low-trust/headscale_auth_lowtrust_2026-03-15" = {};
   };
 
   # Normalize: fill in default fields where not specified

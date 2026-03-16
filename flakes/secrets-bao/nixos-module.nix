@@ -349,7 +349,7 @@ in
 
     zitadelProjectId = lib.mkOption {
       type = lib.types.str;
-      default = "";
+      default = "344379162166820867";
       description = "Zitadel Project -> Resource ID (used to request aud scope).";
     };
 
@@ -388,7 +388,6 @@ in
 
     openBaoRole = lib.mkOption {
       type = lib.types.str;
-      default = "machines";
     };
 
     vaultAgentTokenPath = lib.mkOption {
