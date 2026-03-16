@@ -6,11 +6,11 @@
       },
       "locked": {
         "dir": "flakes/beszel",
-        "lastModified": 1772210636,
-        "narHash": "sha256-CKsGnMEXai4J3gOT0b/T+167GTQfUR/o1xwqvCdT7Hw=",
+        "lastModified": 1773638421,
+        "narHash": "sha256-Swzw+AC76qpuJSjinBz2aePrV5QJMLffTtdzYJLlyrA=",
         "ref": "refs/heads/master",
-        "rev": "a6abc0343a30fd60eb10a110a81cdfc0dee52686",
-        "revCount": 1273,
+        "rev": "e6cf4df14cb43da6c056c0a2ac38280b4648a359",
+        "revCount": 1363,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -55,11 +55,11 @@
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1772385740,
-        "narHash": "sha256-LeectmGs1oX5ezQB8lbHs8TCpQ5ftt8Ev8XlJLO+VoA=",
+        "lastModified": 1773673044,
+        "narHash": "sha256-JIo8KLlmbpO//DjNA4NuFFGrvs3J3gnvY0Gr9ifkWKE=",
         "ref": "refs/heads/master",
-        "rev": "9571a9ee1324bdf8dc7588af153d6596a142228a",
-        "revCount": 1294,
+        "rev": "142e6d0c2159565926474e7562dc878847271d67",
+        "revCount": 1366,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -1317,14 +1317,20 @@
     },
     "secrets-bao": {
       "locked": {
-        "path": "../../flakes/secrets-bao",
-        "type": "path"
+        "dir": "flakes/secrets-bao",
+        "lastModified": 1773673044,
+        "narHash": "sha256-JIo8KLlmbpO//DjNA4NuFFGrvs3J3gnvY0Gr9ifkWKE=",
+        "ref": "refs/heads/master",
+        "rev": "142e6d0c2159565926474e7562dc878847271d67",
+        "revCount": 1366,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
       "original": {
-        "path": "../../flakes/secrets-bao",
-        "type": "path"
-      },
-      "parent": []
+        "dir": "flakes/secrets-bao",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+      }
     },
     "trilium-nixpkgs": {
       "locked": {

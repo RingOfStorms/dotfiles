@@ -22,7 +22,8 @@
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
-    secrets-bao.url = "path:../../flakes/secrets-bao";
+    # secrets-bao.url = "path:../../flakes/secrets-bao";
+    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
