@@ -101,7 +101,15 @@
       };
     };
 
-    litellm_public_api_key_2026-03-15 = { };
+    litellm_public_api_key_2026-03-15 = {
+      group = "nginx";
+      mode = "0440";
+      template = ''
+        {{- with secret "kv/data/machines/high-trust/litellm_public_api_key_2026-03-15" -}}
+        if ($http_authorization != "Bearer {{ index .Data.data "value" }}") { return 401; }
+        {{- end -}}
+      '';
+    };
 
     vaultwarden_env_2026-03-15 = { };
   };
