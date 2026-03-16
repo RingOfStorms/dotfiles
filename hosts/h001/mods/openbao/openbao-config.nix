@@ -287,7 +287,10 @@ in
             while IFS= read -r kv; do
               config_args="$config_args $kv"
             done <<< "$auth_config"
-            eval bao write "auth/$mount_path/config" $config_args
+            if ! eval bao write "auth/$mount_path/config" $config_args 2>&1; then
+              echo "  [auth] WARNING: failed to write config for $auth_path (OIDC discovery may be down)" >&2
+              echo "  [auth] Continuing — config will be applied on next run" >&2
+            fi
           fi
         done
 

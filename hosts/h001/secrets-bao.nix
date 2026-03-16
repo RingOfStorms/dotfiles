@@ -83,7 +83,9 @@
     };
   };
 
-  zitadel_master_key_2026-03-15 = {};
+  zitadel_master_key_2026-03-15 = {
+    mode = "0444";
+  };
 
   oauth2_proxy_key_file_2026-03-15 = {
     configChanges = {

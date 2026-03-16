@@ -297,7 +297,7 @@ let
             if secret.template != null then
               secret.template
             else
-              ''{{- with secret "${secret.kvPath}" -}}{{- .Data.data.${secret.field} -}}{{- end -}}'';
+              ''{{- with secret "${secret.kvPath}" -}}{{- index .Data.data "${secret.field}" -}}{{- end -}}'';
         in
         ''
                     template {
