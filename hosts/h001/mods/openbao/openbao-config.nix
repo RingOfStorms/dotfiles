@@ -381,8 +381,9 @@ in
         # ────────────────────────────────────────────────────────────────
         echo "[config] Cleaning orphan KV secrets ..."
 
-        # Managed prefixes — only delete under these paths
-        for prefix in "machines/high-trust" "machines/low-trust"; do
+        # Managed prefixes — only delete under these paths.
+        # Includes legacy prefixes (home, home_roaming) for cleanup.
+        for prefix in "machines/high-trust" "machines/low-trust" "machines/home" "machines/home_roaming"; do
           current_keys="$(bao kv list -mount=kv -format=json "$prefix" 2>/dev/null | jq -r '.[]' || true)"
           for key in $current_keys; do
             full_path="$prefix/$key"
