@@ -24,7 +24,10 @@
           "lio_".identityFile = "$SECRET_PATH";
           "oren".identityFile = "$SECRET_PATH";
           "juni".identityFile = "$SECRET_PATH";
+          "joe".identityFile = "$SECRET_PATH";
+          "joe_".identityFile = "$SECRET_PATH";
           "gp3".identityFile = "$SECRET_PATH";
+          "gp3_".identityFile = "$SECRET_PATH";
           "t".identityFile = "$SECRET_PATH";
           "t_".identityFile = "$SECRET_PATH";
           "h001".identityFile = "$SECRET_PATH";
