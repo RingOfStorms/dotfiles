@@ -22,9 +22,6 @@ let
 
   # ── Auth methods to ensure exist ─────────────────────────────────────
   authMethods = {
-    "userpass/" = {
-      type = "userpass";
-    };
     "zitadel-jwt/" = {
       type = "jwt";
       config = {
@@ -43,7 +40,7 @@ let
       user_claim = "sub";
       groups_claim = "flatRolesClaim";
       bound_audiences = [ "344379162166820867" ];
-      bound_claims = "flatRolesClaim=device_high_trust";
+      bound_claims = { flatRolesClaim = "device_high_trust"; };
       token_policies = [
         "machine-base"
         "machines-high-trust"
@@ -55,20 +52,12 @@ let
       user_claim = "sub";
       groups_claim = "flatRolesClaim";
       bound_audiences = [ "344379162166820867" ];
-      bound_claims = "flatRolesClaim=device_low_trust";
+      bound_claims = { flatRolesClaim = "device_low_trust"; };
       token_policies = [
         "machine-base"
         "machines-low-trust"
       ];
       token_ttl = "1h";
-    };
-  };
-
-  # ── Userpass users (config only, password set manually) ──────────────
-  # We only reconcile token_policies here. Password is stateful.
-  userpassUsers = {
-    "auth/userpass/users/josh" = {
-      token_policies = [ "admin" ];
     };
   };
 
@@ -177,7 +166,7 @@ let
       inherit (am) type;
       config = am.config or {};
     }) authMethods;
-    inherit authRoles userpassUsers;
+    inherit authRoles;
     kvSecrets = kvSecretsNormalized;
   });
 
@@ -327,36 +316,12 @@ in
 
         for role_path in $(jq -r '.authRoles | keys[]' "$STATE_FILE"); do
           echo "  [role] Writing $role_path"
-          role_json="$(jq -r --arg p "$role_path" '.authRoles[$p]' "$STATE_FILE")"
-
-          # Build bao write arguments from JSON object
-          write_args=""
-          for key in $(printf '%s' "$role_json" | jq -r 'keys[]'); do
-            val="$(printf '%s' "$role_json" | jq -r --arg k "$key" '.[$k] | if type == "array" then join(",") else tostring end')"
-            write_args="$write_args $key=$val"
-          done
-          eval bao write "$role_path" $write_args
+          jq --arg p "$role_path" '.authRoles[$p]' "$STATE_FILE" \
+            | bao write "$role_path" -
         done
 
         # ────────────────────────────────────────────────────────────────
-        # Step 4: Userpass user config (policies only, not passwords)
-        # ────────────────────────────────────────────────────────────────
-        echo "[config] Reconciling userpass users ..."
-
-        for user_path in $(jq -r '.userpassUsers | keys[]' "$STATE_FILE"); do
-          echo "  [userpass] Writing $user_path"
-          user_json="$(jq -r --arg p "$user_path" '.userpassUsers[$p]' "$STATE_FILE")"
-
-          write_args=""
-          for key in $(printf '%s' "$user_json" | jq -r 'keys[]'); do
-            val="$(printf '%s' "$user_json" | jq -r --arg k "$key" '.[$k] | if type == "array" then join(",") else tostring end')"
-            write_args="$write_args $key=$val"
-          done
-          eval bao write "$user_path" $write_args
-        done
-
-        # ────────────────────────────────────────────────────────────────
-        # Step 5: Policies
+        # Step 4: Policies
         # ────────────────────────────────────────────────────────────────
         echo "[config] Reconciling policies ..."
 
@@ -389,7 +354,7 @@ in
         done
 
         # ────────────────────────────────────────────────────────────────
-        # Step 6: Seed KV secret stubs (never overwrites existing values)
+        # Step 5: Seed KV secret stubs (never overwrites existing values)
         # ────────────────────────────────────────────────────────────────
         echo "[config] Seeding missing KV secrets with stubs ..."
 
@@ -410,7 +375,7 @@ in
         done
 
         # ────────────────────────────────────────────────────────────────
-        # Step 7: Revoke ephemeral root token
+        # Step 6: Revoke ephemeral root token
         # ────────────────────────────────────────────────────────────────
         echo "[config] Revoking ephemeral root token ..."
         bao token revoke -self || echo "  [warn] Could not revoke root token (may have expired)"
