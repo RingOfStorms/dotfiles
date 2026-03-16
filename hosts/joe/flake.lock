@@ -3,11 +3,11 @@
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1773416284,
-        "narHash": "sha256-BRfzS8/+kFTXTVN/c8/P61ijTHpEzc3c28tTsWsUxso=",
+        "lastModified": 1773675538,
+        "narHash": "sha256-0w6MfaN+haNY5hX+kbdRdw76l3nSRKOM3BAyMUo3ctE=",
         "ref": "refs/heads/master",
-        "rev": "ea17fd42f14e360a78633d12ad07f3d0a81ba680",
-        "revCount": 1347,
+        "rev": "ba860571558a2dea3a4225920540cba66cdf7dee",
+        "revCount": 1373,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -1166,7 +1166,8 @@
         "home-manager": "home-manager_2",
         "impermanence_mod": "impermanence_mod",
         "nixpkgs": "nixpkgs_5",
-        "ros_neovim": "ros_neovim"
+        "ros_neovim": "ros_neovim",
+        "secrets-bao": "secrets-bao"
       }
     },
     "ros_neovim": {
@@ -1260,6 +1261,23 @@
         "owner": "oxalica",
         "repo": "rust-overlay",
         "type": "github"
+      }
+    },
+    "secrets-bao": {
+      "locked": {
+        "dir": "flakes/secrets-bao",
+        "lastModified": 1773675538,
+        "narHash": "sha256-0w6MfaN+haNY5hX+kbdRdw76l3nSRKOM3BAyMUo3ctE=",
+        "ref": "refs/heads/master",
+        "rev": "ba860571558a2dea3a4225920540cba66cdf7dee",
+        "revCount": 1373,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+      },
+      "original": {
+        "dir": "flakes/secrets-bao",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       }
     }
   },

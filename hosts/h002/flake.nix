@@ -4,8 +4,8 @@
     home-manager.url = "github:rycee/home-manager/release-25.11";
 
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # secrets.url = "path:../../flakes/secrets";
-    secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
+    # secrets-bao.url = "path:../../flakes/secrets-bao";
+    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
 
@@ -39,7 +39,6 @@
             modules = [
               inputs.home-manager.nixosModules.default
 
-              inputs.secrets.nixosModules.default
               inputs.ros_neovim.nixosModules.default
               ({
                 ringofstorms-nvim.includeAllRuntimeDependencies = true;
@@ -62,6 +61,21 @@
               inputs.common.nixosModules.tty_caps_esc
               inputs.common.nixosModules.zsh
               inputs.common.nixosModules.tailnet
+
+              inputs.secrets-bao.nixosModules.default
+              (
+                { inputs, lib, ... }:
+                lib.mkMerge [
+                  {
+                    ringofstorms.secretsBao = {
+                      enable = true;
+                      openBaoRole = "machines-hightrust";
+                      inherit (constants) secrets;
+                    };
+                  }
+                  (inputs.secrets-bao.lib.applyChanges constants.secrets)
+                ]
+              )
               inputs.beszel.nixosModules.agent
               ({
                 beszelAgent = {
@@ -132,10 +146,12 @@
                       ];
                       openssh.authorizedKeys.keys = [
                         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH2KFSRkViT+asBTjCgA7LNP3SHnfNCW+jHbV08VUuIi nix2nix"
+                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
                       ];
                     };
                     root.openssh.authorizedKeys.keys = [
                       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH2KFSRkViT+asBTjCgA7LNP3SHnfNCW+jHbV08VUuIi nix2nix"
+                      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
                     ];
                   };
                 }

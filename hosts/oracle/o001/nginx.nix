@@ -6,7 +6,10 @@
 let
   c = constants;
   upstream = c.upstreamHost;
-  apiKeyFile = config.age.secrets.litellm_public_api_key.path;
+  baoSecrets = config.ringofstorms.secretsBao.secrets or {};
+  apiKeyFile = if baoSecrets ? "litellm_public_api_key_2026-03-15"
+    then baoSecrets."litellm_public_api_key_2026-03-15".path
+    else "/dev/null";
 in
 {
   # JUST A TEST TODO remove

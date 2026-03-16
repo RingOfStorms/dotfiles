@@ -12,19 +12,21 @@
 
     # impermanence_mod.url = "path:../../flakes/impermanence";
     impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
+    # secrets-bao.url = "path:../../flakes/secrets-bao";
+    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
   };
 
-  # NIX_SSHOPTS="-i /run/agenix/nix2nix" nixos-rebuild --flake ".#i001" --target-host luser@10.12.14.119 switch
+  # NIX_SSHOPTS="-i /var/lib/openbao-secrets/nix2nix_2026-03-15" nixos-rebuild --flake ".#i001" --target-host luser@10.12.14.119 switch
   outputs =
     {
       ...
     }@inputs:
     let
-      configurationName = "i001";
-      system = "x86_64-linux";
-      primaryUser = "luser";
+      constants = import ./_constants.nix;
+      configurationName = constants.host.name;
+      primaryUser = constants.host.primaryUser;
       configLocation = "/home/${primaryUser}/.config/nixos-config/hosts/${configurationName}";
-      stateAndHomeVersion = "25.11";
+      stateVersion = constants.host.stateVersion;
       lib = inputs.nixpkgs.lib;
     in
     {
@@ -32,7 +34,7 @@
         "${configurationName}" = (
           lib.nixosSystem {
             specialArgs = {
-              inherit inputs;
+              inherit inputs constants;
             };
             modules = [
               inputs.impermanence_mod.nixosModules.default
@@ -76,6 +78,22 @@
               inputs.common.nixosModules.timezone_auto
               inputs.common.nixosModules.tty_caps_esc
               inputs.common.nixosModules.zsh
+              inputs.common.nixosModules.tailnet
+
+              inputs.secrets-bao.nixosModules.default
+              (
+                { inputs, lib, ... }:
+                lib.mkMerge [
+                  {
+                    ringofstorms.secretsBao = {
+                      enable = true;
+                      openBaoRole = "machines-lowtrust";
+                      inherit (constants) secrets;
+                    };
+                  }
+                  (inputs.secrets-bao.lib.applyChanges constants.secrets)
+                ]
+              )
 
               ./hardware-configuration.nix
               ./impermanence.nix
@@ -87,7 +105,7 @@
                   ...
                 }:
                 rec {
-                  system.stateVersion = stateAndHomeVersion;
+                  system.stateVersion = stateVersion;
                   # TODO allowing password auth for now
                   services.openssh.settings.PasswordAuthentication = lib.mkForce true;
                   # TODO remove this for testbed
@@ -100,7 +118,7 @@
                     backupFileExtension = "bak";
                     # add all normal users to home manager so it applies to them
                     users = lib.mapAttrs (name: user: {
-                      home.stateVersion = stateAndHomeVersion;
+                      home.stateVersion = stateVersion;
                       programs.home-manager.enable = true;
                     }) (lib.filterAttrs (name: user: user.isNormalUser or false) users.users);
 
@@ -137,10 +155,12 @@
                       ];
                       openssh.authorizedKeys.keys = [
                         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH2KFSRkViT+asBTjCgA7LNP3SHnfNCW+jHbV08VUuIi nix2nix"
+                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
                       ];
                     };
                     root.openssh.authorizedKeys.keys = [
                       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH2KFSRkViT+asBTjCgA7LNP3SHnfNCW+jHbV08VUuIi nix2nix"
+                      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
                     ];
                   };
 

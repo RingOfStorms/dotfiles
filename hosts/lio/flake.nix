@@ -8,8 +8,6 @@
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # secrets.url = "path:../../flakes/secrets";
-    secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
     # secrets-bao.url = "path:../../flakes/secrets-bao";
     secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
     # flatpaks.url = "path:../../flakes/flatpaks";
@@ -32,7 +30,6 @@
       nixpkgs,
       home-manager,
       common,
-      secrets,
       flatpaks,
       beszel,
       ros_neovim,
@@ -84,7 +81,6 @@
                 };
               })
 
-              secrets.nixosModules.default
               ros_neovim.nixosModules.default
               ({
                 ringofstorms-nvim.includeAllRuntimeDependencies = true;
@@ -130,33 +126,15 @@
               inputs.secrets-bao.nixosModules.default
               (
                 { inputs, lib, ... }:
-                let
-                  secrets = {
-                    headscale_auth = {
-                      # kvPath = "kv/data/machines/high-trust/headscale_auth";
-                      # dependencies = [ "tailscaled" ];
-                      # configChanges.services.tailscale.authKeyFile = "$SECRET_PATH"; # TODO remove secrets and enable this
-                    };
-                    nix2nix = {
-                      kvPath = "kv/data/machines/high-trust/nix2nix";
-                      owner = "josh";
-                      group = "users";
-                      hmChanges.programs.ssh.matchBlocks = lib.genAttrs [ "joe_" "gp3_" ] (_: {
-                        identityFile = "$SECRET_PATH";
-                      });
-                    };
-                  };
-                in
                 lib.mkMerge [
                   {
                     ringofstorms.secretsBao = {
                       enable = true;
                       openBaoRole = "machines-hightrust";
-                      inherit secrets;
+                      inherit (constants) secrets;
                     };
                   }
-                  (inputs.secrets-bao.lib.applyConfigChanges secrets)
-                  (inputs.secrets-bao.lib.applyHmChanges secrets)
+                  (inputs.secrets-bao.lib.applyChanges constants.secrets)
                 ]
               )
 
@@ -255,6 +233,7 @@
                       ];
                       openssh.authorizedKeys.keys = [
                         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJN2nsLmAlF6zj5dEBkNSJaqcCya+aB6I0imY8Q5Ew0S nix2lio"
+                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
                       ];
                     };
                   };

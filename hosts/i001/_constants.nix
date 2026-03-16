@@ -1,10 +1,10 @@
-# Service constants for gp3 (GPD Pocket 3 - Media/Gaming TV Box)
-# Plugged into TV, impermanence-enabled, streams games from joe.
+# Service constants for i001 (Intel NUC - Testbed)
+# Impermanence-enabled, low-trust device.
 {
   host = {
-    name = "gp3";
+    name = "i001";
     primaryUser = "luser";
-    stateVersion = "26.05";
+    stateVersion = "25.11";
   };
 
   secrets = {

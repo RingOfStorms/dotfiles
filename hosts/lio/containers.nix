@@ -17,12 +17,6 @@ in
   ];
 
   config = {
-    # Obsidian Sync settings
-    # services.obsidian_sync = {
-    #   serverUrl = "https://obsidiansync.joshuabell.xyz";
-    #   dockerEnvFiles = [ config.age.secrets.obsidian_sync_env.path ];
-    # };
-
     ## Give internet access
     networking = {
       nat = {

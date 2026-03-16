@@ -12,13 +12,9 @@ let
   hostDataDir = vw.dataDir;
 
   v_port = vw.port;
-  
-  hasSecret =
-    secret:
-    let
-      secrets = config.age.secrets or { };
-    in
-    secrets ? ${secret} && secrets.${secret} != null;
+
+  baoSecrets = config.ringofstorms.secretsBao.secrets or {};
+  hasVaultwardenEnv = baoSecrets ? "vaultwarden_env_2026-03-15";
 in
 {
   users = {
@@ -36,7 +32,7 @@ in
     chmod -R 750 ${hostDataDir}
   '';
 
-  containers.${name} = lib.mkIf (hasSecret "vaultwarden_env") {
+  containers.${name} = lib.mkIf hasVaultwardenEnv {
     ephemeral = true;
     autoStart = true;
     privateNetwork = false;
@@ -50,7 +46,7 @@ in
         isReadOnly = false;
       };
       "/var/secrets/vaultwarden.env" = {
-        hostPath = config.age.secrets.vaultwarden_env.path;
+        hostPath = baoSecrets."vaultwarden_env_2026-03-15".path;
         isReadOnly = true;
       };
     };
@@ -82,7 +78,7 @@ in
       };
   };
 
-  services.nginx.virtualHosts."${vw.domain}" = lib.mkIf (hasSecret "vaultwarden_env") {
+  services.nginx.virtualHosts."${vw.domain}" = lib.mkIf hasVaultwardenEnv {
     enableACME = true;
     forceSSL = true;
     locations = {

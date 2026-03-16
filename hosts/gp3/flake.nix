@@ -14,6 +14,8 @@
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     # flatpaks.url = "path:../../flakes/flatpaks";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
+    # secrets-bao.url = "path:../../flakes/secrets-bao";
+    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
 
     opencode.url = "github:anomalyco/opencode/c6262f9d4002d86a1f1795c306aa329d45361d12";
 
@@ -91,6 +93,22 @@
               common.nixosModules.tty_caps_esc
               common.nixosModules.zsh
               common.nixosModules.more_filesystems
+              common.nixosModules.tailnet
+
+              inputs.secrets-bao.nixosModules.default
+              (
+                { inputs, lib, ... }:
+                lib.mkMerge [
+                  {
+                    ringofstorms.secretsBao = {
+                      enable = true;
+                      openBaoRole = "machines-lowtrust";
+                      inherit (constants) secrets;
+                    };
+                  }
+                  (inputs.secrets-bao.lib.applyChanges constants.secrets)
+                ]
+              )
 
               (
                 { pkgs, ... }:
@@ -164,6 +182,7 @@
                       ];
                       openssh.authorizedKeys.keys = [
                         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH2KFSRkViT+asBTjCgA7LNP3SHnfNCW+jHbV08VUuIi nix2nix"
+                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
                       ];
                     };
                   };

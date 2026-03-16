@@ -155,111 +155,15 @@
               inputs.secrets-bao.nixosModules.default
               (
                 { inputs, lib, ... }:
-                let
-                  secrets = {
-                    headscale_auth = {
-                      kvPath = "kv/data/machines/high-trust/headscale_auth";
-                      softDepend = [ "tailscaled" ];
-                      configChanges.services.tailscale.authKeyFile = "$SECRET_PATH";
-                    };
-                    "atuin-key-josh" = {
-                      owner = "josh";
-                      group = "users";
-                      mode = "0400";
-                      hardDepend = [ "atuin-autologin" ];
-                      template = ''{{- with secret "kv/data/machines/high-trust/atuin-key-josh" -}}{{ printf "%s\n%s\n%s" .Data.data.user .Data.data.password .Data.data.value }}{{- end -}}'';
-                    };
-                    nix2github = {
-                      owner = "josh";
-                      group = "users";
-                      hmChanges.programs.ssh.matchBlocks."github.com".identityFile = "$SECRET_PATH";
-                    };
-                    nix2bitbucket = {
-                      owner = "josh";
-                      group = "users";
-                      hmChanges.programs.ssh.matchBlocks."bitbucket.org".identityFile = "$SECRET_PATH";
-                    };
-                    nix2gitforgejo = {
-                      owner = "josh";
-                      group = "users";
-                      hmChanges.programs.ssh.matchBlocks."git.joshuabell.xyz".identityFile = "$SECRET_PATH";
-                    };
-                    nix2lio = {
-                      owner = "josh";
-                      group = "users";
-                      hmChanges.programs.ssh.matchBlocks = lib.genAttrs [ "lio" "lio_" ] (_: {
-                        identityFile = "$SECRET_PATH";
-                      });
-                    };
-                    nix2oren = {
-                      owner = "josh";
-                      group = "users";
-                      hmChanges.programs.ssh.matchBlocks.oren.identityFile = "$SECRET_PATH";
-                    };
-                    nix2gpdPocket3 = {
-                      owner = "josh";
-                      group = "users";
-                      hmChanges.programs.ssh.matchBlocks.gp3.identityFile = "$SECRET_PATH";
-                    };
-                    nix2t = {
-                      owner = "josh";
-                      group = "users";
-                      hmChanges.programs.ssh.matchBlocks = lib.genAttrs [ "t" "t_" ] (_: {
-                        identityFile = "$SECRET_PATH";
-                      });
-                    };
-                    nix2h001 = {
-                      owner = "josh";
-                      group = "users";
-                      hmChanges.programs.ssh.matchBlocks = lib.genAttrs [ "h001" "h001_" ] (_: {
-                        identityFile = "$SECRET_PATH";
-                      });
-                    };
-                    nix2h002 = {
-                      owner = "josh";
-                      group = "users";
-                      hmChanges.programs.ssh.matchBlocks = lib.genAttrs [ "h002" "h002_" ] (_: {
-                        identityFile = "$SECRET_PATH";
-                      });
-                    };
-                    nix2h003 = {
-                      owner = "josh";
-                      group = "users";
-                      hmChanges.programs.ssh.matchBlocks = lib.genAttrs [ "h003" "h003_" ] (_: {
-                        identityFile = "$SECRET_PATH";
-                      });
-                    };
-                    nix2linode = {
-                      owner = "josh";
-                      group = "users";
-                      hmChanges.programs.ssh.matchBlocks = lib.genAttrs [ "l001" "l002" "l002_" ] (_: {
-                        identityFile = "$SECRET_PATH";
-                      });
-                    };
-                    nix2oracle = {
-                      owner = "josh";
-                      group = "users";
-                      hmChanges.programs.ssh.matchBlocks = lib.genAttrs [ "o001" "o001_" ] (_: {
-                        identityFile = "$SECRET_PATH";
-                      });
-                    };
-                  };
-                in
                 lib.mkMerge [
                   {
                     ringofstorms.secretsBao = {
                       enable = true;
-                      zitadelKeyPath = "/machine-key.json";
-                      openBaoAddr = "https://sec.joshuabell.xyz";
-                      jwtAuthMountPath = "auth/zitadel-jwt";
                       openBaoRole = "machines-hightrust";
-                      zitadelIssuer = "https://sso.joshuabell.xyz";
-                      zitadelProjectId = "344379162166820867";
-                      inherit secrets;
+                      inherit (constants) secrets;
                     };
                   }
-                  (inputs.secrets-bao.lib.applyConfigChanges secrets)
-                  (inputs.secrets-bao.lib.applyHmChanges secrets)
+                  (inputs.secrets-bao.lib.applyChanges constants.secrets)
                 ]
               )
 
@@ -326,6 +230,7 @@
                       ];
                       openssh.authorizedKeys.keys = [
                         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH2KFSRkViT+asBTjCgA7LNP3SHnfNCW+jHbV08VUuIi nix2nix"
+                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
                       ];
                     };
                   };
@@ -369,7 +274,7 @@
                           exit 0
                         fi
 
-                        secret="/var/lib/openbao-secrets/atuin-key-josh"
+                        secret="/var/lib/openbao-secrets/atuin-key-josh_2026-03-15"
                         if [ ! -s "$secret" ]; then
                           echo "Missing atuin secret at $secret" >&2
                           exit 1

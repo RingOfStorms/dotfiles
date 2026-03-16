@@ -25,6 +25,12 @@
 
       "/var/lib/upower"
 
+      "/var/lib/tailscale"
+
+      # bao secrets
+      "/run/openbao"
+      "/var/lib/openbao-secrets"
+
       # PipeWire Bluetooth device state (profiles, routing, codec selection)
       "/var/lib/pipewire"
 
@@ -38,6 +44,7 @@
       "/var/lib/flatpak"
     ];
     files = [
+      "/machine-key.json"
       "/etc/machine-id"
       "/etc/adjtime"
     ];

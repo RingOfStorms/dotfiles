@@ -6,8 +6,8 @@
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # secrets.url = "path:../../flakes/secrets";
-    secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
+    # secrets-bao.url = "path:../../flakes/secrets-bao";
+    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
 
@@ -19,7 +19,6 @@
       nixpkgs,
       home-manager,
       common,
-      secrets,
       beszel,
       ros_neovim,
       ...
@@ -42,7 +41,6 @@
             modules = [
               home-manager.nixosModules.default
 
-              secrets.nixosModules.default
               ros_neovim.nixosModules.default
 
               common.nixosModules.essentials
@@ -55,6 +53,21 @@
               common.nixosModules.timezone_chi
               common.nixosModules.tty_caps_esc
               common.nixosModules.zsh
+
+              inputs.secrets-bao.nixosModules.default
+              (
+                { inputs, lib, ... }:
+                lib.mkMerge [
+                  {
+                    ringofstorms.secretsBao = {
+                      enable = true;
+                      openBaoRole = "machines-hightrust";
+                      inherit (constants) secrets;
+                    };
+                  }
+                  (inputs.secrets-bao.lib.applyChanges constants.secrets)
+                ]
+              )
 
               beszel.nixosModules.agent
               (
@@ -117,6 +130,7 @@
                       openssh.authorizedKeys.keys = [
                         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA3riAQ8RP5JXj2eO87JpjbM/9SrfFHcN5pEJwQpRcOl nix2h003"
                         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA3riAQ8RP5JXj2eO87JpjbM/9SrfFHcN5pEJwQpRcOl nix2nix"
+                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
                       ];
                     };
                     root = {
@@ -124,6 +138,7 @@
                       openssh.authorizedKeys.keys = [
                         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA3riAQ8RP5JXj2eO87JpjbM/9SrfFHcN5pEJwQpRcOl nix2h003"
                         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA3riAQ8RP5JXj2eO87JpjbM/9SrfFHcN5pEJwQpRcOl nix2nix"
+                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
                       ];
                     };
                   };

@@ -18,6 +18,12 @@
       "/var/lib/iwd"
       "/var/lib/fail2ban"
 
+      "/var/lib/tailscale"
+
+      # bao secrets
+      "/run/openbao"
+      "/var/lib/openbao-secrets"
+
       # PipeWire Bluetooth device state (profiles, routing, codec selection)
       "/var/lib/pipewire"
 
@@ -25,6 +31,7 @@
       "/var/lib/timezone-cache"
     ];
     files = [
+      "/machine-key.json"
       "/etc/machine-id"
     ];
     users.luser = {
