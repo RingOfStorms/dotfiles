@@ -1,10 +1,9 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-
-    i001.url = "path:./hosts/i001";
-    l001.url = "path:./hosts/linode/l001";
-    o001.url = "path:./hosts/oracle/o001";
+    # i001.url = "path:./hosts/i001";
+    # l001.url = "path:./hosts/linode/l001";
+    # o001.url = "path:./hosts/oracle/o001";
   };
 
   outputs =

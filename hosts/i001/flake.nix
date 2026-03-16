@@ -78,7 +78,7 @@
               inputs.common.nixosModules.timezone_auto
               inputs.common.nixosModules.tty_caps_esc
               inputs.common.nixosModules.zsh
-              inputs.common.nixosModules.tailnet
+              # inputs.common.nixosModules.tailnet
 
               inputs.secrets-bao.nixosModules.default
               (

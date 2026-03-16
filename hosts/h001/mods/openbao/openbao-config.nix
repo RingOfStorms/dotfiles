@@ -103,8 +103,8 @@ let
   # The default field is "value" with stub "TODO:replace_me".
   #
   # All secrets use _2026-03-15 date suffix to mark post-rotation versions.
-  # The old undated entries remain in the KV store but are no longer managed
-  # here — they will be manually cleaned up after all hosts are migrated.
+  # The reconciler deletes any KV entries under managed prefixes that are
+  # not declared here.
   kvSecrets = {
     # ── high-trust: SSH keys ──────────────────────────────────────────
     # Single consolidated inter-machine key replaces all per-host nix2* keys
@@ -377,7 +377,24 @@ in
         done
 
         # ────────────────────────────────────────────────────────────────
-        # Step 6: Revoke ephemeral root token
+        # Step 6: Delete orphan KV secrets (not in declared kvSecrets)
+        # ────────────────────────────────────────────────────────────────
+        echo "[config] Cleaning orphan KV secrets ..."
+
+        # Managed prefixes — only delete under these paths
+        for prefix in "machines/high-trust" "machines/low-trust"; do
+          current_keys="$(bao kv list -mount=kv -format=json "$prefix" 2>/dev/null | jq -r '.[]' || true)"
+          for key in $current_keys; do
+            full_path="$prefix/$key"
+            if ! jq -e --arg p "$full_path" '.kvSecrets | has($p)' "$STATE_FILE" > /dev/null; then
+              echo "  [kv] ORPHAN: deleting $full_path (not in config)"
+              bao kv metadata delete -mount=kv "$full_path"
+            fi
+          done
+        done
+
+        # ────────────────────────────────────────────────────────────────
+        # Step 7: Revoke ephemeral root token
         # ────────────────────────────────────────────────────────────────
         echo "[config] Revoking ephemeral root token ..."
         bao token revoke -self || echo "  [warn] Could not revoke root token (may have expired)"

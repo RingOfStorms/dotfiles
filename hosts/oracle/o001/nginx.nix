@@ -32,10 +32,12 @@ in
       };
   };
 
-  # nginx proxies to tailscale overlay IPs and binds on overlayIp
+  # nginx proxies to tailscale overlay IPs and binds on overlayIp.
+  # vault-agent renders the litellm API key snippet that nginx includes;
+  # without it nginx refuses to start (file is root-only placeholder).
   systemd.services.nginx = {
-    wants = [ "network-online.target" ];
-    after = [ "network-online.target" "tailscaled.service" ];
+    wants = [ "network-online.target" "vault-agent.service" ];
+    after = [ "network-online.target" "tailscaled.service" "vault-agent.service" ];
   };
 
   security.acme.acceptTerms = true;
