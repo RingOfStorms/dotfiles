@@ -85,6 +85,9 @@
 
   zitadel_master_key_2026-03-15 = {
     mode = "0444";
+    template = ''
+      {{- with secret "kv/data/machines/high-trust/zitadel_master_key_2026-03-15" -}}{{- .Data.data.value | base64Decode -}}{{- end -}}
+    '';
   };
 
   oauth2_proxy_key_file_2026-03-15 = {
