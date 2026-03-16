@@ -98,6 +98,7 @@
                     };
                   }
                   (inputs.secrets-bao.lib.applyConfigChanges secrets)
+                  (inputs.secrets-bao.lib.applyHmChanges secrets)
                 ]
               )
 
