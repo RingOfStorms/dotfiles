@@ -13,12 +13,8 @@ let
     inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
-  hasSecret =
-    secret:
-    let
-      secrets = config.age.secrets or { };
-    in
-    secrets ? ${secret} && secrets.${secret} != null;
+  baoSecrets = config.ringofstorms.secretsBao.secrets or {};
+  hasOpenwebuiEnv = baoSecrets ? "openwebui_env_2026-03-15";
   c = constants.services.openWebui;
   zitadel = constants.services.zitadel;
 in
@@ -26,7 +22,7 @@ in
   disabledModules = [ declaration ];
   imports = [ "${nixpkgsOpenWebui}/nixos/modules/${declaration}" ];
   options = { };
-  config = lib.mkIf (hasSecret "openwebui_env") {
+  config = {
     services.nginx.virtualHosts."${c.domain}" = {
       addSSL = true;
       sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
@@ -49,7 +45,7 @@ in
       host = "127.0.0.1";
       openFirewall = false;
       package = pkgsOpenWebui.open-webui;
-      environmentFile = config.age.secrets.openwebui_env.path;
+      environmentFile = lib.mkIf hasOpenwebuiEnv baoSecrets."openwebui_env_2026-03-15".path;
       environment = {
         # Declarative config, we don't use admin panel for anything
         # ENABLE_PERSISTENT_CONFIG = "False";

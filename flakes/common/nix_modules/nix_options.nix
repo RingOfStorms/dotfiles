@@ -47,10 +47,6 @@
   nix.extraOptions = ''
     keep-outputs = true
     keep-derivations = true
-    ${lib.optionalString (
-      # TODO revisit this should it move?
-      config ? age && config.age ? secrets && config.age.secrets ? github_read_token
-    ) "!include ${config.age.secrets.github_read_token.path}"}
   '';
 
   # nix helper

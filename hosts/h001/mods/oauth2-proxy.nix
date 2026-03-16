@@ -13,12 +13,6 @@ let
     inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
-  hasSecret =
-    secret:
-    let
-      secrets = config.age.secrets or { };
-    in
-    secrets ? ${secret} && secrets.${secret} != null;
   c = constants.services.oauth2Proxy;
   zitadel = constants.services.zitadel;
   domain = constants.host.domain;
@@ -26,7 +20,7 @@ in
 {
   disabledModules = [ declaration ];
   imports = [ "${nixpkgsOauth2Proxy}/nixos/modules/${declaration}" ];
-  config = lib.mkIf (hasSecret "oauth2_proxy_key_file") {
+  config = {
     services.oauth2-proxy = {
       enable = true;
       httpAddress = "http://127.0.0.1:${toString c.port}";
@@ -36,7 +30,7 @@ in
       redirectURL = "https://${c.domain}/oauth2/callback";
       validateURL = "https://${zitadel.domain}/oauth2/";
       oidcIssuerUrl = "https://${zitadel.domain}";
-      keyFile = config.age.secrets.oauth2_proxy_key_file.path;
+      # keyFile injected via secrets-bao configChanges
       nginx.domain = c.domain;
       email.domains = [ "*" ];
       extraConfig = {

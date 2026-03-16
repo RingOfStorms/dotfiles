@@ -19,12 +19,8 @@ let
 
   zitadelNixpkgs = inputs.zitadel-nixpkgs;
 
-  hasSecret =
-    secret:
-    let
-      secrets = config.age.secrets or { };
-    in
-    secrets ? ${secret} && secrets.${secret} != null;
+  baoSecrets = config.ringofstorms.secretsBao.secrets or {};
+  hasZitadelKey = baoSecrets ? "zitadel_master_key_2026-03-15";
 
   binds = [
     # Postgres data, must use postgres user in container and host
@@ -45,10 +41,10 @@ let
       gid = config.ids.gids.postgres;
     }
   ]
-  ++ lib.optionals (hasSecret "zitadel_master_key") [
+  ++ lib.optionals hasZitadelKey [
     # secret
     {
-      host = config.age.secrets.zitadel_master_key.path;
+      host = baoSecrets."zitadel_master_key_2026-03-15".path;
       container = "/var/secrets/zitadel_master_key.age";
       readOnly = true;
     }

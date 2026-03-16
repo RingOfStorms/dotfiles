@@ -20,8 +20,6 @@
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # secrets.url = "path:../../flakes/secrets";
-    secrets.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
     secrets-bao.url = "path:../../flakes/secrets-bao";
@@ -38,7 +36,6 @@
       nixpkgs,
       home-manager,
       common,
-      secrets,
       beszel,
       ros_neovim,
       nixarr,
@@ -61,7 +58,6 @@
             modules = [
               home-manager.nixosModules.default
 
-              secrets.nixosModules.default
               ros_neovim.nixosModules.default
               ({
                 ringofstorms-nvim.includeAllRuntimeDependencies = true;
@@ -91,34 +87,13 @@
               (
                 { inputs, lib, ... }:
                 let
-                  secrets = {
-                    litellm-env = {
-                      owner = "root";
-                      group = "root";
-                      mode = "0400";
-                      # Uses default: /var/lib/openbao-secrets/litellm-env
-                      softDepend = [ "litellm" ];
-                      template = ''
-                        {{- with secret "kv/data/machines/high-trust/openrouter" -}}
-                        OPENROUTER_API_KEY={{ index .Data.data "api-key" }}
-                        {{ end -}}
-                        {{- with secret "kv/data/machines/high-trust/anthropic-claude" -}}
-                        ANTHROPIC_API_KEY={{ index .Data.data "api-key" }}
-                        {{- end -}}
-                      '';
-                    };
-                  };
+                  secrets = import ./secrets-bao.nix;
                 in
                 lib.mkMerge [
                   {
                     ringofstorms.secretsBao = {
                       enable = true;
-                      zitadelKeyPath = "/machine-key.json";
-                      openBaoAddr = "https://sec.joshuabell.xyz";
-                      jwtAuthMountPath = "auth/zitadel-jwt";
                       openBaoRole = "machines-hightrust";
-                      zitadelIssuer = "https://sso.joshuabell.xyz";
-                      zitadelProjectId = "344379162166820867";
                       inherit secrets;
                     };
                   }
@@ -181,12 +156,14 @@
                       ];
                       openssh.authorizedKeys.keys = [
                         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILZigrRMF/HHMhjBIwiOnS2pqbOz8Az19tch680BGvmu nix2h001"
+                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
                       ];
                     };
                     root = {
                       shell = pkgs.zsh;
                       openssh.authorizedKeys.keys = [
                         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILZigrRMF/HHMhjBIwiOnS2pqbOz8Az19tch680BGvmu nix2h001"
+                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
                       ];
                     };
                   };

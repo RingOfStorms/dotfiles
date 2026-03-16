@@ -5,12 +5,6 @@
   ...
 }:
 let
-  hasSecret =
-    secret:
-    let
-      secrets = config.age.secrets or { };
-    in
-    secrets ? ${secret} && secrets.${secret} != null;
   c = constants.services.nixarr;
 in
 {
@@ -21,9 +15,9 @@ in
       mediaDir = c.mediaDir;
       stateDir = c.stateDir;
 
-      vpn = lib.mkIf (hasSecret "us_chi_wg") {
+      vpn = {
         enable = true;
-        wgConf = config.age.secrets.us_chi_wg.path;
+        # wgConf injected via secrets-bao configChanges
       };
 
       jellyfin.enable = true; # jellyfinnnnnn!

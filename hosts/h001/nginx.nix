@@ -11,25 +11,17 @@ let
     proxyWebsockets = true;
     proxyPass = "http://localhost:${toString homepagePort}";
   };
-  hasSecret =
-    secret:
-    let
-      secrets = config.age.secrets or { };
-    in
-    secrets ? ${secret} && secrets.${secret} != null;
 in
 {
   # TODO transfer these to o001 to use same certs?
   # Will I ever get rate limited by lets encrypt with both doing their own?
-  security.acme = lib.mkIf (hasSecret "linode_rw_domains") {
+  security.acme = {
     acceptTerms = true;
     defaults.email = c.acmeEmail;
     certs."${c.domain}" = {
       domain = c.domain;
       extraDomainNames = [ "*.${c.domain}" ];
-      credentialFiles = {
-        LINODE_TOKEN_FILE = config.age.secrets.linode_rw_domains.path;
-      };
+      # credentialFiles.LINODE_TOKEN_FILE injected via secrets-bao configChanges
       dnsProvider = "linode";
       group = "nginx";
     };

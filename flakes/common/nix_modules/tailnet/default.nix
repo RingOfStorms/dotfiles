@@ -1,17 +1,9 @@
 {
   config,
   pkgs,
-  lib,
   ...
 }:
 let
-  hasSecret =
-    secret:
-    let
-      secrets = config.age.secrets or { };
-    in
-    secrets ? ${secret} && secrets.${secret} != null;
-
   # Shared DNS records for h001 services - used for /etc/hosts fallback
   h001Dns = import ./h001_dns.nix;
 in
@@ -28,7 +20,6 @@ in
     enable = true;
     openFirewall = true;
     useRoutingFeatures = "client";
-    authKeyFile = lib.mkIf (hasSecret "headscale_auth") config.age.secrets.headscale_auth.path;
     extraUpFlags = [
       "--login-server=https://headscale.joshuabell.xyz"
     ];

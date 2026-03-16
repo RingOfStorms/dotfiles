@@ -90,14 +90,6 @@ let
       }) uniqueUsers
     );
   };
-
-  # Secret file path (if using secrets)
-  hasSecret =
-    secret:
-    let
-      secrets = config.age.secrets or { };
-    in
-    secrets ? ${secret} && secrets.${secret} != null;
 in
 {
   options = { };

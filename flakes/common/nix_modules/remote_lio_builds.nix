@@ -4,18 +4,14 @@
   ...
 }:
 let
-  hasSecret =
-    secret:
-    let
-      secrets = config.age.secrets or { };
-    in
-    secrets ? ${secret} && secrets.${secret} != null;
+  baoSecrets = config.ringofstorms.secretsBao.secrets or { };
+  hasNix2Nix = baoSecrets ? "nix2nix_2026-03-15";
+  secretPath = if hasNix2Nix then baoSecrets."nix2nix_2026-03-15".path else "";
 in
 {
-  nix = lib.mkIf (hasSecret "nix2lio") {
+  nix = lib.mkIf hasNix2Nix {
     distributedBuilds = true;
 
-    # Prefer pulling from lio's binary cache when available.
     settings = {
       substituters = lib.mkAfter [ "http://lio:5000" ];
       trusted-public-keys = lib.mkAfter [ "lio:9jKQ2xJyZjD0AWFzMcLe5dg3s8vOJ3uffujbUkBg4ms=" ];
@@ -33,11 +29,11 @@ in
           "benchmark"
           "big-parallel"
           "kvm"
-          "uid-range" # Often helpful
+          "uid-range"
           "recursive-nix"
         ];
         mandatoryFeatures = [ ];
-        sshKey = config.age.secrets.nix2lio.path;
+        sshKey = secretPath;
       }
     ];
   };

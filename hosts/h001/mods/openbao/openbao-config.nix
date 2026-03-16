@@ -126,7 +126,6 @@ let
     "machines/high-trust/oauth2_proxy_key_file_2026-03-15"  = {};
     "machines/high-trust/openwebui_env_2026-03-15"          = {};
     "machines/high-trust/openrouter_2026-03-15"             = { fields = { api-key = "TODO:replace_me"; }; };
-    "machines/high-trust/anthropic-claude_2026-03-15"       = { fields = { api-key = "TODO:replace_me"; }; };
 
     # ── high-trust: per-host service secrets ──────────────────────────
     "machines/high-trust/atuin-key-josh_2026-03-15"         = { fields = { user = "TODO:replace_me"; password = "TODO:replace_me"; value = "TODO:replace_me"; }; };
