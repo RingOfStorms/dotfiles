@@ -23,4 +23,6 @@
     "rtlwifi"
     "mac80211"
   ];
+  # Allow emulation of aarch64-linux binaries for cross compiling
+  boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
 }
