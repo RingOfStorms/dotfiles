@@ -15,6 +15,9 @@
   nix2nix_2026-03-15 = {
     owner = "luser";
     group = "users";
+    template = ''
+      {{- with secret "kv/data/machines/high-trust/nix2nix_2026-03-15" -}}{{- .Data.data.value | base64Decode -}}{{- end -}}
+    '';
     hmChanges = {
       programs.ssh.matchBlocks = {
         "lio".identityFile = "$SECRET_PATH";
@@ -42,6 +45,9 @@
   nix2github_2026-03-15 = {
     owner = "luser";
     group = "users";
+    template = ''
+      {{- with secret "kv/data/machines/high-trust/nix2github_2026-03-15" -}}{{- .Data.data.value | base64Decode -}}{{- end -}}
+    '';
     hmChanges = {
       programs.ssh.matchBlocks."github.com".identityFile = "$SECRET_PATH";
     };
@@ -50,6 +56,9 @@
   nix2gitforgejo_2026-03-15 = {
     owner = "luser";
     group = "users";
+    template = ''
+      {{- with secret "kv/data/machines/high-trust/nix2gitforgejo_2026-03-15" -}}{{- .Data.data.value | base64Decode -}}{{- end -}}
+    '';
     hmChanges = {
       programs.ssh.matchBlocks."git.joshuabell.xyz".identityFile = "$SECRET_PATH";
     };
