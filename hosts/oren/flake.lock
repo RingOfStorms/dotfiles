@@ -1272,11 +1272,11 @@
     "secrets-bao": {
       "locked": {
         "dir": "flakes/secrets-bao",
-        "lastModified": 1773675538,
-        "narHash": "sha256-0w6MfaN+haNY5hX+kbdRdw76l3nSRKOM3BAyMUo3ctE=",
+        "lastModified": 1773688382,
+        "narHash": "sha256-9YWe3a7HduSO1CRg6vPOFLrLLZ5ffF7ZeSEYBTsjH40=",
         "ref": "refs/heads/master",
-        "rev": "ba860571558a2dea3a4225920540cba66cdf7dee",
-        "revCount": 1373,
+        "rev": "6d1c96fec4bcb5c7cab0109407ce4c73e72218de",
+        "revCount": 1377,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
