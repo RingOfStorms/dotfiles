@@ -96,7 +96,7 @@
               common.nixosModules.tty_caps_esc
               common.nixosModules.zsh
               common.nixosModules.more_filesystems
-              common.nixosModules.tailnet
+              # common.nixosModules.tailnet
 
               inputs.secrets-bao.nixosModules.default
               (
