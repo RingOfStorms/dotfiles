@@ -54,6 +54,8 @@ in
           check_provider_endpoints = true;
           drop_params = true;
           modify_params = true;
+          max_request_size_mb = 4000;
+          max_response_size_mb = 4000;
         };
         model_list = [
           # Anthropic (direct)
