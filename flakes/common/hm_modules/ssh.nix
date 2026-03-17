@@ -46,6 +46,9 @@
       "gp3" = {
         user = "josh";
       };
+      "joe" = {
+        user = "josh";
+      };
       "t" = {
         user = "joshua.bell";
         setEnv = {

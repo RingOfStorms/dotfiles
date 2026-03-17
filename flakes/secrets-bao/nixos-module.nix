@@ -2,10 +2,172 @@
   config,
   lib,
   pkgs,
+  constants ? null,
   ...
 }:
 let
   cfg = config.ringofstorms.secretsBao;
+  auto = cfg.autoSecrets;
+
+  isHighTrust = cfg.openBaoRole == "machines-hightrust";
+  isLowTrust = cfg.openBaoRole == "machines-lowtrust";
+
+  # Primary user for secret ownership (from option, constants fallback, or "root")
+  primaryUser =
+    if cfg.primaryUser != null then cfg.primaryUser
+    else if constants != null && constants ? host && constants.host ? primaryUser then constants.host.primaryUser
+    else "root";
+
+  primaryGroup = if primaryUser == "root" then "root" else "users";
+
+  hasTailscale = config.services.tailscale.enable or false;
+  hasHomeManager = (config.home-manager or null) != null;
+
+  # Hardcoded list of SSH matchBlock hosts from the shared ssh.nix HM module.
+  # Keep in sync with flakes/common/hm_modules/ssh.nix.
+  nix2nixMatchBlockHosts = [
+    "lio" "lio_"
+    "oren"
+    "juni"
+    "gp3"
+    "joe"
+    "t" "t_"
+    "h001" "h001_"
+    "h002" "h002_"
+    "h003" "h003_"
+    "l001"
+    "l002" "l002_"
+    "o001" "o001_"
+  ];
+
+  # Build the nix2nix hmChanges: set identityFile for each matchBlock host
+  # that the host actually has defined (conditional on HM ssh matchBlocks).
+  nix2nixHmChanges = {
+    programs.ssh.matchBlocks = builtins.listToAttrs (
+      map (host: {
+        name = host;
+        value = { identityFile = "$SECRET_PATH"; };
+      }) nix2nixMatchBlockHosts
+    );
+  };
+
+  # KV path prefix based on trust level
+  kvPrefix =
+    if isHighTrust then "kv/data/machines/high-trust"
+    else if isLowTrust then "kv/data/machines/low-trust"
+    else null;
+
+  # --- Auto-detected secrets ---
+  autoHeadscaleSecret =
+    if auto.headscaleAuth && hasTailscale && kvPrefix != null then {
+      ${if isHighTrust then "headscale_auth_2026-03-15" else "headscale_auth_lowtrust_2026-03-15"} = {
+        kvPath = "${kvPrefix}/${if isHighTrust then "headscale_auth_2026-03-15" else "headscale_auth_lowtrust_2026-03-15"}";
+        softDepend = [ "tailscaled" ];
+        configChanges.services.tailscale.authKeyFile = "$SECRET_PATH";
+      };
+    }
+    else { };
+
+  autoNix2NixSecret =
+    if auto.nix2nix && isHighTrust && hasHomeManager then {
+      "nix2nix_2026-03-15" = {
+        owner = primaryUser;
+        group = primaryGroup;
+        hmChanges = nix2nixHmChanges;
+      };
+    }
+    else { };
+
+  autoNix2GithubSecret =
+    if auto.nix2github && isHighTrust && hasHomeManager then {
+      "nix2github_2026-03-15" = {
+        owner = primaryUser;
+        group = primaryGroup;
+        hmChanges.programs.ssh.matchBlocks."github.com".identityFile = "$SECRET_PATH";
+      };
+    }
+    else { };
+
+  autoNix2GitforgejoSecret =
+    if auto.nix2gitforgejo && isHighTrust && hasHomeManager then {
+      "nix2gitforgejo_2026-03-15" = {
+        owner = primaryUser;
+        group = primaryGroup;
+        hmChanges.programs.ssh.matchBlocks."git.joshuabell.xyz".identityFile = "$SECRET_PATH";
+      };
+    }
+    else { };
+
+  autoGithubReadTokenSecret =
+    if auto.githubReadToken && isHighTrust then {
+      "github_read_token_2026-03-15" = {
+        configChanges.nix.extraOptions = "!include $SECRET_PATH";
+      };
+    }
+    else { };
+
+  allAutoSecrets =
+    autoHeadscaleSecret
+    // autoNix2NixSecret
+    // autoNix2GithubSecret
+    // autoNix2GitforgejoSecret
+    // autoGithubReadTokenSecret;
+
+  # Substitution helper: replace $SECRET_PATH with the actual secret file path.
+  substitute = secretPath: value:
+    if builtins.isAttrs value then
+      builtins.mapAttrs (_: v: substitute secretPath v) value
+    else if builtins.isList value then
+      map (v: substitute secretPath v) value
+    else if builtins.isString value then
+      builtins.replaceStrings [ "$SECRET_PATH" ] [ secretPath ] value
+    else
+      value;
+
+  deepMerge = a: b:
+    if builtins.isAttrs a && builtins.isAttrs b then
+      builtins.foldl'
+        (acc: key:
+          let
+            newVal = builtins.getAttr key b;
+            mergedVal =
+              if builtins.hasAttr key acc then
+                deepMerge (builtins.getAttr key acc) newVal
+              else
+                newVal;
+          in
+          acc // (builtins.listToAttrs [ { name = key; value = mergedVal; } ])
+        )
+        a
+        (builtins.attrNames b)
+    else if builtins.isList a && builtins.isList b then
+      a ++ b
+    else
+      b;
+
+  # Compute config/HM fragments for auto-detected secrets only.
+  autoConfigFragments = builtins.attrValues (builtins.mapAttrs (
+    name: s:
+    let
+      secretPath = cfg.secretsBasePath + "/" + name;
+    in
+    substitute secretPath (s.configChanges or { })
+  ) allAutoSecrets);
+
+  autoHmFragments = builtins.attrValues (builtins.mapAttrs (
+    name: s:
+    let
+      secretPath = cfg.secretsBasePath + "/" + name;
+    in
+    substitute secretPath (s.hmChanges or { })
+  ) allAutoSecrets);
+
+  autoConfigChanges = builtins.foldl' deepMerge { } autoConfigFragments;
+  autoHmChanges =
+    let merged = builtins.foldl' deepMerge { } autoHmFragments;
+    in
+    if merged == { } then { }
+    else { home-manager.sharedModules = [ (_: merged) ]; };
 
   mkJwtMintScript = pkgs.writeShellScript "zitadel-mint-jwt-impl" ''
     #!/usr/bin/env bash
@@ -390,6 +552,48 @@ in
       type = lib.types.str;
     };
 
+    primaryUser = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = ''
+        Primary user for SSH key secret ownership.
+        Falls back to constants.host.primaryUser (via specialArgs) if null,
+        then to "root" if constants is unavailable.
+      '';
+    };
+
+    autoSecrets = {
+      headscaleAuth = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Auto-add headscale/tailscale auth secret when tailscale is enabled.";
+      };
+
+      nix2nix = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Auto-add nix2nix SSH key secret (high-trust only, when HM ssh is present).";
+      };
+
+      nix2github = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Auto-add GitHub SSH key secret (high-trust only, when HM ssh is present).";
+      };
+
+      nix2gitforgejo = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Auto-add Forgejo SSH key secret (high-trust only, when HM ssh is present).";
+      };
+
+      githubReadToken = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Auto-add GitHub read token for nix (high-trust only).";
+      };
+    };
+
     vaultAgentTokenPath = lib.mkOption {
       type = lib.types.str;
       default = "/run/openbao/vault-agent.token";
@@ -478,6 +682,15 @@ in
 
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
+      # Inject auto-detected secrets (hosts can override individual fields via lib.mkForce if needed)
+      {
+        ringofstorms.secretsBao.secrets = allAutoSecrets;
+      }
+
+      # Apply configChanges/hmChanges for auto-detected secrets
+      autoConfigChanges
+      autoHmChanges
+
       {
         assertions = lib.mapAttrsToList (name: s: {
           assertion = (s.template != null) || (s.kvPath != null);
