@@ -9,7 +9,7 @@
     ./hardware-transcoding.nix
     ./monitoring_hub.nix
     ./youtarr.nix
-    ./openwebui.nix
+    # ./openwebui.nix # Replaced by chat-ui (containers/chat-ui.nix)
     ./trilium.nix
     ./oauth2-proxy.nix
     ./n8n.nix

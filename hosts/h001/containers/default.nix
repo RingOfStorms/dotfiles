@@ -9,6 +9,7 @@ let
 in
 {
   imports = [
+    ./chat-ui.nix
     ./dawarich.nix
     ./forgejo.nix
     ./immich.nix

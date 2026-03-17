@@ -125,16 +125,22 @@
 
               inputs.secrets-bao.nixosModules.default
               (
-                { inputs, lib, ... }:
+                let
+                  autoSecrets = inputs.secrets-bao.lib.mkAutoSecrets {
+                    role = "machines-hightrust";
+                    inherit primaryUser;
+                  };
+                in
+                { lib, ... }:
                 lib.mkMerge [
                   {
                     ringofstorms.secretsBao = {
                       enable = true;
                       openBaoRole = "machines-hightrust";
-                      inherit (constants) secrets;
+                      secrets = autoSecrets;
                     };
                   }
-                  (inputs.secrets-bao.lib.applyChanges constants.secrets)
+                  (inputs.secrets-bao.lib.applyChanges autoSecrets)
                 ]
               )
 
