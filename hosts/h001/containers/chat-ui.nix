@@ -27,7 +27,7 @@ in
         "127.0.0.1:${toString v_port}:3000"
       ];
       volumes = [
-        "${hostDataDir}/data:/data"
+        "${hostDataDir}/db:/data/db"
       ];
       environment = {
         # Connect to litellm proxy on the host
@@ -54,9 +54,9 @@ in
   };
 
   system.activationScripts."${name}_directories" = ''
-    mkdir -p ${hostDataDir}/data
-    chown root:root ${hostDataDir}
-    chmod 777 ${hostDataDir}/data
+    mkdir -p ${hostDataDir}/db
+    chown 1000:1000 ${hostDataDir}/db
+    chmod 755 ${hostDataDir}/db
   '';
 
   services.nginx.virtualHosts."${c.domain}" = {
