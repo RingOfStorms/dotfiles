@@ -109,6 +109,7 @@ in
           ]
         )
         # Azure
+        # Probed with: scripts/probe-azure-models.sh --type chat --nix
         ++ (builtins.map
           (m: {
             model_name = "azure-${m}";
@@ -119,29 +120,21 @@ in
               api_key = "na";
             };
           })
-          # curl -L "http://100.64.0.8:9010/azure/openai/models?api-version=2025-04-01-preview" | jq '.data.[].id'
           [
-            "gpt-5.4-2026-03-05"
-            "gpt-5.3-codex-2026-02-24"
-            "gpt-5.2-2025-12-11"
-            "gpt-5.1-2025-11-13"
-            "gpt-4o-2024-05-13"
             "gpt-4.1-2025-04-14"
             "gpt-4.1-mini-2025-04-14"
-            "gpt-5-nano-2025-08-07"
-            "gpt-5-mini-2025-08-07"
+            "gpt-4o-2024-05-13"
+            "gpt-4o-2024-08-06"
+            "gpt-4o-mini-2024-07-18"
             "gpt-5-2025-08-07"
+            "gpt-5-mini-2025-08-07"
+            "gpt-5-nano-2025-08-07"
+            "gpt-5.1-2025-11-13"
+            "gpt-5.2-2025-12-11"
+            "gpt-5.4-2026-03-05"
+            "o3-mini-2025-01-31"
+            "o4-mini-2025-04-16"
           ]
-          #curl "http://100.64.0.8:9010/azure/openai/deployments/gpt-5.2-2025-12-11/chat/completions?api-version=2025-04-01-preview" \
-          # -H "Content-Type: application/json" \
-          # -H "api-key: na" \
-          # -d '{
-          #   "messages": [
-          #     {"role": "system", "content": "You are a helpful assistant."},
-          #     {"role": "user", "content": "write a haiku?"}
-          #   ],
-          #   "temperature": 0.7
-          # }' | jq
         )
         # Azure reasoning aliases
         ++ [
