@@ -49,6 +49,9 @@
               (pkgs.writeShellScriptBin "deploy_juni" ''
                 NIX_SSHOPTS="-i /var/lib/openbao-secrets/nix2nix_2026-03-15" nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/juni#juni' --target-host josh@10.12.14.172 --use-substitutes --no-reexec switch
               '')
+              (pkgs.writeShellScriptBin "deploy_joe" ''
+                NIX_SSHOPTS="-i /var/lib/openbao-secrets/nix2nix_2026-03-15" nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/joe#joe' --target-host josh@10.12.14.126 --use-substitutes --no-reexec switch
+              '')
             ];
           };
         }
