@@ -1,18 +1,30 @@
 {
   config,
+  lib,
   pkgs,
   ...
 }:
 let
   # Shared DNS records for h001 services - used for /etc/hosts fallback
   h001Dns = import ./h001_dns.nix;
+  cfg = config.ringofstorms.tailnet;
 in
 {
+  options.ringofstorms.tailnet = {
+    h001DnsHosts = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Add /etc/hosts entries for h001 services as fallback for headscale MagicDNS. Disable on hosts where the chicken-and-egg with secrets bootstrap is a problem.";
+    };
+  };
+
+  config = {
+
   environment.systemPackages = with pkgs; [ tailscale ];
   boot.kernelModules = [ "tun" ];
 
   # Add /etc/hosts entries for h001 services as fallback for headscale DNS
-  networking.hosts = {
+  networking.hosts = lib.mkIf cfg.h001DnsHosts {
     "${h001Dns.ip}" = map (name: "${name}.${h001Dns.baseDomain}") h001Dns.subdomains;
   };
 
@@ -39,4 +51,5 @@ in
 
   networking.firewall.trustedInterfaces = [ config.services.tailscale.interfaceName ];
   networking.firewall.checkReversePath = "loose";
+  };
 }
