@@ -108,12 +108,6 @@
       domain = "chat.joshuabell.xyz";
     };
 
-    chatUi = {
-      port = 3033;
-      dataDir = "/var/lib/chat-ui";
-      domain = "chat.joshuabell.xyz";
-    };
-
     trilium = {
       port = 9111;
       overlayPort = 9112;
@@ -229,15 +223,6 @@
 
     openwebui_env_2026-03-15 = {
       softDepend = [ "open-webui" ];
-    };
-
-    # Chat UI OIDC secret - env file with:
-    #   OPENID_CONFIG=https://sso.joshuabell.xyz/.well-known/openid-configuration
-    #   OPENID_CLIENT_ID=<zitadel-client-id>
-    #   OPENID_CLIENT_SECRET=<zitadel-client-secret>
-    #   OPENID_SCOPES=openid email profile
-    chatui_env_2026-03-17 = {
-      softDepend = [ "podman-chat-ui" ];
     };
 
     openrouter_2026-03-15 = {

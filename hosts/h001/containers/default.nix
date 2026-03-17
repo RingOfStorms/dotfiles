@@ -9,7 +9,6 @@ let
 in
 {
   imports = [
-    # ./chat-ui.nix # Disabled in favor of Open WebUI
     ./dawarich.nix
     ./forgejo.nix
     ./immich.nix

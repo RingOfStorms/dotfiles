@@ -125,7 +125,6 @@ let
     "machines/high-trust/zitadel_master_key_2026-03-15"     = {};
     "machines/high-trust/oauth2_proxy_key_file_2026-03-15"  = {};
     "machines/high-trust/openwebui_env_2026-03-15"          = {};
-    "machines/high-trust/chatui_env_2026-03-17"             = {};
     "machines/high-trust/openrouter_2026-03-15"             = { fields = { api-key = "TODO:replace_me"; }; };
 
     # ── high-trust: per-host service secrets ──────────────────────────
