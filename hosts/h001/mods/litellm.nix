@@ -26,7 +26,10 @@ in
     # (copilot models need to reach github, air/azure models need tailscale network)
     systemd.services.litellm = {
       wants = [ "network-online.target" ];
-      after = [ "network-online.target" "tailscaled.service" ];
+      after = [
+        "network-online.target"
+        "tailscaled.service"
+      ];
     };
 
     services.litellm = {
@@ -86,21 +89,22 @@ in
           })
           # List from https://github.com/settings/copilot/features enabled models
           [
-            "claude-opus-4.6"
-            "claude-opus-4.5"
             "claude-sonnet-3.5"
             "claude-sonnet-4"
             "claude-sonnet-4.5"
             "claude-haiku-4.5"
+            "claude-opus-4.5"
+            "claude-opus-4.6"
+            "claude-sonnet-4.6"
             "gemini-2.5-pro"
-            "openai-gpt-5"
+            "openai-gpt-5.2-codex"
+            "openai-gpt-5.3-codex"
+            "openai-gpt-5.4"
             "openai-gpt-5-mini"
-            "openai-gpt-5.1-mini"
             "openai-gpt-5.1"
             "openai-gpt-5.1-codex"
             "openai-gpt-5.1-codex-max"
             "openai-gpt-5.2"
-            "openai-gpt-5.2-codex"
             "grok-code-fast-1"
           ]
         )
@@ -198,6 +202,7 @@ in
             "gpt-5.1"
             "gpt-5.2"
             "gpt-5"
+            "gpt-5.4"
             "gpt-4.1"
             "gpt-4.1-mini"
             "gpt-4o"
@@ -206,6 +211,7 @@ in
             "o3-mini"
             "o4-mini"
             "gemini-2.5-pro"
+            "gemini-2.5-pro-passthrough"
             "gemini-2.0-flash"
             "gemini-2.5-flash"
             "gemini-2.0-flash-lite"
