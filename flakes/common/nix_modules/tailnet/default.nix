@@ -13,7 +13,7 @@ in
   options.ringofstorms.tailnet = {
     h001DnsHosts = lib.mkOption {
       type = lib.types.bool;
-      default = true;
+      default = false;
       description = "Add /etc/hosts entries for h001 services as fallback for headscale MagicDNS. Disable on hosts where the chicken-and-egg with secrets bootstrap is a problem.";
     };
   };

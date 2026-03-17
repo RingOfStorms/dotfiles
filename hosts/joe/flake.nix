@@ -97,7 +97,6 @@
               common.nixosModules.zsh
               common.nixosModules.more_filesystems
               common.nixosModules.tailnet
-              ({ ringofstorms.tailnet.h001DnsHosts = false; })
 
               inputs.secrets-bao.nixosModules.default
               (
