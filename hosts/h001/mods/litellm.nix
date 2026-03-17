@@ -38,6 +38,7 @@ in
       host = "0.0.0.0";
       openFirewall = false;
       package = pkgsLitellm.litellm;
+      # gives openrouter key
       environmentFile = "/var/lib/openbao-secrets/litellm-env";
       environment = {
         SCARF_NO_ANALYTICS = "True";
@@ -58,13 +59,6 @@ in
           max_response_size_mb = 4000;
         };
         model_list = [
-          # Anthropic (direct)
-          {
-            model_name = "anthropic/*";
-            litellm_params = {
-              model = "anthropic/*";
-            };
-          }
           # OpenRouter
           {
             model_name = "openrouter/*";
