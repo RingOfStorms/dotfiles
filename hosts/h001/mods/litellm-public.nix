@@ -14,15 +14,21 @@ let
   };
   c = constants.services.litellmPublic;
 
+  # Probed with: scripts/probe-azure-models.sh --type chat --nix
   azureModels = [
-    "gpt-5.2-2025-12-11"
-    "gpt-5.1-2025-11-13"
-    "gpt-4o-2024-05-13"
     "gpt-4.1-2025-04-14"
     "gpt-4.1-mini-2025-04-14"
-    "gpt-5-nano-2025-08-07"
-    "gpt-5-mini-2025-08-07"
+    "gpt-4o-2024-05-13"
+    "gpt-4o-2024-08-06"
+    "gpt-4o-mini-2024-07-18"
     "gpt-5-2025-08-07"
+    "gpt-5-mini-2025-08-07"
+    "gpt-5-nano-2025-08-07"
+    "gpt-5.1-2025-11-13"
+    "gpt-5.2-2025-12-11"
+    "gpt-5.4-2026-03-05"
+    "o3-mini-2025-01-31"
+    "o4-mini-2025-04-16"
   ];
 in
 {
@@ -133,15 +139,22 @@ in
           })
           # List from https://github.com/settings/copilot/features enabled models
           [
-            "claude-opus-4.6"
-            "claude-opus-4.5"
             "claude-sonnet-3.5"
             "claude-sonnet-4"
             "claude-sonnet-4.5"
             "claude-haiku-4.5"
+            "claude-opus-4.5"
+            "claude-opus-4.6"
+            "claude-sonnet-4.6"
             "gemini-2.5-pro"
-            "openai-gpt-5"
+            "openai-gpt-5.2-codex"
+            "openai-gpt-5.3-codex"
+            "openai-gpt-5.4"
             "openai-gpt-5-mini"
+            "openai-gpt-5.1"
+            "openai-gpt-5.1-codex"
+            "openai-gpt-5.1-codex-max"
+            "openai-gpt-5.2"
             "grok-code-fast-1"
           ]
         );
