@@ -20,9 +20,6 @@ let
 
   primaryGroup = if primaryUser == "root" then "root" else "users";
 
-  hasTailscale = config.services.tailscale.enable or false;
-  hasHomeManager = (config.home-manager or null) != null;
-
   # Hardcoded list of SSH matchBlock hosts from the shared ssh.nix HM module.
   # Keep in sync with flakes/common/hm_modules/ssh.nix.
   nix2nixMatchBlockHosts = [
@@ -58,8 +55,12 @@ let
     else null;
 
   # --- Auto-detected secrets ---
+  # Gated only on the autoSecrets toggle + trust level. Do NOT read from
+  # `config.services.*` or `config.home-manager.*` here — that creates
+  # infinite recursion because the auto-secrets themselves write back into
+  # those same config paths.
   autoHeadscaleSecret =
-    if auto.headscaleAuth && hasTailscale && kvPrefix != null then {
+    if auto.headscaleAuth && kvPrefix != null then {
       ${if isHighTrust then "headscale_auth_2026-03-15" else "headscale_auth_lowtrust_2026-03-15"} = {
         kvPath = "${kvPrefix}/${if isHighTrust then "headscale_auth_2026-03-15" else "headscale_auth_lowtrust_2026-03-15"}";
         softDepend = [ "tailscaled" ];
@@ -69,7 +70,7 @@ let
     else { };
 
   autoNix2NixSecret =
-    if auto.nix2nix && isHighTrust && hasHomeManager then {
+    if auto.nix2nix && isHighTrust then {
       "nix2nix_2026-03-15" = {
         owner = primaryUser;
         group = primaryGroup;
@@ -79,7 +80,7 @@ let
     else { };
 
   autoNix2GithubSecret =
-    if auto.nix2github && isHighTrust && hasHomeManager then {
+    if auto.nix2github && isHighTrust then {
       "nix2github_2026-03-15" = {
         owner = primaryUser;
         group = primaryGroup;
@@ -89,7 +90,7 @@ let
     else { };
 
   autoNix2GitforgejoSecret =
-    if auto.nix2gitforgejo && isHighTrust && hasHomeManager then {
+    if auto.nix2gitforgejo && isHighTrust then {
       "nix2gitforgejo_2026-03-15" = {
         owner = primaryUser;
         group = primaryGroup;
