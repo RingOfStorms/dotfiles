@@ -8,7 +8,6 @@
     litellm-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     trilium-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     oauth2-proxy-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    pinchflat-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     zitadel-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     beszel-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     forgejo-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";

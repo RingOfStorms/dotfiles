@@ -1164,22 +1164,6 @@
         "type": "github"
       }
     },
-    "pinchflat-nixpkgs": {
-      "locked": {
-        "lastModified": 1769789167,
-        "narHash": "sha256-kKB3bqYJU5nzYeIROI82Ef9VtTbu4uA3YydSk/Bioa8=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "62c8382960464ceb98ea593cb8321a2cf8f9e3e5",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
     "puzzles": {
       "inputs": {
         "nixpkgs": "nixpkgs_4"
@@ -1214,7 +1198,6 @@
         "nixpkgs": "nixpkgs_3",
         "oauth2-proxy-nixpkgs": "oauth2-proxy-nixpkgs",
         "open-webui-nixpkgs": "open-webui-nixpkgs",
-        "pinchflat-nixpkgs": "pinchflat-nixpkgs",
         "puzzles": "puzzles",
         "ros_neovim": "ros_neovim",
         "secrets-bao": "secrets-bao",
