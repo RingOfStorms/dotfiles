@@ -221,6 +221,20 @@ in
             "text-embedding-large-exp-03-07"
             "text-embedding-005"
           ]
+        )
+        # Ollama on joe (3090) — models must be pulled manually: ollama pull <model>
+        ++ (builtins.map
+          (m: {
+            model_name = "local-${m}";
+            litellm_params = {
+              model = "ollama/${m}";
+              api_base = "http://100.64.0.12:11434";
+            };
+          })
+          [
+            "qwen2.5:32b"
+            "deepseek-coder-v2:16b"
+          ]
         );
       };
     };

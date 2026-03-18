@@ -117,7 +117,7 @@
                     inputs.opencode.packages.${pkgs.system}.default
                   ];
                   environment.shellAliases = {
-                    "oc" = "all_proxy='' http_proxy='' https_proxy='' opencode";
+                    "oc" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile oc -- opencode";
                     "occ" = "oc -c";
                   };
                 }
