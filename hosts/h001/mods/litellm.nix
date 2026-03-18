@@ -232,7 +232,11 @@ in
             };
           })
           [
-            "qwen2.5:32b"
+            "qwen3:14b"
+            "qwen3:8b"
+            "qwen3:30b"
+            "gemma3:12b"
+            "deepseek-r1:14b"
             "deepseek-coder-v2:16b"
           ]
         );
