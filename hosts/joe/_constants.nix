@@ -5,4 +5,10 @@
     primaryUser = "josh";
     stateVersion = "26.05";
   };
+
+  services = {
+    ollama = {
+      port = 11434;
+    };
+  };
 }
