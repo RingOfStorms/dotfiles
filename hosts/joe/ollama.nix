@@ -1,6 +1,7 @@
 {
   constants,
   pkgs,
+  lib,
   ...
 }:
 let
@@ -17,7 +18,7 @@ in
   # Disable DynamicUser so /var/lib/ollama can be a direct bind mount
   # (impermanence bind mounts conflict with systemd's DynamicUser /var/lib/private setup)
   systemd.services.ollama.serviceConfig = {
-    DynamicUser = false;
+    DynamicUser = lib.mkForce false;
     User = "ollama";
     Group = "ollama";
   };
@@ -28,6 +29,12 @@ in
     home = "/var/lib/ollama";
   };
   users.groups.ollama = {};
+
+  # Ensure models subdirectory exists before ollama starts
+  # (ProtectSystem=strict + ReadWritePaths needs it to exist for mount namespacing)
+  systemd.tmpfiles.rules = [
+    "d /var/lib/ollama/models 0700 ollama ollama -"
+  ];
 
   # Allow access from Tailscale overlay and LAN
   networking.firewall.interfaces."tailscale0".allowedTCPPorts = [ c.port ];
