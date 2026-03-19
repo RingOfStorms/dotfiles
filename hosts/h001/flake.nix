@@ -8,7 +8,6 @@
     litellm-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     trilium-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     oauth2-proxy-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    pinchflat-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     zitadel-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     beszel-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     forgejo-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -86,16 +85,23 @@
 
               inputs.secrets-bao.nixosModules.default
               (
-                { inputs, lib, ... }:
+                let
+                  autoSecrets = inputs.secrets-bao.lib.mkAutoSecrets {
+                    role = "machines-hightrust";
+                    primaryUser = constants.host.primaryUser;
+                  };
+                  allSecrets = autoSecrets // constants.secrets;
+                in
+                { lib, ... }:
                 lib.mkMerge [
                   {
                     ringofstorms.secretsBao = {
                       enable = true;
                       openBaoRole = "machines-hightrust";
-                      inherit (constants) secrets;
+                      secrets = allSecrets;
                     };
                   }
-                  (inputs.secrets-bao.lib.applyChanges constants.secrets)
+                  (inputs.secrets-bao.lib.applyChanges allSecrets)
                 ]
               )
 
@@ -153,14 +159,12 @@
                         "input"
                       ];
                       openssh.authorizedKeys.keys = [
-                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILZigrRMF/HHMhjBIwiOnS2pqbOz8Az19tch680BGvmu nix2h001"
                         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
                       ];
                     };
                     root = {
                       shell = pkgs.zsh;
                       openssh.authorizedKeys.keys = [
-                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILZigrRMF/HHMhjBIwiOnS2pqbOz8Az19tch680BGvmu nix2h001"
                         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
                       ];
                     };

@@ -5,13 +5,13 @@
 let
   nono = pkgs.rustPlatform.buildRustPackage rec {
     pname = "nono";
-    version = "0.17.0";
+    version = "0.18.0";
 
     src = pkgs.fetchFromGitHub {
       owner = "always-further";
       repo = "nono";
       rev = "v${version}";
-      hash = "sha256-LEUblw0AJoqyND086eVzs7piupsbU3kcjL7Flt5mkeg=";
+      hash = "sha256-qUExrCJfPiP3UvWaDHIhVgUcTb7NfBMl0Q5Q88oskHk=";
     };
 
     cargoLock.lockFile = "${src}/Cargo.lock";

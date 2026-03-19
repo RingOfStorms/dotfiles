@@ -117,7 +117,7 @@
                     inputs.opencode.packages.${pkgs.system}.default
                   ];
                   environment.shellAliases = {
-                    "oc" = "all_proxy='' http_proxy='' https_proxy='' opencode";
+                    "oc" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile oc -- opencode";
                     "occ" = "oc -c";
                   };
                 }
@@ -125,16 +125,22 @@
 
               inputs.secrets-bao.nixosModules.default
               (
-                { inputs, lib, ... }:
+                let
+                  autoSecrets = inputs.secrets-bao.lib.mkAutoSecrets {
+                    role = "machines-hightrust";
+                    inherit primaryUser;
+                  };
+                in
+                { lib, ... }:
                 lib.mkMerge [
                   {
                     ringofstorms.secretsBao = {
                       enable = true;
                       openBaoRole = "machines-hightrust";
-                      inherit (constants) secrets;
+                      secrets = autoSecrets;
                     };
                   }
-                  (inputs.secrets-bao.lib.applyChanges constants.secrets)
+                  (inputs.secrets-bao.lib.applyChanges autoSecrets)
                 ]
               )
 
@@ -232,7 +238,6 @@
                         "input"
                       ];
                       openssh.authorizedKeys.keys = [
-                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJN2nsLmAlF6zj5dEBkNSJaqcCya+aB6I0imY8Q5Ew0S nix2lio"
                         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
                       ];
                     };

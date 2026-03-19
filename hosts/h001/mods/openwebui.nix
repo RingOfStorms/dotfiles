@@ -16,6 +16,7 @@ let
   baoSecrets = config.ringofstorms.secretsBao.secrets or {};
   hasOpenwebuiEnv = baoSecrets ? "openwebui_env_2026-03-15";
   c = constants.services.openWebui;
+  litellm = constants.services.litellm;
   zitadel = constants.services.zitadel;
 in
 {
@@ -54,6 +55,13 @@ in
         WEBUI_URL = "https://${c.domain}";
         CUSTOM_NAME = "Josh AI";
         ENV = "prod";
+
+        # Connect to LiteLLM proxy for all models (OpenAI-compatible API)
+        OPENAI_API_BASE_URL = "http://127.0.0.1:${toString litellm.port}/v1";
+        OPENAI_API_KEY = "na";
+        # Disable Ollama (not running on this host)
+        OLLAMA_BASE_URL = "";
+        ENABLE_OLLAMA_API = "False";
 
         ENABLE_SIGNUP = "False";
         ENABLE_LOGIN_FORM = "False";

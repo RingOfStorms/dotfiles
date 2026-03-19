@@ -64,16 +64,23 @@
 
               inputs.secrets-bao.nixosModules.default
               (
-                { inputs, lib, ... }:
+                let
+                  autoSecrets = inputs.secrets-bao.lib.mkAutoSecrets {
+                    role = "machines-hightrust";
+                    primaryUser = constants.host.primaryUser;
+                  };
+                  allSecrets = autoSecrets // constants.secrets;
+                in
+                { lib, ... }:
                 lib.mkMerge [
                   {
                     ringofstorms.secretsBao = {
                       enable = true;
                       openBaoRole = "machines-hightrust";
-                      inherit (constants) secrets;
+                      secrets = allSecrets;
                     };
                   }
-                  (inputs.secrets-bao.lib.applyChanges constants.secrets)
+                  (inputs.secrets-bao.lib.applyChanges allSecrets)
                 ]
               )
 
@@ -119,7 +126,6 @@
                     "${primaryUser}" = {
                       shell = pkgs.zsh;
                       openssh.authorizedKeys.keys = [
-                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG90Gg6dV3yhZ5+X40vICbeBwV9rfD39/8l9QSqluTw8 nix2oracle"
                         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
                       ];
                     };

@@ -40,6 +40,9 @@
       # Steam persists its own library, config, and compatdata here
       "/var/lib/steam"
 
+      # Ollama model storage and state
+      "/var/lib/ollama"
+
       # Flatpak (system-wide installs and runtime data)
       "/var/lib/flatpak"
     ];

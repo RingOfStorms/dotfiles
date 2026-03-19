@@ -323,7 +323,7 @@ in
   services.nginx.virtualHosts = {
     # Matrix server - handles client API
     "${serverName}" = {
-      forceSSL = true;
+      addSSL = true;
       useACMEHost = "joshuabell.xyz";
 
       # .well-known for Matrix client discovery
@@ -367,7 +367,7 @@ in
 
     # Element Web client
     "${elementDomain}" = {
-      forceSSL = true;
+      addSSL = true;
       useACMEHost = "joshuabell.xyz";
 
       locations."/" = {

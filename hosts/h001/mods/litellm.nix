@@ -38,6 +38,7 @@ in
       host = "0.0.0.0";
       openFirewall = false;
       package = pkgsLitellm.litellm;
+      # gives openrouter key
       environmentFile = "/var/lib/openbao-secrets/litellm-env";
       environment = {
         SCARF_NO_ANALYTICS = "True";
@@ -54,15 +55,10 @@ in
           check_provider_endpoints = true;
           drop_params = true;
           modify_params = true;
+          max_request_size_mb = 4000;
+          max_response_size_mb = 4000;
         };
         model_list = [
-          # Anthropic (direct)
-          {
-            model_name = "anthropic/*";
-            litellm_params = {
-              model = "anthropic/*";
-            };
-          }
           # OpenRouter
           {
             model_name = "openrouter/*";
@@ -224,6 +220,24 @@ in
             "text-embedding-ada-002"
             "text-embedding-large-exp-03-07"
             "text-embedding-005"
+          ]
+        )
+        # Ollama on joe (3090) — models must be pulled manually: ollama pull <model>
+        ++ (builtins.map
+          (m: {
+            model_name = "local-${m}";
+            litellm_params = {
+              model = "ollama/${m}";
+              api_base = "http://100.64.0.12:11434";
+            };
+          })
+          [
+            "qwen3:14b"
+            "qwen3:8b"
+            "qwen3:30b"
+            "gemma3:12b"
+            "deepseek-r1:14b"
+            "deepseek-coder-v2:16b"
           ]
         );
       };
