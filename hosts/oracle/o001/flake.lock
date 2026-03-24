@@ -39,11 +39,11 @@
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1773675538,
-        "narHash": "sha256-0w6MfaN+haNY5hX+kbdRdw76l3nSRKOM3BAyMUo3ctE=",
+        "lastModified": 1774322411,
+        "narHash": "sha256-PfVJ1W14LnKWLdx7SsE3/Aki3kfT6LtgTCtphyNI4kw=",
         "ref": "refs/heads/master",
-        "rev": "ba860571558a2dea3a4225920540cba66cdf7dee",
-        "revCount": 1373,
+        "rev": "b8a503f6ea96650c8734f4628f5097a165e00b2a",
+        "revCount": 1420,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -1074,11 +1074,11 @@
     "secrets-bao": {
       "locked": {
         "dir": "flakes/secrets-bao",
-        "lastModified": 1773675538,
-        "narHash": "sha256-0w6MfaN+haNY5hX+kbdRdw76l3nSRKOM3BAyMUo3ctE=",
+        "lastModified": 1774322411,
+        "narHash": "sha256-PfVJ1W14LnKWLdx7SsE3/Aki3kfT6LtgTCtphyNI4kw=",
         "ref": "refs/heads/master",
-        "rev": "ba860571558a2dea3a4225920540cba66cdf7dee",
-        "revCount": 1373,
+        "rev": "b8a503f6ea96650c8734f4628f5097a165e00b2a",
+        "revCount": 1420,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
