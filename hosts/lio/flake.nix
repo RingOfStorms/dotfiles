@@ -19,256 +19,131 @@
     # stt_ime.url = "path:../../flakes/stt_ime";
     stt_ime.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/stt_ime";
 
-    opencode.url = "github:anomalyco/opencode/4ee426ba549131c4903a71dfb6259200467aca81";
+    opencode.url = "github:anomalyco/opencode/eb3bfffad453f1c8c3f0f92bba0d8e34c83fa244";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
     qvm.url = "git+https://git.joshuabell.xyz/ringofstorms/qvm";
   };
 
   outputs =
-    {
-      nixpkgs,
-      home-manager,
-      common,
-      flatpaks,
-      beszel,
-      ros_neovim,
-      nixpkgs-unstable,
-      ...
-    }@inputs:
+    { nixpkgs-unstable, ... }@inputs:
     let
+      fleet = import ../fleet.nix;
       constants = import ./_constants.nix;
-      configuration_name = constants.host.name;
-      primaryUser = constants.host.primaryUser;
       overlayIp = constants.host.overlayIp;
-      lib = nixpkgs.lib;
+      primaryUser = constants.host.primaryUser;
     in
     {
-      nixosConfigurations = {
-        "${configuration_name}" = (
-          lib.nixosSystem {
-            specialArgs = {
-              inherit inputs constants;
+      nixosConfigurations.${constants.host.name} = fleet.mkHost {
+        inherit inputs constants;
+        nixpkgsUnstable = nixpkgs-unstable;
+        secretsRole = "machines-hightrust";
+
+        hmModules = [
+          inputs.common.homeManagerModules.kitty
+          inputs.common.homeManagerModules.foot
+          inputs.common.homeManagerModules.launcher_rofi
+          inputs.common.homeManagerModules.slicer
+          ({ pkgs, ... }: { programs.tmux.package = pkgs.unstable.tmux; })
+          # Local network SSH entries for joe and gp3
+          ({ ... }: {
+            programs.ssh.matchBlocks = {
+              "joe_" = { hostname = fleet.hosts.joe.lanIp; user = fleet.hosts.joe.user; };
+              "gp3_" = { hostname = fleet.hosts.gp3.lanIp; user = fleet.hosts.gp3.user; };
             };
-            modules = [
-              ({
-                nixpkgs.overlays = [
-                  (final: prev: {
-                    unstable = import nixpkgs-unstable {
-                      inherit (final) system config;
-                    };
-                  })
-                ];
-              })
-              home-manager.nixosModules.default
+          })
+        ];
 
-              inputs.de_plasma.nixosModules.default
-              ({
-                ringofstorms.dePlasma = {
-                  enable = true;
-                  gpu.amd.enable = true;
-                  # TODO once encrypted boot?
-                  # sddm.autologinUser = "josh";
-                };
-              })
-              inputs.stt_ime.nixosModules.default
-              ({
-                ringofstorms.sttIme = {
-                  enable = true;
-                  gpuBackend = "hip"; # Use AMD ROCm/HIP acceleration
-                  useGpu = true;
-                  model = "large";
-                };
-              })
+        nixosModules = [
+          inputs.de_plasma.nixosModules.default
+          ({
+            ringofstorms.dePlasma = {
+              enable = true;
+              gpu.amd.enable = true;
+              # TODO once encrypted boot?
+              # sddm.autologinUser = "josh";
+            };
+          })
+          inputs.stt_ime.nixosModules.default
+          ({
+            ringofstorms.sttIme = {
+              enable = true;
+              gpuBackend = "hip"; # Use AMD ROCm/HIP acceleration
+              useGpu = true;
+              model = "large";
+            };
+          })
 
-              ros_neovim.nixosModules.default
-              ({
-                ringofstorms-nvim.includeAllRuntimeDependencies = true;
-              })
-              inputs.qvm.nixosModules.default
-              ({
-                programs.qvm = {
-                  memory = "30G";
-                  cpus = 30;
-                };
-              })
-              flatpaks.nixosModules.default
+          inputs.ros_neovim.nixosModules.default
+          ({ ringofstorms-nvim.includeAllRuntimeDependencies = true; })
+          inputs.qvm.nixosModules.default
+          ({ programs.qvm = { memory = "30G"; cpus = 30; }; })
+          inputs.flatpaks.nixosModules.default
 
-              common.nixosModules.essentials
-              common.nixosModules.git
-              common.nixosModules.tmux
-              common.nixosModules.boot_systemd
-              common.nixosModules.hardening
-              common.nixosModules.jetbrains_font
-              common.nixosModules.nix_options
-              common.nixosModules.no_sleep
-              common.nixosModules.podman
-              common.nixosModules.q_flipper
-              common.nixosModules.tailnet
-              common.nixosModules.timezone_chi
-              common.nixosModules.tty_caps_esc
-              common.nixosModules.zsh
-              common.nixosModules.more_filesystems
+          inputs.common.nixosModules.essentials
+          inputs.common.nixosModules.git
+          inputs.common.nixosModules.tmux
+          inputs.common.nixosModules.boot_systemd
+          inputs.common.nixosModules.hardening
+          inputs.common.nixosModules.jetbrains_font
+          inputs.common.nixosModules.nix_options
+          inputs.common.nixosModules.no_sleep
+          inputs.common.nixosModules.podman
+          inputs.common.nixosModules.q_flipper
+          inputs.common.nixosModules.tailnet
+          inputs.common.nixosModules.timezone_chi
+          inputs.common.nixosModules.tty_caps_esc
+          inputs.common.nixosModules.zsh
+          inputs.common.nixosModules.more_filesystems
 
-              (
-                { pkgs, ... }:
-                {
-                  environment.systemPackages = [
-                    inputs.opencode.packages.${pkgs.system}.default
-                  ];
-                  environment.shellAliases = {
-                    "oc" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile oc -- opencode";
-                    "occ" = "oc -c";
-                  };
-                }
-              )
-
-              inputs.secrets-bao.nixosModules.default
-              (
-                let
-                  autoSecrets = inputs.secrets-bao.lib.mkAutoSecrets {
-                    role = "machines-hightrust";
-                    inherit primaryUser;
-                  };
-                in
-                { lib, ... }:
-                lib.mkMerge [
-                  {
-                    ringofstorms.secretsBao = {
-                      enable = true;
-                      openBaoRole = "machines-hightrust";
-                      secrets = autoSecrets;
-                    };
-                  }
-                  (inputs.secrets-bao.lib.applyChanges autoSecrets)
-                ]
-              )
-
-              beszel.nixosModules.agent
-              ({
-                beszelAgent = {
-                  listen = "${overlayIp}:45876";
-                  token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
-                };
-                services.beszel.agent.environment = {
-                  EXTRA_FILESYSTEMS = "nvme0n1p1__nvme1tb";
-                };
-              })
-
-              ./configuration.nix
-              ./hardware-configuration.nix
-              (import ./containers.nix { inherit inputs; })
-              # ./jails_text.nix
-              # ./hyprland_customizations.nix
-              # ./sway_customizations.nix
-              # ./i3_customizations.nix
-              ./vms.nix
-              ./nono.nix
-              (
-                {
-                  config,
-                  pkgs,
-                  lib,
-                  ...
-                }:
-                rec {
-                  # Home Manager
-                  home-manager = {
-                    useUserPackages = true;
-                    useGlobalPkgs = true;
-                    backupFileExtension = "bak";
-                    # add all normal users to home manager so it applies to them
-                    users = lib.mapAttrs (name: user: {
-                      home.stateVersion = "25.05";
-                      programs.home-manager.enable = true;
-                      # Local network SSH entries for joe and gp3
-                      programs.ssh.matchBlocks = {
-                        "joe_" = {
-                          hostname = "10.12.14.126";
-                          user = "josh";
-                        };
-                        "gp3_" = {
-                          hostname = "10.12.14.144";
-                          user = "josh";
-                        };
-                      };
-                    }) (lib.filterAttrs (name: user: user.isNormalUser or false) users.users);
-
-                    sharedModules = [
-                      # common.homeManagerModules.de_sway
-                      # common.homeManagerModules.de_i3
-                      common.homeManagerModules.tmux
-                      common.homeManagerModules.atuin
-                      common.homeManagerModules.direnv
-                      common.homeManagerModules.foot
-                      common.homeManagerModules.git
-                      common.homeManagerModules.kitty
-                      common.homeManagerModules.launcher_rofi
-                      common.homeManagerModules.postgres_cli_options
-                      common.homeManagerModules.slicer
-                      common.homeManagerModules.ssh
-                      common.homeManagerModules.starship
-                      common.homeManagerModules.zoxide
-                      common.homeManagerModules.zsh
-                      (
-                        { ... }:
-                        {
-                          programs.tmux.package = pkgs.unstable.tmux;
-                        }
-                      )
-                    ];
-
-                    extraSpecialArgs = {
-                      inherit inputs;
-                    };
-                  };
-
-                  # System configuration
-                  networking.hostName = configuration_name;
-                  programs.nh.flake = "/home/${primaryUser}/.config/nixos-config/hosts/${config.networking.hostName}";
-                  nixpkgs.config.allowUnfree = true;
-                  users.users = {
-                    "${primaryUser}" = {
-                      isNormalUser = true;
-                      initialPassword = "password1";
-                      extraGroups = [
-                        "wheel"
-                        "networkmanager"
-                        "video"
-                        "input"
-                      ];
-                      openssh.authorizedKeys.keys = [
-                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
-                      ];
-                    };
-                  };
-
-                  environment.systemPackages = with pkgs; [
-                    vlang
-                    ttyd
-                    pavucontrol
-                    nfs-utils
-                    jellyfin-media-player
-                    element-desktop
-                  ];
-
-                  services.flatpak.packages = [
-                    "org.signal.Signal"
-                    "dev.vencord.Vesktop"
-                    "com.spotify.Client"
-                    "com.bitwarden.desktop"
-                    "org.openscad.OpenSCAD"
-                    "org.blender.Blender"
-                  ];
-
-                  networking.firewall.allowedTCPPorts = [
-                    8080
-                  ];
-                }
-              )
+          ({ pkgs, ... }: {
+            environment.systemPackages = [
+              inputs.opencode.packages.${pkgs.system}.default
             ];
-          }
-        );
+            environment.shellAliases = {
+              "oc" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile oc -- opencode";
+              "occ" = "oc -c";
+            };
+          })
+
+          inputs.beszel.nixosModules.agent
+          ({
+            beszelAgent = {
+              listen = "${overlayIp}:45876";
+              token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
+            };
+            services.beszel.agent.environment = {
+              EXTRA_FILESYSTEMS = "nvme0n1p1__nvme1tb";
+            };
+          })
+
+          ./configuration.nix
+          ./hardware-configuration.nix
+          (import ./containers.nix { inherit inputs; })
+          # ./jails_text.nix
+          # ./hyprland_customizations.nix
+          # ./sway_customizations.nix
+          # ./i3_customizations.nix
+          ./vms.nix
+          ./nono.nix
+
+          # Host-specific config
+          ({ pkgs, ... }: {
+            environment.systemPackages = with pkgs; [
+              vlang ttyd pavucontrol nfs-utils
+              jellyfin-media-player element-desktop
+            ];
+            services.flatpak.packages = [
+              "org.signal.Signal"
+              "dev.vencord.Vesktop"
+              "com.spotify.Client"
+              "com.bitwarden.desktop"
+              "org.openscad.OpenSCAD"
+              "org.blender.Blender"
+            ];
+            networking.firewall.allowedTCPPorts = [ 8080 ];
+          })
+        ];
       };
     };
 }

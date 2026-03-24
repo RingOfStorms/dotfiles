@@ -15,154 +15,63 @@
   };
 
   outputs =
-    {
-      nixpkgs,
-      ros_neovim,
-      ...
-    }@inputs:
+    { ... }@inputs:
     let
+      fleet = import ../fleet.nix;
       constants = import ./_constants.nix;
-      configurationName = constants.host.name;
-      primaryUser = constants.host.primaryUser;
-      configLocation = "/home/${primaryUser}/.config/nixos-config/hosts/${configurationName}";
-      stateAndHomeVersion = constants.host.stateVersion;
       overlayIp = constants.host.overlayIp;
-      lib = inputs.nixpkgs.lib;
     in
     {
-      nixosConfigurations = {
-        "${configurationName}" = (
-          lib.nixosSystem {
-            specialArgs = {
-              inherit inputs constants;
+      nixosConfigurations.${constants.host.name} = fleet.mkHost {
+        inherit inputs constants;
+        secretsRole = "machines-hightrust";
+        authMethod = "initialHashedPassword";
+        authValue = "$y$j9T$v1QhXiZMRY1pFkPmkLkdp0$451GvQt.XFU2qCAi4EQNd1BEqjM/CH6awU8gjcULps6";
+        extraGroups = [ "wheel" "networkmanager" ];
+
+        nixosModules = [
+          inputs.ros_neovim.nixosModules.default
+          ({ ringofstorms-nvim.includeAllRuntimeDependencies = true; })
+
+          inputs.common.nixosModules.essentials
+          inputs.common.nixosModules.git
+          inputs.common.nixosModules.tmux
+          inputs.common.nixosModules.boot_grub
+          ({ lib, ... }: {
+            boot.loader.grub.device = lib.mkForce "/dev/disk/by-id/ata-KINGSTON_SV300S37A120G_50026B773C00F8F4";
+          })
+          inputs.common.nixosModules.hardening
+          inputs.common.nixosModules.nix_options
+          inputs.common.nixosModules.no_sleep
+          inputs.common.nixosModules.timezone_chi
+          inputs.common.nixosModules.tty_caps_esc
+          inputs.common.nixosModules.zsh
+          inputs.common.nixosModules.tailnet
+
+          inputs.beszel.nixosModules.agent
+          ({
+            beszelAgent = {
+              listen = "${overlayIp}:45876";
+              token = "11714da6-fd2e-436a-8b83-e0e07ba33a95";
             };
-            modules = [
-              inputs.home-manager.nixosModules.default
+            services.beszel.agent.environment = {
+              EXTRA_FILESYSTEMS = "/data__Data";
+            };
+          })
 
-              inputs.ros_neovim.nixosModules.default
-              ({
-                ringofstorms-nvim.includeAllRuntimeDependencies = true;
-              })
+          inputs.nixarr.nixosModules.default
+          ./hardware-configuration.nix
+          ./nfs-data.nix
+          ./nfs-data-users-nixarr.nix
 
-              inputs.common.nixosModules.essentials
-              inputs.common.nixosModules.git
-              inputs.common.nixosModules.tmux
-              inputs.common.nixosModules.boot_grub
-              (
-                { lib, ... }:
-                {
-                  boot.loader.grub.device = lib.mkForce "/dev/disk/by-id/ata-KINGSTON_SV300S37A120G_50026B773C00F8F4";
-                }
-              )
-              inputs.common.nixosModules.hardening
-              inputs.common.nixosModules.nix_options
-              inputs.common.nixosModules.no_sleep
-              inputs.common.nixosModules.timezone_chi
-              inputs.common.nixosModules.tty_caps_esc
-              inputs.common.nixosModules.zsh
-              inputs.common.nixosModules.tailnet
-
-              inputs.secrets-bao.nixosModules.default
-              (
-                let
-                  autoSecrets = inputs.secrets-bao.lib.mkAutoSecrets {
-                    role = "machines-hightrust";
-                    primaryUser = constants.host.primaryUser;
-                  };
-                in
-                { lib, ... }:
-                lib.mkMerge [
-                  {
-                    ringofstorms.secretsBao = {
-                      enable = true;
-                      openBaoRole = "machines-hightrust";
-                      secrets = autoSecrets;
-                    };
-                  }
-                  (inputs.secrets-bao.lib.applyChanges autoSecrets)
-                ]
-              )
-              inputs.beszel.nixosModules.agent
-              ({
-                beszelAgent = {
-                  listen = "${overlayIp}:45876";
-                  token = "11714da6-fd2e-436a-8b83-e0e07ba33a95";
-                };
-                services.beszel.agent.environment = {
-                  EXTRA_FILESYSTEMS = "/data__Data";
-                };
-              })
-
-              inputs.nixarr.nixosModules.default
-              ./hardware-configuration.nix
-              ./nfs-data.nix
-              ./nfs-data-users-nixarr.nix
-              (
-                {
-                  config,
-                  pkgs,
-                  lib,
-                  ...
-                }:
-                rec {
-                  system.stateVersion = stateAndHomeVersion;
-
-                  # Home Manager
-                  home-manager = {
-                    useUserPackages = true;
-                    useGlobalPkgs = true;
-                    backupFileExtension = "bak";
-                    # add all normal users to home manager so it applies to them
-                    users = lib.mapAttrs (name: user: {
-                      home.stateVersion = stateAndHomeVersion;
-                      programs.home-manager.enable = true;
-                    }) (lib.filterAttrs (name: user: user.isNormalUser or false) users.users);
-
-                    sharedModules = [
-                      inputs.common.homeManagerModules.tmux
-                      inputs.common.homeManagerModules.atuin
-                      inputs.common.homeManagerModules.direnv
-                      inputs.common.homeManagerModules.git
-                      inputs.common.homeManagerModules.postgres_cli_options
-                      inputs.common.homeManagerModules.starship
-                      inputs.common.homeManagerModules.zoxide
-                      inputs.common.homeManagerModules.zsh
-                      inputs.common.homeManagerModules.ssh
-                    ];
-
-                    extraSpecialArgs = {
-                      inherit inputs;
-                    };
-                  };
-
-                  # System configuration
-                  networking.networkmanager.enable = true;
-                  networking.hostName = configurationName;
-                  programs.nh.flake = configLocation;
-                  nixpkgs.config.allowUnfree = true;
-                  # users.mutableUsers = false;
-                  users.users = {
-                    "${primaryUser}" = {
-                      isNormalUser = true;
-                      # hashedPassword = ""; # Use if mutable users is false above
-                      initialHashedPassword = "$y$j9T$v1QhXiZMRY1pFkPmkLkdp0$451GvQt.XFU2qCAi4EQNd1BEqjM/CH6awU8gjcULps6"; # "test" password
-                      extraGroups = [
-                        "wheel"
-                        "networkmanager"
-                      ];
-                      openssh.authorizedKeys.keys = [
-                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
-                      ];
-                    };
-                    root.openssh.authorizedKeys.keys = [
-                      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
-                    ];
-                  };
-                }
-              )
+          # Host-specific config
+          ({
+            networking.networkmanager.enable = true;
+            users.users.root.openssh.authorizedKeys.keys = [
+              fleet.global.sshPubKey
             ];
-          }
-        );
+          })
+        ];
       };
     };
 }
