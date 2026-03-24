@@ -7,6 +7,12 @@
     stateVersion = "25.11";
   };
 
+  services = {
+    ollama = {
+      port = 11434;
+    };
+  };
+
   secrets = {
     "atuin-key-josh_2026-03-15" = {
       owner = "josh";

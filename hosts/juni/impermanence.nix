@@ -29,6 +29,7 @@
       # cached timezone name for offline restore
       "/var/lib/timezone-cache"
 
+      "/var/lib/ollama"
       "/var/lib/flatpak"
 
       # bao secrets

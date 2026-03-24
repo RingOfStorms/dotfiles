@@ -180,6 +180,7 @@
               })
 
               ./hardware-configuration.nix
+              ./ollama.nix
               (import ./impermanence.nix { inherit primaryUser; })
               (
                 { config, pkgs, ... }:
