@@ -1,9 +1,6 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    # i001.url = "path:./hosts/i001";
-    # l001.url = "path:./hosts/linode/l001";
-    # o001.url = "path:./hosts/oracle/o001";
   };
 
   outputs =
@@ -13,10 +10,40 @@
     let
       # Utilities
       inherit (inputs.nixpkgs) lib;
+      fleet = import ./hosts/fleet.nix;
+
       # Define the systems to support: https://github.com/NixOS/nixpkgs/blob/master/lib/systems/flake-systems.nix
       forAllSystems = lib.genAttrs lib.systems.flakeExposed;
       # Create a mapping from system to corresponding nixpkgs : https://nixos.wiki/wiki/Overlays#In_a_Nix_flake
       nixpkgsFor = forAllSystems (system: inputs.nixpkgs.legacyPackages.${system});
+
+      # Generate a deploy script for a host from the fleet registry.
+      # Hosts with lanIp or specific deploy targets use NIX_SSHOPTS for SSH key auth.
+      mkDeployScript = pkgs: name:
+        let
+          hostDef = fleet.hosts.${name};
+          flakePath = hostDef.flakePath or "hosts/${name}";
+          user = hostDef.user;
+
+          # Determine deploy target: prefer lanIp for local hosts, else hostname
+          target =
+            if hostDef ? lanIp then "${user}@${hostDef.lanIp}"
+            else name;
+
+          # Hosts accessed by name (on tailnet) that already have SSH keys configured
+          # don't need NIX_SSHOPTS. Hosts accessed by raw IP do.
+          needsKey = hostDef ? lanIp;
+          sshOpts =
+            if needsKey
+            then ''NIX_SSHOPTS="-i ${fleet.global.secretsKeyPath}" ''
+            else "";
+        in
+        pkgs.writeShellScriptBin "deploy_${name}" ''
+          ${sshOpts}nixos-rebuild --flake $(git rev-parse --show-toplevel)'/${flakePath}#${name}' --target-host ${target} --use-substitutes --no-reexec switch
+        '';
+
+      # Which hosts get deploy scripts (exclude non-deployable entries like 't' and 'l002')
+      deployHosts = builtins.attrNames fleet.deployableHosts;
     in
     {
       devShells = forAllSystems (
@@ -26,33 +53,7 @@
         in
         {
           default = pkgs.mkShell {
-            packages = [
-              # Some aliases for building + deploying to some remote systems.
-              (pkgs.writeShellScriptBin "deploy_l001" ''
-                nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/linode/l001#l001' --target-host l001 --use-substitutes --no-reexec switch
-              '')
-              (pkgs.writeShellScriptBin "deploy_o001" ''
-                nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/oracle/o001#o001' --target-host o001 --use-substitutes --no-reexec switch
-              '')
-              (pkgs.writeShellScriptBin "deploy_h001" ''
-                nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/h001#h001' --target-host h001 --use-substitutes --no-reexec switch
-              '')
-              (pkgs.writeShellScriptBin "deploy_i001" ''
-                NIX_SSHOPTS="-i /var/lib/openbao-secrets/nix2nix_2026-03-15" nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/i001#i001' --target-host root@10.12.14.119 --use-substitutes --no-reexec switch
-              '')
-              (pkgs.writeShellScriptBin "deploy_h002" ''
-                NIX_SSHOPTS="-i /var/lib/openbao-secrets/nix2nix_2026-03-15" nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/h002#h002' --target-host root@10.12.14.183 --use-substitutes --no-reexec switch
-              '')
-              (pkgs.writeShellScriptBin "deploy_h003" ''
-                NIX_SSHOPTS="-i /var/lib/openbao-secrets/nix2nix_2026-03-15" nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/h003#h003' --target-host root@10.12.14.1 --use-substitutes --no-reexec switch
-              '')
-              (pkgs.writeShellScriptBin "deploy_juni" ''
-                NIX_SSHOPTS="-i /var/lib/openbao-secrets/nix2nix_2026-03-15" nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/juni#juni' --target-host josh@10.12.14.172 --use-substitutes --no-reexec switch
-              '')
-              (pkgs.writeShellScriptBin "deploy_joe" ''
-                NIX_SSHOPTS="-i /var/lib/openbao-secrets/nix2nix_2026-03-15" nixos-rebuild --flake $(git rev-parse --show-toplevel)'/hosts/joe#joe' --target-host josh@10.12.14.126 --use-substitutes --no-reexec switch
-              '')
-            ];
+            packages = map (mkDeployScript pkgs) deployHosts;
           };
         }
       );

@@ -68,18 +68,20 @@
           };
 
       # Hardcoded list of SSH matchBlock hosts from the shared ssh.nix HM module.
-      # Keep in sync with flakes/common/hm_modules/ssh.nix.
+      # Keep in sync with hosts/fleet.nix (sshMatchBlockHosts) and
+      # flakes/common/hm_modules/ssh.nix.
       nix2nixMatchBlockHosts = [
         "lio" "lio_"
         "oren"
-        "juni"
-        "gp3"
-        "joe"
+        "juni" "juni_"
+        "gp3" "gp3_"
+        "joe" "joe_"
+        "i001" "i001_"
         "t" "t_"
         "h001" "h001_"
         "h002" "h002_"
         "h003" "h003_"
-        "l001"
+        "l001" "l001_"
         "l002" "l002_"
         "o001" "o001_"
       ];
