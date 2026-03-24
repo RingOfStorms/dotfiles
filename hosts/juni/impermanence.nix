@@ -96,6 +96,10 @@
         ".local/share/flatpak"
         ".var/app"
 
+        # Jellyfin Media Player (server list, login, settings)
+        ".local/share/jellyfin-desktop"
+        ".config/jellyfinmediaplayer"
+
         # work profile chrome
         ".config/google-chrome-tempus"
       ];
