@@ -84,24 +84,44 @@ in
 
           })
           # List from https://github.com/settings/copilot/features enabled models
+          # ./scripts/probe-copilot-models.sh --nix
           [
-            "claude-sonnet-3.5"
-            "claude-sonnet-4"
-            "claude-sonnet-4.5"
             "claude-haiku-4.5"
             "claude-opus-4.5"
             "claude-opus-4.6"
+            "claude-sonnet-4"
+            "claude-sonnet-4.5"
             "claude-sonnet-4.6"
             "gemini-2.5-pro"
-            "openai-gpt-5.2-codex"
-            "openai-gpt-5.3-codex"
-            "openai-gpt-5.4"
-            "openai-gpt-5-mini"
-            "openai-gpt-5.1"
-            "openai-gpt-5.1-codex"
-            "openai-gpt-5.1-codex-max"
-            "openai-gpt-5.2"
+            "gpt-3.5-turbo"
+            "gpt-3.5-turbo-0613"
+            "gpt-4"
+            "gpt-4"
+            "gpt-4-0125-preview"
+            "gpt-4-0613"
+            "gpt-4-o-preview"
+            "gpt-4-o-preview"
+            "gpt-4.1"
+            "gpt-4.1-2025-04-14"
+            "gpt-41-copilot"
+            "gpt-4o"
+            "gpt-4o-2024-05-13"
+            "gpt-4o-2024-08-06"
+            "gpt-4o-2024-11-20"
+            "gpt-4o-mini"
+            "gpt-4o-mini-2024-07-18"
+            "gpt-5-mini"
+            "gpt-5.1"
+            "gpt-5.1-codex"
+            "gpt-5.1-codex-max"
+            "gpt-5.2"
+            "gpt-5.2-codex"
+            "gpt-5.3-codex"
+            "gpt-5.4"
             "grok-code-fast-1"
+            "text-embedding-3-small"
+            "text-embedding-3-small-inference"
+            "text-embedding-ada-002"
           ]
         )
         # Azure
@@ -135,9 +155,9 @@ in
         # Azure reasoning aliases
         ++ [
           {
-            model_name = "azure-gpt-5.2-low";
+            model_name = "azure-gpt-5.4-low";
             litellm_params = {
-              model = "azure/gpt-5.2-2025-12-11";
+              model = "azure/gpt-5.4-2026-03-05";
               api_base = "http://100.64.0.8:9010/azure";
               api_version = "2025-04-01-preview";
               api_key = "na";
@@ -147,9 +167,9 @@ in
             };
           }
           {
-            model_name = "azure-gpt-5.2-medium";
+            model_name = "azure-gpt-5.4-medium";
             litellm_params = {
-              model = "azure/gpt-5.2-2025-12-11";
+              model = "azure/gpt-5.4-2026-03-05";
               api_base = "http://100.64.0.8:9010/azure";
               api_version = "2025-04-01-preview";
               api_key = "na";
@@ -159,9 +179,9 @@ in
             };
           }
           {
-            model_name = "azure-gpt-5.2-high";
+            model_name = "azure-gpt-5.4-high";
             litellm_params = {
-              model = "azure/gpt-5.2-2025-12-11";
+              model = "azure/gpt-5.4-2026-03-05";
               api_base = "http://100.64.0.8:9010/azure";
               api_version = "2025-04-01-preview";
               api_key = "na";
