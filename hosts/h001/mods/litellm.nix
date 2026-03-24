@@ -67,62 +67,78 @@ in
             };
           }
         ]
-        # Copilot
-        ++ (builtins.map
-          (m: {
-            model_name = "copilot-${m}";
-            litellm_params = {
-              model = "github_copilot/${m}";
-              extra_headers = {
-                editor-version = "vscode/${pkgsLitellm.vscode.version}";
-                editor-plugin-version = "copilot/${pkgsLitellm.vscode-extensions.github.copilot.version}";
-                Copilot-Integration-Id = "vscode-chat";
-                Copilot-Vision-Request = "true";
-                user-agent = "GithubCopilot/${pkgsLitellm.vscode-extensions.github.copilot.version}";
-              };
+        # Copilot — chat models (/chat/completions)
+        # Probed with: ./scripts/probe-copilot-models.sh --nix
+        ++ (
+          let
+            copilotHeaders = {
+              editor-version = "vscode/${pkgsLitellm.vscode.version}";
+              editor-plugin-version = "copilot/${pkgsLitellm.vscode-extensions.github.copilot.version}";
+              Copilot-Integration-Id = "vscode-chat";
+              Copilot-Vision-Request = "true";
+              user-agent = "GithubCopilot/${pkgsLitellm.vscode-extensions.github.copilot.version}";
             };
-
-          })
-          # List from https://github.com/settings/copilot/features enabled models
-          # ./scripts/probe-copilot-models.sh --nix
-          [
-            "claude-haiku-4.5"
-            "claude-opus-4.5"
-            "claude-opus-4.6"
-            "claude-sonnet-4"
-            "claude-sonnet-4.5"
-            "claude-sonnet-4.6"
-            "gemini-2.5-pro"
-            "gpt-3.5-turbo"
-            "gpt-3.5-turbo-0613"
-            "gpt-4"
-            "gpt-4"
-            "gpt-4-0125-preview"
-            "gpt-4-0613"
-            "gpt-4-o-preview"
-            "gpt-4-o-preview"
-            "gpt-4.1"
-            "gpt-4.1-2025-04-14"
-            "gpt-41-copilot"
-            "gpt-4o"
-            "gpt-4o-2024-05-13"
-            "gpt-4o-2024-08-06"
-            "gpt-4o-2024-11-20"
-            "gpt-4o-mini"
-            "gpt-4o-mini-2024-07-18"
-            "gpt-5-mini"
-            "gpt-5.1"
-            "gpt-5.1-codex"
-            "gpt-5.1-codex-max"
-            "gpt-5.2"
-            "gpt-5.2-codex"
-            "gpt-5.3-codex"
-            "gpt-5.4"
-            "grok-code-fast-1"
-            "text-embedding-3-small"
-            "text-embedding-3-small-inference"
-            "text-embedding-ada-002"
-          ]
+          in
+          (builtins.map
+            (m: {
+              model_name = "copilot-${m}";
+              litellm_params = {
+                model = "github_copilot/${m}";
+                extra_headers = copilotHeaders;
+              };
+            })
+            [
+              "claude-haiku-4.5"
+              "claude-opus-4.5"
+              "claude-opus-4.6"
+              "claude-sonnet-4"
+              "claude-sonnet-4.5"
+              "claude-sonnet-4.6"
+              "gemini-2.5-pro"
+              "gpt-3.5-turbo"
+              "gpt-3.5-turbo-0613"
+              "gpt-4"
+              "gpt-4-0125-preview"
+              "gpt-4-0613"
+              "gpt-4-o-preview"
+              "gpt-4.1"
+              "gpt-4.1-2025-04-14"
+              "gpt-41-copilot"
+              "gpt-4o"
+              "gpt-4o-2024-05-13"
+              "gpt-4o-2024-08-06"
+              "gpt-4o-2024-11-20"
+              "gpt-4o-mini"
+              "gpt-4o-mini-2024-07-18"
+              "gpt-5-mini"
+              "gpt-5.1"
+              "gpt-5.2"
+              "grok-code-fast-1"
+              "text-embedding-3-small"
+              "text-embedding-3-small-inference"
+              "text-embedding-ada-002"
+            ]
+          )
+          # Copilot — responses-only models (/responses, not /chat/completions)
+          ++ (builtins.map
+            (m: {
+              model_name = "copilot-${m}";
+              litellm_params = {
+                model = "github_copilot/${m}";
+                extra_headers = copilotHeaders;
+              };
+              model_info = {
+                mode = "responses";
+              };
+            })
+            [
+              "gpt-5.1-codex"
+              "gpt-5.1-codex-max"
+              "gpt-5.2-codex"
+              "gpt-5.3-codex"
+              "gpt-5.4"
+            ]
+          )
         )
         # Azure
         # Probed with: scripts/probe-azure-models.sh --type chat --nix
