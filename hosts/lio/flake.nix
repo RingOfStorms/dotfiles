@@ -44,14 +44,28 @@
           inputs.common.homeManagerModules.foot
           inputs.common.homeManagerModules.launcher_rofi
           inputs.common.homeManagerModules.slicer
-          ({ pkgs, ... }: { programs.tmux.package = pkgs.unstable.tmux; })
+          (
+            { pkgs, ... }:
+            {
+              programs.tmux.package = pkgs.unstable.tmux;
+            }
+          )
           # Local network SSH entries for joe and gp3
-          ({ ... }: {
-            programs.ssh.matchBlocks = {
-              "joe_" = { hostname = fleet.hosts.joe.lanIp; user = fleet.hosts.joe.user; };
-              "gp3_" = { hostname = fleet.hosts.gp3.lanIp; user = fleet.hosts.gp3.user; };
-            };
-          })
+          (
+            { ... }:
+            {
+              programs.ssh.matchBlocks = {
+                "joe_" = {
+                  hostname = fleet.hosts.joe.lanIp;
+                  user = fleet.hosts.joe.user;
+                };
+                "gp3_" = {
+                  hostname = fleet.hosts.gp3.lanIp;
+                  user = fleet.hosts.gp3.user;
+                };
+              };
+            }
+          )
         ];
 
         nixosModules = [
@@ -77,7 +91,12 @@
           inputs.ros_neovim.nixosModules.default
           ({ ringofstorms-nvim.includeAllRuntimeDependencies = true; })
           inputs.qvm.nixosModules.default
-          ({ programs.qvm = { memory = "30G"; cpus = 30; }; })
+          ({
+            programs.qvm = {
+              memory = "30G";
+              cpus = 30;
+            };
+          })
           inputs.flatpaks.nixosModules.default
 
           inputs.common.nixosModules.essentials
@@ -96,15 +115,28 @@
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.more_filesystems
 
-          ({ pkgs, ... }: {
-            environment.systemPackages = [
-              inputs.opencode.packages.${pkgs.system}.default
-            ];
-            environment.shellAliases = {
-              "oc" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile oc -- opencode";
-              "occ" = "oc -c";
-            };
-          })
+          (
+            { pkgs, ... }:
+            {
+              environment.systemPackages = [
+                inputs.opencode.packages.${pkgs.system}.default
+                pkgs.claude-code
+                pkgs.code-cursor
+                pkgs.zed-editor
+              ];
+              environment.shellAliases = {
+                # open code
+                "oc" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile oc -- opencode";
+                "occ" = "oc -c";
+                # claude code
+                "cc" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile cc -- claude";
+                # cursor
+                "cur" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile cc -- cursor";
+                # zed
+                "zed" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile cc -- zeditor";
+              };
+            }
+          )
 
           inputs.beszel.nixosModules.agent
           ({
@@ -128,21 +160,28 @@
           ./nono.nix
 
           # Host-specific config
-          ({ pkgs, ... }: {
-            environment.systemPackages = with pkgs; [
-              vlang ttyd pavucontrol nfs-utils
-              jellyfin-media-player element-desktop
-            ];
-            services.flatpak.packages = [
-              "org.signal.Signal"
-              "dev.vencord.Vesktop"
-              "com.spotify.Client"
-              "com.bitwarden.desktop"
-              "org.openscad.OpenSCAD"
-              "org.blender.Blender"
-            ];
-            networking.firewall.allowedTCPPorts = [ 8080 ];
-          })
+          (
+            { pkgs, ... }:
+            {
+              environment.systemPackages = with pkgs; [
+                vlang
+                ttyd
+                pavucontrol
+                nfs-utils
+                jellyfin-media-player
+                element-desktop
+              ];
+              services.flatpak.packages = [
+                "org.signal.Signal"
+                "dev.vencord.Vesktop"
+                "com.spotify.Client"
+                "com.bitwarden.desktop"
+                "org.openscad.OpenSCAD"
+                "org.blender.Blender"
+              ];
+              networking.firewall.allowedTCPPorts = [ 8080 ];
+            }
+          )
         ];
       };
     };
