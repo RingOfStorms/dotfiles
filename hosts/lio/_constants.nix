@@ -5,6 +5,7 @@
     name = "lio";
     overlayIp = "100.64.0.1";
     primaryUser = "josh";
+    stateVersion = "23.11";
   };
 
   services = {

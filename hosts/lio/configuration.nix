@@ -7,8 +7,6 @@ let
   nixServe = constants.services.nixServe;
 in
 {
-  system.stateVersion = "23.11";
-
   hardware.enableAllFirmware = true;
 
   # Connectivity

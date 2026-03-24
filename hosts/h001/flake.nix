@@ -32,155 +32,59 @@
   };
 
   outputs =
-    {
-      nixpkgs,
-      home-manager,
-      common,
-      beszel,
-      ros_neovim,
-      nixarr,
-      ...
-    }@inputs:
+    { ... }@inputs:
     let
+      fleet = import ../fleet.nix;
       constants = import ./_constants.nix;
-      configuration_name = constants.host.name;
-      stateVersion = constants.host.stateVersion;
-      primaryUser = constants.host.primaryUser;
-      lib = nixpkgs.lib;
     in
     {
-      nixosConfigurations = {
-        "${configuration_name}" = (
-          lib.nixosSystem {
-            specialArgs = {
-              inherit inputs constants;
+      nixosConfigurations.${constants.host.name} = fleet.mkHost {
+        inherit inputs constants;
+        secretsRole = "machines-hightrust";
+
+        nixosModules = [
+          inputs.ros_neovim.nixosModules.default
+          ({ ringofstorms-nvim.includeAllRuntimeDependencies = true; })
+
+          inputs.common.nixosModules.essentials
+          inputs.common.nixosModules.git
+          inputs.common.nixosModules.tmux
+          inputs.common.nixosModules.boot_systemd
+          inputs.common.nixosModules.hardening
+          inputs.common.nixosModules.nix_options
+          inputs.common.nixosModules.podman
+          inputs.common.nixosModules.tailnet
+          inputs.common.nixosModules.timezone_chi
+          inputs.common.nixosModules.tty_caps_esc
+          inputs.common.nixosModules.zsh
+
+          inputs.beszel.nixosModules.agent
+          ({
+            beszelAgent = {
+              token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
+              extraFilesystems = "sda__Media";
             };
-            modules = [
-              home-manager.nixosModules.default
+          })
 
-              ros_neovim.nixosModules.default
-              ({
-                ringofstorms-nvim.includeAllRuntimeDependencies = true;
-              })
+          inputs.puzzles.nixosModules.default
+          inputs.nixarr.nixosModules.default
+          ./hardware-configuration.nix
+          ./mods
+          ./nginx.nix
+          ./containers
+          ./autofs.nix
 
-              common.nixosModules.essentials
-              common.nixosModules.git
-              common.nixosModules.tmux
-              common.nixosModules.boot_systemd
-              common.nixosModules.hardening
-              common.nixosModules.nix_options
-              common.nixosModules.podman
-              common.nixosModules.tailnet
-              common.nixosModules.timezone_chi
-              common.nixosModules.tty_caps_esc
-              common.nixosModules.zsh
-
-              beszel.nixosModules.agent
-              ({
-                beszelAgent = {
-                  token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
-                  extraFilesystems = "sda__Media";
-                };
-              })
-
-              inputs.secrets-bao.nixosModules.default
-              (
-                let
-                  autoSecrets = inputs.secrets-bao.lib.mkAutoSecrets {
-                    role = "machines-hightrust";
-                    primaryUser = constants.host.primaryUser;
-                  };
-                  allSecrets = autoSecrets // constants.secrets;
-                in
-                { lib, ... }:
-                lib.mkMerge [
-                  {
-                    ringofstorms.secretsBao = {
-                      enable = true;
-                      openBaoRole = "machines-hightrust";
-                      secrets = allSecrets;
-                    };
-                  }
-                  (inputs.secrets-bao.lib.applyChanges allSecrets)
-                ]
-              )
-
-              inputs.puzzles.nixosModules.default
-              nixarr.nixosModules.default
-              ./hardware-configuration.nix
-              ./mods
-              ./nginx.nix
-              ./containers
-              ./autofs.nix
-              (
-                { config, pkgs, ... }:
-                rec {
-                  # TODO remove
-                  security.sudo.wheelNeedsPassword = false;
-
-                  # Home Manager
-                  home-manager = {
-                    useUserPackages = true;
-                    useGlobalPkgs = true;
-                    backupFileExtension = "bak";
-                    # add all normal users to home manager so it applies to them
-                    users = lib.mapAttrs (name: user: {
-                      home.stateVersion = stateVersion;
-                      programs.home-manager.enable = true;
-                    }) (lib.filterAttrs (name: user: user.isNormalUser or false) users.users);
-
-                    sharedModules = [
-                      common.homeManagerModules.tmux
-                      common.homeManagerModules.atuin
-                      common.homeManagerModules.direnv
-                      common.homeManagerModules.git
-                      common.homeManagerModules.postgres_cli_options
-                      common.homeManagerModules.ssh
-                      common.homeManagerModules.starship
-                      common.homeManagerModules.zoxide
-                      common.homeManagerModules.zsh
-                    ];
-                  };
-
-                  # System configuration
-                  system.stateVersion = stateVersion;
-                  networking.hostName = configuration_name;
-                  programs.nh.flake = "/home/${primaryUser}/.config/nixos-config/hosts/${configuration_name}";
-                  nixpkgs.config.allowUnfree = true;
-                  users.users = {
-                    "${primaryUser}" = {
-                      isNormalUser = true;
-                      initialPassword = "password1";
-                      shell = pkgs.zsh;
-                      extraGroups = [
-                        "wheel"
-                        "networkmanager"
-                        "video"
-                        "input"
-                      ];
-                      openssh.authorizedKeys.keys = [
-                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
-                      ];
-                    };
-                    root = {
-                      shell = pkgs.zsh;
-                      openssh.authorizedKeys.keys = [
-                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
-                      ];
-                    };
-                  };
-
-                  environment.systemPackages = with pkgs; [
-                    lua
-                    sqlite
-                    ttyd
-                    rclone
-                  ];
-                }
-              )
+          # Host-specific config
+          ({ pkgs, ... }: {
+            users.users.root = {
+              shell = pkgs.zsh;
+              openssh.authorizedKeys.keys = [ fleet.global.sshPubKey ];
+            };
+            environment.systemPackages = with pkgs; [
+              lua sqlite ttyd rclone
             ];
-          }
-        );
+          })
+        ];
       };
     };
 }

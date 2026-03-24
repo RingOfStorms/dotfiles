@@ -39,11 +39,11 @@
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1773780913,
-        "narHash": "sha256-BxRYMhpT7hZ/CKrjSa5sKD/qIhU5hjS3WiBCQGknnJA=",
+        "lastModified": 1774322411,
+        "narHash": "sha256-PfVJ1W14LnKWLdx7SsE3/Aki3kfT6LtgTCtphyNI4kw=",
         "ref": "refs/heads/master",
-        "rev": "d452ea55d5e31b48e2b148944084b4b05e43e3cc",
-        "revCount": 1398,
+        "rev": "b8a503f6ea96650c8734f4628f5097a165e00b2a",
+        "revCount": 1420,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -1182,17 +1182,17 @@
         "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1773628428,
-        "narHash": "sha256-JUlFfILzcUCME3mOxdxDbcCXphNVEfVGIKhwAwtJPl8=",
+        "lastModified": 1774222321,
+        "narHash": "sha256-JQsccVflS/GAjzguvZTLn7UH7tsou8yCSlaA48DVY10=",
         "owner": "anomalyco",
         "repo": "opencode",
-        "rev": "4ee426ba549131c4903a71dfb6259200467aca81",
+        "rev": "eb3bfffad453f1c8c3f0f92bba0d8e34c83fa244",
         "type": "github"
       },
       "original": {
         "owner": "anomalyco",
         "repo": "opencode",
-        "rev": "4ee426ba549131c4903a71dfb6259200467aca81",
+        "rev": "eb3bfffad453f1c8c3f0f92bba0d8e34c83fa244",
         "type": "github"
       }
     },
@@ -1346,11 +1346,11 @@
     "secrets-bao": {
       "locked": {
         "dir": "flakes/secrets-bao",
-        "lastModified": 1773780913,
-        "narHash": "sha256-BxRYMhpT7hZ/CKrjSa5sKD/qIhU5hjS3WiBCQGknnJA=",
+        "lastModified": 1774322411,
+        "narHash": "sha256-PfVJ1W14LnKWLdx7SsE3/Aki3kfT6LtgTCtphyNI4kw=",
         "ref": "refs/heads/master",
-        "rev": "d452ea55d5e31b48e2b148944084b4b05e43e3cc",
-        "revCount": 1398,
+        "rev": "b8a503f6ea96650c8734f4628f5097a165e00b2a",
+        "revCount": 1420,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },

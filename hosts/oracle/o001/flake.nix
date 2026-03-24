@@ -14,131 +14,50 @@
   };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      home-manager,
-      common,
-      beszel,
-      ros_neovim,
-      ...
-    }@inputs:
+    { ... }@inputs:
     let
+      fleet = import ../../fleet.nix;
       constants = import ./_constants.nix;
-      configuration_name = constants.host.name;
-      stateVersion = constants.host.stateVersion;
-      primaryUser = constants.host.primaryUser;
       overlayIp = constants.host.overlayIp;
-      lib = nixpkgs.lib;
     in
     {
-      nixosConfigurations = {
-        "${configuration_name}" = (
-          lib.nixosSystem {
-            specialArgs = {
-              inherit inputs constants;
+      nixosConfigurations.${constants.host.name} = fleet.mkHost {
+        inherit inputs constants;
+        secretsRole = "machines-hightrust";
+        authMethod = "cloudUser";
+
+        nixosModules = [
+          inputs.common.nixosModules.essentials
+          inputs.common.nixosModules.git
+          inputs.common.nixosModules.hardening
+          inputs.common.nixosModules.nix_options
+          inputs.common.nixosModules.docker
+          inputs.common.nixosModules.tailnet
+          inputs.common.nixosModules.zsh
+
+          inputs.beszel.nixosModules.agent
+          ({
+            beszelAgent = {
+              listen = "${overlayIp}:45876";
+              token = "f8a54c41-486b-487a-a78d-a087385c317b";
             };
-            modules = [
-              home-manager.nixosModules.default
+          })
 
-              common.nixosModules.essentials
-              common.nixosModules.git
-              common.nixosModules.hardening
-              common.nixosModules.nix_options
-              common.nixosModules.docker
-              common.nixosModules.tailnet
-              common.nixosModules.zsh
+          inputs.ros_neovim.nixosModules.default
 
-              beszel.nixosModules.agent
-              (
-                { ... }:
-                {
-                  beszelAgent = {
-                    listen = "${overlayIp}:45876";
-                    token = "f8a54c41-486b-487a-a78d-a087385c317b";
-                  };
-                }
-              )
+          ./configuration.nix
+          ./hardware-configuration.nix
+          ./nginx.nix
+          ./containers/vaultwarden.nix
+          ./mods/postgresql.nix
+          ./mods/atuin.nix
+          ./mods/rustdesk-server.nix
 
-              ros_neovim.nixosModules.default
-
-              inputs.secrets-bao.nixosModules.default
-              (
-                let
-                  autoSecrets = inputs.secrets-bao.lib.mkAutoSecrets {
-                    role = "machines-hightrust";
-                    primaryUser = constants.host.primaryUser;
-                  };
-                  allSecrets = autoSecrets // constants.secrets;
-                in
-                { lib, ... }:
-                lib.mkMerge [
-                  {
-                    ringofstorms.secretsBao = {
-                      enable = true;
-                      openBaoRole = "machines-hightrust";
-                      secrets = allSecrets;
-                    };
-                  }
-                  (inputs.secrets-bao.lib.applyChanges allSecrets)
-                ]
-              )
-
-              ./configuration.nix
-              ./hardware-configuration.nix
-              ./nginx.nix
-              ./containers/vaultwarden.nix
-              ./mods/postgresql.nix
-              ./mods/atuin.nix
-              ./mods/rustdesk-server.nix
-              (
-                { pkgs, ... }:
-                rec {
-                  # Home Manager
-                  home-manager = {
-                    useUserPackages = true;
-                    useGlobalPkgs = true;
-                    backupFileExtension = "bak";
-                    # add all normal users to home manager so it applies to them
-                    users = lib.mapAttrs (name: user: {
-                      home.stateVersion = stateVersion;
-                      programs.home-manager.enable = true;
-                    }) (lib.filterAttrs (name: user: name == "root" || (user.isNormalUser or false)) users.users);
-
-                    sharedModules = [
-                      common.homeManagerModules.tmux
-                      common.homeManagerModules.atuin
-                      common.homeManagerModules.git
-                      common.homeManagerModules.postgres_cli_options
-                      common.homeManagerModules.ssh
-                      common.homeManagerModules.starship
-                      common.homeManagerModules.zoxide
-                      common.homeManagerModules.zsh
-                    ];
-                  };
-
-                  # System configuration
-                  system.stateVersion = stateVersion;
-                  networking.hostName = configuration_name;
-                  programs.nh.flake = "/home/${primaryUser}/.config/nixos-config/hosts/${configuration_name}";
-                  nixpkgs.config.allowUnfree = true;
-                  users.users = {
-                    "${primaryUser}" = {
-                      shell = pkgs.zsh;
-                      openssh.authorizedKeys.keys = [
-                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
-                      ];
-                    };
-                  };
-
-                  environment.systemPackages = with pkgs; [
-                    vaultwarden
-                  ];
-                }
-              )
-            ];
-          }
-        );
+          # Host-specific packages
+          ({ pkgs, ... }: {
+            environment.systemPackages = with pkgs; [ vaultwarden ];
+          })
+        ];
       };
     };
 }

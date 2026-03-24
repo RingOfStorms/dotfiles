@@ -29,283 +29,170 @@
   };
 
   outputs =
-    {
-      nixpkgs,
-      home-manager,
-      nixpkgs-unstable,
-      ...
-    }@inputs:
+    { nixpkgs-unstable, ... }@inputs:
     let
+      fleet = import ../fleet.nix;
       constants = import ./_constants.nix;
-      configuration_name = constants.host.name;
-      stateVersion = constants.host.stateVersion;
       primaryUser = constants.host.primaryUser;
-      lib = nixpkgs.lib;
     in
     {
-      nixosConfigurations = {
-        "${configuration_name}" = (
-          lib.nixosSystem {
-            specialArgs = { inherit inputs constants; };
-            modules = [
-              inputs.nixos-hardware.nixosModules.framework-12-13th-gen-intel
-              inputs.impermanence.nixosModules.default
-              ({
-                ringofstorms.impermanence = {
-                  enable = true;
-                  disk = {
-                    boot = "/dev/disk/by-uuid/F5C0-5585";
-                    primary = "/dev/disk/by-uuid/3bfd6e57-5e0f-4742-99e3-e69891ae2431";
-                    swap = "/dev/disk/by-uuid/ad0311e2-7eb1-47af-bc4b-6311968cbccf";
-                  };
-                  encrypted = true;
-                  usbKey = true;
-                  usbKeyPassword = "expend-scarf-pebble";
-                };
-              })
-              ({
-                nixpkgs.overlays = [
-                  (final: prev: {
-                    unstable = import nixpkgs-unstable {
-                      inherit (final) system config;
-                    };
-                  })
-                ];
-              })
-              home-manager.nixosModules.default
+      nixosConfigurations.${constants.host.name} = fleet.mkHost {
+        inherit inputs constants;
+        nixpkgsUnstable = nixpkgs-unstable;
+        secretsRole = "machines-hightrust";
+        authMethod = "hashedPassword";
+        authValue = "$y$j9T$b66ZAxtTo75paZx.mnXyK.$ej0eKS3Wx4488qDfjUJSP0nsUe5TBzw31VbXR19XrQ4";
+        mutableUsers = false;
 
-              inputs.de_plasma.nixosModules.default
-              ({
-                ringofstorms.dePlasma = {
-                  enable = true;
-                  gpu.intel.enable = true;
-                  sddm.autologinUser = primaryUser;
-                  wallpapers = [
-                    ../../hosts/_shared_assets/wallpapers/pixel_neon.png
-                  ];
-                };
-              })
-              inputs.common.nixosModules.jetbrains_font
-              inputs.stt_ime.nixosModules.default
-              ({
-                ringofstorms.sttIme = {
-                  enable = true;
-                  model = "tiny.en";
-                };
-              })
+        hmModules = [
+          inputs.common.homeManagerModules.kitty
+          ({ pkgs, ... }: { programs.tmux.package = pkgs.unstable.tmux; })
+        ];
 
-              inputs.ros_neovim.nixosModules.default
-              ({
-                ringofstorms-nvim.includeAllRuntimeDependencies = true;
-              })
+        nixosModules = [
+          inputs.nixos-hardware.nixosModules.framework-12-13th-gen-intel
+          inputs.impermanence.nixosModules.default
+          ({
+            ringofstorms.impermanence = {
+              enable = true;
+              disk = {
+                boot = "/dev/disk/by-uuid/F5C0-5585";
+                primary = "/dev/disk/by-uuid/3bfd6e57-5e0f-4742-99e3-e69891ae2431";
+                swap = "/dev/disk/by-uuid/ad0311e2-7eb1-47af-bc4b-6311968cbccf";
+              };
+              encrypted = true;
+              usbKey = true;
+              usbKeyPassword = "expend-scarf-pebble";
+            };
+          })
 
-              inputs.flatpaks.nixosModules.default
+          inputs.de_plasma.nixosModules.default
+          ({
+            ringofstorms.dePlasma = {
+              enable = true;
+              gpu.intel.enable = true;
+              sddm.autologinUser = primaryUser;
+              wallpapers = [
+                ../../hosts/_shared_assets/wallpapers/pixel_neon.png
+              ];
+            };
+          })
+          inputs.common.nixosModules.jetbrains_font
+          inputs.stt_ime.nixosModules.default
+          ({ ringofstorms.sttIme = { enable = true; model = "tiny.en"; }; })
 
-              inputs.common.nixosModules.boot_systemd
-              inputs.common.nixosModules.essentials
-              inputs.common.nixosModules.git
-              inputs.common.nixosModules.tmux
-              inputs.common.nixosModules.hardening
-              inputs.common.nixosModules.nix_options
-              inputs.common.nixosModules.timezone_auto
-              inputs.common.nixosModules.tty_caps_esc
-              inputs.common.nixosModules.zsh
-              inputs.common.nixosModules.tailnet
-              (
-                { pkgs, ... }:
-                {
-                  environment.systemPackages = [
-                    inputs.opencode.packages.${pkgs.system}.default
-                  ];
-                  environment.shellAliases = {
-                    "oc" = "all_proxy='' http_proxy='' https_proxy='' opencode";
-                    "occ" = "oc -c";
-                  };
-                }
-              )
-              (
-                { pkgs, lib, ... }:
-                {
-                  # Some boots come up without `/dev/net/tun` until `modprobe tun`.
-                  # This makes `tailscaled` reliable by forcing the module load
-                  # before it starts.
-                  systemd.services.ensure-tun = {
-                    description = "Ensure tun module is loaded";
-                    wantedBy = [ "tailscaled.service" ];
-                    before = [ "tailscaled.service" ];
-                    after = [ "systemd-modules-load.service" ];
-                    serviceConfig = {
-                      Type = "oneshot";
-                      RemainAfterExit = true;
-                      ExecStart = "${pkgs.kmod}/bin/modprobe tun";
-                    };
-                  };
+          inputs.ros_neovim.nixosModules.default
+          ({ ringofstorms-nvim.includeAllRuntimeDependencies = true; })
+          inputs.flatpaks.nixosModules.default
 
-                  systemd.services.tailscaled = {
-                    after = lib.mkAfter [ "ensure-tun.service" ];
-                    wants = lib.mkAfter [ "ensure-tun.service" ];
-                    requires = lib.mkAfter [ "ensure-tun.service" ];
-                  };
-                }
-              )
-              inputs.common.nixosModules.remote_lio_builds
+          inputs.common.nixosModules.boot_systemd
+          inputs.common.nixosModules.essentials
+          inputs.common.nixosModules.git
+          inputs.common.nixosModules.tmux
+          inputs.common.nixosModules.hardening
+          inputs.common.nixosModules.nix_options
+          inputs.common.nixosModules.timezone_auto
+          inputs.common.nixosModules.tty_caps_esc
+          inputs.common.nixosModules.zsh
+          inputs.common.nixosModules.tailnet
+          inputs.common.nixosModules.remote_lio_builds
 
-              inputs.secrets-bao.nixosModules.default
-              (
-                let
-                  autoSecrets = inputs.secrets-bao.lib.mkAutoSecrets {
-                    role = "machines-hightrust";
-                    primaryUser = constants.host.primaryUser;
-                  };
-                  allSecrets = autoSecrets // constants.secrets;
-                in
-                { lib, ... }:
-                lib.mkMerge [
-                  {
-                    ringofstorms.secretsBao = {
-                      enable = true;
-                      openBaoRole = "machines-hightrust";
-                      secrets = allSecrets;
-                    };
-                  }
-                  (inputs.secrets-bao.lib.applyChanges allSecrets)
-                ]
-              )
-
-              inputs.beszel.nixosModules.agent
-              ({
-                beszelAgent = {
-                  token = "2fb5f0a0-24aa-4044-a893-6d0f916cd063";
-                };
-              })
-
-              ./hardware-configuration.nix
-              ./ollama.nix
-              (import ./impermanence.nix { inherit primaryUser; })
-              (
-                { config, pkgs, ... }:
-                rec {
-                  security.sudo.wheelNeedsPassword = false;
-
-                  # Home Manager
-                  home-manager = {
-                    useUserPackages = true;
-                    useGlobalPkgs = true;
-                    backupFileExtension = "bak";
-                    # add all normal users to home manager so it applies to them
-                    users = lib.mapAttrs (name: user: {
-                      home.stateVersion = stateVersion;
-                      programs.home-manager.enable = true;
-                    }) (lib.filterAttrs (name: user: user.isNormalUser or false) users.users);
-
-                    sharedModules = [
-                      inputs.common.homeManagerModules.tmux
-                      inputs.common.homeManagerModules.atuin
-                      inputs.common.homeManagerModules.direnv
-                      inputs.common.homeManagerModules.kitty
-                      inputs.common.homeManagerModules.git
-                      inputs.common.homeManagerModules.postgres_cli_options
-                      inputs.common.homeManagerModules.starship
-                      inputs.common.homeManagerModules.zoxide
-                      inputs.common.homeManagerModules.zsh
-                      inputs.common.homeManagerModules.ssh
-                      (
-                        { ... }:
-                        {
-                          programs.tmux.package = pkgs.unstable.tmux;
-                        }
-                      )
-                    ];
-                  };
-
-                  # System configuration
-                  system.stateVersion = stateVersion;
-                  networking.hostName = configuration_name;
-                  programs.nh.flake = "/home/${primaryUser}/.config/nixos-config/hosts/${config.networking.hostName}";
-                  nixpkgs.config.allowUnfree = true;
-                  users.mutableUsers = false;
-                  users.users = {
-                    "${primaryUser}" = {
-                      isNormalUser = true;
-                      hashedPassword = "$y$j9T$b66ZAxtTo75paZx.mnXyK.$ej0eKS3Wx4488qDfjUJSP0nsUe5TBzw31VbXR19XrQ4";
-                      extraGroups = [
-                        "wheel"
-                        "networkmanager"
-                        "video"
-                        "input"
-                      ];
-                      openssh.authorizedKeys.keys = [
-                        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
-                      ];
-                    };
-                  };
-
-                  environment.systemPackages = with pkgs; [
-                    vlc
-                    google-chrome
-                    jellyfin-media-player
-                    ttyd
-                  ];
-
-                  services.flatpak.packages = [
-                    "dev.vencord.Vesktop"
-                    "com.spotify.Client"
-                    "com.bitwarden.desktop"
-                  ];
-
-                  # TODO move to shared atuin module
-                  systemd.services.atuin-autologin = {
-                    description = "Auto-login to Atuin (if logged out)";
-                    wantedBy = [ "multi-user.target" ];
-                    after = [ "network-online.target" ];
-                    wants = [ "network-online.target" ];
-
-                    serviceConfig = {
-                      Type = "oneshot";
-                      User = "josh";
-                      Group = "users";
-                      Environment = [
-                        "HOME=/home/josh"
-                        "XDG_CONFIG_HOME=/home/josh/.config"
-                        "XDG_DATA_HOME=/home/josh/.local/share"
-                      ];
-
-                      ExecStart = pkgs.writeShellScript "atuin-autologin" ''
-                        #!/usr/bin/env bash
-                        set -euo pipefail
-
-                        if ! ${pkgs.iputils}/bin/ping -c1 -W2 1.1.1.1 &>/dev/null; then
-                          echo "No network access, skipping atuin login"
-                          exit 0
-                        fi
-
-                        secret="/var/lib/openbao-secrets/atuin-key-josh_2026-03-15"
-                        if [ ! -s "$secret" ]; then
-                          echo "Missing atuin secret at $secret" >&2
-                          exit 1
-                        fi
-
-                        # status exits non-zero when logged out.
-                        out="$(${pkgs.atuin}/bin/atuin status 2>&1)" && exit 0
-
-                        if [[ "$out" != *"You are not logged in"* ]]; then
-                          echo "$out" >&2
-                          exit 1
-                        fi
-
-                        username="$(${pkgs.gnused}/bin/sed -n '1p' "$secret")"
-                        password="$(${pkgs.gnused}/bin/sed -n '2p' "$secret")"
-                        key="$(${pkgs.gnused}/bin/sed -n '3p' "$secret")"
-
-                        exec ${pkgs.atuin}/bin/atuin login --username "$username" --password "$password" --key "$key"
-                      '';
-                    };
-                  };
-                }
-              )
+          ({ pkgs, ... }: {
+            environment.systemPackages = [
+              inputs.opencode.packages.${pkgs.system}.default
             ];
-          }
-        );
+            environment.shellAliases = {
+              "oc" = "all_proxy='' http_proxy='' https_proxy='' opencode";
+              "occ" = "oc -c";
+            };
+          })
+
+          # Ensure tun module loads before tailscaled on Framework
+          ({ pkgs, lib, ... }: {
+            systemd.services.ensure-tun = {
+              description = "Ensure tun module is loaded";
+              wantedBy = [ "tailscaled.service" ];
+              before = [ "tailscaled.service" ];
+              after = [ "systemd-modules-load.service" ];
+              serviceConfig = {
+                Type = "oneshot";
+                RemainAfterExit = true;
+                ExecStart = "${pkgs.kmod}/bin/modprobe tun";
+              };
+            };
+            systemd.services.tailscaled = {
+              after = lib.mkAfter [ "ensure-tun.service" ];
+              wants = lib.mkAfter [ "ensure-tun.service" ];
+              requires = lib.mkAfter [ "ensure-tun.service" ];
+            };
+          })
+
+          inputs.beszel.nixosModules.agent
+          ({ beszelAgent.token = "2fb5f0a0-24aa-4044-a893-6d0f916cd063"; })
+
+          ./hardware-configuration.nix
+          ./ollama.nix
+          (import ./impermanence.nix { inherit primaryUser; })
+
+          # Host-specific config
+          ({ pkgs, ... }: {
+            environment.systemPackages = with pkgs; [
+              vlc google-chrome jellyfin-media-player ttyd
+            ];
+            services.flatpak.packages = [
+              "dev.vencord.Vesktop"
+              "com.spotify.Client"
+              "com.bitwarden.desktop"
+            ];
+
+            # TODO move to shared atuin module
+            systemd.services.atuin-autologin = {
+              description = "Auto-login to Atuin (if logged out)";
+              wantedBy = [ "multi-user.target" ];
+              after = [ "network-online.target" ];
+              wants = [ "network-online.target" ];
+              serviceConfig = {
+                Type = "oneshot";
+                User = "josh";
+                Group = "users";
+                Environment = [
+                  "HOME=/home/josh"
+                  "XDG_CONFIG_HOME=/home/josh/.config"
+                  "XDG_DATA_HOME=/home/josh/.local/share"
+                ];
+                ExecStart = pkgs.writeShellScript "atuin-autologin" ''
+                  #!/usr/bin/env bash
+                  set -euo pipefail
+
+                  if ! ${pkgs.iputils}/bin/ping -c1 -W2 1.1.1.1 &>/dev/null; then
+                    echo "No network access, skipping atuin login"
+                    exit 0
+                  fi
+
+                  secret="/var/lib/openbao-secrets/atuin-key-josh_2026-03-15"
+                  if [ ! -s "$secret" ]; then
+                    echo "Missing atuin secret at $secret" >&2
+                    exit 1
+                  fi
+
+                  # status exits non-zero when logged out.
+                  out="$(${pkgs.atuin}/bin/atuin status 2>&1)" && exit 0
+
+                  if [[ "$out" != *"You are not logged in"* ]]; then
+                    echo "$out" >&2
+                    exit 1
+                  fi
+
+                  username="$(${pkgs.gnused}/bin/sed -n '1p' "$secret")"
+                  password="$(${pkgs.gnused}/bin/sed -n '2p' "$secret")"
+                  key="$(${pkgs.gnused}/bin/sed -n '3p' "$secret")"
+
+                  exec ${pkgs.atuin}/bin/atuin login --username "$username" --password "$password" --key "$key"
+                '';
+              };
+            };
+          })
+        ];
       };
     };
 }
