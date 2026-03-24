@@ -2,6 +2,7 @@
   inputs,
   pkgs,
   lib,
+  config,
   constants,
   ...
 }:
@@ -14,22 +15,13 @@ let
   };
   c = constants.services.litellmPublic;
 
-  # Probed with: scripts/probe-azure-models.sh --type chat --nix
-  azureModels = [
-    "gpt-4.1-2025-04-14"
-    "gpt-4.1-mini-2025-04-14"
-    "gpt-4o-2024-05-13"
-    "gpt-4o-2024-08-06"
-    "gpt-4o-mini-2024-07-18"
-    "gpt-5-2025-08-07"
-    "gpt-5-mini-2025-08-07"
-    "gpt-5-nano-2025-08-07"
-    "gpt-5.1-2025-11-13"
-    "gpt-5.2-2025-12-11"
-    "gpt-5.4-2026-03-05"
-    "o3-mini-2025-01-31"
-    "o4-mini-2025-04-16"
-  ];
+  # Reuse the model_list from the private litellm instance, filtering to
+  # only azure and copilot models (exclude air proxy, openrouter, ollama).
+  allModels = config.services.litellm.settings.model_list;
+  isAzureOrCopilot = m:
+    lib.hasPrefix "azure-" m.model_name
+    || lib.hasPrefix "copilot-" m.model_name;
+  publicModels = builtins.filter isAzureOrCopilot allModels;
 in
 {
   options = { };
@@ -39,7 +31,10 @@ in
     systemd.services.litellm-public = {
       description = "LiteLLM Exposed Proxy (limited model set)";
       wants = [ "network-online.target" ];
-      after = [ "network-online.target" "tailscaled.service" ];
+      after = [
+        "network-online.target"
+        "tailscaled.service"
+      ];
       wantedBy = [ "multi-user.target" ];
 
       environment = {
@@ -73,91 +68,7 @@ in
         drop_params = true;
         modify_params = true;
       };
-      model_list =
-        (builtins.map (m: {
-          model_name = "azure-${m}";
-          litellm_params = {
-            model = "azure/${m}";
-            api_base = "http://100.64.0.8:9010/azure";
-            api_version = "2025-04-01-preview";
-            api_key = "na";
-          };
-        }) azureModels)
-        ++ [
-          {
-            model_name = "azure-gpt-5.2-low";
-            litellm_params = {
-              model = "azure/gpt-5.2-2025-12-11";
-              api_base = "http://100.64.0.8:9010/azure";
-              api_version = "2025-04-01-preview";
-              api_key = "na";
-              extra_body = {
-                reasoning_effort = "low";
-              };
-            };
-          }
-          {
-            model_name = "azure-gpt-5.2-medium";
-            litellm_params = {
-              model = "azure/gpt-5.2-2025-12-11";
-              api_base = "http://100.64.0.8:9010/azure";
-              api_version = "2025-04-01-preview";
-              api_key = "na";
-              extra_body = {
-                reasoning_effort = "medium";
-              };
-            };
-          }
-          {
-            model_name = "azure-gpt-5.2-high";
-            litellm_params = {
-              model = "azure/gpt-5.2-2025-12-11";
-              api_base = "http://100.64.0.8:9010/azure";
-              api_version = "2025-04-01-preview";
-              api_key = "na";
-              extra_body = {
-                reasoning_effort = "high";
-              };
-            };
-          }
-        ]
-        # Copilot (note: need to check logs so it can log in)
-        ++ (builtins.map
-          (m: {
-            model_name = "copilot-${m}";
-            litellm_params = {
-              model = "github_copilot/${m}";
-              extra_headers = {
-                editor-version = "vscode/${pkgsLitellm.vscode.version}";
-                editor-plugin-version = "copilot/${pkgsLitellm.vscode-extensions.github.copilot.version}";
-                Copilot-Integration-Id = "vscode-chat";
-                Copilot-Vision-Request = "true";
-                user-agent = "GithubCopilot/${pkgsLitellm.vscode-extensions.github.copilot.version}";
-              };
-            };
-
-          })
-          # List from https://github.com/settings/copilot/features enabled models
-          [
-            "claude-sonnet-3.5"
-            "claude-sonnet-4"
-            "claude-sonnet-4.5"
-            "claude-haiku-4.5"
-            "claude-opus-4.5"
-            "claude-opus-4.6"
-            "claude-sonnet-4.6"
-            "gemini-2.5-pro"
-            "openai-gpt-5.2-codex"
-            "openai-gpt-5.3-codex"
-            "openai-gpt-5.4"
-            "openai-gpt-5-mini"
-            "openai-gpt-5.1"
-            "openai-gpt-5.1-codex"
-            "openai-gpt-5.1-codex-max"
-            "openai-gpt-5.2"
-            "grok-code-fast-1"
-          ]
-        );
+      model_list = publicModels;
     };
   };
 }
