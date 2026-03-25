@@ -19,10 +19,10 @@ in
 
   # Hardware watchdog for freeze detection and recovery
   boot.kernelParams = [ "nmi_watchdog=1" ];
-  systemd.watchdog = {
-    runtimeTime = "30s";      # Reboot if system hangs for 30 seconds
-    rebootTime = "10m";       # Timeout for reboot to complete
-    kexecTime = "10m";        # Timeout for kexec to complete
+  systemd.settings.Manager = {
+    RuntimeWatchdogSec = "30s";      # Reboot if system hangs for 30 seconds
+    RebootWatchdogSec = "10m";       # Timeout for reboot to complete
+    KExecWatchdogSec = "10m";        # Timeout for kexec to complete
   };
 
   services = {

@@ -1,20 +1,16 @@
 {
   pkgs,
+  inputs,
   ...
 }:
 let
-  nono = pkgs.rustPlatform.buildRustPackage rec {
+  nono = pkgs.rustPlatform.buildRustPackage {
     pname = "nono";
-    version = "0.18.0";
+    version = inputs.nono.shortRev or inputs.nono.dirtyShortRev or "unknown";
 
-    src = pkgs.fetchFromGitHub {
-      owner = "always-further";
-      repo = "nono";
-      rev = "v${version}";
-      hash = "sha256-qUExrCJfPiP3UvWaDHIhVgUcTb7NfBMl0Q5Q88oskHk=";
-    };
+    src = inputs.nono;
 
-    cargoLock.lockFile = "${src}/Cargo.lock";
+    cargoLock.lockFile = "${inputs.nono}/Cargo.lock";
 
     nativeBuildInputs = with pkgs; [
       pkg-config
