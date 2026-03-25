@@ -35,7 +35,7 @@
     { ... }@inputs:
     let
       fleet = import ../fleet.nix;
-      constants = import ./_constants.nix;
+      constants = import ./_constants.nix { inherit fleet; };
     in
     {
       nixosConfigurations.${constants.host.name} = fleet.mkHost {

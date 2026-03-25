@@ -4,6 +4,7 @@
   pkgs,
   lib,
   constants,
+  fleet,
   ...
 }:
 let
@@ -15,7 +16,7 @@ let
   };
   c = constants.services.oauth2Proxy;
   zitadel = constants.services.zitadel;
-  domain = constants.host.domain;
+  domain = fleet.global.domain;
 in
 {
   disabledModules = [ declaration ];
@@ -52,8 +53,8 @@ in
 
     services.nginx.virtualHosts."${c.domain}" = {
       addSSL = true;
-      sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
-      sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
+      sslCertificate = "/var/lib/acme/${domain}/fullchain.pem";
+      sslCertificateKey = "/var/lib/acme/${domain}/key.pem";
       locations = {
         "/" = {
           proxyWebsockets = true;

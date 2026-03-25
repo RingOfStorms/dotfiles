@@ -1,5 +1,6 @@
 {
   constants,
+  fleet,
   ...
 }:
 let
@@ -7,7 +8,7 @@ let
 in
 {
   security.acme.acceptTerms = true;
-  security.acme.defaults.email = constants.host.acmeEmail;
+  security.acme.defaults.email = fleet.global.acmeEmail;
   services.nginx = {
     enable = true;
     recommendedGzipSettings = true;

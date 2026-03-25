@@ -1,6 +1,7 @@
 {
   pkgs,
   constants,
+  fleet,
   ...
 }:
 let
@@ -16,8 +17,8 @@ in
     virtualHosts = {
       "${c.domain}" = {
         addSSL = true;
-        sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
-        sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
+        sslCertificate = "/var/lib/acme/${fleet.global.domain}/fullchain.pem";
+        sslCertificateKey = "/var/lib/acme/${fleet.global.domain}/key.pem";
         locations."/" = {
           proxyWebsockets = true;
           proxyPass = "http://localhost:${toString c.port}";

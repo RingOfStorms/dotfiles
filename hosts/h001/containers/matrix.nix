@@ -125,6 +125,7 @@
   pkgs,
   lib,
   inputs,
+  fleet,
   ...
 }:
 let
@@ -324,7 +325,7 @@ in
     # Matrix server - handles client API
     "${serverName}" = {
       addSSL = true;
-      useACMEHost = "joshuabell.xyz";
+      useACMEHost = fleet.global.domain;
 
       # .well-known for Matrix client discovery
       locations."= /.well-known/matrix/server" = {
@@ -368,7 +369,7 @@ in
     # Element Web client
     "${elementDomain}" = {
       addSSL = true;
-      useACMEHost = "joshuabell.xyz";
+      useACMEHost = fleet.global.domain;
 
       locations."/" = {
         proxyPass = "http://${containerAddress}:${toString c.elementPort}";

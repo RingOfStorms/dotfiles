@@ -1,10 +1,12 @@
 {
   config,
   constants,
+  fleet,
   ...
 }:
 let
   c = constants;
+  domain = fleet.global.domain;
   upstream = c.upstreamHost;
   baoSecrets = config.ringofstorms.secretsBao.secrets or {};
   apiKeyFile = if baoSecrets ? "litellm_public_api_key_2026-03-15"
@@ -41,7 +43,7 @@ in
   };
 
   security.acme.acceptTerms = true;
-  security.acme.defaults.email = c.host.acmeEmail;
+  security.acme.defaults.email = fleet.global.acmeEmail;
   services.nginx = {
     enable = true;
     recommendedGzipSettings = true;
@@ -75,21 +77,21 @@ in
         # Redirect self IP to domain
         "64.181.210.7" = {
           locations."/" = {
-            return = "301 https://joshuabell.xyz";
+            return = "301 https://${domain}";
           };
         };
 
         "${c.host.overlayIp}" = tailnetConfig;
-        "o001.net.joshuabell.xyz" = tailnetConfig;
+        "o001.net.${domain}" = tailnetConfig;
 
-        "www.joshuabell.xyz" = {
+        "www.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
-            return = "301 https://joshuabell.xyz";
+            return = "301 https://${domain}";
           };
         };
-        "joshuabell.xyz" = {
+        "${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations = {
@@ -164,7 +166,7 @@ in
         };
 
         # PROXY HOSTS
-        "chat.joshuabell.xyz" = {
+        "chat.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
@@ -172,29 +174,21 @@ in
             proxyPass = "http://${upstream}";
           };
         };
-        "gist.joshuabell.xyz" = {
+        "gist.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
             proxyPass = "http://${upstream}";
           };
         };
-        "git.joshuabell.xyz" = {
+        "git.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
             proxyPass = "http://${upstream}";
           };
         };
-        "n8n.joshuabell.xyz" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://${upstream}";
-          };
-        };
-        "notes.joshuabell.xyz" = {
+        "n8n.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
@@ -202,7 +196,7 @@ in
             proxyPass = "http://${upstream}";
           };
         };
-        "blog.joshuabell.xyz" = {
+        "notes.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
@@ -210,14 +204,22 @@ in
             proxyPass = "http://${upstream}";
           };
         };
-        "sec.joshuabell.xyz" = {
+        "blog.${domain}" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyWebsockets = true;
+            proxyPass = "http://${upstream}";
+          };
+        };
+        "sec.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
             proxyPass = "http://${upstream}";
           };
         };
-        "sso.joshuabell.xyz" = {
+        "sso.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
@@ -227,7 +229,7 @@ in
             '';
           };
         };
-        "sso-proxy.joshuabell.xyz" = {
+        "sso-proxy.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
@@ -237,28 +239,28 @@ in
             '';
           };
         };
-        "jellyfin.joshuabell.xyz" = {
+        "jellyfin.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
             proxyPass = "http://${upstream}";
           };
         };
-        "media.joshuabell.xyz" = {
+        "media.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
             proxyPass = "http://${upstream}";
           };
         };
-        "puzzles.joshuabell.xyz" = {
+        "puzzles.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
             proxyPass = "http://${upstream}";
           };
         };
-        "etebase.joshuabell.xyz" = {
+        "etebase.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
@@ -269,7 +271,7 @@ in
             '';
           };
         };
-        "pim.joshuabell.xyz" = {
+        "pim.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
@@ -277,7 +279,7 @@ in
             proxyPass = "http://${upstream}";
           };
         };
-        "location.joshuabell.xyz" = {
+        "location.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
@@ -288,7 +290,7 @@ in
             '';
           };
         };
-        "photos.joshuabell.xyz" = {
+        "photos.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
@@ -299,7 +301,7 @@ in
             '';
           };
         };
-        "llm.joshuabell.xyz" = {
+        "llm.${domain}" = {
           enableACME = true;
           forceSSL = true;
           extraConfig = ''
@@ -318,7 +320,7 @@ in
         # Matrix homeserver — proxy to h001's host nginx which handles
         # container forwarding. Needs .well-known endpoints for client
         # discovery and large body size for media uploads.
-        "matrix.joshuabell.xyz" = {
+        "matrix.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
@@ -332,7 +334,7 @@ in
         };
 
         # Element Web client for Matrix
-        "element.joshuabell.xyz" = {
+        "element.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {

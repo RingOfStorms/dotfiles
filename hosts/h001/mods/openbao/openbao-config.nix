@@ -2,6 +2,7 @@
   pkgs,
   lib,
   constants,
+  fleet,
   ...
 }:
 let
@@ -25,8 +26,8 @@ let
     "zitadel-jwt/" = {
       type = "jwt";
       config = {
-        oidc_discovery_url = "https://sso.joshuabell.xyz";
-        bound_issuer = "https://sso.joshuabell.xyz";
+        oidc_discovery_url = "https://sso.${fleet.global.domain}";
+        bound_issuer = "https://sso.${fleet.global.domain}";
       };
     };
   };

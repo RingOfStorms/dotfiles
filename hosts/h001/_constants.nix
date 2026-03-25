@@ -1,6 +1,7 @@
 # Service constants for h001 (Service Host)
 # Single source of truth for ports, UIDs/GIDs, data paths, container IPs, and domains.
 # Import this file in flake.nix and pass to service modules via specialArgs or let bindings.
+{ fleet }:
 {
   # Host-level
   host = {
@@ -9,8 +10,6 @@
     lanIp = "10.12.14.10";
     primaryUser = "luser";
     stateVersion = "24.11";
-    domain = "joshuabell.xyz";
-    acmeEmail = "admin@joshuabell.xyz";
   };
 
   # Container network (shared host address for all NixOS containers)
@@ -198,7 +197,7 @@
     # Service secrets
     linode_rw_domains_2026-03-15 = {
       configChanges = {
-        security.acme.certs."joshuabell.xyz".credentialFiles.LINODE_TOKEN_FILE = "$SECRET_PATH";
+        security.acme.certs.${fleet.global.domain}.credentialFiles.LINODE_TOKEN_FILE = "$SECRET_PATH";
       };
     };
 
