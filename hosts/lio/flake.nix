@@ -47,12 +47,6 @@
           inputs.common.homeManagerModules.foot
           inputs.common.homeManagerModules.launcher_rofi
           inputs.common.homeManagerModules.slicer
-          (
-            { pkgs, ... }:
-            {
-              programs.tmux.package = pkgs.unstable.tmux;
-            }
-          )
           # Local network SSH entries for joe and gp3
           (
             { ... }:
