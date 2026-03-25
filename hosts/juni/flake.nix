@@ -46,7 +46,6 @@
 
         hmModules = [
           inputs.common.homeManagerModules.kitty
-          ({ pkgs, ... }: { programs.tmux.package = pkgs.unstable.tmux; })
         ];
 
         nixosModules = [

@@ -329,6 +329,22 @@
         "type": "github"
       }
     },
+    "nono": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1774332003,
+        "narHash": "sha256-m88lr8nt6mgu0RrV5n66Rth9ja4Z9laut74lbXf6RJY=",
+        "owner": "always-further",
+        "repo": "nono",
+        "rev": "4a2dfb7551482b2beb16c167c6b3b25fd786e3f8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "always-further",
+        "repo": "nono",
+        "type": "github"
+      }
+    },
     "nvim_plugin-Almo7aya/openingh.nvim": {
       "flake": false,
       "locked": {
@@ -1243,6 +1259,7 @@
         "home-manager": "home-manager_2",
         "nixpkgs": "nixpkgs_3",
         "nixpkgs-unstable": "nixpkgs-unstable",
+        "nono": "nono",
         "opencode": "opencode",
         "qvm": "qvm",
         "ros_neovim": "ros_neovim",

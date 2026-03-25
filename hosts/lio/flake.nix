@@ -23,6 +23,9 @@
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
     qvm.url = "git+https://git.joshuabell.xyz/ringofstorms/qvm";
+
+    nono.url = "github:always-further/nono";
+    nono.flake = false;
   };
 
   outputs =
@@ -44,12 +47,6 @@
           inputs.common.homeManagerModules.foot
           inputs.common.homeManagerModules.launcher_rofi
           inputs.common.homeManagerModules.slicer
-          (
-            { pkgs, ... }:
-            {
-              programs.tmux.package = pkgs.unstable.tmux;
-            }
-          )
           # Local network SSH entries for joe and gp3
           (
             { ... }:
@@ -119,7 +116,7 @@
             { pkgs, ... }:
             {
               environment.systemPackages = [
-                inputs.opencode.packages.${pkgs.system}.default
+                inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default
                 pkgs.claude-code
                 pkgs.code-cursor
                 pkgs.zed-editor

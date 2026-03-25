@@ -8,6 +8,7 @@ with lib;
   environment.systemPackages = with pkgs; [
     git
     gh
+    meld
   ];
 
   environment.shellAliases = {
