@@ -61,8 +61,6 @@
                 swap = "/dev/disk/by-uuid/ad0311e2-7eb1-47af-bc4b-6311968cbccf";
               };
               encrypted = true;
-              usbKey = true;
-              usbKeyPassword = "expend-scarf-pebble";
             };
           })
 
