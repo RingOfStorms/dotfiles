@@ -23,6 +23,10 @@
       init.defaultBranch = "main";
 
       rerere.enabled = true;
+
+      merge.tool = "meld";
+      mergetool.keepBackup = false;
+      mergetool.meld.cmd = "meld \"$LOCAL\" \"$MERGED\" \"$REMOTE\" --output \"$MERGED\"";
     };
 
     ignores = [
