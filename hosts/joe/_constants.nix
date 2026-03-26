@@ -18,6 +18,10 @@
       port = 8188;
       dataDir = "/var/lib/comfyui";
     };
+    forge = {
+      port = 7860;
+      dataDir = "/var/lib/forge";
+    };
     minecraft = {
       port = 25565;
     };

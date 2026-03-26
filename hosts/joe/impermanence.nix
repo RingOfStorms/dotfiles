@@ -49,6 +49,9 @@
       # ComfyUI models, custom nodes, outputs, and config
       "/var/lib/comfyui"
 
+      # Forge workspace, models, and generated images
+      "/var/lib/forge"
+
       # Minecraft server world data, config, and state
       "/var/lib/minecraft"
 

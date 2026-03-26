@@ -129,6 +129,7 @@
           ./ollama.nix
           ./kokoro-tts.nix
           ./comfyui.nix
+          ./forge.nix
           ./minecraft.nix
           (import ./impermanence.nix { inherit primaryUser; })
 
