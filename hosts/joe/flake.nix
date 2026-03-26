@@ -118,6 +118,7 @@
           ./configuration.nix
           ./hardware-configuration.nix
           ./ollama.nix
+          ./minecraft.nix
           (import ./impermanence.nix { inherit primaryUser; })
 
           # Host-specific config

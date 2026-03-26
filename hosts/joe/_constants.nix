@@ -10,5 +10,8 @@
     ollama = {
       port = 11434;
     };
+    minecraft = {
+      port = 25565;
+    };
   };
 }

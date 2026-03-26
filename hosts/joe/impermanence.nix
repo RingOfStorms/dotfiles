@@ -43,6 +43,9 @@
       # Ollama model storage and state
       "/var/lib/ollama"
 
+      # Minecraft server world data, config, and state
+      "/var/lib/minecraft"
+
       # Flatpak (system-wide installs and runtime data)
       "/var/lib/flatpak"
     ];
@@ -105,6 +108,9 @@
         # Jellyfin Media Player (server list, login, settings)
         ".local/share/jellyfin-desktop"
         ".config/jellyfinmediaplayer"
+
+        # Prismlauncher (Minecraft instances, mods, accounts, settings)
+        ".local/share/PrismLauncher"
 
         # Flatpak (user installs and app data)
         ".local/share/flatpak"
