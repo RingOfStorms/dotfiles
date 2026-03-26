@@ -43,6 +43,9 @@
       # Ollama model storage and state
       "/var/lib/ollama"
 
+      # Kokoro TTS model cache and custom voice packs
+      "/var/lib/kokoro-tts"
+
       # Minecraft server world data, config, and state
       "/var/lib/minecraft"
 

@@ -110,6 +110,7 @@
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.more_filesystems
           inputs.common.nixosModules.tailnet
+          inputs.common.nixosModules.podman
 
           # TODO beszel agent -- needs overlay IP assigned first
           # beszel.nixosModules.agent
@@ -126,6 +127,7 @@
           ./hardware-configuration.nix
           ./nixld.nix
           ./ollama.nix
+          ./kokoro-tts.nix
           ./minecraft.nix
           (import ./impermanence.nix { inherit primaryUser; })
 
