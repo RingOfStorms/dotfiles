@@ -34,8 +34,9 @@ in
       };
       extraOptions = [
         # Pass all NVIDIA GPUs into the container via CDI
+        # (no --group-add=video: this openSUSE image lacks a video group;
+        # CDI handles device access without it)
         "--device=nvidia.com/gpu=all"
-        "--group-add=video"
       ];
     };
   };
