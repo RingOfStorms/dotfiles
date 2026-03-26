@@ -332,11 +332,11 @@
     "nono": {
       "flake": false,
       "locked": {
-        "lastModified": 1774332003,
-        "narHash": "sha256-m88lr8nt6mgu0RrV5n66Rth9ja4Z9laut74lbXf6RJY=",
+        "lastModified": 1774451208,
+        "narHash": "sha256-OfftHO57HsDqi2E5xxeCIblMhGSTf4vFUhSRRNdrIHo=",
         "owner": "always-further",
         "repo": "nono",
-        "rev": "4a2dfb7551482b2beb16c167c6b3b25fd786e3f8",
+        "rev": "3011613cb8ed1cf2b960ac8d8d055282ef70be68",
         "type": "github"
       },
       "original": {
