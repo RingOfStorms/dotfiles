@@ -37,11 +37,11 @@ in
     };
   };
 
-  # Create data directories before the container starts
-  system.activationScripts."${name}_directories" = ''
-    mkdir -p ${c.dataDir}/models
-    mkdir -p ${c.dataDir}/voices
-  '';
+  # Ensure data directories exist before the container starts
+  systemd.tmpfiles.rules = [
+    "d ${c.dataDir}/models 0755 root root -"
+    "d ${c.dataDir}/voices 0755 root root -"
+  ];
 
   # Allow access from Tailscale overlay and LAN
   networking.firewall.interfaces."tailscale0".allowedTCPPorts = [ c.port ];
