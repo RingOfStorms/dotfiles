@@ -102,7 +102,7 @@
           inputs.common.nixosModules.tty_caps_esc
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.more_filesystems
-          # inputs.common.nixosModules.tailnet
+          inputs.common.nixosModules.tailnet
 
           # TODO beszel agent -- needs overlay IP assigned first
           # beszel.nixosModules.agent

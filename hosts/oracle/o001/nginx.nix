@@ -358,11 +358,6 @@ in
         listen 3032;
         proxy_pass ${upstream}:3032;
       }
-      # Minecraft Java Edition — TCP proxy to Joe via Tailscale
-      server {
-        listen 25565;
-        proxy_pass 100.64.0.12:25565;
-      }
     '';
   };
 
@@ -406,6 +401,5 @@ in
     443 # web https
 
     3032 # ssh for git server
-    25565 # Minecraft Java Edition
   ];
 }
