@@ -23,12 +23,19 @@ in
       server-port = c.port;
       online-mode = true;
       white-list = true;
+      spawn-protection = 0;
       difficulty = "normal";
       gamemode = "survival";
-      motd = "Joe's Minecraft Server";
+      motd = "Computer Boyz";
       max-players = 10;
       view-distance = 16;
       simulation-distance = 10;
+    };
+    whitelist = {
+      lnsanehero = "8ea7c69d-9878-464a-9572-c3f783affc78";
+      JediCraft = "a32b4e90-d8f9-492e-be99-63355067e1b5";
+      sdking13 = "11766f4b-b08f-41bf-abbd-781e53f90ea8";
+      RingOfStorms = "fe5b7d3e-73d9-4587-8b6f-743e5edf8e7f";
     };
   };
 
