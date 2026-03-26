@@ -18,8 +18,6 @@
     impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
-
-    # airi.url = "github:moeru-ai/airi";
   };
 
   outputs =
@@ -36,7 +34,13 @@
         authMethod = "hashedPassword";
         authValue = "$y$j9T$HcgOlwo3O7syvUsSQsuyi.$DSe1Cvg.3mtufGxDCmMiJ80uQpAwxjRmdA4EXi9GoF6";
         mutableUsers = false;
-        extraGroups = [ "wheel" "networkmanager" "video" "input" "gamemode" ];
+        extraGroups = [
+          "wheel"
+          "networkmanager"
+          "video"
+          "input"
+          "gamemode"
+        ];
 
         hmModules = [
           inputs.common.homeManagerModules.kitty
@@ -44,15 +48,18 @@
           inputs.common.homeManagerModules.launcher_rofi
           inputs.common.homeManagerModules.slicer
           # Autostart Steam minimized to tray on login
-          ({ ... }: {
-            xdg.configFile."autostart/steam.desktop".text = ''
-              [Desktop Entry]
-              Type=Application
-              Name=Steam
-              Exec=steam -silent
-              X-KDE-autostart-phase=2
-            '';
-          })
+          (
+            { ... }:
+            {
+              xdg.configFile."autostart/steam.desktop".text = ''
+                [Desktop Entry]
+                Type=Application
+                Name=Steam
+                Exec=steam -silent
+                X-KDE-autostart-phase=2
+              '';
+            }
+          )
         ];
 
         nixosModules = [
@@ -117,22 +124,30 @@
 
           ./configuration.nix
           ./hardware-configuration.nix
+          ./nixld.nix
           ./ollama.nix
           ./minecraft.nix
           (import ./impermanence.nix { inherit primaryUser; })
 
           # Host-specific config
-          ({ pkgs, ... }: {
-            environment.systemPackages = with pkgs; [
-              google-chrome vlc jellyfin-media-player ffmpeg-full ttyd
-              # inputs.airi.packages.${pkgs.system}.default
-            ];
-            services.flatpak.packages = [
-              "com.spotify.Client"
-              "com.bitwarden.desktop"
-              "dev.vencord.Vesktop"
-            ];
-          })
+          (
+            { pkgs, ... }:
+            {
+              environment.systemPackages = with pkgs; [
+                google-chrome
+                vlc
+                jellyfin-media-player
+                ffmpeg-full
+                ttyd
+                steam-run
+              ];
+              services.flatpak.packages = [
+                "com.spotify.Client"
+                "com.bitwarden.desktop"
+                "dev.vencord.Vesktop"
+              ];
+            }
+          )
         ];
       };
     };
