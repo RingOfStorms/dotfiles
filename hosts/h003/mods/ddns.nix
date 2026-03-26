@@ -23,8 +23,8 @@ let
 
     TOKEN=$(cat "$TOKEN_FILE")
 
-    # Get current public IP
-    CURRENT_IP=$(${lib.getExe pkgs.curl} -sf https://api.ipify.org || ${lib.getExe pkgs.curl} -sf https://ifconfig.me/ip)
+    # Get current public IPv4 address (force IPv4 with -4 to avoid getting IPv6)
+    CURRENT_IP=$(${lib.getExe pkgs.curl} -4 -sf https://api.ipify.org || ${lib.getExe pkgs.curl} -4 -sf https://ifconfig.me/ip)
     if [ -z "$CURRENT_IP" ]; then
       echo "ERROR: Failed to determine public IP"
       exit 1
@@ -88,7 +88,7 @@ lib.mkIf (tokenFile != null) {
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "${updateScript} ${tokenFile}";
-      DynamicUser = true;
+      User = "root";
     };
   };
 
