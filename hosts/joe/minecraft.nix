@@ -33,7 +33,7 @@ in
     };
     whitelist = {
       lnsanehero = "8ea7c69d-9878-464a-9572-c3f783affc78";
-      JediCraft = "a32b4e90-d8f9-492e-be99-63355067e1b5";
+      Jedicraftt = "00dabc59-bfda-4101-b3e1-6925d5ce8268";
       sdking13 = "11766f4b-b08f-41bf-abbd-781e53f90ea8";
       RingOfStorms = "fe5b7d3e-73d9-4587-8b6f-743e5edf8e7f";
     };
