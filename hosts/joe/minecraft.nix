@@ -22,6 +22,7 @@ in
     serverProperties = {
       server-port = c.port;
       online-mode = true;
+      white-list = true;
       difficulty = "normal";
       gamemode = "survival";
       motd = "Joe's Minecraft Server";

@@ -19,7 +19,7 @@
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
-    airi.url = "github:moeru-ai/airi";
+    # airi.url = "github:moeru-ai/airi";
   };
 
   outputs =
@@ -102,7 +102,7 @@
           inputs.common.nixosModules.tty_caps_esc
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.more_filesystems
-          inputs.common.nixosModules.tailnet
+          # inputs.common.nixosModules.tailnet
 
           # TODO beszel agent -- needs overlay IP assigned first
           # beszel.nixosModules.agent
@@ -125,7 +125,7 @@
           ({ pkgs, ... }: {
             environment.systemPackages = with pkgs; [
               google-chrome vlc jellyfin-media-player ffmpeg-full ttyd
-              inputs.airi.packages.${pkgs.system}.default
+              # inputs.airi.packages.${pkgs.system}.default
             ];
             services.flatpak.packages = [
               "com.spotify.Client"
