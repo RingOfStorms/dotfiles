@@ -78,6 +78,13 @@
       dnsPort = 9053;
     };
 
+    ddns = {
+      hostname = "home";
+      domain = "joshuabell.xyz";
+      # Check interval in minutes
+      interval = 5;
+    };
+
     ups = {
       driver = "usbhid-ups";
       vendorId = "051D";
@@ -89,5 +96,9 @@
         { name = "h002"; host = "10.12.14.183"; user = "luser"; keyFile = "/var/lib/openbao-secrets/nix2nix_2026-03-15"; }
       ];
     };
+  };
+
+  secrets = {
+    linode_rw_domains_2026-03-15 = { };
   };
 }
