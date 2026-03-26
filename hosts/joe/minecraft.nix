@@ -30,6 +30,7 @@ in
       max-players = 10;
       view-distance = 16;
       simulation-distance = 10;
+      pvp = false;
     };
     whitelist = {
       lnsanehero = "8ea7c69d-9878-464a-9572-c3f783affc78";
