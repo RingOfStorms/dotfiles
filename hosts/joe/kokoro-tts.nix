@@ -37,10 +37,10 @@ in
     };
   };
 
-  # Ensure data directories exist before the container starts
+  # Ensure data directories exist and are writable by container's appuser (UID 1001)
   systemd.tmpfiles.rules = [
-    "d ${c.dataDir}/models 0755 root root -"
-    "d ${c.dataDir}/voices 0755 root root -"
+    "d ${c.dataDir}/models 0755 1001 1001 -"
+    "d ${c.dataDir}/voices 0755 1001 1001 -"
   ];
 
   # Allow access from Tailscale overlay and LAN
