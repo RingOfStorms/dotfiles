@@ -14,6 +14,10 @@
       port = 8880;
       dataDir = "/var/lib/kokoro-tts";
     };
+    comfyui = {
+      port = 8188;
+      dataDir = "/var/lib/comfyui";
+    };
     minecraft = {
       port = 25565;
     };

@@ -46,6 +46,9 @@
       # Kokoro TTS model cache and custom voice packs
       "/var/lib/kokoro-tts"
 
+      # ComfyUI models, custom nodes, outputs, and config
+      "/var/lib/comfyui"
+
       # Minecraft server world data, config, and state
       "/var/lib/minecraft"
 
