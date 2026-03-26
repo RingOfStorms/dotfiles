@@ -18,6 +18,8 @@
     impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
+
+    airi.url = "github:moeru-ai/airi";
   };
 
   outputs =
@@ -122,6 +124,7 @@
           ({ pkgs, ... }: {
             environment.systemPackages = with pkgs; [
               google-chrome vlc jellyfin-media-player ffmpeg-full ttyd
+              inputs.airi.packages.${pkgs.system}.default
             ];
             services.flatpak.packages = [
               "com.spotify.Client"
