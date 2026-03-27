@@ -46,9 +46,6 @@
       # Kokoro TTS model cache and custom voice packs
       "/var/lib/kokoro-tts"
 
-      # ComfyUI models, custom nodes, outputs, and config
-      "/var/lib/comfyui"
-
       # Forge workspace, models, and generated images
       "/var/lib/forge"
 
