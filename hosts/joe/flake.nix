@@ -138,6 +138,7 @@
             {
               environment.systemPackages = with pkgs; [
                 google-chrome
+                qdirstat
                 vlc
                 jellyfin-media-player
                 ffmpeg-full
