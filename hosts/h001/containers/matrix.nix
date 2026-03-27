@@ -509,7 +509,7 @@ in
             server_name = serverName;
             public_baseurl = "https://${serverName}";
 
-            # Listeners - client only, no federation
+            # Listeners - client and federation on same port
             listeners = [
               {
                 port = c.synapsePort;
@@ -519,7 +519,7 @@ in
                 x_forwarded = true;
                 resources = [
                   {
-                    names = [ "client" ];
+                    names = [ "client" "federation" ];
                     compress = true;
                   }
                 ];
@@ -535,8 +535,11 @@ in
               };
             };
 
-            # Security: Disable federation completely
-            federation_domain_whitelist = [ ];
+            # Federation: only allow whitelisted servers
+            federation_domain_whitelist = [
+              "matrix.org"
+              "orderoftheborder.org"
+            ];
 
             # Security: Disable registration and guest access
             enable_registration = false;
@@ -545,8 +548,11 @@ in
             # No stats reporting
             report_stats = false;
 
-            # No trusted key servers needed without federation
-            trusted_key_servers = [ ];
+            # Trust the default Matrix.org key server for verifying
+            # other servers' signing keys during federation
+            trusted_key_servers = [
+              { server_name = "matrix.org"; }
+            ];
 
             # Disable presence to save resources on single-user server
             presence.enabled = false;
