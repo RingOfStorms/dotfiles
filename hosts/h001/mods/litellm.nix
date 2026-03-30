@@ -248,12 +248,11 @@ in
             };
           })
           [
-            "qwen3:14b"
-            "qwen3:8b"
-            "qwen3:30b"
-            "gemma3:12b"
-            "deepseek-r1:14b"
-            "deepseek-coder-v2:16b"
+            "qwen3.5:27b"
+            "qwen3.5:9b"
+            "ministral-3:14b"
+            "ministral-3:8b"
+            "devstral-small-2:24b"
           ]
         );
       };
