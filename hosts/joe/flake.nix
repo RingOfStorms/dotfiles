@@ -131,6 +131,8 @@
           ./kokoro-tts.nix
           ./forge.nix
           ./minecraft.nix
+          ./homepage-dashboard.nix
+          ./nginx.nix
           (import ./impermanence.nix { inherit primaryUser; })
 
           # Host-specific config

@@ -19,6 +19,12 @@
     checkIntervalMin = 5;
   };
 
+  services = {
+    sunshine = {
+      port = 47989; # base port; web UI at +1 (47990)
+    };
+  };
+
   # ── Per-host secrets (merged with mkAutoSecrets in fleet.mkHost) ────
   secrets = {
     "hass_token" = {

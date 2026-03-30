@@ -136,16 +136,11 @@
     enable = true;
     autoStart = true;         # start with graphical session
     capSysAdmin = true;       # required for DRM/KMS capture on Wayland
-    openFirewall = false;     # we only expose on the Tailscale interface below
+    openFirewall = false;     # accessible via Tailscale (trusted interface)
     settings = {
       sunshine_name = constants.host.name;
+      port = constants.services.sunshine.port;
     };
-  };
-
-  # Only allow Sunshine ports on the Tailscale interface
-  networking.firewall.interfaces."tailscale0" = {
-    allowedTCPPorts = [ 47984 47989 47990 48010 ];
-    allowedUDPPorts = [ 47998 47999 48000 48002 48010 ];
   };
 
   environment.systemPackages = with pkgs; [

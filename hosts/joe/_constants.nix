@@ -21,5 +21,11 @@
     minecraft = {
       port = 25565;
     };
+    sunshine = {
+      port = 47989; # base port; web UI at +1 (47990)
+    };
+    homepage = {
+      port = 8082;
+    };
   };
 }
