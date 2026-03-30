@@ -66,6 +66,7 @@
             ringofstorms.dePlasma = {
               enable = true;
               gpu.intel.enable = true;
+              noScreenOff = true;
               sddm.autologinUser = primaryUser; # Media box, auto-login
               wallpapers = [
                 ../../hosts/_shared_assets/wallpapers/pixel_rain.png

@@ -86,6 +86,7 @@
                 enable = true;
                 open = false; # Proprietary -- open modules caused device creation failures in DXVK/VKD3D-Proton
               };
+              noScreenOff = true;
               sddm.autologinUser = primaryUser;
               wallpapers = [
                 ../../hosts/_shared_assets/wallpapers/pixel_cat_garage.png

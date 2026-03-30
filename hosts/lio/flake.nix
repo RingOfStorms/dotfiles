@@ -71,6 +71,7 @@
             ringofstorms.dePlasma = {
               enable = true;
               gpu.amd.enable = true;
+              noScreenOff = true;
               # TODO once encrypted boot?
               # sddm.autologinUser = "josh";
             };

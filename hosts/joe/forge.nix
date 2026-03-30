@@ -36,7 +36,7 @@ in
         DIRECT_ADDRESS = constants.host.overlayIp;
         SUPERVISOR_NO_AUTOSTART = "syncthing,jupyter,sshd,serviceportal";
         WEB_ENABLE_AUTH = "false";
-        FORGE_ARGS = "--no-save-ui-config";
+        # FORGE_ARGS = "--no-save-ui-config"; # this doesn't exist
         WORKSPACE = "/workspace";
       };
       extraOptions = [
