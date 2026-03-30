@@ -5,7 +5,30 @@
   # Connectivity
   networking.networkmanager.enable = true;
   services.resolved.enable = true;
-  hardware.bluetooth.enable = true;
+
+  # ── Bluetooth (Switch Pro Controllers) ─────────────────────────────────────
+  hardware.bluetooth = {
+    enable = true;
+    # Power the adapter on at boot so controllers can reconnect automatically
+    powerOnBoot = true;
+    settings = {
+      General = {
+        # Reduce idle disconnect timeout (default 0 = use kernel default which
+        # can be aggressive). 0 here means "never idle-disconnect".
+        IdleTimeout = 0;
+        # Allow the adapter to be discoverable immediately after boot so
+        # controllers that were previously paired can reconnect faster.
+        FastConnectable = true;
+        # Experimental D-Bus interfaces improve battery reporting and
+        # reconnection behavior for game controllers.
+        Experimental = true;
+      };
+      Policy = {
+        # Automatically re-connect to previously paired devices (controllers)
+        AutoEnable = true;
+      };
+    };
+  };
 
   # ── GPD Pocket 3 display ───────────────────────────────────────────────────
   # The GPD Pocket 3 uses a tablet display mounted rotated 90 degrees.
@@ -14,6 +37,15 @@
     "fbcon=rotate:1"
     "mem_sleep_default=s2idle"
   ];
+
+  # ── HDMI ARC audio (TV → soundbar passthrough) ─────────────────────────────
+  # The Intel HDA codec power-saves aggressively, suspending the HDMI audio
+  # sink after a few seconds of silence. When ARC wakes it back up, the
+  # re-negotiation produces audible static/pops. Disabling power_save keeps
+  # the codec active so the ARC link stays clean.
+  boot.extraModprobeConfig = ''
+    options snd_hda_intel power_save=0
+  '';
 
   # Large console font for the small panel
   console.font = "${pkgs.terminus_font}/share/consolefonts/ter-132n.psf.gz";
@@ -42,7 +74,36 @@
   #
   # TLP is still useful for CPU power management even without battery thresholds.
   services.power-profiles-daemon.enable = false;
-  services.tlp.enable = true;
+  services.tlp = {
+    enable = true;
+    settings = {
+      # Prevent TLP from re-enabling audio codec power save (which would
+      # override our snd_hda_intel.power_save=0 and cause HDMI ARC static).
+      SOUND_POWER_SAVE_ON_AC = 0;
+      SOUND_POWER_SAVE_ON_BAT = 0;
+      # Prevent TLP from autosuspending the Bluetooth adapter, which drops
+      # controller connections. Exclude btusb from USB autosuspend.
+      USB_AUTOSUSPEND = 1;
+      USB_EXCLUDE_BTUSB = 1;
+    };
+  };
+
+  # ── PipeWire: keep HDMI sink alive ─────────────────────────────────────────
+  # By default PipeWire suspends idle audio nodes after a timeout.  When the
+  # node resumes, the HDMI ARC link re-negotiates and produces static.
+  # session.suspend-timeout-seconds = 0 disables this.
+  services.pipewire.wireplumber.extraConfig."10-disable-suspend" = {
+    "monitor.alsa.rules" = [
+      {
+        matches = [
+          { "node.name" = "~alsa_output.pci-.*hdmi.*"; }
+        ];
+        actions.update-props = {
+          "session.suspend-timeout-seconds" = 0;
+        };
+      }
+    ];
+  };
 
   # ── Steam (Remote Play client + local games) ───────────────────────────────
   programs.steam = {

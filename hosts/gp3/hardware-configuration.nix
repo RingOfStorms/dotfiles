@@ -27,6 +27,8 @@
   boot.kernelModules = [
     "kvm-intel"
     "btusb"
+    "hid-nintendo"  # Nintendo Switch Pro Controller support (BT + USB)
+    "uinput"        # Virtual input devices for Steam controller remapping
   ];
   boot.extraModulePackages = [ ];
 
