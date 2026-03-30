@@ -61,6 +61,15 @@
   services.fstrim.enable = true;
   services.libinput.enable = true;
 
+  # ── Virtual input device access (uinput) ───────────────────────────────────
+  # Sunshine and Steam create virtual input devices via /dev/uinput to forward
+  # client keyboard/mouse/gamepad input. Default permissions are 0660 root:root
+  # — grant the input group write access so the logged-in user can create
+  # virtual devices without root.
+  services.udev.extraRules = ''
+    KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0660", GROUP="input"
+  '';
+
   # ── Battery ────────────────────────────────────────────────────────────────
   # NOTE: The GPD Pocket 3 does NOT support software-controlled battery charge
   # thresholds on Linux. The embedded controller firmware does not expose

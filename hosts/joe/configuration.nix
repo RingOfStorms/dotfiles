@@ -99,8 +99,15 @@
     settings = {
       sunshine_name = constants.host.name;
       port = constants.services.sunshine.port;
-      output_name = 1;        # KMS monitor index: 0=DP-1 (Samsung), 1=DP-2 (ASUS PG43U)
+      output_name = "1";      # KMS monitor index: 0=DP-1 (Samsung), 1=DP-2 (ASUS PG43U)
     };
+  };
+
+  # The capSysAdmin setcap wrapper sanitizes LD_LIBRARY_PATH, preventing
+  # Sunshine from finding libcuda.so.1 and libnvidia-encode.so.1.
+  # Inject the NVIDIA driver lib path so NVENC hardware encoding works.
+  systemd.user.services.sunshine.environment = {
+    LD_LIBRARY_PATH = "/run/opengl-driver/lib";
   };
 
   environment.systemPackages = with pkgs; [

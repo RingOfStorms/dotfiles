@@ -15,7 +15,7 @@ in
     port = c.port;
     environmentVariables = {
       OLLAMA_ORIGINS = "*";
-      OLLAMA_KEEP_ALIVE = "15m"; # Shorter keepalive to free VRAM for ComfyUI image generation
+      OLLAMA_KEEP_ALIVE = "0"; # Unload models immediately after use so switching models doesn't fail on resource constraints
     };
   };
 
