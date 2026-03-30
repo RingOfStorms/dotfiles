@@ -92,12 +92,14 @@
   #   4. A PIN will appear in Moonlight — enter it in the Sunshine web UI to pair.
   services.sunshine = {
     enable = true;
+    package = pkgs.sunshine.override { cudaSupport = true; }; # NVENC stays on GPU
     autoStart = true;         # start with graphical session
     capSysAdmin = true;       # required for DRM/KMS capture on Wayland
     openFirewall = false;     # accessible via Tailscale (trusted interface)
     settings = {
       sunshine_name = constants.host.name;
       port = constants.services.sunshine.port;
+      output_name = 1;        # KMS monitor index: 0=DP-1 (Samsung), 1=DP-2 (ASUS PG43U)
     };
   };
 
