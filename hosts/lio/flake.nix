@@ -167,6 +167,7 @@
                 nfs-utils
                 jellyfin-media-player
                 element-desktop
+                moonlight-qt # Remote desktop client for Sunshine hosts
               ];
               services.flatpak.packages = [
                 "org.signal.Signal"

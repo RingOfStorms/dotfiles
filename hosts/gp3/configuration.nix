@@ -1,4 +1,4 @@
-{ pkgs, lib, config, ... }:
+{ pkgs, lib, config, constants, ... }:
 {
   hardware.enableAllFirmware = true;
 
@@ -120,6 +120,32 @@
   programs.gamescope = {
     enable = true;
     capSysNice = true;
+  };
+
+  # ── Sunshine (remote desktop for Moonlight clients) ─────────────────────────
+  # Streams the KDE Wayland desktop over the Tailnet.  Pair with Moonlight
+  # on any client to remote-control this box.
+  #
+  # First-time setup:
+  #   1. Open https://localhost:47990 on gp3 (or https://<gp3-tailscale-ip>:47990
+  #      from any tailnet host) to reach the Sunshine web UI.
+  #   2. Create a username / password when prompted.
+  #   3. On the client, open Moonlight → Add Host → enter gp3's Tailscale IP.
+  #   4. A PIN will appear in Moonlight — enter it in the Sunshine web UI to pair.
+  services.sunshine = {
+    enable = true;
+    autoStart = true;         # start with graphical session
+    capSysAdmin = true;       # required for DRM/KMS capture on Wayland
+    openFirewall = false;     # we only expose on the Tailscale interface below
+    settings = {
+      sunshine_name = constants.host.name;
+    };
+  };
+
+  # Only allow Sunshine ports on the Tailscale interface
+  networking.firewall.interfaces."tailscale0" = {
+    allowedTCPPorts = [ 47984 47989 47990 48010 ];
+    allowedUDPPorts = [ 47998 47999 48000 48002 48010 ];
   };
 
   environment.systemPackages = with pkgs; [
