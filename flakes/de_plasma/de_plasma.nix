@@ -60,6 +60,12 @@ in
       description = "Set an autologin user for SDDM (optional).";
     };
 
+    noScreenOff = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Prevent KDE PowerDevil from turning off the display on idle (DPMS). Useful for always-on desktops and media boxes.";
+    };
+
     gpu = {
       enable32Bit = mkOption {
         type = types.bool;
