@@ -60,6 +60,23 @@ let
       ];
       token_ttl = "1h";
     };
+    # Per-host role for gp3: same Zitadel claim as low-trust, but adds
+    # the host-gp3 policy for per-host secrets under machines/by-host/gp3/.
+    # Any device_low_trust device can *authenticate* with this role, but
+    # only gp3 is configured to use it (via openBaoRole override).
+    "auth/zitadel-jwt/role/host-gp3" = {
+      role_type = "jwt";
+      user_claim = "sub";
+      groups_claim = "flatRolesClaim";
+      bound_audiences = [ "344379162166820867" ];
+      bound_claims = { flatRolesClaim = "device_low_trust"; };
+      token_policies = [
+        "machine-base"
+        "machines-low-trust"
+        "host-gp3"
+      ];
+      token_ttl = "1h";
+    };
   };
 
   # ── Policies ─────────────────────────────────────────────────────────
@@ -89,6 +106,15 @@ let
         capabilities = ["read"]
       }
       path "kv/metadata/machines/low-trust/*" {
+        capabilities = ["list", "read"]
+      }
+    '';
+
+    host-gp3 = ''
+      path "kv/data/machines/by-host/gp3/*" {
+        capabilities = ["read"]
+      }
+      path "kv/metadata/machines/by-host/gp3/*" {
         capabilities = ["list", "read"]
       }
     '';
@@ -135,6 +161,9 @@ let
 
     # ── low-trust (gp3, joe, i001) ────────────────────────────────────
     "machines/low-trust/headscale_auth_lowtrust_2026-03-15" = {};
+
+    # ── per-host: gp3 ─────────────────────────────────────────────────
+    "machines/by-host/gp3/hass_token" = {};
   };
 
   # Normalize: fill in default fields where not specified
@@ -383,7 +412,7 @@ in
         echo "[config] Cleaning orphan KV secrets ..."
 
         # Managed prefixes — only delete under these paths
-        for prefix in "machines/high-trust" "machines/low-trust"; do
+        for prefix in "machines/high-trust" "machines/low-trust" "machines/by-host/gp3"; do
           current_keys="$(bao kv list -mount=kv -format=json "$prefix" 2>/dev/null | jq -r '.[]' || true)"
           for key in $current_keys; do
             full_path="$prefix/$key"
