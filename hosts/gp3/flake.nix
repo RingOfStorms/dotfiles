@@ -103,6 +103,14 @@
           ./hardware-configuration.nix
           (import ./impermanence.nix { inherit primaryUser; })
           ./configuration.nix
+          ./battery-manager.nix
+
+          # Override vault-agent role to host-gp3 so it gets the per-host
+          # policy (host-gp3) on top of the shared machines-low-trust policy.
+          # secretsRole stays "machines-lowtrust" for mkAutoSecrets compatibility.
+          ({ lib, ... }: {
+            ringofstorms.secretsBao.openBaoRole = lib.mkForce "host-gp3";
+          })
 
           # Host-specific config
           ({ pkgs, ... }: {
