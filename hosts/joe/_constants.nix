@@ -22,7 +22,10 @@
       port = 25565;
     };
     sunshine = {
-      port = 47989; # base port; web UI at +1 (47990)
+      port = 47989;
+      webUiPort = 47990;
+      tcpPorts = [ 47984 47989 47990 48010 ];
+      udpPorts = [ 47998 47999 48000 48002 48010 ];
     };
     homepage = {
       port = 8082;
