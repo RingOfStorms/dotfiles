@@ -16,8 +16,7 @@
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
     # de_plasma.url = "path:../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
-    # opencode.url = "path:../../flakes/opencode";
-    opencode.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/opencode";
+    opencode.url = "github:anomalyco/opencode/0dcdf5f529dced23d8452c9aa5f166abb24d8f7c";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
@@ -37,6 +36,13 @@
         inherit inputs constants;
         nixpkgsUnstable = nixpkgs-unstable;
         secretsRole = "machines-hightrust";
+        extraGroups = [
+          "wheel"
+          "networkmanager"
+          "video"
+          "input"
+          "gamemode"
+        ];
 
         hmModules = [
           inputs.common.homeManagerModules.kitty
@@ -55,15 +61,17 @@
 
           inputs.ros_neovim.nixosModules.default
           ({ ringofstorms-nvim.includeAllRuntimeDependencies = true; })
-          inputs.opencode.nixosModules.default
 
           (
-            { lib, ... }:
+            { pkgs, ... }:
             {
+              environment.systemPackages = [
+                inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default
+              ];
               environment.shellAliases = {
-                # open code (mkForce to override the alias from opencode flake module)
-                "oc" = lib.mkForce "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile oc -- opencode";
-                "occ" = lib.mkForce "oc -c";
+                # open code
+                "oc" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile oc -- opencode";
+                "occ" = "oc -c";
               };
             }
           )
@@ -105,6 +113,7 @@
             environment.systemPackages = with pkgs; [
               lua qdirstat ffmpeg-full vlc google-chrome
               ladybird nodejs_24 ttyd appimage-run
+              moonlight-qt # Remote desktop client for Sunshine hosts
             ];
             services.flatpak.packages = [
               "org.signal.Signal"

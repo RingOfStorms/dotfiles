@@ -2,6 +2,7 @@
   pkgs,
   lib,
   config,
+  constants,
   ...
 }:
 {
@@ -26,6 +27,14 @@
   # Allow emulation of aarch64-linux binaries for cross compiling
   boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
 
+  # ── Virtual input device access (uinput) ───────────────────────────────────
+  # Steam creates virtual input devices via /dev/uinput to forward client
+  # keyboard/mouse/gamepad input. Grant group-level access so the logged-in
+  # user can create virtual devices without root.
+  services.udev.extraRules = ''
+    KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0660", GROUP="input"
+  '';
+
   # ── Steam ──────────────────────────────────────────────────────────────────
   programs.steam = {
     enable = true;
@@ -34,8 +43,73 @@
     localNetworkGameTransfers.openFirewall = true;
     gamescopeSession.enable = true;
     protontricks.enable = true;
+    # Translate X11 XTEST calls to uinput events on Wayland -- needed for
+    # Steam Remote Play keyboard/mouse input injection via XWayland
+    extest.enable = true;
     extraCompatPackages = with pkgs; [
       proton-ge-bin
     ];
+  };
+
+  # ── Gaming utilities ───────────────────────────────────────────────────────
+  programs.gamemode = {
+    enable = true;
+    enableRenice = true;
+    settings = {
+      general = {
+        renice = 10;
+      };
+      custom = {
+        start = "${lib.getExe pkgs.libnotify} 'GameMode started'";
+        end = "${lib.getExe pkgs.libnotify} 'GameMode ended'";
+      };
+    };
+  };
+
+  programs.gamescope = {
+    enable = true;
+    capSysNice = true; # Allow gamescope to set real-time scheduling
+  };
+
+  # ── Sunshine (remote desktop for Moonlight clients) ─────────────────────────
+  # Streams the KDE Wayland desktop over the Tailnet.  Pair with Moonlight
+  # on any client to remote-control this box.
+  #
+  # First-time setup:
+  #   1. Open https://localhost:47990 on oren (or https://<oren-tailscale-ip>:47990
+  #      from any tailnet host) to reach the Sunshine web UI.
+  #   2. Create a username / password when prompted.
+  #   3. On the client, open Moonlight → Add Host → enter oren's Tailscale IP.
+  #   4. A PIN will appear in Moonlight — enter it in the Sunshine web UI to pair.
+  services.sunshine = {
+    enable = true;
+    autoStart = true;         # start with graphical session
+    capSysAdmin = true;       # required for DRM/KMS capture on Wayland
+    openFirewall = false;     # accessible via Tailscale (trusted interface)
+    settings = {
+      sunshine_name = constants.host.name;
+      port = constants.services.sunshine.port;
+    };
+  };
+
+  environment.systemPackages = with pkgs; [
+    mangohud     # Performance overlay (MANGOHUD=1 %command% or mangohud %command%)
+    protonup-qt  # GUI for managing custom Proton versions
+    vulkan-tools # vulkaninfo for diagnostics
+    steam-run
+  ];
+
+  # ── Gaming environment variables ───────────────────────────────────────────
+  environment.sessionVariables = {
+    # VKD3D-Proton: prevent swapchain starvation in DX12 games
+    VKD3D_SWAPCHAIN_LATENCY_FRAMES = "3";
+    # Gamescope WSI Vulkan layer
+    ENABLE_GAMESCOPE_WSI = "1";
+    # Mesa multi-threading
+    mesa_glthread = "true";
+    # Don't minimize fullscreen games on focus loss
+    SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS = "0";
+    # Xwayland: don't wait for idle buffers before sending to gamescope
+    vk_xwayland_wait_ready = "false";
   };
 }
