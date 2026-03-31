@@ -40,13 +40,29 @@ in
     ];
   };
 
+  # Explicit oneshot to guarantee the tun module is loaded before tailscaled.
+  # Using dev-net-tun.device directly is racy -- the udev device unit may not
+  # be registered by the time tailscaled starts, causing a hard failure.
+  # modprobe is idempotent so this is safe even when the module is already loaded.
+  systemd.services.ensure-tun = {
+    description = "Ensure tun module is loaded";
+    wantedBy = [ "tailscaled.service" ];
+    before = [ "tailscaled.service" ];
+    after = [ "systemd-modules-load.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${pkgs.kmod}/bin/modprobe tun";
+    };
+  };
+
   systemd.services.tailscaled = {
     after = [
       "systemd-modules-load.service"
-      "dev-net-tun.device"
+      "ensure-tun.service"
     ];
-    wants = [ "dev-net-tun.device" ];
-    requires = [ "dev-net-tun.device" ];
+    wants = [ "ensure-tun.service" ];
+    requires = [ "ensure-tun.service" ];
   };
 
   networking.firewall.trustedInterfaces = [ config.services.tailscale.interfaceName ];

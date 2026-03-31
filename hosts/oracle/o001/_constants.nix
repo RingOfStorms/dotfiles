@@ -6,8 +6,6 @@
     overlayIp = "100.64.0.11";
     primaryUser = "root";
     stateVersion = "23.11";
-    domain = "joshuabell.xyz";
-    acmeEmail = "admin@joshuabell.xyz";
   };
 
   # The Tailscale IP of h001, used by nginx to proxy most services

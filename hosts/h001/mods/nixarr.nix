@@ -2,6 +2,7 @@
   config,
   lib,
   constants,
+  fleet,
   ...
 }:
 let
@@ -54,8 +55,8 @@ in
       virtualHosts = {
         "${c.jellyfinDomain}" = {
           addSSL = true;
-          sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
-          sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
+          sslCertificate = "/var/lib/acme/${fleet.global.domain}/fullchain.pem";
+          sslCertificateKey = "/var/lib/acme/${fleet.global.domain}/key.pem";
           locations."/" = {
             proxyWebsockets = true;
             proxyPass = "http://localhost:${toString c.jellyfinPort}";
@@ -63,8 +64,8 @@ in
         };
         "${c.jellyseerrDomain}" = {
           addSSL = true;
-          sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
-          sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
+          sslCertificate = "/var/lib/acme/${fleet.global.domain}/fullchain.pem";
+          sslCertificateKey = "/var/lib/acme/${fleet.global.domain}/key.pem";
           locations."/" = {
             proxyWebsockets = true;
             proxyPass = "http://localhost:${toString c.jellyseerrPort}";

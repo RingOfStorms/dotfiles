@@ -1,11 +1,34 @@
-{ pkgs, lib, config, ... }:
+{ pkgs, lib, config, constants, ... }:
 {
   hardware.enableAllFirmware = true;
 
   # Connectivity
   networking.networkmanager.enable = true;
   services.resolved.enable = true;
-  hardware.bluetooth.enable = true;
+
+  # ── Bluetooth (Switch Pro Controllers) ─────────────────────────────────────
+  hardware.bluetooth = {
+    enable = true;
+    # Power the adapter on at boot so controllers can reconnect automatically
+    powerOnBoot = true;
+    settings = {
+      General = {
+        # Reduce idle disconnect timeout (default 0 = use kernel default which
+        # can be aggressive). 0 here means "never idle-disconnect".
+        IdleTimeout = 0;
+        # Allow the adapter to be discoverable immediately after boot so
+        # controllers that were previously paired can reconnect faster.
+        FastConnectable = true;
+        # Experimental D-Bus interfaces improve battery reporting and
+        # reconnection behavior for game controllers.
+        Experimental = true;
+      };
+      Policy = {
+        # Automatically re-connect to previously paired devices (controllers)
+        AutoEnable = true;
+      };
+    };
+  };
 
   # ── GPD Pocket 3 display ───────────────────────────────────────────────────
   # The GPD Pocket 3 uses a tablet display mounted rotated 90 degrees.
@@ -14,6 +37,15 @@
     "fbcon=rotate:1"
     "mem_sleep_default=s2idle"
   ];
+
+  # ── HDMI ARC audio (TV → soundbar passthrough) ─────────────────────────────
+  # The Intel HDA codec power-saves aggressively, suspending the HDMI audio
+  # sink after a few seconds of silence. When ARC wakes it back up, the
+  # re-negotiation produces audible static/pops. Disabling power_save keeps
+  # the codec active so the ARC link stays clean.
+  boot.extraModprobeConfig = ''
+    options snd_hda_intel power_save=0
+  '';
 
   # Large console font for the small panel
   console.font = "${pkgs.terminus_font}/share/consolefonts/ter-132n.psf.gz";
@@ -29,6 +61,15 @@
   services.fstrim.enable = true;
   services.libinput.enable = true;
 
+  # ── Virtual input device access (uinput) ───────────────────────────────────
+  # Sunshine and Steam create virtual input devices via /dev/uinput to forward
+  # client keyboard/mouse/gamepad input. Default permissions are 0660 root:root
+  # — grant the input group write access so the logged-in user can create
+  # virtual devices without root.
+  services.udev.extraRules = ''
+    KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0660", GROUP="input"
+  '';
+
   # ── Battery ────────────────────────────────────────────────────────────────
   # NOTE: The GPD Pocket 3 does NOT support software-controlled battery charge
   # thresholds on Linux. The embedded controller firmware does not expose
@@ -42,7 +83,36 @@
   #
   # TLP is still useful for CPU power management even without battery thresholds.
   services.power-profiles-daemon.enable = false;
-  services.tlp.enable = true;
+  services.tlp = {
+    enable = true;
+    settings = {
+      # Prevent TLP from re-enabling audio codec power save (which would
+      # override our snd_hda_intel.power_save=0 and cause HDMI ARC static).
+      SOUND_POWER_SAVE_ON_AC = 0;
+      SOUND_POWER_SAVE_ON_BAT = 0;
+      # Prevent TLP from autosuspending the Bluetooth adapter, which drops
+      # controller connections. Exclude btusb from USB autosuspend.
+      USB_AUTOSUSPEND = 1;
+      USB_EXCLUDE_BTUSB = 1;
+    };
+  };
+
+  # ── PipeWire: keep HDMI sink alive ─────────────────────────────────────────
+  # By default PipeWire suspends idle audio nodes after a timeout.  When the
+  # node resumes, the HDMI ARC link re-negotiates and produces static.
+  # session.suspend-timeout-seconds = 0 disables this.
+  services.pipewire.wireplumber.extraConfig."10-disable-suspend" = {
+    "monitor.alsa.rules" = [
+      {
+        matches = [
+          { "node.name" = "~alsa_output.pci-.*hdmi.*"; }
+        ];
+        actions.update-props = {
+          "session.suspend-timeout-seconds" = 0;
+        };
+      }
+    ];
+  };
 
   # ── Steam (Remote Play client + local games) ───────────────────────────────
   programs.steam = {
@@ -59,6 +129,27 @@
   programs.gamescope = {
     enable = true;
     capSysNice = true;
+  };
+
+  # ── Sunshine (remote desktop for Moonlight clients) ─────────────────────────
+  # Streams the KDE Wayland desktop over the Tailnet.  Pair with Moonlight
+  # on any client to remote-control this box.
+  #
+  # First-time setup:
+  #   1. Open https://localhost:47990 on gp3 (or https://<gp3-tailscale-ip>:47990
+  #      from any tailnet host) to reach the Sunshine web UI.
+  #   2. Create a username / password when prompted.
+  #   3. On the client, open Moonlight → Add Host → enter gp3's Tailscale IP.
+  #   4. A PIN will appear in Moonlight — enter it in the Sunshine web UI to pair.
+  services.sunshine = {
+    enable = true;
+    autoStart = true;         # start with graphical session
+    capSysAdmin = true;       # required for DRM/KMS capture on Wayland
+    openFirewall = false;     # accessible via Tailscale (trusted interface)
+    settings = {
+      sunshine_name = constants.host.name;
+      port = constants.services.sunshine.port;
+    };
   };
 
   environment.systemPackages = with pkgs; [

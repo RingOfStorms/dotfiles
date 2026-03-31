@@ -3,6 +3,7 @@
   config,
   lib,
   inputs,
+  fleet,
   ...
 }:
 let
@@ -97,8 +98,8 @@ in
   config = {
     services.nginx.virtualHosts."${domain}" = {
       addSSL = true;
-      sslCertificate = "/var/lib/acme/joshuabell.xyz/fullchain.pem";
-      sslCertificateKey = "/var/lib/acme/joshuabell.xyz/key.pem";
+      sslCertificate = "/var/lib/acme/${fleet.global.domain}/fullchain.pem";
+      sslCertificateKey = "/var/lib/acme/${fleet.global.domain}/key.pem";
       extraConfig = ''
         client_max_body_size 50G;
         proxy_read_timeout 600s;

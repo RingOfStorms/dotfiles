@@ -34,7 +34,13 @@
         authMethod = "hashedPassword";
         authValue = "$y$j9T$HcgOlwo3O7syvUsSQsuyi.$DSe1Cvg.3mtufGxDCmMiJ80uQpAwxjRmdA4EXi9GoF6";
         mutableUsers = false;
-        extraGroups = [ "wheel" "networkmanager" "video" "input" "gamemode" ];
+        extraGroups = [
+          "wheel"
+          "networkmanager"
+          "video"
+          "input"
+          "gamemode"
+        ];
 
         hmModules = [
           inputs.common.homeManagerModules.kitty
@@ -42,15 +48,18 @@
           inputs.common.homeManagerModules.launcher_rofi
           inputs.common.homeManagerModules.slicer
           # Autostart Steam minimized to tray on login
-          ({ ... }: {
-            xdg.configFile."autostart/steam.desktop".text = ''
-              [Desktop Entry]
-              Type=Application
-              Name=Steam
-              Exec=steam -silent
-              X-KDE-autostart-phase=2
-            '';
-          })
+          (
+            { ... }:
+            {
+              xdg.configFile."autostart/steam.desktop".text = ''
+                [Desktop Entry]
+                Type=Application
+                Name=Steam
+                Exec=steam -silent
+                X-KDE-autostart-phase=2
+              '';
+            }
+          )
         ];
 
         nixosModules = [
@@ -77,6 +86,7 @@
                 enable = true;
                 open = false; # Proprietary -- open modules caused device creation failures in DXVK/VKD3D-Proton
               };
+              noScreenOff = true;
               sddm.autologinUser = primaryUser;
               wallpapers = [
                 ../../hosts/_shared_assets/wallpapers/pixel_cat_garage.png
@@ -101,6 +111,7 @@
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.more_filesystems
           inputs.common.nixosModules.tailnet
+          inputs.common.nixosModules.podman
 
           # TODO beszel agent -- needs overlay IP assigned first
           # beszel.nixosModules.agent
@@ -115,20 +126,35 @@
 
           ./configuration.nix
           ./hardware-configuration.nix
+          ./nixld.nix
           ./ollama.nix
+          ./kokoro-tts.nix
+          ./forge.nix
+          ./minecraft.nix
+          ./homepage-dashboard.nix
+          ./nginx.nix
           (import ./impermanence.nix { inherit primaryUser; })
 
           # Host-specific config
-          ({ pkgs, ... }: {
-            environment.systemPackages = with pkgs; [
-              google-chrome vlc jellyfin-media-player ffmpeg-full ttyd
-            ];
-            services.flatpak.packages = [
-              "com.spotify.Client"
-              "com.bitwarden.desktop"
-              "dev.vencord.Vesktop"
-            ];
-          })
+          (
+            { pkgs, ... }:
+            {
+              environment.systemPackages = with pkgs; [
+                google-chrome
+                qdirstat
+                vlc
+                jellyfin-media-player
+                ffmpeg-full
+                ttyd
+                steam-run
+              ];
+              services.flatpak.packages = [
+                "com.spotify.Client"
+                "com.bitwarden.desktop"
+                "dev.vencord.Vesktop"
+              ];
+            }
+          )
         ];
       };
     };

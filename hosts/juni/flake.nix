@@ -104,26 +104,6 @@
             };
           })
 
-          # Ensure tun module loads before tailscaled on Framework
-          ({ pkgs, lib, ... }: {
-            systemd.services.ensure-tun = {
-              description = "Ensure tun module is loaded";
-              wantedBy = [ "tailscaled.service" ];
-              before = [ "tailscaled.service" ];
-              after = [ "systemd-modules-load.service" ];
-              serviceConfig = {
-                Type = "oneshot";
-                RemainAfterExit = true;
-                ExecStart = "${pkgs.kmod}/bin/modprobe tun";
-              };
-            };
-            systemd.services.tailscaled = {
-              after = lib.mkAfter [ "ensure-tun.service" ];
-              wants = lib.mkAfter [ "ensure-tun.service" ];
-              requires = lib.mkAfter [ "ensure-tun.service" ];
-            };
-          })
-
           inputs.beszel.nixosModules.agent
           ({ beszelAgent.token = "2fb5f0a0-24aa-4044-a893-6d0f916cd063"; })
 

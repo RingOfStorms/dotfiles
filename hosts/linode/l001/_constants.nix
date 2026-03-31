@@ -5,8 +5,6 @@
     name = "l001";
     primaryUser = "root";
     stateVersion = "24.11";
-    domain = "joshuabell.xyz";
-    acmeEmail = "admin@joshuabell.xyz";
   };
 
   services = {

@@ -2,10 +2,12 @@
   config,
   lib,
   constants,
+  fleet,
   ...
 }:
 let
   c = constants.host;
+  domain = fleet.global.domain;
   homepagePort = constants.services.homepage.port;
   homepage = {
     proxyWebsockets = true;
@@ -17,10 +19,10 @@ in
   # Will I ever get rate limited by lets encrypt with both doing their own?
   security.acme = {
     acceptTerms = true;
-    defaults.email = c.acmeEmail;
-    certs."${c.domain}" = {
-      domain = c.domain;
-      extraDomainNames = [ "*.${c.domain}" ];
+    defaults.email = fleet.global.acmeEmail;
+    certs."${domain}" = {
+      inherit domain;
+      extraDomainNames = [ "*.${domain}" ];
       # credentialFiles.LINODE_TOKEN_FILE injected via secrets-bao configChanges
       dnsProvider = "linode";
       group = "nginx";
@@ -44,21 +46,21 @@ in
       "${c.lanIp}" = {
         locations = {
           "/" = {
-            return = "301 http://h001.local.${c.domain}";
+            return = "301 http://h001.local.${domain}";
           };
         };
       };
-      "h001.local.${c.domain}" = {
+      "h001.local.${domain}" = {
         locations = {
           "/" = homepage;
         };
       };
       "${c.overlayIp}" = {
         locations."/" = {
-          return = "301 http://h001.net.${c.domain}";
+          return = "301 http://h001.net.${domain}";
         };
       };
-      "h001.net.${c.domain}" = {
+      "h001.net.${domain}" = {
         locations = {
           "/" = homepage;
         };

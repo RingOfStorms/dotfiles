@@ -3,11 +3,11 @@
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1773780913,
-        "narHash": "sha256-BxRYMhpT7hZ/CKrjSa5sKD/qIhU5hjS3WiBCQGknnJA=",
+        "lastModified": 1774884765,
+        "narHash": "sha256-egD0BerySV78qeZbeXcdyNyBcgt9mIt8tGkNqrn5w0g=",
         "ref": "refs/heads/master",
-        "rev": "d452ea55d5e31b48e2b148944084b4b05e43e3cc",
-        "revCount": 1398,
+        "rev": "6b88bd3b7df176280184328e193e63269e29e0e4",
+        "revCount": 1468,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -23,11 +23,11 @@
       },
       "locked": {
         "dir": "flakes/de_plasma",
-        "lastModified": 1773756407,
-        "narHash": "sha256-7u6f+l05cG+OAHrMbbaQF/76aOudMqg471yH/39I/yg=",
+        "lastModified": 1774883520,
+        "narHash": "sha256-w67rf3YLb7GmIKoDWv7SXX7fCTNYmMirbxTwDCtwQzc=",
         "ref": "refs/heads/master",
-        "rev": "ee7339fca4b68063e6d3ee1c8d92e23108ca4653",
-        "revCount": 1392,
+        "rev": "a35538bc81deebe2f1e1a0b9fc6f6cc2a8d4e148",
+        "revCount": 1466,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -1145,11 +1145,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1770766818,
-        "narHash": "sha256-12RCFLyAedyMOdenUi7cN3ioJPEGjA/ZG1BLjugfUVs=",
+        "lastModified": 1772361940,
+        "narHash": "sha256-B1Cz+ydL1iaOnGlwOFld/C8lBECPtzhiy/pP93/CuyY=",
         "owner": "nix-community",
         "repo": "plasma-manager",
-        "rev": "44b928068359b7d2310a34de39555c63c93a2c90",
+        "rev": "a4b33606111c9c5dcd10009042bb710307174f51",
         "type": "github"
       },
       "original": {

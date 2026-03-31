@@ -43,6 +43,15 @@
       # Ollama model storage and state
       "/var/lib/ollama"
 
+      # Kokoro TTS model cache and custom voice packs
+      "/var/lib/kokoro-tts"
+
+      # Forge workspace, models, and generated images
+      "/var/lib/forge"
+
+      # Minecraft server world data, config, and state
+      "/var/lib/minecraft"
+
       # Flatpak (system-wide installs and runtime data)
       "/var/lib/flatpak"
     ];
@@ -105,6 +114,12 @@
         # Jellyfin Media Player (server list, login, settings)
         ".local/share/jellyfin-desktop"
         ".config/jellyfinmediaplayer"
+
+        # Sunshine remote desktop (pairing keys, credentials, config)
+        ".config/sunshine"
+
+        # Prismlauncher (Minecraft instances, mods, accounts, settings)
+        ".local/share/PrismLauncher"
 
         # Flatpak (user installs and app data)
         ".local/share/flatpak"

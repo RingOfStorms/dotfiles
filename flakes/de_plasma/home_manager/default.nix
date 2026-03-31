@@ -234,6 +234,8 @@ in
           powerButtonAction = "turnOffScreen";
           powerProfile = "performance";
           whenLaptopLidClosed = "turnOffScreen";
+        } // lib.optionalAttrs cfg.noScreenOff {
+          turnOffDisplay.idleTimeout = "never";
         };
         battery = {
           autoSuspend.action = "nothing";
@@ -243,6 +245,8 @@ in
           powerButtonAction = "turnOffScreen";
           powerProfile = "balanced";
           whenLaptopLidClosed = "sleep";
+        } // lib.optionalAttrs cfg.noScreenOff {
+          turnOffDisplay.idleTimeout = "never";
         };
         batteryLevels = {
           criticalAction = "shutDown";

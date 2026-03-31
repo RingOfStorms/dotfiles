@@ -74,11 +74,11 @@
       },
       "locked": {
         "dir": "flakes/de_plasma",
-        "lastModified": 1773589413,
-        "narHash": "sha256-IjOTqvsCHqrFDC1t0YbzJHsTcTwFX8Eze88quWwerMQ=",
+        "lastModified": 1774883520,
+        "narHash": "sha256-w67rf3YLb7GmIKoDWv7SXX7fCTNYmMirbxTwDCtwQzc=",
         "ref": "refs/heads/master",
-        "rev": "fdc1c1aea545879c55e89a970f3d24ab4a76d6b7",
-        "revCount": 1357,
+        "rev": "a35538bc81deebe2f1e1a0b9fc6f6cc2a8d4e148",
+        "revCount": 1466,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -267,11 +267,11 @@
     },
     "nixpkgs_4": {
       "locked": {
-        "lastModified": 1772091128,
-        "narHash": "sha256-TnrYykX8Mf/Ugtkix6V+PjW7miU2yClA6uqWl/v6KWM=",
+        "lastModified": 1773909469,
+        "narHash": "sha256-vglVrLfHjFIzIdV9A27Ugul6rh3I1qHbbitGW7dk420=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "3f0336406035444b4a24b942788334af5f906259",
+        "rev": "7149c06513f335be57f26fcbbbe34afda923882b",
         "type": "github"
       },
       "original": {
@@ -332,11 +332,11 @@
     "nono": {
       "flake": false,
       "locked": {
-        "lastModified": 1774332003,
-        "narHash": "sha256-m88lr8nt6mgu0RrV5n66Rth9ja4Z9laut74lbXf6RJY=",
+        "lastModified": 1774451208,
+        "narHash": "sha256-OfftHO57HsDqi2E5xxeCIblMhGSTf4vFUhSRRNdrIHo=",
         "owner": "always-further",
         "repo": "nono",
-        "rev": "4a2dfb7551482b2beb16c167c6b3b25fd786e3f8",
+        "rev": "3011613cb8ed1cf2b960ac8d8d055282ef70be68",
         "type": "github"
       },
       "original": {
@@ -1198,17 +1198,17 @@
         "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1774222321,
-        "narHash": "sha256-JQsccVflS/GAjzguvZTLn7UH7tsou8yCSlaA48DVY10=",
+        "lastModified": 1774392635,
+        "narHash": "sha256-04eOIBHX9e8Brwn+uL/7q8szvRUilr4G0B8eB76dhKU=",
         "owner": "anomalyco",
         "repo": "opencode",
-        "rev": "eb3bfffad453f1c8c3f0f92bba0d8e34c83fa244",
+        "rev": "0dcdf5f529dced23d8452c9aa5f166abb24d8f7c",
         "type": "github"
       },
       "original": {
         "owner": "anomalyco",
         "repo": "opencode",
-        "rev": "eb3bfffad453f1c8c3f0f92bba0d8e34c83fa244",
+        "rev": "0dcdf5f529dced23d8452c9aa5f166abb24d8f7c",
         "type": "github"
       }
     },
@@ -1218,11 +1218,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1770766818,
-        "narHash": "sha256-12RCFLyAedyMOdenUi7cN3ioJPEGjA/ZG1BLjugfUVs=",
+        "lastModified": 1772361940,
+        "narHash": "sha256-B1Cz+ydL1iaOnGlwOFld/C8lBECPtzhiy/pP93/CuyY=",
         "owner": "nix-community",
         "repo": "plasma-manager",
-        "rev": "44b928068359b7d2310a34de39555c63c93a2c90",
+        "rev": "a4b33606111c9c5dcd10009042bb710307174f51",
         "type": "github"
       },
       "original": {

@@ -13,6 +13,10 @@ in
     package = pkgs.ollama-cuda;
     host = "0.0.0.0";
     port = c.port;
+    environmentVariables = {
+      OLLAMA_ORIGINS = "*";
+      OLLAMA_KEEP_ALIVE = "0"; # Unload models immediately after use so switching models doesn't fail on resource constraints
+    };
   };
 
   # Disable DynamicUser so /var/lib/ollama can be a direct bind mount
@@ -28,7 +32,7 @@ in
     group = "ollama";
     home = "/var/lib/ollama";
   };
-  users.groups.ollama = {};
+  users.groups.ollama = { };
 
   # Ensure models subdirectory exists before ollama starts
   # (ProtectSystem=strict + ReadWritePaths needs it to exist for mount namespacing)

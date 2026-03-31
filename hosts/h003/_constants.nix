@@ -59,6 +59,7 @@
       { mac = "38:18:68:49:3c:48"; name = "ellawork-w"; ip = "10.12.14.122"; }
       { mac = "d4:a2:cd:39:4e:f0"; name = "ellawork-e"; ip = "10.12.14.132"; }
       { mac = "00:23:a4:0b:3b:be"; name = "TMREM00004335"; ip = "10.12.14.181"; }
+      { mac = "04:0e:3c:3a:0e:d1"; name = "JOE"; ip = "10.12.14.126"; }
     ];
 
     # DNS split-horizon records (resolve to local IPs when on home network)
@@ -77,6 +78,13 @@
       dnsPort = 9053;
     };
 
+    ddns = {
+      hostname = "home";
+      domain = "joshuabell.xyz";
+      # Check interval in minutes
+      interval = 5;
+    };
+
     ups = {
       driver = "usbhid-ups";
       vendorId = "051D";
@@ -88,5 +96,9 @@
         { name = "h002"; host = "10.12.14.183"; user = "luser"; keyFile = "/var/lib/openbao-secrets/nix2nix_2026-03-15"; }
       ];
     };
+  };
+
+  secrets = {
+    linode_rw_domains_2026-03-15 = { };
   };
 }

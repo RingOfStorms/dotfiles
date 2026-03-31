@@ -1,4 +1,4 @@
-{ pkgs, lib, ... }:
+{ pkgs, lib, constants, ... }:
 {
   hardware.enableAllFirmware = true;
 
@@ -78,6 +78,36 @@
   programs.gamescope = {
     enable = true;
     capSysNice = true; # Allow gamescope to set real-time scheduling
+  };
+
+  # ── Sunshine (remote desktop for Moonlight clients) ─────────────────────────
+  # Streams the KDE Wayland desktop over the Tailnet.  Pair with Moonlight
+  # on any client to remote-control this box.
+  #
+  # First-time setup:
+  #   1. Open https://localhost:47990 on joe (or https://<joe-tailscale-ip>:47990
+  #      from any tailnet host) to reach the Sunshine web UI.
+  #   2. Create a username / password when prompted.
+  #   3. On the client, open Moonlight → Add Host → enter joe's Tailscale IP.
+  #   4. A PIN will appear in Moonlight — enter it in the Sunshine web UI to pair.
+  services.sunshine = {
+    enable = true;
+    package = pkgs.sunshine.override { cudaSupport = true; }; # NVENC stays on GPU
+    autoStart = true;         # start with graphical session
+    capSysAdmin = true;       # required for DRM/KMS capture on Wayland
+    openFirewall = false;     # accessible via Tailscale (trusted interface)
+    settings = {
+      sunshine_name = constants.host.name;
+      port = constants.services.sunshine.port;
+      output_name = "1";      # KMS monitor index: 0=DP-1 (Samsung), 1=DP-2 (ASUS PG43U)
+    };
+  };
+
+  # The capSysAdmin setcap wrapper sanitizes LD_LIBRARY_PATH, preventing
+  # Sunshine from finding libcuda.so.1 and libnvidia-encode.so.1.
+  # Inject the NVIDIA driver lib path so NVENC hardware encoding works.
+  systemd.user.services.sunshine.environment = {
+    LD_LIBRARY_PATH = "/run/opengl-driver/lib";
   };
 
   environment.systemPackages = with pkgs; [

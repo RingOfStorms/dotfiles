@@ -19,7 +19,7 @@
     # stt_ime.url = "path:../../flakes/stt_ime";
     stt_ime.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/stt_ime";
 
-    opencode.url = "github:anomalyco/opencode/eb3bfffad453f1c8c3f0f92bba0d8e34c83fa244";
+    opencode.url = "github:anomalyco/opencode/0dcdf5f529dced23d8452c9aa5f166abb24d8f7c";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
     qvm.url = "git+https://git.joshuabell.xyz/ringofstorms/qvm";
@@ -71,6 +71,7 @@
             ringofstorms.dePlasma = {
               enable = true;
               gpu.amd.enable = true;
+              noScreenOff = true;
               # TODO once encrypted boot?
               # sddm.autologinUser = "josh";
             };
@@ -167,6 +168,7 @@
                 nfs-utils
                 jellyfin-media-player
                 element-desktop
+                moonlight-qt # Remote desktop client for Sunshine hosts
               ];
               services.flatpak.packages = [
                 "org.signal.Signal"
