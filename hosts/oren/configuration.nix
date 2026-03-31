@@ -6,11 +6,6 @@
   ...
 }:
 {
-  environment.systemPackages = with pkgs; [
-    # [Laptop] Battery status
-    acpi
-    bluez # bluetoothctl command
-  ];
   hardware.enableAllFirmware = true;
   hardware.bluetooth.enable = true;
   networking.networkmanager.enable = true;
@@ -93,6 +88,11 @@
   };
 
   environment.systemPackages = with pkgs; [
+
+    # [Laptop] Battery status
+    acpi
+    bluez # bluetoothctl command
+
     mangohud     # Performance overlay (MANGOHUD=1 %command% or mangohud %command%)
     protonup-qt  # GUI for managing custom Proton versions
     vulkan-tools # vulkaninfo for diagnostics
