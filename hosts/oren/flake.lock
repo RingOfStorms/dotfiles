@@ -240,6 +240,22 @@
         "type": "github"
       }
     },
+    "nono": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1774907826,
+        "narHash": "sha256-25zOSFv/pJrqUeY1ksSfgIRRHUKq4D+0GqhNOOD3s7E=",
+        "owner": "always-further",
+        "repo": "nono",
+        "rev": "c7632025d44846e5c7a1a325ac31cf0329087fde",
+        "type": "github"
+      },
+      "original": {
+        "owner": "always-further",
+        "repo": "nono",
+        "type": "github"
+      }
+    },
     "nvim_plugin-Almo7aya/openingh.nvim": {
       "flake": false,
       "locked": {
@@ -1170,6 +1186,7 @@
         "home-manager": "home-manager_2",
         "nixpkgs": "nixpkgs_3",
         "nixpkgs-unstable": "nixpkgs-unstable",
+        "nono": "nono",
         "opencode": "opencode",
         "ros_neovim": "ros_neovim",
         "secrets-bao": "secrets-bao"

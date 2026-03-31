@@ -20,6 +20,9 @@
     opencode.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/opencode";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
+
+    nono.url = "github:always-further/nono";
+    nono.flake = false;
   };
 
   outputs =
@@ -53,6 +56,18 @@
           inputs.ros_neovim.nixosModules.default
           ({ ringofstorms-nvim.includeAllRuntimeDependencies = true; })
           inputs.opencode.nixosModules.default
+
+          (
+            { lib, ... }:
+            {
+              environment.shellAliases = {
+                # open code (mkForce to override the alias from opencode flake module)
+                "oc" = lib.mkForce "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile oc -- opencode";
+                "occ" = lib.mkForce "oc -c";
+              };
+            }
+          )
+
           inputs.flatpaks.nixosModules.default
           # hyprland.nixosModules.default
 
@@ -81,6 +96,7 @@
 
           ./configuration.nix
           ./hardware-configuration.nix
+          ./nono.nix
           # ./sway_customizations.nix
           # ./hyprland_customizations.nix
 
