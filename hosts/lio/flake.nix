@@ -139,7 +139,8 @@
               ];
               environment.shellAliases = {
                 # open code
-                "oc" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile oc -- opencode";
+                "oc" =
+                  "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /dev/null)\" --profile oc -- opencode";
                 "occ" = "oc -c";
                 # claude code
                 "cc" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile cc -- claude";
