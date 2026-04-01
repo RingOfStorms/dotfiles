@@ -13,6 +13,52 @@ let
   reservedAuthMethods = [ "token/" ]; # always exists
   builtinSecretsEngines = [ "cubbyhole/" "identity/" "sys/" ]; # always exist
 
+  # ── Per-host secret access ─────────────────────────────────────────
+  # Each entry generates:
+  #   - A policy "host-<name>" granting read to kv/machines/by-host/<name>/*
+  #   - An auth role "host-<name>" bound to the host's trust-level Zitadel claim
+  #   - An orphan-cleanup prefix for kv/machines/by-host/<name>
+  #
+  # The host must override openBaoRole in its flake.nix to use "host-<name>".
+  perHostSecrets = [
+    { name = "gp3"; trust = "low"; }
+  ];
+
+  mkHostPolicy = h: {
+    name = "host-${h.name}";
+    value = ''
+      path "kv/data/machines/by-host/${h.name}/*" {
+        capabilities = ["read"]
+      }
+      path "kv/metadata/machines/by-host/${h.name}/*" {
+        capabilities = ["list", "read"]
+      }
+    '';
+  };
+
+  mkHostAuthRole = h: {
+    name = "auth/zitadel-jwt/role/host-${h.name}";
+    value = {
+      role_type = "jwt";
+      user_claim = "sub";
+      groups_claim = "flatRolesClaim";
+      bound_audiences = [ "344379162166820867" ];
+      bound_claims = {
+        flatRolesClaim = if h.trust == "high" then "device_high_trust" else "device_low_trust";
+      };
+      token_policies = [
+        "machine-base"
+        (if h.trust == "high" then "machines-high-trust" else "machines-low-trust")
+        "host-${h.name}"
+      ];
+      token_ttl = "1h";
+    };
+  };
+
+  perHostPolicies = builtins.listToAttrs (map mkHostPolicy perHostSecrets);
+  perHostAuthRoles = builtins.listToAttrs (map mkHostAuthRole perHostSecrets);
+  perHostOrphanPrefixes = map (h: "machines/by-host/${h.name}") perHostSecrets;
+
   # ── Secrets engines to ensure exist ──────────────────────────────────
   secretsEngines = {
     "kv/" = {
@@ -60,24 +106,7 @@ let
       ];
       token_ttl = "1h";
     };
-    # Per-host role for gp3: same Zitadel claim as low-trust, but adds
-    # the host-gp3 policy for per-host secrets under machines/by-host/gp3/.
-    # Any device_low_trust device can *authenticate* with this role, but
-    # only gp3 is configured to use it (via openBaoRole override).
-    "auth/zitadel-jwt/role/host-gp3" = {
-      role_type = "jwt";
-      user_claim = "sub";
-      groups_claim = "flatRolesClaim";
-      bound_audiences = [ "344379162166820867" ];
-      bound_claims = { flatRolesClaim = "device_low_trust"; };
-      token_policies = [
-        "machine-base"
-        "machines-low-trust"
-        "host-gp3"
-      ];
-      token_ttl = "1h";
-    };
-  };
+  } // perHostAuthRoles;
 
   # ── Policies ─────────────────────────────────────────────────────────
   policies = {
@@ -99,6 +128,13 @@ let
       path "kv/metadata/machines/high-trust/*" {
         capabilities = ["list", "read"]
       }
+      # High-trust is a superset — also grants read access to low-trust secrets
+      path "kv/data/machines/low-trust/*" {
+        capabilities = ["read"]
+      }
+      path "kv/metadata/machines/low-trust/*" {
+        capabilities = ["list", "read"]
+      }
     '';
 
     machines-low-trust = ''
@@ -109,16 +145,7 @@ let
         capabilities = ["list", "read"]
       }
     '';
-
-    host-gp3 = ''
-      path "kv/data/machines/by-host/gp3/*" {
-        capabilities = ["read"]
-      }
-      path "kv/metadata/machines/by-host/gp3/*" {
-        capabilities = ["list", "read"]
-      }
-    '';
-  };
+  } // perHostPolicies;
 
   # ── KV secrets registry ───────────────────────────────────────────────
   # Declarative list of every KV secret that should exist.
@@ -161,6 +188,10 @@ let
 
     # ── low-trust (gp3, joe, i001) ────────────────────────────────────
     "machines/low-trust/headscale_auth_lowtrust_2026-03-15" = {};
+
+    # ── low-trust: shared service secrets ─────────────────────────────
+    "machines/low-trust/rustdesk_server_key" = {};
+    "machines/low-trust/rustdesk_password" = {};
 
     # ── per-host: gp3 ─────────────────────────────────────────────────
     "machines/by-host/gp3/hass_token" = {};
@@ -412,7 +443,7 @@ in
         echo "[config] Cleaning orphan KV secrets ..."
 
         # Managed prefixes — only delete under these paths
-        for prefix in "machines/high-trust" "machines/low-trust" "machines/by-host/gp3"; do
+        for prefix in "machines/high-trust" "machines/low-trust" ${lib.concatMapStringsSep " " (p: ''"${p}"'') perHostOrphanPrefixes}; do
           current_keys="$(bao kv list -mount=kv -format=json "$prefix" 2>/dev/null | jq -r '.[]' || true)"
           for key in $current_keys; do
             full_path="$prefix/$key"

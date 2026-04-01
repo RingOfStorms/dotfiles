@@ -4,15 +4,15 @@
 # systemd service for unattended access, and optionally sets a permanent
 # password + client ID via an activation script.
 #
-# The server public key and permanent password should come from secrets-bao.
+# The server public key and permanent password come from secrets-bao.
 # Add entries to the host's _constants.nix secrets block:
 #
 #   "rustdesk_server_key" = {
-#     kvPath = "kv/data/machines/<trust>/rustdesk_server_key";
+#     kvPath = "kv/data/machines/low-trust/rustdesk_server_key";
 #     softDepend = [ "rustdesk" ];
 #   };
 #   "rustdesk_password" = {
-#     kvPath = "kv/data/machines/by-host/<hostname>/rustdesk_password";
+#     kvPath = "kv/data/machines/low-trust/rustdesk_password";
 #     softDepend = [ "rustdesk" ];
 #   };
 #
