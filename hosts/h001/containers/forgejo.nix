@@ -168,6 +168,7 @@ in
 
         services.forgejo = {
           enable = true;
+          package = pkgs.forgejo;
           dump = {
             enable = false;
             type = "tar.gz";
