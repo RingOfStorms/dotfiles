@@ -21,7 +21,7 @@
     # ports.url = "path:../../flakes/ports";
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
 
-    opencode.url = "github:anomalyco/opencode/0dcdf5f529dced23d8452c9aa5f166abb24d8f7c";
+    opencode.url = "github:anomalyco/opencode/f9e71ec51569359ddba1c84ef2bdfddfd3b072d1";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
     qvm.url = "git+https://git.joshuabell.xyz/ringofstorms/qvm";
@@ -140,7 +140,7 @@
               environment.shellAliases = {
                 # open code
                 "oc" =
-                  "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /dev/null)\" --profile oc -- opencode";
+                  "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\" --profile oc -- opencode";
                 "occ" = "oc -c";
                 # claude code
                 "cc" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile cc -- claude";
