@@ -94,6 +94,17 @@
           inputs.common.nixosModules.more_filesystems
           inputs.common.nixosModules.remote_lio_builds
 
+          inputs.common.nixosModules.rustdesk
+          ({
+            ringofstorms.rustdesk = {
+              enable = true;
+              server = "o001";
+              serverKeyFile = "/var/lib/openbao-secrets/rustdesk_server_key";
+              passwordFile = "/var/lib/openbao-secrets/rustdesk_password";
+              user = constants.host.primaryUser;
+            };
+          })
+
           inputs.beszel.nixosModules.agent
           ({
             beszelAgent = {
