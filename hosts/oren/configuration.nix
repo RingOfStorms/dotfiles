@@ -2,7 +2,6 @@
   pkgs,
   lib,
   config,
-  constants,
   ...
 }:
 {
@@ -64,27 +63,6 @@
   programs.gamescope = {
     enable = true;
     capSysNice = true; # Allow gamescope to set real-time scheduling
-  };
-
-  # ── Sunshine (remote desktop for Moonlight clients) ─────────────────────────
-  # Streams the KDE Wayland desktop over the Tailnet.  Pair with Moonlight
-  # on any client to remote-control this box.
-  #
-  # First-time setup:
-  #   1. Open https://localhost:47990 on oren (or https://<oren-tailscale-ip>:47990
-  #      from any tailnet host) to reach the Sunshine web UI.
-  #   2. Create a username / password when prompted.
-  #   3. On the client, open Moonlight → Add Host → enter oren's Tailscale IP.
-  #   4. A PIN will appear in Moonlight — enter it in the Sunshine web UI to pair.
-  services.sunshine = {
-    enable = true;
-    autoStart = true;         # start with graphical session
-    capSysAdmin = true;       # required for DRM/KMS capture on Wayland
-    openFirewall = false;     # accessible via Tailscale (trusted interface)
-    settings = {
-      sunshine_name = constants.host.name;
-      port = constants.services.sunshine.port;
-    };
   };
 
   environment.systemPackages = with pkgs; [

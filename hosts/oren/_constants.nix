@@ -1,5 +1,3 @@
-# Service constants for oren (Framework Laptop)
-# Primarily a desktop/dev machine. Minimal services.
 {
   host = {
     name = "oren";
@@ -8,9 +6,5 @@
     stateVersion = "25.05";
   };
 
-  services = {
-    sunshine = {
-      port = 47989; # base port; web UI at +1 (47990)
-    };
-  };
+  services = { };
 }
