@@ -59,13 +59,6 @@ in
       {
         "${section2}" = [
           {
-            "Sunshine" = {
-              description = "Remote Desktop (Moonlight)";
-              href = "https://localhost:${toString s.sunshine.webUiPort}";
-              icon = "mdi-remote-desktop";
-            };
-          }
-          {
             "Minecraft" = {
               description = "Server (port ${toString s.minecraft.port}) — no web UI";
               icon = "minecraft";
