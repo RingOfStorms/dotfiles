@@ -113,7 +113,6 @@
             environment.systemPackages = with pkgs; [
               lua qdirstat ffmpeg-full vlc google-chrome
               ladybird nodejs_24 ttyd appimage-run
-              moonlight-qt # Remote desktop client for Sunshine hosts
             ];
             services.flatpak.packages = [
               "org.signal.Signal"
@@ -123,7 +122,6 @@
               "com.bitwarden.desktop"
               "org.openscad.OpenSCAD"
               "im.riot.Riot"
-              "com.rustdesk.RustDesk"
             ];
             services.devmon.enable = true;
             services.gvfs.enable = true;

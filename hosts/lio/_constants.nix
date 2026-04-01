@@ -14,4 +14,16 @@
       secretKeyFile = "/var/lib/nix-serve/cache-priv-key.pem";
     };
   };
+
+  # ── Per-host secrets (merged with mkAutoSecrets in fleet.mkHost) ────
+  secrets = {
+    "rustdesk_server_key" = {
+      kvPath = "kv/data/machines/low-trust/rustdesk_server_key";
+      softDepend = [ "rustdesk" ];
+    };
+    "rustdesk_password" = {
+      kvPath = "kv/data/machines/low-trust/rustdesk_password";
+      softDepend = [ "rustdesk" ];
+    };
+  };
 }

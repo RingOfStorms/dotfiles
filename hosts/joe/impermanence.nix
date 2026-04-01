@@ -115,8 +115,8 @@
         ".local/share/jellyfin-desktop"
         ".config/jellyfinmediaplayer"
 
-        # Sunshine remote desktop (pairing keys, credentials, config)
-        ".config/sunshine"
+        # RustDesk remote desktop (keypair, config, hashed password)
+        ".config/rustdesk"
 
         # Prismlauncher (Minecraft instances, mods, accounts, settings)
         ".local/share/PrismLauncher"

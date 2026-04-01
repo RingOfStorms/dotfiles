@@ -18,6 +18,8 @@
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     # stt_ime.url = "path:../../flakes/stt_ime";
     stt_ime.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/stt_ime";
+    # ports.url = "path:../../flakes/ports";
+    ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
 
     opencode.url = "github:anomalyco/opencode/0dcdf5f529dced23d8452c9aa5f166abb24d8f7c";
 
@@ -85,6 +87,8 @@
               model = "large";
             };
           })
+          inputs.ports.nixosModules.default
+          ({ ringofstorms.ports.enable = true; })
 
           inputs.ros_neovim.nixosModules.default
           ({ ringofstorms-nvim.includeAllRuntimeDependencies = true; })
@@ -112,6 +116,17 @@
           inputs.common.nixosModules.tty_caps_esc
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.more_filesystems
+
+          inputs.common.nixosModules.rustdesk
+          ({
+            ringofstorms.rustdesk = {
+              enable = true;
+              server = "o001";
+              serverKeyFile = "/var/lib/openbao-secrets/rustdesk_server_key";
+              passwordFile = "/var/lib/openbao-secrets/rustdesk_password";
+              user = primaryUser;
+            };
+          })
 
           (
             { pkgs, ... }:
@@ -168,7 +183,6 @@
                 nfs-utils
                 jellyfin-media-player
                 element-desktop
-                moonlight-qt # Remote desktop client for Sunshine hosts
               ];
               services.flatpak.packages = [
                 "org.signal.Signal"

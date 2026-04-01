@@ -19,17 +19,21 @@
     checkIntervalMin = 5;
   };
 
-  services = {
-    sunshine = {
-      port = 47989; # base port; web UI at +1 (47990)
-    };
-  };
+  services = { };
 
   # ── Per-host secrets (merged with mkAutoSecrets in fleet.mkHost) ────
   secrets = {
     "hass_token" = {
       kvPath = "kv/data/machines/by-host/gp3/hass_token";
       softDepend = [ "battery-manager" ];
+    };
+    "rustdesk_server_key" = {
+      kvPath = "kv/data/machines/low-trust/rustdesk_server_key";
+      softDepend = [ "rustdesk" ];
+    };
+    "rustdesk_password" = {
+      kvPath = "kv/data/machines/low-trust/rustdesk_password";
+      softDepend = [ "rustdesk" ];
     };
   };
 }

@@ -1,4 +1,4 @@
-{ pkgs, lib, config, constants, ... }:
+{ pkgs, lib, config, ... }:
 {
   hardware.enableAllFirmware = true;
 
@@ -62,7 +62,7 @@
   services.libinput.enable = true;
 
   # ── Virtual input device access (uinput) ───────────────────────────────────
-  # Sunshine and Steam create virtual input devices via /dev/uinput to forward
+  # Steam creates virtual input devices via /dev/uinput to forward
   # client keyboard/mouse/gamepad input. Default permissions are 0660 root:root
   # — grant the input group write access so the logged-in user can create
   # virtual devices without root.
@@ -129,27 +129,6 @@
   programs.gamescope = {
     enable = true;
     capSysNice = true;
-  };
-
-  # ── Sunshine (remote desktop for Moonlight clients) ─────────────────────────
-  # Streams the KDE Wayland desktop over the Tailnet.  Pair with Moonlight
-  # on any client to remote-control this box.
-  #
-  # First-time setup:
-  #   1. Open https://localhost:47990 on gp3 (or https://<gp3-tailscale-ip>:47990
-  #      from any tailnet host) to reach the Sunshine web UI.
-  #   2. Create a username / password when prompted.
-  #   3. On the client, open Moonlight → Add Host → enter gp3's Tailscale IP.
-  #   4. A PIN will appear in Moonlight — enter it in the Sunshine web UI to pair.
-  services.sunshine = {
-    enable = true;
-    autoStart = true;         # start with graphical session
-    capSysAdmin = true;       # required for DRM/KMS capture on Wayland
-    openFirewall = false;     # accessible via Tailscale (trusted interface)
-    settings = {
-      sunshine_name = constants.host.name;
-      port = constants.services.sunshine.port;
-    };
   };
 
   environment.systemPackages = with pkgs; [

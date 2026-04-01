@@ -28,8 +28,8 @@ in
       gamemode = "survival";
       motd = "Computer Boyz";
       max-players = 10;
-      view-distance = 16;
-      simulation-distance = 10;
+      view-distance = 32;
+      simulation-distance = 20;
       pvp = false;
     };
     whitelist = {
