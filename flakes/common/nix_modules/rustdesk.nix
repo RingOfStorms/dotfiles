@@ -117,7 +117,7 @@ in
 
             [options]
             custom-rendezvous-server = '${cfg.server}'
-            relay-server = ''
+            relay-server = ''''
             key = '$server_key'
             verification-method = 'use-permanent-password'
             approve-mode = 'password'
