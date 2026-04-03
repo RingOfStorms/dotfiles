@@ -21,11 +21,10 @@
     # ports.url = "path:../../flakes/ports";
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
 
-    opencode.url = "github:anomalyco/opencode/f9e71ec51569359ddba1c84ef2bdfddfd3b072d1";
-
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
     qvm.url = "git+https://git.joshuabell.xyz/ringofstorms/qvm";
 
+    opencode.url = "github:anomalyco/opencode/f9e71ec51569359ddba1c84ef2bdfddfd3b072d1";
     nono.url = "github:always-further/nono";
     nono.flake = false;
   };

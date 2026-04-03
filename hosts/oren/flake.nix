@@ -16,10 +16,12 @@
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
     # de_plasma.url = "path:../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
-    opencode.url = "github:anomalyco/opencode/0dcdf5f529dced23d8452c9aa5f166abb24d8f7c";
+    # ports.url = "path:../../flakes/ports";
+    ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
+    opencode.url = "github:anomalyco/opencode/f9e71ec51569359ddba1c84ef2bdfddfd3b072d1";
     nono.url = "github:always-further/nono";
     nono.flake = false;
   };
@@ -58,6 +60,9 @@
               # sddm.autologinUser = "josh";
             };
           })
+
+          inputs.ports.nixosModules.default
+          ({ ringofstorms.ports.enable = true; })
 
           inputs.ros_neovim.nixosModules.default
           ({ ringofstorms-nvim.includeAllRuntimeDependencies = true; })
@@ -120,25 +125,35 @@
           # ./hyprland_customizations.nix
 
           # Host-specific config
-          ({ pkgs, ... }: {
-            environment.systemPackages = with pkgs; [
-              lua qdirstat ffmpeg-full vlc google-chrome
-              ladybird nodejs_24 ttyd appimage-run
-            ];
-            services.flatpak.packages = [
-              "org.signal.Signal"
-              "dev.vencord.Vesktop"
-              "md.obsidian.Obsidian"
-              "com.spotify.Client"
-              "com.bitwarden.desktop"
-              "org.openscad.OpenSCAD"
-              "im.riot.Riot"
-            ];
-            services.devmon.enable = true;
-            services.gvfs.enable = true;
-            services.udisks2.enable = true;
-            networking.firewall.allowedTCPPorts = [ 9991 ];
-          })
+          (
+            { pkgs, ... }:
+            {
+              environment.systemPackages = with pkgs; [
+                lua
+                qdirstat
+                ffmpeg-full
+                vlc
+                google-chrome
+                ladybird
+                nodejs_24
+                ttyd
+                appimage-run
+              ];
+              services.flatpak.packages = [
+                "org.signal.Signal"
+                "dev.vencord.Vesktop"
+                "md.obsidian.Obsidian"
+                "com.spotify.Client"
+                "com.bitwarden.desktop"
+                "org.openscad.OpenSCAD"
+                "im.riot.Riot"
+              ];
+              services.devmon.enable = true;
+              services.gvfs.enable = true;
+              services.udisks2.enable = true;
+              networking.firewall.allowedTCPPorts = [ 9991 ];
+            }
+          )
         ];
       };
     };
