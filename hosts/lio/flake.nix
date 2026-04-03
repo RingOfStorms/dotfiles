@@ -43,6 +43,7 @@
         inherit inputs constants;
         nixpkgsUnstable = nixpkgs-unstable;
         secretsRole = "machines-hightrust";
+        extraGroups = [ "wheel" "networkmanager" "video" "input" "dialout" ];
 
         hmModules = [
           inputs.common.homeManagerModules.kitty

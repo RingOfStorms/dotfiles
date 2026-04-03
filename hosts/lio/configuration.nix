@@ -25,6 +25,16 @@ in
     KExecWatchdogSec = "10m";        # Timeout for kexec to complete
   };
 
+  # ── Meshtastic / serial device access ──────────────────────────────────────
+  # CH340/CH341 USB-to-serial (used by ThinkNode M5, many ESP32 boards, etc.)
+  # TAG+="uaccess" grants access to the logged-in seat user (needed for
+  # Chrome Web Serial flashers). GROUP="dialout" is the fallback for non-seat
+  # access (SSH, scripts, etc.).
+  services.udev.extraRules = ''
+    SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", GROUP="dialout", MODE="0660", TAG+="uaccess"
+    SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", GROUP="dialout", MODE="0660", TAG+="uaccess"
+  '';
+
   services = {
     # https://discourse.nixos.org/t/very-high-fan-noises-on-nixos-using-a-system76-thelio/23875/10
     # Fixes insane jet speed fan noise
