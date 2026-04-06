@@ -20,8 +20,9 @@
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
+    # mva.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/mva.git";
 
-    opencode.url = "github:anomalyco/opencode/f9e71ec51569359ddba1c84ef2bdfddfd3b072d1";
+    opencode.url = "github:anomalyco/opencode/527b51477da3d07107db71da71e339003d9481ca";
     nono.url = "github:always-further/nono";
     nono.flake = false;
   };
@@ -72,11 +73,13 @@
             {
               environment.systemPackages = [
                 inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default
+                # inputs.mva.packages.${pkgs.stdenv.hostPlatform.system}.default
               ];
               environment.shellAliases = {
                 # open code
                 "oc" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile oc -- opencode";
                 "occ" = "oc -c";
+                "a" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile mva -- mva";
               };
             }
           )
