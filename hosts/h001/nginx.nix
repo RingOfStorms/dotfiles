@@ -42,6 +42,9 @@ in
     recommendedProxySettings = true;
     recommendedTlsSettings = true;
     clientMaxBodySize = "500m";
+    appendHttpConfig = ''
+      proxy_headers_hash_max_size 1024;
+    '';
     virtualHosts = {
       "${c.lanIp}" = {
         locations = {
