@@ -24,7 +24,7 @@
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
     qvm.url = "git+https://git.joshuabell.xyz/ringofstorms/qvm";
 
-    opencode.url = "github:anomalyco/opencode/f9e71ec51569359ddba1c84ef2bdfddfd3b072d1";
+    opencode.url = "github:anomalyco/opencode/9e156ea168fd5b21627e341085bba73018454cb1";
     nono.url = "github:always-further/nono";
     nono.flake = false;
   };
