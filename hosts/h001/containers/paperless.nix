@@ -96,7 +96,9 @@ in
   options = { };
   config = {
     services.nginx.virtualHosts."${c.domain}" = {
-      addSSL = true;
+      listen = [
+        { addr = constants.host.overlayIp; port = 443; ssl = true; }
+      ];
       sslCertificate = "/var/lib/acme/${fleet.global.domain}/fullchain.pem";
       sslCertificateKey = "/var/lib/acme/${fleet.global.domain}/key.pem";
       extraConfig = ''
