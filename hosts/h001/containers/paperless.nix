@@ -168,8 +168,10 @@ in
             };
             services.resolved.enable = true;
 
-            # Ensure users exist on container
-            inherit users;
+            # Override paperless user UID/GID to match host bind mount ownership
+            # (the paperless module creates this user automatically with config.ids.uids.paperless)
+            users.users.paperless.uid = lib.mkForce c.uid;
+            users.groups.paperless.gid = lib.mkForce c.gid;
 
             services.postgresql = {
               enable = true;

@@ -24,6 +24,7 @@
     "location"
     "matrix"
     "element"
+    "docs"
   ];
 
   # Base domain
