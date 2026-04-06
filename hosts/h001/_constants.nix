@@ -84,6 +84,17 @@
       };
     };
 
+    paperless = {
+      port = 28981;
+      uid = 915;
+      gid = 915;
+      dataDir = "/drives/wd10/paperless";
+      varLibDir = "/var/lib/paperless";
+      containerIp = "10.0.0.7";
+      containerIp6 = "fc00::7";
+      domain = "docs.joshuabell.xyz";
+    };
+
     opengist = {
       port = 6157;
       dataDir = "/var/lib/opengist";

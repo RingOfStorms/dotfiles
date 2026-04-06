@@ -1164,6 +1164,22 @@
         "type": "github"
       }
     },
+    "paperless-nixpkgs": {
+      "locked": {
+        "lastModified": 1775036866,
+        "narHash": "sha256-ZojAnPuCdy657PbTq5V0Y+AHKhZAIwSIT2cb8UgAz/U=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "6201e203d09599479a3b3450ed24fa81537ebc4e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "puzzles": {
       "inputs": {
         "nixpkgs": "nixpkgs_4"
@@ -1198,6 +1214,7 @@
         "nixpkgs": "nixpkgs_3",
         "oauth2-proxy-nixpkgs": "oauth2-proxy-nixpkgs",
         "open-webui-nixpkgs": "open-webui-nixpkgs",
+        "paperless-nixpkgs": "paperless-nixpkgs",
         "puzzles": "puzzles",
         "ros_neovim": "ros_neovim",
         "secrets-bao": "secrets-bao",

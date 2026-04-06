@@ -13,6 +13,7 @@ in
     ./forgejo.nix
     ./immich.nix
     ./matrix.nix
+    ./paperless.nix
     ./opengist.nix
     ./zitadel.nix
   ];
