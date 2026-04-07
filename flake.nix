@@ -27,7 +27,7 @@
 
           # Determine deploy target: prefer lanIp for local hosts, else hostname
           target =
-            if hostDef ? lanIp then "${user}@${hostDef.lanIp}"
+            if hostDef ? lanIp then "root@${hostDef.lanIp}"
             else name;
 
           # Hosts accessed by name (on tailnet) that already have SSH keys configured
