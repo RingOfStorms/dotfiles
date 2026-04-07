@@ -96,13 +96,15 @@ in
   options = { };
   config = {
     services.nginx.virtualHosts."${c.domain}" = {
-      listen = [
-        { addr = constants.host.overlayIp; port = 443; ssl = true; }
-      ];
-      onlySSL = true;
+      addSSL = true;
       sslCertificate = "/var/lib/acme/${fleet.global.domain}/fullchain.pem";
       sslCertificateKey = "/var/lib/acme/${fleet.global.domain}/key.pem";
       extraConfig = ''
+        # Tailnet-only: allow overlay network and localhost, deny everything else
+        allow 100.64.0.0/10;
+        allow 127.0.0.0/8;
+        deny all;
+
         client_max_body_size 100M;
         proxy_read_timeout 600s;
         proxy_send_timeout 600s;
