@@ -27,7 +27,10 @@
         secretsRole = "machines-hightrust";
         authMethod = "initialHashedPassword";
         authValue = "$y$j9T$v1QhXiZMRY1pFkPmkLkdp0$451GvQt.XFU2qCAi4EQNd1BEqjM/CH6awU8gjcULps6";
-        extraGroups = [ "wheel" "networkmanager" ];
+        extraGroups = [
+          "wheel"
+          "networkmanager"
+        ];
 
         nixosModules = [
           inputs.ros_neovim.nixosModules.default
@@ -37,9 +40,12 @@
           inputs.common.nixosModules.git
           inputs.common.nixosModules.tmux
           inputs.common.nixosModules.boot_grub
-          ({ lib, ... }: {
-            boot.loader.grub.device = lib.mkForce "/dev/disk/by-id/ata-KINGSTON_SV300S37A120G_50026B773C00F8F4";
-          })
+          (
+            { lib, ... }:
+            {
+              boot.loader.grub.device = lib.mkForce "/dev/disk/by-id/ata-KINGSTON_SV300S37A120G_50026B773C00F8F4";
+            }
+          )
           inputs.common.nixosModules.hardening
           inputs.common.nixosModules.nix_options
           inputs.common.nixosModules.no_sleep
@@ -66,6 +72,7 @@
 
           # Host-specific config
           ({
+            security.sudo.wheelNeedsPassword = false;
             networking.networkmanager.enable = true;
             users.users.root.openssh.authorizedKeys.keys = [
               fleet.global.sshPubKey
