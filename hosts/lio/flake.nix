@@ -25,7 +25,7 @@
     qvm.url = "git+https://git.joshuabell.xyz/ringofstorms/qvm";
 
     opencode.url = "github:anomalyco/opencode/3ea641340761818f1ed0394635681bd0e20cc3a5";
-    nono.url = "github:always-further/nono";
+    nono.url = "github:always-further/nono/3011613cb8ed1cf2b960ac8d8d055282ef70be68";
     nono.flake = false;
   };
 

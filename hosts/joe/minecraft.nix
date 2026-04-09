@@ -19,6 +19,7 @@ in
     eula = true;
     openFirewall = true; # Opens the default port on all interfaces
     declarative = true;
+    jvmOpts = "-Xmx12288M -Xms12288M";
     serverProperties = {
       server-port = c.port;
       online-mode = true;

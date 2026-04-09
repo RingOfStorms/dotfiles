@@ -366,16 +366,17 @@
     "nono": {
       "flake": false,
       "locked": {
-        "lastModified": 1775572154,
-        "narHash": "sha256-YMToXMBApKfFN3REAiofBUSYzk+U5B8BA+atfxyQwuQ=",
+        "lastModified": 1774451208,
+        "narHash": "sha256-OfftHO57HsDqi2E5xxeCIblMhGSTf4vFUhSRRNdrIHo=",
         "owner": "always-further",
         "repo": "nono",
-        "rev": "78cf063307a74085686c7bc9308af92b3d7438af",
+        "rev": "3011613cb8ed1cf2b960ac8d8d055282ef70be68",
         "type": "github"
       },
       "original": {
         "owner": "always-further",
         "repo": "nono",
+        "rev": "3011613cb8ed1cf2b960ac8d8d055282ef70be68",
         "type": "github"
       }
     },
