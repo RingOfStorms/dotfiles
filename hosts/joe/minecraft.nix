@@ -39,6 +39,7 @@ in
       sdking13 = "11766f4b-b08f-41bf-abbd-781e53f90ea8";
       RingOfStorms = "fe5b7d3e-73d9-4587-8b6f-743e5edf8e7f";
       Tacobellington = "b79b741f-a436-497c-af3e-49dd5f724868";
+      drogo_senturi = "a5f22509-bef5-46af-bafa-51b3ce0147e9";
     };
   };
 
