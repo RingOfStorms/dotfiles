@@ -1,14 +1,3 @@
-# Check if ~/.config/environment exists and source all files within it
-if [ -d "$HOME/.config/environment" ]; then
-  for file in "$HOME/.config/environment/"*; do
-    if [ -r "$file" ]; then
-      if ! . "$file"; then
-        echo "Failed to source $file"
-      fi
-    fi
-  done
-fi
-
 htop_psg () {
   htop -p $(psg $1 | awk '{r=r s $2;s=","} END{print r}')
 }
