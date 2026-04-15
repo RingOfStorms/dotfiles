@@ -52,6 +52,23 @@ in
     Group = "minecraft";
   };
 
+  # ── Daily restart at 4 AM ────────────────────────────────────────────────
+  systemd.timers.minecraft-server-restart = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*-*-* 04:00:00";
+      Persistent = true;
+    };
+  };
+
+  systemd.services.minecraft-server-restart = {
+    description = "Restart Minecraft server";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.systemd}/bin/systemctl restart minecraft-server.service";
+    };
+  };
+
   users.users.minecraft = {
     isSystemUser = true;
     group = "minecraft";
