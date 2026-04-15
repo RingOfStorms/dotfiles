@@ -24,7 +24,7 @@
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
     qvm.url = "git+https://git.joshuabell.xyz/ringofstorms/qvm";
 
-    opencode.url = "github:anomalyco/opencode/3ea641340761818f1ed0394635681bd0e20cc3a5";
+    opencode.url = "github:anomalyco/opencode/7cbe1627ec979e0523ab1a4c2c96def7cb352d06";
     nono.url = "github:always-further/nono";
     nono.flake = false;
   };
@@ -42,7 +42,13 @@
         inherit inputs constants;
         nixpkgsUnstable = nixpkgs-unstable;
         secretsRole = "machines-hightrust";
-        extraGroups = [ "wheel" "networkmanager" "video" "input" "dialout" ];
+        extraGroups = [
+          "wheel"
+          "networkmanager"
+          "video"
+          "input"
+          "dialout"
+        ];
 
         hmModules = [
           inputs.common.homeManagerModules.kitty
@@ -148,6 +154,8 @@
                 "cur" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile cc -- cursor";
                 # zed
                 "zed" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile cc -- zeditor";
+                # npm
+                "npm" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile npm -- npm";
               };
             }
           )
