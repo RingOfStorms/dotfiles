@@ -10,6 +10,8 @@
     secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
+    # containers.url = "path:../../flakes/containers";
+    containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -40,6 +42,7 @@
           inputs.common.nixosModules.tty_caps_esc
           inputs.common.nixosModules.zsh
 
+          inputs.containers.nixosModules.default
           inputs.beszel.nixosModules.agent
           ({
             beszelAgent = {
@@ -50,6 +53,7 @@
 
           ./hardware-configuration.nix
           ./mods
+          ./containers.nix
 
           # Host-specific config
           ({ pkgs, ... }: {

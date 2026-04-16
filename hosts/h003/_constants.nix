@@ -85,6 +85,11 @@
       interval = 5;
     };
 
+    # Imperative extra-container services (not part of host nixos-rebuild)
+    minecraft = {
+      port = 25565;
+    };
+
     ups = {
       driver = "usbhid-ups";
       vendorId = "051D";
