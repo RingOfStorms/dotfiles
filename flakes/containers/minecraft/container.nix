@@ -1,4 +1,9 @@
-{ nix-minecraft, pkgs, lib, ... }:
+{
+  nix-minecraft,
+  pkgs,
+  lib,
+  ...
+}:
 let
   # Player-facing port for the Velocity proxy.
   # Must match the firewall rule on the host (see hosts/h003/_constants.nix).
@@ -276,7 +281,7 @@ in
       creative = {
         enable = true;
         package = pkgs.paperServers.paper;
-        jvmOpts = "-Xms2048M -Xmx4096M";
+        jvmOpts = "-Xms2048M -Xmx8192M";
         serverProperties = paperServerProperties 25567 "Creative" // {
           gamemode = "creative";
           force-gamemode = true; # Force creative on join (overrides per-player)
