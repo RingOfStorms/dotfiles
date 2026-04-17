@@ -1,7 +1,6 @@
 { constants, ... }:
 let
   section1 = "a. AI / Creative";
-  section2 = "b. Gaming / Remote";
   s = constants.services;
 in
 {
@@ -23,10 +22,6 @@ in
         "${section1}" = {
           style = "row";
           columns = 3;
-        };
-        "${section2}" = {
-          style = "row";
-          columns = 2;
         };
       };
     };
@@ -52,16 +47,6 @@ in
               description = "Text-to-Speech API";
               href = "http://localhost:${toString s.kokoro-tts.port}";
               icon = "mdi-microphone";
-            };
-          }
-        ];
-      }
-      {
-        "${section2}" = [
-          {
-            "Minecraft" = {
-              description = "Server (port ${toString s.minecraft.port}) — no web UI";
-              icon = "minecraft";
             };
           }
         ];

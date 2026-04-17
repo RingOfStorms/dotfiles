@@ -18,9 +18,6 @@
       port = 7860;
       dataDir = "/var/lib/forge";
     };
-    minecraft = {
-      port = 25565;
-    };
     homepage = {
       port = 8082;
     };

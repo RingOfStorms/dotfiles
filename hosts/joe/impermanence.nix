@@ -49,9 +49,6 @@
       # Forge workspace, models, and generated images
       "/var/lib/forge"
 
-      # Minecraft server world data, config, and state
-      "/var/lib/minecraft"
-
       # Flatpak (system-wide installs and runtime data)
       "/var/lib/flatpak"
     ];

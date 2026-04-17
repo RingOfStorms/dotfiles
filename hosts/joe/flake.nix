@@ -141,7 +141,6 @@
           ./ollama.nix
           ./kokoro-tts.nix
           ./forge.nix
-          ./minecraft.nix
           ./homepage-dashboard.nix
           ./nginx.nix
           (import ./impermanence.nix { inherit primaryUser; })
@@ -158,6 +157,7 @@
                 ffmpeg-full
                 ttyd
                 steam-run
+                prismlauncher # Open-source Minecraft launcher (multi-instance, mods, modpacks)
               ];
               services.flatpak.packages = [
                 "com.spotify.Client"
