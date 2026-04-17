@@ -34,18 +34,6 @@ in
           proxyPass = "http://localhost:${toString hs.port}"; # headscale
         };
       };
-      "computerboyz.joshuabell.xyz" = {
-        enableACME = true;
-        forceSSL = true;
-        locations."/" = {
-          return = "444";
-        };
-        # Proxy to h003's nginx over tailscale, which proxies to squaremap
-        locations."/map/survival/" = {
-          proxyPass = "http://${fleet.hosts.h003.overlayIp}:80/map/survival/";
-          proxyWebsockets = true;
-        };
-      };
       "_" = {
         rejectSSL = true;
         default = true;
