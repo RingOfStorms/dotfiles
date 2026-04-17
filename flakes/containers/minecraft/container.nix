@@ -116,6 +116,8 @@ in
   imports = [ nix-minecraft.nixosModules.minecraft-servers ];
   nixpkgs.overlays = [ nix-minecraft.overlay ];
 
+  environment.systemPackages = [ pkgs.tmux ];
+
   # Open the Velocity proxy port inside the container's firewall
   networking.firewall.allowedTCPPorts = [ proxyPort ];
 
