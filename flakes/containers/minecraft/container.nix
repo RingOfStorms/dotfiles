@@ -60,18 +60,6 @@ let
     sha512 = "353cfb54600b90c5c30595e3357f680ec851319bcf95427b5ca319df4feee7b2b074f230b5b16a3d3f7dbd6d9ecc89b8e21941f645f1df08292c2dffa406db26";
   };
 
-  # ViaVersion -- allows newer Minecraft clients to connect
-  viaversion = pkgs.fetchurl {
-    url = "https://cdn.modrinth.com/data/P1OZGk5p/versions/Sh5z5ETl/ViaVersion-5.8.1.jar";
-    sha512 = "233f51ff846797ebc9c2425036e495833b5ec50064742c00ea7182a09f3e4bb79fc280d9947b9af4e71d5294cad5d2505bfb5aaf65c0e08f7cf90f41920d1ca4";
-  };
-
-  # ViaBackwards -- allows older Minecraft clients to connect
-  viabackwards = pkgs.fetchurl {
-    url = "https://cdn.modrinth.com/data/NpvuJQoq/versions/6GSQXY2l/ViaBackwards-5.8.1.jar";
-    sha512 = "91010a989684f91895178d1e9d46574effda009505132efddc3df9ee744aac307d226463d9d0ae15b8bf777df88a30ea03c9b795e2b6c9c18668c393ccac7a27";
-  };
-
   # EssentialsX -- /home, /tpa, /warp, /spawn, /kit, etc.
   essentialsx = pkgs.fetchurl {
     url = "https://cdn.modrinth.com/data/hXiIvTyT/versions/Oa9ZDzZq/EssentialsX-2.21.2.jar";
@@ -203,8 +191,6 @@ in
 
         # Velocity plugins (individual symlinks so plugins/ stays writable for config dirs)
         symlinks."plugins/LuckPerms-Velocity.jar" = luckpermsVelocity;
-        symlinks."plugins/ViaVersion.jar" = viaversion;
-        symlinks."plugins/ViaBackwards.jar" = viabackwards;
         symlinks."plugins/PAPIProxyBridge.jar" = papiproxybridge;
 
         # LuckPerms config for the proxy
