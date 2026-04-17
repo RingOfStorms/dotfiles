@@ -183,6 +183,9 @@
           # ./i3_customizations.nix
           ./vms.nix
           ./nono.nix
+          ./ttyd.nix
+          ./homepage-dashboard.nix
+          ./nginx.nix
 
           # Host-specific config
           (
@@ -204,7 +207,6 @@
                 "org.openscad.OpenSCAD"
                 "org.blender.Blender"
               ];
-              networking.firewall.allowedTCPPorts = [ 8080 ];
             }
           )
         ];

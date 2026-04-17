@@ -13,6 +13,12 @@
       port = 5000;
       secretKeyFile = "/var/lib/nix-serve/cache-priv-key.pem";
     };
+    ttyd = {
+      port = 8080;
+    };
+    homepage = {
+      port = 8082;
+    };
   };
 
   # ── Per-host secrets (merged with mkAutoSecrets in fleet.mkHost) ────
