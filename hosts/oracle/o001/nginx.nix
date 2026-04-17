@@ -346,7 +346,7 @@ in
         # ── Minecraft survival map (squaremap) ─────────────────────────────
         # Proxied to h003's nginx over tailscale, which proxies to squaremap
         "computerboyz.${domain}" = {
-          useACMEHost = domain;
+          enableACME = true;
           forceSSL = true;
           locations."/" = {
             return = "444";
