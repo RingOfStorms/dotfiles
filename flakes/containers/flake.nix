@@ -15,6 +15,7 @@
         {
           imports = [ extra-container.nixosModules.default ];
           programs.extra-container.enable = true;
+          boot.enableContainers = true;
         };
     };
 }
