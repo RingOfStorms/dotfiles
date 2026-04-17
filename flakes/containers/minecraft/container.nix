@@ -124,7 +124,9 @@ in
         enable = true;
         package = pkgs.paperServers.paper;
         jvmOpts = "-Xms4096M -Xmx12288M"; # Matches original joe config
-        serverProperties = paperServerProperties 25566 "Survival";
+        serverProperties = paperServerProperties 25566 "Survival" // {
+          force-gamemode = true; # Force survival on join
+        };
         whitelist = whitelist;
 
         # Paper reads the secret from paper-global.yml, but we use
@@ -140,11 +142,16 @@ in
 
       # ── Paper: Creative (secondary) ──────────────────────────────────
       # Second Paper instance for plugin experimentation later.
+      # Superflat world in creative mode.
       creative = {
         enable = true;
         package = pkgs.paperServers.paper;
         jvmOpts = "-Xms2048M -Xmx4096M";
-        serverProperties = paperServerProperties 25567 "Creative";
+        serverProperties = paperServerProperties 25567 "Creative" // {
+          gamemode = "creative";
+          force-gamemode = true; # Force creative on join (overrides per-player)
+          level-type = "flat";
+        };
         whitelist = whitelist;
 
         files."config/paper-global.yml".value = {
