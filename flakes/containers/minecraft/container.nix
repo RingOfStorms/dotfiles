@@ -19,6 +19,14 @@ let
     BlockEmpires = "f1572c9b-34a8-463f-8329-18b7abae943c";
   };
 
+  # Operators (server admins)
+  ops = {
+    BlockEmpires = {
+      uuid = "f1572c9b-34a8-463f-8329-18b7abae943c";
+      level = 4; # Full operator permissions
+    };
+  };
+
   # Shared Paper server properties (both servers use the same base config)
   paperServerProperties = port: motd: {
     server-port = port;
@@ -128,6 +136,7 @@ in
           force-gamemode = true; # Force survival on join
         };
         whitelist = whitelist;
+        ops = ops;
 
         # Paper reads the secret from paper-global.yml, but we use
         # @FORWARDING_SECRET@ substitution from an environment file.
@@ -153,6 +162,7 @@ in
           level-type = "flat";
         };
         whitelist = whitelist;
+        ops = ops;
 
         files."config/paper-global.yml".value = {
           proxies.velocity = {
