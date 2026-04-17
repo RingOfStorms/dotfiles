@@ -20,10 +20,11 @@ let
   };
 
   # Operators (server admins)
-  ops = {
+  operators = {
     BlockEmpires = {
       uuid = "f1572c9b-34a8-463f-8329-18b7abae943c";
-      level = 4; # Full operator permissions
+      level = 4;
+      bypassesPlayerLimit = true;
     };
   };
 
@@ -136,7 +137,7 @@ in
           force-gamemode = true; # Force survival on join
         };
         whitelist = whitelist;
-        ops = ops;
+        operators = operators;
 
         # Paper reads the secret from paper-global.yml, but we use
         # @FORWARDING_SECRET@ substitution from an environment file.
@@ -160,9 +161,11 @@ in
           gamemode = "creative";
           force-gamemode = true; # Force creative on join (overrides per-player)
           level-type = "flat";
+          spawn-monsters = false;
+          spawn-animals = false;
         };
         whitelist = whitelist;
-        ops = ops;
+        operators = operators;
 
         files."config/paper-global.yml".value = {
           proxies.velocity = {
