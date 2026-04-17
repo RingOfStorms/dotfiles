@@ -148,6 +148,31 @@
           # Host-specific config
           (
             { pkgs, ... }:
+            let
+              # Prism Launcher wrapper that forces LWJGL to use the native
+              # Wayland GLFW backend instead of X11/XWayland.
+              #
+              # Why: prismlauncher already ships glfw3-minecraft (the Wayland-
+              # patched GLFW 3.4) in LD_LIBRARY_PATH, but LWJGL still defaults
+              # to GLFW's X11 platform unless told otherwise. Under XWayland,
+              # opening the Minecraft chat with `t` or `/` causes the keypress
+              # to be re-injected into the chat box (~70% of the time) due to
+              # XWayland's broken key-repeat replay behavior.
+              #
+              # Setting LWJGL_USE_WAYLAND=1 makes LWJGL initialise GLFW with
+              # the Wayland platform, so key events come straight from the
+              # Wayland compositor with no replay/grab races.
+              prismlauncher-wayland = pkgs.symlinkJoin {
+                name = "prismlauncher-wayland";
+                paths = [ pkgs.prismlauncher ];
+                nativeBuildInputs = [ pkgs.makeWrapper ];
+                postBuild = ''
+                  wrapProgram $out/bin/prismlauncher \
+                    --set LWJGL_USE_WAYLAND 1
+                '';
+                inherit (pkgs.prismlauncher) meta;
+              };
+            in
             {
               environment.systemPackages = with pkgs; [
                 google-chrome
@@ -157,12 +182,16 @@
                 ffmpeg-full
                 ttyd
                 steam-run
-                prismlauncher # Open-source Minecraft launcher (multi-instance, mods, modpacks)
+                prismlauncher-wayland # Open-source Minecraft launcher (Wayland-native LWJGL/GLFW)
+                # Native (non-flatpak) Vesktop. The flatpak build had broken
+                # screen sharing on NVIDIA -- the picker would freeze after
+                # the first attempt due to portal/pipewire sandboxing issues.
+                # Native binary uses host xdg-desktop-portal-kde directly.
+                vesktop
               ];
               services.flatpak.packages = [
                 "com.spotify.Client"
                 "com.bitwarden.desktop"
-                "dev.vencord.Vesktop"
               ];
             }
           )

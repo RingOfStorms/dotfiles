@@ -145,6 +145,24 @@ in
       # KDEConnect
       programs.kdeconnect.enable = true;
 
+      # ── XDG Desktop Portals ──────────────────────────────────────────────────
+      # Pin xdg-desktop-portal-kde as the authoritative backend for everything.
+      # Without this, the portal dispatcher walks all installed backends and
+      # waits ~25s for each to time out before falling back. That manifests as:
+      #   - File picker dialogs taking 30-40s to open (Firefox, flatpaks)
+      #   - Vesktop / Discord screen-share picker hanging after first prompt
+      #   - Slow clipboard image paste in flatpak Electron apps
+      # Explicitly setting "kde" as default for both common and plasma sessions
+      # routes ScreenCast, FileChooser, Clipboard, etc. directly to KDE's portal.
+      xdg.portal = {
+        enable = true;
+        extraPortals = [ pkgs.kdePackages.xdg-desktop-portal-kde ];
+        config = {
+          common.default = [ "kde" ];
+          plasma.default = [ "kde" ];
+        };
+      };
+
       # Useful KDE packages
       environment.systemPackages = with pkgs; [
         # Core KDE tools

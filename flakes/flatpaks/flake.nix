@@ -29,6 +29,11 @@
                     Context.sockets = [
                       "wayland"
                       "x11"
+                      # Required for any flatpak that needs PipeWire screencast
+                      # or audio capture (Vesktop screen share, OBS, etc.).
+                      # Without this, the portal picker shows but the screencast
+                      # handshake hangs because the sandbox can't see /run/user/<uid>/pipewire-0.
+                      "pipewire"
                     ];
                     Context.devices = [ "dri" ]; # allow GPU access if desired
                     Environment = {

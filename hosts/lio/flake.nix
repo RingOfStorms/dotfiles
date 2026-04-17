@@ -10,23 +10,23 @@
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets-bao.url = "path:../../flakes/secrets-bao";
     secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
-    # flatpaks.url = "path:../../flakes/flatpaks";
-    flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
+    flatpaks.url = "path:../../flakes/flatpaks";
+    # flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
-    # de_plasma.url = "path:../../flakes/de_plasma";
-    de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
+    de_plasma.url = "path:../../flakes/de_plasma";
+    # de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     # stt_ime.url = "path:../../flakes/stt_ime";
     stt_ime.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/stt_ime";
     # ports.url = "path:../../flakes/ports";
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
-    containers.url = "path:../../flakes/containers";
-    # containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers";
+    # containers.url = "path:../../flakes/containers";
+    containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
     qvm.url = "git+https://git.joshuabell.xyz/ringofstorms/qvm";
 
-    opencode.url = "github:anomalyco/opencode/7cbe1627ec979e0523ab1a4c2c96def7cb352d06";
+    opencode.url = "github:anomalyco/opencode/88582566bf2bfd2d26000f0c25735bf48ddeca00";
     nono.url = "github:always-further/nono";
     nono.flake = false;
   };
