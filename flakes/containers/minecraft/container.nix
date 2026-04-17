@@ -1,9 +1,8 @@
 { nix-minecraft, pkgs, lib, ... }:
 let
-  # Shared forwarding secret for Velocity <-> Paper modern forwarding.
-  # Must be identical across Velocity's forwarding.secret and each Paper
-  # server's paper-global.yml. Replace with a real random string.
-  forwardingSecret = "J3qHvMspR8cNk7Fz9wXd";
+  # Path where the shared forwarding secret lives (generated on first boot).
+  # Must be identical across Velocity and each Paper backend.
+  secretPath = "/var/lib/minecraft-secrets/forwarding.secret";
 
   # Whitelist shared across servers
   whitelist = {
@@ -30,21 +29,49 @@ let
     simulation-distance = 20;
     pvp = false;
   };
-
-  # Paper velocity forwarding config (injected into paper-global.yml)
-  paperVelocityConfig = {
-    value = {
-      proxies.velocity = {
-        enabled = true;
-        online-mode = true;
-        secret = forwardingSecret;
-      };
-    };
-  };
 in
 {
   imports = [ nix-minecraft.nixosModules.minecraft-servers ];
   nixpkgs.overlays = [ nix-minecraft.overlay ];
+
+  # ── Generate forwarding secret on first boot ────────────────────────────
+  # Creates a random secret once and reuses it forever. All minecraft
+  # services wait for this before starting.
+  systemd.services.minecraft-forwarding-secret = {
+    description = "Generate Velocity forwarding secret if missing";
+    wantedBy = [ "multi-user.target" ];
+    before = [
+      "minecraft-server-velocity.service"
+      "minecraft-server-survival.service"
+      "minecraft-server-creative.service"
+    ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      if [ ! -f "${secretPath}" ]; then
+        mkdir -p "$(dirname "${secretPath}")"
+        ${pkgs.openssl}/bin/openssl rand -hex 32 > "${secretPath}"
+        chmod 644 "${secretPath}"
+        echo "Generated new forwarding secret"
+      fi
+    '';
+  };
+
+  # Make the minecraft server services depend on the secret existing
+  systemd.services.minecraft-server-velocity = {
+    after = [ "minecraft-forwarding-secret.service" ];
+    requires = [ "minecraft-forwarding-secret.service" ];
+  };
+  systemd.services.minecraft-server-survival = {
+    after = [ "minecraft-forwarding-secret.service" ];
+    requires = [ "minecraft-forwarding-secret.service" ];
+  };
+  systemd.services.minecraft-server-creative = {
+    after = [ "minecraft-forwarding-secret.service" ];
+    requires = [ "minecraft-forwarding-secret.service" ];
+  };
 
   services.minecraft-servers = {
     enable = true;
@@ -80,8 +107,8 @@ in
           };
         };
 
-        # The forwarding secret file that backends must match
-        files."forwarding.secret" = forwardingSecret;
+        # Symlink the generated secret into Velocity's data dir
+        symlinks."forwarding.secret" = secretPath;
       };
 
       # ── Paper: Survival (primary) ────────────────────────────────────
@@ -89,11 +116,19 @@ in
       survival = {
         enable = true;
         package = pkgs.paperServers.paper;
-        jvmOpts = "-Xms4096M -Xmx12288M";
+        jvmOpts = "-Xms4096M -Xmx12288M"; # Matches original joe config
         serverProperties = paperServerProperties 25566 "Survival";
         whitelist = whitelist;
 
-        files."config/paper-global.yml" = paperVelocityConfig;
+        # Paper reads the secret from paper-global.yml, but we use
+        # @FORWARDING_SECRET@ substitution from an environment file.
+        files."config/paper-global.yml".value = {
+          proxies.velocity = {
+            enabled = true;
+            online-mode = true;
+            secret = "@FORWARDING_SECRET@";
+          };
+        };
       };
 
       # ── Paper: Creative (secondary) ──────────────────────────────────
@@ -105,9 +140,40 @@ in
         serverProperties = paperServerProperties 25567 "Creative";
         whitelist = whitelist;
 
-        files."config/paper-global.yml" = paperVelocityConfig;
+        files."config/paper-global.yml".value = {
+          proxies.velocity = {
+            enabled = true;
+            online-mode = true;
+            secret = "@FORWARDING_SECRET@";
+          };
+        };
       };
     };
+
+    # Environment file for @VAR@ substitution in `files` entries.
+    # nix-minecraft replaces @FORWARDING_SECRET@ with the value at runtime.
+    environmentFile = "/var/lib/minecraft-secrets/env";
+  };
+
+  # Generate the env file from the secret on boot (after secret exists)
+  systemd.services.minecraft-forwarding-env = {
+    description = "Generate environment file from forwarding secret";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "minecraft-forwarding-secret.service" ];
+    requires = [ "minecraft-forwarding-secret.service" ];
+    before = [
+      "minecraft-server-velocity.service"
+      "minecraft-server-survival.service"
+      "minecraft-server-creative.service"
+    ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      echo "FORWARDING_SECRET=$(cat ${secretPath})" > /var/lib/minecraft-secrets/env
+      chmod 644 /var/lib/minecraft-secrets/env
+    '';
   };
 
   # ── Daily restart at 4 AM ───────────────────────────────────────────────
