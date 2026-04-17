@@ -1,6 +1,19 @@
 {
   description = "Minecraft extra-container: Velocity proxy + 2 Paper servers via nix-minecraft";
 
+  # ── Usage ─────────────────────────────────────────────────────────────────
+  # Start:   nix run . -- create --start
+  # Stop:    sudo nixos-container stop minecraft
+  # Start:   sudo nixos-container start minecraft
+  # Destroy: nix run . -- destroy
+  # Console: sudo nixos-container root-login minecraft
+  #
+  # ── Data ──────────────────────────────────────────────────────────────────
+  # All state: /var/lib/nixos-containers/minecraft/
+  # Worlds:    /var/lib/nixos-containers/minecraft/srv/minecraft/{survival,creative}/
+  # Velocity:  /var/lib/nixos-containers/minecraft/srv/minecraft/velocity/
+  # Secret:    /var/lib/nixos-containers/minecraft/var/lib/minecraft-secrets/
+
   inputs = {
     extra-container.url = "github:erikarvstedt/extra-container";
     nix-minecraft.url = "github:Infinidoge/nix-minecraft";

@@ -87,7 +87,7 @@
 
     # Imperative extra-container services (not part of host nixos-rebuild)
     minecraft = {
-      port = 25565;
+      port = 25560; # Velocity proxy -- must match flakes/containers/minecraft/container.nix
     };
 
     ups = {

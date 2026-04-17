@@ -1,5 +1,9 @@
 { nix-minecraft, pkgs, lib, ... }:
 let
+  # Player-facing port for the Velocity proxy.
+  # Must match the firewall rule on the host (see hosts/h003/_constants.nix).
+  proxyPort = 25560;
+
   # Path where the shared forwarding secret lives (generated on first boot).
   # Must be identical across Velocity and each Paper backend.
   secretPath = "/var/lib/minecraft-secrets/forwarding.secret";
@@ -33,6 +37,9 @@ in
 {
   imports = [ nix-minecraft.nixosModules.minecraft-servers ];
   nixpkgs.overlays = [ nix-minecraft.overlay ];
+
+  # Open the Velocity proxy port inside the container's firewall
+  networking.firewall.allowedTCPPorts = [ proxyPort ];
 
   # ── Generate forwarding secret on first boot ────────────────────────────
   # Creates a random secret once and reuses it forever. All minecraft
@@ -80,7 +87,7 @@ in
 
     servers = {
       # ── Velocity Proxy ────────────────────────────────────────────────
-      # Player-facing entry point. Players connect here on 25565.
+      # Player-facing entry point. Players connect here on proxyPort.
       # Routes to backend Paper servers on localhost.
       velocity = {
         enable = true;
@@ -89,7 +96,7 @@ in
 
         symlinks."velocity.toml".value = {
           config-version = "2.7";
-          bind = "0.0.0.0:25565";
+          bind = "0.0.0.0:${toString proxyPort}";
           motd = "<green>Computer Boyz";
           show-max-players = 10;
           online-mode = true;
@@ -103,7 +110,7 @@ in
 
           query = {
             enabled = false;
-            port = 25565;
+            port = proxyPort;
           };
         };
 
