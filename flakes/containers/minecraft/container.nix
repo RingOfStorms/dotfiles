@@ -217,10 +217,31 @@ in
         symlinks."plugins/DeathChest.jar" = deathchest;
         files."plugins/LuckPerms/config.yml".value = luckpermsConfig "survival";
 
-        # DeathChest -- very long expiry (14 real days = 1209600 seconds)
+        # DeathChest -- 14 real days expiry (1209600 seconds)
         files."plugins/DeathChest/config.yml".value = {
-          duration.expiration = 1209600;
-          duration.no-expiration = false;
+          update-checker = false;
+          auto-update = false;
+          duration-format = "dd'd' HH'h' mm'm' ss's'";
+          chest = {
+            expiration = 1209600;
+            drop-items-after-expiration = true;
+            blast-protection = true;
+            no-expiration-permission = {
+              enabled = false;
+              permission = "deathchest.stays-forever";
+            };
+            thief-protection = {
+              enabled = true;
+              permission = "deathchest.thiefprotected";
+              bypass-permission = "deathchest.thiefprotected.bypass";
+              expiration = 0;
+            };
+          };
+          player-notification = {
+            enabled = true;
+            message = "&7You died. Your items were put into a chest which disappears after &c14 days&7! \${x} \${y} \${z}";
+          };
+          config-version = 3;
         };
 
         # Paper reads the secret from paper-global.yml, but we use
