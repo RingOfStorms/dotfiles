@@ -7,7 +7,7 @@
 let
   # Player-facing port for the Velocity proxy.
   # Must match the firewall rule on the host (see hosts/h003/_constants.nix).
-  proxyPort = 25560;
+  proxyPort = 25565;
 
   # Path where the shared forwarding secret lives (generated on first boot).
   # Must be identical across Velocity and each Paper backend.

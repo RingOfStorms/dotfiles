@@ -110,10 +110,10 @@ in
       interfaces = {
         # WAN interface - allow nothing inbound by default
         ${net.wanInterface} = {
-          # Block all WAN except port-forwarded services
-          allowedTCPPorts = [
-            25565 # Minecraft Java Edition (forwarded to Joe)
-          ];
+          # Block all WAN except port-forwarded services.
+          # Note: Minecraft (25565) is opened globally via hosts/h003/containers.nix
+          # using constants.services.minecraft.port -- no entry needed here.
+          allowedTCPPorts = [ ];
           allowedUDPPorts = [ ];
         };
 
@@ -156,15 +156,6 @@ in
     #     sourcePort = 8080;
     #   }
     # ];
-
-    # Port forwarding — Minecraft Java Edition to Joe
-    nat.forwardPorts = [
-      {
-        destination = "10.12.14.126:25565";
-        proto = "tcp";
-        sourcePort = 25565;
-      }
-    ];
   };
 
   # dnsmasq for DHCP + DNS
