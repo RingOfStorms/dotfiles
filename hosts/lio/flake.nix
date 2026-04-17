@@ -20,6 +20,8 @@
     stt_ime.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/stt_ime";
     # ports.url = "path:../../flakes/ports";
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
+    containers.url = "path:../../flakes/containers";
+    # containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
     qvm.url = "git+https://git.joshuabell.xyz/ringofstorms/qvm";
@@ -106,6 +108,7 @@
             };
           })
           inputs.flatpaks.nixosModules.default
+          inputs.containers.nixosModules.default
 
           inputs.common.nixosModules.essentials
           inputs.common.nixosModules.git

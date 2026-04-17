@@ -2,22 +2,25 @@
   description = "Minecraft extra-container: Velocity proxy + 2 Paper servers via nix-minecraft";
 
   inputs = {
-    # Inherit extra-container from parent -- single pin for host binary + container lib
-    containers.url = "path:..";
+    extra-container.url = "github:erikarvstedt/extra-container";
     nix-minecraft.url = "github:Infinidoge/nix-minecraft";
-    nix-minecraft.inputs.nixpkgs.follows = "nixpkgs";
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    # Use 25.11 to match extra-container's nixpkgs pin.
+    # extra-container's eval-config.nix has a minimal module set with dummy
+    # options that are incompatible with nixpkgs-unstable (see issue #40).
+    # nix-minecraft server packages (Paper, Velocity, etc.) are fetched via
+    # its overlay and are independent of the nixpkgs version here.
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
   };
 
   outputs =
     {
-      containers,
+      extra-container,
       nix-minecraft,
       nixpkgs,
       ...
     }:
-    containers.lib.eachSupportedSystem (system: {
-      packages.default = containers.lib.buildContainers {
+    extra-container.lib.eachSupportedSystem (system: {
+      packages.default = extra-container.lib.buildContainers {
         inherit system nixpkgs;
 
         config.containers.minecraft = {
