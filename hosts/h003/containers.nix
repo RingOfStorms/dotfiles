@@ -10,13 +10,14 @@
     {
       networking.firewall.allowedTCPPorts = [
         constants.services.minecraft.port # Velocity proxy (player-facing)
-        80 # nginx for squaremap
       ];
 
+      # Reverse proxy for squaremap -- l001 terminates HTTPS and proxies
+      # to h003 over tailscale. This nginx listens on the overlay IP only.
       services.nginx = {
         enable = true;
 
-        # Drop everything by default (like h001)
+        # Drop everything by default
         virtualHosts."_" = {
           default = true;
           locations."/" = {
@@ -24,13 +25,12 @@
           };
         };
 
-        # squaremap survival map at /computerboyz/survival
-        virtualHosts."home.joshuabell.xyz" = {
-          listen = [{ addr = "0.0.0.0"; port = 80; }];
+        virtualHosts."computerboyz.joshuabell.xyz" = {
+          listen = [{ addr = "${constants.host.overlayIp}"; port = 80; }];
           locations."/" = {
             return = "444";
           };
-          locations."/computerboyz/survival/" = {
+          locations."/map/survival/" = {
             proxyPass = "http://127.0.0.1:${toString constants.services.minecraft.mapPort}/";
             proxyWebsockets = true;
           };

@@ -237,13 +237,13 @@ in
         symlinks."plugins/squaremap.jar" = squaremap;
         files."plugins/LuckPerms/config.yml".value = luckpermsConfig "survival";
 
-        # DeathChest -- 14 real days expiry (1209600 seconds)
+        # DeathChest -- 1 hour expiry (3600 seconds)
         files."plugins/DeathChest/config.yml".value = {
           update-checker = false;
           auto-update = false;
-          duration-format = "dd'd' HH'h' mm'm' ss's'";
+          duration-format = "mm'm' ss's'";
           chest = {
-            expiration = 1209600;
+            expiration = 3600;
             drop-items-after-expiration = true;
             blast-protection = true;
             no-expiration-permission = {
@@ -254,7 +254,7 @@ in
           };
           player-notification = {
             enabled = true;
-            message = "&7You died. Your items were put into a chest which disappears after &c14 days&7! \${x} \${y} \${z}";
+            message = "&7You died. Your items were put into a chest which disappears after &c1 hour&7! \${x} \${y} \${z}";
           };
           config-version = 3;
         };
