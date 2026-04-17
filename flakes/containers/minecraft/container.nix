@@ -201,13 +201,11 @@ in
         # Symlink the generated secret into Velocity's data dir
         symlinks."forwarding.secret" = secretPath;
 
-        # Velocity plugins
-        symlinks.plugins = pkgs.linkFarmFromDrvs "plugins" [
-          luckpermsVelocity
-          viaversion
-          viabackwards
-          papiproxybridge
-        ];
+        # Velocity plugins (individual symlinks so plugins/ stays writable for config dirs)
+        symlinks."plugins/LuckPerms-Velocity.jar" = luckpermsVelocity;
+        symlinks."plugins/ViaVersion.jar" = viaversion;
+        symlinks."plugins/ViaBackwards.jar" = viabackwards;
+        symlinks."plugins/PAPIProxyBridge.jar" = papiproxybridge;
 
         # LuckPerms config for the proxy
         files."plugins/luckperms/config.yml".value = luckpermsConfig "proxy";
@@ -226,13 +224,11 @@ in
         whitelist = whitelist;
         operators = operators;
 
-        symlinks.plugins = pkgs.linkFarmFromDrvs "plugins" [
-          luckpermsBukkit
-          essentialsx
-          protocollib
-          placeholderapi
-          deathchest
-        ];
+        symlinks."plugins/LuckPerms.jar" = luckpermsBukkit;
+        symlinks."plugins/EssentialsX.jar" = essentialsx;
+        symlinks."plugins/ProtocolLib.jar" = protocollib;
+        symlinks."plugins/PlaceholderAPI.jar" = placeholderapi;
+        symlinks."plugins/DeathChest.jar" = deathchest;
         files."plugins/LuckPerms/config.yml".value = luckpermsConfig "survival";
 
         # DeathChest -- very long expiry (14 real days = 1209600 seconds)
@@ -269,14 +265,12 @@ in
         whitelist = whitelist;
         operators = operators;
 
-        symlinks.plugins = pkgs.linkFarmFromDrvs "plugins" [
-          luckpermsBukkit
-          essentialsx
-          protocollib
-          placeholderapi
-          fawe
-          worldeditsui
-        ];
+        symlinks."plugins/LuckPerms.jar" = luckpermsBukkit;
+        symlinks."plugins/EssentialsX.jar" = essentialsx;
+        symlinks."plugins/ProtocolLib.jar" = protocollib;
+        symlinks."plugins/PlaceholderAPI.jar" = placeholderapi;
+        symlinks."plugins/FastAsyncWorldEdit.jar" = fawe;
+        symlinks."plugins/WorldEditSUI.jar" = worldeditsui;
         files."plugins/LuckPerms/config.yml".value = luckpermsConfig "creative";
 
         files."config/paper-global.yml".value = {
