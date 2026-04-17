@@ -88,6 +88,7 @@
     # Imperative extra-container services (not part of host nixos-rebuild)
     minecraft = {
       port = 25560; # Velocity proxy -- must match flakes/containers/minecraft/container.nix
+      mapPort = 8080; # squaremap web UI -- proxied via nginx on port 80
     };
 
     ups = {

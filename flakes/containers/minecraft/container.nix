@@ -102,6 +102,15 @@ let
     sha256 = "3d51d63da0d3a55fa97c4e3278c67109b157f5bc76393ed7c22d647d2db1af36";
   };
 
+  # squaremap -- 2D top-down web map (survival only)
+  squaremap = pkgs.fetchurl {
+    url = "https://cdn.modrinth.com/data/PFb7ZqK6/versions/GItyEkou/squaremap-paper-mc1.21.11-1.3.12.jar";
+    sha512 = "b35306031aaec4d5cb32c52e0bde7e95321cbce24016e8e9fb9cc1161366c7ba352a864bf1f9a44240e35b886fd933f5fc1b20a2c02ea2ff0ca4b611e7259cd4";
+  };
+
+  # squaremap web port (survival map)
+  squaremapPort = 8080;
+
   # Shared LuckPerms config -- all instances use the same file-based storage
   # so permissions are synchronized across the network.
   # Data lives at /srv/minecraft/.luckperms-shared/ inside the container.
@@ -224,6 +233,7 @@ in
         symlinks."plugins/PlaceholderAPI.jar" = placeholderapi;
         symlinks."plugins/DeathChest.jar" = deathchest;
         symlinks."plugins/SmartLock.jar" = smartlock;
+        symlinks."plugins/squaremap.jar" = squaremap;
         files."plugins/LuckPerms/config.yml".value = luckpermsConfig "survival";
 
         # DeathChest -- 14 real days expiry (1209600 seconds)

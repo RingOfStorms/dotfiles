@@ -10,7 +10,20 @@
     {
       networking.firewall.allowedTCPPorts = [
         constants.services.minecraft.port # Velocity proxy (player-facing)
+        80 # squaremap web UI (nginx reverse proxy)
       ];
+
+      # squaremap web UI -- reverse proxy from port 80 to the container's map port
+      services.nginx = {
+        enable = true;
+        virtualHosts."_" = {
+          listen = [{ addr = "0.0.0.0"; port = 80; }];
+          locations."/" = {
+            proxyPass = "http://127.0.0.1:${toString constants.services.minecraft.mapPort}";
+            proxyWebsockets = true;
+          };
+        };
+      };
     }
   ];
 }
