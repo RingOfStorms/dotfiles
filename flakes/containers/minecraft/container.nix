@@ -348,5 +348,40 @@ in
     '';
   };
 
+  # ── Unified tmux session for all server consoles ─────────────────────────
+  # Attach with: tmux attach -t mc
+  # Windows: 1=velocity, 2=survival, 3=creative
+  systemd.services.minecraft-tmux = {
+    description = "Tmux session with all Minecraft server consoles";
+    wantedBy = [ "multi-user.target" ];
+    after = [
+      "minecraft-server-velocity.service"
+      "minecraft-server-survival.service"
+      "minecraft-server-creative.service"
+    ];
+    requires = [
+      "minecraft-server-velocity.service"
+      "minecraft-server-survival.service"
+      "minecraft-server-creative.service"
+    ];
+    serviceConfig = {
+      Type = "forking";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "mc-tmux-start" ''
+        # Wait briefly for server sockets to appear
+        sleep 3
+        ${pkgs.tmux}/bin/tmux new-session -d -s mc -n velocity
+        ${pkgs.tmux}/bin/tmux send-keys -t mc:velocity "${pkgs.tmux}/bin/tmux -S /run/minecraft/velocity.sock attach" Enter
+        ${pkgs.tmux}/bin/tmux new-window -t mc -n survival
+        ${pkgs.tmux}/bin/tmux send-keys -t mc:survival "${pkgs.tmux}/bin/tmux -S /run/minecraft/survival.sock attach" Enter
+        ${pkgs.tmux}/bin/tmux new-window -t mc -n creative
+        ${pkgs.tmux}/bin/tmux send-keys -t mc:creative "${pkgs.tmux}/bin/tmux -S /run/minecraft/creative.sock attach" Enter
+        # Select velocity window by default
+        ${pkgs.tmux}/bin/tmux select-window -t mc:velocity
+      '';
+      ExecStop = "${pkgs.tmux}/bin/tmux kill-session -t mc";
+    };
+  };
+
   system.stateVersion = "25.11";
 }

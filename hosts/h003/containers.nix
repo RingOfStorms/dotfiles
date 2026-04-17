@@ -36,6 +36,10 @@
           };
         };
       };
+      # Shell aliases for container management
+      environment.shellAliases = {
+        mc-attach = "sudo nixos-container run minecraft -- tmux attach -t mc";
+      };
     }
   ];
 }
