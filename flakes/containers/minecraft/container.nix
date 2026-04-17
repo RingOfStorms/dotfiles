@@ -42,6 +42,81 @@ let
     simulation-distance = 20;
     pvp = false;
   };
+
+  # ── Plugin JARs ──────────────────────────────────────────────────────────
+  # LuckPerms -- network-wide permissions (installed on Velocity + all backends)
+  luckpermsVelocity = pkgs.fetchurl {
+    url = "https://cdn.modrinth.com/data/Vebnzrzj/versions/GZjsuCmU/LuckPerms-Velocity-5.5.17.jar";
+    sha512 = "f1c12b25346d55731c3a939f7fe30ff3255f3e37c08e5af2ab501f010a60b6abf316f5d3db0022a26fbfe2c670e129d68240f627cdd33d6afad0ac093acf22ed";
+  };
+  luckpermsBukkit = pkgs.fetchurl {
+    url = "https://cdn.modrinth.com/data/Vebnzrzj/versions/OrIs0S6b/LuckPerms-Bukkit-5.5.17.jar";
+    sha512 = "773895644260b338818bfeff0c78f8d4f590f56b0f711c378a4eec91be6e8b37354099b5db1ea5b2dce4c02486213297a6da09675c9bf6f014f9a400b5772cf3";
+  };
+
+  # WorldEdit (Fast Async) -- //wand, //set, //copy, //paste, etc.
+  fawe = pkgs.fetchurl {
+    url = "https://cdn.modrinth.com/data/z4HZZnLr/versions/mHtmqIig/FastAsyncWorldEdit-Paper-2.15.0.jar";
+    sha512 = "353cfb54600b90c5c30595e3357f680ec851319bcf95427b5ca319df4feee7b2b074f230b5b16a3d3f7dbd6d9ecc89b8e21941f645f1df08292c2dffa406db26";
+  };
+
+  # ViaVersion -- allows newer Minecraft clients to connect
+  viaversion = pkgs.fetchurl {
+    url = "https://cdn.modrinth.com/data/P1OZGk5p/versions/Sh5z5ETl/ViaVersion-5.8.1.jar";
+    sha512 = "233f51ff846797ebc9c2425036e495833b5ec50064742c00ea7182a09f3e4bb79fc280d9947b9af4e71d5294cad5d2505bfb5aaf65c0e08f7cf90f41920d1ca4";
+  };
+
+  # ViaBackwards -- allows older Minecraft clients to connect
+  viabackwards = pkgs.fetchurl {
+    url = "https://cdn.modrinth.com/data/NpvuJQoq/versions/6GSQXY2l/ViaBackwards-5.8.1.jar";
+    sha512 = "91010a989684f91895178d1e9d46574effda009505132efddc3df9ee744aac307d226463d9d0ae15b8bf777df88a30ea03c9b795e2b6c9c18668c393ccac7a27";
+  };
+
+  # EssentialsX -- /home, /tpa, /warp, /spawn, /kit, etc.
+  essentialsx = pkgs.fetchurl {
+    url = "https://cdn.modrinth.com/data/hXiIvTyT/versions/Oa9ZDzZq/EssentialsX-2.21.2.jar";
+    sha512 = "0571b015dce84cf03e906c2d498e8bc3827d86debafafb89851517a76c3eec0391b9bb90f6ec4a5f0dbf4c18bee84ead5e354fc0a5be0cc567fdaa9fc8d96c15";
+  };
+
+  # ProtocolLib -- packet-level API used by many plugins
+  protocollib = pkgs.fetchurl {
+    url = "https://github.com/dmulloy2/ProtocolLib/releases/download/5.4.0/ProtocolLib.jar";
+    sha256 = "ee2e7ab9b5386f2d103081c4d108e61b1035df2ca692b53d6e2409fb1f5caccf";
+  };
+
+  # PlaceholderAPI -- shared placeholder system for plugins
+  placeholderapi = pkgs.fetchurl {
+    url = "https://cdn.modrinth.com/data/lKEzGugV/versions/UmbIiI5H/PlaceholderAPI-2.12.2.jar";
+    sha512 = "94addf996ba45e16dbded3fcaf05e8b442212ce0d577f7edc42b743ad9532c1e24115263976126d36f27c0868ab1c03c40c2d13947985124b92dabca4527dddb";
+  };
+
+  # PAPIProxyBridge -- syncs PlaceholderAPI placeholders across Velocity
+  papiproxybridge = pkgs.fetchurl {
+    url = "https://cdn.modrinth.com/data/bEIUEGTX/versions/jR1s02Y5/PAPIProxyBridge-Velocity-1.8.4.jar";
+    sha512 = "136160b1b31be50ee8bf07797cc0420bfa63c9b3f9725f8a36d3970ffb2df06fcd2a9b1501e74f612ac1dd474af3412eae9cfa925230653e16f041c4642c4031";
+  };
+
+  # DeathChest -- spawns a chest on death instead of item drops (survival only)
+  deathchest = pkgs.fetchurl {
+    url = "https://hangarcdn.papermc.io/plugins/CyntrixAlgorithm/DeathChest/versions/2.2.9/PAPER/deathchest.jar";
+    sha256 = "84fb0dd09386102951ad9c4a5b75a3541db866199168b49e4e36354426b9a35b";
+  };
+
+  # WorldEditSUI -- visual selection overlay for WorldEdit (creative only)
+  worldeditsui = pkgs.fetchurl {
+    url = "https://hangarcdn.papermc.io/plugins/kennytv/WorldEditSUI/versions/1.7.4/PAPER/WorldEditSUI-1.7.4.jar";
+    sha256 = "7006cf9e5944c75e1b57cc19dc88ed17fc179a0e28354fda424aa32a95aac3d8";
+  };
+
+  # Shared LuckPerms config -- all instances use the same file-based storage
+  # so permissions are synchronized across the network.
+  # Data lives at /srv/minecraft/.luckperms-shared/ inside the container.
+  luckpermsConfig = serverType: {
+    server = serverType;
+    storage-method = "h2"; # Shared H2 file database
+    data.address = "/srv/minecraft/.luckperms-shared/luckperms-h2";
+    messaging-service = "pluginmsg"; # Sync changes across servers via Velocity
+  };
 in
 {
   imports = [ nix-minecraft.nixosModules.minecraft-servers ];
@@ -125,10 +200,22 @@ in
 
         # Symlink the generated secret into Velocity's data dir
         symlinks."forwarding.secret" = secretPath;
+
+        # Velocity plugins
+        symlinks.plugins = pkgs.linkFarmFromDrvs "plugins" [
+          luckpermsVelocity
+          viaversion
+          viabackwards
+          papiproxybridge
+        ];
+
+        # LuckPerms config for the proxy
+        files."plugins/luckperms/config.yml".value = luckpermsConfig "proxy";
       };
 
       # ── Paper: Survival (primary) ────────────────────────────────────
-      # Main unmodified Paper server. Plugins will NOT be added here.
+      # Main unmodified Paper server. Plugins will NOT be added here
+      # beyond LuckPerms for network-wide permissions.
       survival = {
         enable = true;
         package = pkgs.paperServers.paper;
@@ -138,6 +225,21 @@ in
         };
         whitelist = whitelist;
         operators = operators;
+
+        symlinks.plugins = pkgs.linkFarmFromDrvs "plugins" [
+          luckpermsBukkit
+          essentialsx
+          protocollib
+          placeholderapi
+          deathchest
+        ];
+        files."plugins/LuckPerms/config.yml".value = luckpermsConfig "survival";
+
+        # DeathChest -- very long expiry (14 real days = 1209600 seconds)
+        files."plugins/DeathChest/config.yml".value = {
+          duration.expiration = 1209600;
+          duration.no-expiration = false;
+        };
 
         # Paper reads the secret from paper-global.yml, but we use
         # @FORWARDING_SECRET@ substitution from an environment file.
@@ -166,6 +268,16 @@ in
         };
         whitelist = whitelist;
         operators = operators;
+
+        symlinks.plugins = pkgs.linkFarmFromDrvs "plugins" [
+          luckpermsBukkit
+          essentialsx
+          protocollib
+          placeholderapi
+          fawe
+          worldeditsui
+        ];
+        files."plugins/LuckPerms/config.yml".value = luckpermsConfig "creative";
 
         files."config/paper-global.yml".value = {
           proxies.velocity = {
