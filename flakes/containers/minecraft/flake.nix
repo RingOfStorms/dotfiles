@@ -5,6 +5,7 @@
     # Inherit extra-container from parent -- single pin for host binary + container lib
     containers.url = "path:..";
     nix-minecraft.url = "github:Infinidoge/nix-minecraft";
+    nix-minecraft.inputs.nixpkgs.follows = "nixpkgs";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
   };
 
