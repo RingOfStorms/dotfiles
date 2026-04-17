@@ -261,7 +261,7 @@ in
 
       # ── Paper: Creative (secondary) ──────────────────────────────────
       # Second Paper instance for plugin experimentation later.
-      # Superflat world in creative mode.
+      # Creative mode with normal world gen.
       creative = {
         enable = true;
         package = pkgs.paperServers.paper;
@@ -269,7 +269,6 @@ in
         serverProperties = paperServerProperties 25567 "Creative" // {
           gamemode = "creative";
           force-gamemode = true; # Force creative on join (overrides per-player)
-          level-type = "flat";
           spawn-monsters = false;
           spawn-animals = false;
         };
