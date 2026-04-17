@@ -96,6 +96,12 @@ let
     sha256 = "7006cf9e5944c75e1b57cc19dc88ed17fc179a0e28354fda424aa32a95aac3d8";
   };
 
+  # Safe-Chest -- chest/container locking with /sc protect
+  safechest = pkgs.fetchurl {
+    url = "https://hangarcdn.papermc.io/plugins/Wilkcraft/Safe-Chest/versions/1.2.6/PAPER/Safe-Chest-1.2.6.jar";
+    sha256 = "0e26456fda88d8c90c26703c8cbad76b7a381711d3db2f8ba79a127c90f5ac7d";
+  };
+
   # Shared LuckPerms config -- all instances use the same file-based storage
   # so permissions are synchronized across the network.
   # Data lives at /srv/minecraft/.luckperms-shared/ inside the container.
@@ -215,6 +221,7 @@ in
         symlinks."plugins/ProtocolLib.jar" = protocollib;
         symlinks."plugins/PlaceholderAPI.jar" = placeholderapi;
         symlinks."plugins/DeathChest.jar" = deathchest;
+        symlinks."plugins/Safe-Chest.jar" = safechest;
         files."plugins/LuckPerms/config.yml".value = luckpermsConfig "survival";
 
         # DeathChest -- 14 real days expiry (1209600 seconds)
@@ -230,12 +237,7 @@ in
               enabled = false;
               permission = "deathchest.stays-forever";
             };
-            thief-protection = {
-              enabled = true;
-              permission = "deathchest.thiefprotected";
-              bypass-permission = "deathchest.thiefprotected.bypass";
-              expiration = 0;
-            };
+            thief-protection.enabled = false;
           };
           player-notification = {
             enabled = true;
