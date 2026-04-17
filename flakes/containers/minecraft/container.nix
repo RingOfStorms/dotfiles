@@ -32,7 +32,8 @@ let
   paperServerProperties = port: motd: {
     server-port = port;
     online-mode = false; # Velocity handles authentication
-    white-list = false; # Velocity handles this
+    white-list = true; # Enforce whitelist on backend servers
+    enforce-whitelist = true; # Kick players not on whitelist immediately
     spawn-protection = 0;
     difficulty = "normal";
     gamemode = "survival";
