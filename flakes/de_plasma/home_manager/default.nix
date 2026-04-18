@@ -285,6 +285,21 @@ in
             };
           };
         }
+        {
+          description = "Foot - No window decorations";
+          match = {
+            window-class = {
+              value = "foot";
+              type = "exact";
+            };
+          };
+          apply = {
+            noborder = {
+              value = true;
+              apply = "force"; # Force this setting
+            };
+          };
+        }
       ];
 
       windows = {
