@@ -61,9 +61,10 @@ in
             verify_clients = true;
             automatically_add_embedded_derp_region = true;
           };
-          # Keep public Tailscale DERP servers as fallback
-          auto_update_enable = true;
-          update_frequency = "5m";
+          # Self-hosted DERP only. See headscale_derp.md for rationale and
+          # alternative approaches we considered.
+          urls = [ ];
+          auto_update_enable = false;
         };
         dns = {
           magic_dns = true;
