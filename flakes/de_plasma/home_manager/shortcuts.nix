@@ -98,7 +98,7 @@ in
     programs.plasma.hotkeys.commands = {
       terminal = {
         key = "Meta+Return";
-        command = "foot";
+        command = "kitty";
       };
     };
   };
