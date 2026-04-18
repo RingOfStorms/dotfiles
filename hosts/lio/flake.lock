@@ -39,11 +39,11 @@
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1776464263,
-        "narHash": "sha256-MRt8OaIGwVL09AjDO+nBjOO8WF2hLGeo6JmwwRQrs/Q=",
+        "lastModified": 1776551127,
+        "narHash": "sha256-RM9YV9tPk9B5ng62Iiy8ACKPqTR9xcY6SKQTR68rqcQ=",
         "ref": "refs/heads/master",
-        "rev": "74ab3bccddc9b3687032af8d6d6f2b83c2050306",
-        "revCount": 1564,
+        "rev": "96b916c04f5689c2af3947dc587519ebfb18df7f",
+        "revCount": 1569,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -94,11 +94,11 @@
       },
       "locked": {
         "dir": "flakes/de_plasma",
-        "lastModified": 1776465838,
-        "narHash": "sha256-l8e8p3En5SgOeK8CErI1Bt+nZKbgNnEG4v5Ui3A1yNE=",
+        "lastModified": 1776551127,
+        "narHash": "sha256-RM9YV9tPk9B5ng62Iiy8ACKPqTR9xcY6SKQTR68rqcQ=",
         "ref": "refs/heads/master",
-        "rev": "1841da107ed239067ec3e74e1efeb90aef459db4",
-        "revCount": 1565,
+        "rev": "96b916c04f5689c2af3947dc587519ebfb18df7f",
+        "revCount": 1569,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -439,11 +439,11 @@
     "nono": {
       "flake": false,
       "locked": {
-        "lastModified": 1776402659,
-        "narHash": "sha256-sTxuDLZld7BNupvFOLxyFW2+y5yKTIrw3B1H9+TdtsM=",
+        "lastModified": 1776497390,
+        "narHash": "sha256-1qiD/v9LHlxBL8kIoz5iZNFpSrPRfDhA1Gvf0mVkIns=",
         "owner": "always-further",
         "repo": "nono",
-        "rev": "832be3e51bb76d805c35395b951b27663598924f",
+        "rev": "1906454c1ca7d4016d32884d8cd7de83b5e82e6d",
         "type": "github"
       },
       "original": {
@@ -1150,11 +1150,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1775513299,
-        "narHash": "sha256-FO/tMGr1WJKTJiOwQLO2kZauQ/Xwff2Vw6H9sOSWcDU=",
+        "lastModified": 1776551230,
+        "narHash": "sha256-82y2+Z/DckZeOoVort+bV/p42+uJ41ppC+nXK4a6lfs=",
         "ref": "refs/heads/master",
-        "rev": "97998989add76b63388ab2d86b6e996947996f97",
-        "revCount": 337,
+        "rev": "098be7a8acfe6988f029e8d27f75bd791ef88870",
+        "revCount": 338,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/nvim"
       },
