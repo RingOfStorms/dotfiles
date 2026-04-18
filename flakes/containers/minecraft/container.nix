@@ -96,6 +96,18 @@ let
     sha256 = "84fb0dd09386102951ad9c4a5b75a3541db866199168b49e4e36354426b9a35b";
   };
 
+  # How long a death chest stays before despawning. Used in both the plugin
+  # config and the user-facing notification message so they stay in sync.
+  deathChestExpirySeconds = 1800; # 30 minutes
+  deathChestExpiryHuman = "30 minutes";
+
+  # Vault -- permission/economy bridge API. EssentialsX requires this to
+  # expose LuckPerms group prefixes/suffixes in chat and other features.
+  vault = pkgs.fetchurl {
+    url = "https://github.com/MilkBowl/Vault/releases/download/1.7.3/Vault.jar";
+    sha256 = "07fhfz7ycdlbmxsri11z02ywkby54g6wi9q0myxzap1syjbyvdd6";
+  };
+
   # WorldEditSUI -- visual selection overlay for WorldEdit (creative only)
   worldeditsui = pkgs.fetchurl {
     url = "https://hangarcdn.papermc.io/plugins/kennytv/WorldEditSUI/versions/1.7.4/PAPER/WorldEditSUI-1.7.4.jar";
@@ -234,6 +246,7 @@ in
         operators = operators;
 
         symlinks."plugins/LuckPerms.jar" = luckpermsBukkit;
+        symlinks."plugins/Vault.jar" = vault;
         symlinks."plugins/EssentialsX.jar" = essentialsx;
         symlinks."plugins/ProtocolLib.jar" = protocollib;
         symlinks."plugins/PlaceholderAPI.jar" = placeholderapi;
@@ -242,13 +255,13 @@ in
         symlinks."plugins/squaremap.jar" = squaremap;
         files."plugins/LuckPerms/config.yml".value = luckpermsConfig "survival";
 
-        # DeathChest -- 1 hour expiry (3600 seconds)
+        # DeathChest -- expiry controlled by deathChestExpiry* bindings above
         files."plugins/DeathChest/config.yml".value = {
           update-checker = false;
           auto-update = false;
           duration-format = "mm'm' ss's'";
           chest = {
-            expiration = 3600;
+            expiration = deathChestExpirySeconds;
             drop-items-after-expiration = true;
             blast-protection = true;
             no-expiration-permission = {
@@ -259,7 +272,7 @@ in
           };
           player-notification = {
             enabled = true;
-            message = "&7You died. Your items were put into a chest which disappears after &c1 hour&7! \${x} \${y} \${z}";
+            message = "&7You died. Your items were put into a chest which disappears after &c${deathChestExpiryHuman}&7! \${x} \${y} \${z}";
           };
           config-version = 3;
         };
@@ -292,6 +305,7 @@ in
         operators = operators;
 
         symlinks."plugins/LuckPerms.jar" = luckpermsBukkit;
+        symlinks."plugins/Vault.jar" = vault;
         symlinks."plugins/EssentialsX.jar" = essentialsx;
         symlinks."plugins/ProtocolLib.jar" = protocollib;
         symlinks."plugins/PlaceholderAPI.jar" = placeholderapi;
