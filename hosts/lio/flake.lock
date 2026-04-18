@@ -39,11 +39,11 @@
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1776551127,
-        "narHash": "sha256-RM9YV9tPk9B5ng62Iiy8ACKPqTR9xcY6SKQTR68rqcQ=",
+        "lastModified": 1776551783,
+        "narHash": "sha256-QuJqMJkOPz5qLbfx9VrOxl8H/5ZJBgitBIegek6IYd8=",
         "ref": "refs/heads/master",
-        "rev": "96b916c04f5689c2af3947dc587519ebfb18df7f",
-        "revCount": 1569,
+        "rev": "62d73cffe63fb350186119aa74abebfc51560050",
+        "revCount": 1572,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -94,11 +94,11 @@
       },
       "locked": {
         "dir": "flakes/de_plasma",
-        "lastModified": 1776551127,
-        "narHash": "sha256-RM9YV9tPk9B5ng62Iiy8ACKPqTR9xcY6SKQTR68rqcQ=",
+        "lastModified": 1776551549,
+        "narHash": "sha256-UEaqgMTQbr8FQshExbIL+4DboY0r3/5toi4TARIDOT4=",
         "ref": "refs/heads/master",
-        "rev": "96b916c04f5689c2af3947dc587519ebfb18df7f",
-        "revCount": 1569,
+        "rev": "9292c73f7cbb9709c62683a0f51998cffae6cb3d",
+        "revCount": 1571,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
