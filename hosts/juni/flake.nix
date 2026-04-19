@@ -25,7 +25,7 @@
     # ports.url = "path:../../flakes/ports";
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
 
-    opencode.url = "github:anomalyco/opencode/c6262f9d4002d86a1f1795c306aa329d45361d12";
+    opencode.url = "github:anomalyco/opencode/88582566bf2bfd2d26000f0c25735bf48ddeca00";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -78,7 +78,12 @@
           })
           inputs.common.nixosModules.jetbrains_font
           inputs.stt_ime.nixosModules.default
-          ({ ringofstorms.sttIme = { enable = true; model = "tiny.en"; }; })
+          ({
+            ringofstorms.sttIme = {
+              enable = true;
+              model = "tiny.en";
+            };
+          })
           inputs.ports.nixosModules.default
           ({ ringofstorms.ports.enable = true; })
 
@@ -109,15 +114,18 @@
             };
           })
 
-          ({ pkgs, ... }: {
-            environment.systemPackages = [
-              inputs.opencode.packages.${pkgs.system}.default
-            ];
-            environment.shellAliases = {
-              "oc" = "all_proxy='' http_proxy='' https_proxy='' opencode";
-              "occ" = "oc -c";
-            };
-          })
+          (
+            { pkgs, ... }:
+            {
+              environment.systemPackages = [
+                inputs.opencode.packages.${pkgs.system}.default
+              ];
+              environment.shellAliases = {
+                "oc" = "all_proxy='' http_proxy='' https_proxy='' opencode";
+                "occ" = "oc -c";
+              };
+            }
+          )
 
           inputs.beszel.nixosModules.agent
           ({ beszelAgent.token = "2fb5f0a0-24aa-4044-a893-6d0f916cd063"; })
@@ -127,63 +135,69 @@
           (import ./impermanence.nix { inherit primaryUser; })
 
           # Host-specific config
-          ({ pkgs, ... }: {
-            environment.systemPackages = with pkgs; [
-              vlc google-chrome jellyfin-media-player ttyd
-            ];
-            services.flatpak.packages = [
-              "dev.vencord.Vesktop"
-              "com.spotify.Client"
-              "com.bitwarden.desktop"
-            ];
+          (
+            { pkgs, ... }:
+            {
+              environment.systemPackages = with pkgs; [
+                vlc
+                google-chrome
+                jellyfin-media-player
+                ttyd
+              ];
+              services.flatpak.packages = [
+                "dev.vencord.Vesktop"
+                "com.spotify.Client"
+                "com.bitwarden.desktop"
+              ];
 
-            # TODO move to shared atuin module
-            systemd.services.atuin-autologin = {
-              description = "Auto-login to Atuin (if logged out)";
-              wantedBy = [ "multi-user.target" ];
-              after = [ "network-online.target" ];
-              wants = [ "network-online.target" ];
-              serviceConfig = {
-                Type = "oneshot";
-                User = "josh";
-                Group = "users";
-                Environment = [
-                  "HOME=/home/josh"
-                  "XDG_CONFIG_HOME=/home/josh/.config"
-                  "XDG_DATA_HOME=/home/josh/.local/share"
-                ];
-                ExecStart = pkgs.writeShellScript "atuin-autologin" ''
-                  #!/usr/bin/env bash
-                  set -euo pipefail
+              # TODO move to shared atuin module
+              systemd.services.atuin-autologin = {
+                description = "Auto-login to Atuin (if logged out)";
+                wantedBy = [ "multi-user.target" ];
+                after = [ "network-online.target" ];
+                wants = [ "network-online.target" ];
+                serviceConfig = {
+                  Type = "oneshot";
+                  User = "josh";
+                  Group = "users";
+                  Environment = [
+                    "HOME=/home/josh"
+                    "XDG_CONFIG_HOME=/home/josh/.config"
+                    "XDG_DATA_HOME=/home/josh/.local/share"
+                  ];
+                  ExecStart = pkgs.writeShellScript "atuin-autologin" ''
+                    #!/usr/bin/env bash
+                    set -euo pipefail
 
-                  if ! ${pkgs.iputils}/bin/ping -c1 -W2 1.1.1.1 &>/dev/null; then
-                    echo "No network access, skipping atuin login"
-                    exit 0
-                  fi
+                    if ! ${pkgs.iputils}/bin/ping -c1 -W2 1.1.1.1 &>/dev/null; then
+                      echo "No network access, skipping atuin login"
+                      exit 0
+                    fi
 
-                  secret="/var/lib/openbao-secrets/atuin-key-josh_2026-03-15"
-                  if [ ! -s "$secret" ]; then
-                    echo "Missing atuin secret at $secret" >&2
-                    exit 1
-                  fi
+                    secret="/var/lib/openbao-secrets/atuin-key-josh_2026-03-15"
+                    if [ ! -s "$secret" ]; then
+                      echo "Missing atuin secret at $secret" >&2
+                      exit 1
+                    fi
 
-                  # status exits non-zero when logged out.
-                  out="$(${pkgs.atuin}/bin/atuin status 2>&1)" && exit 0
+                    # status exits non-zero when logged out.
+                    out="$(${pkgs.atuin}/bin/atuin status 2>&1)" && exit 0
 
-                  if [[ "$out" != *"You are not logged in"* ]]; then
-                    echo "$out" >&2
-                    exit 1
-                  fi
+                    if [[ "$out" != *"You are not logged in"* ]]; then
+                      echo "$out" >&2
+                      exit 1
+                    fi
 
-                  username="$(${pkgs.gnused}/bin/sed -n '1p' "$secret")"
-                  password="$(${pkgs.gnused}/bin/sed -n '2p' "$secret")"
-                  key="$(${pkgs.gnused}/bin/sed -n '3p' "$secret")"
+                    username="$(${pkgs.gnused}/bin/sed -n '1p' "$secret")"
+                    password="$(${pkgs.gnused}/bin/sed -n '2p' "$secret")"
+                    key="$(${pkgs.gnused}/bin/sed -n '3p' "$secret")"
 
-                  exec ${pkgs.atuin}/bin/atuin login --username "$username" --password "$password" --key "$key"
-                '';
+                    exec ${pkgs.atuin}/bin/atuin login --username "$username" --password "$password" --key "$key"
+                  '';
+                };
               };
-            };
-          })
+            }
+          )
         ];
       };
     };
