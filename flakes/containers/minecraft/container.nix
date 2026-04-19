@@ -255,6 +255,58 @@ in
         symlinks."plugins/squaremap.jar" = squaremap;
         files."plugins/LuckPerms/config.yml".value = luckpermsConfig "survival";
 
+        # squaremap -- enable Nether and End rendering.
+        #
+        # By default squaremap "enables" all worlds, but the Nether map looks
+        # like solid bedrock because the renderer iterates downward from the
+        # top of the build limit and immediately hits the Nether ceiling.
+        # Setting `iterate-up: true` + `max-height: 127` makes it render the
+        # Nether floor properly (everything from y=0 looking upward, capped
+        # just below the bedrock ceiling).
+        #
+        # The End is fine with default top-down rendering since it has no
+        # ceiling, but we set a friendlier display name for the web UI.
+        #
+        # Squaremap reads per-world settings from `world-settings.<worldname>`
+        # falling back to `world-settings.default.*`. World names use the
+        # vanilla resource-location key (with `:` replaced by `_`).
+        files."plugins/squaremap/config.yml".value = {
+          settings = {
+            web-address = "http://localhost:${toString squaremapPort}";
+            internal-webserver = {
+              enabled = true;
+              bind = "0.0.0.0";
+              port = squaremapPort;
+            };
+          };
+          world-settings = {
+            default = {
+              # Inherited by every world unless overridden below
+              map.enabled = true;
+              map.background-render.enabled = true;
+            };
+            minecraft_overworld = {
+              map.display-name = "Overworld";
+              map.order = 0;
+            };
+            minecraft_the_nether = {
+              map.display-name = "Nether";
+              map.order = 1;
+              map.enabled = true;
+              # Render upward from y=0 instead of downward from build limit,
+              # otherwise the entire map shows bedrock ceiling.
+              map.iterate-up = true;
+              # Cap render height just below the Nether bedrock ceiling (y=128)
+              map.max-height = 127;
+            };
+            minecraft_the_end = {
+              map.display-name = "The End";
+              map.order = 2;
+              map.enabled = true;
+            };
+          };
+        };
+
         # DeathChest -- expiry controlled by deathChestExpiry* bindings above
         files."plugins/DeathChest/config.yml".value = {
           update-checker = false;
