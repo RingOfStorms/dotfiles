@@ -137,6 +137,19 @@ let
   # squaremap web port (survival map)
   squaremapPort = 8080;
 
+  # SimpleProxyChat -- cross-server chat + join/leave/switch messages.
+  # Velocity-side plugin does the actual sync; the Helper jar runs on each
+  # Paper backend so SPC can resolve PlaceholderAPI placeholders (e.g.
+  # LuckPerms group prefixes) inside chat messages.
+  simpleProxyChat = pkgs.fetchurl {
+    url = "https://github.com/beanbeanjuice/SimpleProxyChat/releases/download/0.5.7/SimpleProxyChat-0.5.7.jar";
+    sha256 = "0ni0vfgyy85jaq7m7rh92xc3207xdkkjvirpiwqvjjx1dfqazvf3";
+  };
+  simpleProxyChatHelper = pkgs.fetchurl {
+    url = "https://github.com/beanbeanjuice/SimpleProxyChat/releases/download/0.5.7/SimpleProxyChatHelper-0.0.4.jar";
+    sha256 = "1w074j8gdjpnw9xpg6xvjpsa4zk96mgqhhl3cdyr99nlr6klhs99";
+  };
+
   # ── LuckPerms storage (PostgreSQL) ──────────────────────────────────────
   # All three instances (velocity proxy + survival + creative) share a single
   # PostgreSQL database so permissions are synchronized across the network.
@@ -301,9 +314,63 @@ in
         # Velocity plugins (individual symlinks so plugins/ stays writable for config dirs)
         symlinks."plugins/LuckPerms-Velocity.jar" = luckpermsVelocity;
         symlinks."plugins/PAPIProxyBridge.jar" = papiproxybridge;
+        symlinks."plugins/SimpleProxyChat.jar" = simpleProxyChat;
 
         # LuckPerms config for the proxy
         files."plugins/luckperms/config.yml".value = luckpermsConfig "proxy";
+
+        # SimpleProxyChat -- in-game only (no Discord bridge for now).
+        # `aliases` map the internal velocity server names to display names
+        # used in chat/join/leave messages.
+        # `use-helper: true` lets SPC pull PlaceholderAPI values (e.g.
+        # LuckPerms prefixes) from the backend Paper servers via the
+        # SimpleProxyChatHelper plugin installed on each backend.
+        files."plugins/SimpleProxyChat/config.yml".value = {
+          use-discord = false;
+          BOT-TOKEN = "TOKEN_HERE";
+          CHANNEL-ID = "GLOBAL_CHANNEL_ID";
+          bot-activity = {
+            status = "ONLINE";
+            type = "CUSTOM_STATUS";
+            text = "%online%/%max-players% online";
+          };
+          server-update-interval = 3;
+          aliases = {
+            survival = "Survival";
+            creative = "Creative";
+          };
+          use-permissions = false;
+          proxy-message-prefix = ""; # empty = every message is global
+          use-initial-server-status = true;
+          use-fake-messages = true;
+          timestamp = {
+            format = "hh:mm a";
+            timezone = "America/Los_Angeles";
+          };
+          use-helper = true;
+          update-notifications = true;
+          use-simple-proxy-chat-banning-system = false;
+          # Replays the last few messages when a player switches servers,
+          # since Velocity doesn't preserve chat across the hop.
+          send-previous-messages-on-switch = {
+            enabled = true;
+            amount = 15;
+          };
+          commands = {
+            reload-aliases = [ "spcreload" ];
+            chat-toggle-aliases = [ "chattoggle" ];
+            ban-aliases = [ "spcban" ];
+            unban-aliases = [ "spcunban" ];
+            whisper-aliases = [ "spc-msg" ];
+            reply-aliases = [ "spc-r" ];
+            broadcast-aliases = [
+              "spc-bc"
+              "broadcast"
+            ];
+          };
+          disabled-servers = [ ];
+          file-version = 16;
+        };
       };
 
       # ── Paper: Survival (primary) ────────────────────────────────────
@@ -326,6 +393,7 @@ in
         symlinks."plugins/PlaceholderAPI.jar" = placeholderapi;
         symlinks."plugins/DeathChest.jar" = deathchest;
         symlinks."plugins/squaremap.jar" = squaremap;
+        symlinks."plugins/SimpleProxyChatHelper.jar" = simpleProxyChatHelper;
         files."plugins/LuckPerms/config.yml".value = luckpermsConfig "survival";
 
         # squaremap -- enable Nether and End rendering.
@@ -438,6 +506,7 @@ in
         symlinks."plugins/PlaceholderAPI.jar" = placeholderapi;
         symlinks."plugins/FastAsyncWorldEdit.jar" = fawe;
         symlinks."plugins/WorldEditSUI.jar" = worldeditsui;
+        symlinks."plugins/SimpleProxyChatHelper.jar" = simpleProxyChatHelper;
         files."plugins/LuckPerms/config.yml".value = luckpermsConfig "creative";
 
         files."config/paper-global.yml".value = {
