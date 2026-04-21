@@ -4,14 +4,6 @@
 
 ```
 /lp group default permission set deathchest.place true server=survival
-
-/lp group default permission set smartlock.lock true server=survival
-/lp group default permission set smartlock.unlock true server=survival
-/lp group default permission set smartlock.add true server=survival
-/lp group default permission set smartlock.addarea true server=survival
-/lp group default permission set smartlock.remove true server=survival
-/lp group default permission set smartlock.info true server=survival
-/lp group default permission set smartlock.help true server=survival
 ```
 
 ## Creative

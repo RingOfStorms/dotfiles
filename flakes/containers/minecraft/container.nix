@@ -114,12 +114,6 @@ let
     sha256 = "7006cf9e5944c75e1b57cc19dc88ed17fc179a0e28354fda424aa32a95aac3d8";
   };
 
-  # SmartLock -- chest/container locking with /lock
-  smartlock = pkgs.fetchurl {
-    url = "https://hangarcdn.papermc.io/plugins/GroupMoro/SmartLock/versions/1.0.3/PAPER/SmartLock-1.0.3.jar";
-    sha256 = "3d51d63da0d3a55fa97c4e3278c67109b157f5bc76393ed7c22d647d2db1af36";
-  };
-
   # squaremap -- 2D top-down web map (survival only)
   squaremap = pkgs.fetchurl {
     url = "https://cdn.modrinth.com/data/PFb7ZqK6/versions/GItyEkou/squaremap-paper-mc1.21.11-1.3.12.jar";
@@ -251,7 +245,6 @@ in
         symlinks."plugins/ProtocolLib.jar" = protocollib;
         symlinks."plugins/PlaceholderAPI.jar" = placeholderapi;
         symlinks."plugins/DeathChest.jar" = deathchest;
-        symlinks."plugins/SmartLock.jar" = smartlock;
         symlinks."plugins/squaremap.jar" = squaremap;
         files."plugins/LuckPerms/config.yml".value = luckpermsConfig "survival";
 
