@@ -123,13 +123,36 @@ let
   # squaremap web port (survival map)
   squaremapPort = 8080;
 
-  # Shared LuckPerms config -- all instances use the same file-based storage
-  # so permissions are synchronized across the network.
-  # Data lives at /srv/minecraft/.luckperms-shared/ inside the container.
+  # ── LuckPerms storage (PostgreSQL) ──────────────────────────────────────
+  # All three instances (velocity proxy + survival + creative) share a single
+  # PostgreSQL database so permissions are synchronized across the network.
+  #
+  # Auth: peer-trust on 127.0.0.1 (see services.postgresql.authentication
+  # below). The container has no exposed postgres port and the loopback
+  # interface inside a NixOS container is isolated from the host, so trust
+  # auth is safe here. This mirrors hosts/h001/containers/forgejo.nix.
+  #
+  # First-boot note: LuckPerms downloads the PostgreSQL JDBC driver from
+  # Maven Central on first start. The container has internet access, so
+  # this just works -- but expect a few extra seconds on the first launch
+  # after switching storage methods. Schema is auto-created.
+  luckpermsDbName = "luckperms";
+  luckpermsDbUser = "luckperms";
   luckpermsConfig = serverType: {
     server = serverType;
-    storage-method = "h2"; # Shared H2 file database
-    data.address = "/srv/minecraft/.luckperms-shared/luckperms-h2";
+    storage-method = "postgresql";
+    data = {
+      address = "127.0.0.1"; # default port 5432
+      database = luckpermsDbName;
+      username = luckpermsDbUser;
+      password = ""; # ignored under trust auth
+      pool-settings = {
+        # Upstream defaults are MySQL-tuned. The useUnicode/characterEncoding
+        # JDBC properties are not recognized by the PostgreSQL driver, so we
+        # explicitly empty `properties` to avoid driver warnings on startup.
+        properties = { };
+      };
+    };
     messaging-service = "pluginmsg"; # Sync changes across servers via Velocity
   };
 in
@@ -167,18 +190,61 @@ in
     '';
   };
 
-  # Make the minecraft server services depend on the secret existing
+  # Make the minecraft server services depend on:
+  #   - the forwarding secret existing (Velocity modern forwarding)
+  #   - postgresql being up (LuckPerms storage backend)
   systemd.services.minecraft-server-velocity = {
-    after = [ "minecraft-forwarding-secret.service" ];
-    requires = [ "minecraft-forwarding-secret.service" ];
+    after = [
+      "minecraft-forwarding-secret.service"
+      "postgresql.service"
+    ];
+    requires = [
+      "minecraft-forwarding-secret.service"
+      "postgresql.service"
+    ];
   };
   systemd.services.minecraft-server-survival = {
-    after = [ "minecraft-forwarding-secret.service" ];
-    requires = [ "minecraft-forwarding-secret.service" ];
+    after = [
+      "minecraft-forwarding-secret.service"
+      "postgresql.service"
+    ];
+    requires = [
+      "minecraft-forwarding-secret.service"
+      "postgresql.service"
+    ];
   };
   systemd.services.minecraft-server-creative = {
-    after = [ "minecraft-forwarding-secret.service" ];
-    requires = [ "minecraft-forwarding-secret.service" ];
+    after = [
+      "minecraft-forwarding-secret.service"
+      "postgresql.service"
+    ];
+    requires = [
+      "minecraft-forwarding-secret.service"
+      "postgresql.service"
+    ];
+  };
+
+  # ── PostgreSQL for LuckPerms ────────────────────────────────────────────
+  # Single shared database used by Velocity + Paper backends for permissions.
+  # Trust auth on loopback only -- nothing outside the container can reach
+  # postgres. The `luckperms` role owns the `luckperms` database; LuckPerms
+  # creates its own tables on first connect (prefixed `luckperms_`).
+  services.postgresql = {
+    enable = true;
+    package = pkgs.postgresql_17;
+    enableJIT = true;
+    authentication = ''
+      local all all trust
+      host  all all 127.0.0.1/32 trust
+      host  all all ::1/128      trust
+    '';
+    ensureDatabases = [ luckpermsDbName ];
+    ensureUsers = [
+      {
+        name = luckpermsDbUser;
+        ensureDBOwnership = true;
+      }
+    ];
   };
 
   services.minecraft-servers = {
