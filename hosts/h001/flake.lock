@@ -55,11 +55,11 @@
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1775590042,
-        "narHash": "sha256-r8vifvwH8e1GFHhSST+C0yPh7tPh/up4MtnOIG25xgs=",
+        "lastModified": 1776635268,
+        "narHash": "sha256-IMnuA+VyE4YASc1a6fXTt2F9L5Bf1h6+QD877bbQtBg=",
         "ref": "refs/heads/master",
-        "rev": "b27ed7ff163a3b5f7fa467dbf1185d8af96df75d",
-        "revCount": 1515,
+        "rev": "0eeb3b19893ff95296ece44d81502d1290701bad",
+        "revCount": 1577,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -138,11 +138,11 @@
     },
     "litellm-nixpkgs": {
       "locked": {
-        "lastModified": 1776169885,
-        "narHash": "sha256-l/iNYDZ4bGOAFQY2q8y5OAfBBtrDAaPuRQqWaFHVRXM=",
+        "lastModified": 1776548001,
+        "narHash": "sha256-ZSK0NL4a1BwVbbTBoSnWgbJy9HeZFXLYQizjb2DPF24=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "4bd9165a9165d7b5e33ae57f3eecbcb28fb231c9",
+        "rev": "b12141ef619e0a9c1c84dc8c684040326f27cdcc",
         "type": "github"
       },
       "original": {
@@ -975,11 +975,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1775513299,
-        "narHash": "sha256-FO/tMGr1WJKTJiOwQLO2kZauQ/Xwff2Vw6H9sOSWcDU=",
+        "lastModified": 1776551230,
+        "narHash": "sha256-82y2+Z/DckZeOoVort+bV/p42+uJ41ppC+nXK4a6lfs=",
         "ref": "refs/heads/master",
-        "rev": "97998989add76b63388ab2d86b6e996947996f97",
-        "revCount": 337,
+        "rev": "098be7a8acfe6988f029e8d27f75bd791ef88870",
+        "revCount": 338,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/nvim"
       },
@@ -1012,11 +1012,11 @@
     "secrets-bao": {
       "locked": {
         "dir": "flakes/secrets-bao",
-        "lastModified": 1775590042,
-        "narHash": "sha256-r8vifvwH8e1GFHhSST+C0yPh7tPh/up4MtnOIG25xgs=",
+        "lastModified": 1776635268,
+        "narHash": "sha256-IMnuA+VyE4YASc1a6fXTt2F9L5Bf1h6+QD877bbQtBg=",
         "ref": "refs/heads/master",
-        "rev": "b27ed7ff163a3b5f7fa467dbf1185d8af96df75d",
-        "revCount": 1515,
+        "rev": "0eeb3b19893ff95296ece44d81502d1290701bad",
+        "revCount": 1577,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
