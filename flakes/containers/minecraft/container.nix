@@ -38,6 +38,14 @@ let
     };
   };
 
+  # Vanilla test server: every whitelisted player is also an op so anyone
+  # can /gamemode, /tp, /give, etc. while debugging mechanics.
+  vanillaTestOperators = lib.mapAttrs (_name: uuid: {
+    inherit uuid;
+    level = 4;
+    bypassesPlayerLimit = true;
+  }) whitelist;
+
   # Shared Paper server properties (both servers use the same base config)
   paperServerProperties = port: motd: {
     server-port = port;
@@ -200,6 +208,11 @@ in
 {
   imports = [ nix-minecraft.nixosModules.minecraft-servers ];
   nixpkgs.overlays = [ nix-minecraft.overlay ];
+
+  # Mojang's vanilla server jar is marked unfree (unfreeRedistributable).
+  # Allow only that single package; everything else stays restricted.
+  nixpkgs.config.allowUnfreePredicate =
+    pkg: builtins.elem (lib.getName pkg) [ "minecraft-server" ];
 
   environment.systemPackages = [ pkgs.tmux ];
 
@@ -564,7 +577,7 @@ in
           pvp = false;
         };
         whitelist = whitelist;
-        operators = operators;
+        operators = vanillaTestOperators;
       };
     };
 
