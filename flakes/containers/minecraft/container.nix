@@ -9,6 +9,11 @@ let
   # Must match the firewall rule on the host (see hosts/h003/_constants.nix).
   proxyPort = 25565;
 
+  # Standalone vanilla 1.21 test server, NOT behind Velocity. Used to
+  # validate vanilla mechanics (e.g. cobblestone generators) when Paper
+  # behavior is suspect. Bound directly so a real client can connect.
+  vanillaTestPort = 25560;
+
   # Path where the shared forwarding secret lives (generated on first boot).
   # Must be identical across Velocity and each Paper backend.
   secretPath = "/var/lib/minecraft-secrets/forwarding.secret";
@@ -150,6 +155,15 @@ let
     sha256 = "1w074j8gdjpnw9xpg6xvjpsa4zk96mgqhhl3cdyr99nlr6klhs99";
   };
 
+  # F3NPerm -- lets non-op players with /gamemode permission use the
+  # vanilla F3+N (cycle gamemode) and F3+F4 (gamemode picker) hotkeys.
+  # The client refuses these unless the server tells it the player is op,
+  # so this plugin spoofs op status purely for that purpose. Creative-only.
+  f3nperm = pkgs.fetchurl {
+    url = "https://cdn.modrinth.com/data/mGZ550y3/versions/UcHVPYYQ/F3NPerm-3.6.1.jar";
+    sha256 = "1wh3a9pzbibqx3dnpn8wy64q8yh2cjw332mp5d8z8p5n5f7zmfr8";
+  };
+
   # ── LuckPerms storage (PostgreSQL) ──────────────────────────────────────
   # All three instances (velocity proxy + survival + creative) share a single
   # PostgreSQL database so permissions are synchronized across the network.
@@ -190,7 +204,10 @@ in
   environment.systemPackages = [ pkgs.tmux ];
 
   # Open the Velocity proxy port inside the container's firewall
-  networking.firewall.allowedTCPPorts = [ proxyPort ];
+  networking.firewall.allowedTCPPorts = [
+    proxyPort
+    vanillaTestPort
+  ];
 
   # ── Generate forwarding secret on first boot ────────────────────────────
   # Creates a random secret once and reuses it forever. All minecraft
@@ -507,6 +524,7 @@ in
         symlinks."plugins/FastAsyncWorldEdit.jar" = fawe;
         symlinks."plugins/WorldEditSUI.jar" = worldeditsui;
         symlinks."plugins/SimpleProxyChatHelper.jar" = simpleProxyChatHelper;
+        symlinks."plugins/F3NPerm.jar" = f3nperm;
         files."plugins/LuckPerms/config.yml".value = luckpermsConfig "creative";
 
         files."config/paper-global.yml".value = {
@@ -518,6 +536,35 @@ in
         };
 
         files."config/paper-world-defaults.yml".value = paperWorldDefaults;
+      };
+
+      # ── Vanilla 1.21 (test, standalone) ──────────────────────────────
+      # NOT behind Velocity. Bound directly to vanillaTestPort so a real
+      # client can connect and validate vanilla mechanics (cobble gen,
+      # fluid behavior, etc.) when Paper behavior is suspect.
+      #
+      # Capped at 2 GB heap. Same whitelist + ops as the prod servers.
+      # No plugins, no PaperMC, just Mojang's server.jar.
+      vanilla-test = {
+        enable = true;
+        package = pkgs.vanillaServers.vanilla-1_21;
+        jvmOpts = "-Xms512M -Xmx2048M";
+        serverProperties = {
+          server-port = vanillaTestPort;
+          online-mode = true; # Authenticate against Mojang directly
+          white-list = true;
+          enforce-whitelist = true;
+          spawn-protection = 0;
+          difficulty = "normal";
+          gamemode = "survival";
+          motd = "Vanilla 1.21 Test";
+          max-players = 5;
+          view-distance = 12;
+          simulation-distance = 10;
+          pvp = false;
+        };
+        whitelist = whitelist;
+        operators = operators;
       };
     };
 
@@ -562,12 +609,13 @@ in
       systemctl restart minecraft-server-velocity
       systemctl restart minecraft-server-survival
       systemctl restart minecraft-server-creative
+      systemctl restart minecraft-server-vanilla-test
     '';
   };
 
   # ── Unified tmux session for all server consoles ─────────────────────────
   # Attach with: tmux attach -t mc
-  # Windows: 1=velocity, 2=survival, 3=creative
+  # Windows: 1=velocity, 2=survival, 3=creative, 4=vanilla-test
   systemd.services.minecraft-tmux = {
     description = "Tmux session with all Minecraft server consoles";
     wantedBy = [ "multi-user.target" ];
@@ -575,11 +623,13 @@ in
       "minecraft-server-velocity.service"
       "minecraft-server-survival.service"
       "minecraft-server-creative.service"
+      "minecraft-server-vanilla-test.service"
     ];
     requires = [
       "minecraft-server-velocity.service"
       "minecraft-server-survival.service"
       "minecraft-server-creative.service"
+      "minecraft-server-vanilla-test.service"
     ];
     serviceConfig = {
       Type = "forking";
@@ -593,6 +643,8 @@ in
         ${pkgs.tmux}/bin/tmux send-keys -t mc:survival "${pkgs.tmux}/bin/tmux -S /run/minecraft/survival.sock attach" Enter
         ${pkgs.tmux}/bin/tmux new-window -t mc -n creative
         ${pkgs.tmux}/bin/tmux send-keys -t mc:creative "${pkgs.tmux}/bin/tmux -S /run/minecraft/creative.sock attach" Enter
+        ${pkgs.tmux}/bin/tmux new-window -t mc -n vanilla-test
+        ${pkgs.tmux}/bin/tmux send-keys -t mc:vanilla-test "${pkgs.tmux}/bin/tmux -S /run/minecraft/vanilla-test.sock attach" Enter
         # Select velocity window by default
         ${pkgs.tmux}/bin/tmux select-window -t mc:velocity
       '';

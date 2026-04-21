@@ -10,6 +10,7 @@
     {
       networking.firewall.allowedTCPPorts = [
         constants.services.minecraft.port # Velocity proxy (player-facing)
+        constants.services.minecraft.vanillaTestPort # Standalone vanilla test server
       ];
 
       # Reverse proxy for squaremap -- l001 terminates HTTPS and proxies
