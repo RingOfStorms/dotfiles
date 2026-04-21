@@ -49,6 +49,20 @@ let
     pvp = false;
   };
 
+  # Paper per-world defaults. We enable the "unsupported" piston/TNT duping
+  # knobs because we want classic survival-tech contraptions (TNT dupers,
+  # bedrock breakers, headless-piston designs) to work.
+  #
+  # These flags live under `unsupported-settings` because Mojang considers
+  # the underlying behaviour a bug; Paper disables them by default but
+  # exposes toggles for servers that intentionally rely on them.
+  paperWorldDefaults = {
+    unsupported-settings = {
+      allow-piston-duplication = true; # classic TNT/carpet/rail dupers
+      allow-headless-pistons = true; # modern dupers + headless-piston contraptions
+    };
+  };
+
   # ── Plugin JARs ──────────────────────────────────────────────────────────
   # LuckPerms -- network-wide permissions (installed on Velocity + all backends)
   luckpermsVelocity = pkgs.fetchurl {
@@ -397,6 +411,8 @@ in
             secret = "@FORWARDING_SECRET@";
           };
         };
+
+        files."config/paper-world-defaults.yml".value = paperWorldDefaults;
       };
 
       # ── Paper: Creative (secondary) ──────────────────────────────────
@@ -431,6 +447,8 @@ in
             secret = "@FORWARDING_SECRET@";
           };
         };
+
+        files."config/paper-world-defaults.yml".value = paperWorldDefaults;
       };
     };
 
