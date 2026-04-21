@@ -40,8 +40,10 @@
       # Steam persists its own library, config, and compatdata here
       "/var/lib/steam"
 
-      # Ollama model storage and state
-      "/var/lib/ollama"
+      # llama.cpp server state (router slot kvs, etc.)
+      "/var/lib/llama-cpp"
+      # llama.cpp model cache (downloaded GGUFs from Hugging Face — biggest dir)
+      "/var/cache/llama-cpp"
 
       # Kokoro TTS model cache and custom voice packs
       "/var/lib/kokoro-tts"

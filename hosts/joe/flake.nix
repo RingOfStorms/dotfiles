@@ -138,7 +138,7 @@
           ./configuration.nix
           ./hardware-configuration.nix
           ./nixld.nix
-          ./ollama.nix
+          ./llama-cpp.nix
           ./kokoro-tts.nix
           ./forge.nix
           ./homepage-dashboard.nix

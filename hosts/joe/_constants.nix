@@ -7,7 +7,7 @@
   };
 
   services = {
-    ollama = {
+    llama-cpp = {
       port = 11434;
     };
     kokoro-tts = {

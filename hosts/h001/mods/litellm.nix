@@ -245,21 +245,22 @@ in
             "text-embedding-large-exp-03-07"
           ]
         )
-        # Ollama on joe (3090) — models must be pulled manually: ollama pull <model>
+        # llama.cpp router on joe (3090) — models are configured in
+        # hosts/joe/llama-cpp.nix (modelsPreset) and downloaded from
+        # Hugging Face on first request. The router loads/unloads as
+        # needed (max 1 resident model). OpenAI-compatible API at /v1.
         ++ (builtins.map
           (m: {
             model_name = "local-${m}";
             litellm_params = {
-              model = "ollama/${m}";
-              api_base = "http://100.64.0.12:11434";
+              model = "openai/${m}";
+              api_base = "http://100.64.0.12:11434/v1";
+              api_key = "na";
             };
           })
           [
-            "qwen3.5:27b"
-            "qwen3.5:9b"
-            "ministral-3:14b"
-            "ministral-3:8b"
-            "devstral-small-2:24b"
+            "qwen3.6-35b-a3b"
+            "qwen3-coder-30b-a3b"
           ]
         );
       };

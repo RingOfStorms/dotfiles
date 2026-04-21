@@ -29,10 +29,10 @@ in
       {
         "${section1}" = [
           {
-            "Ollama" = {
-              description = "LLM Inference (port ${toString s.ollama.port})";
-              href = "http://localhost:${toString s.ollama.port}";
-              icon = "ollama";
+            "llama.cpp" = {
+              description = "LLM Inference (port ${toString s.llama-cpp.port})";
+              href = "http://localhost:${toString s.llama-cpp.port}";
+              icon = "mdi-robot";
             };
           }
           {
