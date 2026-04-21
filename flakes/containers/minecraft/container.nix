@@ -560,7 +560,9 @@ in
       # No plugins, no PaperMC, just Mojang's server.jar.
       vanilla-test = {
         enable = true;
-        package = pkgs.vanillaServers.vanilla-1_21;
+        # Match the client version exactly -- vanilla MC has no protocol
+        # negotiation, so 1.21 (= 1.21.0) and 1.21.11 are incompatible.
+        package = pkgs.vanillaServers.vanilla-1_21_11;
         jvmOpts = "-Xms512M -Xmx2048M";
         serverProperties = {
           server-port = vanillaTestPort;
