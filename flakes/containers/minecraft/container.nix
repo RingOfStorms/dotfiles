@@ -46,33 +46,174 @@ let
     bypassesPlayerLimit = true;
   }) whitelist;
 
-  # Shared Paper server properties (both servers use the same base config)
-  paperServerProperties = port: motd: {
-    server-port = port;
-    online-mode = false; # Velocity handles authentication
-    white-list = true; # Enforce whitelist on backend servers
-    enforce-whitelist = true; # Kick players not on whitelist immediately
-    spawn-protection = 0;
-    difficulty = "normal";
-    gamemode = "survival";
-    motd = motd;
-    max-players = 10;
-    view-distance = 32;
-    simulation-distance = 20;
-    pvp = false;
+  # ── Vanilla-compat config ────────────────────────────────────────────────
+  # Mirrors PaperMC's official "Vanilla-like experience" guide:
+  #   https://docs.papermc.io/paper/vanilla/
+  # Goal: TNT dupers, farms, redstone, item sorters, AFK contraptions all
+  # behave the same as a vanilla 1.21 Mojang server.
+  #
+  # NOTE: `pause-when-empty-seconds` is in server.properties (set in
+  # `paperServerProperties` below). All three Paper servers apply the same
+  # vanilla-compat config; the only differences are server.properties (port,
+  # gamemode, motd) and the Velocity proxy block (omitted on vanilla-test).
+
+  # Shared Paper server properties. `online-modeFn` lets the standalone
+  # vanilla-test server set true while the Velocity-fronted prod servers
+  # set false (Velocity authenticates).
+  paperServerProperties =
+    {
+      port,
+      motd,
+      onlineMode ? false,
+    }:
+    {
+      server-port = port;
+      online-mode = onlineMode;
+      white-list = true;
+      enforce-whitelist = true;
+      spawn-protection = 0;
+      difficulty = "normal";
+      gamemode = "survival";
+      motd = motd;
+      max-players = 10;
+      view-distance = 32;
+      simulation-distance = 20;
+      pvp = false;
+      # Pair with `unsupported-settings.disable-world-ticking-when-empty`
+      # below: vanilla pauses the world after 60s with no players online.
+      pause-when-empty-seconds = 60;
+    };
+
+  paperWorldDefaults = {
+    chunks = {
+      delay-chunk-unloads-by = "0s";
+      max-auto-save-chunks-per-tick = 200;
+    };
+    collisions = {
+      allow-player-cramming-damage = true;
+      max-entity-collisions = 2147483647;
+    };
+    entities = {
+      behavior = {
+        cooldown-failed-beehive-releases = false;
+        only-merge-items-horizontally = true;
+        phantoms-do-not-spawn-on-creative-players = false;
+        phantoms-only-attack-insomniacs = false;
+        stuck-entity-poi-retry-delay = "disabled";
+        # Required for gold farms (Paper default false matches vanilla).
+        nerf-pigmen-from-nether-portals = false;
+      };
+      spawning = {
+        max-arrow-despawn-invulnerability = "disabled";
+        count-all-mobs-for-spawning = true;
+        duplicate-uuid.mode = "NOTHING";
+        filter-bad-tile-entity-nbt-from-falling-blocks = false;
+        per-player-mob-spawns = false;
+        # Required for many iron farms.
+        iron-golems-can-spawn-in-air = true;
+      };
+      # Required for armor-stand-based clocks/contraptions and marker logic.
+      armor-stands.tick = true;
+      markers.tick = true;
+    };
+    fixes = {
+      # Don't freeze primed TNT in water -- water-bucket piston/observer
+      # dupers depend on the primed TNT drifting in flowing water.
+      prevent-tnt-from-moving-in-water = false;
+      tnt-entity-height-nerf = "disabled";
+      falling-block-height-nerf = "disabled";
+      fix-items-merging-through-walls = false;
+      disable-unloaded-chunk-enderpearl-exploit = false;
+    };
+    hopper.cooldown-when-full = false;
+    maps.item-frame-cursor-limit = 2147483647;
+    misc = {
+      allow-remote-ender-dragon-respawning = true;
+      redstone-implementation = "VANILLA";
+      update-pathfinding-on-block-update = true;
+    };
+    scoreboards.use-vanilla-world-scoreboard-name-coloring = true;
+    unsupported-settings = {
+      # Pairs with server.properties pause-when-empty-seconds=60 to
+      # implement vanilla's pause-when-empty behavior.
+      disable-world-ticking-when-empty = true;
+      fix-invulnerable-end-crystal-exploit = false;
+    };
   };
 
-  # Paper per-world defaults. We enable the "unsupported" piston/TNT duping
-  # knobs because we want classic survival-tech contraptions (TNT dupers,
-  # bedrock breakers, headless-piston designs) to work.
-  #
-  # These flags live under `unsupported-settings` because Mojang considers
-  # the underlying behaviour a bug; Paper disables them by default but
-  # exposes toggles for servers that intentionally rely on them.
-  paperWorldDefaults = {
-    unsupported-settings = {
-      allow-piston-duplication = true; # classic TNT/carpet/rail dupers
-      allow-headless-pistons = true; # modern dupers + headless-piston contraptions
+  # paper-global.yml unsupported-settings -- re-enables vanilla "bugs"
+  # that Mojang considers exploits but tech-survival relies on.
+  # IMPORTANT: in Paper 1.20.5+ these moved out of paper-world-defaults.yml.
+  paperGlobalUnsupported = {
+    allow-piston-duplication = true; # classic TNT/carpet/rail dupers
+    allow-headless-pistons = true; # bedrock breakers, modern dupers
+    allow-unsafe-end-portal-teleportation = true; # end-portal sand/gravel dupers
+    allow-permanent-block-break-exploits = true; # bedrock, end portal frames, etc.
+    skip-tripwire-hook-placement-validation = true; # tripwire-hook duping
+    perform-username-validation = false;
+    update-equipment-on-player-actions = false;
+    oversized-item-component-sanitizer.dont-sanitize = [
+      "minecraft:container"
+      "minecraft:charged_projectiles"
+      "minecraft:bundle_contents"
+    ];
+  };
+
+  # Vanilla-compat paper-global.yml. Doesn't include proxies.velocity --
+  # callers add that themselves where needed.
+  paperGlobalBase = {
+    commands = {
+      suggest-player-names-when-null-tab-completions = false;
+      time-command-affects-all-worlds = true;
+    };
+    item-validation = {
+      book = {
+        author = 2147483647;
+        page = 2147483647;
+        title = 2147483647;
+      };
+      book-size.page-max = "disabled";
+      display-name = 2147483647;
+      lore-line = 2147483647;
+      resolve-selectors-in-books = true;
+    };
+    misc = {
+      fix-far-end-terrain-generation = false;
+      max-joins-per-tick = 2147483647;
+    };
+    packet-limiter = {
+      all-packets.interval = -1;
+      overrides."minecraft:place_recipe".interval = -1;
+    };
+    spam-limiter.incoming-packet-threshold = "disabled";
+    unsupported-settings = paperGlobalUnsupported;
+  };
+
+  # paper-global.yml for the Velocity-fronted prod servers (survival, creative).
+  paperGlobalProd = paperGlobalBase // {
+    proxies.velocity = {
+      enabled = true;
+      online-mode = true;
+      secret = "@FORWARDING_SECRET@";
+    };
+  };
+
+  # spigot.yml -- vanilla-compat tweaks. Disables entity-activation-range
+  # optimization (mobs that go inactive cause AFK farms to stall) and
+  # removes the per-tick TNT processing throttle (default 100; some big
+  # dupers exceed this in a single tick and silently drop the surplus).
+  paperSpigotConfig = {
+    world-settings.default = {
+      entity-activation-range = {
+        animals = 0;
+        monsters = 0;
+        raiders = 0;
+        misc = 0;
+        water = 0;
+        villagers = 0;
+        flying-monsters = 0;
+      };
+      max-tnt-per-tick = -1;
     };
   };
 
@@ -410,7 +551,7 @@ in
         enable = true;
         package = pkgs.paperServers.paper;
         jvmOpts = "-Xms4096M -Xmx12288M"; # Matches original joe config
-        serverProperties = paperServerProperties 25566 "Survival" // {
+        serverProperties = paperServerProperties { port = 25566; motd = "Survival"; } // {
           force-gamemode = true; # Force survival on join
         };
         whitelist = whitelist;
@@ -500,17 +641,12 @@ in
           config-version = 3;
         };
 
-        # Paper reads the secret from paper-global.yml, but we use
-        # @FORWARDING_SECRET@ substitution from an environment file.
-        files."config/paper-global.yml".value = {
-          proxies.velocity = {
-            enabled = true;
-            online-mode = true;
-            secret = "@FORWARDING_SECRET@";
-          };
-        };
-
+        # Paper reads the secret from paper-global.yml; @FORWARDING_SECRET@
+        # is substituted at runtime from the environment file. Also carries
+        # the unsupported-settings dupe toggles (see paperGlobalProd).
+        files."config/paper-global.yml".value = paperGlobalProd;
         files."config/paper-world-defaults.yml".value = paperWorldDefaults;
+        files."spigot.yml".value = paperSpigotConfig;
       };
 
       # ── Paper: Creative (secondary) ──────────────────────────────────
@@ -520,7 +656,7 @@ in
         enable = true;
         package = pkgs.paperServers.paper;
         jvmOpts = "-Xms2048M -Xmx8192M";
-        serverProperties = paperServerProperties 25567 "Creative" // {
+        serverProperties = paperServerProperties { port = 25567; motd = "Creative"; } // {
           gamemode = "creative";
           force-gamemode = true; # Force creative on join (overrides per-player)
           spawn-monsters = false;
@@ -540,15 +676,9 @@ in
         symlinks."plugins/F3NPerm.jar" = f3nperm;
         files."plugins/LuckPerms/config.yml".value = luckpermsConfig "creative";
 
-        files."config/paper-global.yml".value = {
-          proxies.velocity = {
-            enabled = true;
-            online-mode = true;
-            secret = "@FORWARDING_SECRET@";
-          };
-        };
-
+        files."config/paper-global.yml".value = paperGlobalProd;
         files."config/paper-world-defaults.yml".value = paperWorldDefaults;
+        files."spigot.yml".value = paperSpigotConfig;
       };
 
       # ── Paper (test, standalone, no plugins) ─────────────────────────
@@ -567,25 +697,23 @@ in
         enable = true;
         package = pkgs.paperServers.paper;
         jvmOpts = "-Xms512M -Xmx2048M";
-        serverProperties = {
-          server-port = vanillaTestPort;
-          online-mode = true; # Authenticate against Mojang directly
-          white-list = true;
-          enforce-whitelist = true;
-          spawn-protection = 0;
-          difficulty = "normal";
-          gamemode = "survival";
+        serverProperties = paperServerProperties {
+          port = vanillaTestPort;
           motd = "Paper Test (no plugins)";
+          onlineMode = true; # No Velocity in front; Paper handles auth
+        } // {
           max-players = 5;
           view-distance = 12;
           simulation-distance = 10;
-          pvp = false;
         };
         whitelist = whitelist;
         operators = vanillaTestOperators;
 
-        # Same dupe/headless-piston toggles as the prod servers.
+        # Same vanilla-compat tweaks as the prod servers, but no
+        # `proxies.velocity` block since this server is standalone.
+        files."config/paper-global.yml".value = paperGlobalBase;
         files."config/paper-world-defaults.yml".value = paperWorldDefaults;
+        files."spigot.yml".value = paperSpigotConfig;
       };
     };
 
