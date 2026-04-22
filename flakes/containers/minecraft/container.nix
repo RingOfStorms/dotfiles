@@ -182,10 +182,22 @@ let
       max-joins-per-tick = 2147483647;
     };
     packet-limiter = {
-      all-packets.interval = -1;
-      overrides."minecraft:place_recipe".interval = -1;
+      # interval=-1 + max-packet-rate=-1 disables the limiter. Both fields
+      # are required by Paper's deserializer; the doc page only shows the
+      # `interval` field but the underlying schema demands max-packet-rate
+      # alongside it (default action is KICK, leave that implicit).
+      all-packets = {
+        interval = -1.0;
+        max-packet-rate = -1.0;
+      };
+      overrides."minecraft:place_recipe" = {
+        interval = -1.0;
+        max-packet-rate = -1.0;
+      };
     };
-    spam-limiter.incoming-packet-threshold = "disabled";
+    # Field is an Integer despite the docs showing the literal "disabled"
+    # default. -1 disables the threshold per Paper's source.
+    spam-limiter.incoming-packet-threshold = -1;
     unsupported-settings = paperGlobalUnsupported;
   };
 
