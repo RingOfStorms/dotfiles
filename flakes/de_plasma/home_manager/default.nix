@@ -309,6 +309,7 @@ in
 
         # Disable Baloo file indexer & extractor entirely.
         # Companion to systemd user-service masking in ../de_plasma.nix.
+        # Lists in baloofilerc are comma-separated strings, not Nix lists.
         baloofilerc = {
           "Basic Settings"."Indexing-Enabled" = false;
           General = {
@@ -316,8 +317,8 @@ in
             "exclude filters version" = 9;
             # Belt-and-suspenders: even if Indexing-Enabled is flipped on,
             # there's nothing to index.
-            "folders" = [ ];
-            "exclude folders" = [ "$HOME" ];
+            "folders" = "";
+            "exclude folders" = "$HOME";
           };
         };
       };
