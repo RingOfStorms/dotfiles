@@ -306,6 +306,20 @@ in
         kwalletrc.Wallet.Enabled = false;
         plasmanotifyrc.Notifications.PopupPosition = "TopRight";
         kwinrc.Wayland.InputMethod = "/run/current-system/sw/share/applications/org.fcitx.Fcitx5.desktop";
+
+        # Disable Baloo file indexer & extractor entirely.
+        # Companion to systemd user-service masking in ../de_plasma.nix.
+        baloofilerc = {
+          "Basic Settings"."Indexing-Enabled" = false;
+          General = {
+            "dbVersion" = 2;
+            "exclude filters version" = 9;
+            # Belt-and-suspenders: even if Indexing-Enabled is flipped on,
+            # there's nothing to index.
+            "folders" = [ ];
+            "exclude folders" = [ "$HOME" ];
+          };
+        };
       };
     };
   };

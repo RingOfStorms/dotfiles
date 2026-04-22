@@ -327,6 +327,14 @@ in
       };
     })
 
+    # Disable KDE Baloo (file indexer + extractor).
+    # Companion to baloofilerc settings in ./home_manager/default.nix.
+    # Masking the user units prevents Plasma from auto-starting them even
+    # if a stray baloofilerc somewhere flips Indexing-Enabled back on.
+    ({
+      systemd.user.services.kde-baloo.enable = lib.mkForce false;
+    })
+
     {
       assertions = [
         {
