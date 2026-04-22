@@ -551,18 +551,21 @@ in
         files."config/paper-world-defaults.yml".value = paperWorldDefaults;
       };
 
-      # ── Vanilla 1.21 (test, standalone) ──────────────────────────────
+      # ── Paper (test, standalone, no plugins) ─────────────────────────
       # NOT behind Velocity. Bound directly to vanillaTestPort so a real
-      # client can connect and validate vanilla mechanics (cobble gen,
-      # fluid behavior, etc.) when Paper behavior is suspect.
+      # client can connect and prototype contraptions (dupers, gens, etc.)
+      # without disturbing the prod survival world.
       #
-      # Capped at 2 GB heap. Same whitelist + ops as the prod servers.
-      # No plugins, no PaperMC, just Mojang's server.jar.
+      # Plain Paper with NO plugins -- isolates Paper-vs-vanilla behavior
+      # while leaving the unsupported-settings dupe toggles enabled (same
+      # `paperWorldDefaults` as the prod servers).
+      #
+      # Online-mode is true here (authenticates against Mojang directly)
+      # because there is no Velocity proxy in front of this server.
+      # Capped at 2 GB heap. Whitelisted players are all ops.
       vanilla-test = {
         enable = true;
-        # Match the client version exactly -- vanilla MC has no protocol
-        # negotiation, so 1.21 (= 1.21.0) and 1.21.11 are incompatible.
-        package = pkgs.vanillaServers.vanilla-1_21_11;
+        package = pkgs.paperServers.paper;
         jvmOpts = "-Xms512M -Xmx2048M";
         serverProperties = {
           server-port = vanillaTestPort;
@@ -572,7 +575,7 @@ in
           spawn-protection = 0;
           difficulty = "normal";
           gamemode = "survival";
-          motd = "Vanilla 1.21 Test";
+          motd = "Paper Test (no plugins)";
           max-players = 5;
           view-distance = 12;
           simulation-distance = 10;
@@ -580,6 +583,9 @@ in
         };
         whitelist = whitelist;
         operators = vanillaTestOperators;
+
+        # Same dupe/headless-piston toggles as the prod servers.
+        files."config/paper-world-defaults.yml".value = paperWorldDefaults;
       };
     };
 
