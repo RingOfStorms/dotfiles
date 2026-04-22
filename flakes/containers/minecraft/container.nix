@@ -9,11 +9,6 @@ let
   # Must match the firewall rule on the host (see hosts/h003/_constants.nix).
   proxyPort = 25565;
 
-  # Standalone vanilla 1.21 test server, NOT behind Velocity. Used to
-  # validate vanilla mechanics (e.g. cobblestone generators) when Paper
-  # behavior is suspect. Bound directly so a real client can connect.
-  vanillaTestPort = 25560;
-
   # Path where the shared forwarding secret lives (generated on first boot).
   # Must be identical across Velocity and each Paper backend.
   secretPath = "/var/lib/minecraft-secrets/forwarding.secret";
@@ -38,14 +33,6 @@ let
     };
   };
 
-  # Vanilla test server: every whitelisted player is also an op so anyone
-  # can /gamemode, /tp, /give, etc. while debugging mechanics.
-  vanillaTestOperators = lib.mapAttrs (_name: uuid: {
-    inherit uuid;
-    level = 4;
-    bypassesPlayerLimit = true;
-  }) whitelist;
-
   # ── Vanilla-compat config ────────────────────────────────────────────────
   # Mirrors PaperMC's official "Vanilla-like experience" guide:
   #   https://docs.papermc.io/paper/vanilla/
@@ -53,22 +40,20 @@ let
   # behave the same as a vanilla 1.21 Mojang server.
   #
   # NOTE: `pause-when-empty-seconds` is in server.properties (set in
-  # `paperServerProperties` below). All three Paper servers apply the same
-  # vanilla-compat config; the only differences are server.properties (port,
-  # gamemode, motd) and the Velocity proxy block (omitted on vanilla-test).
+  # `paperServerProperties` below). Both Paper servers apply the same
+  # vanilla-compat config; the only differences are server.properties
+  # (port, gamemode, motd) and the Velocity proxy block.
 
-  # Shared Paper server properties. `online-modeFn` lets the standalone
-  # vanilla-test server set true while the Velocity-fronted prod servers
-  # set false (Velocity authenticates).
+  # Shared Paper server properties. `online-mode` is false because Velocity
+  # in front of the backends handles authentication.
   paperServerProperties =
     {
       port,
       motd,
-      onlineMode ? false,
     }:
     {
       server-port = port;
-      online-mode = onlineMode;
+      online-mode = false; # Velocity handles authentication
       white-list = true;
       enforce-whitelist = true;
       spawn-protection = 0;
@@ -370,10 +355,7 @@ in
   environment.systemPackages = [ pkgs.tmux ];
 
   # Open the Velocity proxy port inside the container's firewall
-  networking.firewall.allowedTCPPorts = [
-    proxyPort
-    vanillaTestPort
-  ];
+  networking.firewall.allowedTCPPorts = [ proxyPort ];
 
   # ── Generate forwarding secret on first boot ────────────────────────────
   # Creates a random secret once and reuses it forever. All minecraft
@@ -693,40 +675,6 @@ in
         files."spigot.yml".value = paperSpigotConfig;
       };
 
-      # ── Paper (test, standalone, no plugins) ─────────────────────────
-      # NOT behind Velocity. Bound directly to vanillaTestPort so a real
-      # client can connect and prototype contraptions (dupers, gens, etc.)
-      # without disturbing the prod survival world.
-      #
-      # Plain Paper with NO plugins -- isolates Paper-vs-vanilla behavior
-      # while leaving the unsupported-settings dupe toggles enabled (same
-      # `paperWorldDefaults` as the prod servers).
-      #
-      # Online-mode is true here (authenticates against Mojang directly)
-      # because there is no Velocity proxy in front of this server.
-      # Capped at 2 GB heap. Whitelisted players are all ops.
-      vanilla-test = {
-        enable = true;
-        package = pkgs.paperServers.paper;
-        jvmOpts = "-Xms512M -Xmx2048M";
-        serverProperties = paperServerProperties {
-          port = vanillaTestPort;
-          motd = "Paper Test (no plugins)";
-          onlineMode = true; # No Velocity in front; Paper handles auth
-        } // {
-          max-players = 5;
-          view-distance = 12;
-          simulation-distance = 10;
-        };
-        whitelist = whitelist;
-        operators = vanillaTestOperators;
-
-        # Same vanilla-compat tweaks as the prod servers, but no
-        # `proxies.velocity` block since this server is standalone.
-        files."config/paper-global.yml".value = paperGlobalBase;
-        files."config/paper-world-defaults.yml".value = paperWorldDefaults;
-        files."spigot.yml".value = paperSpigotConfig;
-      };
     };
 
     # Environment file for @VAR@ substitution in `files` entries.
@@ -770,13 +718,12 @@ in
       systemctl restart minecraft-server-velocity
       systemctl restart minecraft-server-survival
       systemctl restart minecraft-server-creative
-      systemctl restart minecraft-server-vanilla-test
     '';
   };
 
   # ── Unified tmux session for all server consoles ─────────────────────────
   # Attach with: tmux attach -t mc
-  # Windows: 1=velocity, 2=survival, 3=creative, 4=vanilla-test
+  # Windows: 1=velocity, 2=survival, 3=creative
   systemd.services.minecraft-tmux = {
     description = "Tmux session with all Minecraft server consoles";
     wantedBy = [ "multi-user.target" ];
@@ -784,13 +731,11 @@ in
       "minecraft-server-velocity.service"
       "minecraft-server-survival.service"
       "minecraft-server-creative.service"
-      "minecraft-server-vanilla-test.service"
     ];
     requires = [
       "minecraft-server-velocity.service"
       "minecraft-server-survival.service"
       "minecraft-server-creative.service"
-      "minecraft-server-vanilla-test.service"
     ];
     serviceConfig = {
       Type = "forking";
@@ -804,8 +749,6 @@ in
         ${pkgs.tmux}/bin/tmux send-keys -t mc:survival "${pkgs.tmux}/bin/tmux -S /run/minecraft/survival.sock attach" Enter
         ${pkgs.tmux}/bin/tmux new-window -t mc -n creative
         ${pkgs.tmux}/bin/tmux send-keys -t mc:creative "${pkgs.tmux}/bin/tmux -S /run/minecraft/creative.sock attach" Enter
-        ${pkgs.tmux}/bin/tmux new-window -t mc -n vanilla-test
-        ${pkgs.tmux}/bin/tmux send-keys -t mc:vanilla-test "${pkgs.tmux}/bin/tmux -S /run/minecraft/vanilla-test.sock attach" Enter
         # Select velocity window by default
         ${pkgs.tmux}/bin/tmux select-window -t mc:velocity
       '';

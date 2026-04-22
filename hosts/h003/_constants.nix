@@ -89,7 +89,6 @@
     minecraft = {
       port = 25565; # Velocity proxy (vanilla MC default port) -- must match flakes/containers/minecraft/container.nix
       mapPort = 8080; # squaremap web UI -- proxied via nginx on port 80
-      vanillaTestPort = 25560; # Standalone vanilla 1.21 test server (bypasses Velocity) -- must match container.nix
     };
 
     ups = {
