@@ -67,6 +67,8 @@ type PortEntry struct {
 	Error       string
 	LocalPort   int // local port (usually same as remote)
 	Discovered  bool
+	PID         int    // remote PID, 0 if unknown
+	Cwd         string // remote working dir of process, "" if unknown
 }
 
 type ViewMode int
@@ -165,16 +167,69 @@ func sshDiscover(host, controlPath string) tea.Cmd {
 		}
 
 		ports := parseListeningPorts(output)
+
+		// Resolve working directory for each PID via /proc on remote.
+		// Single ssh round-trip; gracefully degrades if /proc isn't available
+		// (non-Linux remote) or the process is owned by another user.
+		pidSet := map[int]bool{}
+		for _, p := range ports {
+			if p.PID > 0 {
+				pidSet[p.PID] = true
+			}
+		}
+		if len(pidSet) > 0 {
+			pids := make([]string, 0, len(pidSet))
+			for pid := range pidSet {
+				pids = append(pids, strconv.Itoa(pid))
+			}
+			// Build: for pid in 1 2 3; do printf '%s\t' "$pid"; readlink /proc/$pid/cwd 2>/dev/null || echo; done
+			script := fmt.Sprintf(
+				`for pid in %s; do printf '%%s\t' "$pid"; readlink /proc/$pid/cwd 2>/dev/null || echo; done`,
+				strings.Join(pids, " "),
+			)
+			cwdCmd := exec.Command("ssh",
+				"-S", controlPath,
+				"-o", "ConnectTimeout=5",
+				host,
+				script,
+			)
+			if cwdOut, cwdErr := cwdCmd.Output(); cwdErr == nil {
+				cwdMap := map[int]string{}
+				for _, line := range strings.Split(string(cwdOut), "\n") {
+					parts := strings.SplitN(line, "\t", 2)
+					if len(parts) != 2 {
+						continue
+					}
+					pid, err := strconv.Atoi(parts[0])
+					if err != nil {
+						continue
+					}
+					cwdMap[pid] = strings.TrimSpace(parts[1])
+				}
+				for i := range ports {
+					if cwd, ok := cwdMap[ports[i].PID]; ok {
+						ports[i].Cwd = cwd
+					}
+				}
+			}
+		}
+
+		// Re-sort now that cwd is populated, so groups are adjacent.
+		sortPortsGrouped(ports)
 		return discoverResultMsg{ports: ports, err: nil}
 	}
 }
 
 func parseListeningPorts(output string) []PortEntry {
-	seen := make(map[int]string)
+	type seenEntry struct {
+		proc string
+		pid  int
+	}
+	seen := make(map[int]seenEntry)
 	// Match port from ss output: patterns like *:8080, 0.0.0.0:3000, [::]:5432, 127.0.0.1:9090
 	portRe := regexp.MustCompile(`(?:[\d.*]+|\[?::[\].]?):(\d+)\s`)
-	// Match process name from ss -p: users:(("name",...))
-	procRe := regexp.MustCompile(`users:\(\("([^"]+)"`)
+	// Match process name and PID from ss -p: users:(("name",pid=12345,fd=20))
+	procRe := regexp.MustCompile(`users:\(\("([^"]+)",pid=(\d+)`)
 
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
@@ -193,29 +248,47 @@ func parseListeningPorts(output string) []PortEntry {
 		}
 
 		proc := ""
+		pid := 0
 		procMatch := procRe.FindStringSubmatch(line)
-		if len(procMatch) > 1 {
+		if len(procMatch) > 2 {
 			proc = procMatch[1]
+			pid, _ = strconv.Atoi(procMatch[2])
 		}
 		if _, exists := seen[port]; !exists {
-			seen[port] = proc
+			seen[port] = seenEntry{proc: proc, pid: pid}
 		}
 	}
 
 	var entries []PortEntry
-	for port, proc := range seen {
+	for port, info := range seen {
 		entries = append(entries, PortEntry{
 			Port:       port,
-			Process:    proc,
+			Process:    info.proc,
+			PID:        info.pid,
 			Status:     PortInactive,
 			LocalPort:  port,
 			Discovered: true,
 		})
 	}
-	sort.Slice(entries, func(i, j int) bool {
+	sortPortsGrouped(entries)
+	return entries
+}
+
+// sortPortsGrouped orders entries so that ports sharing a working directory
+// are adjacent. Groups are ordered alphabetically by cwd; ports without a
+// known cwd come last. Within a group, ports are sorted numerically.
+func sortPortsGrouped(entries []PortEntry) {
+	sort.SliceStable(entries, func(i, j int) bool {
+		ci, cj := entries[i].Cwd, entries[j].Cwd
+		// empty cwd sorts last
+		if (ci == "") != (cj == "") {
+			return ci != ""
+		}
+		if ci != cj {
+			return ci < cj
+		}
 		return entries[i].Port < entries[j].Port
 	})
-	return entries
 }
 
 func sshForward(host, controlPath string, localPort, remotePort int) tea.Cmd {
@@ -299,6 +372,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.ensureVisible()
 		return m, nil
 
 	case connectResultMsg:
@@ -316,6 +390,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = errorStyle.Render("Discovery: " + msg.err.Error() + " (add ports manually with 'a')")
 		} else {
 			m.ports = msg.ports
+			if m.cursor >= len(m.ports) {
+				m.cursor = len(m.ports) - 1
+			}
+			if m.cursor < 0 {
+				m.cursor = 0
+			}
+			m.ensureVisible()
 			m.statusMsg = fmt.Sprintf("Found %d listening ports", len(msg.ports))
 		}
 		return m, clearStatusAfter(5 * time.Second)
@@ -387,9 +468,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Discovered: false,
 				}
 				m.ports = append(m.ports, entry)
-				sort.Slice(m.ports, func(i, j int) bool {
-					return m.ports[i].Port < m.ports[j].Port
-				})
+				sortPortsGrouped(m.ports)
 				// Move cursor to the new entry
 				for i, p := range m.ports {
 					if p.Port == port {
@@ -397,6 +476,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						break
 					}
 				}
+				m.ensureVisible()
 				m.statusMsg = fmt.Sprintf("Added port %d", port)
 				return m, clearStatusAfter(3 * time.Second)
 			case "esc":
@@ -418,17 +498,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-			m.ensureVisible()
+			m.moveCursor(0, -1)
 			return m, nil
 
 		case "down", "j":
-			if m.cursor < len(m.ports)-1 {
-				m.cursor++
+			m.moveCursor(0, 1)
+			return m, nil
+
+		case "left", "h":
+			m.moveCursor(-1, 0)
+			return m, nil
+
+		case "right", "l":
+			m.moveCursor(1, 0)
+			return m, nil
+
+		case "home", "g":
+			if len(m.ports) > 0 {
+				m.cursor = 0
+				m.ensureVisible()
 			}
-			m.ensureVisible()
+			return m, nil
+
+		case "end", "G":
+			if len(m.ports) > 0 {
+				m.cursor = len(m.ports) - 1
+				m.ensureVisible()
+			}
 			return m, nil
 
 		case " ", "enter":
@@ -464,6 +560,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.cursor >= len(m.ports) && m.cursor > 0 {
 				m.cursor--
 			}
+			m.ensureVisible()
 			return m, cmd
 
 		case "r":
@@ -504,27 +601,263 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *model) ensureVisible() {
-	maxVisible := m.maxVisiblePorts()
-	if maxVisible <= 0 {
-		return
-	}
-	if m.cursor < m.scrollOffset {
-		m.scrollOffset = m.cursor
-	}
-	if m.cursor >= m.scrollOffset+maxVisible {
-		m.scrollOffset = m.cursor - maxVisible + 1
-	}
+// --- Grid layout ---
+//
+// Ports are rendered in a column-major grid: column 0 fills top-to-bottom
+// first, then column 1, etc. Groups of ports sharing a working directory
+// are kept contiguous in the flat layout, separated by a "spacer" sentinel
+// (port index = -1) so blank lines naturally appear between groups within
+// the same column.
+
+const (
+	cellPadding    = 2 // spaces between cells horizontally
+	procNameMaxLen = 12
+)
+
+// layoutSlot describes one position in the flattened grid sequence.
+// portIdx == -1 means "spacer" (renders as blank cell, not selectable).
+type layoutSlot struct {
+	portIdx int
 }
 
-func (m model) maxVisiblePorts() int {
-	// Reserve lines for: title(2) + status(2) + help(~6) + add-port(2) + padding
-	overhead := 14
+// buildLayout returns the flat slot sequence used for column-major rendering
+// and for cursor navigation. Spacers separate groups of ports sharing a cwd.
+func (m model) buildLayout() []layoutSlot {
+	slots := make([]layoutSlot, 0, len(m.ports)+8)
+	prevCwd := ""
+	prevHasGroup := false
+	for i, p := range m.ports {
+		hasGroup := p.Cwd != ""
+		if i > 0 {
+			// Insert spacer when cwd changes between two grouped ports,
+			// or when transitioning into/out of the ungrouped bucket.
+			if hasGroup != prevHasGroup || (hasGroup && p.Cwd != prevCwd) {
+				slots = append(slots, layoutSlot{portIdx: -1})
+			}
+		}
+		slots = append(slots, layoutSlot{portIdx: i})
+		prevCwd = p.Cwd
+		prevHasGroup = hasGroup
+	}
+	return slots
+}
+
+// gridGeometry computes rows-per-column and number of columns based on
+// terminal size, the number of slots, and the cell width.
+func (m model) gridGeometry(slotCount int) (rows, cols, cellWidth int) {
+	cellWidth = m.cellWidth()
+	rows = m.gridRows()
+	if rows <= 0 {
+		rows = 1
+	}
+	if cellWidth <= 0 {
+		cellWidth = 20
+	}
+	maxCols := 1
+	if m.width > 0 {
+		// 2-char left margin matches existing layout
+		maxCols = (m.width - 2) / cellWidth
+		if maxCols < 1 {
+			maxCols = 1
+		}
+	}
+	// Number of columns actually needed for slotCount items at `rows` per col.
+	needed := (slotCount + rows - 1) / rows
+	cols = needed
+	if cols > maxCols {
+		cols = maxCols
+	}
+	if cols < 1 {
+		cols = 1
+	}
+	return rows, cols, cellWidth
+}
+
+// gridRows returns how many rows of port cells fit vertically.
+func (m model) gridRows() int {
+	// Reserve: title(2, PaddingBottom adds one) + blank-after-title(0)
+	//        + detail(1) + scroll-indicator(1, reserved even if absent)
+	//        + add-port(0-2) + status(0-2, PaddingTop adds one) + help(2)
+	overhead := 2 /*title*/ + 1 /*detail*/ + 1 /*scroll-indicator slack*/ + 2 /*help*/
+	if m.viewMode == ViewAddPort {
+		overhead += 2
+	}
+	if m.statusMsg != "" {
+		overhead += 2
+	}
 	avail := m.height - overhead
 	if avail < 3 {
 		avail = 3
 	}
 	return avail
+}
+
+// cellWidth returns the width (in cells / runes) of one grid cell. Each cell
+// is "> [X] PPPPP  procname    " padded to a uniform width.
+func (m model) cellWidth() int {
+	// "> " (2) + "[X] " (4) + "PPPPP" (5) + "  " (2) + procname(<=procNameMaxLen) + padding
+	w := 2 + 4 + 5 + 2 + procNameMaxLen + cellPadding
+	return w
+}
+
+// slotForPort finds the layout slot index for a given port index.
+func slotForPort(slots []layoutSlot, portIdx int) int {
+	for i, s := range slots {
+		if s.portIdx == portIdx {
+			return i
+		}
+	}
+	return -1
+}
+
+// gridPos returns the (col, row) of a slot index in column-major order.
+func gridPos(slotIdx, rows int) (col, row int) {
+	if rows <= 0 {
+		return 0, 0
+	}
+	return slotIdx / rows, slotIdx % rows
+}
+
+// slotAt returns the slot index for a (col, row) in column-major order.
+func slotAt(col, row, rows int) int {
+	return col*rows + row
+}
+
+// moveCursor moves the cursor by (dx, dy) cells in the visual grid,
+// skipping spacer slots.
+func (m *model) moveCursor(dx, dy int) {
+	if len(m.ports) == 0 {
+		return
+	}
+	slots := m.buildLayout()
+	rows, cols, _ := m.gridGeometry(len(slots))
+	curSlot := slotForPort(slots, m.cursor)
+	if curSlot < 0 {
+		curSlot = 0
+	}
+	col, row := gridPos(curSlot, rows)
+	totalCols := (len(slots) + rows - 1) / rows
+	_ = cols // visible cols, not used for nav bound (we allow scrolling)
+
+	// Try to step; if we land on a spacer or out-of-bounds, keep stepping
+	// in the same direction until we hit a real port or run out of grid.
+	for step := 0; step < rows*totalCols; step++ {
+		row += dy
+		col += dx
+		if row < 0 || row >= rows || col < 0 || col >= totalCols {
+			return // can't move further
+		}
+		idx := slotAt(col, row, rows)
+		if idx < 0 || idx >= len(slots) {
+			return
+		}
+		if slots[idx].portIdx >= 0 {
+			m.cursor = slots[idx].portIdx
+			m.ensureVisible()
+			return
+		}
+		// landed on a spacer; continue in same direction
+	}
+}
+
+// renderCell returns a fixed-width string for one grid cell. Spacer slots
+// (portIdx == -1) render as a blank cell of the same width.
+func (m model) renderCell(slots []layoutSlot, slotIdx, cellWidth int) string {
+	if slotIdx < 0 || slotIdx >= len(slots) {
+		return strings.Repeat(" ", cellWidth)
+	}
+	slot := slots[slotIdx]
+	if slot.portIdx < 0 {
+		return strings.Repeat(" ", cellWidth)
+	}
+	p := m.ports[slot.portIdx]
+	selected := slot.portIdx == m.cursor
+
+	cursor := "  "
+	if selected {
+		cursor = selectedStyle.Render("> ")
+	}
+
+	var status string
+	switch p.Status {
+	case PortInactive:
+		status = dimStyle.Render("[ ]")
+	case PortForwarding:
+		status = lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render("[~]")
+	case PortActive:
+		status = activeStyle.Render("[*]")
+	case PortFailed:
+		status = errorStyle.Render("[!]")
+	}
+
+	portStr := fmt.Sprintf("%5d", p.Port)
+	if selected {
+		portStr = selectedStyle.Render(portStr)
+	}
+
+	proc := p.Process
+	if proc == "" && !p.Discovered {
+		proc = "(manual)"
+	}
+	if len(proc) > procNameMaxLen {
+		proc = proc[:procNameMaxLen-1] + "…"
+	}
+	procPadded := fmt.Sprintf("%-*s", procNameMaxLen, proc)
+	procRendered := dimStyle.Render(procPadded)
+
+	// "> [X] PPPPP  procname  "
+	cell := fmt.Sprintf("%s%s %s  %s%s", cursor, status, portStr, procRendered, strings.Repeat(" ", cellPadding))
+	// Note: lipgloss styles add invisible ANSI codes; visible width is
+	// constant by construction (fixed-width fields). Don't trim.
+	return cell
+}
+
+// renderDetail returns a one-line description of the currently selected port
+// (status, forward target, error, cwd). Empty string if nothing meaningful.
+func (m model) renderDetail() string {
+	if len(m.ports) == 0 || m.cursor < 0 || m.cursor >= len(m.ports) {
+		return " "
+	}
+	p := m.ports[m.cursor]
+	parts := []string{}
+	if p.Status == PortActive {
+		parts = append(parts, activeStyle.Render(fmt.Sprintf("-> localhost:%d", p.LocalPort)))
+	}
+	if p.Cwd != "" {
+		parts = append(parts, dimStyle.Render("cwd: "+p.Cwd))
+	}
+	if p.Error != "" {
+		parts = append(parts, errorStyle.Render(p.Error))
+	}
+	if len(parts) == 0 {
+		return " "
+	}
+	return strings.Join(parts, "  ")
+}
+
+// ensureVisible adjusts m.scrollOffset (measured in columns) so the cursor's
+// column is within the visible window.
+func (m *model) ensureVisible() {
+	if len(m.ports) == 0 {
+		m.scrollOffset = 0
+		return
+	}
+	slots := m.buildLayout()
+	rows, cols, _ := m.gridGeometry(len(slots))
+	curSlot := slotForPort(slots, m.cursor)
+	if curSlot < 0 {
+		return
+	}
+	col, _ := gridPos(curSlot, rows)
+	if col < m.scrollOffset {
+		m.scrollOffset = col
+	}
+	if col >= m.scrollOffset+cols {
+		m.scrollOffset = col - cols + 1
+	}
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
 }
 
 func (m model) View() string {
@@ -556,71 +889,59 @@ func (m model) View() string {
 	b.WriteString(titleStyle.Render(title))
 	b.WriteString("\n")
 
-	// Port list
+	// Port grid
 	if len(m.ports) == 0 {
 		b.WriteString(dimStyle.Render("  No ports found. Press 'a' to add one manually."))
 		b.WriteString("\n")
+		// Empty detail line so layout stays stable.
+		b.WriteString("\n")
 	} else {
-		maxVisible := m.maxVisiblePorts()
-		end := m.scrollOffset + maxVisible
-		if end > len(m.ports) {
-			end = len(m.ports)
+		slots := m.buildLayout()
+		rows, cols, cellWidth := m.gridGeometry(len(slots))
+		totalCols := (len(slots) + rows - 1) / rows
+
+		// Clamp scroll offset.
+		if m.scrollOffset+cols > totalCols {
+			m.scrollOffset = totalCols - cols
+		}
+		if m.scrollOffset < 0 {
+			m.scrollOffset = 0
 		}
 
-		if m.scrollOffset > 0 {
-			b.WriteString(dimStyle.Render(fmt.Sprintf("  ... %d more above ...", m.scrollOffset)))
+		// Render row-by-row, picking the right column from column-major layout.
+		for r := 0; r < rows; r++ {
+			var rowBuf strings.Builder
+			rowBuf.WriteString("  ") // left margin
+			for cOffset := 0; cOffset < cols; cOffset++ {
+				c := m.scrollOffset + cOffset
+				if c >= totalCols {
+					break
+				}
+				idx := slotAt(c, r, rows)
+				cell := m.renderCell(slots, idx, cellWidth)
+				rowBuf.WriteString(cell)
+			}
+			b.WriteString(strings.TrimRight(rowBuf.String(), " "))
 			b.WriteString("\n")
 		}
 
-		for i := m.scrollOffset; i < end; i++ {
-			p := m.ports[i]
-			cursor := "  "
-			if i == m.cursor {
-				cursor = "> "
+		// Scroll indicators
+		if m.scrollOffset > 0 || m.scrollOffset+cols < totalCols {
+			var parts []string
+			if m.scrollOffset > 0 {
+				parts = append(parts, fmt.Sprintf("< %d cols", m.scrollOffset))
 			}
-
-			// Status indicator
-			var status string
-			switch p.Status {
-			case PortInactive:
-				status = dimStyle.Render("[ ]")
-			case PortForwarding:
-				status = lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render("[~]")
-			case PortActive:
-				status = activeStyle.Render("[*]")
-			case PortFailed:
-				status = errorStyle.Render("[!]")
+			if m.scrollOffset+cols < totalCols {
+				parts = append(parts, fmt.Sprintf("%d cols >", totalCols-m.scrollOffset-cols))
 			}
-
-			portStr := fmt.Sprintf("%5d", p.Port)
-			if i == m.cursor {
-				portStr = selectedStyle.Render(portStr)
-				cursor = selectedStyle.Render("> ")
-			}
-
-			line := fmt.Sprintf("%s%s %s", cursor, status, portStr)
-
-			if p.Process != "" {
-				line += dimStyle.Render(fmt.Sprintf("  %s", p.Process))
-			}
-			if !p.Discovered {
-				line += dimStyle.Render("  (manual)")
-			}
-			if p.Status == PortActive {
-				line += activeStyle.Render(fmt.Sprintf("  -> localhost:%d", p.LocalPort))
-			}
-			if p.Error != "" {
-				line += errorStyle.Render(fmt.Sprintf("  %s", p.Error))
-			}
-
-			b.WriteString(line)
+			b.WriteString(dimStyle.Render("  " + strings.Join(parts, "  ")))
 			b.WriteString("\n")
 		}
 
-		if end < len(m.ports) {
-			b.WriteString(dimStyle.Render(fmt.Sprintf("  ... %d more below ...", len(m.ports)-end)))
-			b.WriteString("\n")
-		}
+		// Detail line for selected port (always rendered for layout stability).
+		b.WriteString("  ")
+		b.WriteString(m.renderDetail())
+		b.WriteString("\n")
 	}
 
 	// Add port input
@@ -638,8 +959,9 @@ func (m model) View() string {
 
 	// Help
 	help := []string{
+		"hjkl/arrows: move",
 		"space/enter: toggle",
-		"a: add port",
+		"a: add",
 		"d: remove",
 		"r: refresh",
 		"f: forward all",

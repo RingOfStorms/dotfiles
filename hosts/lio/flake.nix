@@ -146,20 +146,29 @@
                 pkgs.code-cursor
                 pkgs.zed-editor
               ];
-              environment.shellAliases = {
-                # open code
-                "oc" =
-                  "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\" --profile oc -- opencode";
-                "occ" = "oc -c";
-                # claude code
-                "cc" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile cc -- claude";
-                # cursor
-                "cur" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile cc -- cursor";
-                # zed
-                "zed" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile cc -- zeditor";
-                # npm
-                "npm" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile npm -- npm";
-              };
+              environment.shellAliases =
+                let
+                  no_proxy = "NO_PROXY='h001.net.joshuabell.xyz,*.ts.net,127.0.0.1,localhost,100.64.0.0/10'";
+                in
+                {
+                  "mva" =
+                    "${no_proxy} nono run --profile mva --allow-cwd --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\" -- /home/josh/projects/mva/target/release/mva";
+                  "mva_" = "${no_proxy} /home/josh/projects/mva/target/release/mva";
+                  # open code
+                  "oc" =
+                    "${no_proxy} nono run --allow-cwd --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\" --profile oc -- opencode";
+                  "oc_" =
+                    "${no_proxy} nono run --allow-cwd --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\" --profile oc -- opencode";
+                  "occ" = "oc -c";
+                  # claude code
+                  "cc" = "${no_proxy}  nono run --allow-cwd --profile cc -- claude";
+                  # cursor
+                  "cur" = "${no_proxy} nono run --allow-cwd --profile cc -- cursor";
+                  # zed
+                  "zed" = "${no_proxy} nono run --allow-cwd --profile cc -- zeditor";
+                  # npm
+                  "npm" = "${no_proxy} nono run --allow-cwd --profile npm -- npm";
+                };
             }
           )
 
