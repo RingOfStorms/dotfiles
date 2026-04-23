@@ -131,7 +131,7 @@
           ({ beszelAgent.token = "2fb5f0a0-24aa-4044-a893-6d0f916cd063"; })
 
           ./hardware-configuration.nix
-          ./ollama.nix
+          ./lm-studio.nix
           (import ./impermanence.nix { inherit primaryUser; })
 
           # Host-specific config

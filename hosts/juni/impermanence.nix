@@ -29,7 +29,6 @@
       # cached timezone name for offline restore
       "/var/lib/timezone-cache"
 
-      "/var/lib/ollama"
       "/var/lib/flatpak"
 
       # bao secrets
@@ -103,6 +102,10 @@
 
         # work profile chrome
         ".config/google-chrome-tempus"
+
+        # LM Studio: downloaded models, chats, settings, and bundled runtime
+        # (~/.lmstudio is multi-GB once you've pulled a model)
+        ".lmstudio"
       ];
       files = [
         # Plasma 6 KWin monitor output configuration (hardware-specific)
