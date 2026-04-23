@@ -26,6 +26,8 @@
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
 
     opencode.url = "github:anomalyco/opencode/88582566bf2bfd2d26000f0c25735bf48ddeca00";
+    nono.url = "github:always-further/nono";
+    nono.flake = false;
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -118,14 +120,26 @@
             { pkgs, ... }:
             {
               environment.systemPackages = [
-                inputs.opencode.packages.${pkgs.system}.default
+                inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default
               ];
-              environment.shellAliases = {
-                "oc" = "all_proxy='' http_proxy='' https_proxy='' opencode";
-                "occ" = "oc -c";
-              };
+              environment.shellAliases =
+                let
+                  no_proxy = "NO_PROXY='h001.net.joshuabell.xyz,*.ts.net,127.0.0.1,localhost,100.64.0.0/10'";
+                in
+                {
+                  "mva" =
+                    "${no_proxy} nono run --profile mva --allow-cwd --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\" -- /home/josh/projects/mva/target/release/mva";
+                  "mva_" = "${no_proxy} /home/josh/projects/mva/target/release/mva";
+                  # open code
+                  "oc" =
+                    "${no_proxy} nono run --allow-cwd --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\" --profile oc -- opencode";
+                  "oc_" =
+                    "${no_proxy} nono run --allow-cwd --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\" --profile oc -- opencode";
+                  "occ" = "oc -c";
+                };
             }
           )
+          ./nono.nix
 
           inputs.beszel.nixosModules.agent
           ({ beszelAgent.token = "2fb5f0a0-24aa-4044-a893-6d0f916cd063"; })
