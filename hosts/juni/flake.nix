@@ -119,6 +119,14 @@
           (
             { pkgs, ... }:
             {
+              # Allow root deploys via SSH using the nix2nix key (matches
+              # joe/lio/h00x). Required so the root flake's `deploy_juni`
+              # script can run `nix-env --set` + `switch-to-configuration`
+              # on the target.
+              users.users.root.openssh.authorizedKeys.keys = [
+                fleet.global.sshPubKey
+              ];
+
               environment.systemPackages = [
                 inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default
               ];
