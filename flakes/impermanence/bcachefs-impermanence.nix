@@ -508,14 +508,33 @@ in
 
             unlock_with_passphrase_until_success() {
               log "Falling back to passphrase unlock for ${PRIMARY}..."
-              while true; do
-                if ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"; then
+              local max_attempts=5
+              local attempt=1
+              while [ "$attempt" -le "$max_attempts" ]; do
+                # Reopen /dev/console for stdin each iteration. Without this,
+                # the inherited service stdin reaches EOF after the first
+                # `bcachefs unlock` reads from it, causing every subsequent
+                # call to fail instantly without re-prompting.
+                if ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}" </dev/console; then
                   log "Bcachefs unlock successful (passphrase)!"
                   return 0
                 fi
-                echo "Unlock failed. Try again."
-                sleep 0.2
+                echo "Unlock failed (attempt $attempt/$max_attempts)."
+                attempt=$((attempt + 1))
+                sleep 1
               done
+
+              log "Exceeded $max_attempts unlock attempts. Powering off."
+              # Force an immediate poweroff from initrd. systemctl --force
+              # poweroff bypasses the normal shutdown sequence (which we
+              # can't complete from initrd anyway since the root isn't
+              # mounted yet).
+              systemctl --force --force poweroff
+              # Belt-and-suspenders: if systemctl is unavailable for any
+              # reason, fall back to the kernel's reboot syscall via
+              # /proc/sysrq-trigger.
+              echo o > /proc/sysrq-trigger 2>/dev/null || true
+              exit 1
             }
 
             # 1) Optional USB key scan (if enabled)
