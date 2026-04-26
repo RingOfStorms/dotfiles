@@ -508,14 +508,28 @@ in
 
             unlock_with_passphrase_until_success() {
               log "Falling back to passphrase unlock for ${PRIMARY}..."
-              local max_attempts=5
+              local max_attempts=3
               local attempt=1
               while [ "$attempt" -le "$max_attempts" ]; do
-                # Reopen /dev/console for stdin each iteration. Without this,
-                # the inherited service stdin reaches EOF after the first
-                # `bcachefs unlock` reads from it, causing every subsequent
-                # call to fail instantly without re-prompting.
-                if ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}" </dev/console; then
+                # Use systemd-ask-password to prompt on the console and pipe
+                # the result into `bcachefs unlock` on stdin. This is the
+                # same pattern the upstream nixpkgs bcachefs module uses.
+                #
+                # We avoid letting `bcachefs unlock` prompt directly because
+                # in initrd it reads from the inherited fd 0; once that fd
+                # reaches EOF (after the first attempt), every subsequent
+                # invocation fails instantly with no prompt, even with
+                # `</dev/console` redirection. Driving the prompt ourselves
+                # via systemd-ask-password sidesteps that entirely — each
+                # invocation gets a fresh prompt on the console agent.
+                #
+                # --timeout=0 = wait indefinitely for input
+                # --no-tty    = use the password agent (console) rather than
+                #               trying to read from our own (non-existent)
+                #               controlling terminal
+                if systemd-ask-password --timeout=0 --no-tty \
+                      "Enter bcachefs passphrase for ${PRIMARY} (attempt $attempt/$max_attempts):" \
+                      | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"; then
                   log "Bcachefs unlock successful (passphrase)!"
                   return 0
                 fi
@@ -525,14 +539,13 @@ in
               done
 
               log "Exceeded $max_attempts unlock attempts. Powering off."
-              # Force an immediate poweroff from initrd. systemctl --force
-              # poweroff bypasses the normal shutdown sequence (which we
-              # can't complete from initrd anyway since the root isn't
-              # mounted yet).
+              # Force an immediate poweroff from initrd. The doubled --force
+              # skips even the unmount/sync attempts, which is what we want
+              # from initrd where there's nothing meaningful to unmount.
               systemctl --force --force poweroff
               # Belt-and-suspenders: if systemctl is unavailable for any
               # reason, fall back to the kernel's reboot syscall via
-              # /proc/sysrq-trigger.
+              # /proc/sysrq-trigger ('o' = poweroff).
               echo o > /proc/sysrq-trigger 2>/dev/null || true
               exit 1
             }
