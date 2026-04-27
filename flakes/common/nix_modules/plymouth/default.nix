@@ -23,13 +23,26 @@ let
       maxw=$(cat $maxWidthPath)
 
       # 1. Extract every frame, coalesced (so each PNG is a complete
-      #    image, not a delta), downscaled to maxWidth keeping aspect.
+      #    image, not a delta), composited onto solid black to drop
+      #    any alpha channel, and downscaled to maxWidth keeping
+      #    aspect. The black background matters: the source GIF's
+      #    later frames are placed over a transparent canvas, and
+      #    Plymouth renders alpha as black anyway — but flattening
+      #    here guarantees consistent dimensions and no transparent
+      #    pixels that could cause flicker on some renderers.
       magick ${./assets/infinite.gif} \
         -coalesce \
+        -background black \
+        -alpha remove -alpha off \
         -resize "''${maxw}x>" \
         $out/raw-%04d.png
 
-      # 2. Keep every Nth frame, renumber from 0.
+      # 2. Drop frame 0. The source GIF's first frame is fully black
+      #    (the animation fades in from black), so keeping it would
+      #    cause a visible black flash every loop iteration.
+      rm -f $out/raw-0000.png
+
+      # 3. Keep every Nth frame from what's left, renumber from 0.
       i=0
       kept=0
       for f in $(ls $out/raw-*.png | sort); do
@@ -42,11 +55,13 @@ let
         i=$((i + 1))
       done
 
-      # 3. Quantize PNGs (8-bit palette, ~50–80% size reduction) and
-      #    strip metadata. --skip-if-larger keeps any frame that
-      #    doesn't shrink.
-      pngquant --ext .png --force --quality=60-85 --skip-if-larger \
-        --strip $out/frame-*.png || true
+      # 4. Quantize PNGs to 8-bit palette (~50–80% size reduction)
+      #    and strip metadata. We do NOT pass --skip-if-larger so
+      #    every frame gets a consistent palette/encoding — mixing
+      #    quantized and unquantized frames can cause subtle visual
+      #    pops when Plymouth swaps between them.
+      pngquant --ext .png --force --quality=60-85 --strip \
+        $out/frame-*.png || true
 
       echo "infinite-frames: kept $kept frames" >&2
       du -sh $out >&2

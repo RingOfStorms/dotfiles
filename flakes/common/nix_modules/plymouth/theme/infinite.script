@@ -67,6 +67,7 @@ if (frame_count > 0) {
 // so advance one frame every (50/30) ≈ 1.67 ticks → use a fractional
 // accumulator.
 tick = 0;
+last_idx = -1;
 fps  = 8;    // calm playback (~5.6 s loop at stride 12)
 refresh_hz = 50;
 
@@ -78,7 +79,14 @@ fun refresh_callback() {
     // Manual modulo (Plymouth script lacks a `%` operator on floats
     // and we want it to be safe even if Math.Int gives us a float).
     while (idx >= frame_count) idx = idx - frame_count;
-    anim.sprite.SetImage(frames[idx]);
+    // Only swap the sprite image when the frame actually changes.
+    // Calling SetImage every refresh tick (50 Hz) when the frame
+    // index hasn't moved can cause subtle redraw glitches on some
+    // Plymouth renderers and wastes work.
+    if (idx != last_idx) {
+        anim.sprite.SetImage(frames[idx]);
+        last_idx = idx;
+    }
 }
 Plymouth.SetRefreshFunction(refresh_callback);
 

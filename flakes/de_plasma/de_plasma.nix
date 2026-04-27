@@ -51,7 +51,12 @@ in
         ../../hosts/_shared_assets/wallpapers/pixel_neon.png
         ../../hosts/_shared_assets/wallpapers/pixel_neon_v.png
       ];
-      description = "List of wallpaper paths to set system-wide for immediate loading.";
+      description = ''
+        Wallpaper image paths consumed by plasma-manager via Home Manager.
+        All entries are passed to `programs.plasma.workspace.wallpaper`.
+        Only the first entry is applied to a live session on activation
+        (via `plasma-apply-wallpaperimage` in the HM activation hook).
+      '';
     };
 
     sddm.autologinUser = mkOption {
