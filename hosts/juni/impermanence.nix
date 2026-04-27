@@ -117,20 +117,17 @@
         ".local/share/plasma" # plasmoid/widget runtime data
         ".local/share/color-schemes" # custom color schemes
 
-        # plasma-manager's runtime state. Contains `last_run_*` sha256 markers
-        # that gate its post-login `run_all.sh` script (which applies themes,
-        # wallpapers, panels, and desktop layout via plasmashell D-Bus +
-        # `plasma-apply-*` CLIs — these REQUIRE a running plasmashell, so they
-        # cannot run during HM activation; they fire from a KDE autostart
-        # entry, *after* plasmashell has already painted defaults). Without
-        # persisting this dir, the markers are wiped each boot and the apply
-        # scripts re-run every login → the visible "flash" of default theme
-        # / wallpaper / panels for ~1s before plasma-manager reapplies. With
-        # the dir persisted, after the first successful boot the markers
-        # match the current generation hash and the scripts no-op. The very
-        # first boot after enabling persistence still flashes (no markers
-        # yet); subsequent boots are clean.
-        ".local/share/plasma-manager"
+        # NOTE: Tried persisting plasma-manager's `last_run_*` markers (either
+        # directly via `.local/share/plasma-manager` or via a shadow dir at
+        # `.local/state/plasma-manager-markers`) to skip plasma-manager's
+        # post-login apply scripts and eliminate the brief "flash of defaults"
+        # visible on each login. It DOES NOT WORK because plasma-manager's
+        # apply scripts mutate runtime state (in particular, panels and
+        # wallpaper are written into `~/.config/plasma-org.kde.plasma.desktop-appletsrc`
+        # via qdbus calls to the running plasmashell — they're not persistent
+        # config writes). The markers track script-content hashes, not desktop
+        # state, so persisted markers + wiped appletsrc → skip-but-no-state
+        # → defaults render permanently. Reverted; accept the brief flash.
       ];
       files = [
         # Plasma 6 KWin monitor output configuration (hardware-specific).

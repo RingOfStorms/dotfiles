@@ -332,5 +332,18 @@ in
     # blank out (kwin reconfigure mid-session is heavy), which was worse than
     # the original "wait for next login" behavior. Removed; we accept that
     # changes from a switch only take effect after the user logs out / in.
+
+    # NOTE: Tried a `last_run_*` shadow-marker workaround here (activation
+    # hook + systemd user path/service to symlink markers from a persisted
+    # shadow dir into ~/.local/share/plasma-manager/) so plasma-manager's
+    # post-login apply scripts would skip on subsequent boots and eliminate
+    # the visible "flash of defaults" during login on impermanence systems.
+    # It backfired: the markers track script-content hashes, but the apply
+    # scripts mutate runtime state (panels/wallpaper are pushed into the
+    # appletsrc via qdbus to the running plasmashell, NOT into persistent
+    # config). With markers persisted but appletsrc wiped on each boot, the
+    # scripts skip and the runtime state never gets re-applied → wallpaper
+    # and panels go missing. The brief flash on each login is the lesser
+    # evil; reverted.
   };
 }
