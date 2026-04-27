@@ -1,0 +1,153 @@
+// Infinite — animated Plymouth theme for ringofstorms hosts.
+//
+// Behavior:
+//   - Plays frame-XXXX.png in a loop, scaled to fit the screen, centered.
+//   - Renders a password prompt when systemd-ask-password forwards one
+//     (used by the bcachefs unlock at boot).
+//   - Renders systemd status messages near the bottom.
+//
+// Frame files are produced at build time by plymouth/default.nix
+// (frame stride / pngquant) and dropped next to this script. They are
+// numbered contiguously starting at frame-0000.png.
+//
+// Plymouth script reference used:
+//   - Charlie Brej's tutorial series (plymouth-theme docs)
+//   - adi1090x/plymouth-themes (real-world examples)
+
+// ---------- Screen ----------
+screen.w = Window.GetWidth(0);
+screen.h = Window.GetHeight(0);
+screen.half.w = screen.w / 2;
+screen.half.h = screen.h / 2;
+
+// Solid black behind the animation. The GIF has dark edges so this
+// also hides any letterboxing introduced by aspect-preserving scale.
+Window.SetBackgroundTopColor(0.0, 0.0, 0.0);
+Window.SetBackgroundBottomColor(0.0, 0.0, 0.0);
+
+// ---------- Frame loading ----------
+// Build a small string-formatter for 4-digit zero-padded names since
+// Plymouth script has no printf-equivalent.
+fun pad4(n) {
+    s = "" + n;
+    if (n < 10)    return "000" + s;
+    if (n < 100)   return "00"  + s;
+    if (n < 1000)  return "0"   + s;
+    return s;
+}
+
+frames = [];
+i = 0;
+loop = 1;
+while (loop) {
+    name = "frame-" + pad4(i) + ".png";
+    img = Image(name);
+    if (!img) {
+        loop = 0;
+    } else {
+        frames[i] = img;
+        i++;
+    }
+}
+frame_count = i;
+
+// One sprite for the whole animation; we just swap its image each tick.
+// Pre-compute the centered position from frame 0's dimensions.
+anim.sprite = Sprite();
+if (frame_count > 0) {
+    anim.x = screen.half.w - frames[0].GetWidth()  / 2;
+    anim.y = screen.half.h - frames[0].GetHeight() / 2;
+    anim.sprite.SetX(anim.x);
+    anim.sprite.SetY(anim.y);
+    anim.sprite.SetImage(frames[0]);
+}
+
+// ---------- Animation state ----------
+// Plymouth refresh callback fires at ~50 Hz. We want ~30 fps playback,
+// so advance one frame every (50/30) ≈ 1.67 ticks → use a fractional
+// accumulator.
+tick = 0;
+fps  = 5;    // slow, dreamy playback (~9 s loop at stride 12)
+refresh_hz = 50;
+
+fun refresh_callback() {
+    if (frame_count <= 1) return;
+    tick++;
+    advance = Math.Int(tick * fps / refresh_hz);
+    idx = advance;
+    // Manual modulo (Plymouth script lacks a `%` operator on floats
+    // and we want it to be safe even if Math.Int gives us a float).
+    while (idx >= frame_count) idx = idx - frame_count;
+    anim.sprite.SetImage(frames[idx]);
+}
+Plymouth.SetRefreshFunction(refresh_callback);
+
+// ---------- Password prompt ----------
+// systemd-ask-password forwards prompts here when the bcachefs unlock
+// (or any other initrd password agent) calls systemd-ask-password.
+// We render:
+//   - a prompt label (the message passed by the caller)
+//   - a row of asterisks reflecting bullet count
+// Both sit at the bottom-third of the screen so the animation stays
+// visible behind/above them.
+
+prompt = null;
+bullets = null;
+message = null;
+bullet.image = Image.Text("*", 1, 1, 1);
+
+fun DisplayPasswordCallback(promptText, bulletCount) {
+    // Clear any prior prompt state.
+    prompt = null;
+    bullets = null;
+
+    if (promptText == "") promptText = "Passphrase:";
+    prompt.image = Image.Text(promptText, 1, 1, 1);
+    prompt.sprite = Sprite(prompt.image);
+    prompt.sprite.SetX(screen.half.w - prompt.image.GetWidth() / 2);
+    prompt.sprite.SetY(screen.h - 4 * prompt.image.GetHeight());
+
+    // Bullet row, centered.
+    totalWidth = bulletCount * bullet.image.GetWidth();
+    startPos = screen.half.w - totalWidth / 2;
+    for (b = 0; b < bulletCount; b++) {
+        bullets[b].sprite = Sprite(bullet.image);
+        bullets[b].sprite.SetX(startPos + b * bullet.image.GetWidth());
+        bullets[b].sprite.SetY(screen.h - 2 * bullet.image.GetHeight());
+    }
+}
+Plymouth.SetDisplayPasswordFunction(DisplayPasswordCallback);
+
+fun DisplayNormalCallback() {
+    prompt = null;
+    bullets = null;
+    message = null;
+}
+Plymouth.SetDisplayNormalFunction(DisplayNormalCallback);
+
+// ---------- Status / message ----------
+// Plymouth has two channels for transient text:
+//   - Update (systemd unit progress, "Started X.service")
+//   - Message (one-off `plymouth message --text=...`)
+// We render both via the same sprite, near the bottom edge.
+
+status = null;
+fun show_status_text(text) {
+    status = null;
+    if (text == "") return;
+    status.image  = Image.Text(text, 0.7, 0.7, 0.7);
+    status.sprite = Sprite(status.image);
+    status.sprite.SetX(screen.half.w - status.image.GetWidth() / 2);
+    status.sprite.SetY(screen.h - status.image.GetHeight() - 8);
+}
+Plymouth.SetUpdateStatusFunction(show_status_text);
+Plymouth.SetMessageFunction(show_status_text);
+
+// ---------- Quit ----------
+fun quit_callback() {
+    prompt = null;
+    bullets = null;
+    message = null;
+    status = null;
+}
+Plymouth.SetQuitFunction(quit_callback);

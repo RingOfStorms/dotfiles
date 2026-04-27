@@ -358,6 +358,15 @@ in
           # /run/systemd/ask-password/ socket. Service stdout/stderr fall
           # through to the journal (and to the console as systemd's default
           # journal-tee in initrd).
+          #
+          # Bonus: this same agent-socket design is what makes the
+          # prompt automatically Plymouth-compatible.
+          # plymouth-ask-password-agent (enabled when
+          # boot.plymouth.enable = true) listens on the same
+          # /run/systemd/ask-password/ directory and renders the
+          # prompt graphically via the theme's
+          # display_password_callback. Don't add StandardInput=tty
+          # here — it would break both the console and Plymouth flows.
         };
 
         script =
