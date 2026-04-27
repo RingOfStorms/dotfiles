@@ -325,66 +325,12 @@ in
       };
     };
 
-    # Soft post-activation reload of a live Plasma session.
-    #
-    # Why: plasma-manager writes config files with `overrideConfig = true`,
-    # but a running plasmashell/kwin won't notice until something pokes them.
-    # Without this, `nh os switch` / `deploy_*` against a host with an active
-    # session produces a visible flicker (wallpaper resets, panels reload to
-    # defaults, etc.) until the next login.
-    #
-    # This script detects an active user D-Bus session and, if found, asks
-    # plasmashell + kwin + kglobalaccel to re-read their config in place.
-    # No-ops cleanly when no graphical session exists (e.g. activation during
-    # boot before login, or on headless runs).
-    home.activation.reloadPlasma = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      uid="$(${pkgs.coreutils}/bin/id -u)"
-      runtime="/run/user/$uid"
-      bus="$runtime/bus"
-
-      if [ ! -S "$bus" ]; then
-        echo "reloadPlasma: no user D-Bus at $bus, skipping (no graphical session)"
-        exit 0
-      fi
-
-      export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus"
-      export XDG_RUNTIME_DIR="$runtime"
-
-      # Liveness check: is plasmashell actually running and on the bus?
-      if ! ${pkgs.dbus}/bin/dbus-send --session --print-reply \
-            --dest=org.kde.plasmashell /MainApplication \
-            org.freedesktop.DBus.Peer.Ping >/dev/null 2>&1; then
-        echo "reloadPlasma: plasmashell not on D-Bus, skipping"
-        exit 0
-      fi
-
-      echo "reloadPlasma: live Plasma session detected, applying soft refresh"
-
-      ${lib.optionalString (cfg.wallpapers != [ ]) ''
-        # Wallpaper — instant, no flicker. Only applies the first wallpaper;
-        # multi-wallpaper / slideshow setups are left to plasmashell refresh.
-        ${pkgs.kdePackages.plasma-workspace}/bin/plasma-apply-wallpaperimage \
-          ${lib.escapeShellArg (toString (builtins.head cfg.wallpapers))} \
-          || echo "reloadPlasma: plasma-apply-wallpaperimage failed (non-fatal)"
-      ''}
-
-      # KWin — picks up kwinrc, rules, scripts, shortcuts without --replace.
-      ${pkgs.dbus}/bin/dbus-send --session --type=method_call \
-        --dest=org.kde.KWin /KWin org.kde.KWin.reconfigure \
-        || echo "reloadPlasma: kwin reconfigure failed (non-fatal)"
-
-      # Global shortcuts daemon — re-reads kglobalshortcutsrc.
-      ${pkgs.dbus}/bin/dbus-send --session --type=method_call \
-        --dest=org.kde.kglobalaccel /kglobalaccel \
-        org.kde.KGlobalAccel.reloadConfig \
-        || echo "reloadPlasma: kglobalaccel reload failed (non-fatal)"
-
-      # Plasmashell — refresh in place (no quit/start). Picks up plasmarc,
-      # panel translucency, applet config, etc.
-      ${pkgs.dbus}/bin/dbus-send --session --type=method_call \
-        --dest=org.kde.plasmashell /PlasmaShell \
-        org.kde.PlasmaShell.refreshCurrentShell \
-        || echo "reloadPlasma: plasmashell refreshCurrentShell failed (non-fatal)"
-    '';
+    # NOTE: Previously had a `home.activation.reloadPlasma` hook here that
+    # poked plasmashell/kwin/kglobalaccel via D-Bus after activation to make
+    # `nh os switch` / `deploy_*` apply changes to a live session without a
+    # relogin. On Plasma 6 Wayland it caused the whole graphical session to
+    # blank out (kwin reconfigure mid-session is heavy), which was worse than
+    # the original "wait for next login" behavior. Removed; we accept that
+    # changes from a switch only take effect after the user logs out / in.
   };
 }
