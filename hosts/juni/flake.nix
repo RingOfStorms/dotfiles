@@ -94,6 +94,7 @@
           inputs.flatpaks.nixosModules.default
 
           inputs.common.nixosModules.boot_systemd
+          inputs.common.nixosModules.plymouth
           inputs.common.nixosModules.essentials
           inputs.common.nixosModules.git
           inputs.common.nixosModules.tmux
