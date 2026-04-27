@@ -106,10 +106,68 @@
         # LM Studio: downloaded models, chats, settings, and bundled runtime
         # (~/.lmstudio is multi-GB once you've pulled a model)
         ".lmstudio"
+
+        # --- Plasma config persistence ---
+        # With impermanence, ~/.config and ~/.local/share are wiped each boot.
+        # SDDM autologin starts plasmashell *before* HM activation has rewritten
+        # its configs, so plasmashell briefly reads stock defaults — visible as
+        # a "flash" of default wallpaper / panels / theme before the real config
+        # kicks in. Persisting these means plasmashell renders correctly on
+        # first paint after each boot. With `programs.plasma.overrideConfig =
+        # true` (in flakes/de_plasma/home_manager/default.nix), plasma-manager
+        # wipes & rewrites managed keys on every activation, so persisted files
+        # never drift from declared state — runtime-only keys (recent docs,
+        # window positions) survive harmlessly.
+        # First boot after enabling: persist files don't exist yet, so the
+        # very first login still flashes. Every subsequent boot is clean.
+        ".config/plasma-workspace" # session/autostart state, ksmserver lock
+        ".local/share/plasma" # plasmoid/widget runtime data
+        ".local/share/color-schemes" # custom color schemes
       ];
       files = [
         # Plasma 6 KWin monitor output configuration (hardware-specific)
         ".config/kwinoutputconfig.json"
+
+        # --- Plasma config persistence (see directories block above) ---
+        # Desktop containment + applet layout (panels, widgets, wallpaper plugin).
+        ".config/plasma-org.kde.plasma.desktop-appletsrc"
+        ".config/plasmashellrc"
+        ".config/plasmarc"
+        # KWin: window manager settings, rules, virtual desktops, scripts.
+        ".config/kwinrc"
+        ".config/kwinrulesrc"
+        # Shortcuts: global + khotkeys.
+        ".config/kglobalshortcutsrc"
+        ".config/khotkeysrc"
+        # KDE-wide look/feel: color scheme, fonts, icons, cursor.
+        ".config/kdeglobals"
+        # Lock screen appearance + behavior.
+        ".config/kscreenlockerrc"
+        # Session manager (logout/restore behavior).
+        ".config/ksmserverrc"
+        # Activities.
+        ".config/kactivitymanagerdrc"
+        # Keyboard layout (xkb).
+        ".config/kxkbrc"
+        # File manager + terminal (declared via plasma-manager).
+        ".config/dolphinrc"
+        ".config/konsolerc"
+        # Baloo file indexer (disabled declaratively).
+        ".config/baloofilerc"
+        # KWallet (disabled declaratively).
+        ".config/kwalletrc"
+        # Notification position/behavior.
+        ".config/plasmanotifyrc"
+        # KRunner search bar.
+        ".config/krunnerrc"
+        # System Settings application state.
+        ".config/systemsettingsrc"
+        # Spectacle screenshot tool defaults.
+        ".config/spectaclerc"
+        # Breeze widget style settings.
+        ".config/breezerc"
+        # Qt5 settings (cursor size, fonts) — read by all Qt apps at startup.
+        ".config/Trolltech.conf"
       ];
     };
   };
