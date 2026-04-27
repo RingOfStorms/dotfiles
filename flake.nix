@@ -23,7 +23,6 @@
         let
           hostDef = fleet.hosts.${name};
           flakePath = hostDef.flakePath or "hosts/${name}";
-          user = hostDef.user;
 
           # Determine deploy target: prefer lanIp for local hosts, else hostname
           target =
