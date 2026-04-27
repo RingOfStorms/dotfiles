@@ -107,67 +107,24 @@
         # (~/.lmstudio is multi-GB once you've pulled a model)
         ".lmstudio"
 
-        # --- Plasma config persistence ---
+        # --- Plasma directory-level persistence ---
         # With impermanence, ~/.config and ~/.local/share are wiped each boot.
-        # SDDM autologin starts plasmashell *before* HM activation has rewritten
-        # its configs, so plasmashell briefly reads stock defaults — visible as
-        # a "flash" of default wallpaper / panels / theme before the real config
-        # kicks in. Persisting these means plasmashell renders correctly on
-        # first paint after each boot. With `programs.plasma.overrideConfig =
-        # true` (in flakes/de_plasma/home_manager/default.nix), plasma-manager
-        # wipes & rewrites managed keys on every activation, so persisted files
-        # never drift from declared state — runtime-only keys (recent docs,
-        # window positions) survive harmlessly.
-        # First boot after enabling: persist files don't exist yet, so the
-        # very first login still flashes. Every subsequent boot is clean.
+        # Directory bind-mounts are safe with KDE's atomic-rename writes;
+        # individual *file* bind-mounts are NOT — KDE rewrites them via
+        # write-tmp-then-rename, which detaches the bind mount and leaves the
+        # persisted copy stale/empty. So we only persist directories here.
+        # The login-flash for theme/wallpaper/panels is not fully solved by
+        # this alone; revisit with a different mechanism (e.g. symlink-based
+        # placement via home.file, or persisting all of ~/.config) later.
         ".config/plasma-workspace" # session/autostart state, ksmserver lock
         ".local/share/plasma" # plasmoid/widget runtime data
         ".local/share/color-schemes" # custom color schemes
       ];
       files = [
-        # Plasma 6 KWin monitor output configuration (hardware-specific)
+        # Plasma 6 KWin monitor output configuration (hardware-specific).
+        # NOTE: this is a JSON file written by KWin on output-config changes;
+        # acceptable as a single-file bind because writes are infrequent.
         ".config/kwinoutputconfig.json"
-
-        # --- Plasma config persistence (see directories block above) ---
-        # Desktop containment + applet layout (panels, widgets, wallpaper plugin).
-        ".config/plasma-org.kde.plasma.desktop-appletsrc"
-        ".config/plasmashellrc"
-        ".config/plasmarc"
-        # KWin: window manager settings, rules, virtual desktops, scripts.
-        ".config/kwinrc"
-        ".config/kwinrulesrc"
-        # Shortcuts: global + khotkeys.
-        ".config/kglobalshortcutsrc"
-        ".config/khotkeysrc"
-        # KDE-wide look/feel: color scheme, fonts, icons, cursor.
-        ".config/kdeglobals"
-        # Lock screen appearance + behavior.
-        ".config/kscreenlockerrc"
-        # Session manager (logout/restore behavior).
-        ".config/ksmserverrc"
-        # Activities.
-        ".config/kactivitymanagerdrc"
-        # Keyboard layout (xkb).
-        ".config/kxkbrc"
-        # File manager + terminal (declared via plasma-manager).
-        ".config/dolphinrc"
-        ".config/konsolerc"
-        # Baloo file indexer (disabled declaratively).
-        ".config/baloofilerc"
-        # KWallet (disabled declaratively).
-        ".config/kwalletrc"
-        # Notification position/behavior.
-        ".config/plasmanotifyrc"
-        # KRunner search bar.
-        ".config/krunnerrc"
-        # System Settings application state.
-        ".config/systemsettingsrc"
-        # Spectacle screenshot tool defaults.
-        ".config/spectaclerc"
-        # Breeze widget style settings.
-        ".config/breezerc"
-        # Qt5 settings (cursor size, fonts) — read by all Qt apps at startup.
-        ".config/Trolltech.conf"
       ];
     };
   };

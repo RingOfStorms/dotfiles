@@ -85,14 +85,15 @@ in
 
     frameStride = lib.mkOption {
       type = lib.types.ints.positive;
-      default = 12;
+      default = 4;
       description = ''
         Keep every Nth frame from the source GIF. The source has 541
-        frames; stride 12 keeps ~45 frames (~4.5 s loop at the script's
-        10 fps playback). Lower = smoother but larger initrd; higher =
-        choppier but smaller. Each kept PNG adds ~10–40 KB to initrd
-        after pngquant. To change playback speed, edit `fps` in
-        infinite.script (not this stride).
+        frames (540 after dropping the all-black frame 0); stride 4
+        keeps ~135 frames (~33 s loop at the script's 4 fps playback).
+        Lower = smoother but larger initrd; higher = choppier but
+        smaller. Each kept PNG adds ~10–40 KB to initrd after pngquant.
+        To change playback speed, edit `fps` in infinite.script (not
+        this stride).
       '';
     };
 

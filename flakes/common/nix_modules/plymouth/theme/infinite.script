@@ -68,7 +68,7 @@ if (frame_count > 0) {
 // accumulator.
 tick = 0;
 last_idx = -1;
-fps  = 8;    // calm playback (~5.6 s loop at stride 12)
+fps  = 4;    // calm playback (~33 s loop at stride 4 / ~135 frames)
 refresh_hz = 50;
 
 fun refresh_callback() {
