@@ -545,9 +545,7 @@ in
         enable = true;
         package = pkgs.paperServers.paper;
         jvmOpts = "-Xms4096M -Xmx12288M"; # Matches original joe config
-        serverProperties = paperServerProperties { port = 25566; motd = "Survival"; } // {
-          force-gamemode = true; # Force survival on join
-        };
+        serverProperties = paperServerProperties { port = 25566; motd = "Survival"; };
         whitelist = whitelist;
         operators = operators;
 
@@ -652,7 +650,6 @@ in
         jvmOpts = "-Xms2048M -Xmx8192M";
         serverProperties = paperServerProperties { port = 25567; motd = "Creative"; } // {
           gamemode = "creative";
-          force-gamemode = true; # Force creative on join (overrides per-player)
           spawn-monsters = false;
           spawn-animals = false;
         };
