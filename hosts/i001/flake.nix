@@ -76,7 +76,9 @@
           inputs.common.nixosModules.tailnet
 
           ./hardware-configuration.nix
-          ./impermanence.nix
+          (import ./impermanence.nix {
+            impermanence_mod = inputs.impermanence_mod;
+          })
 
           # Host-specific config
           ({ pkgs, lib, ... }: {

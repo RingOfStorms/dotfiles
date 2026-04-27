@@ -155,7 +155,10 @@
 
           ./hardware-configuration.nix
           ./lm-studio.nix
-          (import ./impermanence.nix { inherit primaryUser; })
+          (import ./impermanence.nix {
+            inherit primaryUser;
+            impermanence_mod = inputs.impermanence;
+          })
 
           # Host-specific config
           (

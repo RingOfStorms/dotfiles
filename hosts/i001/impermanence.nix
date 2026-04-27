@@ -1,64 +1,40 @@
+# Impermanence persistence declarations for i001 (install host /
+# low-trust kiosk). Most state comes from the shared persistence sets
+# in `flakes/impermanence/shared_persistence/`. Only host-specific
+# entries live inline below.
+{ impermanence_mod }:
 { ... }:
+let
+  user = "luser";
+  shared = impermanence_mod.lib.mergeSharedPersistence (
+    with impermanence_mod.sharedPersistence;
+    [
+      essentials
+      network_manager
+      bluetooth
+      iwd
+      hardening
+      tailscale
+      openbao
+      pipewire
+      timezone_cache
+      atuin
+      zoxide
+      nvim_ros
+      chrome
+      de_plasma
+    ]
+  );
+in
 {
   environment.persistence."/persist" = {
     enable = true;
     hideMounts = true;
-    directories = [
-      "/var/log"
-      "/var/lib/nixos"
-      "/var/lib/systemd/coredump"
-      "/var/lib/systemd/timers"
-
-      "/etc/nixos"
-      "/etc/ssh"
-
-      "/etc/NetworkManager/system-connections"
-      "/var/lib/bluetooth"
-      "/var/lib/NetworkManager"
-      "/var/lib/iwd"
-      "/var/lib/fail2ban"
-
-      "/var/lib/tailscale"
-
-      # bao secrets
-      "/run/openbao"
-      "/var/lib/openbao-secrets"
-
-      # PipeWire Bluetooth device state (profiles, routing, codec selection)
-      "/var/lib/pipewire"
-
-      # cached timezone name for offline restore
-      "/var/lib/timezone-cache"
-    ];
-    files = [
-      "/machine-key.json"
-      "/etc/machine-id"
-    ];
-    users.luser = {
-      directories = [
-        ".ssh"
-        ".gnupg"
-
-        "projects"
-        ".config/nixos-config"
-
-        ".config/atuin"
-        ".local/share/atuin"
-
-        ".local/share/zoxide"
-
-        # KDE
-        ".config/kdeconnect"
-
-        # Chrome
-        ".config/google-chrome"
-
-        # neovim ros_neovim
-        ".local/state/nvim_ringofstorms_helium"
-      ];
-      files = [
-
-      ];
+    directories = shared.system.directories ++ [ ];
+    files = shared.system.files ++ [ ];
+    users."${user}" = {
+      directories = shared.user.directories ++ [ ];
+      files = shared.user.files ++ [ ];
     };
   };
 }

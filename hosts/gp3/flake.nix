@@ -113,7 +113,10 @@
           })
 
           ./hardware-configuration.nix
-          (import ./impermanence.nix { inherit primaryUser; })
+          (import ./impermanence.nix {
+            inherit primaryUser;
+            impermanence_mod = inputs.impermanence_mod;
+          })
           ./configuration.nix
           ./battery-manager.nix
 
