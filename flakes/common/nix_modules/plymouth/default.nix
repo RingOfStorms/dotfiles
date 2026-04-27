@@ -101,6 +101,29 @@ in
         would disable it).
       '';
     };
+
+    earlyKms = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ "i915" ];
+      example = [ "amdgpu" ];
+      description = ''
+        KMS driver modules to force-load early in initrd so Plymouth
+        has a DRM device to render against from the very first frame.
+
+        Without this, Plymouth's framebuffer-only fallback path
+        sometimes loses the race against the kernel's TTY/journal
+        output, producing a text-mode boot even when the splash is
+        otherwise fully configured. Loading the GPU driver in initrd
+        ensures DRM is up before plymouth-start.service runs.
+
+        Defaults to [ "i915" ] (Intel iGPUs, used on juni/gp3/i001).
+        Override per-host:
+          - NVIDIA proprietary: [ "nvidia_drm" ] (also requires
+            nvidia kernel modules in initrd; see hosts/joe).
+          - AMD: [ "amdgpu" ]
+          - Empty list disables this and relies on simpledrm/efifb.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -124,6 +147,12 @@ in
 
     boot.consoleLogLevel = lib.mkIf cfg.quiet 0;
     boot.initrd.verbose  = lib.mkIf cfg.quiet false;
+
+    # Force-load the GPU driver in initrd so DRM is available before
+    # plymouth-start.service runs. Without this Plymouth races the
+    # journal-tee for /dev/console and loses, producing a text-mode
+    # boot. Shutdown still works because by then the driver is loaded.
+    boot.initrd.kernelModules = cfg.earlyKms;
 
     # Plymouth requires systemd-initrd for clean integration. The
     # impermanence module already enables this; assert here so a
