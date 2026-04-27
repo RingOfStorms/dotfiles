@@ -6,12 +6,17 @@
 }:
 let
   c = constants.services.llama-cpp;
-  llamaCppCuda = pkgs.llama-cpp.override { cudaSupport = true; };
 in
 {
+  # Enable CUDA globally on this host so pkgs.llama-cpp (and its deps) match
+  # the derivation hashes published by https://cuda-maintainers.cachix.org,
+  # avoiding multi-hour from-source rebuilds. A per-package `.override` here
+  # produces a different drv hash than the cache and forces a local build.
+  nixpkgs.config.cudaSupport = true;
+
   services.llama-cpp = {
     enable = true;
-    package = llamaCppCuda;
+    package = pkgs.llama-cpp;
     host = "0.0.0.0";
     port = c.port;
 
