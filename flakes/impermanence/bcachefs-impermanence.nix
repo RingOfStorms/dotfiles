@@ -349,14 +349,15 @@ in
           Type = "oneshot";
           RemainAfterExit = true;
           KeyringMode = "shared";
-          # TTY access is needed for passphrase fallback prompt
-          StandardInput = "tty";
-          StandardOutput = "tty";
-          StandardError = "tty";
-          TTYPath = "/dev/console";
-          TTYReset = "no";
-          TTYVHangup = "no";
-          TTYVTDisallocate = "no";
+          # NOTE: deliberately NO StandardInput=tty / TTYPath=/dev/console.
+          # Holding /dev/console as our controlling terminal blocks
+          # systemd-ask-password-console.service (the password agent) from
+          # acquiring the console via TIOCSCTTY, so the prompt would never
+          # render. We delegate all interactive prompting to the agent via
+          # `systemd-ask-password`, which talks to it over the
+          # /run/systemd/ask-password/ socket. Service stdout/stderr fall
+          # through to the journal (and to the console as systemd's default
+          # journal-tee in initrd).
         };
 
         script =
@@ -511,29 +512,31 @@ in
               local max_attempts=3
               local attempt=1
               while [ "$attempt" -le "$max_attempts" ]; do
-                # Use systemd-ask-password to prompt on the console and pipe
-                # the result into `bcachefs unlock` on stdin. This is the
-                # same pattern the upstream nixpkgs bcachefs module uses.
+                # Use systemd-ask-password to render the prompt via the
+                # console password agent (systemd-ask-password-console.service),
+                # then pipe the result into `bcachefs unlock`. Same pattern
+                # as the upstream nixpkgs bcachefs module.
                 #
-                # We avoid letting `bcachefs unlock` prompt directly because
-                # in initrd it reads from the inherited fd 0; once that fd
-                # reaches EOF (after the first attempt), every subsequent
-                # invocation fails instantly with no prompt, even with
-                # `</dev/console` redirection. Driving the prompt ourselves
-                # via systemd-ask-password sidesteps that entirely — each
-                # invocation gets a fresh prompt on the console agent.
+                # CRITICAL: this only works because our service does NOT set
+                # StandardInput=tty / TTYPath=/dev/console (see serviceConfig
+                # comment above). If our service held /dev/console as a ctty,
+                # the agent would block forever trying to TIOCSCTTY it and
+                # no prompt would ever render.
                 #
-                # --timeout=0 = wait indefinitely for input
-                # --no-tty    = use the password agent (console) rather than
-                #               trying to read from our own (non-existent)
-                #               controlling terminal
-                if systemd-ask-password --timeout=0 --no-tty \
+                # We can't let `bcachefs unlock` prompt by itself either: its
+                # prompting paths read from inherited fd 0 (here /dev/null)
+                # and have an internal 3-attempt loop that misbehaves on EOF.
+                # Piping a single line in routes it through the well-behaved
+                # `new_from_stdin` path.
+                #
+                # --timeout=0 = wait indefinitely for user input.
+                if systemd-ask-password --timeout=0 \
                       "Enter bcachefs passphrase for ${PRIMARY} (attempt $attempt/$max_attempts):" \
                       | ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${PRIMARY}"; then
                   log "Bcachefs unlock successful (passphrase)!"
                   return 0
                 fi
-                echo "Unlock failed (attempt $attempt/$max_attempts)."
+                log "Unlock attempt $attempt/$max_attempts failed."
                 attempt=$((attempt + 1))
                 sleep 1
               done
