@@ -113,12 +113,24 @@
         # individual *file* bind-mounts are NOT — KDE rewrites them via
         # write-tmp-then-rename, which detaches the bind mount and leaves the
         # persisted copy stale/empty. So we only persist directories here.
-        # The login-flash for theme/wallpaper/panels is not fully solved by
-        # this alone; revisit with a different mechanism (e.g. symlink-based
-        # placement via home.file, or persisting all of ~/.config) later.
         ".config/plasma-workspace" # session/autostart state, ksmserver lock
         ".local/share/plasma" # plasmoid/widget runtime data
         ".local/share/color-schemes" # custom color schemes
+
+        # plasma-manager's runtime state. Contains `last_run_*` sha256 markers
+        # that gate its post-login `run_all.sh` script (which applies themes,
+        # wallpapers, panels, and desktop layout via plasmashell D-Bus +
+        # `plasma-apply-*` CLIs — these REQUIRE a running plasmashell, so they
+        # cannot run during HM activation; they fire from a KDE autostart
+        # entry, *after* plasmashell has already painted defaults). Without
+        # persisting this dir, the markers are wiped each boot and the apply
+        # scripts re-run every login → the visible "flash" of default theme
+        # / wallpaper / panels for ~1s before plasma-manager reapplies. With
+        # the dir persisted, after the first successful boot the markers
+        # match the current generation hash and the scripts no-op. The very
+        # first boot after enabling persistence still flashes (no markers
+        # yet); subsequent boots are clean.
+        ".local/share/plasma-manager"
       ];
       files = [
         # Plasma 6 KWin monitor output configuration (hardware-specific).
