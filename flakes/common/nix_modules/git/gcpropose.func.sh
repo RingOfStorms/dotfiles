@@ -13,7 +13,7 @@ gcpropose() {
   export http_proxy=''
   export https_proxy=''
   local LITELLM_BASE_URL="http://h001.net.joshuabell.xyz:8094"
-  local LITELLM_MODEL="azure-gpt-5-mini-2025-08-07"
+  local LITELLM_MODEL="copilot-gpt-5-mini"
 
   local mode="staged"
   while [ $# -gt 0 ]; do

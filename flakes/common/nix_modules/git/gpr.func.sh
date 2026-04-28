@@ -79,7 +79,7 @@ _gpr_generate_description() {
   local existing_description="${2:-}"
 
   local LITELLM_BASE_URL="http://h001.net.joshuabell.xyz:8094"
-  local LITELLM_MODEL="azure-gpt-5-mini-2025-08-07"
+  local LITELLM_MODEL="copilot-gpt-5-mini"
 
   local current_branch
   current_branch=$(_gpr_get_current_branch)
@@ -229,7 +229,7 @@ _gpr_generate_title() {
   local base_branch="$1"
 
   local LITELLM_BASE_URL="http://h001.net.joshuabell.xyz:8094"
-  local LITELLM_MODEL="azure-gpt-5-mini-2025-08-07"
+  local LITELLM_MODEL="copilot-gpt-5-mini"
 
   local current_branch
   current_branch=$(_gpr_get_current_branch)
