@@ -16,12 +16,10 @@ let
   c = constants.services.litellmPublic;
 
   # Reuse the model_list from the private litellm instance, filtering to
-  # only azure and copilot models (exclude air proxy, openrouter, ollama).
+  # only copilot models (exclude air proxy, openrouter, ollama, local).
   allModels = config.services.litellm.settings.model_list;
-  isAzureOrCopilot = m:
-    lib.hasPrefix "azure-" m.model_name
-    || lib.hasPrefix "copilot-" m.model_name;
-  publicModels = builtins.filter isAzureOrCopilot allModels;
+  isCopilot = m: lib.hasPrefix "copilot-" m.model_name;
+  publicModels = builtins.filter isCopilot allModels;
 in
 {
   options = { };

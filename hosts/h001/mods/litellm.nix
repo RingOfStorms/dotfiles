@@ -119,73 +119,6 @@ in
             "text-embedding-ada-002"
           ]
         )
-        # Azure
-        # Probed with: scripts/probe-azure-models.sh --type chat --nix
-        ++ (builtins.map
-          (m: {
-            model_name = "azure-${m}";
-            litellm_params = {
-              model = "azure/${m}";
-              api_base = "http://100.64.0.8:9010/azure";
-              api_version = "2025-04-01-preview";
-              api_key = "na";
-            };
-          })
-          [
-            "gpt-4.1-2025-04-14"
-            "gpt-4.1-mini-2025-04-14"
-            "gpt-4o-2024-05-13"
-            "gpt-4o-2024-08-06"
-            "gpt-4o-mini-2024-07-18"
-            "gpt-5-2025-08-07"
-            "gpt-5-mini-2025-08-07"
-            "gpt-5-nano-2025-08-07"
-            "gpt-5.1-2025-11-13"
-            "gpt-5.2-2025-12-11"
-            "gpt-5.4-2026-03-05"
-            "o3-mini-2025-01-31"
-            "o4-mini-2025-04-16"
-          ]
-        )
-        # Azure reasoning aliases
-        ++ [
-          {
-            model_name = "azure-gpt-5.4-low";
-            litellm_params = {
-              model = "azure/gpt-5.4-2026-03-05";
-              api_base = "http://100.64.0.8:9010/azure";
-              api_version = "2025-04-01-preview";
-              api_key = "na";
-              extra_body = {
-                reasoning_effort = "low";
-              };
-            };
-          }
-          {
-            model_name = "azure-gpt-5.4-medium";
-            litellm_params = {
-              model = "azure/gpt-5.4-2026-03-05";
-              api_base = "http://100.64.0.8:9010/azure";
-              api_version = "2025-04-01-preview";
-              api_key = "na";
-              extra_body = {
-                reasoning_effort = "medium";
-              };
-            };
-          }
-          {
-            model_name = "azure-gpt-5.4-high";
-            litellm_params = {
-              model = "azure/gpt-5.4-2026-03-05";
-              api_base = "http://100.64.0.8:9010/azure";
-              api_version = "2025-04-01-preview";
-              api_key = "na";
-              extra_body = {
-                reasoning_effort = "high";
-              };
-            };
-          }
-        ]
         # 宙 Proxy
         ++ (builtins.map
           (m: {
@@ -208,6 +141,7 @@ in
             "claude-opus-4.5"
             "claude-opus-4.6"
             "claude-opus-4.7"
+            "claude-opus-4-7"
             "claude-sonnet-4"
             "claude-sonnet-4.5"
             "claude-sonnet-4.6"
@@ -234,6 +168,7 @@ in
             "gpt-5.1"
             "gpt-5.2"
             "gpt-5.4"
+            "gpt-5.5"
             "kimi-2.5"
             "minimax-2.5"
             "o3-mini"
