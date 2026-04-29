@@ -109,9 +109,19 @@ in
       locations = {
         "/" = {
           proxyWebsockets = true;
-          recommendedProxySettings = true;
+          # NOTE: do NOT set `recommendedProxySettings = true` here.
+          # That include sets `X-Forwarded-Proto $scheme;` AFTER our
+          # explicit override below, clobbering it back to "http" (since
+          # this server receives plain-http from the upstream o001 proxy).
+          # Rails (with APPLICATION_PROTOCOL=https) then sees scheme mismatch,
+          # issues a 301 to https, and the browser ends up in a redirect loop.
+          # Mirror what jellyfin does (hosts/h001/mods/nixarr.nix): rely on
+          # only the explicit headers we set here.
           proxyPass = "http://${containerAddress}:${toString webPort}";
           extraConfig = ''
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto https;
           '';
         };
