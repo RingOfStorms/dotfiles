@@ -216,6 +216,10 @@ in
               webPort = webPort;
               localDomain = domain;
 
+              # We proxy from the host's nginx; don't spin up another nginx
+              # inside the container.
+              configureNginx = false;
+
               # Database configuration (using local postgres)
               database = {
                 createLocally = false; # We create it via ensureDatabases
@@ -244,6 +248,12 @@ in
               environment = {
                 # Enable registration for initial setup (set to "true" to disable after creating accounts)
                 DISABLE_REGISTRATION = "false";
+                # Tell Rails it's served over HTTPS by the upstream nginx.
+                # The upstream module hardcodes APPLICATION_PROTOCOL=http, which
+                # causes an Origin/base_url mismatch behind a TLS-terminating
+                # reverse proxy and silently fails login (CSRF rejection) and
+                # ActionCable websocket connections.
+                APPLICATION_PROTOCOL = "https";
                 # Set timezone if needed
                 # TIME_ZONE = "America/Chicago";
               };
