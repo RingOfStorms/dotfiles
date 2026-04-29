@@ -109,19 +109,30 @@ in
       locations = {
         "/" = {
           proxyWebsockets = true;
-          # NOTE: do NOT set `recommendedProxySettings = true` here.
-          # That include sets `X-Forwarded-Proto $scheme;` AFTER our
-          # explicit override below, clobbering it back to "http" (since
-          # this server receives plain-http from the upstream o001 proxy).
-          # Rails (with APPLICATION_PROTOCOL=https) then sees scheme mismatch,
-          # issues a 301 to https, and the browser ends up in a redirect loop.
-          # Mirror what jellyfin does (hosts/h001/mods/nixarr.nix): rely on
-          # only the explicit headers we set here.
           proxyPass = "http://${containerAddress}:${toString webPort}";
+
+          # Disable nginx's global `recommendedProxySettings = true` for
+          # this location. The recommended include ends with
+          # `proxy_set_header X-Forwarded-Proto $scheme;`, and nginx does
+          # NOT deduplicate proxy_set_header directives — every one is
+          # sent as a separate header line. Combined with our own
+          # `X-Forwarded-Proto https;` override, puma ended up seeing two
+          # X-Forwarded-Proto headers ("https" and "http") and used "http",
+          # which made Rails (with force_ssl=true via APPLICATION_PROTOCOL)
+          # 301-redirect to https — producing an infinite loop with the
+          # upstream o001 proxy.
+          #
+          # Same problem for Host: duplicate `Host` headers were being
+          # joined by Rack into "location.joshuabell.xyz, location.joshuabell.xyz"
+          # which never matched APPLICATION_HOSTS, returning 403.
+          #
+          # Set every header we need explicitly here, exactly once.
+          recommendedProxySettings = false;
           extraConfig = ''
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Forwarded-Proto https;
           '';
         };
