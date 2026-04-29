@@ -5,6 +5,8 @@
   imports = [
     ./litellm.nix
     ./litellm-public.nix
+    ./bifrost.nix
+    ./portkey.nix
     ./nixarr.nix
     ./hardware-transcoding.nix
     ./monitoring_hub.nix

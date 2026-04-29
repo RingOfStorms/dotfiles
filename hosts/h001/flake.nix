@@ -30,6 +30,9 @@
     puzzles.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/puzzles.git";
 
     nixarr.url = "github:rasmus-kirk/nixarr";
+
+    # LLM gateway bake-off
+    bifrost.url = "github:maximhq/bifrost";
   };
 
   outputs =
@@ -69,6 +72,7 @@
 
           inputs.puzzles.nixosModules.default
           inputs.nixarr.nixosModules.default
+          inputs.bifrost.nixosModules.bifrost
           ./hardware-configuration.nix
           ./mods
           ./nginx.nix
