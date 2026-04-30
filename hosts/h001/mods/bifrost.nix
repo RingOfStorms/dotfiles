@@ -142,7 +142,21 @@ in
         };
 
         providers = {
-          # OpenRouter — wildcard model passthrough.
+          # OpenRouter — wired as an openai-compatible CUSTOM provider
+          # (rather than the built-in `openrouter` standard provider) so
+          # it does NOT populate Bifrost's model catalog. Bifrost has no
+          # `require_provider_prefix` flag; when a request omits the
+          # `provider/` prefix it auto-resolves via the catalog and picks
+          # the alphabetically-first match. With OpenRouter as a standard
+          # provider, every bare model name silently routed through it.
+          # Custom providers fail the `parsedProvider != provider` filter
+          # in framework/modelcatalog/models.go, so their pool stays
+          # empty → bare-name requests now error with "provider is
+          # required in model field". See agent report 2026-04-30.
+          #
+          # base_url has NO trailing /v1 — Bifrost's openai provider
+          # hardcodes `/v1/chat/completions` and appends to base_url
+          # (core/providers/openai/openai.go:64-94, :747).
           openrouter = {
             keys = [
               {
@@ -152,6 +166,18 @@ in
                 weight = 1.0;
               }
             ];
+            network_config = {
+              base_url = "https://openrouter.ai/api";
+              default_request_timeout_in_seconds = 120;
+            };
+            custom_provider_config = {
+              base_provider_type = "openai";
+              allowed_requests = {
+                chat_completion = true;
+                chat_completion_stream = true;
+                embedding = true;
+              };
+            };
           };
 
           # Upstream LiteLLM at work (air_prd) via openai-compatible
@@ -176,6 +202,37 @@ in
             ];
             network_config = {
               base_url = "http://100.64.0.8:9010/air_prd";
+              default_request_timeout_in_seconds = 120;
+            };
+            custom_provider_config = {
+              base_provider_type = "openai";
+              allowed_requests = {
+                chat_completion = true;
+                chat_completion_stream = true;
+                embedding = true;
+              };
+            };
+          };
+
+          # llama.cpp router on joe (3090) — models configured in
+          # hosts/joe/llama-cpp.nix (modelsPreset), downloaded from HF on
+          # first request. Router loads/unloads as needed (max 1 resident).
+          # OpenAI-compatible API at /v1. Mirrors litellm.nix `local-*`
+          # entries; addressed here as `local/<model>`.
+          #
+          # base_url has NO trailing /v1 — Bifrost's openai provider
+          # hardcodes the `/v1/...` segment (see openrouter note above).
+          local = {
+            keys = [
+              {
+                name = "k1";
+                value = "na";
+                models = [ "*" ];
+                weight = 1.0;
+              }
+            ];
+            network_config = {
+              base_url = "http://100.64.0.12:11434";
               default_request_timeout_in_seconds = 120;
             };
             custom_provider_config = {
