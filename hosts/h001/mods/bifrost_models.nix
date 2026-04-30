@@ -2,11 +2,11 @@
 # Regenerate with: `nix develop` then `bifrost-models`.
 #
 # Sources:
-#   air models:        http://100.64.0.8:9010/air_prd/models
+#   air models:        http://t.net.joshuabell.xyz:9010/air_prd/models
 #   openrouter models: https://openrouter.ai/api/v1/models (pricing inline)
 #   air pricing:       https://models.dev/api.json (fuzzy-matched)
 #
-# Generated 2026-04-30T05:24:56Z.
+# Generated 2026-04-30T05:28:55Z.
 {
   # Models exposed by upstream air_prd at sync time. Reference list;
   # not currently consumed by bifrost.nix but useful for sanity-checking
@@ -57,20 +57,20 @@
   ];
 
   airPricingOverrides = [
-    # air/claude-3.7-sonnet ← models.dev/claude-3.7-sonnet (score 0.84)
+    # air/claude-3.7-sonnet ← models.dev/claude-3-7-sonnet (score 0.84)
     {
-      id = "air-claude-3-7-sonnet";
-      name = "air → claude-3.7-sonnet (matched claude-3.7-sonnet, score 0.84)";
+      id = "air-claude-3_7-sonnet";
+      name = "air → claude-3.7-sonnet (matched claude-3-7-sonnet, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
       match_type = "exact";
       pattern = "claude-3.7-sonnet";
       request_types = [ "chat_completion" ];
-      pricing_patch = "{\"cache_creation_input_token_cost\":0.00000375,\"cache_read_input_token_cost\":3.0000000000000004e-7,\"input_cost_per_token\":0.000003,\"output_cost_per_token\":0.000015}";
+      pricing_patch = "{\"cache_read_input_token_cost\":3e-7,\"input_cost_per_token\":0.000003,\"output_cost_per_token\":0.000015}";
     }
     # air/claude-haiku-4.5 ← models.dev/claude-haiku-4-5 (score 0.84)
     {
-      id = "air-claude-haiku-4-5";
+      id = "air-claude-haiku-4_5";
       name = "air → claude-haiku-4.5 (matched claude-haiku-4-5, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -103,7 +103,7 @@
     }
     # air/claude-opus-4.1 ← models.dev/claude-opus-4-1 (score 0.84)
     {
-      id = "air-claude-opus-4-1";
+      id = "air-claude-opus-4_1";
       name = "air → claude-opus-4.1 (matched claude-opus-4-1, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -114,7 +114,7 @@
     }
     # air/claude-opus-4.5 ← models.dev/claude-opus-4-5 (score 0.84)
     {
-      id = "air-claude-opus-4-5";
+      id = "air-claude-opus-4_5";
       name = "air → claude-opus-4.5 (matched claude-opus-4-5, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -125,7 +125,7 @@
     }
     # air/claude-opus-4.6 ← models.dev/claude-opus-4-6 (score 0.84)
     {
-      id = "air-claude-opus-4-6";
+      id = "air-claude-opus-4_6";
       name = "air → claude-opus-4.6 (matched claude-opus-4-6, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -136,7 +136,7 @@
     }
     # air/claude-opus-4.7 ← models.dev/claude-opus-4-7 (score 0.84)
     {
-      id = "air-claude-opus-4-7";
+      id = "air-claude-opus-4_7";
       name = "air → claude-opus-4.7 (matched claude-opus-4-7, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -158,7 +158,7 @@
     }
     # air/claude-sonnet-4.5 ← models.dev/claude-sonnet-4-5 (score 0.84)
     {
-      id = "air-claude-sonnet-4-5";
+      id = "air-claude-sonnet-4_5";
       name = "air → claude-sonnet-4.5 (matched claude-sonnet-4-5, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -169,7 +169,7 @@
     }
     # air/claude-sonnet-4.6 ← models.dev/claude-sonnet-4-6 (score 0.84)
     {
-      id = "air-claude-sonnet-4-6";
+      id = "air-claude-sonnet-4_6";
       name = "air → claude-sonnet-4.6 (matched claude-sonnet-4-6, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -180,18 +180,18 @@
     }
     # air/deepseek-3.1 ← models.dev/deepseek-v3.1 (score 0.78)
     {
-      id = "air-deepseek-3-1";
+      id = "air-deepseek-3_1";
       name = "air → deepseek-3.1 (matched deepseek-v3.1, score 0.78)";
       scope_kind = "provider";
       provider_id = "air";
       match_type = "exact";
       pattern = "deepseek-3.1";
       request_types = [ "chat_completion" ];
-      pricing_patch = "{\"input_cost_per_token\":5.6e-7,\"output_cost_per_token\":0.00000168}";
+      pricing_patch = "{\"cache_read_input_token_cost\":1.1e-7,\"input_cost_per_token\":5.6e-7,\"output_cost_per_token\":0.00000168}";
     }
     # air/gemini-2.0-flash ← models.dev/gemini-2.0-flash (score 0.84)
     {
-      id = "air-gemini-2-0-flash";
+      id = "air-gemini-2_0-flash";
       name = "air → gemini-2.0-flash (matched gemini-2.0-flash, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -202,7 +202,7 @@
     }
     # air/gemini-2.0-flash-lite ← models.dev/gemini-2.0-flash-lite (score 0.84)
     {
-      id = "air-gemini-2-0-flash-lite";
+      id = "air-gemini-2_0-flash-lite";
       name = "air → gemini-2.0-flash-lite (matched gemini-2.0-flash-lite, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -213,7 +213,7 @@
     }
     # air/gemini-2.5-flash ← models.dev/gemini-2.5-flash (score 0.84)
     {
-      id = "air-gemini-2-5-flash";
+      id = "air-gemini-2_5-flash";
       name = "air → gemini-2.5-flash (matched gemini-2.5-flash, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -224,7 +224,7 @@
     }
     # air/gemini-2.5-flash-image ← models.dev/gemini-2.5-flash-image (score 0.84)
     {
-      id = "air-gemini-2-5-flash-image";
+      id = "air-gemini-2_5-flash-image";
       name = "air → gemini-2.5-flash-image (matched gemini-2.5-flash-image, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -235,7 +235,7 @@
     }
     # air/gemini-2.5-flash-lite ← models.dev/gemini-2.5-flash-lite (score 0.84)
     {
-      id = "air-gemini-2-5-flash-lite";
+      id = "air-gemini-2_5-flash-lite";
       name = "air → gemini-2.5-flash-lite (matched gemini-2.5-flash-lite, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -246,7 +246,7 @@
     }
     # air/gemini-2.5-pro ← models.dev/gemini-2.5-pro (score 0.84)
     {
-      id = "air-gemini-2-5-pro";
+      id = "air-gemini-2_5-pro";
       name = "air → gemini-2.5-pro (matched gemini-2.5-pro, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -257,7 +257,7 @@
     }
     # air/gemini-2.5-pro-batch ← models.dev/gemini-2.5-pro (score 0.58)
     {
-      id = "air-gemini-2-5-pro-batch";
+      id = "air-gemini-2_5-pro-batch";
       name = "air → gemini-2.5-pro-batch (matched gemini-2.5-pro, score 0.58)";
       scope_kind = "provider";
       provider_id = "air";
@@ -268,7 +268,7 @@
     }
     # air/gemini-2.5-pro-passthrough ← models.dev/gemini-2.5-pro (score 0.53)
     {
-      id = "air-gemini-2-5-pro-passthrough";
+      id = "air-gemini-2_5-pro-passthrough";
       name = "air → gemini-2.5-pro-passthrough (matched gemini-2.5-pro, score 0.53)";
       scope_kind = "provider";
       provider_id = "air";
@@ -277,16 +277,16 @@
       request_types = [ "chat_completion" ];
       pricing_patch = "{\"cache_read_input_token_cost\":1.25e-7,\"input_cost_per_token\":0.00000125,\"output_cost_per_token\":0.00001}";
     }
-    # air/glm-4.7 ← models.dev/glm-4.7 (score 0.84)
+    # air/glm-4.7 ← models.dev/GLM-4.7 (score 0.84)
     {
-      id = "air-glm-4-7";
-      name = "air → glm-4.7 (matched glm-4.7, score 0.84)";
+      id = "air-glm-4_7";
+      name = "air → glm-4.7 (matched GLM-4.7, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
       match_type = "exact";
       pattern = "glm-4.7";
       request_types = [ "chat_completion" ];
-      pricing_patch = "{\"cache_read_input_token_cost\":1.0000000000000001e-7,\"input_cost_per_token\":6e-7,\"output_cost_per_token\":0.0000022}";
+      pricing_patch = "{\"input_cost_per_token\":0.0000035,\"output_cost_per_token\":0.000014}";
     }
     # air/glm-5 ← models.dev/glm-5 (score 0.84)
     {
@@ -297,11 +297,11 @@
       match_type = "exact";
       pattern = "glm-5";
       request_types = [ "chat_completion" ];
-      pricing_patch = "{\"cache_read_input_token_cost\":2.0000000000000002e-7,\"input_cost_per_token\":0.000001,\"output_cost_per_token\":0.0000032000000000000003}";
+      pricing_patch = "{\"input_cost_per_token\":0.000001,\"output_cost_per_token\":0.0000032000000000000003}";
     }
     # air/gpt-4.1 ← models.dev/openai-gpt-4.1 (score 0.84)
     {
-      id = "air-gpt-4-1";
+      id = "air-gpt-4_1";
       name = "air → gpt-4.1 (matched openai-gpt-4.1, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -312,7 +312,7 @@
     }
     # air/gpt-4.1-mini ← models.dev/gpt-4.1-mini (score 0.84)
     {
-      id = "air-gpt-4-1-mini";
+      id = "air-gpt-4_1-mini";
       name = "air → gpt-4.1-mini (matched gpt-4.1-mini, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -321,27 +321,27 @@
       request_types = [ "chat_completion" ];
       pricing_patch = "{\"cache_read_input_token_cost\":1.0000000000000001e-7,\"input_cost_per_token\":4.0000000000000003e-7,\"output_cost_per_token\":0.0000016000000000000001}";
     }
-    # air/gpt-4o ← models.dev/openai-gpt-4o (score 0.84)
+    # air/gpt-4o ← models.dev/azure-gpt-4o (score 0.84)
     {
       id = "air-gpt-4o";
-      name = "air → gpt-4o (matched openai-gpt-4o, score 0.84)";
+      name = "air → gpt-4o (matched azure-gpt-4o, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
       match_type = "exact";
       pattern = "gpt-4o";
       request_types = [ "chat_completion" ];
-      pricing_patch = "{\"cache_read_input_token_cost\":0.00000125,\"input_cost_per_token\":0.0000025,\"output_cost_per_token\":0.00001}";
+      pricing_patch = "{\"input_cost_per_token\":0.000002499,\"output_cost_per_token\":0.000009996}";
     }
-    # air/gpt-4o-mini ← models.dev/azure-gpt-4o-mini (score 0.84)
+    # air/gpt-4o-mini ← models.dev/gpt-4o-mini (score 0.84)
     {
       id = "air-gpt-4o-mini";
-      name = "air → gpt-4o-mini (matched azure-gpt-4o-mini, score 0.84)";
+      name = "air → gpt-4o-mini (matched gpt-4o-mini, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
       match_type = "exact";
       pattern = "gpt-4o-mini";
       request_types = [ "chat_completion" ];
-      pricing_patch = "{\"input_cost_per_token\":1.4960000000000002e-7,\"output_cost_per_token\":5.95e-7}";
+      pricing_patch = "{\"cache_read_input_token_cost\":8e-8,\"input_cost_per_token\":1.5e-7,\"output_cost_per_token\":6e-7}";
     }
     # air/gpt-5 ← models.dev/openai-gpt-5 (score 0.84)
     {
@@ -378,7 +378,7 @@
     }
     # air/gpt-5.1 ← models.dev/gpt-5.1 (score 0.84)
     {
-      id = "air-gpt-5-1";
+      id = "air-gpt-5_1";
       name = "air → gpt-5.1 (matched gpt-5.1, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -387,10 +387,10 @@
       request_types = [ "chat_completion" ];
       pricing_patch = "{\"cache_read_input_token_cost\":1.3e-7,\"input_cost_per_token\":0.00000125,\"output_cost_per_token\":0.00001}";
     }
-    # air/gpt-5.2 ← models.dev/openai-gpt-5.2 (score 0.84)
+    # air/gpt-5.2 ← models.dev/gpt-5.2 (score 0.84)
     {
-      id = "air-gpt-5-2";
-      name = "air → gpt-5.2 (matched openai-gpt-5.2, score 0.84)";
+      id = "air-gpt-5_2";
+      name = "air → gpt-5.2 (matched gpt-5.2, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
       match_type = "exact";
@@ -400,7 +400,7 @@
     }
     # air/gpt-5.4 ← models.dev/gpt-5-4 (score 0.84)
     {
-      id = "air-gpt-5-4";
+      id = "air-gpt-5_4";
       name = "air → gpt-5.4 (matched gpt-5-4, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -411,7 +411,7 @@
     }
     # air/gpt-5.5 ← models.dev/gpt-5.5 (score 0.84)
     {
-      id = "air-gpt-5-5";
+      id = "air-gpt-5_5";
       name = "air → gpt-5.5 (matched gpt-5.5, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
@@ -420,32 +420,32 @@
       request_types = [ "chat_completion" ];
       pricing_patch = "{\"cache_read_input_token_cost\":5e-7,\"input_cost_per_token\":0.000005,\"output_cost_per_token\":0.00003}";
     }
-    # air/kimi-2.5 ← models.dev/Kimi-K2.5 (score 0.77)
+    # air/kimi-2.5 ← models.dev/kimi-k2.5 (score 0.77)
     {
-      id = "air-kimi-2-5";
-      name = "air → kimi-2.5 (matched Kimi-K2.5, score 0.77)";
+      id = "air-kimi-2_5";
+      name = "air → kimi-2.5 (matched kimi-k2.5, score 0.77)";
       scope_kind = "provider";
       provider_id = "air";
       match_type = "exact";
       pattern = "kimi-2.5";
       request_types = [ "chat_completion" ];
-      pricing_patch = "{\"input_cost_per_token\":5.5e-7,\"output_cost_per_token\":0.00000275}";
+      pricing_patch = "{\"input_cost_per_token\":5e-7,\"output_cost_per_token\":0.0000027}";
     }
     # air/minimax-2.5 ← models.dev/MiniMax-M2.5 (score 0.77)
     {
-      id = "air-minimax-2-5";
+      id = "air-minimax-2_5";
       name = "air → minimax-2.5 (matched MiniMax-M2.5, score 0.77)";
       scope_kind = "provider";
       provider_id = "air";
       match_type = "exact";
       pattern = "minimax-2.5";
       request_types = [ "chat_completion" ];
-      pricing_patch = "{\"input_cost_per_token\":3e-7,\"output_cost_per_token\":0.0000012}";
+      pricing_patch = "{\"cache_creation_input_token_cost\":3.75e-7,\"cache_read_input_token_cost\":3e-8,\"input_cost_per_token\":3e-7,\"output_cost_per_token\":0.0000012}";
     }
-    # air/o3-mini ← models.dev/openai-o3-mini (score 0.84)
+    # air/o3-mini ← models.dev/o3-mini (score 0.84)
     {
       id = "air-o3-mini";
-      name = "air → o3-mini (matched openai-o3-mini, score 0.84)";
+      name = "air → o3-mini (matched o3-mini, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
       match_type = "exact";
@@ -524,7 +524,7 @@
   openrouterPricingOverrides = [
     # openrouter/ai21/jamba-large-1.7
     {
-      id = "openrouter-ai21-jamba-large-1-7";
+      id = "openrouter-ai21_jamba-large-1_7";
       name = "openrouter → ai21/jamba-large-1.7";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -535,7 +535,7 @@
     }
     # openrouter/aion-labs/aion-1.0
     {
-      id = "openrouter-aion-labs-aion-1-0";
+      id = "openrouter-aion-labs_aion-1_0";
       name = "openrouter → aion-labs/aion-1.0";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -546,7 +546,7 @@
     }
     # openrouter/aion-labs/aion-1.0-mini
     {
-      id = "openrouter-aion-labs-aion-1-0-mini";
+      id = "openrouter-aion-labs_aion-1_0-mini";
       name = "openrouter → aion-labs/aion-1.0-mini";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -557,7 +557,7 @@
     }
     # openrouter/aion-labs/aion-2.0
     {
-      id = "openrouter-aion-labs-aion-2-0";
+      id = "openrouter-aion-labs_aion-2_0";
       name = "openrouter → aion-labs/aion-2.0";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -568,7 +568,7 @@
     }
     # openrouter/aion-labs/aion-rp-llama-3.1-8b
     {
-      id = "openrouter-aion-labs-aion-rp-llama-3-1-8b";
+      id = "openrouter-aion-labs_aion-rp-llama-3_1-8b";
       name = "openrouter → aion-labs/aion-rp-llama-3.1-8b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -579,7 +579,7 @@
     }
     # openrouter/alfredpros/codellama-7b-instruct-solidity
     {
-      id = "openrouter-alfredpros-codellama-7b-instruct-solidity";
+      id = "openrouter-alfredpros_codellama-7b-instruct-solidity";
       name = "openrouter → alfredpros/codellama-7b-instruct-solidity";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -590,7 +590,7 @@
     }
     # openrouter/alibaba/tongyi-deepresearch-30b-a3b
     {
-      id = "openrouter-alibaba-tongyi-deepresearch-30b-a3b";
+      id = "openrouter-alibaba_tongyi-deepresearch-30b-a3b";
       name = "openrouter → alibaba/tongyi-deepresearch-30b-a3b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -601,7 +601,7 @@
     }
     # openrouter/allenai/olmo-3-32b-think
     {
-      id = "openrouter-allenai-olmo-3-32b-think";
+      id = "openrouter-allenai_olmo-3-32b-think";
       name = "openrouter → allenai/olmo-3-32b-think";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -612,7 +612,7 @@
     }
     # openrouter/allenai/olmo-3.1-32b-instruct
     {
-      id = "openrouter-allenai-olmo-3-1-32b-instruct";
+      id = "openrouter-allenai_olmo-3_1-32b-instruct";
       name = "openrouter → allenai/olmo-3.1-32b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -623,7 +623,7 @@
     }
     # openrouter/alpindale/goliath-120b
     {
-      id = "openrouter-alpindale-goliath-120b";
+      id = "openrouter-alpindale_goliath-120b";
       name = "openrouter → alpindale/goliath-120b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -634,7 +634,7 @@
     }
     # openrouter/amazon/nova-2-lite-v1
     {
-      id = "openrouter-amazon-nova-2-lite-v1";
+      id = "openrouter-amazon_nova-2-lite-v1";
       name = "openrouter → amazon/nova-2-lite-v1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -645,7 +645,7 @@
     }
     # openrouter/amazon/nova-lite-v1
     {
-      id = "openrouter-amazon-nova-lite-v1";
+      id = "openrouter-amazon_nova-lite-v1";
       name = "openrouter → amazon/nova-lite-v1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -656,7 +656,7 @@
     }
     # openrouter/amazon/nova-micro-v1
     {
-      id = "openrouter-amazon-nova-micro-v1";
+      id = "openrouter-amazon_nova-micro-v1";
       name = "openrouter → amazon/nova-micro-v1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -667,7 +667,7 @@
     }
     # openrouter/amazon/nova-premier-v1
     {
-      id = "openrouter-amazon-nova-premier-v1";
+      id = "openrouter-amazon_nova-premier-v1";
       name = "openrouter → amazon/nova-premier-v1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -678,7 +678,7 @@
     }
     # openrouter/amazon/nova-pro-v1
     {
-      id = "openrouter-amazon-nova-pro-v1";
+      id = "openrouter-amazon_nova-pro-v1";
       name = "openrouter → amazon/nova-pro-v1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -689,7 +689,7 @@
     }
     # openrouter/anthracite-org/magnum-v4-72b
     {
-      id = "openrouter-anthracite-org-magnum-v4-72b";
+      id = "openrouter-anthracite-org_magnum-v4-72b";
       name = "openrouter → anthracite-org/magnum-v4-72b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -700,7 +700,7 @@
     }
     # openrouter/anthropic/claude-3-haiku
     {
-      id = "openrouter-anthropic-claude-3-haiku";
+      id = "openrouter-anthropic_claude-3-haiku";
       name = "openrouter → anthropic/claude-3-haiku";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -711,7 +711,7 @@
     }
     # openrouter/anthropic/claude-3.5-haiku
     {
-      id = "openrouter-anthropic-claude-3-5-haiku";
+      id = "openrouter-anthropic_claude-3_5-haiku";
       name = "openrouter → anthropic/claude-3.5-haiku";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -722,7 +722,7 @@
     }
     # openrouter/anthropic/claude-3.7-sonnet
     {
-      id = "openrouter-anthropic-claude-3-7-sonnet";
+      id = "openrouter-anthropic_claude-3_7-sonnet";
       name = "openrouter → anthropic/claude-3.7-sonnet";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -733,7 +733,7 @@
     }
     # openrouter/anthropic/claude-3.7-sonnet:thinking
     {
-      id = "openrouter-anthropic-claude-3-7-sonnet-thinking";
+      id = "openrouter-anthropic_claude-3_7-sonnet-thinking";
       name = "openrouter → anthropic/claude-3.7-sonnet:thinking";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -744,7 +744,7 @@
     }
     # openrouter/anthropic/claude-haiku-4.5
     {
-      id = "openrouter-anthropic-claude-haiku-4-5";
+      id = "openrouter-anthropic_claude-haiku-4_5";
       name = "openrouter → anthropic/claude-haiku-4.5";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -755,7 +755,7 @@
     }
     # openrouter/anthropic/claude-opus-4
     {
-      id = "openrouter-anthropic-claude-opus-4";
+      id = "openrouter-anthropic_claude-opus-4";
       name = "openrouter → anthropic/claude-opus-4";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -766,7 +766,7 @@
     }
     # openrouter/anthropic/claude-opus-4.1
     {
-      id = "openrouter-anthropic-claude-opus-4-1";
+      id = "openrouter-anthropic_claude-opus-4_1";
       name = "openrouter → anthropic/claude-opus-4.1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -777,7 +777,7 @@
     }
     # openrouter/anthropic/claude-opus-4.5
     {
-      id = "openrouter-anthropic-claude-opus-4-5";
+      id = "openrouter-anthropic_claude-opus-4_5";
       name = "openrouter → anthropic/claude-opus-4.5";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -788,7 +788,7 @@
     }
     # openrouter/anthropic/claude-opus-4.6
     {
-      id = "openrouter-anthropic-claude-opus-4-6";
+      id = "openrouter-anthropic_claude-opus-4_6";
       name = "openrouter → anthropic/claude-opus-4.6";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -799,7 +799,7 @@
     }
     # openrouter/anthropic/claude-opus-4.6-fast
     {
-      id = "openrouter-anthropic-claude-opus-4-6-fast";
+      id = "openrouter-anthropic_claude-opus-4_6-fast";
       name = "openrouter → anthropic/claude-opus-4.6-fast";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -810,7 +810,7 @@
     }
     # openrouter/anthropic/claude-opus-4.7
     {
-      id = "openrouter-anthropic-claude-opus-4-7";
+      id = "openrouter-anthropic_claude-opus-4_7";
       name = "openrouter → anthropic/claude-opus-4.7";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -821,7 +821,7 @@
     }
     # openrouter/anthropic/claude-sonnet-4
     {
-      id = "openrouter-anthropic-claude-sonnet-4";
+      id = "openrouter-anthropic_claude-sonnet-4";
       name = "openrouter → anthropic/claude-sonnet-4";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -832,7 +832,7 @@
     }
     # openrouter/anthropic/claude-sonnet-4.5
     {
-      id = "openrouter-anthropic-claude-sonnet-4-5";
+      id = "openrouter-anthropic_claude-sonnet-4_5";
       name = "openrouter → anthropic/claude-sonnet-4.5";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -843,7 +843,7 @@
     }
     # openrouter/anthropic/claude-sonnet-4.6
     {
-      id = "openrouter-anthropic-claude-sonnet-4-6";
+      id = "openrouter-anthropic_claude-sonnet-4_6";
       name = "openrouter → anthropic/claude-sonnet-4.6";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -854,7 +854,7 @@
     }
     # openrouter/arcee-ai/coder-large
     {
-      id = "openrouter-arcee-ai-coder-large";
+      id = "openrouter-arcee-ai_coder-large";
       name = "openrouter → arcee-ai/coder-large";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -865,7 +865,7 @@
     }
     # openrouter/arcee-ai/maestro-reasoning
     {
-      id = "openrouter-arcee-ai-maestro-reasoning";
+      id = "openrouter-arcee-ai_maestro-reasoning";
       name = "openrouter → arcee-ai/maestro-reasoning";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -876,7 +876,7 @@
     }
     # openrouter/arcee-ai/spotlight
     {
-      id = "openrouter-arcee-ai-spotlight";
+      id = "openrouter-arcee-ai_spotlight";
       name = "openrouter → arcee-ai/spotlight";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -887,7 +887,7 @@
     }
     # openrouter/arcee-ai/trinity-large-preview
     {
-      id = "openrouter-arcee-ai-trinity-large-preview";
+      id = "openrouter-arcee-ai_trinity-large-preview";
       name = "openrouter → arcee-ai/trinity-large-preview";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -898,7 +898,7 @@
     }
     # openrouter/arcee-ai/trinity-large-thinking
     {
-      id = "openrouter-arcee-ai-trinity-large-thinking";
+      id = "openrouter-arcee-ai_trinity-large-thinking";
       name = "openrouter → arcee-ai/trinity-large-thinking";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -909,7 +909,7 @@
     }
     # openrouter/arcee-ai/trinity-mini
     {
-      id = "openrouter-arcee-ai-trinity-mini";
+      id = "openrouter-arcee-ai_trinity-mini";
       name = "openrouter → arcee-ai/trinity-mini";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -920,7 +920,7 @@
     }
     # openrouter/arcee-ai/virtuoso-large
     {
-      id = "openrouter-arcee-ai-virtuoso-large";
+      id = "openrouter-arcee-ai_virtuoso-large";
       name = "openrouter → arcee-ai/virtuoso-large";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -931,7 +931,7 @@
     }
     # openrouter/baidu/ernie-4.5-21b-a3b
     {
-      id = "openrouter-baidu-ernie-4-5-21b-a3b";
+      id = "openrouter-baidu_ernie-4_5-21b-a3b";
       name = "openrouter → baidu/ernie-4.5-21b-a3b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -942,7 +942,7 @@
     }
     # openrouter/baidu/ernie-4.5-21b-a3b-thinking
     {
-      id = "openrouter-baidu-ernie-4-5-21b-a3b-thinking";
+      id = "openrouter-baidu_ernie-4_5-21b-a3b-thinking";
       name = "openrouter → baidu/ernie-4.5-21b-a3b-thinking";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -953,7 +953,7 @@
     }
     # openrouter/baidu/ernie-4.5-300b-a47b
     {
-      id = "openrouter-baidu-ernie-4-5-300b-a47b";
+      id = "openrouter-baidu_ernie-4_5-300b-a47b";
       name = "openrouter → baidu/ernie-4.5-300b-a47b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -964,7 +964,7 @@
     }
     # openrouter/baidu/ernie-4.5-vl-28b-a3b
     {
-      id = "openrouter-baidu-ernie-4-5-vl-28b-a3b";
+      id = "openrouter-baidu_ernie-4_5-vl-28b-a3b";
       name = "openrouter → baidu/ernie-4.5-vl-28b-a3b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -975,7 +975,7 @@
     }
     # openrouter/baidu/ernie-4.5-vl-424b-a47b
     {
-      id = "openrouter-baidu-ernie-4-5-vl-424b-a47b";
+      id = "openrouter-baidu_ernie-4_5-vl-424b-a47b";
       name = "openrouter → baidu/ernie-4.5-vl-424b-a47b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -986,7 +986,7 @@
     }
     # openrouter/bytedance-seed/seed-1.6
     {
-      id = "openrouter-bytedance-seed-seed-1-6";
+      id = "openrouter-bytedance-seed_seed-1_6";
       name = "openrouter → bytedance-seed/seed-1.6";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -997,7 +997,7 @@
     }
     # openrouter/bytedance-seed/seed-1.6-flash
     {
-      id = "openrouter-bytedance-seed-seed-1-6-flash";
+      id = "openrouter-bytedance-seed_seed-1_6-flash";
       name = "openrouter → bytedance-seed/seed-1.6-flash";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1008,7 +1008,7 @@
     }
     # openrouter/bytedance-seed/seed-2.0-lite
     {
-      id = "openrouter-bytedance-seed-seed-2-0-lite";
+      id = "openrouter-bytedance-seed_seed-2_0-lite";
       name = "openrouter → bytedance-seed/seed-2.0-lite";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1019,7 +1019,7 @@
     }
     # openrouter/bytedance-seed/seed-2.0-mini
     {
-      id = "openrouter-bytedance-seed-seed-2-0-mini";
+      id = "openrouter-bytedance-seed_seed-2_0-mini";
       name = "openrouter → bytedance-seed/seed-2.0-mini";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1030,7 +1030,7 @@
     }
     # openrouter/bytedance/ui-tars-1.5-7b
     {
-      id = "openrouter-bytedance-ui-tars-1-5-7b";
+      id = "openrouter-bytedance_ui-tars-1_5-7b";
       name = "openrouter → bytedance/ui-tars-1.5-7b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1041,7 +1041,7 @@
     }
     # openrouter/cohere/command-a
     {
-      id = "openrouter-cohere-command-a";
+      id = "openrouter-cohere_command-a";
       name = "openrouter → cohere/command-a";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1052,7 +1052,7 @@
     }
     # openrouter/cohere/command-r-08-2024
     {
-      id = "openrouter-cohere-command-r-08-2024";
+      id = "openrouter-cohere_command-r-08-2024";
       name = "openrouter → cohere/command-r-08-2024";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1063,7 +1063,7 @@
     }
     # openrouter/cohere/command-r-plus-08-2024
     {
-      id = "openrouter-cohere-command-r-plus-08-2024";
+      id = "openrouter-cohere_command-r-plus-08-2024";
       name = "openrouter → cohere/command-r-plus-08-2024";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1074,7 +1074,7 @@
     }
     # openrouter/cohere/command-r7b-12-2024
     {
-      id = "openrouter-cohere-command-r7b-12-2024";
+      id = "openrouter-cohere_command-r7b-12-2024";
       name = "openrouter → cohere/command-r7b-12-2024";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1085,7 +1085,7 @@
     }
     # openrouter/deepcogito/cogito-v2.1-671b
     {
-      id = "openrouter-deepcogito-cogito-v2-1-671b";
+      id = "openrouter-deepcogito_cogito-v2_1-671b";
       name = "openrouter → deepcogito/cogito-v2.1-671b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1096,7 +1096,7 @@
     }
     # openrouter/deepseek/deepseek-chat
     {
-      id = "openrouter-deepseek-deepseek-chat";
+      id = "openrouter-deepseek_deepseek-chat";
       name = "openrouter → deepseek/deepseek-chat";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1107,7 +1107,7 @@
     }
     # openrouter/deepseek/deepseek-chat-v3-0324
     {
-      id = "openrouter-deepseek-deepseek-chat-v3-0324";
+      id = "openrouter-deepseek_deepseek-chat-v3-0324";
       name = "openrouter → deepseek/deepseek-chat-v3-0324";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1118,7 +1118,7 @@
     }
     # openrouter/deepseek/deepseek-chat-v3.1
     {
-      id = "openrouter-deepseek-deepseek-chat-v3-1";
+      id = "openrouter-deepseek_deepseek-chat-v3_1";
       name = "openrouter → deepseek/deepseek-chat-v3.1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1129,7 +1129,7 @@
     }
     # openrouter/deepseek/deepseek-r1
     {
-      id = "openrouter-deepseek-deepseek-r1";
+      id = "openrouter-deepseek_deepseek-r1";
       name = "openrouter → deepseek/deepseek-r1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1140,7 +1140,7 @@
     }
     # openrouter/deepseek/deepseek-r1-0528
     {
-      id = "openrouter-deepseek-deepseek-r1-0528";
+      id = "openrouter-deepseek_deepseek-r1-0528";
       name = "openrouter → deepseek/deepseek-r1-0528";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1151,7 +1151,7 @@
     }
     # openrouter/deepseek/deepseek-r1-distill-llama-70b
     {
-      id = "openrouter-deepseek-deepseek-r1-distill-llama-70b";
+      id = "openrouter-deepseek_deepseek-r1-distill-llama-70b";
       name = "openrouter → deepseek/deepseek-r1-distill-llama-70b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1162,7 +1162,7 @@
     }
     # openrouter/deepseek/deepseek-r1-distill-qwen-32b
     {
-      id = "openrouter-deepseek-deepseek-r1-distill-qwen-32b";
+      id = "openrouter-deepseek_deepseek-r1-distill-qwen-32b";
       name = "openrouter → deepseek/deepseek-r1-distill-qwen-32b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1173,7 +1173,7 @@
     }
     # openrouter/deepseek/deepseek-v3.1-terminus
     {
-      id = "openrouter-deepseek-deepseek-v3-1-terminus";
+      id = "openrouter-deepseek_deepseek-v3_1-terminus";
       name = "openrouter → deepseek/deepseek-v3.1-terminus";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1184,7 +1184,7 @@
     }
     # openrouter/deepseek/deepseek-v3.2
     {
-      id = "openrouter-deepseek-deepseek-v3-2";
+      id = "openrouter-deepseek_deepseek-v3_2";
       name = "openrouter → deepseek/deepseek-v3.2";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1195,7 +1195,7 @@
     }
     # openrouter/deepseek/deepseek-v3.2-exp
     {
-      id = "openrouter-deepseek-deepseek-v3-2-exp";
+      id = "openrouter-deepseek_deepseek-v3_2-exp";
       name = "openrouter → deepseek/deepseek-v3.2-exp";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1206,7 +1206,7 @@
     }
     # openrouter/deepseek/deepseek-v3.2-speciale
     {
-      id = "openrouter-deepseek-deepseek-v3-2-speciale";
+      id = "openrouter-deepseek_deepseek-v3_2-speciale";
       name = "openrouter → deepseek/deepseek-v3.2-speciale";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1217,7 +1217,7 @@
     }
     # openrouter/deepseek/deepseek-v4-flash
     {
-      id = "openrouter-deepseek-deepseek-v4-flash";
+      id = "openrouter-deepseek_deepseek-v4-flash";
       name = "openrouter → deepseek/deepseek-v4-flash";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1228,7 +1228,7 @@
     }
     # openrouter/deepseek/deepseek-v4-pro
     {
-      id = "openrouter-deepseek-deepseek-v4-pro";
+      id = "openrouter-deepseek_deepseek-v4-pro";
       name = "openrouter → deepseek/deepseek-v4-pro";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1239,7 +1239,7 @@
     }
     # openrouter/essentialai/rnj-1-instruct
     {
-      id = "openrouter-essentialai-rnj-1-instruct";
+      id = "openrouter-essentialai_rnj-1-instruct";
       name = "openrouter → essentialai/rnj-1-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1250,7 +1250,7 @@
     }
     # openrouter/google/gemini-2.0-flash-001
     {
-      id = "openrouter-google-gemini-2-0-flash-001";
+      id = "openrouter-google_gemini-2_0-flash-001";
       name = "openrouter → google/gemini-2.0-flash-001";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1261,7 +1261,7 @@
     }
     # openrouter/google/gemini-2.0-flash-lite-001
     {
-      id = "openrouter-google-gemini-2-0-flash-lite-001";
+      id = "openrouter-google_gemini-2_0-flash-lite-001";
       name = "openrouter → google/gemini-2.0-flash-lite-001";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1272,7 +1272,7 @@
     }
     # openrouter/google/gemini-2.5-flash
     {
-      id = "openrouter-google-gemini-2-5-flash";
+      id = "openrouter-google_gemini-2_5-flash";
       name = "openrouter → google/gemini-2.5-flash";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1283,7 +1283,7 @@
     }
     # openrouter/google/gemini-2.5-flash-image
     {
-      id = "openrouter-google-gemini-2-5-flash-image";
+      id = "openrouter-google_gemini-2_5-flash-image";
       name = "openrouter → google/gemini-2.5-flash-image";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1294,7 +1294,7 @@
     }
     # openrouter/google/gemini-2.5-flash-lite
     {
-      id = "openrouter-google-gemini-2-5-flash-lite";
+      id = "openrouter-google_gemini-2_5-flash-lite";
       name = "openrouter → google/gemini-2.5-flash-lite";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1305,7 +1305,7 @@
     }
     # openrouter/google/gemini-2.5-flash-lite-preview-09-2025
     {
-      id = "openrouter-google-gemini-2-5-flash-lite-preview-09-2025";
+      id = "openrouter-google_gemini-2_5-flash-lite-preview-09-2025";
       name = "openrouter → google/gemini-2.5-flash-lite-preview-09-2025";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1316,7 +1316,7 @@
     }
     # openrouter/google/gemini-2.5-pro
     {
-      id = "openrouter-google-gemini-2-5-pro";
+      id = "openrouter-google_gemini-2_5-pro";
       name = "openrouter → google/gemini-2.5-pro";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1327,7 +1327,7 @@
     }
     # openrouter/google/gemini-2.5-pro-preview
     {
-      id = "openrouter-google-gemini-2-5-pro-preview";
+      id = "openrouter-google_gemini-2_5-pro-preview";
       name = "openrouter → google/gemini-2.5-pro-preview";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1338,7 +1338,7 @@
     }
     # openrouter/google/gemini-2.5-pro-preview-05-06
     {
-      id = "openrouter-google-gemini-2-5-pro-preview-05-06";
+      id = "openrouter-google_gemini-2_5-pro-preview-05-06";
       name = "openrouter → google/gemini-2.5-pro-preview-05-06";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1349,7 +1349,7 @@
     }
     # openrouter/google/gemini-3-flash-preview
     {
-      id = "openrouter-google-gemini-3-flash-preview";
+      id = "openrouter-google_gemini-3-flash-preview";
       name = "openrouter → google/gemini-3-flash-preview";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1360,7 +1360,7 @@
     }
     # openrouter/google/gemini-3-pro-image-preview
     {
-      id = "openrouter-google-gemini-3-pro-image-preview";
+      id = "openrouter-google_gemini-3-pro-image-preview";
       name = "openrouter → google/gemini-3-pro-image-preview";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1371,7 +1371,7 @@
     }
     # openrouter/google/gemini-3.1-flash-image-preview
     {
-      id = "openrouter-google-gemini-3-1-flash-image-preview";
+      id = "openrouter-google_gemini-3_1-flash-image-preview";
       name = "openrouter → google/gemini-3.1-flash-image-preview";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1382,7 +1382,7 @@
     }
     # openrouter/google/gemini-3.1-flash-lite-preview
     {
-      id = "openrouter-google-gemini-3-1-flash-lite-preview";
+      id = "openrouter-google_gemini-3_1-flash-lite-preview";
       name = "openrouter → google/gemini-3.1-flash-lite-preview";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1393,7 +1393,7 @@
     }
     # openrouter/google/gemini-3.1-pro-preview
     {
-      id = "openrouter-google-gemini-3-1-pro-preview";
+      id = "openrouter-google_gemini-3_1-pro-preview";
       name = "openrouter → google/gemini-3.1-pro-preview";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1404,7 +1404,7 @@
     }
     # openrouter/google/gemini-3.1-pro-preview-customtools
     {
-      id = "openrouter-google-gemini-3-1-pro-preview-customtools";
+      id = "openrouter-google_gemini-3_1-pro-preview-customtools";
       name = "openrouter → google/gemini-3.1-pro-preview-customtools";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1415,7 +1415,7 @@
     }
     # openrouter/google/gemma-2-27b-it
     {
-      id = "openrouter-google-gemma-2-27b-it";
+      id = "openrouter-google_gemma-2-27b-it";
       name = "openrouter → google/gemma-2-27b-it";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1426,7 +1426,7 @@
     }
     # openrouter/google/gemma-3-12b-it
     {
-      id = "openrouter-google-gemma-3-12b-it";
+      id = "openrouter-google_gemma-3-12b-it";
       name = "openrouter → google/gemma-3-12b-it";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1437,7 +1437,7 @@
     }
     # openrouter/google/gemma-3-27b-it
     {
-      id = "openrouter-google-gemma-3-27b-it";
+      id = "openrouter-google_gemma-3-27b-it";
       name = "openrouter → google/gemma-3-27b-it";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1448,7 +1448,7 @@
     }
     # openrouter/google/gemma-3-4b-it
     {
-      id = "openrouter-google-gemma-3-4b-it";
+      id = "openrouter-google_gemma-3-4b-it";
       name = "openrouter → google/gemma-3-4b-it";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1459,7 +1459,7 @@
     }
     # openrouter/google/gemma-3n-e4b-it
     {
-      id = "openrouter-google-gemma-3n-e4b-it";
+      id = "openrouter-google_gemma-3n-e4b-it";
       name = "openrouter → google/gemma-3n-e4b-it";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1470,7 +1470,7 @@
     }
     # openrouter/google/gemma-4-26b-a4b-it
     {
-      id = "openrouter-google-gemma-4-26b-a4b-it";
+      id = "openrouter-google_gemma-4-26b-a4b-it";
       name = "openrouter → google/gemma-4-26b-a4b-it";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1481,7 +1481,7 @@
     }
     # openrouter/google/gemma-4-31b-it
     {
-      id = "openrouter-google-gemma-4-31b-it";
+      id = "openrouter-google_gemma-4-31b-it";
       name = "openrouter → google/gemma-4-31b-it";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1492,7 +1492,7 @@
     }
     # openrouter/gryphe/mythomax-l2-13b
     {
-      id = "openrouter-gryphe-mythomax-l2-13b";
+      id = "openrouter-gryphe_mythomax-l2-13b";
       name = "openrouter → gryphe/mythomax-l2-13b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1503,7 +1503,7 @@
     }
     # openrouter/ibm-granite/granite-4.0-h-micro
     {
-      id = "openrouter-ibm-granite-granite-4-0-h-micro";
+      id = "openrouter-ibm-granite_granite-4_0-h-micro";
       name = "openrouter → ibm-granite/granite-4.0-h-micro";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1514,7 +1514,7 @@
     }
     # openrouter/inception/mercury-2
     {
-      id = "openrouter-inception-mercury-2";
+      id = "openrouter-inception_mercury-2";
       name = "openrouter → inception/mercury-2";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1525,7 +1525,7 @@
     }
     # openrouter/inclusionai/ling-2.6-flash
     {
-      id = "openrouter-inclusionai-ling-2-6-flash";
+      id = "openrouter-inclusionai_ling-2_6-flash";
       name = "openrouter → inclusionai/ling-2.6-flash";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1536,7 +1536,7 @@
     }
     # openrouter/inflection/inflection-3-pi
     {
-      id = "openrouter-inflection-inflection-3-pi";
+      id = "openrouter-inflection_inflection-3-pi";
       name = "openrouter → inflection/inflection-3-pi";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1547,7 +1547,7 @@
     }
     # openrouter/inflection/inflection-3-productivity
     {
-      id = "openrouter-inflection-inflection-3-productivity";
+      id = "openrouter-inflection_inflection-3-productivity";
       name = "openrouter → inflection/inflection-3-productivity";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1558,7 +1558,7 @@
     }
     # openrouter/kwaipilot/kat-coder-pro-v2
     {
-      id = "openrouter-kwaipilot-kat-coder-pro-v2";
+      id = "openrouter-kwaipilot_kat-coder-pro-v2";
       name = "openrouter → kwaipilot/kat-coder-pro-v2";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1569,7 +1569,7 @@
     }
     # openrouter/liquid/lfm-2-24b-a2b
     {
-      id = "openrouter-liquid-lfm-2-24b-a2b";
+      id = "openrouter-liquid_lfm-2-24b-a2b";
       name = "openrouter → liquid/lfm-2-24b-a2b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1580,7 +1580,7 @@
     }
     # openrouter/mancer/weaver
     {
-      id = "openrouter-mancer-weaver";
+      id = "openrouter-mancer_weaver";
       name = "openrouter → mancer/weaver";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1591,7 +1591,7 @@
     }
     # openrouter/meta-llama/llama-3-70b-instruct
     {
-      id = "openrouter-meta-llama-llama-3-70b-instruct";
+      id = "openrouter-meta-llama_llama-3-70b-instruct";
       name = "openrouter → meta-llama/llama-3-70b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1602,7 +1602,7 @@
     }
     # openrouter/meta-llama/llama-3-8b-instruct
     {
-      id = "openrouter-meta-llama-llama-3-8b-instruct";
+      id = "openrouter-meta-llama_llama-3-8b-instruct";
       name = "openrouter → meta-llama/llama-3-8b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1613,7 +1613,7 @@
     }
     # openrouter/meta-llama/llama-3.1-70b-instruct
     {
-      id = "openrouter-meta-llama-llama-3-1-70b-instruct";
+      id = "openrouter-meta-llama_llama-3_1-70b-instruct";
       name = "openrouter → meta-llama/llama-3.1-70b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1624,7 +1624,7 @@
     }
     # openrouter/meta-llama/llama-3.1-8b-instruct
     {
-      id = "openrouter-meta-llama-llama-3-1-8b-instruct";
+      id = "openrouter-meta-llama_llama-3_1-8b-instruct";
       name = "openrouter → meta-llama/llama-3.1-8b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1635,7 +1635,7 @@
     }
     # openrouter/meta-llama/llama-3.2-11b-vision-instruct
     {
-      id = "openrouter-meta-llama-llama-3-2-11b-vision-instruct";
+      id = "openrouter-meta-llama_llama-3_2-11b-vision-instruct";
       name = "openrouter → meta-llama/llama-3.2-11b-vision-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1646,7 +1646,7 @@
     }
     # openrouter/meta-llama/llama-3.2-1b-instruct
     {
-      id = "openrouter-meta-llama-llama-3-2-1b-instruct";
+      id = "openrouter-meta-llama_llama-3_2-1b-instruct";
       name = "openrouter → meta-llama/llama-3.2-1b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1657,7 +1657,7 @@
     }
     # openrouter/meta-llama/llama-3.2-3b-instruct
     {
-      id = "openrouter-meta-llama-llama-3-2-3b-instruct";
+      id = "openrouter-meta-llama_llama-3_2-3b-instruct";
       name = "openrouter → meta-llama/llama-3.2-3b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1668,7 +1668,7 @@
     }
     # openrouter/meta-llama/llama-3.3-70b-instruct
     {
-      id = "openrouter-meta-llama-llama-3-3-70b-instruct";
+      id = "openrouter-meta-llama_llama-3_3-70b-instruct";
       name = "openrouter → meta-llama/llama-3.3-70b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1679,7 +1679,7 @@
     }
     # openrouter/meta-llama/llama-4-maverick
     {
-      id = "openrouter-meta-llama-llama-4-maverick";
+      id = "openrouter-meta-llama_llama-4-maverick";
       name = "openrouter → meta-llama/llama-4-maverick";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1690,7 +1690,7 @@
     }
     # openrouter/meta-llama/llama-4-scout
     {
-      id = "openrouter-meta-llama-llama-4-scout";
+      id = "openrouter-meta-llama_llama-4-scout";
       name = "openrouter → meta-llama/llama-4-scout";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1701,7 +1701,7 @@
     }
     # openrouter/meta-llama/llama-guard-3-8b
     {
-      id = "openrouter-meta-llama-llama-guard-3-8b";
+      id = "openrouter-meta-llama_llama-guard-3-8b";
       name = "openrouter → meta-llama/llama-guard-3-8b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1712,7 +1712,7 @@
     }
     # openrouter/meta-llama/llama-guard-4-12b
     {
-      id = "openrouter-meta-llama-llama-guard-4-12b";
+      id = "openrouter-meta-llama_llama-guard-4-12b";
       name = "openrouter → meta-llama/llama-guard-4-12b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1723,7 +1723,7 @@
     }
     # openrouter/microsoft/phi-4
     {
-      id = "openrouter-microsoft-phi-4";
+      id = "openrouter-microsoft_phi-4";
       name = "openrouter → microsoft/phi-4";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1734,7 +1734,7 @@
     }
     # openrouter/microsoft/wizardlm-2-8x22b
     {
-      id = "openrouter-microsoft-wizardlm-2-8x22b";
+      id = "openrouter-microsoft_wizardlm-2-8x22b";
       name = "openrouter → microsoft/wizardlm-2-8x22b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1745,7 +1745,7 @@
     }
     # openrouter/minimax/minimax-01
     {
-      id = "openrouter-minimax-minimax-01";
+      id = "openrouter-minimax_minimax-01";
       name = "openrouter → minimax/minimax-01";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1756,7 +1756,7 @@
     }
     # openrouter/minimax/minimax-m1
     {
-      id = "openrouter-minimax-minimax-m1";
+      id = "openrouter-minimax_minimax-m1";
       name = "openrouter → minimax/minimax-m1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1767,7 +1767,7 @@
     }
     # openrouter/minimax/minimax-m2
     {
-      id = "openrouter-minimax-minimax-m2";
+      id = "openrouter-minimax_minimax-m2";
       name = "openrouter → minimax/minimax-m2";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1778,7 +1778,7 @@
     }
     # openrouter/minimax/minimax-m2-her
     {
-      id = "openrouter-minimax-minimax-m2-her";
+      id = "openrouter-minimax_minimax-m2-her";
       name = "openrouter → minimax/minimax-m2-her";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1789,7 +1789,7 @@
     }
     # openrouter/minimax/minimax-m2.1
     {
-      id = "openrouter-minimax-minimax-m2-1";
+      id = "openrouter-minimax_minimax-m2_1";
       name = "openrouter → minimax/minimax-m2.1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1800,7 +1800,7 @@
     }
     # openrouter/minimax/minimax-m2.5
     {
-      id = "openrouter-minimax-minimax-m2-5";
+      id = "openrouter-minimax_minimax-m2_5";
       name = "openrouter → minimax/minimax-m2.5";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1811,7 +1811,7 @@
     }
     # openrouter/minimax/minimax-m2.7
     {
-      id = "openrouter-minimax-minimax-m2-7";
+      id = "openrouter-minimax_minimax-m2_7";
       name = "openrouter → minimax/minimax-m2.7";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1822,7 +1822,7 @@
     }
     # openrouter/mistralai/codestral-2508
     {
-      id = "openrouter-mistralai-codestral-2508";
+      id = "openrouter-mistralai_codestral-2508";
       name = "openrouter → mistralai/codestral-2508";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1833,7 +1833,7 @@
     }
     # openrouter/mistralai/devstral-2512
     {
-      id = "openrouter-mistralai-devstral-2512";
+      id = "openrouter-mistralai_devstral-2512";
       name = "openrouter → mistralai/devstral-2512";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1844,7 +1844,7 @@
     }
     # openrouter/mistralai/devstral-medium
     {
-      id = "openrouter-mistralai-devstral-medium";
+      id = "openrouter-mistralai_devstral-medium";
       name = "openrouter → mistralai/devstral-medium";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1855,7 +1855,7 @@
     }
     # openrouter/mistralai/devstral-small
     {
-      id = "openrouter-mistralai-devstral-small";
+      id = "openrouter-mistralai_devstral-small";
       name = "openrouter → mistralai/devstral-small";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1866,7 +1866,7 @@
     }
     # openrouter/mistralai/ministral-14b-2512
     {
-      id = "openrouter-mistralai-ministral-14b-2512";
+      id = "openrouter-mistralai_ministral-14b-2512";
       name = "openrouter → mistralai/ministral-14b-2512";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1877,7 +1877,7 @@
     }
     # openrouter/mistralai/ministral-3b-2512
     {
-      id = "openrouter-mistralai-ministral-3b-2512";
+      id = "openrouter-mistralai_ministral-3b-2512";
       name = "openrouter → mistralai/ministral-3b-2512";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1888,7 +1888,7 @@
     }
     # openrouter/mistralai/ministral-8b-2512
     {
-      id = "openrouter-mistralai-ministral-8b-2512";
+      id = "openrouter-mistralai_ministral-8b-2512";
       name = "openrouter → mistralai/ministral-8b-2512";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1899,7 +1899,7 @@
     }
     # openrouter/mistralai/mistral-7b-instruct-v0.1
     {
-      id = "openrouter-mistralai-mistral-7b-instruct-v0-1";
+      id = "openrouter-mistralai_mistral-7b-instruct-v0_1";
       name = "openrouter → mistralai/mistral-7b-instruct-v0.1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1910,7 +1910,7 @@
     }
     # openrouter/mistralai/mistral-large
     {
-      id = "openrouter-mistralai-mistral-large";
+      id = "openrouter-mistralai_mistral-large";
       name = "openrouter → mistralai/mistral-large";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1921,7 +1921,7 @@
     }
     # openrouter/mistralai/mistral-large-2407
     {
-      id = "openrouter-mistralai-mistral-large-2407";
+      id = "openrouter-mistralai_mistral-large-2407";
       name = "openrouter → mistralai/mistral-large-2407";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1932,7 +1932,7 @@
     }
     # openrouter/mistralai/mistral-large-2411
     {
-      id = "openrouter-mistralai-mistral-large-2411";
+      id = "openrouter-mistralai_mistral-large-2411";
       name = "openrouter → mistralai/mistral-large-2411";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1943,7 +1943,7 @@
     }
     # openrouter/mistralai/mistral-large-2512
     {
-      id = "openrouter-mistralai-mistral-large-2512";
+      id = "openrouter-mistralai_mistral-large-2512";
       name = "openrouter → mistralai/mistral-large-2512";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1954,7 +1954,7 @@
     }
     # openrouter/mistralai/mistral-medium-3
     {
-      id = "openrouter-mistralai-mistral-medium-3";
+      id = "openrouter-mistralai_mistral-medium-3";
       name = "openrouter → mistralai/mistral-medium-3";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1965,7 +1965,7 @@
     }
     # openrouter/mistralai/mistral-medium-3.1
     {
-      id = "openrouter-mistralai-mistral-medium-3-1";
+      id = "openrouter-mistralai_mistral-medium-3_1";
       name = "openrouter → mistralai/mistral-medium-3.1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1976,7 +1976,7 @@
     }
     # openrouter/mistralai/mistral-nemo
     {
-      id = "openrouter-mistralai-mistral-nemo";
+      id = "openrouter-mistralai_mistral-nemo";
       name = "openrouter → mistralai/mistral-nemo";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1987,7 +1987,7 @@
     }
     # openrouter/mistralai/mistral-saba
     {
-      id = "openrouter-mistralai-mistral-saba";
+      id = "openrouter-mistralai_mistral-saba";
       name = "openrouter → mistralai/mistral-saba";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -1998,7 +1998,7 @@
     }
     # openrouter/mistralai/mistral-small-24b-instruct-2501
     {
-      id = "openrouter-mistralai-mistral-small-24b-instruct-2501";
+      id = "openrouter-mistralai_mistral-small-24b-instruct-2501";
       name = "openrouter → mistralai/mistral-small-24b-instruct-2501";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2009,7 +2009,7 @@
     }
     # openrouter/mistralai/mistral-small-2603
     {
-      id = "openrouter-mistralai-mistral-small-2603";
+      id = "openrouter-mistralai_mistral-small-2603";
       name = "openrouter → mistralai/mistral-small-2603";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2020,7 +2020,7 @@
     }
     # openrouter/mistralai/mistral-small-3.1-24b-instruct
     {
-      id = "openrouter-mistralai-mistral-small-3-1-24b-instruct";
+      id = "openrouter-mistralai_mistral-small-3_1-24b-instruct";
       name = "openrouter → mistralai/mistral-small-3.1-24b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2031,7 +2031,7 @@
     }
     # openrouter/mistralai/mistral-small-3.2-24b-instruct
     {
-      id = "openrouter-mistralai-mistral-small-3-2-24b-instruct";
+      id = "openrouter-mistralai_mistral-small-3_2-24b-instruct";
       name = "openrouter → mistralai/mistral-small-3.2-24b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2042,7 +2042,7 @@
     }
     # openrouter/mistralai/mixtral-8x22b-instruct
     {
-      id = "openrouter-mistralai-mixtral-8x22b-instruct";
+      id = "openrouter-mistralai_mixtral-8x22b-instruct";
       name = "openrouter → mistralai/mixtral-8x22b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2053,7 +2053,7 @@
     }
     # openrouter/mistralai/mixtral-8x7b-instruct
     {
-      id = "openrouter-mistralai-mixtral-8x7b-instruct";
+      id = "openrouter-mistralai_mixtral-8x7b-instruct";
       name = "openrouter → mistralai/mixtral-8x7b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2064,7 +2064,7 @@
     }
     # openrouter/mistralai/pixtral-large-2411
     {
-      id = "openrouter-mistralai-pixtral-large-2411";
+      id = "openrouter-mistralai_pixtral-large-2411";
       name = "openrouter → mistralai/pixtral-large-2411";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2075,7 +2075,7 @@
     }
     # openrouter/mistralai/voxtral-small-24b-2507
     {
-      id = "openrouter-mistralai-voxtral-small-24b-2507";
+      id = "openrouter-mistralai_voxtral-small-24b-2507";
       name = "openrouter → mistralai/voxtral-small-24b-2507";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2086,7 +2086,7 @@
     }
     # openrouter/moonshotai/kimi-k2
     {
-      id = "openrouter-moonshotai-kimi-k2";
+      id = "openrouter-moonshotai_kimi-k2";
       name = "openrouter → moonshotai/kimi-k2";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2097,7 +2097,7 @@
     }
     # openrouter/moonshotai/kimi-k2-0905
     {
-      id = "openrouter-moonshotai-kimi-k2-0905";
+      id = "openrouter-moonshotai_kimi-k2-0905";
       name = "openrouter → moonshotai/kimi-k2-0905";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2108,7 +2108,7 @@
     }
     # openrouter/moonshotai/kimi-k2-thinking
     {
-      id = "openrouter-moonshotai-kimi-k2-thinking";
+      id = "openrouter-moonshotai_kimi-k2-thinking";
       name = "openrouter → moonshotai/kimi-k2-thinking";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2119,7 +2119,7 @@
     }
     # openrouter/moonshotai/kimi-k2.5
     {
-      id = "openrouter-moonshotai-kimi-k2-5";
+      id = "openrouter-moonshotai_kimi-k2_5";
       name = "openrouter → moonshotai/kimi-k2.5";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2130,7 +2130,7 @@
     }
     # openrouter/moonshotai/kimi-k2.6
     {
-      id = "openrouter-moonshotai-kimi-k2-6";
+      id = "openrouter-moonshotai_kimi-k2_6";
       name = "openrouter → moonshotai/kimi-k2.6";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2141,7 +2141,7 @@
     }
     # openrouter/morph/morph-v3-fast
     {
-      id = "openrouter-morph-morph-v3-fast";
+      id = "openrouter-morph_morph-v3-fast";
       name = "openrouter → morph/morph-v3-fast";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2152,7 +2152,7 @@
     }
     # openrouter/morph/morph-v3-large
     {
-      id = "openrouter-morph-morph-v3-large";
+      id = "openrouter-morph_morph-v3-large";
       name = "openrouter → morph/morph-v3-large";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2163,7 +2163,7 @@
     }
     # openrouter/nex-agi/deepseek-v3.1-nex-n1
     {
-      id = "openrouter-nex-agi-deepseek-v3-1-nex-n1";
+      id = "openrouter-nex-agi_deepseek-v3_1-nex-n1";
       name = "openrouter → nex-agi/deepseek-v3.1-nex-n1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2174,7 +2174,7 @@
     }
     # openrouter/nousresearch/hermes-2-pro-llama-3-8b
     {
-      id = "openrouter-nousresearch-hermes-2-pro-llama-3-8b";
+      id = "openrouter-nousresearch_hermes-2-pro-llama-3-8b";
       name = "openrouter → nousresearch/hermes-2-pro-llama-3-8b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2185,7 +2185,7 @@
     }
     # openrouter/nousresearch/hermes-3-llama-3.1-405b
     {
-      id = "openrouter-nousresearch-hermes-3-llama-3-1-405b";
+      id = "openrouter-nousresearch_hermes-3-llama-3_1-405b";
       name = "openrouter → nousresearch/hermes-3-llama-3.1-405b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2196,7 +2196,7 @@
     }
     # openrouter/nousresearch/hermes-3-llama-3.1-70b
     {
-      id = "openrouter-nousresearch-hermes-3-llama-3-1-70b";
+      id = "openrouter-nousresearch_hermes-3-llama-3_1-70b";
       name = "openrouter → nousresearch/hermes-3-llama-3.1-70b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2207,7 +2207,7 @@
     }
     # openrouter/nousresearch/hermes-4-405b
     {
-      id = "openrouter-nousresearch-hermes-4-405b";
+      id = "openrouter-nousresearch_hermes-4-405b";
       name = "openrouter → nousresearch/hermes-4-405b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2218,7 +2218,7 @@
     }
     # openrouter/nousresearch/hermes-4-70b
     {
-      id = "openrouter-nousresearch-hermes-4-70b";
+      id = "openrouter-nousresearch_hermes-4-70b";
       name = "openrouter → nousresearch/hermes-4-70b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2229,7 +2229,7 @@
     }
     # openrouter/nvidia/llama-3.1-nemotron-70b-instruct
     {
-      id = "openrouter-nvidia-llama-3-1-nemotron-70b-instruct";
+      id = "openrouter-nvidia_llama-3_1-nemotron-70b-instruct";
       name = "openrouter → nvidia/llama-3.1-nemotron-70b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2240,7 +2240,7 @@
     }
     # openrouter/nvidia/llama-3.3-nemotron-super-49b-v1.5
     {
-      id = "openrouter-nvidia-llama-3-3-nemotron-super-49b-v1-5";
+      id = "openrouter-nvidia_llama-3_3-nemotron-super-49b-v1_5";
       name = "openrouter → nvidia/llama-3.3-nemotron-super-49b-v1.5";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2251,7 +2251,7 @@
     }
     # openrouter/nvidia/nemotron-3-nano-30b-a3b
     {
-      id = "openrouter-nvidia-nemotron-3-nano-30b-a3b";
+      id = "openrouter-nvidia_nemotron-3-nano-30b-a3b";
       name = "openrouter → nvidia/nemotron-3-nano-30b-a3b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2262,7 +2262,7 @@
     }
     # openrouter/nvidia/nemotron-3-super-120b-a12b
     {
-      id = "openrouter-nvidia-nemotron-3-super-120b-a12b";
+      id = "openrouter-nvidia_nemotron-3-super-120b-a12b";
       name = "openrouter → nvidia/nemotron-3-super-120b-a12b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2273,7 +2273,7 @@
     }
     # openrouter/nvidia/nemotron-nano-12b-v2-vl
     {
-      id = "openrouter-nvidia-nemotron-nano-12b-v2-vl";
+      id = "openrouter-nvidia_nemotron-nano-12b-v2-vl";
       name = "openrouter → nvidia/nemotron-nano-12b-v2-vl";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2284,7 +2284,7 @@
     }
     # openrouter/nvidia/nemotron-nano-9b-v2
     {
-      id = "openrouter-nvidia-nemotron-nano-9b-v2";
+      id = "openrouter-nvidia_nemotron-nano-9b-v2";
       name = "openrouter → nvidia/nemotron-nano-9b-v2";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2295,7 +2295,7 @@
     }
     # openrouter/openai/gpt-3.5-turbo
     {
-      id = "openrouter-openai-gpt-3-5-turbo";
+      id = "openrouter-openai_gpt-3_5-turbo";
       name = "openrouter → openai/gpt-3.5-turbo";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2306,7 +2306,7 @@
     }
     # openrouter/openai/gpt-3.5-turbo-0613
     {
-      id = "openrouter-openai-gpt-3-5-turbo-0613";
+      id = "openrouter-openai_gpt-3_5-turbo-0613";
       name = "openrouter → openai/gpt-3.5-turbo-0613";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2317,7 +2317,7 @@
     }
     # openrouter/openai/gpt-3.5-turbo-16k
     {
-      id = "openrouter-openai-gpt-3-5-turbo-16k";
+      id = "openrouter-openai_gpt-3_5-turbo-16k";
       name = "openrouter → openai/gpt-3.5-turbo-16k";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2328,7 +2328,7 @@
     }
     # openrouter/openai/gpt-3.5-turbo-instruct
     {
-      id = "openrouter-openai-gpt-3-5-turbo-instruct";
+      id = "openrouter-openai_gpt-3_5-turbo-instruct";
       name = "openrouter → openai/gpt-3.5-turbo-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2339,7 +2339,7 @@
     }
     # openrouter/openai/gpt-4
     {
-      id = "openrouter-openai-gpt-4";
+      id = "openrouter-openai_gpt-4";
       name = "openrouter → openai/gpt-4";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2350,7 +2350,7 @@
     }
     # openrouter/openai/gpt-4-0314
     {
-      id = "openrouter-openai-gpt-4-0314";
+      id = "openrouter-openai_gpt-4-0314";
       name = "openrouter → openai/gpt-4-0314";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2361,7 +2361,7 @@
     }
     # openrouter/openai/gpt-4-1106-preview
     {
-      id = "openrouter-openai-gpt-4-1106-preview";
+      id = "openrouter-openai_gpt-4-1106-preview";
       name = "openrouter → openai/gpt-4-1106-preview";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2372,7 +2372,7 @@
     }
     # openrouter/openai/gpt-4-turbo
     {
-      id = "openrouter-openai-gpt-4-turbo";
+      id = "openrouter-openai_gpt-4-turbo";
       name = "openrouter → openai/gpt-4-turbo";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2383,7 +2383,7 @@
     }
     # openrouter/openai/gpt-4-turbo-preview
     {
-      id = "openrouter-openai-gpt-4-turbo-preview";
+      id = "openrouter-openai_gpt-4-turbo-preview";
       name = "openrouter → openai/gpt-4-turbo-preview";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2394,7 +2394,7 @@
     }
     # openrouter/openai/gpt-4.1
     {
-      id = "openrouter-openai-gpt-4-1";
+      id = "openrouter-openai_gpt-4_1";
       name = "openrouter → openai/gpt-4.1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2405,7 +2405,7 @@
     }
     # openrouter/openai/gpt-4.1-mini
     {
-      id = "openrouter-openai-gpt-4-1-mini";
+      id = "openrouter-openai_gpt-4_1-mini";
       name = "openrouter → openai/gpt-4.1-mini";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2416,7 +2416,7 @@
     }
     # openrouter/openai/gpt-4.1-nano
     {
-      id = "openrouter-openai-gpt-4-1-nano";
+      id = "openrouter-openai_gpt-4_1-nano";
       name = "openrouter → openai/gpt-4.1-nano";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2427,7 +2427,7 @@
     }
     # openrouter/openai/gpt-4o
     {
-      id = "openrouter-openai-gpt-4o";
+      id = "openrouter-openai_gpt-4o";
       name = "openrouter → openai/gpt-4o";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2438,7 +2438,7 @@
     }
     # openrouter/openai/gpt-4o-2024-05-13
     {
-      id = "openrouter-openai-gpt-4o-2024-05-13";
+      id = "openrouter-openai_gpt-4o-2024-05-13";
       name = "openrouter → openai/gpt-4o-2024-05-13";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2449,7 +2449,7 @@
     }
     # openrouter/openai/gpt-4o-2024-08-06
     {
-      id = "openrouter-openai-gpt-4o-2024-08-06";
+      id = "openrouter-openai_gpt-4o-2024-08-06";
       name = "openrouter → openai/gpt-4o-2024-08-06";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2460,7 +2460,7 @@
     }
     # openrouter/openai/gpt-4o-2024-11-20
     {
-      id = "openrouter-openai-gpt-4o-2024-11-20";
+      id = "openrouter-openai_gpt-4o-2024-11-20";
       name = "openrouter → openai/gpt-4o-2024-11-20";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2471,7 +2471,7 @@
     }
     # openrouter/openai/gpt-4o-audio-preview
     {
-      id = "openrouter-openai-gpt-4o-audio-preview";
+      id = "openrouter-openai_gpt-4o-audio-preview";
       name = "openrouter → openai/gpt-4o-audio-preview";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2482,7 +2482,7 @@
     }
     # openrouter/openai/gpt-4o-mini
     {
-      id = "openrouter-openai-gpt-4o-mini";
+      id = "openrouter-openai_gpt-4o-mini";
       name = "openrouter → openai/gpt-4o-mini";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2493,7 +2493,7 @@
     }
     # openrouter/openai/gpt-4o-mini-2024-07-18
     {
-      id = "openrouter-openai-gpt-4o-mini-2024-07-18";
+      id = "openrouter-openai_gpt-4o-mini-2024-07-18";
       name = "openrouter → openai/gpt-4o-mini-2024-07-18";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2504,7 +2504,7 @@
     }
     # openrouter/openai/gpt-4o-mini-search-preview
     {
-      id = "openrouter-openai-gpt-4o-mini-search-preview";
+      id = "openrouter-openai_gpt-4o-mini-search-preview";
       name = "openrouter → openai/gpt-4o-mini-search-preview";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2515,7 +2515,7 @@
     }
     # openrouter/openai/gpt-4o-search-preview
     {
-      id = "openrouter-openai-gpt-4o-search-preview";
+      id = "openrouter-openai_gpt-4o-search-preview";
       name = "openrouter → openai/gpt-4o-search-preview";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2526,7 +2526,7 @@
     }
     # openrouter/openai/gpt-5
     {
-      id = "openrouter-openai-gpt-5";
+      id = "openrouter-openai_gpt-5";
       name = "openrouter → openai/gpt-5";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2537,7 +2537,7 @@
     }
     # openrouter/openai/gpt-5-chat
     {
-      id = "openrouter-openai-gpt-5-chat";
+      id = "openrouter-openai_gpt-5-chat";
       name = "openrouter → openai/gpt-5-chat";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2548,7 +2548,7 @@
     }
     # openrouter/openai/gpt-5-codex
     {
-      id = "openrouter-openai-gpt-5-codex";
+      id = "openrouter-openai_gpt-5-codex";
       name = "openrouter → openai/gpt-5-codex";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2559,7 +2559,7 @@
     }
     # openrouter/openai/gpt-5-image
     {
-      id = "openrouter-openai-gpt-5-image";
+      id = "openrouter-openai_gpt-5-image";
       name = "openrouter → openai/gpt-5-image";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2570,7 +2570,7 @@
     }
     # openrouter/openai/gpt-5-image-mini
     {
-      id = "openrouter-openai-gpt-5-image-mini";
+      id = "openrouter-openai_gpt-5-image-mini";
       name = "openrouter → openai/gpt-5-image-mini";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2581,7 +2581,7 @@
     }
     # openrouter/openai/gpt-5-mini
     {
-      id = "openrouter-openai-gpt-5-mini";
+      id = "openrouter-openai_gpt-5-mini";
       name = "openrouter → openai/gpt-5-mini";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2592,7 +2592,7 @@
     }
     # openrouter/openai/gpt-5-nano
     {
-      id = "openrouter-openai-gpt-5-nano";
+      id = "openrouter-openai_gpt-5-nano";
       name = "openrouter → openai/gpt-5-nano";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2603,7 +2603,7 @@
     }
     # openrouter/openai/gpt-5-pro
     {
-      id = "openrouter-openai-gpt-5-pro";
+      id = "openrouter-openai_gpt-5-pro";
       name = "openrouter → openai/gpt-5-pro";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2614,7 +2614,7 @@
     }
     # openrouter/openai/gpt-5.1
     {
-      id = "openrouter-openai-gpt-5-1";
+      id = "openrouter-openai_gpt-5_1";
       name = "openrouter → openai/gpt-5.1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2625,7 +2625,7 @@
     }
     # openrouter/openai/gpt-5.1-chat
     {
-      id = "openrouter-openai-gpt-5-1-chat";
+      id = "openrouter-openai_gpt-5_1-chat";
       name = "openrouter → openai/gpt-5.1-chat";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2636,7 +2636,7 @@
     }
     # openrouter/openai/gpt-5.1-codex
     {
-      id = "openrouter-openai-gpt-5-1-codex";
+      id = "openrouter-openai_gpt-5_1-codex";
       name = "openrouter → openai/gpt-5.1-codex";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2647,7 +2647,7 @@
     }
     # openrouter/openai/gpt-5.1-codex-max
     {
-      id = "openrouter-openai-gpt-5-1-codex-max";
+      id = "openrouter-openai_gpt-5_1-codex-max";
       name = "openrouter → openai/gpt-5.1-codex-max";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2658,7 +2658,7 @@
     }
     # openrouter/openai/gpt-5.1-codex-mini
     {
-      id = "openrouter-openai-gpt-5-1-codex-mini";
+      id = "openrouter-openai_gpt-5_1-codex-mini";
       name = "openrouter → openai/gpt-5.1-codex-mini";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2669,7 +2669,7 @@
     }
     # openrouter/openai/gpt-5.2
     {
-      id = "openrouter-openai-gpt-5-2";
+      id = "openrouter-openai_gpt-5_2";
       name = "openrouter → openai/gpt-5.2";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2680,7 +2680,7 @@
     }
     # openrouter/openai/gpt-5.2-chat
     {
-      id = "openrouter-openai-gpt-5-2-chat";
+      id = "openrouter-openai_gpt-5_2-chat";
       name = "openrouter → openai/gpt-5.2-chat";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2691,7 +2691,7 @@
     }
     # openrouter/openai/gpt-5.2-codex
     {
-      id = "openrouter-openai-gpt-5-2-codex";
+      id = "openrouter-openai_gpt-5_2-codex";
       name = "openrouter → openai/gpt-5.2-codex";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2702,7 +2702,7 @@
     }
     # openrouter/openai/gpt-5.2-pro
     {
-      id = "openrouter-openai-gpt-5-2-pro";
+      id = "openrouter-openai_gpt-5_2-pro";
       name = "openrouter → openai/gpt-5.2-pro";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2713,7 +2713,7 @@
     }
     # openrouter/openai/gpt-5.3-chat
     {
-      id = "openrouter-openai-gpt-5-3-chat";
+      id = "openrouter-openai_gpt-5_3-chat";
       name = "openrouter → openai/gpt-5.3-chat";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2724,7 +2724,7 @@
     }
     # openrouter/openai/gpt-5.3-codex
     {
-      id = "openrouter-openai-gpt-5-3-codex";
+      id = "openrouter-openai_gpt-5_3-codex";
       name = "openrouter → openai/gpt-5.3-codex";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2735,7 +2735,7 @@
     }
     # openrouter/openai/gpt-5.4
     {
-      id = "openrouter-openai-gpt-5-4";
+      id = "openrouter-openai_gpt-5_4";
       name = "openrouter → openai/gpt-5.4";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2746,7 +2746,7 @@
     }
     # openrouter/openai/gpt-5.4-image-2
     {
-      id = "openrouter-openai-gpt-5-4-image-2";
+      id = "openrouter-openai_gpt-5_4-image-2";
       name = "openrouter → openai/gpt-5.4-image-2";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2757,7 +2757,7 @@
     }
     # openrouter/openai/gpt-5.4-mini
     {
-      id = "openrouter-openai-gpt-5-4-mini";
+      id = "openrouter-openai_gpt-5_4-mini";
       name = "openrouter → openai/gpt-5.4-mini";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2768,7 +2768,7 @@
     }
     # openrouter/openai/gpt-5.4-nano
     {
-      id = "openrouter-openai-gpt-5-4-nano";
+      id = "openrouter-openai_gpt-5_4-nano";
       name = "openrouter → openai/gpt-5.4-nano";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2779,7 +2779,7 @@
     }
     # openrouter/openai/gpt-5.4-pro
     {
-      id = "openrouter-openai-gpt-5-4-pro";
+      id = "openrouter-openai_gpt-5_4-pro";
       name = "openrouter → openai/gpt-5.4-pro";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2790,7 +2790,7 @@
     }
     # openrouter/openai/gpt-5.5
     {
-      id = "openrouter-openai-gpt-5-5";
+      id = "openrouter-openai_gpt-5_5";
       name = "openrouter → openai/gpt-5.5";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2801,7 +2801,7 @@
     }
     # openrouter/openai/gpt-5.5-pro
     {
-      id = "openrouter-openai-gpt-5-5-pro";
+      id = "openrouter-openai_gpt-5_5-pro";
       name = "openrouter → openai/gpt-5.5-pro";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2812,7 +2812,7 @@
     }
     # openrouter/openai/gpt-audio
     {
-      id = "openrouter-openai-gpt-audio";
+      id = "openrouter-openai_gpt-audio";
       name = "openrouter → openai/gpt-audio";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2823,7 +2823,7 @@
     }
     # openrouter/openai/gpt-audio-mini
     {
-      id = "openrouter-openai-gpt-audio-mini";
+      id = "openrouter-openai_gpt-audio-mini";
       name = "openrouter → openai/gpt-audio-mini";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2834,7 +2834,7 @@
     }
     # openrouter/openai/gpt-oss-120b
     {
-      id = "openrouter-openai-gpt-oss-120b";
+      id = "openrouter-openai_gpt-oss-120b";
       name = "openrouter → openai/gpt-oss-120b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2845,7 +2845,7 @@
     }
     # openrouter/openai/gpt-oss-20b
     {
-      id = "openrouter-openai-gpt-oss-20b";
+      id = "openrouter-openai_gpt-oss-20b";
       name = "openrouter → openai/gpt-oss-20b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2856,7 +2856,7 @@
     }
     # openrouter/openai/gpt-oss-safeguard-20b
     {
-      id = "openrouter-openai-gpt-oss-safeguard-20b";
+      id = "openrouter-openai_gpt-oss-safeguard-20b";
       name = "openrouter → openai/gpt-oss-safeguard-20b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2867,7 +2867,7 @@
     }
     # openrouter/openai/o1
     {
-      id = "openrouter-openai-o1";
+      id = "openrouter-openai_o1";
       name = "openrouter → openai/o1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2878,7 +2878,7 @@
     }
     # openrouter/openai/o1-pro
     {
-      id = "openrouter-openai-o1-pro";
+      id = "openrouter-openai_o1-pro";
       name = "openrouter → openai/o1-pro";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2889,7 +2889,7 @@
     }
     # openrouter/openai/o3
     {
-      id = "openrouter-openai-o3";
+      id = "openrouter-openai_o3";
       name = "openrouter → openai/o3";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2900,7 +2900,7 @@
     }
     # openrouter/openai/o3-deep-research
     {
-      id = "openrouter-openai-o3-deep-research";
+      id = "openrouter-openai_o3-deep-research";
       name = "openrouter → openai/o3-deep-research";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2911,7 +2911,7 @@
     }
     # openrouter/openai/o3-mini
     {
-      id = "openrouter-openai-o3-mini";
+      id = "openrouter-openai_o3-mini";
       name = "openrouter → openai/o3-mini";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2922,7 +2922,7 @@
     }
     # openrouter/openai/o3-mini-high
     {
-      id = "openrouter-openai-o3-mini-high";
+      id = "openrouter-openai_o3-mini-high";
       name = "openrouter → openai/o3-mini-high";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2933,7 +2933,7 @@
     }
     # openrouter/openai/o3-pro
     {
-      id = "openrouter-openai-o3-pro";
+      id = "openrouter-openai_o3-pro";
       name = "openrouter → openai/o3-pro";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2944,7 +2944,7 @@
     }
     # openrouter/openai/o4-mini
     {
-      id = "openrouter-openai-o4-mini";
+      id = "openrouter-openai_o4-mini";
       name = "openrouter → openai/o4-mini";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2955,7 +2955,7 @@
     }
     # openrouter/openai/o4-mini-deep-research
     {
-      id = "openrouter-openai-o4-mini-deep-research";
+      id = "openrouter-openai_o4-mini-deep-research";
       name = "openrouter → openai/o4-mini-deep-research";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2966,7 +2966,7 @@
     }
     # openrouter/openai/o4-mini-high
     {
-      id = "openrouter-openai-o4-mini-high";
+      id = "openrouter-openai_o4-mini-high";
       name = "openrouter → openai/o4-mini-high";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2977,7 +2977,7 @@
     }
     # openrouter/perplexity/sonar
     {
-      id = "openrouter-perplexity-sonar";
+      id = "openrouter-perplexity_sonar";
       name = "openrouter → perplexity/sonar";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2988,7 +2988,7 @@
     }
     # openrouter/perplexity/sonar-deep-research
     {
-      id = "openrouter-perplexity-sonar-deep-research";
+      id = "openrouter-perplexity_sonar-deep-research";
       name = "openrouter → perplexity/sonar-deep-research";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -2999,7 +2999,7 @@
     }
     # openrouter/perplexity/sonar-pro
     {
-      id = "openrouter-perplexity-sonar-pro";
+      id = "openrouter-perplexity_sonar-pro";
       name = "openrouter → perplexity/sonar-pro";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3010,7 +3010,7 @@
     }
     # openrouter/perplexity/sonar-pro-search
     {
-      id = "openrouter-perplexity-sonar-pro-search";
+      id = "openrouter-perplexity_sonar-pro-search";
       name = "openrouter → perplexity/sonar-pro-search";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3021,7 +3021,7 @@
     }
     # openrouter/perplexity/sonar-reasoning-pro
     {
-      id = "openrouter-perplexity-sonar-reasoning-pro";
+      id = "openrouter-perplexity_sonar-reasoning-pro";
       name = "openrouter → perplexity/sonar-reasoning-pro";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3032,7 +3032,7 @@
     }
     # openrouter/prime-intellect/intellect-3
     {
-      id = "openrouter-prime-intellect-intellect-3";
+      id = "openrouter-prime-intellect_intellect-3";
       name = "openrouter → prime-intellect/intellect-3";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3043,7 +3043,7 @@
     }
     # openrouter/qwen/qwen-2.5-72b-instruct
     {
-      id = "openrouter-qwen-qwen-2-5-72b-instruct";
+      id = "openrouter-qwen_qwen-2_5-72b-instruct";
       name = "openrouter → qwen/qwen-2.5-72b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3054,7 +3054,7 @@
     }
     # openrouter/qwen/qwen-2.5-7b-instruct
     {
-      id = "openrouter-qwen-qwen-2-5-7b-instruct";
+      id = "openrouter-qwen_qwen-2_5-7b-instruct";
       name = "openrouter → qwen/qwen-2.5-7b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3065,7 +3065,7 @@
     }
     # openrouter/qwen/qwen-2.5-coder-32b-instruct
     {
-      id = "openrouter-qwen-qwen-2-5-coder-32b-instruct";
+      id = "openrouter-qwen_qwen-2_5-coder-32b-instruct";
       name = "openrouter → qwen/qwen-2.5-coder-32b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3076,7 +3076,7 @@
     }
     # openrouter/qwen/qwen-max
     {
-      id = "openrouter-qwen-qwen-max";
+      id = "openrouter-qwen_qwen-max";
       name = "openrouter → qwen/qwen-max";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3087,7 +3087,7 @@
     }
     # openrouter/qwen/qwen-plus
     {
-      id = "openrouter-qwen-qwen-plus";
+      id = "openrouter-qwen_qwen-plus";
       name = "openrouter → qwen/qwen-plus";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3098,7 +3098,7 @@
     }
     # openrouter/qwen/qwen-plus-2025-07-28
     {
-      id = "openrouter-qwen-qwen-plus-2025-07-28";
+      id = "openrouter-qwen_qwen-plus-2025-07-28";
       name = "openrouter → qwen/qwen-plus-2025-07-28";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3109,7 +3109,7 @@
     }
     # openrouter/qwen/qwen-plus-2025-07-28:thinking
     {
-      id = "openrouter-qwen-qwen-plus-2025-07-28-thinking";
+      id = "openrouter-qwen_qwen-plus-2025-07-28-thinking";
       name = "openrouter → qwen/qwen-plus-2025-07-28:thinking";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3120,7 +3120,7 @@
     }
     # openrouter/qwen/qwen-turbo
     {
-      id = "openrouter-qwen-qwen-turbo";
+      id = "openrouter-qwen_qwen-turbo";
       name = "openrouter → qwen/qwen-turbo";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3131,7 +3131,7 @@
     }
     # openrouter/qwen/qwen-vl-max
     {
-      id = "openrouter-qwen-qwen-vl-max";
+      id = "openrouter-qwen_qwen-vl-max";
       name = "openrouter → qwen/qwen-vl-max";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3142,7 +3142,7 @@
     }
     # openrouter/qwen/qwen-vl-plus
     {
-      id = "openrouter-qwen-qwen-vl-plus";
+      id = "openrouter-qwen_qwen-vl-plus";
       name = "openrouter → qwen/qwen-vl-plus";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3153,7 +3153,7 @@
     }
     # openrouter/qwen/qwen2.5-vl-72b-instruct
     {
-      id = "openrouter-qwen-qwen2-5-vl-72b-instruct";
+      id = "openrouter-qwen_qwen2_5-vl-72b-instruct";
       name = "openrouter → qwen/qwen2.5-vl-72b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3164,7 +3164,7 @@
     }
     # openrouter/qwen/qwen3-14b
     {
-      id = "openrouter-qwen-qwen3-14b";
+      id = "openrouter-qwen_qwen3-14b";
       name = "openrouter → qwen/qwen3-14b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3175,7 +3175,7 @@
     }
     # openrouter/qwen/qwen3-235b-a22b
     {
-      id = "openrouter-qwen-qwen3-235b-a22b";
+      id = "openrouter-qwen_qwen3-235b-a22b";
       name = "openrouter → qwen/qwen3-235b-a22b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3186,7 +3186,7 @@
     }
     # openrouter/qwen/qwen3-235b-a22b-2507
     {
-      id = "openrouter-qwen-qwen3-235b-a22b-2507";
+      id = "openrouter-qwen_qwen3-235b-a22b-2507";
       name = "openrouter → qwen/qwen3-235b-a22b-2507";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3197,7 +3197,7 @@
     }
     # openrouter/qwen/qwen3-235b-a22b-thinking-2507
     {
-      id = "openrouter-qwen-qwen3-235b-a22b-thinking-2507";
+      id = "openrouter-qwen_qwen3-235b-a22b-thinking-2507";
       name = "openrouter → qwen/qwen3-235b-a22b-thinking-2507";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3208,7 +3208,7 @@
     }
     # openrouter/qwen/qwen3-30b-a3b
     {
-      id = "openrouter-qwen-qwen3-30b-a3b";
+      id = "openrouter-qwen_qwen3-30b-a3b";
       name = "openrouter → qwen/qwen3-30b-a3b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3219,7 +3219,7 @@
     }
     # openrouter/qwen/qwen3-30b-a3b-instruct-2507
     {
-      id = "openrouter-qwen-qwen3-30b-a3b-instruct-2507";
+      id = "openrouter-qwen_qwen3-30b-a3b-instruct-2507";
       name = "openrouter → qwen/qwen3-30b-a3b-instruct-2507";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3230,7 +3230,7 @@
     }
     # openrouter/qwen/qwen3-30b-a3b-thinking-2507
     {
-      id = "openrouter-qwen-qwen3-30b-a3b-thinking-2507";
+      id = "openrouter-qwen_qwen3-30b-a3b-thinking-2507";
       name = "openrouter → qwen/qwen3-30b-a3b-thinking-2507";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3241,7 +3241,7 @@
     }
     # openrouter/qwen/qwen3-32b
     {
-      id = "openrouter-qwen-qwen3-32b";
+      id = "openrouter-qwen_qwen3-32b";
       name = "openrouter → qwen/qwen3-32b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3252,7 +3252,7 @@
     }
     # openrouter/qwen/qwen3-8b
     {
-      id = "openrouter-qwen-qwen3-8b";
+      id = "openrouter-qwen_qwen3-8b";
       name = "openrouter → qwen/qwen3-8b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3263,7 +3263,7 @@
     }
     # openrouter/qwen/qwen3-coder
     {
-      id = "openrouter-qwen-qwen3-coder";
+      id = "openrouter-qwen_qwen3-coder";
       name = "openrouter → qwen/qwen3-coder";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3274,7 +3274,7 @@
     }
     # openrouter/qwen/qwen3-coder-30b-a3b-instruct
     {
-      id = "openrouter-qwen-qwen3-coder-30b-a3b-instruct";
+      id = "openrouter-qwen_qwen3-coder-30b-a3b-instruct";
       name = "openrouter → qwen/qwen3-coder-30b-a3b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3285,7 +3285,7 @@
     }
     # openrouter/qwen/qwen3-coder-flash
     {
-      id = "openrouter-qwen-qwen3-coder-flash";
+      id = "openrouter-qwen_qwen3-coder-flash";
       name = "openrouter → qwen/qwen3-coder-flash";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3296,7 +3296,7 @@
     }
     # openrouter/qwen/qwen3-coder-next
     {
-      id = "openrouter-qwen-qwen3-coder-next";
+      id = "openrouter-qwen_qwen3-coder-next";
       name = "openrouter → qwen/qwen3-coder-next";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3307,7 +3307,7 @@
     }
     # openrouter/qwen/qwen3-coder-plus
     {
-      id = "openrouter-qwen-qwen3-coder-plus";
+      id = "openrouter-qwen_qwen3-coder-plus";
       name = "openrouter → qwen/qwen3-coder-plus";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3318,7 +3318,7 @@
     }
     # openrouter/qwen/qwen3-max
     {
-      id = "openrouter-qwen-qwen3-max";
+      id = "openrouter-qwen_qwen3-max";
       name = "openrouter → qwen/qwen3-max";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3329,7 +3329,7 @@
     }
     # openrouter/qwen/qwen3-max-thinking
     {
-      id = "openrouter-qwen-qwen3-max-thinking";
+      id = "openrouter-qwen_qwen3-max-thinking";
       name = "openrouter → qwen/qwen3-max-thinking";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3340,7 +3340,7 @@
     }
     # openrouter/qwen/qwen3-next-80b-a3b-instruct
     {
-      id = "openrouter-qwen-qwen3-next-80b-a3b-instruct";
+      id = "openrouter-qwen_qwen3-next-80b-a3b-instruct";
       name = "openrouter → qwen/qwen3-next-80b-a3b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3351,7 +3351,7 @@
     }
     # openrouter/qwen/qwen3-next-80b-a3b-thinking
     {
-      id = "openrouter-qwen-qwen3-next-80b-a3b-thinking";
+      id = "openrouter-qwen_qwen3-next-80b-a3b-thinking";
       name = "openrouter → qwen/qwen3-next-80b-a3b-thinking";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3362,7 +3362,7 @@
     }
     # openrouter/qwen/qwen3-vl-235b-a22b-instruct
     {
-      id = "openrouter-qwen-qwen3-vl-235b-a22b-instruct";
+      id = "openrouter-qwen_qwen3-vl-235b-a22b-instruct";
       name = "openrouter → qwen/qwen3-vl-235b-a22b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3373,7 +3373,7 @@
     }
     # openrouter/qwen/qwen3-vl-235b-a22b-thinking
     {
-      id = "openrouter-qwen-qwen3-vl-235b-a22b-thinking";
+      id = "openrouter-qwen_qwen3-vl-235b-a22b-thinking";
       name = "openrouter → qwen/qwen3-vl-235b-a22b-thinking";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3384,7 +3384,7 @@
     }
     # openrouter/qwen/qwen3-vl-30b-a3b-instruct
     {
-      id = "openrouter-qwen-qwen3-vl-30b-a3b-instruct";
+      id = "openrouter-qwen_qwen3-vl-30b-a3b-instruct";
       name = "openrouter → qwen/qwen3-vl-30b-a3b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3395,7 +3395,7 @@
     }
     # openrouter/qwen/qwen3-vl-30b-a3b-thinking
     {
-      id = "openrouter-qwen-qwen3-vl-30b-a3b-thinking";
+      id = "openrouter-qwen_qwen3-vl-30b-a3b-thinking";
       name = "openrouter → qwen/qwen3-vl-30b-a3b-thinking";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3406,7 +3406,7 @@
     }
     # openrouter/qwen/qwen3-vl-32b-instruct
     {
-      id = "openrouter-qwen-qwen3-vl-32b-instruct";
+      id = "openrouter-qwen_qwen3-vl-32b-instruct";
       name = "openrouter → qwen/qwen3-vl-32b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3417,7 +3417,7 @@
     }
     # openrouter/qwen/qwen3-vl-8b-instruct
     {
-      id = "openrouter-qwen-qwen3-vl-8b-instruct";
+      id = "openrouter-qwen_qwen3-vl-8b-instruct";
       name = "openrouter → qwen/qwen3-vl-8b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3428,7 +3428,7 @@
     }
     # openrouter/qwen/qwen3-vl-8b-thinking
     {
-      id = "openrouter-qwen-qwen3-vl-8b-thinking";
+      id = "openrouter-qwen_qwen3-vl-8b-thinking";
       name = "openrouter → qwen/qwen3-vl-8b-thinking";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3439,7 +3439,7 @@
     }
     # openrouter/qwen/qwen3.5-122b-a10b
     {
-      id = "openrouter-qwen-qwen3-5-122b-a10b";
+      id = "openrouter-qwen_qwen3_5-122b-a10b";
       name = "openrouter → qwen/qwen3.5-122b-a10b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3450,7 +3450,7 @@
     }
     # openrouter/qwen/qwen3.5-27b
     {
-      id = "openrouter-qwen-qwen3-5-27b";
+      id = "openrouter-qwen_qwen3_5-27b";
       name = "openrouter → qwen/qwen3.5-27b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3461,7 +3461,7 @@
     }
     # openrouter/qwen/qwen3.5-35b-a3b
     {
-      id = "openrouter-qwen-qwen3-5-35b-a3b";
+      id = "openrouter-qwen_qwen3_5-35b-a3b";
       name = "openrouter → qwen/qwen3.5-35b-a3b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3472,7 +3472,7 @@
     }
     # openrouter/qwen/qwen3.5-397b-a17b
     {
-      id = "openrouter-qwen-qwen3-5-397b-a17b";
+      id = "openrouter-qwen_qwen3_5-397b-a17b";
       name = "openrouter → qwen/qwen3.5-397b-a17b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3483,7 +3483,7 @@
     }
     # openrouter/qwen/qwen3.5-9b
     {
-      id = "openrouter-qwen-qwen3-5-9b";
+      id = "openrouter-qwen_qwen3_5-9b";
       name = "openrouter → qwen/qwen3.5-9b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3494,7 +3494,7 @@
     }
     # openrouter/qwen/qwen3.5-flash-02-23
     {
-      id = "openrouter-qwen-qwen3-5-flash-02-23";
+      id = "openrouter-qwen_qwen3_5-flash-02-23";
       name = "openrouter → qwen/qwen3.5-flash-02-23";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3505,7 +3505,7 @@
     }
     # openrouter/qwen/qwen3.5-plus-02-15
     {
-      id = "openrouter-qwen-qwen3-5-plus-02-15";
+      id = "openrouter-qwen_qwen3_5-plus-02-15";
       name = "openrouter → qwen/qwen3.5-plus-02-15";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3516,7 +3516,7 @@
     }
     # openrouter/qwen/qwen3.5-plus-20260420
     {
-      id = "openrouter-qwen-qwen3-5-plus-20260420";
+      id = "openrouter-qwen_qwen3_5-plus-20260420";
       name = "openrouter → qwen/qwen3.5-plus-20260420";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3527,7 +3527,7 @@
     }
     # openrouter/qwen/qwen3.6-27b
     {
-      id = "openrouter-qwen-qwen3-6-27b";
+      id = "openrouter-qwen_qwen3_6-27b";
       name = "openrouter → qwen/qwen3.6-27b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3538,7 +3538,7 @@
     }
     # openrouter/qwen/qwen3.6-35b-a3b
     {
-      id = "openrouter-qwen-qwen3-6-35b-a3b";
+      id = "openrouter-qwen_qwen3_6-35b-a3b";
       name = "openrouter → qwen/qwen3.6-35b-a3b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3549,7 +3549,7 @@
     }
     # openrouter/qwen/qwen3.6-flash
     {
-      id = "openrouter-qwen-qwen3-6-flash";
+      id = "openrouter-qwen_qwen3_6-flash";
       name = "openrouter → qwen/qwen3.6-flash";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3560,7 +3560,7 @@
     }
     # openrouter/qwen/qwen3.6-max-preview
     {
-      id = "openrouter-qwen-qwen3-6-max-preview";
+      id = "openrouter-qwen_qwen3_6-max-preview";
       name = "openrouter → qwen/qwen3.6-max-preview";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3571,7 +3571,7 @@
     }
     # openrouter/qwen/qwen3.6-plus
     {
-      id = "openrouter-qwen-qwen3-6-plus";
+      id = "openrouter-qwen_qwen3_6-plus";
       name = "openrouter → qwen/qwen3.6-plus";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3582,7 +3582,7 @@
     }
     # openrouter/rekaai/reka-edge
     {
-      id = "openrouter-rekaai-reka-edge";
+      id = "openrouter-rekaai_reka-edge";
       name = "openrouter → rekaai/reka-edge";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3593,7 +3593,7 @@
     }
     # openrouter/rekaai/reka-flash-3
     {
-      id = "openrouter-rekaai-reka-flash-3";
+      id = "openrouter-rekaai_reka-flash-3";
       name = "openrouter → rekaai/reka-flash-3";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3604,7 +3604,7 @@
     }
     # openrouter/relace/relace-apply-3
     {
-      id = "openrouter-relace-relace-apply-3";
+      id = "openrouter-relace_relace-apply-3";
       name = "openrouter → relace/relace-apply-3";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3615,7 +3615,7 @@
     }
     # openrouter/relace/relace-search
     {
-      id = "openrouter-relace-relace-search";
+      id = "openrouter-relace_relace-search";
       name = "openrouter → relace/relace-search";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3626,7 +3626,7 @@
     }
     # openrouter/sao10k/l3-euryale-70b
     {
-      id = "openrouter-sao10k-l3-euryale-70b";
+      id = "openrouter-sao10k_l3-euryale-70b";
       name = "openrouter → sao10k/l3-euryale-70b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3637,7 +3637,7 @@
     }
     # openrouter/sao10k/l3-lunaris-8b
     {
-      id = "openrouter-sao10k-l3-lunaris-8b";
+      id = "openrouter-sao10k_l3-lunaris-8b";
       name = "openrouter → sao10k/l3-lunaris-8b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3648,7 +3648,7 @@
     }
     # openrouter/sao10k/l3.1-70b-hanami-x1
     {
-      id = "openrouter-sao10k-l3-1-70b-hanami-x1";
+      id = "openrouter-sao10k_l3_1-70b-hanami-x1";
       name = "openrouter → sao10k/l3.1-70b-hanami-x1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3659,7 +3659,7 @@
     }
     # openrouter/sao10k/l3.1-euryale-70b
     {
-      id = "openrouter-sao10k-l3-1-euryale-70b";
+      id = "openrouter-sao10k_l3_1-euryale-70b";
       name = "openrouter → sao10k/l3.1-euryale-70b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3670,7 +3670,7 @@
     }
     # openrouter/sao10k/l3.3-euryale-70b
     {
-      id = "openrouter-sao10k-l3-3-euryale-70b";
+      id = "openrouter-sao10k_l3_3-euryale-70b";
       name = "openrouter → sao10k/l3.3-euryale-70b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3681,7 +3681,7 @@
     }
     # openrouter/stepfun/step-3.5-flash
     {
-      id = "openrouter-stepfun-step-3-5-flash";
+      id = "openrouter-stepfun_step-3_5-flash";
       name = "openrouter → stepfun/step-3.5-flash";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3692,7 +3692,7 @@
     }
     # openrouter/switchpoint/router
     {
-      id = "openrouter-switchpoint-router";
+      id = "openrouter-switchpoint_router";
       name = "openrouter → switchpoint/router";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3703,7 +3703,7 @@
     }
     # openrouter/tencent/hunyuan-a13b-instruct
     {
-      id = "openrouter-tencent-hunyuan-a13b-instruct";
+      id = "openrouter-tencent_hunyuan-a13b-instruct";
       name = "openrouter → tencent/hunyuan-a13b-instruct";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3714,7 +3714,7 @@
     }
     # openrouter/thedrummer/cydonia-24b-v4.1
     {
-      id = "openrouter-thedrummer-cydonia-24b-v4-1";
+      id = "openrouter-thedrummer_cydonia-24b-v4_1";
       name = "openrouter → thedrummer/cydonia-24b-v4.1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3725,7 +3725,7 @@
     }
     # openrouter/thedrummer/rocinante-12b
     {
-      id = "openrouter-thedrummer-rocinante-12b";
+      id = "openrouter-thedrummer_rocinante-12b";
       name = "openrouter → thedrummer/rocinante-12b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3736,7 +3736,7 @@
     }
     # openrouter/thedrummer/skyfall-36b-v2
     {
-      id = "openrouter-thedrummer-skyfall-36b-v2";
+      id = "openrouter-thedrummer_skyfall-36b-v2";
       name = "openrouter → thedrummer/skyfall-36b-v2";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3747,7 +3747,7 @@
     }
     # openrouter/thedrummer/unslopnemo-12b
     {
-      id = "openrouter-thedrummer-unslopnemo-12b";
+      id = "openrouter-thedrummer_unslopnemo-12b";
       name = "openrouter → thedrummer/unslopnemo-12b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3758,7 +3758,7 @@
     }
     # openrouter/tngtech/deepseek-r1t2-chimera
     {
-      id = "openrouter-tngtech-deepseek-r1t2-chimera";
+      id = "openrouter-tngtech_deepseek-r1t2-chimera";
       name = "openrouter → tngtech/deepseek-r1t2-chimera";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3769,7 +3769,7 @@
     }
     # openrouter/undi95/remm-slerp-l2-13b
     {
-      id = "openrouter-undi95-remm-slerp-l2-13b";
+      id = "openrouter-undi95_remm-slerp-l2-13b";
       name = "openrouter → undi95/remm-slerp-l2-13b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3780,7 +3780,7 @@
     }
     # openrouter/upstage/solar-pro-3
     {
-      id = "openrouter-upstage-solar-pro-3";
+      id = "openrouter-upstage_solar-pro-3";
       name = "openrouter → upstage/solar-pro-3";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3791,7 +3791,7 @@
     }
     # openrouter/writer/palmyra-x5
     {
-      id = "openrouter-writer-palmyra-x5";
+      id = "openrouter-writer_palmyra-x5";
       name = "openrouter → writer/palmyra-x5";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3802,7 +3802,7 @@
     }
     # openrouter/x-ai/grok-3
     {
-      id = "openrouter-x-ai-grok-3";
+      id = "openrouter-x-ai_grok-3";
       name = "openrouter → x-ai/grok-3";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3813,7 +3813,7 @@
     }
     # openrouter/x-ai/grok-3-beta
     {
-      id = "openrouter-x-ai-grok-3-beta";
+      id = "openrouter-x-ai_grok-3-beta";
       name = "openrouter → x-ai/grok-3-beta";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3824,7 +3824,7 @@
     }
     # openrouter/x-ai/grok-3-mini
     {
-      id = "openrouter-x-ai-grok-3-mini";
+      id = "openrouter-x-ai_grok-3-mini";
       name = "openrouter → x-ai/grok-3-mini";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3835,7 +3835,7 @@
     }
     # openrouter/x-ai/grok-3-mini-beta
     {
-      id = "openrouter-x-ai-grok-3-mini-beta";
+      id = "openrouter-x-ai_grok-3-mini-beta";
       name = "openrouter → x-ai/grok-3-mini-beta";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3846,7 +3846,7 @@
     }
     # openrouter/x-ai/grok-4
     {
-      id = "openrouter-x-ai-grok-4";
+      id = "openrouter-x-ai_grok-4";
       name = "openrouter → x-ai/grok-4";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3857,7 +3857,7 @@
     }
     # openrouter/x-ai/grok-4-fast
     {
-      id = "openrouter-x-ai-grok-4-fast";
+      id = "openrouter-x-ai_grok-4-fast";
       name = "openrouter → x-ai/grok-4-fast";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3868,7 +3868,7 @@
     }
     # openrouter/x-ai/grok-4.1-fast
     {
-      id = "openrouter-x-ai-grok-4-1-fast";
+      id = "openrouter-x-ai_grok-4_1-fast";
       name = "openrouter → x-ai/grok-4.1-fast";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3879,7 +3879,7 @@
     }
     # openrouter/x-ai/grok-4.20
     {
-      id = "openrouter-x-ai-grok-4-20";
+      id = "openrouter-x-ai_grok-4_20";
       name = "openrouter → x-ai/grok-4.20";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3890,7 +3890,7 @@
     }
     # openrouter/x-ai/grok-4.20-multi-agent
     {
-      id = "openrouter-x-ai-grok-4-20-multi-agent";
+      id = "openrouter-x-ai_grok-4_20-multi-agent";
       name = "openrouter → x-ai/grok-4.20-multi-agent";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3901,7 +3901,7 @@
     }
     # openrouter/x-ai/grok-code-fast-1
     {
-      id = "openrouter-x-ai-grok-code-fast-1";
+      id = "openrouter-x-ai_grok-code-fast-1";
       name = "openrouter → x-ai/grok-code-fast-1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3912,7 +3912,7 @@
     }
     # openrouter/xiaomi/mimo-v2-flash
     {
-      id = "openrouter-xiaomi-mimo-v2-flash";
+      id = "openrouter-xiaomi_mimo-v2-flash";
       name = "openrouter → xiaomi/mimo-v2-flash";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3923,7 +3923,7 @@
     }
     # openrouter/xiaomi/mimo-v2-omni
     {
-      id = "openrouter-xiaomi-mimo-v2-omni";
+      id = "openrouter-xiaomi_mimo-v2-omni";
       name = "openrouter → xiaomi/mimo-v2-omni";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3934,7 +3934,7 @@
     }
     # openrouter/xiaomi/mimo-v2-pro
     {
-      id = "openrouter-xiaomi-mimo-v2-pro";
+      id = "openrouter-xiaomi_mimo-v2-pro";
       name = "openrouter → xiaomi/mimo-v2-pro";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3945,7 +3945,7 @@
     }
     # openrouter/xiaomi/mimo-v2.5
     {
-      id = "openrouter-xiaomi-mimo-v2-5";
+      id = "openrouter-xiaomi_mimo-v2_5";
       name = "openrouter → xiaomi/mimo-v2.5";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3956,7 +3956,7 @@
     }
     # openrouter/xiaomi/mimo-v2.5-pro
     {
-      id = "openrouter-xiaomi-mimo-v2-5-pro";
+      id = "openrouter-xiaomi_mimo-v2_5-pro";
       name = "openrouter → xiaomi/mimo-v2.5-pro";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3967,7 +3967,7 @@
     }
     # openrouter/z-ai/glm-4-32b
     {
-      id = "openrouter-z-ai-glm-4-32b";
+      id = "openrouter-z-ai_glm-4-32b";
       name = "openrouter → z-ai/glm-4-32b";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3978,7 +3978,7 @@
     }
     # openrouter/z-ai/glm-4.5
     {
-      id = "openrouter-z-ai-glm-4-5";
+      id = "openrouter-z-ai_glm-4_5";
       name = "openrouter → z-ai/glm-4.5";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -3989,7 +3989,7 @@
     }
     # openrouter/z-ai/glm-4.5-air
     {
-      id = "openrouter-z-ai-glm-4-5-air";
+      id = "openrouter-z-ai_glm-4_5-air";
       name = "openrouter → z-ai/glm-4.5-air";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -4000,7 +4000,7 @@
     }
     # openrouter/z-ai/glm-4.5v
     {
-      id = "openrouter-z-ai-glm-4-5v";
+      id = "openrouter-z-ai_glm-4_5v";
       name = "openrouter → z-ai/glm-4.5v";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -4011,7 +4011,7 @@
     }
     # openrouter/z-ai/glm-4.6
     {
-      id = "openrouter-z-ai-glm-4-6";
+      id = "openrouter-z-ai_glm-4_6";
       name = "openrouter → z-ai/glm-4.6";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -4022,7 +4022,7 @@
     }
     # openrouter/z-ai/glm-4.6v
     {
-      id = "openrouter-z-ai-glm-4-6v";
+      id = "openrouter-z-ai_glm-4_6v";
       name = "openrouter → z-ai/glm-4.6v";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -4033,7 +4033,7 @@
     }
     # openrouter/z-ai/glm-4.7
     {
-      id = "openrouter-z-ai-glm-4-7";
+      id = "openrouter-z-ai_glm-4_7";
       name = "openrouter → z-ai/glm-4.7";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -4044,7 +4044,7 @@
     }
     # openrouter/z-ai/glm-4.7-flash
     {
-      id = "openrouter-z-ai-glm-4-7-flash";
+      id = "openrouter-z-ai_glm-4_7-flash";
       name = "openrouter → z-ai/glm-4.7-flash";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -4055,7 +4055,7 @@
     }
     # openrouter/z-ai/glm-5
     {
-      id = "openrouter-z-ai-glm-5";
+      id = "openrouter-z-ai_glm-5";
       name = "openrouter → z-ai/glm-5";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -4066,7 +4066,7 @@
     }
     # openrouter/z-ai/glm-5-turbo
     {
-      id = "openrouter-z-ai-glm-5-turbo";
+      id = "openrouter-z-ai_glm-5-turbo";
       name = "openrouter → z-ai/glm-5-turbo";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -4077,7 +4077,7 @@
     }
     # openrouter/z-ai/glm-5.1
     {
-      id = "openrouter-z-ai-glm-5-1";
+      id = "openrouter-z-ai_glm-5_1";
       name = "openrouter → z-ai/glm-5.1";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -4088,7 +4088,7 @@
     }
     # openrouter/z-ai/glm-5v-turbo
     {
-      id = "openrouter-z-ai-glm-5v-turbo";
+      id = "openrouter-z-ai_glm-5v-turbo";
       name = "openrouter → z-ai/glm-5v-turbo";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -4099,7 +4099,7 @@
     }
     # openrouter/~anthropic/claude-haiku-latest
     {
-      id = "openrouter-anthropic-claude-haiku-latest";
+      id = "openrouter-anthropic_claude-haiku-latest";
       name = "openrouter → ~anthropic/claude-haiku-latest";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -4110,7 +4110,7 @@
     }
     # openrouter/~anthropic/claude-opus-latest
     {
-      id = "openrouter-anthropic-claude-opus-latest";
+      id = "openrouter-anthropic_claude-opus-latest";
       name = "openrouter → ~anthropic/claude-opus-latest";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -4121,7 +4121,7 @@
     }
     # openrouter/~anthropic/claude-sonnet-latest
     {
-      id = "openrouter-anthropic-claude-sonnet-latest";
+      id = "openrouter-anthropic_claude-sonnet-latest";
       name = "openrouter → ~anthropic/claude-sonnet-latest";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -4132,7 +4132,7 @@
     }
     # openrouter/~google/gemini-flash-latest
     {
-      id = "openrouter-google-gemini-flash-latest";
+      id = "openrouter-google_gemini-flash-latest";
       name = "openrouter → ~google/gemini-flash-latest";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -4143,7 +4143,7 @@
     }
     # openrouter/~google/gemini-pro-latest
     {
-      id = "openrouter-google-gemini-pro-latest";
+      id = "openrouter-google_gemini-pro-latest";
       name = "openrouter → ~google/gemini-pro-latest";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -4154,7 +4154,7 @@
     }
     # openrouter/~moonshotai/kimi-latest
     {
-      id = "openrouter-moonshotai-kimi-latest";
+      id = "openrouter-moonshotai_kimi-latest";
       name = "openrouter → ~moonshotai/kimi-latest";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -4165,7 +4165,7 @@
     }
     # openrouter/~openai/gpt-latest
     {
-      id = "openrouter-openai-gpt-latest";
+      id = "openrouter-openai_gpt-latest";
       name = "openrouter → ~openai/gpt-latest";
       scope_kind = "provider";
       provider_id = "openrouter";
@@ -4176,7 +4176,7 @@
     }
     # openrouter/~openai/gpt-mini-latest
     {
-      id = "openrouter-openai-gpt-mini-latest";
+      id = "openrouter-openai_gpt-mini-latest";
       name = "openrouter → ~openai/gpt-mini-latest";
       scope_kind = "provider";
       provider_id = "openrouter";
