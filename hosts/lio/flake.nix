@@ -207,10 +207,14 @@
                 nfs-utils
                 jellyfin-media-player
                 element-desktop
+                # Native (non-flatpak) Vesktop. The flatpak build had broken
+                # screen sharing -- the picker would freeze after the first
+                # attempt due to portal/pipewire sandboxing issues.
+                # Native binary uses host xdg-desktop-portal-kde directly.
+                vesktop
               ];
               services.flatpak.packages = [
                 "org.signal.Signal"
-                "dev.vencord.Vesktop"
                 "com.spotify.Client"
                 "com.bitwarden.desktop"
                 "org.openscad.OpenSCAD"
