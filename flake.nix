@@ -52,14 +52,12 @@
         in
         {
           default = pkgs.mkShell {
-            packages =
-              (map (mkDeployScript pkgs) deployHosts)
-              ++ [
-                # Regenerates hosts/h001/mods/bifrost_models.nix from
-                # upstream provider /models endpoints + models.dev pricing.
-                # See scripts/bifrost_models/ for the source.
-                (pkgs.callPackage ./scripts/bifrost_models { })
-              ];
+            # Per-script tools live in their own sub-flakes so we don't drag
+            # a toolchain (Go etc.) onto every machine that just wants
+            # deploy_*. The bifrost-models regen script is at
+            # scripts/bifrost_models/ — `cd` there and `nix develop` (or
+            # let direnv pick up the .envrc).
+            packages = map (mkDeployScript pkgs) deployHosts;
           };
         }
       );

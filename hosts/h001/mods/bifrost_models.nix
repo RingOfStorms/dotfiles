@@ -6,7 +6,7 @@
 #   openrouter models: https://openrouter.ai/api/v1/models (pricing inline)
 #   air pricing:       https://models.dev/api.json (fuzzy-matched)
 #
-# Generated 2026-04-30T05:16:21Z.
+# Generated 2026-04-30T05:24:56Z.
 {
   # Models exposed by upstream air_prd at sync time. Reference list;
   # not currently consumed by bifrost.nix but useful for sanity-checking
@@ -57,16 +57,16 @@
   ];
 
   airPricingOverrides = [
-    # air/claude-3.7-sonnet ← models.dev/claude-3-7-sonnet (score 0.84)
+    # air/claude-3.7-sonnet ← models.dev/claude-3.7-sonnet (score 0.84)
     {
       id = "air-claude-3-7-sonnet";
-      name = "air → claude-3.7-sonnet (matched claude-3-7-sonnet, score 0.84)";
+      name = "air → claude-3.7-sonnet (matched claude-3.7-sonnet, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
       match_type = "exact";
       pattern = "claude-3.7-sonnet";
       request_types = [ "chat_completion" ];
-      pricing_patch = "{\"cache_read_input_token_cost\":3e-7,\"input_cost_per_token\":0.000003,\"output_cost_per_token\":0.000015}";
+      pricing_patch = "{\"cache_creation_input_token_cost\":0.00000375,\"cache_read_input_token_cost\":3.0000000000000004e-7,\"input_cost_per_token\":0.000003,\"output_cost_per_token\":0.000015}";
     }
     # air/claude-haiku-4.5 ← models.dev/claude-haiku-4-5 (score 0.84)
     {
@@ -154,7 +154,7 @@
       match_type = "exact";
       pattern = "claude-sonnet-4";
       request_types = [ "chat_completion" ];
-      pricing_patch = "{\"input_cost_per_token\":0.000003307,\"output_cost_per_token\":0.000016536000000000002}";
+      pricing_patch = "{\"cache_creation_input_token_cost\":0.00000375,\"cache_read_input_token_cost\":3e-7,\"input_cost_per_token\":0.000003,\"output_cost_per_token\":0.000015}";
     }
     # air/claude-sonnet-4.5 ← models.dev/claude-sonnet-4-5 (score 0.84)
     {
@@ -178,16 +178,16 @@
       request_types = [ "chat_completion" ];
       pricing_patch = "{\"cache_creation_input_token_cost\":0.00000375,\"cache_read_input_token_cost\":3e-7,\"input_cost_per_token\":0.000003,\"output_cost_per_token\":0.000015}";
     }
-    # air/deepseek-3.1 ← models.dev/deepseek-v3-1 (score 0.78)
+    # air/deepseek-3.1 ← models.dev/deepseek-v3.1 (score 0.78)
     {
       id = "air-deepseek-3-1";
-      name = "air → deepseek-3.1 (matched deepseek-v3-1, score 0.78)";
+      name = "air → deepseek-3.1 (matched deepseek-v3.1, score 0.78)";
       scope_kind = "provider";
       provider_id = "air";
       match_type = "exact";
       pattern = "deepseek-3.1";
       request_types = [ "chat_completion" ];
-      pricing_patch = "{\"input_cost_per_token\":5.739999999999999e-7,\"output_cost_per_token\":0.0000017210000000000001}";
+      pricing_patch = "{\"input_cost_per_token\":5.6e-7,\"output_cost_per_token\":0.00000168}";
     }
     # air/gemini-2.0-flash ← models.dev/gemini-2.0-flash (score 0.84)
     {
@@ -277,16 +277,16 @@
       request_types = [ "chat_completion" ];
       pricing_patch = "{\"cache_read_input_token_cost\":1.25e-7,\"input_cost_per_token\":0.00000125,\"output_cost_per_token\":0.00001}";
     }
-    # air/glm-4.7 ← models.dev/GLM-4.7 (score 0.84)
+    # air/glm-4.7 ← models.dev/glm-4.7 (score 0.84)
     {
       id = "air-glm-4-7";
-      name = "air → glm-4.7 (matched GLM-4.7, score 0.84)";
+      name = "air → glm-4.7 (matched glm-4.7, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
       match_type = "exact";
       pattern = "glm-4.7";
       request_types = [ "chat_completion" ];
-      pricing_patch = "{\"input_cost_per_token\":0.0000035,\"output_cost_per_token\":0.000014}";
+      pricing_patch = "{\"cache_read_input_token_cost\":1.0000000000000001e-7,\"input_cost_per_token\":6e-7,\"output_cost_per_token\":0.0000022}";
     }
     # air/glm-5 ← models.dev/glm-5 (score 0.84)
     {
@@ -297,7 +297,7 @@
       match_type = "exact";
       pattern = "glm-5";
       request_types = [ "chat_completion" ];
-      pricing_patch = "{\"cache_creation_input_token_cost\":0,\"cache_read_input_token_cost\":2.0000000000000002e-7,\"input_cost_per_token\":0.000001,\"output_cost_per_token\":0.0000032000000000000003}";
+      pricing_patch = "{\"cache_read_input_token_cost\":2.0000000000000002e-7,\"input_cost_per_token\":0.000001,\"output_cost_per_token\":0.0000032000000000000003}";
     }
     # air/gpt-4.1 ← models.dev/openai-gpt-4.1 (score 0.84)
     {
@@ -365,10 +365,10 @@
       request_types = [ "chat_completion" ];
       pricing_patch = "{\"cache_read_input_token_cost\":2.5000000000000002e-8,\"input_cost_per_token\":2.5e-7,\"output_cost_per_token\":0.000002}";
     }
-    # air/gpt-5-nano ← models.dev/openai-gpt-5-nano (score 0.84)
+    # air/gpt-5-nano ← models.dev/gpt-5-nano (score 0.84)
     {
       id = "air-gpt-5-nano";
-      name = "air → gpt-5-nano (matched openai-gpt-5-nano, score 0.84)";
+      name = "air → gpt-5-nano (matched gpt-5-nano, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
       match_type = "exact";
@@ -387,10 +387,10 @@
       request_types = [ "chat_completion" ];
       pricing_patch = "{\"cache_read_input_token_cost\":1.3e-7,\"input_cost_per_token\":0.00000125,\"output_cost_per_token\":0.00001}";
     }
-    # air/gpt-5.2 ← models.dev/gpt-5.2 (score 0.84)
+    # air/gpt-5.2 ← models.dev/openai-gpt-5.2 (score 0.84)
     {
       id = "air-gpt-5-2";
-      name = "air → gpt-5.2 (matched gpt-5.2, score 0.84)";
+      name = "air → gpt-5.2 (matched openai-gpt-5.2, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
       match_type = "exact";
@@ -398,10 +398,10 @@
       request_types = [ "chat_completion" ];
       pricing_patch = "{\"cache_read_input_token_cost\":1.75e-7,\"input_cost_per_token\":0.00000175,\"output_cost_per_token\":0.000014}";
     }
-    # air/gpt-5.4 ← models.dev/openai-gpt-5.4 (score 0.84)
+    # air/gpt-5.4 ← models.dev/gpt-5-4 (score 0.84)
     {
       id = "air-gpt-5-4";
-      name = "air → gpt-5.4 (matched openai-gpt-5.4, score 0.84)";
+      name = "air → gpt-5.4 (matched gpt-5-4, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
       match_type = "exact";
@@ -431,27 +431,27 @@
       request_types = [ "chat_completion" ];
       pricing_patch = "{\"input_cost_per_token\":5.5e-7,\"output_cost_per_token\":0.00000275}";
     }
-    # air/minimax-2.5 ← models.dev/minimax-m2-5 (score 0.77)
+    # air/minimax-2.5 ← models.dev/MiniMax-M2.5 (score 0.77)
     {
       id = "air-minimax-2-5";
-      name = "air → minimax-2.5 (matched minimax-m2-5, score 0.77)";
+      name = "air → minimax-2.5 (matched MiniMax-M2.5, score 0.77)";
       scope_kind = "provider";
       provider_id = "air";
       match_type = "exact";
       pattern = "minimax-2.5";
       request_types = [ "chat_completion" ];
-      pricing_patch = "{\"cache_read_input_token_cost\":3e-8,\"input_cost_per_token\":3e-7,\"output_cost_per_token\":0.0000012}";
+      pricing_patch = "{\"input_cost_per_token\":3e-7,\"output_cost_per_token\":0.0000012}";
     }
-    # air/o3-mini ← models.dev/azure-o3-mini (score 0.84)
+    # air/o3-mini ← models.dev/openai-o3-mini (score 0.84)
     {
       id = "air-o3-mini";
-      name = "air → o3-mini (matched azure-o3-mini, score 0.84)";
+      name = "air → o3-mini (matched openai-o3-mini, score 0.84)";
       scope_kind = "provider";
       provider_id = "air";
       match_type = "exact";
       pattern = "o3-mini";
       request_types = [ "chat_completion" ];
-      pricing_patch = "{\"input_cost_per_token\":0.000001088,\"output_cost_per_token\":0.0000043996}";
+      pricing_patch = "{\"cache_read_input_token_cost\":5.5e-7,\"input_cost_per_token\":0.0000011,\"output_cost_per_token\":0.0000044}";
     }
     # air/o4-mini ← models.dev/o4-mini (score 0.84)
     {

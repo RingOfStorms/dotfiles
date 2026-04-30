@@ -529,6 +529,18 @@ func main() {
 	}
 	fmt.Fprintf(os.Stderr, "  openrouter: %d with pricing, %d skipped (zero/free)\n", orMatched, orSkipped)
 
+	// Defensive: bail before writing if any id collides. Bifrost's config
+	// loader rejects duplicates at startup ("a record with this id already
+	// exists") which is much harder to debug than a script-time failure.
+	// Check air + openrouter together since they share the same id namespace
+	// in the persisted governance_pricing_overrides table.
+	if dups := findDuplicateIDs(airOverrides, orOverrides); len(dups) > 0 {
+		for _, d := range dups {
+			fmt.Fprintf(os.Stderr, "  duplicate id %q from patterns: %v\n", d.id, d.patterns)
+		}
+		die(fmt.Errorf("%d duplicate override id(s); fix slugify() or rename upstream model aliases", len(dups)))
+	}
+
 	// Render Nix file.
 	out := renderNix(airOverrides, orOverrides, *airBase, *orBase, *skipOR)
 	if err := os.WriteFile(outPath, []byte(out), 0644); err != nil {
@@ -540,6 +552,34 @@ func main() {
 func die(err error) {
 	fmt.Fprintln(os.Stderr, "error:", err)
 	os.Exit(1)
+}
+
+// findDuplicateIDs — scans both override lists for colliding `id` values.
+// Returns one entry per duplicate id with all the patterns that produced it.
+func findDuplicateIDs(lists ...[]override) []struct {
+	id       string
+	patterns []string
+} {
+	seen := map[string][]string{}
+	for _, l := range lists {
+		for _, o := range l {
+			seen[o.ID] = append(seen[o.ID], o.Pattern)
+		}
+	}
+	var out []struct {
+		id       string
+		patterns []string
+	}
+	for id, pats := range seen {
+		if len(pats) > 1 {
+			out = append(out, struct {
+				id       string
+				patterns []string
+			}{id, pats})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].id < out[j].id })
+	return out
 }
 
 // perMillionToPerToken — models.dev gives USD per 1M tokens; Bifrost wants
@@ -598,8 +638,17 @@ func renderNix(air, or []override, airBase, orBase string, skipOR bool) string {
 
 // slugify — turn a model id into something safe for use as a Bifrost
 // pricing-override `id`. Override ids are persisted in SQLite and used as
-// upsert keys; stability matters more than aesthetics. Lowercase + replace
-// non [a-z0-9-] with '-'.
+// upsert keys (Bifrost has no regex constraint on the field), so stability
+// matters more than aesthetics.
+//
+// Map `.` → `_` (not `-`) so we don't collide on model names that already
+// contain a dash variant of the same family. air_prd exposes both
+// `claude-opus-4-7` (the literal upstream id) and `claude-opus-4.7` (their
+// dotted alias) — collapsing both with `.` → `-` produced two
+// `air-claude-opus-4-7` rows and Bifrost rejected the duplicate id
+// ("a record with this id already exists") on startup. Slashes (used by
+// OpenRouter, e.g. `anthropic/claude-3.5-sonnet`) also become `_` so the
+// id stays in [a-z0-9_-].
 func slugify(s string) string {
 	s = strings.ToLower(s)
 	var b strings.Builder
@@ -607,6 +656,8 @@ func slugify(s string) string {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
 			b.WriteRune(r)
+		case r == '.', r == '/':
+			b.WriteRune('_')
 		default:
 			b.WriteRune('-')
 		}
@@ -615,5 +666,5 @@ func slugify(s string) string {
 	for strings.Contains(out, "--") {
 		out = strings.ReplaceAll(out, "--", "-")
 	}
-	return strings.Trim(out, "-")
+	return strings.Trim(out, "-_")
 }
