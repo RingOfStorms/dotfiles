@@ -76,6 +76,7 @@ in
     nodejs_24
     foot
     vlc
+    firefox
     (google-chrome.override {
       commandLineArgs = [
         "--remote-debugging-port=9222"

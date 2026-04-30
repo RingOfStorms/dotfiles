@@ -176,6 +176,12 @@ in
                 chat_completion = true;
                 chat_completion_stream = true;
                 embedding = true;
+                # Lets Bifrost's /v1/models proxy upstream's /v1/models
+                # (https://openrouter.ai/api/v1/models) so the model list
+                # is auto-populated rather than hand-maintained. With
+                # keys[].models = ["*"] the upstream response is returned
+                # unfiltered, prefixed `openrouter/<id>`.
+                list_models = true;
               };
             };
           };
@@ -210,6 +216,9 @@ in
                 chat_completion = true;
                 chat_completion_stream = true;
                 embedding = true;
+                # Proxy upstream LiteLLM's /v1/models. See openrouter
+                # block above for the rationale.
+                list_models = true;
               };
             };
           };
@@ -241,6 +250,9 @@ in
                 chat_completion = true;
                 chat_completion_stream = true;
                 embedding = true;
+                # Proxy llama.cpp's /v1/models. See openrouter block
+                # above for the rationale.
+                list_models = true;
               };
             };
           };
