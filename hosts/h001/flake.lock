@@ -57,16 +57,17 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1777480993,
-        "narHash": "sha256-kY97/kY31g4NZROBjUAdKvN8Kfcw/IrW21iH4B0IN34=",
+        "lastModified": 1777383015,
+        "narHash": "sha256-pEXgkyqy3801SuVaRmgATgk1+6qwtsIyQOCwhLfS/lU=",
         "owner": "maximhq",
         "repo": "bifrost",
-        "rev": "f6f9afa8f4055ab7c20c020157637d1a2406fe9d",
+        "rev": "c7aa3cab06b6c51ca782a34b92a7924fdd207b8a",
         "type": "github"
       },
       "original": {
         "owner": "maximhq",
         "repo": "bifrost",
+        "rev": "c7aa3cab06b6c51ca782a34b92a7924fdd207b8a",
         "type": "github"
       }
     },

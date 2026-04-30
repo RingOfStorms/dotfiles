@@ -32,7 +32,11 @@
     nixarr.url = "github:rasmus-kirk/nixarr";
 
     # LLM gateway bake-off
-    bifrost.url = "github:maximhq/bifrost";
+    # Pinned to a commit BEFORE upstream PR #3107 (2026-04-28) bumped
+    # axios/uuid/postcss without updating the flake's npmDepsHash for
+    # bifrost-ui. Bump this when upstream cuts a release that fixes the
+    # hash, or override npmDepsHash locally.
+    bifrost.url = "github:maximhq/bifrost/c7aa3cab06b6c51ca782a34b92a7924fdd207b8a";
   };
 
   outputs =

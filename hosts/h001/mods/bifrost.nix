@@ -1,5 +1,6 @@
 {
   pkgs,
+  inputs,
   constants,
   ...
 }:
@@ -16,6 +17,53 @@
 # (no PR open as of 2026-04). Copilot stays on litellm.
 let
   c = constants.services.bifrost;
+
+  # Upstream's flake hardcodes an npmDepsHash for bifrost-ui that
+  # doesn't match what npm actually produces in our build environment
+  # (likely a node-version / npm-prefetch difference). Override both
+  # bifrost-ui and bifrost-http with a corrected hash. Bump the hash
+  # below if upstream changes ui/package-lock.json again.
+  bifrostSrc = inputs.bifrost;
+  bifrostVersion = "1.4.9";
+
+  # Override buildNpmPackage to swap npmDepsHash before the npm-deps FOD
+  # is constructed. (overrideAttrs on the final ui derivation is too late
+  # — npmDeps is a separate fixed-output derivation built from the hash
+  # passed to buildNpmPackage.) If the hash drifts again, set to
+  # pkgs.lib.fakeHash, rebuild, copy the "got:" hash from the error.
+  npmDepsHashOverride = "sha256-qFpGbGfCCJ1AeYySPLirdte4NGHZPetWL/cOQcrNMWM=";
+
+  # bifrost-ui.nix calls `pkgs.buildNpmPackage` directly, so we shadow
+  # `pkgs` with one whose buildNpmPackage forces our npmDepsHash.
+  pkgsWithFixedBuildNpm = pkgs // {
+    buildNpmPackage =
+      args: pkgs.buildNpmPackage (args // { npmDepsHash = npmDepsHashOverride; });
+  };
+
+  bifrost-ui-fixed = pkgs.callPackage "${bifrostSrc}/nix/packages/bifrost-ui.nix" {
+    pkgs = pkgsWithFixedBuildNpm;
+    src = bifrostSrc;
+    version = bifrostVersion;
+  };
+
+  # bifrost-http.nix expects `inputs.nixpkgs` (it builds a custom
+  # buildGoModule against that nixpkgs path). Pass through the bifrost
+  # flake's own nixpkgs input, mirroring what the upstream flake does.
+  # Also override vendorHash since upstream's pin doesn't match what
+  # `go mod vendor` produces in our environment. If it drifts again,
+  # set to pkgs.lib.fakeHash, rebuild, copy the "got:" hash.
+  goVendorHashOverride = "sha256-odcos+b+G2mLeSyQ/1N8esHwskrgUlcquiVEATOu7WE=";
+
+  bifrost-http-raw = pkgs.callPackage "${bifrostSrc}/nix/packages/bifrost-http.nix" {
+    inputs = { nixpkgs = inputs.bifrost.inputs.nixpkgs; };
+    src = bifrostSrc;
+    version = bifrostVersion;
+    bifrost-ui = bifrost-ui-fixed;
+  };
+
+  bifrost-http-fixed = bifrost-http-raw.overrideAttrs (_: {
+    vendorHash = goVendorHashOverride;
+  });
 in
 {
   config = {
@@ -34,6 +82,7 @@ in
 
     services.bifrost = {
       enable = true;
+      package = bifrost-http-fixed;
       host = "0.0.0.0";
       port = c.port;
       stateDir = c.dataDir;
