@@ -247,7 +247,10 @@ in
     ];
 
     environment = {
-      BAO_ADDR = "http://127.0.0.1:${toString c.port}";
+      # Use the loopback-only admin listener — that's where the
+      # `sys/generate-root/*` endpoints are enabled (the public listener
+      # keeps the post-CVE-2026-5807 default of disabled).
+      BAO_ADDR = "http://127.0.0.1:${toString c.adminPort}";
     };
 
     serviceConfig = {

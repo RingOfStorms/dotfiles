@@ -35,10 +35,28 @@ in
     settings = {
       ui = true;
 
+      # Public-facing listener (nginx terminates TLS for sec.joshuabell.xyz
+      # and proxies here). Keeps the OpenBao 2.5.3 / CVE-2026-5807 default
+      # of disabled `sys/generate-root/*` endpoints — internet-reachable
+      # callers can NOT spam-cancel an in-progress root-generation.
       listener.default = {
         type = "tcp";
         address = "127.0.0.1:${toString c.port}";
-        tls_disable = true; # nginx will handle TLS
+        tls_disable = true; # nginx handles TLS
+        # disable_unauthed_generate_root_endpoints defaults to true (CVE fix)
+      };
+
+      # Loopback-only admin listener. Used by openbao-apply-config.service
+      # to mint an ephemeral root token via `bao operator generate-root`
+      # from the on-disk unseal key shares, apply declarative config,
+      # then revoke. Bound to 127.0.0.1 ONLY and never fronted by nginx,
+      # so the CVE-2026-5807 attack surface (unauthenticated DoS via
+      # spam-cancel) is restricted to processes already on this host.
+      listener.admin = {
+        type = "tcp";
+        address = "127.0.0.1:${toString c.adminPort}";
+        tls_disable = true;
+        disable_unauthed_generate_root_endpoints = false;
       };
 
       storage.file = {

@@ -156,6 +156,11 @@
 
     openbao = {
       port = 8200;
+      # Loopback-only second listener used by openbao-apply-config.service to
+      # call `bao operator generate-root` (which is disabled by default on the
+      # public-facing listener since OpenBao 2.5.3 / CVE-2026-5807). Never
+      # proxied by nginx, never exposed beyond 127.0.0.1.
+      adminPort = 8201;
       dataDir = "/var/lib/openbao";
       keysDir = "/bao-keys";
       domain = "sec.joshuabell.xyz";

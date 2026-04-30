@@ -9,12 +9,28 @@
 #
 # Persistence: SQLite under stateDir (default config_store + logs_store
 # backends). Required for cost tracking + the Web UI. Cost data is sourced
-# from the same LiteLLM-style community pricing JSON litellm uses.
+# from the same LiteLLM-style community pricing JSON litellm uses (fetched
+# from https://getbifrost.ai/datasheet, schema-identical to LiteLLM's
+# model_prices_and_context_window.json).
 #
 # Auth: none on UI/API. Tailscale-only exposure is the safety boundary.
 # Smoke-test scope: 1 OpenRouter wildcard provider + 1 upstream-litellm
 # (work air_prd) provider. No Copilot — Bifrost has no Copilot provider
 # (no PR open as of 2026-04). Copilot stays on litellm.
+#
+# Cost tracking for the `air` custom provider: Bifrost's cost lookup is
+# keyed on `model|provider|mode`. With a custom provider name (`air`),
+# the catalog has no matching entry (entries use canonical provider names
+# like `openai`), so the UI shows "—" / N/A. Bifrost has no path to read
+# the upstream `X-Litellm-Response-Cost` header, and stock LiteLLM does
+# not embed cost into the response body's `usage.cost` field — so the
+# only fix is `governance.pricing_overrides`, which lets us pin a price
+# for `(provider=air, model=X)` via the same per-token fields as the
+# datasheet. Add a row per model as we use it (matches the per-model
+# scope chosen during initial setup; safer than family wildcards since
+# variants within a family can have different prices). Pricing values
+# below are mirrored from getbifrost.ai/datasheet — bump if upstream
+# OpenAI pricing changes.
 let
   c = constants.services.bifrost;
 
@@ -98,10 +114,20 @@ in
       settings = {
         "$schema" = "https://www.getbifrost.ai/schema";
 
-        # SQLite-backed config & logs (default backends). Enables Web UI,
-        # cost tracking, request log history.
-        config_store = { enabled = true; };
-        logs_store = { enabled = true; };
+        # SQLite-backed config & logs. Enables Web UI, cost tracking,
+        # request log history. Both DBs land under stateDir.
+        # Per upstream `examples/configs/withconfigstorelogsstoresqlite/`,
+        # `type` and `config.path` are required (no defaults).
+        config_store = {
+          enabled = true;
+          type = "sqlite";
+          config = { path = "${c.dataDir}/config.db"; };
+        };
+        logs_store = {
+          enabled = true;
+          type = "sqlite";
+          config = { path = "${c.dataDir}/logs.db"; };
+        };
 
         client = {
           # Inference endpoints unauth'd (tailnet-only). Management UI
@@ -124,7 +150,16 @@ in
 
           # Upstream LiteLLM at work (air_prd) via openai-compatible
           # custom_provider_config. Reachable on tailnet.
-          air-prd = {
+          #
+          # Slug is `air` (not `air-prd`). The "prd" was stage-leakage
+          # from the upstream litellm proxy path — clients address this
+          # as `air/<model>` and it's the only air-* env we proxy.
+          # Renaming is safe (no validation regex on custom provider
+          # names; only constraint is "must not collide with a standard
+          # provider", which `air` doesn't). Caveat: the old `air-prd`
+          # row stays in ${c.dataDir}/config.db after rebuild — delete
+          # it via the Bifrost UI Providers tab.
+          air = {
             keys = [
               {
                 name = "k1";
@@ -146,6 +181,31 @@ in
               };
             };
           };
+        };
+
+        # Pricing overrides for the `air` custom provider. See the file
+        # header for the rationale. `pricing_patch` must be a
+        # JSON-encoded *string* (not a nested object) — that's how the
+        # upstream config schema models it. Per-model scope; add a new
+        # row each time we start exercising a new air/* model.
+        governance = {
+          pricing_overrides = [
+            {
+              id = "air-gpt-5-mini";
+              name = "air → OpenAI gpt-5-mini";
+              scope_kind = "provider";
+              provider_id = "air";
+              match_type = "exact";
+              pattern = "gpt-5-mini";
+              request_types = [ "chat_completion" ];
+              # Mirrored from getbifrost.ai/datasheet (openai/gpt-5-mini).
+              pricing_patch = builtins.toJSON {
+                input_cost_per_token = 2.5e-7;
+                output_cost_per_token = 2.0e-6;
+                cache_read_input_token_cost = 2.5e-8;
+              };
+            }
+          ];
         };
       };
     };
