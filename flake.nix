@@ -52,7 +52,14 @@
         in
         {
           default = pkgs.mkShell {
-            packages = map (mkDeployScript pkgs) deployHosts;
+            packages =
+              (map (mkDeployScript pkgs) deployHosts)
+              ++ [
+                # Regenerates hosts/h001/mods/bifrost_models.nix from
+                # upstream provider /models endpoints + models.dev pricing.
+                # See scripts/bifrost_models/ for the source.
+                (pkgs.callPackage ./scripts/bifrost_models { })
+              ];
           };
         }
       );

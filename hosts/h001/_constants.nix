@@ -160,7 +160,10 @@
       # call `bao operator generate-root` (which is disabled by default on the
       # public-facing listener since OpenBao 2.5.3 / CVE-2026-5807). Never
       # proxied by nginx, never exposed beyond 127.0.0.1.
-      adminPort = 8201;
+      #
+      # NOTE: avoid port+1 of the api listener — openbao auto-allocates that
+      # for its Raft cluster listener even on single-node file storage.
+      adminPort = 8210;
       dataDir = "/var/lib/openbao";
       keysDir = "/bao-keys";
       domain = "sec.joshuabell.xyz";

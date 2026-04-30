@@ -1,5 +1,6 @@
 {
   pkgs,
+  lib,
   constants,
   fleet,
   ...
@@ -76,6 +77,16 @@ in
 
   # Additional systemd service hardening
   systemd.services.openbao = {
+    # The upstream module sets restartIfChanged=false (sensible default —
+    # restarting bao seals it and requires an unseal cycle). We override
+    # because openbao-auto-unseal.service is wantedBy=openbao.service +
+    # partOf=openbao.service, so a restart automatically pulls auto-unseal
+    # along and the instance comes back unsealed without manual steps.
+    # Cost: every nixos-rebuild that changes openbao's config (or its
+    # systemd unit) restarts the server, which adds a brief seal/unseal
+    # cycle (~1-2s downtime) plus invalidation of any short-lived tokens.
+    restartIfChanged = lib.mkForce true;
+
     serviceConfig = {
       # Security hardening
       NoNewPrivileges = true;
