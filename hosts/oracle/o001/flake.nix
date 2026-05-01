@@ -33,6 +33,7 @@
           inputs.common.nixosModules.nix_options
           inputs.common.nixosModules.docker
           inputs.common.nixosModules.tailnet
+          ({ ringofstorms.tailnet.omitCaptivePortal = false; })
           inputs.common.nixosModules.zsh
 
           inputs.beszel.nixosModules.agent
@@ -53,9 +54,12 @@
           ./mods/atuin.nix
 
           # Host-specific packages
-          ({ pkgs, ... }: {
-            environment.systemPackages = with pkgs; [ vaultwarden ];
-          })
+          (
+            { pkgs, ... }:
+            {
+              environment.systemPackages = with pkgs; [ vaultwarden ];
+            }
+          )
         ];
       };
     };

@@ -167,7 +167,7 @@ in
 
               services.postgresql = {
                 enable = true;
-                package = pkgs.${"postgresql_${postgresVersion}"}.withPackages (ps: [ ps.pgvecto-rs ]);
+                package = pkgs.${"postgresql_${postgresVersion}"};
                 enableJIT = true;
                 authentication = ''
                   local all all trust
@@ -183,9 +183,10 @@ in
                     ensureClauses.login = true;
                   }
                 ];
-                settings = {
-                  shared_preload_libraries = [ "vectors.so" ];
-                };
+                # NOTE: pgvecto-rs has been removed upstream; the immich module
+                # now injects pgvector + vectorchord extensions and the
+                # `shared_preload_libraries = [ "vchord.so" ]` setting itself
+                # when services.immich.database.enable = true. Don't override.
               };
 
               # Backup database
