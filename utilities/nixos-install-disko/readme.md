@@ -381,7 +381,7 @@ sudo ls -la /var/lib/openbao-secrets/
 Expected: a JWT lands at `/run/openbao/zitadel.jwt`, vault-agent
 authenticates, and the host's declared secrets render under
 `/var/lib/openbao-secrets/` (e.g. `headscale_auth_2026-03-15`,
-`rustdesk_password`, `atuin-key-josh_2026-03-15`).
+`atuin-key-josh_2026-03-15`).
 
 If something is empty, follow the logs:
 
@@ -423,11 +423,6 @@ Services declared with `hardDepend` / `softDepend` in
 # Atuin login (if ringofstorms.atuin.autologin.enable = true)
 sudo systemctl restart atuin-autologin.service
 atuin sync -f
-
-# RustDesk picks up the password via system.activationScripts on the
-# next switch, so re-run nixos-rebuild switch (or reboot).
-sudo nixos-rebuild switch \
-  --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/$HOST#$HOST"
 ```
 
 ### USB Key for Auto-Unlock (Optional)

@@ -25,16 +25,6 @@
       domain = "atuin.joshuabell.xyz";
     };
 
-    rustdesk = {
-      ports = {
-        signal = 21115;
-        relay = 21116;
-        relayHbbs = 21117;
-        tcp4 = 21118;
-        tcp5 = 21119;
-      };
-    };
-
     # Test container
     wasabi = {
       hostAddress = "192.168.100.2";

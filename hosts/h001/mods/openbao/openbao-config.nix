@@ -189,10 +189,6 @@ let
     # ── low-trust (gp3, joe, i001) ────────────────────────────────────
     "machines/low-trust/headscale_auth_lowtrust_2026-03-15" = {};
 
-    # ── low-trust: shared service secrets ─────────────────────────────
-    "machines/low-trust/rustdesk_server_key" = {};
-    "machines/low-trust/rustdesk_password" = {};
-
     # ── per-host: gp3 ─────────────────────────────────────────────────
     "machines/by-host/gp3/hass_token" = {};
   };

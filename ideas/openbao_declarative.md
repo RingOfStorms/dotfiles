@@ -351,8 +351,6 @@ Recorded for future reference. **Not approved for execution.**
    - `kv/machines/high-trust/vaultwarden_env_2026-03-15`
    - `kv/machines/high-trust/zitadel_master_key_2026-03-15`
    - `kv/machines/low-trust/headscale_auth_lowtrust_2026-03-15`
-   - `kv/machines/low-trust/rustdesk_password`
-   - `kv/machines/low-trust/rustdesk_server_key`
 3. **Re-bootstrap Zitadel ↔ OpenBao trust** — audience IDs,
    pubkeys, JWT validation config; possibly re-issue Zitadel keys.
 4. **Re-onboard every consumer host** (h003, joe, juni, gp3, lio,

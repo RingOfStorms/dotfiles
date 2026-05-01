@@ -27,13 +27,5 @@
       kvPath = "kv/data/machines/by-host/gp3/hass_token";
       softDepend = [ "battery-manager" ];
     };
-    "rustdesk_server_key" = {
-      kvPath = "kv/data/machines/low-trust/rustdesk_server_key";
-      softDepend = [ "rustdesk" ];
-    };
-    "rustdesk_password" = {
-      kvPath = "kv/data/machines/low-trust/rustdesk_password";
-      softDepend = [ "rustdesk" ];
-    };
   };
 }

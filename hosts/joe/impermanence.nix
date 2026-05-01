@@ -30,7 +30,6 @@ let
       chrome
       steam
       jellyfin_media_player
-      rustdesk
     ]
   );
 in

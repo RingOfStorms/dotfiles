@@ -27,7 +27,6 @@ let
       nvim_ros
       de_plasma
       chrome
-      rustdesk
     ]
   );
 in

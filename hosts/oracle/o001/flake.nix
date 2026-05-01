@@ -51,7 +51,6 @@
           ./containers/vaultwarden.nix
           ./mods/postgresql.nix
           ./mods/atuin.nix
-          ./mods/rustdesk-server.nix
 
           # Host-specific packages
           ({ pkgs, ... }: {
