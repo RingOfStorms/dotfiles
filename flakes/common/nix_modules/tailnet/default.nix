@@ -16,9 +16,36 @@ in
       default = false;
       description = "Add /etc/hosts entries for h001 services as fallback for headscale MagicDNS. Disable on hosts where the chicken-and-egg with secrets bootstrap is a problem.";
     };
+
+    omitCaptivePortal = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Build tailscale with the upstream `ts_omit_captiveportal` build tag,
+        compiling out the captive-portal detector entirely. This eliminates the
+        periodic DNS lookups / HTTP probes to controlplane.tailscale.com and
+        login.tailscale.com that tailscaled hard-codes into its captive-portal
+        endpoint list (see net/captivedetection/endpoints.go upstream), which
+        fire every ~5 minutes regardless of `--login-server`.
+
+        Default-on for this headscale-only fleet. Set to `false` on portable
+        hosts (laptops) that need to detect captive portals on hotel/coffee-shop
+        wifi.
+
+        Triggers a local rebuild of the tailscale package.
+      '';
+    };
   };
 
   config = {
+
+  nixpkgs.overlays = lib.mkIf cfg.omitCaptivePortal [
+    (final: prev: {
+      tailscale = prev.tailscale.overrideAttrs (old: {
+        tags = (old.tags or []) ++ [ "ts_omit_captiveportal" ];
+      });
+    })
+  ];
 
   environment.systemPackages = with pkgs; [ tailscale ];
   boot.kernelModules = [ "tun" ];
@@ -32,11 +59,12 @@ in
     enable = true;
     openFirewall = true;
     useRoutingFeatures = "client";
+    # Idiomatic equivalent of `extraDaemonFlags = [ "--no-logs-no-support" ]`:
+    # sets TS_NO_LOGS_NO_SUPPORT=true, suppressing log uploads / netlog phone-home.
+    # (Does NOT affect captive-portal probes -- see omitCaptivePortal option.)
+    disableUpstreamLogging = true;
     extraUpFlags = [
       "--login-server=https://headscale.joshuabell.xyz"
-    ];
-    extraDaemonFlags = [
-      "--no-logs-no-support"
     ];
   };
 
