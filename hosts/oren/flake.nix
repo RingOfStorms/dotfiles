@@ -177,11 +177,11 @@
                 # Media
                 vlc
 
-                # signal-desktop
-                # vesktop
-                # bitwarden-desktop
-                # spotify
-                # element-desktop
+                signal-desktop
+                vesktop
+                bitwarden-desktop
+                spotify
+                element-desktop
               ];
 
               services.devmon.enable = true;
