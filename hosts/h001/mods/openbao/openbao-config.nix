@@ -22,6 +22,7 @@ let
   # The host must override openBaoRole in its flake.nix to use "host-<name>".
   perHostSecrets = [
     { name = "gp3"; trust = "low"; }
+    { name = "joe"; trust = "low"; }
   ];
 
   mkHostPolicy = h: {
@@ -191,6 +192,23 @@ let
 
     # ── per-host: gp3 ─────────────────────────────────────────────────
     "machines/by-host/gp3/hass_token" = {};
+
+    # ── per-host: joe ─────────────────────────────────────────────────
+    # KRDP server password for the host's primary user. Single password,
+    # used as the RDP credential for the user account configured by the
+    # ringofstorms.krdp module on joe.
+    "machines/by-host/joe/krdp_password" = {};
+
+    # ── h001 service: guacamole ───────────────────────────────────────
+    # Per-connection RDP/SSH passwords that Guacamole hands to guacd when
+    # opening connections. Stored under high-trust because h001 (the
+    # gateway) is high-trust; the actual credentials match passwords on
+    # the target hosts.
+    #
+    # joe RDP password is fetched via this secret on h001 (separately from
+    # joe's by-host copy). They must be kept in sync manually until we
+    # build a smarter rotation pipeline.
+    "machines/high-trust/guacamole_joe_krdp_2026-05-01" = {};
   };
 
   # Normalize: fill in default fields where not specified

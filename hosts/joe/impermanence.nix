@@ -48,6 +48,10 @@ in
 
       # Stable Diffusion Forge workspace, models, generated images.
       "/var/lib/forge"
+
+      # KRDP self-signed TLS cert + key for the RDP server (regenerated
+      # if missing, but persisting avoids RDP client re-trust prompts).
+      "/var/lib/krdp"
     ];
     files = shared.system.files ++ [ ];
     users."${primaryUser}" = {

@@ -343,6 +343,25 @@ in
           };
         };
 
+        # Apache Guacamole — clientless HTML5 remote desktop gateway on
+        # h001. SSO + auth gating happens at h001's nginx (oauth2-proxy
+        # auth_request + Guacamole's header-auth extension); o001 just
+        # proxies through. Long read timeout because the WebSocket
+        # tunnel that streams the desktop is held open for the entire
+        # session.
+        "guac.${domain}" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyPass = "http://${upstream}";
+            proxyWebsockets = true;
+            extraConfig = ''
+              proxy_read_timeout 1d;
+              proxy_buffering off;
+            '';
+          };
+        };
+
         # ── Minecraft survival map (squaremap) ─────────────────────────────
         # Proxied to h003's nginx over tailscale, which proxies to squaremap
         "computerboyz.${domain}" = {

@@ -132,9 +132,18 @@
           ./forge.nix
           ./homepage-dashboard.nix
           ./nginx.nix
+          ./krdp.nix
           (import ./impermanence.nix {
             inherit primaryUser;
             impermanence_mod = inputs.impermanence_mod;
+          })
+
+          # Override vault-agent role to host-joe so it can read the
+          # per-host krdp_password secret on top of the shared
+          # machines-low-trust policy. secretsRole stays
+          # "machines-lowtrust" for mkAutoSecrets compatibility.
+          ({ lib, ... }: {
+            ringofstorms.secretsBao.openBaoRole = lib.mkForce "host-joe";
           })
 
           # Host-specific config

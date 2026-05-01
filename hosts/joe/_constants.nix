@@ -21,8 +21,21 @@
     homepage = {
       port = 8082;
     };
+    krdp = {
+      port = 3389;
+    };
   };
 
   # ── Per-host secrets (merged with mkAutoSecrets in fleet.mkHost) ────
-  secrets = { };
+  secrets = {
+    # Password for the KRDP user systemd unit. The same value should
+    # also live at machines/high-trust/guacamole_joe_krdp_2026-05-01
+    # (rendered on h001) so Guacamole can connect.
+    "krdp_password" = {
+      kvPath = "kv/data/machines/by-host/joe/krdp_password";
+      owner = "josh";
+      group = "users";
+      softDepend = [ "krdpserver" ]; # noop for user units, but harmless
+    };
+  };
 }

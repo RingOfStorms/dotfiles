@@ -48,7 +48,11 @@ in
         # errors-to-info-log = "true";
       };
       cookie.refresh = "12h";
-      # setXauthrequest = true;
+      # Required by services.oauth2-proxy.nginx — populates the
+      # X-Auth-Request-User response header that the nginx module then
+      # forwards to upstreams as X-User. Currently consumed by
+      # Guacamole's auth-header extension (see mods/guacamole.nix).
+      setXauthrequest = true;
     };
 
     services.nginx.virtualHosts."${c.domain}" = {
