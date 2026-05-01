@@ -73,6 +73,17 @@ in
           username, password, key. Read by the autologin oneshot.
         '';
       };
+
+      reachabilityUrl = mkOption {
+        type = types.str;
+        default = "https://atuin.joshuabell.xyz";
+        description = ''
+          URL the autologin oneshot probes (HEAD via curl) before
+          attempting login. ICMP-based checks (ping 1.1.1.1) often
+          fail on networks that drop outbound ICMP even when
+          HTTPS works fine. Set to "" to skip the check entirely.
+        '';
+      };
     };
   };
 
@@ -100,10 +111,16 @@ in
             #!/usr/bin/env bash
             set -euo pipefail
 
-            if ! ${pkgs.iputils}/bin/ping -c1 -W2 1.1.1.1 &>/dev/null; then
-              echo "No network access, skipping atuin login"
-              exit 0
-            fi
+            ${lib.optionalString (cfg.autologin.reachabilityUrl != "") ''
+              # Probe the actual sync server over HTTPS (TCP+TLS).
+              # Avoids ICMP checks that get blackholed on many networks
+              # even when normal HTTPS traffic works fine.
+              if ! ${pkgs.curl}/bin/curl -fsS --max-time 5 -o /dev/null \
+                   --head "${cfg.autologin.reachabilityUrl}"; then
+                echo "Atuin sync server unreachable (${cfg.autologin.reachabilityUrl}), skipping login"
+                exit 0
+              fi
+            ''}
 
             secret="${cfg.autologin.secretFile}"
             if [ ! -s "$secret" ]; then

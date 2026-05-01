@@ -100,18 +100,15 @@ nixos-generate-config --root /mnt
 # If setup remotely we can install from pushed up flake like so from the target host
 HOST=i001
 nixos-install --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/$HOST#$HOST" --option tarball-ttl 0
-
-# NOTE not sure if this works very well, seems to be partially
 # or push from more powerful machine that can build faster, on host
-HOST=juni
-cd hosts/$HOST && nixos-rebuild build --flake ".#$HOST"
-NIX_SSHOPTS="-i /run/agenix/nix2nix" nix-copy-closure --to $HOST --use-substitutes --gzip result
-CLOSURE=$(readlink -f result)
-echo $CLOSURE
+HOST=oren
+HOST_IP=10.12.14.124
+cd hosts/$HOST
+nixos-rebuild build --flake ".#$HOST"
+NIX_SSHOPTS="-i /var/lib/openbao-secrets/nix2nix_2026-03-15" nix-copy-closure --to root@$HOST_IP --use-substitutes --gzip result
+CLOSURE=$(readlink -f result) && echo $CLOSURE
 # on target
 nixos-install --system $CLOSURE
-
-# OR fully offline over flash drive...
 ```
 
 - After boot
@@ -136,8 +133,6 @@ nix-env -p /nix/var/nix/profiles/system --set "$CLOSURE"
 "$CLOSURE"/bin/switch-to-configuration switch
 ```
 
-or from host machine? TODO haven't tried this fully
-
 ```sh
 NIX_SSHOPTS="-i /run/agenix/nix2nix" sudo nixos-rebuild switch --flake "~/.config/nixos-config/hosts/i001#nixosConfigurations.i001" --target-host luser@10.12.14.119 --build-host localhost
 NIX_SSHOPTS="-i /run/agenix/nix2nix" sudo nixos-rebuild switch --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/i001#i001" --target-host luser@10.12.14.119 --build-host localhost
@@ -158,4 +153,64 @@ echo For setting up in config: $UUID
 mount -t bcachefs --mkdir /dev/$DEVICE /usb_key
 echo "test" > /usb_key/key
 umount /usb_key && rmdir /usb_key
+```
+
+## Post Install First boot setup
+
+### Set user password from default
+
+`passwd` `password1` -> new pass
+
+### Create the machine identity in Zitadel
+
+In `https://sso.joshuabell.xyz` (admin):
+
+1. **Users → Machine Users → + New**
+   - Name: the host name (e.g. `oren`)
+   - **Access Token Type: JWT**
+   - Save
+2. **Projects → <the OpenBao-trusted project> → Authorizations**
+   - Grant the new machine user the role(s) matching its trust tier
+     (e.g. `machines-hightrust` for oren/juni, `machines-lowtrust`
+     for gp3/joe).
+3. Back on the machine user page: **Keys → + New**, type **JSON**,
+   download the file. This is `machine-key.json`.
+
+### 2. Copy the key to the host
+
+`/machine-key.json` is in the impermanence essentials persist set
+(see `flakes/impermanence/shared_persistence/essentials.nix`), so the
+real file lives at `/persist/machine-key.json` and is bind-mounted to
+`/machine-key.json` at boot.
+
+```sh
+HOST_IP=10.12.14.124
+ scp -i /var/lib/openbao-secrets/nix2nix_2026-03-15 ~/Downloads/370960357004410883.json josh@$HOST_IP:/tmp/machine-key.json
+sudo install -m 0400 -o root -g root /tmp/machine-key.json /persist/machine-key.json &&
+sudo ln -sf /persist/machine-key.json /machine-key.json &&
+rm /tmp/machine-key.json
+```
+
+### 3. Kick the secret-fetch pipeline
+
+The `zitadel-mint-jwt` timer fires roughly every 30s, but you can
+force it immediately:
+
+```sh
+sudo systemctl start zitadel-mint-jwt.service &&
+sudo systemctl start vault-agent.service &&
+sudo systemctl start openbao-secrets-ready.service &&
+sudo ls -la /var/lib/openbao-secrets/
+```
+
+### 4. Tailscale / Headscale auto-join
+
+```sh
+sudo systemctl restart tailscaled-autoconnect.service
+tailscale status
+```
+
+```sh
+sudo systemctl restart atuin-autologin.service
+atuin sync -f
 ```
