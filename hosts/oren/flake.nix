@@ -177,7 +177,6 @@
                 # Media
                 vlc
 
-                signal-desktop
                 vesktop
                 bitwarden-desktop
                 spotify
