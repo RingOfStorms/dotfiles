@@ -1,3 +1,15 @@
+# Setup installer USB
+
+```sh
+# get latest nixpkgs for iso
+cd utilities/nixos-installers && flake update -a && cd ../..
+nix build "./utilities/nixos-installers/flake.nix#packages.x86_64-linux.iso-minimal-stable"
+# Flash to usb
+DEVICE=/dev/sdX
+ISO=result/iso/nixos.*iso
+sudo dd if="$ISO" of="$DEVICE" bs=4M status=progress oflag=sync
+```
+
 # Install nix minimal with bcachefs filesystem
 
 - optional encryption
@@ -12,13 +24,13 @@
 ```sh
 DEVICE=sda
 parted /dev/$DEVICE -- mklabel gpt
-parted /dev/$DEVICE -- mkpart ESP fat32 1MB 2GB
+parted /dev/$DEVICE -- mkpart ESP fat32 1MB 5GB
 parted /dev/$DEVICE -- set 1 esp on
 # with swap
-parted /dev/$DEVICE -- mkpart PRIMARY 2GB -8GB
-parted /dev/$DEVICE -- mkpart SWAP linux-swap -8GB 100%
+parted /dev/$DEVICE -- mkpart PRIMARY 5GB -##GB
+parted /dev/$DEVICE -- mkpart SWAP linux-swap -##GB 100%
 # OR no swap
-parted /dev/$DEVICE -- mkpart PRIMARY 2GB 100%
+parted /dev/$DEVICE -- mkpart PRIMARY 5GB 100%
 ```
 
 ### Format partitions
@@ -30,7 +42,7 @@ SWAP=sda3
 
 mkfs.fat -F 32 -n BOOT /dev/$BOOT
 
-bcachefs format --label=nixos --encrypted /dev/$PRIMARY
+bcachefs format --label=nixos --encrypted /dev/$PRIMARY | tee primary.log
 bcachefs unlock /dev/$PRIMARY
 
 mkswap /dev/$SWAP
@@ -44,6 +56,7 @@ swapon /dev/$SWAP
 
 ```sh
 keyctl link @u @s
+# Gets the external UUID of primary bcachefs
 U=$(lsblk -o name,uuid | grep $PRIMARY | awk '{print $2}')
 echo $U
 mount /dev/disk/by-uuid/$U /mnt

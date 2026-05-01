@@ -5,13 +5,15 @@
 
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
-    # Use relative to get current version for testin
-    common.url = "path:../../flakes/common";
-    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    nixos-hardware.url = "github:NixOS/nixos-hardware/master";
+
+    # Use relative to get current version for testing
+    # impermanence.url = "path:../../flakes/impermanence";
+    impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
+    # common.url = "path:../../flakes/common";
+    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets-bao.url = "path:../../flakes/secrets-bao";
     secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
-    # flatpaks.url = "path:../../flakes/flatpaks";
-    flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
     # de_plasma.url = "path:../../flakes/de_plasma";
@@ -33,6 +35,7 @@
       fleet = import ../fleet.nix;
       constants = import ./_constants.nix;
       overlayIp = constants.host.overlayIp;
+      primaryUser = constants.host.primaryUser;
     in
     {
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
@@ -44,7 +47,6 @@
           "networkmanager"
           "video"
           "input"
-          "gamemode"
         ];
 
         hmModules = [
@@ -52,13 +54,30 @@
         ];
 
         nixosModules = [
+          inputs.nixos-hardware.nixosModules.framework-16-7040-amd
+
+          inputs.impermanence.nixosModules.default
+          ({
+            ringofstorms.impermanence = {
+              enable = true;
+              disk = {
+                # TODO: fill in after fresh bcachefs install. Capture from
+                # `lsblk -o name,uuid` after partitioning per
+                # utilities/nixos-installers/install_bcachefs.md.
+                boot = "/dev/disk/by-uuid/4705-A942";
+                primary = "/dev/disk/by-uuid/7ec365a0-a859-450b-af17-ecae217610d6";
+                swap = "/dev/disk/by-uuid/e1d9fbb4-476a-484f-9486-6a9744b45c42";
+              };
+              encrypted = true;
+            };
+          })
+
           inputs.de_plasma.nixosModules.default
           ({
             ringofstorms.dePlasma = {
               enable = true;
               gpu.amd.enable = true;
-              # TODO once encrypted boot?
-              # sddm.autologinUser = "josh";
+              sddm.autologinUser = primaryUser;
             };
           })
 
@@ -84,13 +103,11 @@
             }
           )
 
-          inputs.flatpaks.nixosModules.default
-          # hyprland.nixosModules.default
-
+          inputs.common.nixosModules.boot_systemd
+          inputs.common.nixosModules.plymouth
           inputs.common.nixosModules.essentials
           inputs.common.nixosModules.git
           inputs.common.nixosModules.tmux
-          inputs.common.nixosModules.boot_systemd
           inputs.common.nixosModules.hardening
           inputs.common.nixosModules.jetbrains_font
           inputs.common.nixosModules.nix_options
@@ -102,6 +119,18 @@
           inputs.common.nixosModules.more_filesystems
           inputs.common.nixosModules.remote_lio_builds
 
+          inputs.common.nixosModules.atuin
+          ({
+            ringofstorms.atuin = {
+              enable = true;
+              autologin = {
+                enable = true;
+                user = primaryUser;
+                secretFile = "/var/lib/openbao-secrets/atuin-key-josh_2026-03-15";
+              };
+            };
+          })
+
           inputs.common.nixosModules.rustdesk
           ({
             ringofstorms.rustdesk = {
@@ -109,7 +138,7 @@
               server = "o001";
               serverKeyFile = "/var/lib/openbao-secrets/rustdesk_server_key";
               passwordFile = "/var/lib/openbao-secrets/rustdesk_password";
-              user = constants.host.primaryUser;
+              user = primaryUser;
             };
           })
 
@@ -121,36 +150,44 @@
             };
           })
 
-          ./configuration.nix
           ./hardware-configuration.nix
           ./nono.nix
-          # ./sway_customizations.nix
-          # ./hyprland_customizations.nix
+          (import ./impermanence.nix {
+            inherit primaryUser;
+            impermanence_mod = inputs.impermanence;
+          })
 
           # Host-specific config
           (
             { pkgs, ... }:
             {
               environment.systemPackages = with pkgs; [
+                # Dev/CLI
                 lua
                 qdirstat
                 ffmpeg-full
-                vlc
-                google-chrome
-                ladybird
                 nodejs_24
                 ttyd
                 appimage-run
+
+                # Browsers
+                google-chrome
+                firefox
+                ladybird
+
+                # Media
+                vlc
+
+                # Native desktop apps (replacing flatpaks for reliability:
+                # broken portal/pipewire/screen-share interactions, slow
+                # updates, sandbox quirks).
+                signal-desktop
+                vesktop
+                bitwarden-desktop
+                spotify
+                element-desktop
               ];
-              services.flatpak.packages = [
-                "org.signal.Signal"
-                "dev.vencord.Vesktop"
-                "md.obsidian.Obsidian"
-                "com.spotify.Client"
-                "com.bitwarden.desktop"
-                "org.openscad.OpenSCAD"
-                "im.riot.Riot"
-              ];
+
               services.devmon.enable = true;
               services.gvfs.enable = true;
               services.udisks2.enable = true;
