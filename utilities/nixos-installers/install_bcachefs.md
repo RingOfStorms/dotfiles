@@ -97,12 +97,12 @@ nixos-generate-config --root /mnt
 - Copy useful bits out into real config in repo (primarily swap/kernel modules)
 - Decide on SWAP, USB key unlock, impermanence
   - Use i001 as an example install with this setup
-- Run nixos-install
+- Run nixos-install (with one of the commands below)
 
 ```sh
 # If setup remotely we can install from pushed up flake like so from the target host
 HOST=i001
-nixos-install --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/$HOST#$HOST"
+nixos-install --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/$HOST#$HOST" --option tarball-ttl 0
 
 # NOTE not sure if this works very well, seems to be partially
 # or push from more powerful machine that can build faster, on host

@@ -24,7 +24,7 @@
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
     # mva.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/mva.git";
 
-    opencode.url = "github:anomalyco/opencode/3ea641340761818f1ed0394635681bd0e20cc3a5";
+    opencode.url = "github:anomalyco/opencode/375444a149780c7121bd8964685c4bfe8edd1870";
     nono.url = "github:always-further/nono";
     nono.flake = false;
   };
