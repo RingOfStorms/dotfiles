@@ -38,6 +38,7 @@ password auth, zsh, starship, neovim, and parted. Default password for both
 ## Step 1: Boot the ISO & SSH In
 
 Boot the target machine from the USB.
+
 ```sh
 ip a
 ```
@@ -117,12 +118,12 @@ DISK=/dev/nvme0n1  # or /dev/sda, etc.
 parted -s "$DISK" mklabel gpt
 
 # EFI System Partition (3GB)
-parted -s "$DISK" mkpart ESP fat32 1MiB 3GiB
+parted -s "$DISK" mkpart ESP fat32 1MiB 5GiB
 parted -s "$DISK" set 1 esp on
 mkfs.fat -F32 "${DISK}p1"
 
-# Swap (adjust size as needed)
-parted -s "$DISK" mkpart swap linux-swap 3GiB 19GiB
+# Swap (adjust size as needed) (16GB)
+parted -s "$DISK" mkpart swap linux-swap 5GiB 21GiB
 mkswap "${DISK}p2"
 swapon "${DISK}p2"
 
@@ -239,6 +240,7 @@ the boot drive** (`/`, `/boot`, `/nix`, `/persist`, `/snapshots`, swap) -- the
 impermanence module declares these mounts itself and they will conflict.
 
 Keep only:
+
 - Hardware detection (`boot.initrd.availableKernelModules`, `boot.kernelModules`, etc.)
 - CPU microcode (`hardware.cpu.*.updateMicrocode`)
 - `nixpkgs.hostPlatform`
@@ -289,20 +291,24 @@ Commit and push.
 HOST=HOSTNAME
 nix flake metadata "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/$HOST" --refresh
 nixos-install --no-root-password \
-  --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/$HOST#$HOST"
+  --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/$HOST#$HOST" \
+  --option tarball-ttl 0
 ```
 
-Or if building remotely and copying the closure:
+Or if building remotely and copying the closure (much faster on a beefy
+workstation, especially for hosts with slow CPUs / small RAM):
 
 ```sh
-# On your workstation (faster builds):
-HOST=gp3
-nixos-rebuild build --flake "./hosts/$HOST#$HOST"
-NIX_SSHOPTS="-o StrictHostKeyChecking=no" \
-  nix-copy-closure --to root@<IP> --use-substitutes --gzip result
+# On your workstation:
+HOST=oren
+HOST_IP=10.12.14.124
+cd hosts/$HOST
+nixos-rebuild build --flake ".#$HOST"
+NIX_SSHOPTS="-i /var/lib/openbao-secrets/nix2nix_2026-03-15" \
+  nix-copy-closure --to root@$HOST_IP --use-substitutes --gzip result
+CLOSURE=$(readlink -f result) && echo $CLOSURE
 
 # On the target:
-CLOSURE=$(readlink -f /path/to/result)
 nixos-install --no-root-password --system "$CLOSURE"
 ```
 
@@ -314,44 +320,115 @@ reboot
 
 Remove the USB stick. The machine boots into the new NixOS system.
 
-### Secrets (OpenBao / Zitadel)
+### 7a. Set the user password
 
-If the host uses `secrets-bao`, it needs a Zitadel machine token so OpenBao can
-authenticate and fetch secrets. This is a one-time setup per host.
+Default password from the install is `password1` (or whatever the host's
+`authValue`/`hashedPassword` was set to). Change it on first login:
 
-1. **Create a Machine User in Zitadel**
-   - Log in to `https://sso.joshuabell.xyz` as an admin
-   - Go to **Users > Machine Users > + New**
-   - Name it after the host (e.g. `gp3`, `joe`)
-   - Set **Access Token Type** to `JWT`
-   - Save the user
+```sh
+passwd
+```
 
-2. **Add the machine user to the correct project**
-   - Go to **Projects** > your project (the one OpenBao trusts)
-   - Under **Authorizations**, grant the new machine user a role
-     (this is what OpenBao checks when validating the JWT)
+### 7b. Create the machine identity in Zitadel
 
-3. **Generate a Machine Key**
-   - On the machine user page, go to **Keys > + New**
-   - Select **JSON** as the key type
-   - Download the key file -- this is the `machine-key.json`
+If the host uses `secrets-bao`, it needs a Zitadel machine token so OpenBao
+can authenticate and fetch secrets. This is a one-time setup per host.
 
-4. **Copy the key to the host**
-   ```sh
-   scp machine-key.json josh@<HOST>:/persist/machine-key.json
-   sudo ln -sf /persist/machine-key.json /machine-key.json
-   sudo chmod 0400 /machine-key.json
-   ```
+In `https://sso.joshuabell.xyz` (admin):
 
-5. **Verify the impermanence persist list** includes `/machine-key.json`
-   (check `impermanence.nix` for the host)
+1. **Users → Machine Users → + New**
+   - Name: the host name (e.g. `oren`, `gp3`)
+   - **Access Token Type: JWT**
+   - Save
+2. **Projects → <the OpenBao-trusted project> → Authorizations**
+   - Grant the new machine user the role(s) matching its trust tier
+     (e.g. `machines-hightrust` for oren/juni, `machines-lowtrust`
+     for gp3/joe).
+3. Back on the machine user page: **Keys → + New**, type **JSON**,
+   download the file. This is `machine-key.json`.
 
-6. Secrets will auto-provision on the next `zitadel-mint-jwt` timer fire (~30s).
-   You can force it immediately with:
-   ```sh
-   sudo systemctl start zitadel-mint-jwt.service
-   journalctl -u zitadel-mint-jwt.service -f
-   ```
+### 7c. Copy the key to the host
+
+`/machine-key.json` is in the impermanence essentials persist set
+(see `flakes/impermanence/shared_persistence/essentials.nix`), so the
+real file lives at `/persist/machine-key.json` and is bind-mounted to
+`/machine-key.json` at boot.
+
+```sh
+HOST_IP=10.12.14.124
+scp -i /var/lib/openbao-secrets/nix2nix_2026-03-15 \
+  ~/Downloads/<KEY-ID>.json josh@$HOST_IP:/tmp/machine-key.json
+
+ssh josh@$HOST_IP '
+  sudo install -m 0400 -o root -g root /tmp/machine-key.json /persist/machine-key.json &&
+  sudo ln -sf /persist/machine-key.json /machine-key.json &&
+  rm /tmp/machine-key.json
+'
+```
+
+### 7d. Kick the secret-fetch pipeline
+
+The `zitadel-mint-jwt` timer fires roughly every 30s, but you can
+force it immediately:
+
+```sh
+sudo systemctl start zitadel-mint-jwt.service &&
+sudo systemctl start vault-agent.service &&
+sudo systemctl start openbao-secrets-ready.service &&
+sudo ls -la /var/lib/openbao-secrets/
+```
+
+Expected: a JWT lands at `/run/openbao/zitadel.jwt`, vault-agent
+authenticates, and the host's declared secrets render under
+`/var/lib/openbao-secrets/` (e.g. `headscale_auth_2026-03-15`,
+`rustdesk_password`, `atuin-key-josh_2026-03-15`).
+
+If something is empty, follow the logs:
+
+```sh
+journalctl -u zitadel-mint-jwt -u vault-agent -u openbao-secrets-ready -f
+```
+
+### 7e. Tailscale / Headscale auto-join
+
+Nothing to do manually. The `secrets-bao` machine-trust bundles
+auto-include the headscale preauth key at:
+
+- `/var/lib/openbao-secrets/headscale_auth_2026-03-15` (high-trust)
+- `/var/lib/openbao-secrets/headscale_auth_lowtrust_2026-03-15` (low-trust)
+
+and wire it into `services.tailscale.authKeyFile`. Once secrets render
+in step 7d, kick the autoconnect:
+
+```sh
+sudo systemctl restart tailscaled-autoconnect.service
+tailscale status
+```
+
+If you're reusing the host name, **remove the stale node from
+headscale first** so the new register doesn't collide:
+
+```sh
+ssh h001 'sudo headscale nodes list' | grep "$HOST"
+ssh h001 'sudo headscale nodes delete --identifier <id>'
+```
+
+### 7f. Trigger anything else that depended on secrets
+
+Services declared with `hardDepend` / `softDepend` in
+`_constants.nix:secrets` retry automatically once
+`openbao-secrets-ready` succeeds. To kick them now:
+
+```sh
+# Atuin login (if ringofstorms.atuin.autologin.enable = true)
+sudo systemctl restart atuin-autologin.service
+atuin sync -f
+
+# RustDesk picks up the password via system.activationScripts on the
+# next switch, so re-run nixos-rebuild switch (or reboot).
+sudo nixos-rebuild switch \
+  --flake "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=hosts/$HOST#$HOST"
+```
 
 ### USB Key for Auto-Unlock (Optional)
 
@@ -360,17 +437,3 @@ filesystem containing a `/key` file can auto-unlock the disk at boot. The USB
 drive can optionally be encrypted with `usbKeyPassword`.
 
 See [usb_key.md](usb_key.md) for full instructions on formatting and setup.
-
-## Summary: Steps for a New Impermanence Host
-
-| # | What | Where | Time |
-|---|------|-------|------|
-| 0 | Build custom ISO, flash to USB | Workstation | 10-20 min |
-| 1 | Boot ISO, SSH in | Target | 2 min |
-| 2a | Disko (single-drive: partition + format) | Target | 1 min |
-| 2b | Manual (multi-drive / custom: partition, format, subvolumes) | Target | 5-10 min |
-| 3 | Mount everything under `/mnt` (verify/fix) | Target | 1 min |
-| 4 | `nixos-generate-config`, copy hardware-config | Target + Workstation | 2 min |
-| 5 | Record UUIDs, update host config, push | Workstation | 3 min |
-| 6 | `nixos-install --flake ...` | Target | 5-15 min |
-| 7 | Reboot, setup machine key for secrets | Target | 2 min |
