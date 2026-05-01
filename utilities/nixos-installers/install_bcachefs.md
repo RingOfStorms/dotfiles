@@ -14,8 +14,6 @@ sudo dd if="$ISO" of="$DEVICE" bs=4M status=progress oflag=sync
 
 - optional encryption
 - optional auto unlock with USB key
-- custom iso installer
-  - `nix build .\#packages.x86_64-linux.iso-minimal-stable`
 
 ## Format main drive with boot, bcachefs, & swap
 
@@ -36,9 +34,10 @@ parted /dev/$DEVICE -- mkpart PRIMARY 5GB 100%
 ### Format partitions
 
 ```sh
-BOOT=sda1
-PRIMARY=sda2
-SWAP=sda3
+BOOT=$DEVICE"p1"
+PRIMARY=$DEVICE"p2"
+SWAP=$DEVICE"p3"
+echo $BOOT $PRIMARY $SWAP
 
 mkfs.fat -F 32 -n BOOT /dev/$BOOT
 
@@ -50,7 +49,6 @@ swapon /dev/$SWAP
 ```
 
 > TIP: Save encryption password in password manager +
-> Copy the External/Internal/Magic number output UUIDS
 
 ### Setup subvolumes
 
@@ -96,7 +94,6 @@ nixos-generate-config --root /mnt
 
 - Copy useful bits out into real config in repo (primarily swap/kernel modules)
 - Decide on SWAP, USB key unlock, impermanence
-  - Use i001 as an example install with this setup
 - Run nixos-install (with one of the commands below)
 
 ```sh

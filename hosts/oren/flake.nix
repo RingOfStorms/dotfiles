@@ -64,9 +64,9 @@
                 # TODO: fill in after fresh bcachefs install. Capture from
                 # `lsblk -o name,uuid` after partitioning per
                 # utilities/nixos-installers/install_bcachefs.md.
-                boot = "/dev/disk/by-uuid/4705-A942";
-                primary = "/dev/disk/by-uuid/7ec365a0-a859-450b-af17-ecae217610d6";
-                swap = "/dev/disk/by-uuid/e1d9fbb4-476a-484f-9486-6a9744b45c42";
+                boot = "/dev/disk/by-uuid/1902-AB03";
+                primary = "/dev/disk/by-uuid/19d6c8c3-7438-42a9-b0d1-bbd95ce040d6";
+                swap = "/dev/disk/by-uuid/4936a8d2-94a5-4de8-8fec-e2872d1fb39a";
               };
               encrypted = true;
             };
@@ -173,19 +173,15 @@
                 # Browsers
                 google-chrome
                 firefox
-                ladybird
 
                 # Media
                 vlc
 
-                # Native desktop apps (replacing flatpaks for reliability:
-                # broken portal/pipewire/screen-share interactions, slow
-                # updates, sandbox quirks).
-                signal-desktop
-                vesktop
-                bitwarden-desktop
-                spotify
-                element-desktop
+                # signal-desktop
+                # vesktop
+                # bitwarden-desktop
+                # spotify
+                # element-desktop
               ];
 
               services.devmon.enable = true;
