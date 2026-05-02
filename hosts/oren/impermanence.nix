@@ -41,7 +41,12 @@ in
     directories = shared.system.directories ++ [ ];
     files = shared.system.files ++ [ ];
     users."${primaryUser}" = {
-      directories = shared.user.directories ++ [ ];
+      directories = shared.user.directories ++ [
+        # Secondary Chrome profile for the work account (Tempus). Spawned
+        # by the `chrome` wrapper in ~/projects/flake_wrappers/tempus_wrapper
+        # via `--user-data-dir=$HOME/.config/google-chrome-tempus`.
+        ".config/google-chrome-tempus"
+      ];
       files = shared.user.files ++ [ ];
     };
   };
