@@ -19,7 +19,6 @@ let
       openbao
       pipewire
       timezone_cache
-      flatpak
       atuin
       zoxide
       tmux
@@ -28,6 +27,7 @@ let
       nvim_ros
       de_plasma
       chrome
+      bitwarden
       steam
       jellyfin_media_player
     ]

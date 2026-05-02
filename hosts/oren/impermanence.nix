@@ -27,6 +27,10 @@ let
       nvim_ros
       de_plasma
       chrome
+      firefox
+      bitwarden
+      mva
+      nono
     ]
   );
 in

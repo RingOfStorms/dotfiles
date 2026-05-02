@@ -213,11 +213,11 @@
       },
       "locked": {
         "dir": "flakes/impermanence",
-        "lastModified": 1777321161,
-        "narHash": "sha256-Q5exM0aeIA7OqWRgtjfqghB7pRqvJeTHA/5rJoY1sKs=",
+        "lastModified": 1777678586,
+        "narHash": "sha256-N5bZQPnPfspqbBMNSrFuYI+qrovS5ByofWsz5+kdebY=",
         "ref": "refs/heads/master",
-        "rev": "eb55f67ebef4cca37f7088dbab8a67e3bd24fd30",
-        "revCount": 1624,
+        "rev": "0a79da23d9a3507d33aeb5bdfc773194a4a0bd5e",
+        "revCount": 1666,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },

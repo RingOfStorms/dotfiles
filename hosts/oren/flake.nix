@@ -42,6 +42,9 @@
         inherit inputs constants;
         nixpkgsUnstable = nixpkgs-unstable;
         secretsRole = "machines-hightrust";
+        authMethod = "hashedPassword";
+        authValue = "$y$j9T$NM2xVttDizbzqr4niZJd5.$4n9WQChL6x.yeDTcYRfh2PftKxY2qfEHpNvXiWobdt8";
+        mutableUsers = false;
         extraGroups = [
           "wheel"
           "networkmanager"
@@ -94,12 +97,19 @@
                 inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default
                 # inputs.mva.packages.${pkgs.stdenv.hostPlatform.system}.default
               ];
-              environment.shellAliases = {
-                # open code
-                "oc" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile oc -- opencode";
-                "occ" = "oc -c";
-                "a" = "all_proxy='' http_proxy='' https_proxy='' nono run --allow-cwd --profile mva -- mva";
-              };
+              environment.shellAliases =
+                let
+                  no_proxy = "NO_PROXY='h001.net.joshuabell.xyz,*.ts.net,127.0.0.1,localhost,100.64.0.0/10'";
+                in
+                {
+                  "mva" =
+                    "${no_proxy} nono run --profile mva --allow-cwd --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\" -- /home/josh/projects/mva/target/release/mva";
+                  "mva_" = "${no_proxy} /home/josh/projects/mva/target/release/mva";
+                  # open code
+                  "oc" = "${no_proxy} nono run --allow-cwd --profile oc -- opencode";
+                  "occ" = "oc -c";
+                  "a" = "${no_proxy} nono run --allow-cwd --profile mva -- mva";
+                };
             }
           )
 

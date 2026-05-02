@@ -150,7 +150,7 @@
                     "${no_proxy} nono run --allow-cwd --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\" --profile oc -- opencode";
                   "occ" = "oc -c";
                   # claude code
-                  "cc" = "${no_proxy}  nono run --allow-cwd --profile cc -- claude";
+                  "cc" = "${no_proxy} nono run --allow-cwd --profile cc -- claude";
                   # cursor
                   "cur" = "${no_proxy} nono run --allow-cwd --profile cc -- cursor";
                   # zed

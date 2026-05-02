@@ -12,8 +12,6 @@
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # de_plasma.url = "path:../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
-    # flatpaks.url = "path:../../flakes/flatpaks";
-    flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     # secrets-bao.url = "path:../../flakes/secrets-bao";
     secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
 
@@ -76,7 +74,6 @@
 
           inputs.ros_neovim.nixosModules.default
           ({ ringofstorms-nvim.includeAllRuntimeDependencies = true; })
-          inputs.flatpaks.nixosModules.default
 
           inputs.common.nixosModules.essentials
           inputs.common.nixosModules.git
@@ -119,11 +116,12 @@
           # Host-specific config
           ({ pkgs, ... }: {
             environment.systemPackages = with pkgs; [
-              vlc google-chrome jellyfin-media-player ffmpeg-full
-            ];
-            services.flatpak.packages = [
-              "com.spotify.Client"
-              "com.bitwarden.desktop"
+              vlc
+              google-chrome
+              jellyfin-media-player
+              ffmpeg-full
+              spotify
+              bitwarden-desktop
             ];
           })
         ];

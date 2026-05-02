@@ -56,26 +56,6 @@
         "type": "github"
       }
     },
-    "flatpaks": {
-      "inputs": {
-        "nix-flatpak": "nix-flatpak"
-      },
-      "locked": {
-        "dir": "flakes/flatpaks",
-        "lastModified": 1777648108,
-        "narHash": "sha256-V2ILVjPl59PaWaPgKMJ6FliLVxujlVPuikoUnZpayMM=",
-        "ref": "refs/heads/master",
-        "rev": "9fb02d5d5f48cf6f70eafad735e3645e2653d717",
-        "revCount": 1659,
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      },
-      "original": {
-        "dir": "flakes/flatpaks",
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      }
-    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -165,11 +145,11 @@
       },
       "locked": {
         "dir": "flakes/impermanence",
-        "lastModified": 1777648108,
-        "narHash": "sha256-V2ILVjPl59PaWaPgKMJ6FliLVxujlVPuikoUnZpayMM=",
+        "lastModified": 1777678586,
+        "narHash": "sha256-N5bZQPnPfspqbBMNSrFuYI+qrovS5ByofWsz5+kdebY=",
         "ref": "refs/heads/master",
-        "rev": "9fb02d5d5f48cf6f70eafad735e3645e2653d717",
-        "revCount": 1659,
+        "rev": "0a79da23d9a3507d33aeb5bdfc773194a4a0bd5e",
+        "revCount": 1666,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -177,22 +157,6 @@
         "dir": "flakes/impermanence",
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      }
-    },
-    "nix-flatpak": {
-      "locked": {
-        "lastModified": 1767983141,
-        "narHash": "sha256-7ZCulYUD9RmJIDULTRkGLSW1faMpDlPKcbWJLYHoXcs=",
-        "owner": "gmodena",
-        "repo": "nix-flatpak",
-        "rev": "440818969ac2cbd77bfe025e884d0aa528991374",
-        "type": "github"
-      },
-      "original": {
-        "owner": "gmodena",
-        "ref": "latest",
-        "repo": "nix-flatpak",
-        "type": "github"
       }
     },
     "nixos-hardware": {
@@ -925,7 +889,6 @@
       "inputs": {
         "common": "common",
         "de_plasma": "de_plasma",
-        "flatpaks": "flatpaks",
         "home-manager": "home-manager_2",
         "impermanence_mod": "impermanence_mod",
         "nixos-hardware": "nixos-hardware",
