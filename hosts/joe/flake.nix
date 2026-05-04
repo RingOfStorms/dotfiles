@@ -21,8 +21,6 @@
     # beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
     # de_plasma.url = "path:../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
-    # flatpaks.url = "path:../../flakes/flatpaks";
-    flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     # secrets-bao.url = "path:../../flakes/secrets-bao";
     secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
     # impermanence_mod.url = "path:../../flakes/impermanence";
@@ -57,7 +55,6 @@
           inputs.common.homeManagerModules.kitty
           inputs.common.homeManagerModules.foot
           inputs.common.homeManagerModules.launcher_rofi
-          inputs.common.homeManagerModules.slicer
           # Autostart Steam minimized to tray on login
           (
             { ... }:
@@ -133,8 +130,6 @@
           #   };
           # })
 
-          inputs.flatpaks.nixosModules.default
-
           ./configuration.nix
           ./hardware-configuration.nix
           ./nixld.nix
@@ -153,9 +148,12 @@
           # per-host krdp_password secret on top of the shared
           # machines-low-trust policy. secretsRole stays
           # "machines-lowtrust" for mkAutoSecrets compatibility.
-          ({ lib, ... }: {
-            ringofstorms.secretsBao.openBaoRole = lib.mkForce "host-joe";
-          })
+          (
+            { lib, ... }:
+            {
+              ringofstorms.secretsBao.openBaoRole = lib.mkForce "host-joe";
+            }
+          )
 
           # Host-specific config
           (
@@ -191,19 +189,11 @@
                 qdirstat
                 vlc
                 jellyfin-media-player
-                ffmpeg-full
                 ttyd
                 steam-run
-                prismlauncher-wayland # Open-source Minecraft launcher (Wayland-native LWJGL/GLFW)
-                # Native (non-flatpak) Vesktop. The flatpak build had broken
-                # screen sharing on NVIDIA -- the picker would freeze after
-                # the first attempt due to portal/pipewire sandboxing issues.
-                # Native binary uses host xdg-desktop-portal-kde directly.
+                prismlauncher-wayland
                 vesktop
-              ];
-              services.flatpak.packages = [
-                "com.spotify.Client"
-                "com.bitwarden.desktop"
+                bitwarden-desktop
               ];
             }
           )
