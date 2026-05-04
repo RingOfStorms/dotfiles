@@ -92,6 +92,7 @@ rec {
     };
     gp3 = {
       user = "luser";
+      overlayIp = "100.64.0.15";
       lanIp = "10.12.14.144";
       trust = "low";
     };
