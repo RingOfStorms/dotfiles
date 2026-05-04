@@ -80,10 +80,15 @@ in
       Type = "oneshot";
       RemainAfterExit = true;
       ExecStart = pkgs.writeShellScript "grd-configure" ''
-        set -euo pipefail
+        # NOTE: deliberately NOT using `set -e` — every grdctl call
+        # spits "RDP server certificate is invalid" + exits nonzero on
+        # startup whenever the *previous* settings don't have a valid
+        # cert path yet, even when the subcommand itself succeeds in
+        # writing the new setting. We treat each call as best-effort
+        # and verify the end state with `grdctl status` at the end.
+        set -uo pipefail
 
         # ── 1. Ensure TLS cert/key exist ─────────────────────────────
-        # grdctl refuses to do anything if the cert is missing/invalid.
         ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname ${lib.escapeShellArg certPath})"
         if [ ! -s ${lib.escapeShellArg certPath} ] || [ ! -s ${lib.escapeShellArg certKeyPath} ]; then
           echo "grd-configure: generating self-signed TLS pair" >&2
@@ -96,39 +101,47 @@ in
           ${pkgs.coreutils}/bin/chmod 600 ${lib.escapeShellArg certKeyPath}
         fi
 
-        # ── 2. Ensure the default gnome-keyring exists and is unlocked.
-        # On autologin hosts PAM has no password to hand to
-        # gnome-keyring-daemon, so the default keyring stays locked
-        # forever and grdctl set-credentials hangs. Create/unlock it
-        # with an empty password — fine for a fully-trusted, autologin,
-        # tailnet-only box like gp3. NOT for boxes with real users.
-        if [ ! -f "$HOME/.local/share/keyrings/login.keyring" ]; then
-          echo "grd-configure: creating empty-password login keyring" >&2
-          ${pkgs.coreutils}/bin/mkdir -p "$HOME/.local/share/keyrings"
-          # gnome-keyring-daemon will create the keyring on first
-          # unlock attempt with whatever password we pipe in (empty).
-          printf "" | ${pkgs.gnome-keyring}/bin/gnome-keyring-daemon \
-            --unlock --components=secrets > /dev/null 2>&1 || true
-        fi
+        # We do NOT run gnome-keyring-daemon ourselves — SDDM's PAM
+        # stack already starts `gnome-keyring-daemon --daemonize --login`
+        # for us and registers org.freedesktop.secrets on the user bus.
+        # If that's missing, set-credentials will fail and we'll see it
+        # in the final status check.
 
-        # ── 3. Tell grdctl about the cert (must come BEFORE other
-        #       grdctl calls — it errors out at startup otherwise).
-        ${pkgs.gnome-remote-desktop}/bin/grdctl rdp set-tls-cert ${lib.escapeShellArg certPath}
-        ${pkgs.gnome-remote-desktop}/bin/grdctl rdp set-tls-key  ${lib.escapeShellArg certKeyPath}
+        GRD=${pkgs.gnome-remote-desktop}/bin/grdctl
 
-        # ── 4. Apply credentials from openbao ────────────────────────
+        # ── 2. Tell grdctl about the cert ─────────────────────────────
+        # These two calls return nonzero the first time (cert isnt yet
+        # the configured one), but the WRITE succeeds. After this, all
+        # subsequent grdctl calls stop spitting the cert error.
+        "$GRD" rdp set-tls-cert ${lib.escapeShellArg certPath} || true
+        "$GRD" rdp set-tls-key  ${lib.escapeShellArg certKeyPath} || true
+
+        # ── 3. Apply credentials from openbao ────────────────────────
         PW="$(${pkgs.coreutils}/bin/cat ${lib.escapeShellArg passwordFile})"
-        ${pkgs.gnome-remote-desktop}/bin/grdctl rdp set-credentials ${lib.escapeShellArg user} "$PW"
+        "$GRD" rdp set-credentials ${lib.escapeShellArg user} "$PW" || true
 
-        # ── 5. Port + behaviour ──────────────────────────────────────
-        ${pkgs.gnome-remote-desktop}/bin/grdctl rdp set-port ${toString c.port}
-        ${pkgs.gnome-remote-desktop}/bin/grdctl rdp disable-view-only
-        ${pkgs.gnome-remote-desktop}/bin/grdctl rdp enable
+        # ── 4. Port + behaviour ──────────────────────────────────────
+        "$GRD" rdp set-port ${toString c.port} || true
+        "$GRD" rdp disable-view-only || true
+        "$GRD" rdp enable || true
 
-        # ── 6. (Re)start the daemon so the new settings take effect.
-        # gnome-remote-desktop.service is socket+dbus activated; if it
-        # was already running with stale settings, force a reload.
+        # ── 5. (Re)start the daemon so the new settings take effect.
         ${pkgs.systemd}/bin/systemctl --user try-restart gnome-remote-desktop.service || true
+
+        # ── 6. Verify end state and fail loudly if anything is off. ──
+        # Status output is the same format we read manually with `grdctl
+        # status`. Username and Password lines should NOT say "(empty)".
+        echo "grd-configure: final status:" >&2
+        "$GRD" status >&2 || true
+
+        if "$GRD" status 2>/dev/null | grep -qE "^\s*Status:\s*disabled"; then
+          echo "grd-configure: ERROR: RDP backend is disabled after configure" >&2
+          exit 1
+        fi
+        if "$GRD" status 2>/dev/null | grep -qE "^\s*Username:\s*\(empty\)"; then
+          echo "grd-configure: ERROR: credentials did not take" >&2
+          exit 1
+        fi
       '';
     };
   };
