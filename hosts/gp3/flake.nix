@@ -105,7 +105,7 @@
           })
           ./configuration.nix
           ./battery-manager.nix
-          ./krdp.nix
+          ./grd.nix
 
           # Override vault-agent role to host-gp3 so it gets the per-host
           # policy (host-gp3) on top of the shared machines-low-trust policy.

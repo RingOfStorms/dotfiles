@@ -38,13 +38,22 @@ in
     enable = true;
     hideMounts = true;
     directories = shared.system.directories ++ [
-      # KRDP self-signed TLS cert + key for the RDP server (regenerated
-      # if missing, but persisting avoids RDP client re-trust prompts).
-      "/var/lib/krdp"
+      # gnome-remote-desktop daemon state — TLS cert/key, paired
+      # device list. Regenerated if missing, but persisting avoids
+      # RDP client re-trust prompts.
+      "/var/lib/gnome-remote-desktop"
     ];
     files = shared.system.files ++ [ ];
     users."${primaryUser}" = {
-      directories = shared.user.directories ++ [ ];
+      directories = shared.user.directories ++ [
+        # gnome-remote-desktop user-level config: TLS cert/key,
+        # credentials store, paired-clients list. grdctl writes here
+        # (the grd-configure user unit on every boot, but persisting
+        # avoids regenerating the cert each reboot which would force
+        # RDP clients to re-trust on every reboot).
+        ".config/gnome-remote-desktop"
+        ".local/share/gnome-remote-desktop"
+      ];
       files = shared.user.files ++ [ ];
     };
   };
