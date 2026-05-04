@@ -53,6 +53,12 @@ in
         # RDP clients to re-trust on every reboot).
         ".config/gnome-remote-desktop"
         ".local/share/gnome-remote-desktop"
+
+        # gnome-keyring storage. GRD writes the RDP password here
+        # via libsecret. Without persistence, the keyring would be
+        # recreated empty every boot and grdctl would have to write
+        # the password back from openbao on every login.
+        ".local/share/keyrings"
       ];
       files = shared.user.files ++ [ ];
     };
