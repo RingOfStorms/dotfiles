@@ -192,6 +192,8 @@ let
 
     # ── per-host: gp3 ─────────────────────────────────────────────────
     "machines/by-host/gp3/hass_token" = {};
+    # KRDP server password for gp3's primary user (luser).
+    "machines/by-host/gp3/krdp_password" = {};
 
     # ── per-host: joe ─────────────────────────────────────────────────
     # KRDP server password for the host's primary user. Single password,

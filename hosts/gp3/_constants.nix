@@ -19,13 +19,27 @@
     checkIntervalMin = 5;
   };
 
-  services = { };
+  services = {
+    krdp = {
+      port = 3389;
+    };
+  };
 
   # ── Per-host secrets (merged with mkAutoSecrets in fleet.mkHost) ────
   secrets = {
     "hass_token" = {
       kvPath = "kv/data/machines/by-host/gp3/hass_token";
       softDepend = [ "battery-manager" ];
+    };
+
+    # Password for the KRDP user systemd unit. The same value should
+    # also live at machines/high-trust/guacamole_gp3_krdp_2026-05-04
+    # (rendered on h001) so Guacamole can connect.
+    "krdp_password" = {
+      kvPath = "kv/data/machines/by-host/gp3/krdp_password";
+      owner = "luser";
+      group = "users";
+      softDepend = [ "krdpserver" ];
     };
   };
 }

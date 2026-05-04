@@ -37,7 +37,11 @@ in
   environment.persistence."/persist" = {
     enable = true;
     hideMounts = true;
-    directories = shared.system.directories ++ [ ];
+    directories = shared.system.directories ++ [
+      # KRDP self-signed TLS cert + key for the RDP server (regenerated
+      # if missing, but persisting avoids RDP client re-trust prompts).
+      "/var/lib/krdp"
+    ];
     files = shared.system.files ++ [ ];
     users."${primaryUser}" = {
       directories = shared.user.directories ++ [ ];
