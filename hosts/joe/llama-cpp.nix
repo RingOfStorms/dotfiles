@@ -1,4 +1,5 @@
 {
+  inputs,
   constants,
   pkgs,
   lib,
@@ -6,17 +7,31 @@
 }:
 let
   c = constants.services.llama-cpp;
+
+  # Pinned llama-cpp from a frozen nixpkgs (see hosts/joe/flake.nix input).
+  # We import the pinned nixpkgs as its own pkgs set with cudaSupport=true so
+  # the resulting llama-cpp derivation hash exactly matches the one already
+  # in /nix/store on joe, avoiding a multi-hour from-source CUDA rebuild
+  # (which has been crashing the machine). Bumping
+  # inputs.llama-cpp-nixpkgs is what triggers a rebuild -- nothing else does.
+  pkgsLlamaCpp = import inputs.llama-cpp-nixpkgs {
+    inherit (pkgs.stdenv.hostPlatform) system;
+    config = {
+      allowUnfree = true;
+      cudaSupport = true;
+    };
+  };
 in
 {
-  # Enable CUDA globally on this host so pkgs.llama-cpp (and its deps) match
-  # the derivation hashes published by https://cuda-maintainers.cachix.org,
-  # avoiding multi-hour from-source rebuilds. A per-package `.override` here
-  # produces a different drv hash than the cache and forces a local build.
+  # Enable CUDA globally on this host so any other package that wants CUDA
+  # picks it up. The llama-cpp package itself comes from the pinned pkgs
+  # set above, NOT from this host's rolling pkgs, so this flag does not
+  # affect llama-cpp's drv hash.
   nixpkgs.config.cudaSupport = true;
 
   services.llama-cpp = {
     enable = true;
-    package = pkgs.llama-cpp;
+    package = pkgsLlamaCpp.llama-cpp;
     host = "0.0.0.0";
     port = c.port;
 

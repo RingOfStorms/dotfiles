@@ -179,6 +179,22 @@
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       }
     },
+    "llama-cpp-nixpkgs": {
+      "locked": {
+        "lastModified": 1777268161,
+        "narHash": "sha256-bxrdOn8SCOv8tN4JbTF/TXq7kjo9ag4M+C8yzzIRYbE=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "1c3fe55ad329cbcb28471bb30f05c9827f724c76",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "1c3fe55ad329cbcb28471bb30f05c9827f724c76",
+        "type": "github"
+      }
+    },
     "nix-flatpak": {
       "locked": {
         "lastModified": 1767983141,
@@ -877,6 +893,7 @@
         "flatpaks": "flatpaks",
         "home-manager": "home-manager_2",
         "impermanence_mod": "impermanence_mod",
+        "llama-cpp-nixpkgs": "llama-cpp-nixpkgs",
         "nixpkgs": "nixpkgs_5",
         "ros_neovim": "ros_neovim",
         "secrets-bao": "secrets-bao"
