@@ -159,7 +159,7 @@ in
       template = ''
         {{- with secret "kv/data/machines/high-trust/guacamole_joe_krdp_2026-05-01" -}}
         <user-mapping>
-          <authorize username="admin@joshuabell.xyz" password="header-auth-bypass">
+          <authorize username="abc@joshuabell.xyz" password="header-auth-bypass">
             <connection name="joe (RDP)">
               <protocol>rdp</protocol>
               <param name="hostname">100.64.0.12</param>
@@ -193,9 +193,11 @@ in
   # provides the actual proxyPass — both attrsets target the same
   # vhost name and nginx merges them.
   services.oauth2-proxy.nginx.virtualHosts."${guacDomain}" = {
-    # No group restriction yet; SSO login alone is sufficient. Tighten
-    # later with `allowed_groups = [ "remote-desktop" ];` once that
-    # group exists in Zitadel.
+    # Edge-level gating: only Zitadel users with the `remote-desktop`
+    # project role can pass oauth2-proxy. Maps to flatRolesClaim per
+    # the OIDC client config in mods/oauth2-proxy.nix. Users without
+    # this role get a 403 at nginx — they never reach Guacamole.
+    allowed_groups = [ "remote-desktop" ];
   };
 
   services.nginx.virtualHosts."${guacDomain}" = {
