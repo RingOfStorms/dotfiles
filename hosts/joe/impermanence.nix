@@ -49,9 +49,11 @@ in
       # Stable Diffusion Forge workspace, models, generated images.
       "/var/lib/forge"
 
-      # KRDP self-signed TLS cert + key for the RDP server (regenerated
-      # if missing, but persisting avoids RDP client re-trust prompts).
-      "/var/lib/krdp"
+      # xrdp self-signed TLS cert + key. Regenerated if missing, but
+      # persisting avoids RDP client re-trust prompts on every reboot.
+      # (xrdp's RSA keys live under /run/xrdp and regenerate on each
+      # boot — that's fine, only used for the RDP-protocol legacy crypto.)
+      "/var/lib/xrdp"
     ];
     files = shared.system.files ++ [ ];
     users."${primaryUser}" = {

@@ -21,21 +21,22 @@
     homepage = {
       port = 8082;
     };
-    krdp = {
+    # xrdp — RDP server (fresh-session model, X11). Authenticates via
+    # PAM against the user's system password; no openbao password
+    # needed for the RDP server itself.
+    xrdp = {
       port = 3389;
     };
   };
 
   # ── Per-host secrets (merged with mkAutoSecrets in fleet.mkHost) ────
-  secrets = {
-    # Password for the KRDP user systemd unit. The same value should
-    # also live at machines/high-trust/guacamole_joe_krdp_2026-05-01
-    # (rendered on h001) so Guacamole can connect.
-    "krdp_password" = {
-      kvPath = "kv/data/machines/by-host/joe/krdp_password";
-      owner = "josh";
-      group = "users";
-      softDepend = [ "krdpserver" ]; # noop for user units, but harmless
-    };
-  };
+  # xrdp authenticates via PAM against the user's system password,
+  # so no openbao secret is needed for the RDP server.
+  #
+  # NOTE: When Guacamole connects to joe via RDP, it'll need the user's
+  # actual system password, which it will get from the Guacamole
+  # connection config on h001 (machines/high-trust/guacamole_joe_*).
+  # That secret should be set to josh's plaintext system password so
+  # the Guacamole connection succeeds via PAM.
+  secrets = { };
 }
