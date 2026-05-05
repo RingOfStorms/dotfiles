@@ -39,6 +39,27 @@ let
   certPath = "/var/lib/krdp/krdp.crt";
   certKeyPath = "/var/lib/krdp/krdp.key";
 
+  # ── Why this overlay exists ─────────────────────────────────────
+  #
+  # KRDP itself doesn't encode video — it delegates to KPipeWire,
+  # which links libavcodec. The default nixpkgs `pkgs.ffmpeg` is the
+  # "small" variant which builds with VAAPI but WITHOUT openh264 and
+  # WITHOUT x264. So on hosts where VAAPI hardware encode isn't
+  # available (e.g. NVIDIA proprietary), KRDP negotiates H.264 with
+  # the client, then silently fails to encode any frames, leaving the
+  # client on a black screen until it times out.
+  #
+  # The fix is to rebuild KPipeWire against ffmpeg-full, which has
+  # openh264 (software fallback) plus x264 plus NVENC if withUnfree
+  # is set (joe is allowUnfree=true via nixpkgs.config).
+  #
+  # We use `pkgs.kdePackages.kpipewire.override` to swap the ffmpeg
+  # input. Everything that depends on kpipewire (krdp, kwin
+  # screencast, etc.) automatically picks this up because we apply
+  # the change as a nixpkgs overlay.
+  ffmpegForKpipewire = pkgs.ffmpeg-full;
+
+
   # Wrapper that reads the password file at startup and execs krdpserver
   # with -u/-p. Doing this in a wrapper (instead of baking the path into
   # ExecStart and letting systemd interpolate) keeps the password off
@@ -75,6 +96,24 @@ let
   '';
 in
 {
+  # ── Overlay: rebuild kpipewire against ffmpeg-full ──────────────
+  # See the comment on ffmpegForKpipewire above for the why. This
+  # rebuilds kpipewire from source (~5–10 min on first deploy), and
+  # implicitly rebuilds anything that links it (krdp, krfb, plasma-
+  # workspace, etc.). Subsequent deploys hit the binary cache or
+  # local store.
+  nixpkgs.overlays = [
+    (final: prev: {
+      kdePackages = prev.kdePackages.overrideScope (
+        kdeFinal: kdePrev: {
+          kpipewire = kdePrev.kpipewire.override {
+            ffmpeg = ffmpegForKpipewire;
+          };
+        }
+      );
+    })
+  ];
+
   # KRDP is already pulled in by Plasma 6's optional packages — but be
   # explicit so we own the dependency and don't silently break if upstream
   # drops it from the default set.
