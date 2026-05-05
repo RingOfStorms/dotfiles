@@ -191,13 +191,6 @@ let
 
     # ── per-host: gp3 ─────────────────────────────────────────────────
     "machines/by-host/gp3/hass_token" = {};
-    # KRDP server password for gp3's primary user (luser).
-    "machines/by-host/gp3/krdp_password" = {};
-
-    # Note: Guacamole connections are now SSH-only and use the
-    # fleet-wide nix2nix_2026-03-15 ed25519 key for auth, so there
-    # are no per-connection password secrets here. See
-    # hosts/h001/mods/guacamole.nix for the user-mapping template.
   };
 
   # Normalize: fill in default fields where not specified

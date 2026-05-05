@@ -21,6 +21,5 @@
     # ./vault.nix
     ./puzzles.nix
     ./etebase.nix
-    ./guacamole.nix
   ];
 }

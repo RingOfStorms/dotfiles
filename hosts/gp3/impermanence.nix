@@ -37,29 +37,10 @@ in
   environment.persistence."/persist" = {
     enable = true;
     hideMounts = true;
-    directories = shared.system.directories ++ [
-      # gnome-remote-desktop daemon state — TLS cert/key, paired
-      # device list. Regenerated if missing, but persisting avoids
-      # RDP client re-trust prompts.
-      "/var/lib/gnome-remote-desktop"
-    ];
+    directories = shared.system.directories ++ [ ];
     files = shared.system.files ++ [ ];
     users."${primaryUser}" = {
-      directories = shared.user.directories ++ [
-        # gnome-remote-desktop user-level config: TLS cert/key,
-        # credentials store, paired-clients list. grdctl writes here
-        # (the grd-configure user unit on every boot, but persisting
-        # avoids regenerating the cert each reboot which would force
-        # RDP clients to re-trust on every reboot).
-        ".config/gnome-remote-desktop"
-        ".local/share/gnome-remote-desktop"
-
-        # gnome-keyring storage. GRD writes the RDP password here
-        # via libsecret. Without persistence, the keyring would be
-        # recreated empty every boot and grdctl would have to write
-        # the password back from openbao on every login.
-        ".local/share/keyrings"
-      ];
+      directories = shared.user.directories ++ [ ];
       files = shared.user.files ++ [ ];
     };
   };
