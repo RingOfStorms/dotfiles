@@ -138,7 +138,6 @@
           ./forge.nix
           ./homepage-dashboard.nix
           ./nginx.nix
-          ./xrdp.nix
           (import ./impermanence.nix {
             inherit primaryUser;
             impermanence_mod = inputs.impermanence_mod;

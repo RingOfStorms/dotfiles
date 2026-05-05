@@ -194,16 +194,10 @@ let
     # KRDP server password for gp3's primary user (luser).
     "machines/by-host/gp3/krdp_password" = {};
 
-    # ── h001 service: guacamole ───────────────────────────────────────
-    # Per-connection RDP/SSH passwords that Guacamole hands to guacd when
-    # opening connections. Stored under high-trust because h001 (the
-    # gateway) is high-trust; the actual credentials match passwords on
-    # the target hosts.
-    #
-    # joe uses xrdp with PAM auth against josh's system password.
-    # Set this secret to josh's plaintext system password so Guacamole
-    # can authenticate to xrdp on joe via the user-mapping.xml template.
-    "machines/high-trust/guacamole_joe_krdp_2026-05-01" = {};
+    # Note: Guacamole connections are now SSH-only and use the
+    # fleet-wide nix2nix_2026-03-15 ed25519 key for auth, so there
+    # are no per-connection password secrets here. See
+    # hosts/h001/mods/guacamole.nix for the user-mapping template.
   };
 
   # Normalize: fill in default fields where not specified

@@ -21,12 +21,7 @@
     homepage = {
       port = 8082;
     };
-    # xrdp — RDP server (fresh-session model, X11). Authenticates via
-    # PAM against the user's system password; no openbao password
-    # needed for the RDP server itself.
-    xrdp = {
-      port = 3389;
-    };
+
   };
 
   # ── Per-host secrets (merged with mkAutoSecrets in fleet.mkHost) ────

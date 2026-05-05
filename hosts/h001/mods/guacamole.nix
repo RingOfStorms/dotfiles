@@ -8,17 +8,24 @@
 #                       │
 #                       │  guacamole protocol (loopback :4822)
 #                       ▼
-#                  guacd (translates RDP/VNC/SSH ↔ HTML5)
+#                  guacd (translates SSH ↔ HTML5)
 #                       │
-#                       │  RDP/SSH over tailscale0
+#                       │  SSH over tailscale0 (or LAN for non-tailnet hosts)
 #                       ▼
-#                  joe (KRDP), other hosts (sshd)
+#                  every host in fleet.hosts (sshd)
 #
 # Auth: oauth2-proxy authenticates against Zitadel and forwards
 #       X-User: <user> to the backend. The guacamole-auth-header
 #       extension reads X-User and trusts it as the authenticated
 #       identity. user-mapping.xml then provides the connection list
 #       for that user.
+#
+# Connections are SSH-only for now. Public-key auth uses the fleet-wide
+# `nix2nix_2026-03-15` ed25519 key, which is already authorized on
+# every host's authorized_keys (set by fleet.mkHost via global.sshPubKey).
+# RDP support has been removed pending a working live-mirroring KRDP
+# build for Plasma — see the prior history of this module if/when we
+# revisit that.
 #
 # Why we override GUACAMOLE_HOME to /var/lib/guacamole instead of using
 # the default /etc/guacamole (which the nixpkgs module manages):
@@ -76,6 +83,72 @@ let
     http-auth-header: X-User
   '';
   guacPropertiesFile = pkgs.writeText "guacamole.properties" guacPropertiesText;
+
+  # ── Zitadel users authorized to use Guacamole ──────────────────
+  # Each entry produces an <authorize username="..."> block. The
+  # `username` MUST match what oauth2-proxy puts into the X-User
+  # header (defaults to the user's email, see services.oauth2-proxy
+  # in mods/oauth2-proxy.nix). Add more users as you grant the
+  # `remote-desktop` Zitadel project role to additional people.
+  authorizedUsers = [
+    "abc@joshuabell.xyz"
+  ];
+
+  # ── Hosts that should appear as SSH connections in Guacamole ───
+  # Pulls from fleet.hosts. We include only deployable hosts —
+  # `t` and `l002` are SSH-config aliases for external accounts
+  # (work box, etc.) where the fleet's nix2nix key isn't authorized
+  # in authorized_keys. Hitting them from Guacamole would just hang
+  # at the SSH key auth step.
+  #
+  # For each remaining host, prefers overlayIp (tailnet) over lanIp
+  # over publicIp — h001 is on the tailnet and trusts that interface,
+  # so reaching hosts via tailscale is both available and cheaper
+  # than going out the LAN gateway.
+  isReachable = h: h ? overlayIp || h ? lanIp || h ? publicIp;
+  pickIp = h:
+    if h ? overlayIp then h.overlayIp
+    else if h ? lanIp then h.lanIp
+    else h.publicIp;
+  sshHosts = lib.filterAttrs
+    (_: h: (h ? user) && isReachable h)
+    fleet.deployableHosts;
+
+  # Render a single <connection> XML element for one host. Uses
+  # the inline `private-key` param so guacd doesn't need filesystem
+  # access to the key — vault-agent templates the key in at render
+  # time. Indented to slot inside an <authorize> block.
+  mkSshConnection = name: h: ''
+            <connection name=${escapeXmlAttr "${name} (${h.user}@${pickIp h})"}>
+              <protocol>ssh</protocol>
+              <param name="hostname">${pickIp h}</param>
+              <param name="port">22</param>
+              <param name="username">${h.user}</param>
+              <param name="private-key">{{ .Data.data.value }}</param>
+              <param name="color-scheme">gray-black</param>
+              <param name="font-size">12</param>
+            </connection>'';
+
+  # Tiny helper to XML-attribute-escape a string. user/IP fields are
+  # under our control so they won't contain quotes or angle brackets,
+  # but it's cheap insurance.
+  escapeXmlAttr = s:
+    "\"" + (lib.replaceStrings [ "&" "<" ">" "\"" ] [ "&amp;" "&lt;" "&gt;" "&quot;" ] s) + "\"";
+
+  # Render one <authorize> block per authorized user. Every authorized
+  # user gets the same connection list — we don't (yet) have a need
+  # for per-user connection ACLs since the Zitadel role check at the
+  # edge already gates access to Guacamole entirely.
+  connectionsBlock = lib.concatStringsSep "\n"
+    (lib.mapAttrsToList mkSshConnection sshHosts);
+
+  mkAuthorizeBlock = email: ''
+          <authorize username=${escapeXmlAttr email} password="header-auth-bypass">
+${connectionsBlock}
+          </authorize>'';
+
+  authorizeBlocks = lib.concatStringsSep "\n"
+    (map mkAuthorizeBlock authorizedUsers);
 in
 {
   assertions = [{
@@ -138,48 +211,42 @@ in
     # next login attempt without a Tomcat restart.
   ];
 
-  # ── Vault-agent template: render user-mapping.xml at runtime ───────
+  # ── Vault-agent template: render user-mapping.xml at runtime ──
   # The placeholder password on <authorize> is bypassed because
   # header-auth provides the authenticated identity before
-  # user-mapping's password check runs. The connection-level password
-  # IS the real RDP credential and is templated in from openbao.
+  # user-mapping's password check runs. The per-connection
+  # `private-key` is templated in from the fleet-wide nix2nix
+  # ed25519 key (already authorized on every host's authorized_keys
+  # via fleet.mkHost + global.sshPubKey).
   #
-  # The `username` attribute must match whatever oauth2-proxy puts into
-  # the X-User header (i.e. whatever maps to X-Auth-Request-User upstream).
-  # With oauth2-proxy defaults, that's the user's *email*. If you change
-  # `--user-id-claim` in services.oauth2-proxy, update the username here
-  # to match.
+  # The `username` attribute on <authorize> must match what
+  # oauth2-proxy puts into the X-User header (defaults to email).
+  # See `authorizedUsers` in the let-binding above.
+  #
+  # The secret name reuses the existing per-host
+  # `nix2nix_2026-03-15` KV path on h001 — no new secret to provision.
   ringofstorms.secretsBao.secrets = {
-    "guacamole_joe_krdp_2026-05-01" = {
+    # Sibling secret that renders the user-mapping.xml file. The
+    # nix2nix_2026-03-15 KV path is also rendered separately by
+    # mkAutoSecrets for the primary user's SSH config — having a
+    # second secretsBao entry that READS the same kvPath but
+    # renders to a different file with different ownership is
+    # exactly what's needed here.
+    guacamole-user-mapping = {
+      kvPath = "kv/data/machines/high-trust/nix2nix_2026-03-15";
       path = "${guacamoleHome}/user-mapping.xml";
       owner = "tomcat";
       group = "tomcat";
       mode = "0640";
       softDepend = [ "tomcat" ];
+      # We use the nix2nix KV path here directly. The inner
+      # {{ .Data.data.value }} substitution is referenced from
+      # mkSshConnection above when building each connection's
+      # <param name="private-key"> element.
       template = ''
-        {{- with secret "kv/data/machines/high-trust/guacamole_joe_krdp_2026-05-01" -}}
+        {{- with secret "kv/data/machines/high-trust/nix2nix_2026-03-15" -}}
         <user-mapping>
-          <authorize username="abc@joshuabell.xyz" password="header-auth-bypass">
-            <connection name="joe (RDP)">
-              <protocol>rdp</protocol>
-              <param name="hostname">100.64.0.12</param>
-              <param name="port">3389</param>
-              <param name="username">josh</param>
-              <param name="password">{{ .Data.data.value }}</param>
-              <param name="security">nla</param>
-              <param name="ignore-cert">true</param>
-              <param name="resize-method">display-update</param>
-              <param name="enable-wallpaper">true</param>
-              <param name="enable-font-smoothing">true</param>
-              <param name="color-depth">24</param>
-            </connection>
-            <connection name="joe (SSH)">
-              <protocol>ssh</protocol>
-              <param name="hostname">100.64.0.12</param>
-              <param name="port">22</param>
-              <param name="username">josh</param>
-            </connection>
-          </authorize>
+${authorizeBlocks}
         </user-mapping>
         {{- end -}}
       '';
