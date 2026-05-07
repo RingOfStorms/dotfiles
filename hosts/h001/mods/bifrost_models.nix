@@ -2,7 +2,7 @@
 # Regenerate with: `nix develop` then `bifrost-models`.
 #
 # Sources:
-#   air models:        http://t.net.joshuabell.xyz:9010/air_prd/models
+#   air models:        http://10.12.14.181:9010/air_prd/models
 #   openrouter models: https://openrouter.ai/api/v1/models (pricing inline)
 #   air pricing:       https://models.dev/api.json (fuzzy-matched)
 #

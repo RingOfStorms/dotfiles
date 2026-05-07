@@ -5,7 +5,8 @@
   imports = [
     ./litellm.nix
     ./litellm-public.nix
-    ./bifrost.nix
+    # Waiting on https://github.com/maximhq/bifrost/pull/2054 to be merged/released (github provider support)
+    # ./bifrost.nix
     ./portkey.nix
     ./nixarr.nix
     ./hardware-transcoding.nix

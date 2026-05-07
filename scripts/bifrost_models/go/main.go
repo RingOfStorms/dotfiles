@@ -417,7 +417,7 @@ func envOr(key, def string) string {
 }
 
 func main() {
-	airBase := flag.String("air-base", envOr("AIR_BASE_URL", "http://100.64.0.8:9010/air_prd"),
+	airBase := flag.String("air-base", envOr("AIR_BASE_URL", "http://10.12.14.181:9010/air_prd"),
 		"upstream LiteLLM base for the `air` provider (env: AIR_BASE_URL)")
 	orBase := flag.String("openrouter-base", envOr("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
 		"OpenRouter API base (env: OPENROUTER_BASE_URL)")

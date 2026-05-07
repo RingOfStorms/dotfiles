@@ -13,7 +13,7 @@
 # from https://getbifrost.ai/datasheet, schema-identical to LiteLLM's
 # model_prices_and_context_window.json).
 #
-# Auth: none on UI/API. Tailscale-only exposure is the safety boundary.
+# Auth: none on UI/API. Tailnet/LAN-only exposure is the safety boundary.
 # Smoke-test scope: 1 OpenRouter wildcard provider + 1 upstream-litellm
 # (work air_prd) provider. No Copilot — Bifrost has no Copilot provider
 # (no PR open as of 2026-04). Copilot stays on litellm.
@@ -92,13 +92,12 @@ in
     # Tailnet exposure mirrors litellm.nix.
     networking.firewall.interfaces."tailscale0".allowedTCPPorts = [ c.port ];
 
-    # Wait for tailscale (air_prd reachable via 100.64.0.8) and DNS, same
-    # rationale as litellm.nix.
+    # Wait for DNS / network-online, same rationale as litellm.nix.
+    # (air_prd is now reached via the t machine's LAN IP, no tailscale dep.)
     systemd.services.bifrost = {
       wants = [ "network-online.target" ];
       after = [
         "network-online.target"
-        "tailscaled.service"
       ];
     };
 
@@ -187,7 +186,7 @@ in
           };
 
           # Upstream LiteLLM at work (air_prd) via openai-compatible
-          # custom_provider_config. Reachable on tailnet.
+          # custom_provider_config. Reachable on the LAN (t machine).
           #
           # Slug is `air` (not `air-prd`). The "prd" was stage-leakage
           # from the upstream litellm proxy path — clients address this
@@ -207,7 +206,7 @@ in
               }
             ];
             network_config = {
-              base_url = "http://100.64.0.8:9010/air_prd";
+              base_url = "http://10.12.14.181:9010/air_prd";
               default_request_timeout_in_seconds = 120;
             };
             custom_provider_config = {

@@ -13,8 +13,8 @@
 #  - No GitHub Copilot provider (the `github` provider is GitHub Models
 #    via Azure AI Inference, NOT Copilot).
 #  - SSRF guard blocks non-loopback private-IP custom_host targets in OSS.
-#    Reaching 100.64.0.8 (work air_prd) over tailscale falls outside the
-#    default trusted set; we work around that with TRUSTED_CUSTOM_HOSTS,
+#    Reaching 10.12.14.181 (work air_prd, t machine on LAN) falls outside
+#    the default trusted set; we work around that with TRUSTED_CUSTOM_HOSTS,
 #    which the OSS image does honor at request time (only the documented
 #    enterprise allowlist is gated — env-var trust list works in OSS).
 #
@@ -108,8 +108,8 @@ in
       ];
       environment = {
         FETCH_SETTINGS_FROM_FILE = "true";
-        # Allow custom_host targets on the work tailnet (air_prd litellm).
-        TRUSTED_CUSTOM_HOSTS = "100.64.0.8";
+        # Allow custom_host targets on the LAN (air_prd litellm on t).
+        TRUSTED_CUSTOM_HOSTS = "10.12.14.181";
         # Disables the local /public/ console UI mount. Logs are
         # ephemeral anyway; no analytics value lost.
         NODE_ENV = "production";
@@ -123,7 +123,6 @@ in
       ];
       after = [
         "network-online.target"
-        "tailscaled.service"
         "portkey-conf.service"
       ];
     };

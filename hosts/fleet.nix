@@ -76,6 +76,7 @@ rec {
     };
     juni = {
       user = "josh";
+      overlayIp = "100.64.0.18";
       lanIp = "10.12.14.172";
       trust = "high";
     };
@@ -87,7 +88,7 @@ rec {
     };
     oren = {
       user = "josh";
-      overlayIp = "100.64.0.5";
+      overlayIp = "100.64.0.2";
       trust = "high";
     };
     gp3 = {
@@ -128,6 +129,7 @@ rec {
   # ─── SSH MATCH BLOCK HOSTS ────────────────────────────────────────
   # Used by secrets-bao mkAutoSecrets to wire nix2nix identity.
   # Generates the list of all SSH matchBlock host names (including _ variants).
+  # An `_` variant is emitted for any host with a direct IP (lanIp or publicIp).
   sshMatchBlockHosts =
     let
       hostNames = builtins.attrNames hosts;
@@ -144,11 +146,11 @@ rec {
   #
   # The convention is:
   #   - Hosts with overlayIp: base matchBlock uses MagicDNS (no hostname),
-  #     underscore variant (e.g. "h001_") uses lanIp for direct LAN access.
-  #   - Hosts with ONLY publicIp (no overlayIp, e.g. l001): base matchBlock
-  #     gets hostname set to publicIp, underscore variant also gets publicIp.
-  #   - Hosts with lanIp but no overlayIp (e.g. t): base uses MagicDNS,
-  #     underscore variant uses lanIp.
+  #     underscore variant (e.g. "h001_") uses lanIp (preferred) or publicIp
+  #     for direct access.
+  #   - Hosts WITHOUT overlayIp: both the base matchBlock AND the `_` variant
+  #     get hostname set to the direct IP (lanIp preferred, else publicIp).
+  #     They're aliases — `juni` and `juni_` both resolve to the lanIp.
   mkSshMatchBlocks =
     let
       mkBlock = name: h:
@@ -159,18 +161,20 @@ rec {
           hasPublic = h ? publicIp;
           hasLan = h ? lanIp;
 
-          # For hosts not on tailnet but with a publicIp, set hostname on the main block
-          mainHostname =
-            if !hasOverlay && hasPublic then { hostname = h.publicIp; }
-            else {};
-
-          baseBlock = { inherit user; } // termEnvAttrs // mainHostname;
-
-          # The _ variant uses lanIp (preferred) or publicIp for direct access
+          # Direct IP — lanIp preferred, else publicIp.
           directIp =
             if hasLan then h.lanIp
             else if hasPublic then h.publicIp
             else null;
+
+          # For hosts not on tailnet, put the direct IP on the main block.
+          mainHostname =
+            if !hasOverlay && directIp != null then { hostname = directIp; }
+            else {};
+
+          baseBlock = { inherit user; } // termEnvAttrs // mainHostname;
+
+          # The `_` variant exists whenever a direct IP is available.
           underscoreBlock =
             if directIp != null then {
               "${name}_" = { inherit user; } // termEnvAttrs // { hostname = directIp; };

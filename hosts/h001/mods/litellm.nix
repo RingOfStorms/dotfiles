@@ -22,13 +22,13 @@ in
     # Expose litellm to my overlay network as well
     networking.firewall.interfaces."tailscale0".allowedTCPPorts = [ c.port ];
 
-    # Ensure litellm starts after DNS is available and tailscale is up
-    # (copilot models need to reach github, air/azure models need tailscale network)
+    # Ensure litellm starts after DNS / network-online is up.
+    # (copilot models need to reach github; air/azure models reach the t
+    # machine on the LAN — no overlay dep anymore.)
     systemd.services.litellm = {
       wants = [ "network-online.target" ];
       after = [
         "network-online.target"
-        "tailscaled.service"
       ];
     };
 
@@ -125,14 +125,14 @@ in
             model_name = "air-${m}";
             litellm_params = {
               model = "litellm_proxy/${m}";
-              api_base = "http://100.64.0.8:9010/air_prd";
+              api_base = "http://10.12.14.181:9010/air_prd";
               api_key = "na";
               drop_params = true;
               # TODO try this instead of sanitized name
               # additional_drop_params = if [ "messages[*].cacheControl" ];
             };
           })
-          # curl -L t.net.joshuabell.xyz:9010/air_prd/models | jq '.data.[].id'
+          # curl -L t:9010/air_prd/models | jq '.data.[].id'
           [
             "claude-3.7-sonnet"
             "claude-haiku-4.5"
