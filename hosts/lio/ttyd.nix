@@ -11,9 +11,9 @@ let
   tailnetIp = "100.64.0.1";
   port      = constants.services.ttyd.port;
 
-  mkTtyd = { name, bindIp, extraAfter ? [ ] }: {
+  mkTtyd = { name, bindIp, extraAfter ? [ ], extraWants ? [ ] }: {
     description = "ttyd web terminal (${name}, ${bindIp}:${toString port})";
-    wants    = [ "network-online.target" ];
+    wants    = [ "network-online.target" ] ++ extraWants;
     after    = [ "network-online.target" ] ++ extraAfter;
     wantedBy = [ "multi-user.target" ];
 
@@ -24,6 +24,9 @@ let
       ExecStart = "${lib.getExe pkgs.ttyd} -p ${toString port} -i ${bindIp} -W -c :root ${pkgs.zsh}/bin/zsh -l";
       Restart = "always";
       RestartSec = 5;
+      # Allow binding to addresses not yet on any interface (e.g. tailscale0
+      # still being configured at boot). Harmless for plain LAN binds too.
+      IPFreeBind = true;
     };
   };
 in
@@ -38,7 +41,11 @@ in
     systemd.services.ttyd-tailnet = mkTtyd {
       name       = "tailnet";
       bindIp     = tailnetIp;
-      extraAfter = [ "tailscaled.service" ];
+      # tailscaled-autoconnect.service (Type=notify) only finishes once
+      # `tailscale up` returns and tailscale0 has its address; tailscaled.service
+      # alone races and we hit `bind: cannot assign requested address`.
+      extraAfter = [ "tailscaled-autoconnect.service" ];
+      extraWants = [ "tailscaled-autoconnect.service" ];
     };
 
     # Open port 8080 on LAN and tailscale0 only (not on every interface).

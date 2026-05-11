@@ -12,6 +12,17 @@
         constants.services.minecraft.port # Velocity proxy (player-facing)
       ];
 
+      # nginx below binds on the Tailscale overlay IP -- wait for tailscale to
+      # actually be up. tailscaled-autoconnect.service (Type=notify) only
+      # finishes once `tailscale up` returns and tailscale0 has its address;
+      # tailscaled.service alone races. IPFreeBind=true also lets nginx bind
+      # to addresses not yet on any interface as belt-and-suspenders.
+      systemd.services.nginx = {
+        wants = [ "network-online.target" "tailscaled-autoconnect.service" ];
+        after = [ "network-online.target" "tailscaled-autoconnect.service" ];
+        serviceConfig.IPFreeBind = true;
+      };
+
       # Reverse proxy for squaremap -- l001 terminates HTTPS and proxies
       # to h003 over tailscale. This nginx listens on the overlay IP only.
       services.nginx = {

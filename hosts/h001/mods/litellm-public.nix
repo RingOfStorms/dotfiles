@@ -28,10 +28,14 @@ in
 
     systemd.services.litellm-public = {
       description = "LiteLLM Exposed Proxy (limited model set)";
-      wants = [ "network-online.target" ];
+      # Listens on 0.0.0.0 (no specific address), but it's only reachable via
+      # the firewall rule on tailscale0, so wait for the interface to be fully
+      # up via tailscaled-autoconnect.service (Type=notify) instead of just the
+      # daemon starting.
+      wants = [ "network-online.target" "tailscaled-autoconnect.service" ];
       after = [
         "network-online.target"
-        "tailscaled.service"
+        "tailscaled-autoconnect.service"
       ];
       wantedBy = [ "multi-user.target" ];
 

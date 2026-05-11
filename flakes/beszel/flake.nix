@@ -70,9 +70,16 @@
                 };
               };
 
+              # Agent listens on `[::]` (no specific address), so binding never
+              # fails -- but it talks to the hub over the Tailscale overlay, so
+              # we still want to wait until the device is logged in before we
+              # try the initial connect. `tailscaled-autoconnect.service` is
+              # `Type=notify` and only finishes once `tailscale up` returns,
+              # which is what we actually want here (vs `tailscaled.service`,
+              # which only guarantees the daemon was started).
               systemd.services.beszel-agent = {
-                requires = [ "tailscaled.service" ];
-                after = [ "tailscaled.service" ];
+                wants = [ "tailscaled-autoconnect.service" ];
+                after = [ "tailscaled-autoconnect.service" ];
               };
             };
           };
