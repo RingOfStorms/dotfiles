@@ -69,8 +69,25 @@ in
         ]
         # Copilot
         # Probed with: ./scripts/probe-copilot-models.sh --nix
+        #
+        # Claude / Gemini / Grok models on Copilot Business do NOT support the
+        # /responses endpoint — only /chat/completions. Tagging them with
+        # `mode = "chat"` tells litellm to bridge MVA's /v1/responses requests
+        # down to /chat/completions upstream instead of forwarding 1:1 (which
+        # gets a 400 "unsupported_api_for_model" from githubcopilot).
         ++ (builtins.map
-          (m: {
+          (m: let
+            # responses-only: codex variants and gpt-5.4+
+            isResponsesOnly =
+              (builtins.match ".*codex.*" m != null)
+              || (builtins.match "gpt-5\\.4.*" m != null);
+            # chat-only on Copilot: claude-*, gemini-*, grok-*, embeddings
+            isChatOnly =
+              (builtins.match "claude-.*" m != null)
+              || (builtins.match "gemini-.*" m != null)
+              || (builtins.match "grok-.*" m != null)
+              || (builtins.match "text-embedding-.*" m != null);
+          in {
             model_name = "copilot-${m}";
             litellm_params = {
               model = "github_copilot/${m}";
@@ -82,7 +99,11 @@ in
                 user-agent = "GithubCopilot/${pkgsLitellm.vscode-extensions.github.copilot.version}";
               };
             };
-          })
+          } // (
+            if isResponsesOnly then { model_info.mode = "responses"; }
+            else if isChatOnly then { model_info.mode = "chat"; }
+            else {}
+          ))
           [
             "claude-haiku-4.5"
             "claude-opus-4.5"
