@@ -184,16 +184,6 @@
       webDomain = "pim.joshuabell.xyz";
     };
 
-    youtarr = {
-      externalPort = 3087;
-      internalPort = 3011;
-      dbPort = 3321;
-      uid = 187;
-      gid = 187;
-      dataDir = "/var/lib/youtarr";
-      mediaDir = "/nfs/h002/youtarr/media";
-    };
-
     nixarr = {
       jellyfinPort = 8096;
       jellyseerrPort = 5055;
