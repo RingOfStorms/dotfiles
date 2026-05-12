@@ -138,25 +138,23 @@
               environment.shellAliases =
                 let
                   no_proxy = "NO_PROXY='h001.net.joshuabell.xyz,*.ts.net,127.0.0.1,localhost,100.64.0.0/10'";
+                  nono_base = "nono run --allow-cwd --silent --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\"";
                 in
                 {
-                  "mva" =
-                    "${no_proxy} nono run --profile mva --allow-cwd --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\" -- /home/josh/projects/mva/target/release/mva";
+                  "mva" = "${no_proxy} ${nono_base} --profile mva  -- /home/josh/projects/mva/target/release/mva";
                   "mva_" = "${no_proxy} /home/josh/projects/mva/target/release/mva";
                   # open code
-                  "oc" =
-                    "${no_proxy} nono run --allow-cwd --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\" --profile oc -- opencode";
-                  "oc_" =
-                    "${no_proxy} nono run --allow-cwd --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\" --profile oc -- opencode";
+                  "oc" = "${no_proxy} ${nono_base} --profile oc -- opencode";
+                  "oc_" = "${no_proxy} opencode";
                   "occ" = "oc -c";
                   # claude code
-                  "cc" = "${no_proxy} nono run --allow-cwd --profile cc -- claude";
+                  "cc" = "${no_proxy} ${nono_base} --profile cc -- claude";
                   # cursor
-                  "cur" = "${no_proxy} nono run --allow-cwd --profile cc -- cursor";
+                  "cur" = "${no_proxy} ${nono_base} --profile cc -- cursor";
                   # zed
-                  "zed" = "${no_proxy} nono run --allow-cwd --profile cc -- zeditor";
+                  "zed" = "${no_proxy} ${nono_base} --profile cc -- zeditor";
                   # npm
-                  "npm" = "${no_proxy} nono run --allow-cwd --profile npm -- npm";
+                  "npm" = "${no_proxy} ${nono_base} --profile npm -- npm";
                 };
             }
           )

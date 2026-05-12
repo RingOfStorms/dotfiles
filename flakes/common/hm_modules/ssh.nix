@@ -12,6 +12,7 @@ in
   programs.ssh = {
     enable = true;
     enableDefaultConfig = false;
+    includes = [ "~/.ssh/extra_config" ];
     matchBlocks = {
       "*" = {
         forwardAgent = false;
