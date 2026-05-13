@@ -179,12 +179,30 @@
     };
 
     # Penpot (https://penpot.app) — self-hosted Figma alternative.
-    # Tailscale-only exposure: only the frontend port is bound to the
-    # overlay IP, no nginx vhost, no public domain. The other components
-    # (backend, exporter, mcp, postgres, valkey) talk to each other over
-    # a private podman network and are not exposed on the host.
+    # Tailscale-only exposure: only the frontend + the three penpot-mcp
+    # ports are bound to the overlay IP, no nginx vhost, no public
+    # domain. Backend / exporter / postgres / valkey talk over a private
+    # podman network and are not exposed on the host.
+    #
+    # MCP ports (penpot/penpot-mcp running in --multi-user mode):
+    #   mcpPluginPort    HTTP  — serves manifest.json + plugin assets
+    #                            to the browser tab loading the plugin.
+    #                            (Built from upstream source by a sidecar
+    #                            container; the official mcp image only
+    #                            ships the server, not the plugin.)
+    #   mcpServerPort    HTTP  — MCP transport endpoint your AI client
+    #                            (opencode etc.) connects to.
+    #   mcpWebsocketPort WS    — plugin (in browser) ↔ server channel.
     penpot = {
       port = 8086;
+      mcpPluginPort = 4400;
+      mcpServerPort = 4401;
+      mcpWebsocketPort = 4402;
+      # Pinned commit of penpot/penpot-mcp used to build the plugin.
+      # Repo is archived (project moved into main penpot monorepo), so
+      # this commit is effectively the final state. Bump manually if
+      # upstream re-publishes from the monorepo path.
+      mcpPluginRev = "73e0cd21853dd03103f7ac675042b1277ee0b736";
       dataDir = "/var/lib/penpot";
       domain = null;
     };
