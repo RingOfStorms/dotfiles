@@ -15,6 +15,7 @@ in
     ./matrix.nix
     ./paperless.nix
     ./opengist.nix
+    ./penpot.nix
     ./zitadel.nix
   ];
 

@@ -178,6 +178,17 @@
       domain = "puzzles.joshuabell.xyz";
     };
 
+    # Penpot (https://penpot.app) — self-hosted Figma alternative.
+    # Tailscale-only exposure: only the frontend port is bound to the
+    # overlay IP, no nginx vhost, no public domain. The other components
+    # (backend, exporter, mcp, postgres, valkey) talk to each other over
+    # a private podman network and are not exposed on the host.
+    penpot = {
+      port = 8086;
+      dataDir = "/var/lib/penpot";
+      domain = null;
+    };
+
     etebase = {
       dataDir = "/var/lib/etebase-server";
       domain = "etebase.joshuabell.xyz";
