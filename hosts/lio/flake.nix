@@ -179,7 +179,7 @@
           # ./i3_customizations.nix
           ./vms.nix
           ./nono.nix
-          ./ttyd.nix
+          # ./ttyd.nix  # replaced by SSH (see configuration.nix)
           ./homepage-dashboard.nix
           ./nginx.nix
 
@@ -189,7 +189,6 @@
             {
               environment.systemPackages = with pkgs; [
                 vlang
-                ttyd
                 pavucontrol
                 nfs-utils
                 jellyfin-media-player
