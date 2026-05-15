@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  Decorative "PCB trace" backdrop for the neon snowflake splash.
+
+  Design notes:
+    - One wedge of orthogonal-ish traces and pads is authored once in
+      group #wedge, then <use>'d six times rotated by 60° so the layout
+      matches the snowflake's 6-fold symmetry.
+    - All geometry sits in the outer ~40% of the canvas (radius > 350
+      from center 480,480) so the snowflake — which lives in the inner
+      ~512px circle when centered — is never overdrawn.
+    - Two trace shades:
+        #7A2D08 (deep) for primary traces
+        #A8451A (mid)  for highlight runs and pad rings
+      These are intentionally MUCH dimmer than the snowflake (#C2532A /
+      #FFB347) so the eye locks onto the snowflake as the focal element.
+    - viewBox is 960×960 so coordinates read in nice round numbers; the
+      build pipeline rasterizes this at the same width as the snowflake
+      and composites them concentrically.
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="960" height="960" viewBox="0 0 960 960"
+     version="1.1">
+  <defs>
+    <!-- One wedge: traces + pads in the upper third of the canvas,
+         emanating outward from the centerpiece. Rotated 6× below. -->
+    <g id="wedge" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Primary traces (deep) -->
+      <g stroke="#7A2D08" stroke-width="2.5">
+        <!-- long radial trace going up, with a 90° elbow -->
+        <path d="M 480 360 L 480 180 L 360 180 L 360 80"/>
+        <!-- parallel trace, offset right -->
+        <path d="M 520 360 L 520 220 L 640 220 L 640 120 L 720 120"/>
+        <!-- bus running along the top -->
+        <path d="M 200 100 L 760 100"/>
+        <!-- drop legs from the bus -->
+        <path d="M 240 100 L 240 60"/>
+        <path d="M 320 100 L 320 40"/>
+        <path d="M 480 100 L 480 30"/>
+        <path d="M 560 100 L 560 50"/>
+        <path d="M 680 100 L 680 60"/>
+        <!-- diagonal escape route -->
+        <path d="M 460 380 L 380 300 L 380 200 L 280 200 L 280 140"/>
+      </g>
+      <!-- Highlight traces (mid) -->
+      <g stroke="#A8451A" stroke-width="1.6">
+        <path d="M 500 360 L 500 260 L 600 260 L 600 160"/>
+        <path d="M 440 380 L 440 320 L 340 320 L 340 240"/>
+        <path d="M 220 100 L 220 70 L 180 70"/>
+        <path d="M 740 100 L 740 70 L 780 70"/>
+      </g>
+      <!-- Pads (vias / SMD): outer ring + filled inner dot.
+           Placed at trace endpoints and a few junctions. -->
+      <g fill="#A8451A" stroke="#A8451A" stroke-width="1.2">
+        <circle cx="360"  cy="80"  r="4" fill="#0a0a0c" stroke-width="1.6"/>
+        <circle cx="240"  cy="60"  r="3.5" fill="#0a0a0c" stroke-width="1.4"/>
+        <circle cx="320"  cy="40"  r="3.5" fill="#0a0a0c" stroke-width="1.4"/>
+        <circle cx="480"  cy="30"  r="4.5" fill="#0a0a0c" stroke-width="1.6"/>
+        <circle cx="560"  cy="50"  r="3.5" fill="#0a0a0c" stroke-width="1.4"/>
+        <circle cx="680"  cy="60"  r="3.5" fill="#0a0a0c" stroke-width="1.4"/>
+        <circle cx="720"  cy="120" r="4" fill="#0a0a0c" stroke-width="1.6"/>
+        <circle cx="600"  cy="160" r="4" fill="#0a0a0c" stroke-width="1.6"/>
+        <circle cx="280"  cy="140" r="4" fill="#0a0a0c" stroke-width="1.6"/>
+        <circle cx="340"  cy="240" r="3" fill="#0a0a0c" stroke-width="1.2"/>
+        <!-- tiny solid dots: solder pools / test points -->
+        <circle cx="180"  cy="70"  r="1.6"/>
+        <circle cx="780"  cy="70"  r="1.6"/>
+        <circle cx="220"  cy="100" r="1.4"/>
+        <circle cx="740"  cy="100" r="1.4"/>
+      </g>
+    </g>
+  </defs>
+
+  <!-- Six rotated copies of the wedge, sharing center (480, 480). -->
+  <g>
+    <use href="#wedge" transform="rotate(0   480 480)"/>
+    <use href="#wedge" transform="rotate(60  480 480)"/>
+    <use href="#wedge" transform="rotate(120 480 480)"/>
+    <use href="#wedge" transform="rotate(180 480 480)"/>
+    <use href="#wedge" transform="rotate(240 480 480)"/>
+    <use href="#wedge" transform="rotate(300 480 480)"/>
+  </g>
+</svg>
