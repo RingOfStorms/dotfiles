@@ -24,6 +24,7 @@ let
       tmux
       direnv
       opencode
+      mva
       nvim_ros
       de_plasma
       chrome
