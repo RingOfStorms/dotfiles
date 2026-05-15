@@ -23,28 +23,47 @@ let
   #
   # Pipeline (all at Nix build time; nothing prerendered is committed):
   #
-  #   1. Rasterize three SVGs with resvg:
-  #        - snowflake.svg       → two-tone orange snowflake (final colored fill)
-  #        - snowflake-mask.svg  → white silhouette (tintable mask for glow)
-  #        - circuits.svg        → dim PCB-trace backdrop (6-fold symmetric)
-  #      The snowflake is rendered at ~53% of the canvas width so the
-  #      circuits ring it rather than overlapping it.
+  #   1. Rasterize four SVGs with resvg:
+  #        - snowflake-mask.svg       → full silhouette (used for halo + framing)
+  #        - snowflake-arms-dark.svg  → silhouette of the three "dark" arms only
+  #        - snowflake-arms-light.svg → silhouette of the three "light" arms only
+  #        - circuits.svg             → dim PCB-trace backdrop (6-fold symmetric)
+  #      The snowflake is rendered at ~62% of the canvas width so the
+  #      circuits ring it rather than overlapping it. (Earlier values
+  #      of 53% read as "small object on big canvas"; 62% gives the
+  #      snowflake more presence without crowding the circuits.)
   #
   #   2. Build a static "background" PNG: dark canvas (#0a0a0c) with the
   #      circuits centered on it. This never changes between frames, so
   #      we build it once and reuse.
   #
-  #   3. Build a static "neon" PNG: the snowflake plus its glow stack —
-  #      outer halo (#FF6A00, big blur), mid bloom (#FF8A1F, medium
-  #      blur), the colored two-tone snowflake itself, and a hot
-  #      white-amber core (#FFEAC2, tiny blur). All screen-blended onto
-  #      transparent so the result can be re-blended over the background
-  #      with arbitrary brightness per frame.
+  #   3. Build a static "neon" PNG: per-arm-class gradient tubes plus a
+  #      soft outer halo. The trick is that flat fills + a glow halo
+  #      read as "orange sticker on dark background" rather than as a
+  #      glowing tube — so each arm is recolored by a *distance
+  #      transform* gradient (edge of arm → deeper interior maps to
+  #      darker → brighter orange). Two distinct gradients are used:
+  #          dark arms : #2a0700 → #F24005   (deep, redder)
+  #          light arms: #5a1a02 → #FF8030   (bright, hotter)
+  #      Both endpoints stay strictly in the orange/red hue range — no
+  #      white or pale amber, which would wash to gray-white when
+  #      screen-blended with the halo. The two-tone differentiation
+  #      gives back the alternating-arm structure of the original NixOS
+  #      logo without losing the neon look.
+  #
+  #      Halo is one tinted-blurred copy of the full silhouette,
+  #      screen-blended underneath the tubes. Sigma 12 + 0.40 alpha
+  #      keeps it tight to the snowflake without bleeding into the
+  #      circuits.
   #
   #   4. For each frame:
   #        a. Take the neon layer, multiply its RGB by the frame's
   #           brightness factor `m` (1.0 = on, ≤1.0 = dimmed flicker),
-  #           keeping its alpha channel intact.
+  #           keeping its alpha channel intact. `-channel RGB` scopes
+  #           the multiply to color channels only — multiplying alpha
+  #           too would shrink the snowflake during a flicker (wrong
+  #           perceptual effect for a buzzing tube; we want it to dim
+  #           in place, not shrink).
   #        b. Composite the dimmed neon over the background.
   #        c. Run pngquant for size.
   #
@@ -71,23 +90,21 @@ let
       maxw=$(cat $maxWidthPath)
       nframes=$(cat $frameCountPath)
 
-      # Snowflake takes ~53% of canvas width so the circuits (which
-      # extend nearly to the SVG edge) frame it without overlap.
-      sw=$(( maxw * 53 / 100 ))
+      # Snowflake takes ~62% of canvas width so the circuits (which
+      # extend nearly to the SVG edge) frame it without crowding.
+      sw=$(( maxw * 62 / 100 ))
 
       # ---------- 1. Rasterize SVGs ----------
-      resvg --width "$maxw" ${./assets/circuits.svg}        circuits.png
-      resvg --width "$sw"   ${./assets/snowflake.svg}       snowflake.png
-      resvg --width "$sw"   ${./assets/snowflake-mask.svg}  mask.png
+      resvg --width "$maxw" ${./assets/circuits.svg}             circuits.png
+      resvg --width "$sw"   ${./assets/snowflake-mask.svg}       mask.png
+      resvg --width "$sw"   ${./assets/snowflake-arms-dark.svg}  arms-dark.png
+      resvg --width "$sw"   ${./assets/snowflake-arms-light.svg} arms-light.png
 
-      # Pad snowflake + mask up to maxw×maxw on transparent background,
-      # centered, so all layers share dimensions for clean compositing.
-      magick snowflake.png \
-        -background none -gravity center -extent "''${maxw}x''${maxw}" \
-        snowflake-c.png
-      magick mask.png \
-        -background none -gravity center -extent "''${maxw}x''${maxw}" \
-        mask-c.png
+      # Pad to maxw×maxw on transparent background, centered, so every
+      # layer shares dimensions for clean compositing.
+      magick mask.png       -background none -gravity center -extent "''${maxw}x''${maxw}" mask-c.png
+      magick arms-dark.png  -background none -gravity center -extent "''${maxw}x''${maxw}" dark-c.png
+      magick arms-light.png -background none -gravity center -extent "''${maxw}x''${maxw}" light-c.png
 
       # ---------- 2. Background (dark canvas + circuits) ----------
       # `-compose over` is the default but we name it explicitly because
@@ -97,32 +114,55 @@ let
         background.png
 
       # ---------- 3. Neon stack ----------
-      # Helper: tinted-blurred copy of the mask.
-      #   $1 = output file, $2 = blur (sigma), $3 = color, $4 = opacity (0..1)
-      # `+level-colors black,COLOR` remaps black→black, white→COLOR,
-      # preserving the soft alpha edge from the blur. Then we scale
-      # alpha by $4 via `-channel A -evaluate Multiply`.
-      tint_blur() {
-        local out="$1" blur="$2" color="$3" opacity="$4"
-        magick mask-c.png \
-          -filter Gaussian -blur "0x''${blur}" \
-          +level-colors "black,''${color}" \
-          -channel A -evaluate Multiply "$opacity" +channel \
+      # Two-tone gradient tubes + a single soft halo. See the long
+      # comment at the top of this file for the why.
+
+      # Helper: build a colored tube layer from one arm-class silhouette.
+      #   $1 = input mask png, $2 = output png,
+      #   $3 = edge color (deep), $4 = inner color (bright)
+      # Steps:
+      #   - distance transform inside the silhouette → grayscale where
+      #     deeper interior = brighter
+      #   - colorize via gradient CLUT (must promote distance to sRGB
+      #     first, otherwise CLUT collapses to grayscale)
+      #   - reattach the original binary mask as alpha so the tube is
+      #     fully opaque inside the silhouette and the *color* varies
+      #     by depth (NOT the alpha — varying alpha would let the dark
+      #     background bleed through and the snowflake would look
+      #     hollow/translucent rather than glowing)
+      make_tube() {
+        local in="$1" out="$2" cedge="$3" cinner="$4"
+        magick "$in" -alpha extract \
+          -morphology Distance Euclidean:4 \
+          -auto-level dist.png
+        magick -size 1x256 "gradient:''${cedge}-''${cinner}" -colorspace sRGB grad.png
+        magick dist.png -colorspace sRGB grad.png -clut tube-rgb.png
+        magick "$in" -alpha extract mask-a.png
+        magick tube-rgb.png mask-a.png \
+          -compose CopyOpacity -composite \
+          -define png:color-type=6 \
           "$out"
       }
 
-      tint_blur halo.png  30 '#FF6A00' 0.85
-      tint_blur bloom.png 10 '#FF8A1F' 0.95
-      tint_blur core.png   2 '#FFEAC2' 1.00
+      # Dark arms: deeper, redder gradient (#f24005 family)
+      make_tube dark-c.png  tube-dark.png  '#2a0700' '#F24005'
+      # Light arms: brighter, hotter gradient
+      make_tube light-c.png tube-light.png '#5a1a02' '#FF8030'
 
-      # Stack: halo → bloom → colored snowflake → core, all screen-blended
-      # onto a transparent canvas so the result is a self-contained
-      # "neon layer" with proper alpha for re-blending later.
+      # Halo: tight outer aura, kept off the circuits.
+      magick mask-c.png \
+        -filter Gaussian -blur 0x12 \
+        +level-colors "black,#FF5A00" \
+        -channel A -evaluate Multiply 0.40 +channel \
+        halo.png
+
+      # Stack: halo → dark tubes → light tubes. Light goes on top
+      # because at the central hex (where dark and light arms meet)
+      # we want the brighter color to win.
       magick -size "''${maxw}x''${maxw}" canvas:none \
         halo.png       -compose screen -composite \
-        bloom.png      -compose screen -composite \
-        snowflake-c.png -compose over   -composite \
-        core.png       -compose screen -composite \
+        tube-dark.png  -compose over   -composite \
+        tube-light.png -compose over   -composite \
         neon.png
 
       # ---------- 4. Generate per-frame brightness schedule ----------

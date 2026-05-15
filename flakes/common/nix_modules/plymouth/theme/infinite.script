@@ -5,8 +5,6 @@
 //     The frames are a flickering neon-orange Nix snowflake on a dark
 //     PCB-trace backdrop, generated procedurally at Nix build time
 //     from SVG sources (see plymouth/default.nix).
-//   - Renders "NIXOS" / "BOOTING..." titles and a real progress bar
-//     driven by Plymouth's SetBootProgressFunction.
 //   - Renders a password prompt when systemd-ask-password forwards one
 //     (used by the bcachefs unlock at boot).
 //   - Renders systemd status messages near the bottom.
@@ -96,85 +94,6 @@ fun refresh_callback() {
 }
 Plymouth.SetRefreshFunction(refresh_callback);
 
-// ---------- Title / subtitle / progress bar ----------
-// "NIXOS" and "BOOTING..." render once (they don't change), positioned
-// just below the snowflake animation. The progress bar redraws on each
-// boot-progress callback. All three sit in the lower-third so the
-// snowflake stays the visual focus.
-//
-// Plymouth's Image.Text() can't pick a font size — it just rasterizes
-// at the system default. To fake a large title we render once and
-// scale up via Sprite.SetImage(image.Scale(w, h)). Scaled bitmap text
-// looks chunky but matches the boot aesthetic, and we don't depend on
-// an embedded TTF.
-//
-// Color = pale amber (matches the snowflake's hot-core highlight).
-title.image = Image.Text("NIXOS", 1.0, 0.72, 0.20);
-title.scaled = title.image.Scale(
-    title.image.GetWidth()  * 3,
-    title.image.GetHeight() * 3
-);
-title.sprite = Sprite(title.scaled);
-// Position: snowflake is centered, ~maxWidth tall. We don't know
-// maxWidth here — Plymouth scales the frame PNG to fit screen height
-// preserving aspect, and the frame is square. So the snowflake's
-// bottom edge is at roughly screen.h * 0.5 + screen.h * 0.5 = screen.h
-// when the frame is full-height. We pull the title up into the lower
-// quarter so it overlays the lower band of the snowflake's halo
-// rather than falling off-screen on short displays.
-title.sprite.SetX(screen.half.w - title.scaled.GetWidth() / 2);
-title.sprite.SetY(screen.h * 0.74);
-
-subtitle.image = Image.Text("BOOTING...", 0.85, 0.55, 0.15);
-subtitle.scaled = subtitle.image.Scale(
-    subtitle.image.GetWidth()  * 2,
-    subtitle.image.GetHeight() * 2
-);
-subtitle.sprite = Sprite(subtitle.scaled);
-subtitle.sprite.SetX(screen.half.w - subtitle.scaled.GetWidth() / 2);
-subtitle.sprite.SetY(screen.h * 0.74 + title.scaled.GetHeight() + 8);
-
-// Progress bar: thin orange rectangle that fills left→right as
-// SetBootProgressFunction fires. We build two sprites — a dim outline
-// the full width, and a bright fill we resize each tick.
-progress.bar.w   = screen.w / 3;
-progress.bar.h   = 8;
-progress.bar.x   = screen.half.w - progress.bar.w / 2;
-progress.bar.y   = screen.h * 0.86;
-
-// Outline (dim). Image.Text isn't usable for rectangles; instead we
-// build a 1×1 colored image and scale it. Cheap and works on every
-// Plymouth renderer.
-progress.outline.px     = Image.Text(" ", 0.4, 0.18, 0.05).Scale(progress.bar.w, progress.bar.h);
-progress.outline.sprite = Sprite(progress.outline.px);
-progress.outline.sprite.SetX(progress.bar.x);
-progress.outline.sprite.SetY(progress.bar.y);
-
-// Fill (bright). Starts at width 0; we recreate the scaled image on
-// each progress tick rather than scaling a sprite (Plymouth scales
-// images, not sprites).
-progress.fill.base   = Image.Text(" ", 1.0, 0.55, 0.10);
-progress.fill.sprite = Sprite();
-progress.fill.sprite.SetX(progress.bar.x);
-progress.fill.sprite.SetY(progress.bar.y);
-
-last_progress = -1;
-fun boot_progress_callback(duration, fraction) {
-    // Quantize to 1% steps so we don't redraw 50 times/sec for sub-pixel
-    // changes. Plymouth fires this very frequently during boot.
-    pct = Math.Int(fraction * 100);
-    if (pct == last_progress) return;
-    last_progress = pct;
-
-    // Width 0 would crash Plymouth's image scaler on some versions
-    // (it tries to allocate a 0×h image). Clamp to ≥1.
-    fw = Math.Int(progress.bar.w * fraction);
-    if (fw < 1) fw = 1;
-
-    progress.fill.sprite.SetImage(progress.fill.base.Scale(fw, progress.bar.h));
-}
-Plymouth.SetBootProgressFunction(boot_progress_callback);
-
 // ---------- Password prompt ----------
 // systemd-ask-password forwards prompts here when the bcachefs unlock
 // (or any other initrd password agent) calls systemd-ask-password.
@@ -242,9 +161,5 @@ fun quit_callback() {
     bullets = null;
     message = null;
     status = null;
-    title.sprite = null;
-    subtitle.sprite = null;
-    progress.outline.sprite = null;
-    progress.fill.sprite = null;
 }
 Plymouth.SetQuitFunction(quit_callback);
