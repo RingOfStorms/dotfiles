@@ -8,9 +8,9 @@
 # - /etc/machine-id: stable machine id across boots
 # - /etc/adjtime: hwclock drift correction
 #
-# User: ssh keys, gpg keyring, the projects scratch dir, and the
-# nixos-config checkout itself (you really don't want to re-clone
-# this on every boot).
+# User: ssh keys, gpg keyring, the projects + other scratch dirs,
+# and the nixos-config checkout itself (you really don't want to
+# re-clone this on every boot).
 {
   system = {
     directories = [
@@ -31,6 +31,7 @@
       ".ssh"
       ".gnupg"
       "projects"
+      "other"
       ".config/nixos-config"
     ];
     files = [ ];

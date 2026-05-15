@@ -97,32 +97,51 @@ let
         background.png
 
       # ---------- 3. Neon stack ----------
-      # Helper: tinted-blurred copy of the mask.
-      #   $1 = output file, $2 = blur (sigma), $3 = color, $4 = opacity (0..1)
-      # `+level-colors black,COLOR` remaps black→black, white→COLOR,
-      # preserving the soft alpha edge from the blur. Then we scale
-      # alpha by $4 via `-channel A -evaluate Multiply`.
-      tint_blur() {
-        local out="$1" blur="$2" color="$3" opacity="$4"
-        magick mask-c.png \
-          -filter Gaussian -blur "0x''${blur}" \
-          +level-colors "black,''${color}" \
-          -channel A -evaluate Multiply "$opacity" +channel \
-          "$out"
-      }
+      # Tuned for "lit shape on dark canvas, not orange wash". The
+      # earlier sigmas (30/10/2) at 1080×1080 produced a glow ~5% of
+      # the canvas in every direction, swallowing the snowflake and
+      # the circuits in a tan haze. These sigmas keep the glow tight
+      # to the snowflake's outline while still reading as "neon".
+      #
+      # Three layers, all derived from the white silhouette mask:
+      #   halo  : medium blur, deep orange — the soft outer aura
+      #   bloom : tight blur, brighter orange — the close-in glow
+      #   edge  : a 1–2 px highlight along the snowflake outline only,
+      #           giving the appearance of a hot neon tube. We compute
+      #           it as (mask - eroded(mask)) so it's a ring, not a
+      #           fill — fill highlights make the whole snowflake look
+      #           uniformly washed out (the v1 problem).
 
-      tint_blur halo.png  30 '#FF6A00' 0.85
-      tint_blur bloom.png 10 '#FF8A1F' 0.95
-      tint_blur core.png   2 '#FFEAC2' 1.00
+      # Halo
+      magick mask-c.png \
+        -filter Gaussian -blur 0x12 \
+        +level-colors "black,#FF4500" \
+        -channel A -evaluate Multiply 0.65 +channel \
+        halo.png
 
-      # Stack: halo → bloom → colored snowflake → core, all screen-blended
-      # onto a transparent canvas so the result is a self-contained
-      # "neon layer" with proper alpha for re-blending later.
+      # Bloom
+      magick mask-c.png \
+        -filter Gaussian -blur 0x4 \
+        +level-colors "black,#FF8800" \
+        -channel A -evaluate Multiply 0.90 +channel \
+        bloom.png
+
+      # Hot tube edge (mask minus eroded mask = 1–2 px ring along outline)
+      magick mask-c.png \
+        \( +clone -morphology Erode Disk:2 \) \
+        -compose Minus -composite \
+        -filter Gaussian -blur 0x1.2 \
+        +level-colors "black,#FFD088" \
+        edge.png
+
+      # Stack: halo → bloom → colored snowflake → hot edge.
+      # All screen-blended onto a transparent canvas so the result is a
+      # self-contained "neon layer" with proper alpha for re-blending.
       magick -size "''${maxw}x''${maxw}" canvas:none \
-        halo.png       -compose screen -composite \
-        bloom.png      -compose screen -composite \
+        halo.png        -compose screen -composite \
+        bloom.png       -compose screen -composite \
         snowflake-c.png -compose over   -composite \
-        core.png       -compose screen -composite \
+        edge.png        -compose screen -composite \
         neon.png
 
       # ---------- 4. Generate per-frame brightness schedule ----------
