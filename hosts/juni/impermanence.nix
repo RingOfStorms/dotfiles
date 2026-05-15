@@ -25,6 +25,7 @@ let
       direnv
       opencode
       mva
+      nono
       nvim_ros
       de_plasma
       chrome
