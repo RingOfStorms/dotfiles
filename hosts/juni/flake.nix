@@ -24,8 +24,11 @@
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
 
     opencode.url = "github:anomalyco/opencode/88582566bf2bfd2d26000f0c25735bf48ddeca00";
-    nono.url = "github:always-further/nono";
+    nono.url = "github:always-further/nono/6b00932fe80a52b65f3718bb900878287640cc31";
     nono.flake = false;
+    # Used to pin a newer rustc than what nixpkgs ships (needed by nono).
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };

@@ -29,6 +29,9 @@
     opencode.url = "github:anomalyco/opencode/88582566bf2bfd2d26000f0c25735bf48ddeca00";
     nono.url = "github:always-further/nono";
     nono.flake = false;
+    # Used to pin a newer rustc than what nixpkgs ships (needed by nono).
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =

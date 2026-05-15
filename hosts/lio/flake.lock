@@ -1105,6 +1105,7 @@
         "ports": "ports",
         "qvm": "qvm",
         "ros_neovim": "ros_neovim",
+        "rust-overlay": "rust-overlay_2",
         "secrets-bao": "secrets-bao",
         "stt_ime": "stt_ime"
       }
@@ -1176,6 +1177,26 @@
         "owner": "oxalica",
         "repo": "rust-overlay",
         "rev": "669151bbc7f2416b622af2f48e9136e2c9da5530",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "rust-overlay_2": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1778815121,
+        "narHash": "sha256-xlhD+1NVJbhrUUM2usRHW6iKWTXP2uw2Fo6sWJmLg8g=",
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "017351829a9356423afd2cca0dde9b63346c8ab3",
         "type": "github"
       },
       "original": {
