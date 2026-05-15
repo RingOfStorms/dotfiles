@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  NixOS snowflake, two-tone orange.
+  Geometry from font-os (Junaid Qadir B), originally MIT-licensed,
+  itself derived from the official NixOS logo. Reduced from 7 paths
+  to 6 (upstream had a duplicate of the upper-left arm) and recolored
+  for the neon pipeline:
+
+    arm-dark : #C2532A   — analog of font-os #5277c3
+    arm-light: #FFB347   — analog of font-os #7ebae4
+
+  The neon glow stack in plymouth/default.nix composites blurred
+  copies of this SVG (rasterized at runtime) on top of itself; the
+  two-tone shows through where the bloom doesn't fully wash it out,
+  giving subtle "darker arm / lighter arm" structure under the glow.
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="512" height="512" viewBox="0 0 512 512"
+     version="1.1">
+  <g transform="matrix(1.25,0,0,-1.25,0,512)">
+    <g transform="matrix(1.0205226,0,0,1.0205226,0,27.171437)">
+      <!-- Three "dark" arms -->
+      <path fill="#C2532A"
+            d="m 122.453,169.761 97.758,-169.34 -44.926,-0.422 -26.101,45.496 -26.286,-45.25 -22.32,0.008 -11.433,19.75 37.449,64.394 -26.582,46.258 22.441,39.106 z"/>
+      <path fill="#C2532A"
+            d="m 236,244.386 -195.535,0.011 22.101,39.118 52.45,-0.149 -26.047,45.391 11.168,19.328 22.82,0.023 L 160,283.483 213.352,283.374 236,244.386 Z"/>
+      <path fill="#C2532A"
+            d="m 243.625,108.636 97.777,169.328 22.825,-38.696 -26.348,-45.351 52.332,-0.137 11.152,-19.336 -11.39,-19.777 -74.489,0.238 -26.769,-46.152 -45.09,-0.117 z"/>
+      <!-- Three "light" arms -->
+      <path fill="#FFB347"
+            d="M 157.738,239.515 59.961,70.183 37.133,108.882 63.484,154.229 11.152,154.366 0,173.702 l 11.391,19.777 74.488,-0.234 26.769,46.152 45.09,0.118 z"/>
+      <path fill="#FFB347"
+            d="M 165.238,104.155 360.77,104.143 338.672,65.026 286.223,65.171 312.27,19.784 301.102,0.456 278.277,0.429 l -37.039,64.629 -53.355,0.109 -22.645,38.988 z"/>
+      <path fill="#FFB347"
+            d="m 279.043,178.35 -97.758,169.34 44.926,0.422 26.101,-45.496 26.286,45.254 22.32,-0.008 11.434,-19.754 -37.45,-64.39 26.582,-46.262 -22.441,-39.106 z"/>
+    </g>
+  </g>
+</svg>
