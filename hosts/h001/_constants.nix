@@ -107,12 +107,6 @@
       domain = null; # No public domain, accessed via Tailscale
     };
 
-    litellmPublic = {
-      port = 8095;
-      dataDir = "/var/lib/litellm-public";
-      domain = "llm.joshuabell.xyz";
-    };
-
     # LLM gateway bake-off: alternate gateways running alongside litellm
     # for testing. Tailscale-only exposure, same as litellm.
     bifrost = {

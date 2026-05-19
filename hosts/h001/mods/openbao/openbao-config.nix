@@ -183,7 +183,6 @@ let
 
     # ── high-trust: per-host service secrets ──────────────────────────
     "machines/high-trust/atuin-key-josh_2026-03-15"         = { fields = { user = "TODO:replace_me"; password = "TODO:replace_me"; value = "TODO:replace_me"; }; };
-    "machines/high-trust/litellm_public_api_key_2026-03-15" = {};
     "machines/high-trust/vaultwarden_env_2026-03-15"        = {};
 
     # ── low-trust (gp3, joe, i001) ────────────────────────────────────

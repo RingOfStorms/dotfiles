@@ -8,10 +8,6 @@ let
   c = constants;
   domain = fleet.global.domain;
   upstream = c.upstreamHost;
-  baoSecrets = config.ringofstorms.secretsBao.secrets or {};
-  apiKeyFile = if baoSecrets ? "litellm_public_api_key_2026-03-15"
-    then baoSecrets."litellm_public_api_key_2026-03-15".path
-    else "/dev/null";
 in
 {
   # JUST A TEST TODO remove
@@ -35,15 +31,13 @@ in
   };
 
   # nginx proxies to tailscale overlay IPs and binds on overlayIp.
-  # vault-agent renders the litellm API key snippet that nginx includes;
-  # without it nginx refuses to start (file is root-only placeholder).
   # tailscaled-autoconnect.service (Type=notify) only finishes once `tailscale up`
   # has returned and tailscale0 has its address; tailscaled.service alone is just
   # the daemon being started and races nginx's bind. IPFreeBind=true also lets
   # nginx bind to addresses not yet on any interface as belt-and-suspenders.
   systemd.services.nginx = {
-    wants = [ "network-online.target" "tailscaled-autoconnect.service" "vault-agent.service" ];
-    after = [ "network-online.target" "tailscaled-autoconnect.service" "vault-agent.service" ];
+    wants = [ "network-online.target" "tailscaled-autoconnect.service" ];
+    after = [ "network-online.target" "tailscaled-autoconnect.service" ];
     serviceConfig.IPFreeBind = true;
   };
 
@@ -277,22 +271,6 @@ in
             '';
           };
         };
-        "llm.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          extraConfig = ''
-            access_log /var/log/nginx/llm.access.log noauth;
-          '';
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://${upstream}:8095";
-            extraConfig = ''
-              # API key auth - secret file contains: if ($http_authorization != "Bearer sk-xxx") { return 401; }
-              include ${apiKeyFile};
-            '';
-          };
-        };
-
         # Matrix homeserver — proxy to h001's host nginx which handles
         # container forwarding. Needs .well-known endpoints for client
         # discovery and large body size for media uploads.
@@ -366,24 +344,7 @@ in
       maxtime = "168h";
       factor = "4";
     };
-    jails = {
-      nginx-llm-auth.settings = {
-        enabled = true;
-        filter = "nginx-llm-auth";
-        backend = "polling";
-        logpath = "/var/log/nginx/llm.access.log";
-        maxretry = 5;
-        findtime = "10m";
-        bantime = "1h";
-      };
-    };
   };
-
-  environment.etc."fail2ban/filter.d/nginx-llm-auth.conf".text = ''
-    [Definition]
-    failregex = ^<HOST> .* "(GET|POST|PUT|DELETE|PATCH|OPTIONS) .* HTTP/[0-9.]+" 401
-    ignoreregex =
-  '';
 
   # NOTE Oracle also has security rules that must expose these ports so this alone will not work! See readme
   networking.firewall.allowedTCPPorts = [

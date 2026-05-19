@@ -91,13 +91,15 @@ in
             model_name = "copilot-${m}";
             litellm_params = {
               model = "github_copilot/${m}";
-              extra_headers = {
-                editor-version = "vscode/${pkgsLitellm.vscode.version}";
-                editor-plugin-version = "copilot/${pkgsLitellm.vscode-extensions.github.copilot.version}";
-                Copilot-Integration-Id = "vscode-chat";
-                Copilot-Vision-Request = "true";
-                user-agent = "GithubCopilot/${pkgsLitellm.vscode-extensions.github.copilot.version}";
-              };
+              # NB: do NOT set extra_headers here. Recent litellm
+              # (get_copilot_default_headers + GithubCopilotResponsesAPIConfig)
+              # already injects copilot-integration-id, editor-version,
+              # editor-plugin-version, user-agent, x-github-api-version, etc.
+              # Adding our own with different casing (Copilot-Integration-Id vs
+              # copilot-integration-id) causes httpx to emit BOTH header
+              # lines, which GitHub concatenates and rejects as
+              # "unknown Copilot-Integration-Id". Copilot-Vision-Request and
+              # X-Initiator are also computed per-request automatically.
             };
           } // (
             if isResponsesOnly then { model_info.mode = "responses"; }
