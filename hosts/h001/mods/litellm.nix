@@ -214,6 +214,14 @@ in
               api_base = "http://100.64.0.12:11434/v1";
               api_key = "na";
             };
+            # llama.cpp / llama-server only speaks /v1/chat/completions.
+            # Without this, litellm forwards MVA's /v1/responses calls 1:1
+            # upstream and the local server rejects them with a schema
+            # validation error (e.g. "'type' must be one of 'output_text'
+            # or 'refusal'"). `mode = "chat"` makes litellm bridge
+            # /responses → /chat/completions, same as the Copilot
+            # claude-/gemini-/grok- block above.
+            model_info.mode = "chat";
           })
           [
             "qwen3.6-35b-a3b"
