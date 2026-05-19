@@ -45,6 +45,7 @@ in
       directories = shared.user.directories ++ [
         # Secondary Chrome profile for the work account (Tempus).
         ".config/google-chrome-tempus"
+        ".config/google-chrome-tempus-np"
 
         # Hugging Face hub cache (used by hf-hub for whisper.cpp etc.).
         ".cache/huggingface"
