@@ -106,10 +106,18 @@ let
       magick arms-dark.png  -background none -gravity center -extent "''${maxw}x''${maxw}" dark-c.png
       magick arms-light.png -background none -gravity center -extent "''${maxw}x''${maxw}" light-c.png
 
-      # ---------- 2. Background (dark canvas + circuits) ----------
-      # `-compose over` is the default but we name it explicitly because
-      # the rest of the pipeline switches between operators.
-      magick -size "''${maxw}x''${maxw}" canvas:'#0a0a0c' \
+      # ---------- 2. Background (transparent + circuits) ----------
+      # Frames are transparent outside the lit areas. The Plymouth
+      # script paints the window true black (0,0,0), and Plymouth
+      # itself paints true black behind the frame on the rest of the
+      # screen — using a transparent frame canvas instead of a
+      # near-black one (#0a0a0c) avoids the visible darker-than-true-
+      # black square around the snowflake that appears on real
+      # displays at low brightness.
+      #
+      # `-compose over` is the default but we name it explicitly
+      # because the rest of the pipeline switches between operators.
+      magick -size "''${maxw}x''${maxw}" canvas:none \
         circuits.png -gravity center -compose over -composite \
         background.png
 
@@ -150,10 +158,23 @@ let
       make_tube light-c.png tube-light.png '#5a1a02' '#FF8030'
 
       # Halo: tight outer aura, kept off the circuits.
-      magick mask-c.png \
+      # NOTE: don't use `+level-colors` here — it resets the alpha
+      # channel to fully opaque (transparent areas become solid black
+      # at the chosen color), which then leaks through every subsequent
+      # screen-compose and lifts the corner alpha of every frame above
+      # zero. That made the splash render as a slightly-lighter-than-
+      # true-black square around the snowflake on real displays.
+      #
+      # Instead: blur the mask alpha, multiply down to the desired
+      # opacity, and attach it to a solid-color image.
+      magick mask-c.png -alpha extract \
         -filter Gaussian -blur 0x12 \
-        +level-colors "black,#FF5A00" \
-        -channel A -evaluate Multiply 0.40 +channel \
+        -evaluate Multiply 0.40 \
+        halo-alpha.png
+      magick -size "''${maxw}x''${maxw}" canvas:'#FF5A00' \
+        halo-alpha.png \
+        -compose CopyOpacity -composite \
+        -define png:color-type=6 \
         halo.png
 
       # Stack: halo → dark tubes → light tubes. Light goes on top

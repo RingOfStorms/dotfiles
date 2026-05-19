@@ -52,16 +52,16 @@
       <!-- Pads (vias / SMD): outer ring + filled inner dot.
            Placed at trace endpoints and a few junctions. -->
       <g fill="#A8451A" stroke="#A8451A" stroke-width="1.2">
-        <circle cx="360"  cy="80"  r="4" fill="#0a0a0c" stroke-width="1.6"/>
-        <circle cx="240"  cy="60"  r="3.5" fill="#0a0a0c" stroke-width="1.4"/>
-        <circle cx="320"  cy="40"  r="3.5" fill="#0a0a0c" stroke-width="1.4"/>
-        <circle cx="480"  cy="30"  r="4.5" fill="#0a0a0c" stroke-width="1.6"/>
-        <circle cx="560"  cy="50"  r="3.5" fill="#0a0a0c" stroke-width="1.4"/>
-        <circle cx="680"  cy="60"  r="3.5" fill="#0a0a0c" stroke-width="1.4"/>
-        <circle cx="720"  cy="120" r="4" fill="#0a0a0c" stroke-width="1.6"/>
-        <circle cx="600"  cy="160" r="4" fill="#0a0a0c" stroke-width="1.6"/>
-        <circle cx="280"  cy="140" r="4" fill="#0a0a0c" stroke-width="1.6"/>
-        <circle cx="340"  cy="240" r="3" fill="#0a0a0c" stroke-width="1.2"/>
+        <circle cx="360"  cy="80"  r="4" fill="none" stroke-width="1.6"/>
+        <circle cx="240"  cy="60"  r="3.5" fill="none" stroke-width="1.4"/>
+        <circle cx="320"  cy="40"  r="3.5" fill="none" stroke-width="1.4"/>
+        <circle cx="480"  cy="30"  r="4.5" fill="none" stroke-width="1.6"/>
+        <circle cx="560"  cy="50"  r="3.5" fill="none" stroke-width="1.4"/>
+        <circle cx="680"  cy="60"  r="3.5" fill="none" stroke-width="1.4"/>
+        <circle cx="720"  cy="120" r="4" fill="none" stroke-width="1.6"/>
+        <circle cx="600"  cy="160" r="4" fill="none" stroke-width="1.6"/>
+        <circle cx="280"  cy="140" r="4" fill="none" stroke-width="1.6"/>
+        <circle cx="340"  cy="240" r="3" fill="none" stroke-width="1.2"/>
         <!-- tiny solid dots: solder pools / test points -->
         <circle cx="180"  cy="70"  r="1.6"/>
         <circle cx="780"  cy="70"  r="1.6"/>
