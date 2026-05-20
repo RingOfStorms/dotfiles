@@ -37,10 +37,15 @@
       # but we still overwrite to make casual recovery harder.
       echo "enc: securely removing $src" >&2
       if [ -d "$src" ]; then
+        # Many files (e.g. git pack/object files) are mode 0444 and shred
+        # needs to open them for writing. Grant owner write on the whole
+        # tree first so shred can do its job.
+        chmod -R u+w -- "$src" 2>/dev/null || true
         ${pkgs.findutils}/bin/find "$src" -type f -print0 \
           | xargs -0 -r ${pkgs.coreutils}/bin/shred -u -n 3 -z
         rm -rf -- "$src"
       else
+        chmod u+w -- "$src" 2>/dev/null || true
         ${pkgs.coreutils}/bin/shred -u -n 3 -z -- "$src"
       fi
       echo "enc: removed $src" >&2
