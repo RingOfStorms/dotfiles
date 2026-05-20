@@ -102,10 +102,12 @@ in
         # gets a 400 "unsupported_api_for_model" from githubcopilot).
         ++ (builtins.map
           (m: let
-            # responses-only: codex variants and gpt-5.4+
+            # responses-only: codex variants and gpt-5.4+ (incl. 5.5, 5.6, …).
+            # GitHub Copilot rejects /chat/completions for these with
+            # "unsupported_api_for_model"; they only speak /responses.
             isResponsesOnly =
               (builtins.match ".*codex.*" m != null)
-              || (builtins.match "gpt-5\\.4.*" m != null);
+              || (builtins.match "gpt-5\\.[4-9].*" m != null);
             # chat-only on Copilot: claude-*, gemini-*, grok-*, embeddings
             isChatOnly =
               (builtins.match "claude-.*" m != null)
