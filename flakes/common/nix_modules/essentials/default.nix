@@ -32,6 +32,45 @@ with lib;
     parted
     fio
     moreutils
+
+    # `rmrec <name> [name...]` - recursively find and delete dirs/files by
+    # name under CWD (e.g. `rmrec node_modules dist target .direnv`).
+    # Lists matches first and prompts for confirmation. Uses -prune so it
+    # doesn't descend into matched dirs. chmods u+w first so read-only
+    # files (git objects, etc.) don't block rm.
+    (pkgs.writeShellScriptBin "rmrec" ''
+      set -euo pipefail
+      if [ $# -lt 1 ]; then
+        echo "usage: rmrec <name> [name...]" >&2
+        echo "  recursively finds and deletes dirs/files matching any name under CWD" >&2
+        exit 1
+      fi
+      args=( '(' )
+      first=1
+      for n in "$@"; do
+        if [ $first -eq 1 ]; then first=0; else args+=( -o ); fi
+        args+=( -name "$n" )
+      done
+      args+=( ')' )
+
+      echo "rmrec: scanning $(pwd) for: $*" >&2
+      matches=$(${pkgs.findutils}/bin/find . "''${args[@]}" -prune -print)
+      if [ -z "$matches" ]; then
+        echo "rmrec: nothing to remove" >&2
+        exit 0
+      fi
+      echo "$matches"
+      count=$(printf '%s\n' "$matches" | wc -l)
+      printf 'rmrec: delete %s entries? [y/N] ' "$count" >&2
+      read -r ans
+      case "$ans" in
+        y|Y|yes|YES) ;;
+        *) echo "rmrec: aborted" >&2; exit 1 ;;
+      esac
+      printf '%s\n' "$matches" | xargs -d '\n' -r chmod -R u+w 2>/dev/null || true
+      printf '%s\n' "$matches" | xargs -d '\n' -r rm -rf
+      echo "rmrec: done" >&2
+    '')
   ];
 
   environment.shellAliases = {
