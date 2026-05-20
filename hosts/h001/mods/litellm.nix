@@ -202,31 +202,77 @@ in
             "text-embedding-large-exp-03-07"
           ]
         )
-        # llama.cpp router on joe (3090) — models are configured in
-        # hosts/joe/llama-cpp.nix (modelsPreset) and downloaded from
+        # llama.cpp router on joe (RTX 3080 10GB) — models are configured
+        # in hosts/joe/llama-cpp.nix (modelsPreset) and downloaded from
         # Hugging Face on first request. The router loads/unloads as
         # needed (max 1 resident model). OpenAI-compatible API at /v1.
-        ++ (builtins.map
-          (m: {
-            model_name = "local-${m}";
-            litellm_params = {
-              model = "openai/${m}";
+        #
+        # Per-model defaults (sampling, parallel_tool_calls, thinking
+        # toggle) are baked in here so clients don't have to know them.
+        # Anything a client sends overrides these defaults.
+        #
+        # Each upstream model is exposed TWICE in the model list:
+        #   local-<model>            -> thinking ON  (default, CoT)
+        #   local-<model>-no_think   -> thinking OFF (snappy chat)
+        # Clients just pick the variant they want from the model list;
+        # nothing else in the request needs to change.
+        ++ (
+          let
+            joeBase = upstream: {
+              model = "openai/${upstream}";
               api_base = "http://100.64.0.12:11434/v1";
               api_key = "na";
             };
-            # llama.cpp / llama-server only speaks /v1/chat/completions.
-            # Without this, litellm forwards MVA's /v1/responses calls 1:1
-            # upstream and the local server rejects them with a schema
-            # validation error (e.g. "'type' must be one of 'output_text'
-            # or 'refusal'"). `mode = "chat"` makes litellm bridge
-            # /responses → /chat/completions, same as the Copilot
-            # claude-/gemini-/grok- block above.
-            model_info.mode = "chat";
+            # Build a (thinking-on, thinking-off) pair for one upstream.
+            mkPair = { name, upstream, sampling }: [
+              {
+                model_name = "local-${name}";
+                litellm_params = joeBase upstream // sampling // {
+                  extra_body = {
+                    chat_template_kwargs = { enable_thinking = true; };
+                  };
+                };
+                model_info.mode = "chat";
+              }
+              {
+                model_name = "local-${name}-no_think";
+                litellm_params = joeBase upstream // sampling // {
+                  extra_body = {
+                    chat_template_kwargs = { enable_thinking = false; };
+                  };
+                };
+                model_info.mode = "chat";
+              }
+            ];
+          in
+          # Gemma 4 26B-A4B — general purpose / multimodal daily driver.
+          # Sampling per Gemma 4 model card.
+          (mkPair {
+            name = "gemma-4-26b-a4b";
+            upstream = "gemma-4-26b-a4b";
+            sampling = {
+              temperature = 1.0;
+              top_p = 0.95;
+              top_k = 64;
+            };
           })
-          [
-            "qwen3.6-35b-a3b"
-            "qwen3-coder-30b-a3b"
-          ]
+          # Qwen3.5-35B-A3B — agentic coding. Unsloth-recommended sampling
+          # per u/awitod's config in the LocalLLaMA Apr 2026 megathread.
+          # presence_penalty=1.5 is non-default and materially reduces
+          # tool-call loops, so we pin it. parallel_tool_calls=true lets
+          # the model emit multiple tool_calls in a single assistant turn
+          # instead of one-at-a-time round trips — critical for agents.
+          ++ (mkPair {
+            name = "qwen3.5-35b-a3b";
+            upstream = "qwen3.5-35b-a3b";
+            sampling = {
+              temperature = 0.7;
+              top_p = 0.8;
+              top_k = 20;
+              presence_penalty = 1.5;
+              parallel_tool_calls = true;
+            };
+          })
         );
       };
     };

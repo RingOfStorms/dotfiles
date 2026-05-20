@@ -40,35 +40,58 @@ in
     # /var/cache/llama-cpp (LLAMA_CACHE). The router loads/unloads models
     # on demand, capped by --models-max below (mirrors the old
     # OLLAMA_KEEP_ALIVE=0 behavior on a single 24GB GPU).
+    # Model picks driven by the r/LocalLLaMA "Best Local LLMs Apr 2026"
+    # megathread, filtered to what fits joe (RTX 3080 10GB + 32GB DDR4):
+    #
+    #   * Gemma 4 26B-A4B (MoE, 4B activated, multimodal) — the most-
+    #     recommended general-purpose model in the thread. ~16GB on disk
+    #     at UD-Q4_K_XL, very fast (~100+ t/s reported), comfy on 32GB RAM.
+    #     Daily driver / vision / chat.
+    #
+    #   * Qwen3.5-35B-A3B (MoE, 3B activated) — u/awitod's go-to agentic
+    #     coding model; u/youcloudsofdoom runs the same quant on an 8GB
+    #     laptop 4070 + 64GB DDR5 at ~30 t/s. Tight on 32GB but workable
+    #     with --n-cpu-moe (most expert weights live in RAM, only the
+    #     active 3B + KV cache need to be hot on the GPU).
     modelsPreset = {
-      # Primary: Qwen3.6 MoE (35B total / 3B activated, vision-capable).
-      # NOTE: brand-new architecture — if llama.cpp can't load it, the
-      # qwen3-coder fallback below uses the well-supported Qwen3 MoE arch.
-      "qwen3.6-35b-a3b" = {
-        hf-repo = "unsloth/Qwen3.6-35B-A3B-GGUF";
-        hf-file = "Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf";
-        alias = "qwen3.6-35b-a3b";
+      # Primary: Gemma 4 26B-A4B (general purpose, multimodal).
+      "gemma-4-26b-a4b" = {
+        hf-repo = "unsloth/gemma-4-26B-A4B-it-GGUF";
+        hf-file = "gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf";
+        alias = "gemma-4-26b-a4b";
         ngl = "auto";
-        ctx-size = "32768";
+        ctx-size = "65536";
         flash-attn = "auto";
         jinja = "on";
-        # Thinking-mode sampling recommended by the Qwen3.6 model card.
+        # Sampling per Gemma 4 model card (thread: false79, truthputer).
         temp = "1.0";
         top-p = "0.95";
+        top-k = "64";
+        # Default thinking ON at the model level; litellm flips it per
+        # request via chat_template_kwargs.enable_thinking, so the
+        # `-no_think` model variant overrides this to false per-call.
+        chat-template-kwargs = ''{"enable_thinking":true}'';
+      };
+
+      # Secondary: Qwen3.5-35B-A3B (agentic coding).
+      "qwen3.5-35b-a3b" = {
+        hf-repo = "unsloth/Qwen3.5-35B-A3B-GGUF";
+        hf-file = "Qwen3.5-35B-A3B-UD-Q4_K_XL.gguf";
+        alias = "qwen3.5-35b-a3b";
+        ngl = "auto";
+        ctx-size = "65536";
+        flash-attn = "auto";
+        jinja = "on";
+        # Offload most MoE expert tensors to CPU — we only have 10GB VRAM,
+        # but with 3B active params per token the GPU still does the hot
+        # work. Tune down if RAM pressure gets ugly.
+        n-cpu-moe = "32";
+        # Sampling per u/awitod's Qwen3.5-35B-A3B unsloth-guide config.
+        temp = "0.7";
+        top-p = "0.8";
         top-k = "20";
         min-p = "0.0";
         presence-penalty = "1.5";
-      };
-
-      # Fallback: known-working coder MoE (30B total / 3B activated).
-      "qwen3-coder-30b-a3b" = {
-        hf-repo = "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF";
-        hf-file = "Qwen3-Coder-30B-A3B-Instruct-UD-Q4_K_XL.gguf";
-        alias = "qwen3-coder-30b-a3b";
-        ngl = "auto";
-        ctx-size = "32768";
-        flash-attn = "auto";
-        jinja = "on";
       };
     };
 
