@@ -32,6 +32,7 @@ let
       firefox
       bitwarden
       jellyfin_media_player
+      vesktop
     ]
   );
 in
