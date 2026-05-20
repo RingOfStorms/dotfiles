@@ -59,7 +59,16 @@ in
           max_response_size_mb = 4000;
         };
         model_list = [
-          # OpenRouter
+          # OpenRouter — wildcard catch-all. Any model passed as
+          # `openrouter/<slug>` is forwarded as-is, regardless of
+          # whether litellm knows about it. This works for chat
+          # completions but does NOT make models show up in
+          # /v1/models, because litellm can only enumerate wildcard
+          # providers it has dedicated discovery code for (OpenAI,
+          # Anthropic, Gemini, XAI, Fireworks, Vertex, vLLM, Topaz,
+          # LiteLLM Proxy). OpenRouter is not in that list, so for
+          # any specific OpenRouter model we want to appear in the
+          # model picker, add an explicit alias below.
           {
             model_name = "openrouter/*";
             litellm_params = {
@@ -67,6 +76,22 @@ in
             };
           }
         ]
+        # OpenRouter explicit aliases — only needed so these show up
+        # in /v1/models (i.e. the OpenWebUI model picker). At call
+        # time the wildcard above would handle them equally well.
+        ++ (builtins.map
+          (m: {
+            model_name = "openrouter/${m}";
+            litellm_params = {
+              model = "openrouter/${m}";
+            };
+          })
+          [
+            "owl-alpha"
+            "google/gemini-2.5-flash-lite"
+            "nvidia/nemotron-3-super-120b-a12b:free"
+          ]
+        )
         # Copilot
         # Probed with: ./scripts/probe-copilot-models.sh --nix
         #
