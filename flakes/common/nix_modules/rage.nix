@@ -3,13 +3,29 @@
   environment.systemPackages = [
     pkgs.rage
 
-    # `enc <path> [output.tar.gz.age]`
+    # `enc [-s] <path> [output.tar.gz.age]`
     # Tar+gzips the path, encrypts with rage in passphrase mode, then
-    # securely shreds + removes the original source.
+    # removes the original source. By default uses plain `rm -rf`. Pass
+    # `-s` / `--shred` to overwrite with `shred` first (slow, and only
+    # meaningful on non-SSD / non-CoW filesystems).
     (pkgs.writeShellScriptBin "enc" ''
       set -euo pipefail
+      shred_mode=0
+      # Parse leading flags. Stop at first non-flag arg.
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          -s|--shred) shred_mode=1; shift ;;
+          -h|--help)
+            echo "usage: enc [-s|--shred] <path> [output.tar.gz.age]" >&2
+            echo "  -s, --shred   overwrite source with shred before removing (slow)" >&2
+            exit 0 ;;
+          --) shift; break ;;
+          -*) echo "enc: unknown flag '$1'" >&2; exit 1 ;;
+          *) break ;;
+        esac
+      done
       if [ $# -lt 1 ]; then
-        echo "usage: enc <path> [output.tar.gz.age]" >&2
+        echo "usage: enc [-s|--shred] <path> [output.tar.gz.age]" >&2
         exit 1
       fi
       src="$1"
@@ -31,22 +47,28 @@
         | ${pkgs.rage}/bin/rage -p -o "$out"
       echo "enc: wrote $out" >&2
 
-      # Securely shred + remove the original source now that the
-      # encrypted archive exists. shred only meaningfully helps on
-      # traditional filesystems (not CoW/SSD-with-wear-leveling),
-      # but we still overwrite to make casual recovery harder.
-      echo "enc: securely removing $src" >&2
-      if [ -d "$src" ]; then
-        # Many files (e.g. git pack/object files) are mode 0444 and shred
-        # needs to open them for writing. Grant owner write on the whole
-        # tree first so shred can do its job.
-        chmod -R u+w -- "$src" 2>/dev/null || true
-        ${pkgs.findutils}/bin/find "$src" -type f -print0 \
-          | xargs -0 -r ${pkgs.coreutils}/bin/shred -u -n 3 -z
-        rm -rf -- "$src"
+      # Remove the original source now that the encrypted archive exists.
+      if [ $shred_mode -eq 1 ]; then
+        # NOTE: shred is mostly security theater on SSDs and CoW filesystems
+        # (btrfs/zfs/bcachefs) due to wear leveling and copy-on-write. It is
+        # only meaningfully effective on traditional spinning disks with
+        # non-journaled overwrites. Use FDE for real unrecoverability.
+        echo "enc: shredding + removing $src (this may be slow)" >&2
+        if [ -d "$src" ]; then
+          # Many files (e.g. git pack/object files) are mode 0444 and shred
+          # needs to open them for writing. Grant owner write on the tree.
+          chmod -R u+w -- "$src" 2>/dev/null || true
+          ${pkgs.findutils}/bin/find "$src" -type f -print0 \
+            | xargs -0 -r ${pkgs.coreutils}/bin/shred -u -n 3 -z
+          rm -rf -- "$src"
+        else
+          chmod u+w -- "$src" 2>/dev/null || true
+          ${pkgs.coreutils}/bin/shred -u -n 3 -z -- "$src"
+        fi
       else
-        chmod u+w -- "$src" 2>/dev/null || true
-        ${pkgs.coreutils}/bin/shred -u -n 3 -z -- "$src"
+        echo "enc: removing $src" >&2
+        chmod -R u+w -- "$src" 2>/dev/null || true
+        rm -rf -- "$src"
       fi
       echo "enc: removed $src" >&2
     '')
