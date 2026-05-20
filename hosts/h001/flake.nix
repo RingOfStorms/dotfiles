@@ -85,15 +85,24 @@
           ./autofs.nix
 
           # Host-specific config
-          ({ pkgs, ... }: {
-            users.users.root = {
-              shell = pkgs.zsh;
-              openssh.authorizedKeys.keys = [ fleet.global.sshPubKey ];
-            };
-            environment.systemPackages = with pkgs; [
-              lua sqlite ttyd rclone
-            ];
-          })
+          (
+            { pkgs, ... }:
+            {
+              users.users.root = {
+                shell = pkgs.zsh;
+                openssh.authorizedKeys.keys = [ fleet.global.sshPubKey ];
+              };
+              environment.systemPackages = with pkgs; [
+                lua
+                sqlite
+                ttyd
+                rclone
+              ];
+              environment.shellAliases = {
+                mva = "/home/luser/projects/mva/target/release/mva";
+              };
+            }
+          )
         ];
       };
     };
