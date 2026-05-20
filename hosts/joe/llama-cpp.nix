@@ -41,51 +41,69 @@ in
     # on demand, capped by --models-max below (mirrors the old
     # OLLAMA_KEEP_ALIVE=0 behavior on a single 24GB GPU).
     # Model picks driven by the r/LocalLLaMA "Best Local LLMs Apr 2026"
-    # megathread, filtered to what fits joe (RTX 3080 10GB + 32GB DDR4):
+    # megathread, filtered to what fits joe (RTX 3080 10GB + 32GB DDR4).
     #
-    #   * Gemma 4 26B-A4B (MoE, 4B activated, multimodal) — the most-
-    #     recommended general-purpose model in the thread. ~16GB on disk
-    #     at UD-Q4_K_XL, very fast (~100+ t/s reported), comfy on 32GB RAM.
-    #     Daily driver / vision / chat.
+    # IMPORTANT VRAM CONSTRAINT
+    # joe runs a KDE Plasma desktop session (kwin/Chrome/Steam) which
+    # holds ~2.4 GB of the 10 GB framebuffer. Effective VRAM for llama
+    # is ~7.0–7.5 GB, NOT 10 GB. All sizing below assumes 7 GB budget.
     #
-    #   * Qwen3.5-35B-A3B (MoE, 3B activated) — u/awitod's go-to agentic
-    #     coding model; u/youcloudsofdoom runs the same quant on an 8GB
-    #     laptop 4070 + 64GB DDR5 at ~30 t/s. Tight on 32GB but workable
-    #     with --n-cpu-moe (most expert weights live in RAM, only the
-    #     active 3B + KV cache need to be hot on the GPU).
+    # Settings that apply to BOTH models:
+    #   * parallel=1            single-user box; default n_seq_max=4
+    #                           quadruples KV cache for no benefit.
+    #   * ctx-size=32768        64k blew KV past the 7 GB budget. 32k
+    #                           leaves headroom and is plenty for chat.
+    #   * ngl=99 (explicit)     `auto` aborts when combined with
+    #                           tensor-overrides (n-cpu-moe), then
+    #                           silently puts EVERYTHING on the GPU and
+    #                           OOMs. Pin layer count by hand.
+    #   * cache-type-k/v=q8_0   halves KV cache footprint vs f16, ~zero
+    #                           quality cost. Critical on a 10 GB card.
+    #   * reasoning=on          replaces the deprecated
+    #                           --chat-template-kwargs '{"enable_thinking":true}'.
+    #                           litellm flips it off per-call for the
+    #                           `-no_think` model variants.
     modelsPreset = {
       # Primary: Gemma 4 26B-A4B (general purpose, multimodal).
+      # 26B total / 4B activated. Dense attention layers, MoE FFNs.
+      # At Q4_K_XL the file is ~16 GB; with n-cpu-moe=99 only the
+      # ~2 GB of attention/embedding stays on GPU, which fits.
       "gemma-4-26b-a4b" = {
         hf-repo = "unsloth/gemma-4-26B-A4B-it-GGUF";
         hf-file = "gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf";
         alias = "gemma-4-26b-a4b";
-        ngl = "auto";
-        ctx-size = "65536";
-        flash-attn = "auto";
+        ngl = "99";
+        n-cpu-moe = "99"; # send ALL MoE experts to CPU
+        ctx-size = "32768";
+        parallel = "1";
+        flash-attn = "on";
+        cache-type-k = "q8_0";
+        cache-type-v = "q8_0";
         jinja = "on";
+        reasoning = "on"; # `-no_think` variant flips this per-request
         # Sampling per Gemma 4 model card (thread: false79, truthputer).
         temp = "1.0";
         top-p = "0.95";
         top-k = "64";
-        # Default thinking ON at the model level; litellm flips it per
-        # request via chat_template_kwargs.enable_thinking, so the
-        # `-no_think` model variant overrides this to false per-call.
-        chat-template-kwargs = ''{"enable_thinking":true}'';
       };
 
       # Secondary: Qwen3.5-35B-A3B (agentic coding).
+      # 35B total / 3B activated, hybrid SSM+MoE — note this needs an
+      # extra "recurrent state cache" GPU buffer on top of normal KV,
+      # which is what was OOMing previously.
       "qwen3.5-35b-a3b" = {
         hf-repo = "unsloth/Qwen3.5-35B-A3B-GGUF";
         hf-file = "Qwen3.5-35B-A3B-UD-Q4_K_XL.gguf";
         alias = "qwen3.5-35b-a3b";
-        ngl = "auto";
-        ctx-size = "65536";
-        flash-attn = "auto";
+        ngl = "99";
+        n-cpu-moe = "99"; # all 256 experts on CPU; only hot path on GPU
+        ctx-size = "32768";
+        parallel = "1";
+        flash-attn = "on";
+        cache-type-k = "q8_0";
+        cache-type-v = "q8_0";
         jinja = "on";
-        # Offload most MoE expert tensors to CPU — we only have 10GB VRAM,
-        # but with 3B active params per token the GPU still does the hot
-        # work. Tune down if RAM pressure gets ugly.
-        n-cpu-moe = "32";
+        reasoning = "on";
         # Sampling per u/awitod's Qwen3.5-35B-A3B unsloth-guide config.
         temp = "0.7";
         top-p = "0.8";
@@ -97,7 +115,7 @@ in
 
     extraFlags = [
       "--models-max"
-      "1" # Single 3090 — keep at most one model resident at a time.
+      "1" # Single GPU — keep at most one model resident at a time.
       "--metrics" # Prometheus-compatible /metrics endpoint.
     ];
   };
