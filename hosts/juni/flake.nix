@@ -103,6 +103,7 @@
           inputs.common.nixosModules.timezone_auto
           inputs.common.nixosModules.tty_caps_esc
           inputs.common.nixosModules.zsh
+          inputs.common.nixosModules.rage
           inputs.common.nixosModules.tailnet
           inputs.common.nixosModules.remote_lio_builds
 
