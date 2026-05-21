@@ -10,8 +10,8 @@
     # Use relative to get current version for testing
     # impermanence.url = "path:../../flakes/impermanence";
     impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
-    common.url = "path:../../flakes/common";
-    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    # common.url = "path:../../flakes/common";
+    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # secrets-bao.url = "path:../../flakes/secrets-bao";
     secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
     # beszel.url = "path:../../flakes/beszel";
