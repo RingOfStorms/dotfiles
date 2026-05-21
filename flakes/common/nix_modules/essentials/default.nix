@@ -40,10 +40,28 @@ with lib;
     # files (git objects, etc.) don't block rm.
     (pkgs.writeShellScriptBin "rmrec" ''
       set -euo pipefail
+      # Default set of common build artifacts / caches / dependency dirs
+      # across many ecosystems. Used when rmrec is called with no args.
+      defaults=(
+        # JS/TS
+        node_modules .next .nuxt .svelte-kit .turbo .parcel-cache .vite .astro .angular .docusaurus .remix
+        dist build out .output .cache .tmp .temp coverage .nyc_output
+        # Rust
+        target
+        # Python
+        __pycache__ .pytest_cache .mypy_cache .ruff_cache .pyre .pytype .tox .nox .ipynb_checkpoints .hypothesis .coverage
+        .venv venv __pypackages__ .eggs
+        # JVM / Android / IDE
+        .gradle .idea_modules .kotlin .nb-gradle
+        # Infra / tooling
+        .terraform .direnv .stack-work .dart_tool .zig-cache zig-out .ccls-cache .clangd
+        # Misc OS junk
+        .DS_Store Thumbs.db
+      )
       if [ $# -lt 1 ]; then
-        echo "usage: rmrec <name> [name...]" >&2
-        echo "  recursively finds and deletes dirs/files matching any name under CWD" >&2
-        exit 1
+        echo "rmrec: no args given, using defaults:" >&2
+        printf '  %s\n' "''${defaults[*]}" >&2
+        set -- "''${defaults[@]}"
       fi
       args=( '(' )
       first=1
