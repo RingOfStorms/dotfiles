@@ -8,10 +8,32 @@
 
     defaultKeymap = "emacs";
 
+    # Ephemeral history: keep an in-memory list for up-arrow within a session,
+    # but never persist to disk. Atuin is the source of truth for history.
+    history = {
+      size = 10000;     # in-memory entries available to up-arrow this session
+      save = 0;         # never save any entries to HISTFILE
+      share = false;    # don't share history between concurrent sessions
+      append = false;   # don't append to HISTFILE on exit
+      extended = false;
+      ignoreAllDups = true;
+    };
+
     initContent = ''
       # Set editor to neovim, TODO only do this if mod.neovim is enabled
       export EDITOR=nvim
       export VISUAL=nvim
+
+      # --- Ephemeral shell history (atuin is the only persistent store) ---
+      # Home Manager always sets HISTFILE; unset it so zsh has nowhere to write.
+      # Also belt-and-braces unset any incremental-write options that other
+      # init files (oh-my-zsh, /etc/zshrc, atuin's zsh init) might have set.
+      unset HISTFILE
+      unsetopt SHARE_HISTORY
+      unsetopt INC_APPEND_HISTORY
+      unsetopt INC_APPEND_HISTORY_TIME
+      unsetopt APPEND_HISTORY
+      # ---------------------------------------------------------------------
 
       # Enable editing command in external editor
       autoload -Uz edit-command-line
