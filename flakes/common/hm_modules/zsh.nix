@@ -2,7 +2,12 @@
 {
   programs.zsh = {
     enable = true;
-    autosuggestion.enable = true;
+    autosuggestion = {
+      enable = true;
+      # Source suggestions from atuin instead of zsh's in-memory $history
+      # (which atuin's init populates from its DB on shell startup).
+      strategy = [ "atuin" ];
+    };
 
     shellAliases = { };
 
