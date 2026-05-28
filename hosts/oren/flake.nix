@@ -25,8 +25,11 @@
     # mva.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/mva.git";
 
     opencode.url = "github:anomalyco/opencode/375444a149780c7121bd8964685c4bfe8edd1870";
-    nono.url = "github:always-further/nono";
+    nono.url = "github:always-further/nono/b251c72fe5a4c7b1d1323307493db736be42c912";
     nono.flake = false;
+    # Used to pin a newer rustc than what nixpkgs ships (needed by nono).
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
