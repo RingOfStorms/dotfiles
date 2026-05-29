@@ -4,7 +4,24 @@
   ...
 }:
 let
-  nono = pkgs.rustPlatform.buildRustPackage {
+  # nono requires rustc >= 1.95, which neither nixos-25.11 nor nixos-unstable
+  # ships at the moment. Pull a pinned stable toolchain from rust-overlay and
+  # build a dedicated rustPlatform so the rest of the system keeps using
+  # nixpkgs' default rustc.
+  rustPkgs = import inputs.nixpkgs {
+    inherit (pkgs.stdenv.hostPlatform) system;
+    overlays = [ inputs.rust-overlay.overlays.default ];
+    config.allowUnfree = true;
+  };
+
+  rustToolchain = rustPkgs.rust-bin.stable.latest.default;
+
+  rustPlatform = rustPkgs.makeRustPlatform {
+    cargo = rustToolchain;
+    rustc = rustToolchain;
+  };
+
+  nono = rustPlatform.buildRustPackage {
     pname = "nono";
     version = inputs.nono.shortRev or inputs.nono.dirtyShortRev or "unknown";
 
