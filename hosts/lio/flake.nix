@@ -145,18 +145,18 @@
                   nono_base = "nono run --allow-cwd --silent --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\"";
                 in
                 {
-                  "mva" = "${no_proxy} ${nono_base} --profile mva  -- /home/josh/projects/mva/target/release/mva";
+                  "mva" = "${no_proxy} ${nono_base} --profile mva-full  -- /home/josh/projects/mva/target/release/mva";
                   "mva_" = "${no_proxy} /home/josh/projects/mva/target/release/mva";
                   # open code
-                  "oc" = "${no_proxy} ${nono_base} --profile oc -- opencode";
+                  "oc" = "${no_proxy} ${nono_base} --profile opencode-full -- opencode";
                   "oc_" = "${no_proxy} opencode";
                   "occ" = "oc -c";
                   # claude code
-                  "cc" = "${no_proxy} ${nono_base} --profile cc -- claude";
+                  "cc" = "${no_proxy} ${nono_base} --profile claude-code-full -- claude";
                   # cursor
-                  "cur" = "${no_proxy} ${nono_base} --profile cc -- cursor";
+                  "cur" = "${no_proxy} ${nono_base} --profile claude-code-full -- cursor";
                   # zed
-                  "zed" = "${no_proxy} ${nono_base} --profile cc -- zeditor";
+                  "zed" = "${no_proxy} ${nono_base} --profile claude-code-full -- zeditor";
                   # npm
                   "npm" = "${no_proxy} ${nono_base} --profile npm -- npm";
                 };

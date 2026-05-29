@@ -135,7 +135,7 @@
                 in
                 {
                   "mva" =
-                    "${no_proxy} nono run --profile mva --allow-cwd --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\" -- /home/josh/projects/mva/target/release/mva";
+                    "${no_proxy} nono run --profile mva-full --allow-cwd --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\" -- /home/josh/projects/mva/target/release/mva";
                   "mva_" = "${no_proxy} /home/josh/projects/mva/target/release/mva";
                 };
             }
