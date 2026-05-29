@@ -113,7 +113,8 @@ in
               (builtins.match "claude-.*" m != null)
               || (builtins.match "gemini-.*" m != null)
               || (builtins.match "grok-.*" m != null)
-              || (builtins.match "text-embedding-.*" m != null);
+              || (builtins.match "text-embedding-.*" m != null)
+              || (m == "trajectory-compaction");
           in {
             model_name = "copilot-${m}";
             litellm_params = {
@@ -138,9 +139,11 @@ in
             "claude-opus-4.5"
             "claude-opus-4.6"
             "claude-opus-4.7"
+            "claude-opus-4.8"
             "claude-sonnet-4.5"
             "claude-sonnet-4.6"
             "gemini-2.5-pro"
+            "gemini-3.5-flash"
             "gpt-3.5-turbo"
             "gpt-3.5-turbo-0613"
             "gpt-4"
@@ -166,6 +169,7 @@ in
             "text-embedding-3-small"
             "text-embedding-3-small-inference"
             "text-embedding-ada-002"
+            "trajectory-compaction"
           ]
         )
         # 宙 Proxy
