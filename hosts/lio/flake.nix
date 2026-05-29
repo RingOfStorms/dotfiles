@@ -27,7 +27,7 @@
     qvm.url = "git+https://git.joshuabell.xyz/ringofstorms/qvm";
 
     opencode.url = "github:anomalyco/opencode/88582566bf2bfd2d26000f0c25735bf48ddeca00";
-    nono.url = "github:always-further/nono/b251c72fe5a4c7b1d1323307493db736be42c912";
+    nono.url = "github:always-further/nono/e61814f8a70a53346a1e9d0bcf7ba4f52e0e4d1d";
     nono.flake = false;
     # Used to pin a newer rustc than what nixpkgs ships (needed by nono).
     rust-overlay.url = "github:oxalica/rust-overlay";
