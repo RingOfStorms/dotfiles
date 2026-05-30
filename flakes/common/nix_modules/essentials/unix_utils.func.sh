@@ -37,6 +37,36 @@ mail_clear() {
   : > /var/mail/$USER
 }
 
+# ports_expose PORT [PORT...] - temporarily open TCP port(s) in the NixOS
+# firewall by inserting accept rules at the top of the inet nixos-fw
+# input-allow chain. Handy for quickly exposing an ssh -R tunnel without a
+# rebuild. NOT persistent: rules are lost on reboot or `ports_reset`. For a
+# durable rule add it to networking.firewall.allowedTCPPorts and rebuild.
+ports_expose() {
+  if [ "$#" -lt 1 ]; then
+    echo "usage: ports_expose PORT [PORT...]" >&2
+    return 1
+  fi
+  for port in "$@"; do
+    case "$port" in
+      ''|*[!0-9]*)
+        echo "ports_expose: invalid port '$port'" >&2
+        return 1
+        ;;
+    esac
+    sudo nft insert rule inet nixos-fw input-allow tcp dport "$port" accept \
+      && echo "ports_expose: opened tcp/$port"
+  done
+}
+
+# ports_reset - drop all transient firewall changes and re-apply the
+# declarative NixOS firewall configuration by restarting the firewall
+# service. This undoes any `ports_expose` rules.
+ports_reset() {
+  echo "ports_reset: restarting firewall to restore declarative rules..."
+  sudo systemctl restart firewall && echo "ports_reset: done"
+}
+
 speedtest_fs () {
   dir=$(pwd)
   drive=$(df -h "${dir}" | awk 'NR==2 {print $1}')
