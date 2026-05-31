@@ -1,0 +1,119 @@
+# vulnix CVE whitelist
+#
+# Suppress CVEs reviewed and accepted as non-applicable (false positives) or
+# acceptable risk, so future `nixos-audit` runs surface only real signal.
+#
+# Pass to the auditor with:  nix run .#audit -- --whitelist scripts/audit/whitelist.toml
+#
+# Matching (vulnix):
+#   ["pname"]              -> suppress ALL findings for that package name
+#   ["pname-version"]      -> suppress findings for that exact name+version
+#     cve = ["CVE-..."]    -> (optional) restrict to specific CVEs
+#   comment = "..."        -> why it's whitelisted (required for review hygiene)
+#   until = "YYYY-MM-DD"   -> (optional) expiry; re-review after this date
+#
+# Curated 2026-05-30 from a vulnix --system scan of lio. Re-review periodically;
+# entries here HIDE findings, so keep them tight (prefer exact name+version or a
+# specific CVE over a bare pname when a real same-named package also exists).
+#
+# ════════════════════════════════════════════════════════════════════════════
+# Category A — NAME-COLLISION FALSE POSITIVES
+# vulnix matches on pname; these language-ecosystem packages share a name with
+# the C library a CVE is actually about. The C lib (e.g. real curl/zlib) is NOT
+# whitelisted here, so its genuine CVEs still surface. Targeted by exact version.
+# ════════════════════════════════════════════════════════════════════════════
+
+["curl-0.4.46"]
+comment = "Rust `curl` crate, not the C curl library. CVEs are about C curl."
+["curl-0.4.49"]
+comment = "Rust `curl` crate, not the C curl library."
+
+["zlib-0.7.1.1"]
+comment = "Haskell zlib binding, not C zlib."
+
+["network-3.2.8.0"]
+comment = "Haskell `network` library; CVE collision."
+
+["nix-0.30.1"]
+comment = "Rust `nix` crate, not the Nix package manager."
+["nix-0.31.3"]
+comment = "Rust `nix` crate, not the Nix package manager."
+
+["hyper-1.9.0"]
+comment = "Haskell/Rust name collision; not the affected component."
+
+["Diff-1.0.2"]
+comment = ".NET/other ecosystem lib; pname collision."
+["xunit-2.9.3"]
+comment = ".NET xUnit; pname collision, not a system package CVE."
+
+["lapack-3"]
+comment = "version-string collision (bare '3'); not a real LAPACK CVE match."
+
+# Haskell libraries (often shipped alongside a *.cabal variant). These are
+# build/library artifacts of Haskell tooling, not exploitable system services.
+["async-2.2.5"]
+comment = "Haskell async library; pname collision."
+["async-2.2.6"]
+comment = "Haskell async library; pname collision."
+["bytes-1.6.0"]
+comment = "Haskell bytes library; pname collision."
+["bytes-1.11.0"]
+comment = "Haskell bytes library; pname collision."
+["cms-0.2.3"]
+comment = "Haskell cms library; pname collision."
+["commonmark-0.2.6.1"]
+comment = "Haskell commonmark; pname collision."
+["filelock-0.1.1.8"]
+comment = "Haskell filelock; pname collision."
+["h2-0.4.13"]
+comment = "Haskell h2; pname collision (CVE is about HTTP/2 servers)."
+["http-1.4.0"]
+comment = "Haskell http; pname collision."
+["idna-0.5.0"]
+comment = "Haskell/Rust idna; pname collision."
+["safe-0.3.21"]
+comment = "Haskell safe library; pname collision."
+["semver-1.0.28"]
+comment = "Haskell semver; pname collision."
+["stringbuilder-0.5.1"]
+comment = "Haskell stringbuilder; pname collision."
+["tap-1.0.1"]
+comment = "Haskell tap; pname collision."
+["time-0.3.41"]
+comment = "Haskell time library; pname collision."
+["tokio-1.52.3"]
+comment = "Rust tokio crate; pname collision."
+["vault-0.3.1.5"]
+comment = "Haskell vault library, not HashiCorp Vault."
+["vault-0.3.1.6"]
+comment = "Haskell vault library, not HashiCorp Vault."
+["warp-3.4.9"]
+comment = "Haskell warp; pname collision."
+["yaml-0.11.11.2"]
+comment = "Haskell yaml; pname collision."
+["yoke-0.8.1"]
+comment = "Rust yoke crate; pname collision."
+["yoke-0.8.2"]
+comment = "Rust yoke crate; pname collision."
+
+# ════════════════════════════════════════════════════════════════════════════
+# Category C — DEV-TOOL FALSE POSITIVES / EOL build deps (not runtime-exploitable)
+# ════════════════════════════════════════════════════════════════════════════
+
+["ShellCheck-0.11.0"]
+cve = ["CVE-2021-28794"]
+comment = "CVE-2021-28794 is about a VS Code extension, not GHC ShellCheck."
+["shellcheck-0.11.0"]
+cve = ["CVE-2021-28794"]
+comment = "Same VS Code extension CVE; lowercase variant."
+
+["python-2.7.18.12"]
+comment = "Python 2 (EOL) pulled in as a build/transitive dep, not a runtime service. Accepted."
+until = "2026-12-31"
+
+# NOTE: Category B (build-time toolchains: go-*-bootstrap, gcc, binutils, cargo,
+# *-vendor, *-source, *-go-modules, *-npm-deps) is intentionally NOT whitelisted
+# by bare pname here — their version strings churn on every nixpkgs bump, which
+# would make stale entries. They are build inputs, not in the runtime closure;
+# treat them as noise in the report rather than maintaining churny entries.

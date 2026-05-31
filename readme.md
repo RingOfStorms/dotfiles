@@ -58,6 +58,42 @@ boot.initrd.luks.devices
   - TODO move key into secrets and mount it to atuin local share
 - ssh key access, ssh iden in config in nix config
 
+### Security auditing
+
+Scan flake locks and built closures for security-relevant issues:
+
+```sh
+nix run .#audit                 # staleness (all locks) + CVE (current host)
+nix run .#audit -- --all        # staleness + CVE for every deployable host (beefy box)
+nix run .#audit -- --host lio   # staleness + CVE for one host
+nix run .#audit -- --stale-only # only the staleness / rev-drift passes (no builds)
+nix run .#audit -- --cve-only   # only the CVE pass
+```
+
+Two layers (see `scripts/audit/audit.sh`):
+
+1. **Staleness scan** — runs DeterminateSystems/flake-checker (fetched at runtime)
+   against every `flake.lock`, flagging nixpkgs inputs that are stale (>30d),
+   off a supported branch, or not upstream nixpkgs. Also prints a nixpkgs
+   **rev-drift report** so lock divergence across hosts is visible at a glance.
+2. **CVE scan** — `vulnix` matches known CVEs against the package versions in a
+   built system closure. Default is the current host (`vulnix --system`);
+   `--host`/`--all` build each host's `system.build.toplevel` and scan that.
+   Foreign-arch / cloud hosts are skipped unless `--build-remote` is passed.
+
+Caveat: vulnix only matches **nixpkgs-derived** store paths — third-party git
+inputs (e.g. `git.joshuabell.xyz/...`, rust-overlay) get no CVE coverage, so the
+staleness scan + rev-drift report are the safety net for those.
+
+Suppress reviewed/accepted CVEs with a whitelist so they stop re-alarming:
+
+```sh
+nix run .#audit -- --whitelist scripts/audit/whitelist.toml
+```
+
+vulnix downloads the NVD database on first run (slow, needs network). Exit code:
+`0` clean, `1` staleness/config warnings, `2` vulnerabilities found.
+
 ### Notes
 
 Dual booting windows?

@@ -43,8 +43,34 @@
 
       # Which hosts get deploy scripts (exclude non-deployable entries like 't' and 'l002')
       deployHosts = builtins.attrNames fleet.deployableHosts;
+
+      # Security auditor — scans every flake.lock for stale/off-branch nixpkgs
+      # inputs (via DeterminateSystems/flake-checker, fetched at runtime) and
+      # matches CVEs against built host closures (via vulnix). The script lives
+      # at scripts/audit/audit.sh; this just wraps it with its runtime deps so
+      # the toolchain stays scoped to `nix run .#audit` / the devShell and never
+      # lands on every machine. See scripts/audit/audit.sh for usage.
+      mkAuditApp = pkgs:
+        pkgs.writeShellApplication {
+          name = "nixos-audit";
+          runtimeInputs = [ pkgs.vulnix pkgs.jq pkgs.git pkgs.findutils ];
+          text = builtins.readFile ./scripts/audit/audit.sh;
+        };
     in
     {
+      apps = forAllSystems (
+        system:
+        let
+          pkgs = nixpkgsFor.${system};
+        in
+        {
+          audit = {
+            type = "app";
+            program = "${mkAuditApp pkgs}/bin/nixos-audit";
+          };
+        }
+      );
+
       devShells = forAllSystems (
         system:
         let
@@ -57,7 +83,8 @@
             # deploy_*. The bifrost-models regen script is at
             # scripts/bifrost_models/ — `cd` there and `nix develop` (or
             # let direnv pick up the .envrc).
-            packages = map (mkDeployScript pkgs) deployHosts;
+            packages = map (mkDeployScript pkgs) deployHosts
+              ++ [ (mkAuditApp pkgs) ];
           };
         }
       );
