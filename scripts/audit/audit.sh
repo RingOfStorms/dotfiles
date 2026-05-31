@@ -123,7 +123,7 @@ staleness_scan() {
 
     if [[ $rc -eq 0 ]]; then
       ok "$lock"
-    elif printf '%s' "$out" | grep -q "no nixpkgs dependency found"; then
+    elif [[ "$out" == *"no nixpkgs dependency found"* ]]; then
       # Sub-flake whose nixpkgs input isn't keyed "nixpkgs" (e.g. follows).
       note "$lock (no direct nixpkgs input — skipped)"
     else
@@ -253,12 +253,20 @@ run_vulnix() {
   note "${label}: ${total} package(s) flagged (${build_count} build-only artifacts filtered)"
   note "top runtime findings by CVSS (build artifacts excluded):"
 
-  # Print runtime findings, highest CVSS first, with CVE count.
-  printf '%s' "$runtime_json" | jq -r '
-    [.[] | {name, max: ([.cvssv3_basescore[]?] | max // 0), n: (.affected_by | length)}]
-    | sort_by(-.max)[]
-    | "      \(.max|tostring|(. + "    ")[0:5]) \(.n) CVE(s)  \(.name)"
-  ' | head -40
+  # Print the top-N runtime findings, highest CVSS first, with CVE count.
+  # The limit is applied inside jq (not via `head`) so the pipe never closes
+  # early — `head` on a still-writing producer raises SIGPIPE, which under
+  # `set -o pipefail` makes the whole run exit 141.
+  local top=40
+  printf '%s' "$runtime_json" | jq -r --argjson top "$top" '
+    ( [.[] | {name, max: ([.cvssv3_basescore[]?] | max // 0), n: (.affected_by | length)}]
+      | sort_by(-.max) ) as $rows
+    | ($rows[:$top][]
+       | "      \(.max|tostring|(. + "    ")[0:5]) \(.n) CVE(s)  \(.name)"),
+      (if ($rows|length) > $top
+       then "      … and \(($rows|length) - $top) more (re-run with no whitelist or see vulnix --json)"
+       else empty end)
+  '
 
   if [[ "$runtime_count" -gt 0 ]]; then
     vuln "${label}: ${runtime_count} runtime package(s) with known advisories"
