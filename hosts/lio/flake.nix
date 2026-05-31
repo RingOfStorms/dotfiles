@@ -27,7 +27,7 @@
     qvm.url = "git+https://git.joshuabell.xyz/ringofstorms/qvm";
 
     opencode.url = "github:anomalyco/opencode/88582566bf2bfd2d26000f0c25735bf48ddeca00";
-    nono.url = "github:always-further/nono/b251c72fe5a4c7b1d1323307493db736be42c912";
+    nono.url = "github:always-further/nono/e61814f8a70a53346a1e9d0bcf7ba4f52e0e4d1d";
     nono.flake = false;
     # Used to pin a newer rustc than what nixpkgs ships (needed by nono).
     rust-overlay.url = "github:oxalica/rust-overlay";
@@ -145,18 +145,18 @@
                   nono_base = "nono run --allow-cwd --silent --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\"";
                 in
                 {
-                  "mva" = "${no_proxy} ${nono_base} --profile mva  -- /home/josh/projects/mva/target/release/mva";
+                  "mva" = "${no_proxy} ${nono_base} --profile mva-full  -- /home/josh/projects/mva/target/release/mva";
                   "mva_" = "${no_proxy} /home/josh/projects/mva/target/release/mva";
                   # open code
-                  "oc" = "${no_proxy} ${nono_base} --profile oc -- opencode";
+                  "oc" = "${no_proxy} ${nono_base} --profile opencode-full -- opencode";
                   "oc_" = "${no_proxy} opencode";
                   "occ" = "oc -c";
                   # claude code
-                  "cc" = "${no_proxy} ${nono_base} --profile cc -- claude";
+                  "cc" = "${no_proxy} ${nono_base} --profile claude-code-full -- claude";
                   # cursor
-                  "cur" = "${no_proxy} ${nono_base} --profile cc -- cursor";
+                  "cur" = "${no_proxy} ${nono_base} --profile claude-code-full -- cursor";
                   # zed
-                  "zed" = "${no_proxy} ${nono_base} --profile cc -- zeditor";
+                  "zed" = "${no_proxy} ${nono_base} --profile claude-code-full -- zeditor";
                   # npm
                   "npm" = "${no_proxy} ${nono_base} --profile npm -- npm";
                 };

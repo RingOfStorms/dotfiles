@@ -439,17 +439,17 @@
     "nono": {
       "flake": false,
       "locked": {
-        "lastModified": 1779136380,
-        "narHash": "sha256-N7suxy3sHzUeAMaRuKLYOtiNq2txVJ55aUP206NDGIo=",
+        "lastModified": 1779864367,
+        "narHash": "sha256-d9FA2nWJO548HJIAxYxqPoi6Dyrb4zPjAAnd0FJdl4Y=",
         "owner": "always-further",
         "repo": "nono",
-        "rev": "b251c72fe5a4c7b1d1323307493db736be42c912",
+        "rev": "e61814f8a70a53346a1e9d0bcf7ba4f52e0e4d1d",
         "type": "github"
       },
       "original": {
         "owner": "always-further",
         "repo": "nono",
-        "rev": "b251c72fe5a4c7b1d1323307493db736be42c912",
+        "rev": "e61814f8a70a53346a1e9d0bcf7ba4f52e0e4d1d",
         "type": "github"
       }
     },

@@ -113,7 +113,8 @@ in
               (builtins.match "claude-.*" m != null)
               || (builtins.match "gemini-.*" m != null)
               || (builtins.match "grok-.*" m != null)
-              || (builtins.match "text-embedding-.*" m != null);
+              || (builtins.match "text-embedding-.*" m != null)
+              || (m == "trajectory-compaction");
           in {
             model_name = "copilot-${m}";
             litellm_params = {
@@ -138,9 +139,11 @@ in
             "claude-opus-4.5"
             "claude-opus-4.6"
             "claude-opus-4.7"
+            "claude-opus-4.8"
             "claude-sonnet-4.5"
             "claude-sonnet-4.6"
             "gemini-2.5-pro"
+            "gemini-3.5-flash"
             "gpt-3.5-turbo"
             "gpt-3.5-turbo-0613"
             "gpt-4"
@@ -166,6 +169,7 @@ in
             "text-embedding-3-small"
             "text-embedding-3-small-inference"
             "text-embedding-ada-002"
+            "trajectory-compaction"
           ]
         )
         # 宙 Proxy
@@ -189,11 +193,14 @@ in
             "claude-opus-4.1"
             "claude-opus-4.5"
             "claude-opus-4.6"
-            "claude-opus-4.7"
             "claude-opus-4-7"
+            "claude-opus-4.7"
+            "claude-opus-4.8"
             "claude-sonnet-4"
             "claude-sonnet-4.5"
+            "claude-sonnet-4-6"
             "claude-sonnet-4.6"
+            "codex-auto-review"
             "deepseek-3.1"
             "gemini-2.0-flash"
             "gemini-2.0-flash-lite"
@@ -203,6 +210,12 @@ in
             "gemini-2.5-pro"
             "gemini-2.5-pro-batch"
             "gemini-2.5-pro-passthrough"
+            "gemini-3.1-flash-lite"
+            "gemini-3.1-flash-lite-passthrough"
+            "gemini-3.5-flash"
+            "gemini-3.5-flash-passthrough"
+            "gemini-embedding-001"
+            "gemini-embedding-2"
             "glm-4.7"
             "glm-5"
             "gpt-4.1"
@@ -217,8 +230,11 @@ in
             "gpt-5.1"
             "gpt-5.2"
             "gpt-5.4"
+            "gpt-5.4-mini"
+            "gpt-5.4-nano"
             "gpt-5.5"
             "kimi-2.5"
+            "kimi-k2.6"
             "minimax-2.5"
             "o3-mini"
             "o4-mini"
