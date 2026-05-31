@@ -58,7 +58,7 @@
       { mac = "a8:29:48:94:23:dd"; name = "TL-SG1428PE"; ip = "10.12.16.2"; }
       { mac = "38:18:68:49:3c:48"; name = "ellawork-w"; ip = "10.12.14.122"; }
       { mac = "d4:a2:cd:39:4e:f0"; name = "ellawork-e"; ip = "10.12.14.132"; }
-      { mac = "00:23:a4:0b:3b:be"; name = "TMREM00004335"; ip = "10.12.14.181"; }
+      { mac = "00:23:a4:0b:3b:be"; name = "TMREM"; ip = "10.12.14.181"; }
       { mac = "04:0e:3c:3a:0e:d1"; name = "JOE"; ip = "10.12.14.126"; }
     ];
 
