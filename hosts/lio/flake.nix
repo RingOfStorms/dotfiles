@@ -24,7 +24,6 @@
     containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
-    qvm.url = "git+https://git.joshuabell.xyz/ringofstorms/qvm";
 
     opencode.url = "github:anomalyco/opencode/88582566bf2bfd2d26000f0c25735bf48ddeca00";
     nono.url = "github:always-further/nono/e61814f8a70a53346a1e9d0bcf7ba4f52e0e4d1d";
@@ -103,13 +102,6 @@
 
           inputs.ros_neovim.nixosModules.default
           ({ ringofstorms-nvim.includeAllRuntimeDependencies = true; })
-          inputs.qvm.nixosModules.default
-          ({
-            programs.qvm = {
-              memory = "30G";
-              cpus = 30;
-            };
-          })
           inputs.flatpaks.nixosModules.default
           inputs.containers.nixosModules.default
 

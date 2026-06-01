@@ -209,26 +209,29 @@ revdrift_report() {
 # Layer 2 — CVE scan (vulnix)
 # ════════════════════════════════════════════════════════════════════
 
-# Build-only artifacts that are NOT in the runtime closure. These are pure noise
-# in a security report (compilers, vendored sources, intermediate outputs), and
-# their version strings churn every nixpkgs bump so whitelisting them is
-# unmaintainable. We filter them from the runtime view but still report the raw
-# total so nothing is silently hidden.
+# Build-only artifacts that are never in a runtime closure. Used as a fallback
+# classifier when we have no concrete runtime root to compare against.
 BUILD_ARTIFACT_RE='(-bootstrap|-vendor|-vendor-staging|-go-modules|-npm-deps|-source|-source-unsecvars|-binlore|-env|\.cabal$|\.tar$)'
 
-# Run vulnix with the given args and classify the result.
+# Print the package basenames (store hash stripped) of a path's RUNTIME closure.
+# This is ground truth for "what actually runs" — far more accurate than the
+# name-regex heuristic, because it excludes build-time-only dependencies
+# (compilers, vendored sources, etc.) that vulnix --system otherwise reports.
+runtime_names() {
+  nix-store -q --requisites "$1" 2>/dev/null | sed 's|/nix/store/[a-z0-9]*-||'
+}
+
+# Run vulnix and classify findings into "in runtime closure" (actionable) vs
+# "build-only" (not running). Args:
+#   $1 label, $2 runtime-root path (or "" if none), $3.. vulnix args
 #
-# vulnix's exit code is ambiguous: it returns non-zero BOTH when it finds
-# vulnerabilities AND when it errors (bad path, NVD download failure, network
-# down). So we drive detection off --json output instead: a parseable JSON array
-# tells us exactly how many packages have advisories; unparseable output means a
-# real error, which must NOT be reported as a vulnerability.
+# vulnix's exit code is ambiguous (non-zero for BOTH findings and errors), so we
+# drive everything off --json: a parseable array = success; unparseable = error.
 run_vulnix() {
-  local label="$1"; shift
+  local label="$1" runtime_root="$2"; shift 2
   local args=("$@")
   if [[ -n "$WHITELIST" ]]; then args+=(--whitelist "$WHITELIST"); fi
 
-  # Single JSON run is authoritative for both classification and the report.
   local json
   json="$(vulnix --json "${args[@]}" 2>/dev/null || true)"
 
@@ -243,20 +246,39 @@ run_vulnix() {
     return
   fi
 
-  # Split: runtime closure vs build-only artifacts.
-  local runtime_json runtime_count
-  runtime_json="$(printf '%s' "$json" \
-    | jq --arg re "$BUILD_ARTIFACT_RE" '[.[] | select(.name | test($re) | not)]')"
+  # Partition findings into runtime vs build-only.
+  local runtime_json rtfile="" method
+  if [[ -n "$runtime_root" && -e "$runtime_root" ]]; then
+    # Ground truth: intersect with the actual runtime closure.
+    method="runtime closure"
+    rtfile="$(mktemp)"
+    runtime_names "$runtime_root" | sort -u > "$rtfile"
+    runtime_json="$(printf '%s' "$json" | jq --rawfile rt "$rtfile" '
+      ($rt | split("\n") | map(select(length>0))) as $names
+      | ($names | INDEX(.)) as $set
+      | [ .[]
+          | . as $f
+          | select(
+              ($set[$f.name] != null)                       # exact match
+              or any($names[]; startswith($f.name + "-"))   # multi-output (-lib,-bin,…)
+            )
+        ]
+    ' 2>/dev/null || printf '%s' "$json")"
+    rm -f "$rtfile"
+  else
+    # Fallback: name-regex heuristic.
+    method="name heuristic"
+    runtime_json="$(printf '%s' "$json" \
+      | jq --arg re "$BUILD_ARTIFACT_RE" '[.[] | select(.name | test($re) | not)]')"
+  fi
+
+  local runtime_count build_count
   runtime_count="$(printf '%s' "$runtime_json" | jq 'length')"
-  local build_count=$(( total - runtime_count ))
+  build_count=$(( total - runtime_count ))
 
-  note "${label}: ${total} package(s) flagged (${build_count} build-only artifacts filtered)"
-  note "top runtime findings by CVSS (build artifacts excluded):"
+  note "${label}: ${total} flagged → ${runtime_count} in runtime closure, ${build_count} build-only (via ${method})"
+  note "actionable runtime findings by CVSS:"
 
-  # Print the top-N runtime findings, highest CVSS first, with CVE count.
-  # The limit is applied inside jq (not via `head`) so the pipe never closes
-  # early — `head` on a still-writing producer raises SIGPIPE, which under
-  # `set -o pipefail` makes the whole run exit 141.
   local top=40
   printf '%s' "$runtime_json" | jq -r --argjson top "$top" '
     ( [.[] | {name, max: ([.cvssv3_basescore[]?] | max // 0), n: (.affected_by | length)}]
@@ -264,7 +286,7 @@ run_vulnix() {
     | ($rows[:$top][]
        | "      \(.max|tostring|(. + "    ")[0:5]) \(.n) CVE(s)  \(.name)"),
       (if ($rows|length) > $top
-       then "      … and \(($rows|length) - $top) more (re-run with no whitelist or see vulnix --json)"
+       then "      … and \(($rows|length) - $top) more"
        else empty end)
   '
 
@@ -279,14 +301,14 @@ run_vulnix() {
 vulnix_closure() {
   local path="$1" label="$2"
   note "vulnix scanning closure for ${label}"
-  run_vulnix "$label" --closure "$path"
+  run_vulnix "$label" "$path" --closure "$path"
 }
 
-# Scan the live running system.
+# Scan the live running system, classified against its runtime closure.
 cve_current() {
   hdr "CVE scan — current host (live system)"
   note "vulnix --system (this may download the CVE database on first run)"
-  run_vulnix "current host" --system
+  run_vulnix "current host" "/run/current-system" --system
 }
 
 # Build one host's toplevel and scan its closure.
