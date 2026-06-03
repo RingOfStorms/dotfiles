@@ -1,7 +1,7 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
-    home-manager.url = "github:rycee/home-manager/release-25.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
+    home-manager.url = "github:rycee/home-manager/release-26.05";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
     # Use relative to get current version for testing
