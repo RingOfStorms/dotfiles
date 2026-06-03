@@ -224,6 +224,23 @@
         "type": "github"
       }
     },
+    "nixarr-sabnzbd-fix": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1779105792,
+        "narHash": "sha256-1xs1ML+icHDnQAYYuUAGJFY956XidEpQtBEy4mJuGhE=",
+        "owner": "strangeglyph",
+        "repo": "nixarr",
+        "rev": "dab8f236d6a1d81fa9af7a9d424de5cbdeab1aa1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "strangeglyph",
+        "repo": "nixarr",
+        "rev": "dab8f236d6a1d81fa9af7a9d424de5cbdeab1aa1",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1776062742,
@@ -976,6 +993,7 @@
         "matrix-nixpkgs": "matrix-nixpkgs",
         "n8n-nixpkgs": "n8n-nixpkgs",
         "nixarr": "nixarr",
+        "nixarr-sabnzbd-fix": "nixarr-sabnzbd-fix",
         "nixpkgs": "nixpkgs_4",
         "oauth2-proxy-nixpkgs": "oauth2-proxy-nixpkgs",
         "open-webui-nixpkgs": "open-webui-nixpkgs",

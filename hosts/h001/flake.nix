@@ -31,6 +31,17 @@
 
     nixarr.url = "github:rasmus-kirk/nixarr";
 
+    # SABnzbd module override for nixpkgs 26.05. nixarr main still uses the
+    # deprecated `services.sabnzbd.configFile` (broken on 26.05 — see
+    # nix-media-server/nixarr#132). We disable nixarr's sabnzbd module and
+    # import the fixed one from the PR branch instead. Pinned to the PR head
+    # SHA; `flake = false` so we only consume the single module file and don't
+    # drag in the fork's flake inputs. Remove once #132 lands in nixarr main.
+    nixarr-sabnzbd-fix = {
+      url = "github:strangeglyph/nixarr/dab8f236d6a1d81fa9af7a9d424de5cbdeab1aa1";
+      flake = false;
+    };
+
     # LLM gateway bake-off
     # Pinned to a commit BEFORE upstream PR #3107 (2026-04-28) bumped
     # axios/uuid/postcss without updating the flake's npmDepsHash for
