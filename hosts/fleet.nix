@@ -155,8 +155,11 @@ rec {
     let
       mkBlock = name: h:
         let
+          # home-manager 26.05 `programs.ssh.settings` uses upstream OpenSSH
+          # directive names (User, HostName, SetEnv) instead of the old
+          # camelCase matchBlocks option names.
           user = h.user;
-          termEnvAttrs = if h ? sshTermEnv then { setEnv.TERM = h.sshTermEnv; } else {};
+          termEnvAttrs = if h ? sshTermEnv then { SetEnv.TERM = h.sshTermEnv; } else {};
           hasOverlay = h ? overlayIp;
           hasPublic = h ? publicIp;
           hasLan = h ? lanIp;
@@ -169,15 +172,15 @@ rec {
 
           # For hosts not on tailnet, put the direct IP on the main block.
           mainHostname =
-            if !hasOverlay && directIp != null then { hostname = directIp; }
+            if !hasOverlay && directIp != null then { HostName = directIp; }
             else {};
 
-          baseBlock = { inherit user; } // termEnvAttrs // mainHostname;
+          baseBlock = { User = user; } // termEnvAttrs // mainHostname;
 
           # The `_` variant exists whenever a direct IP is available.
           underscoreBlock =
             if directIp != null then {
-              "${name}_" = { inherit user; } // termEnvAttrs // { hostname = directIp; };
+              "${name}_" = { User = user; } // termEnvAttrs // { HostName = directIp; };
             } else {};
         in
         { "${name}" = baseBlock; } // underscoreBlock;

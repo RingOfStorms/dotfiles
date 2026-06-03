@@ -90,7 +90,7 @@
 
           ({ pkgs, ... }: {
             environment.systemPackages = [
-              inputs.opencode.packages.${pkgs.system}.default
+              inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default
             ];
             environment.shellAliases = {
               "oc" = "all_proxy='' http_proxy='' https_proxy='' opencode";
