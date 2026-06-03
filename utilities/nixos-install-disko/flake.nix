@@ -2,7 +2,7 @@
   description = "NixOS installer ISOs with bcachefs + disko support";
 
   inputs = {
-    stable.url = "github:nixos/nixpkgs/nixos-25.11";
+    stable.url = "github:nixos/nixpkgs/nixos-26.05";
     unstable.url = "github:nixos/nixpkgs/nixos-unstable";
     
     impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";

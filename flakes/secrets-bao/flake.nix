@@ -133,10 +133,10 @@
               "nix2nix_2026-03-15" = {
                 owner = primaryUser;
                 inherit group;
-                hmChanges.programs.ssh.matchBlocks = builtins.listToAttrs (
+                hmChanges.programs.ssh.settings = builtins.listToAttrs (
                   map (host: {
                     name = host;
-                    value = { identityFile = "$SECRET_PATH"; };
+                    value = { IdentityFile = "$SECRET_PATH"; };
                   }) nix2nixMatchBlockHosts
                 );
               };
@@ -148,7 +148,7 @@
               "nix2github_2026-03-15" = {
                 owner = primaryUser;
                 inherit group;
-                hmChanges.programs.ssh.matchBlocks."github.com".identityFile = "$SECRET_PATH";
+                hmChanges.programs.ssh.settings."github.com".IdentityFile = "$SECRET_PATH";
               };
             }
             else { };
@@ -158,7 +158,7 @@
               "nix2gitforgejo_2026-03-15" = {
                 owner = primaryUser;
                 inherit group;
-                hmChanges.programs.ssh.matchBlocks."git.joshuabell.xyz".identityFile = "$SECRET_PATH";
+                hmChanges.programs.ssh.settings."git.joshuabell.xyz".IdentityFile = "$SECRET_PATH";
               };
             }
             else { };
