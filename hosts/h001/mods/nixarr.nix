@@ -43,6 +43,14 @@ in
           "h001"
           "h001.net.joshuabell.xyz"
         ];
+        # You reach the GUI over the tailnet (h001.net.joshuabell.xyz =>
+        # 100.64.0.13). sabnzbd treats the CGNAT/tailnet range 100.64.0.0/10
+        # as "external internet" and blocks it ("External internet access
+        # denied") unless it's listed as a local range. Add tailnet + LAN.
+        whitelistRanges = [
+          "100.64.0.0/10"
+          "10.12.14.0/24"
+        ];
       };
       transmission = {
         enable = true; # Torrent downloader
