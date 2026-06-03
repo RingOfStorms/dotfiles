@@ -32,7 +32,18 @@ in
       jellyfin.vpn.enable = true;
       seerr.enable = true; # request manager for media (was jellyseerr; renamed in nixarr)
       # seerr.vpn.enable = true; # NOTE makes it not able to communicate to *arr apps
-      sabnzbd.enable = true; # Usenet downloader
+      sabnzbd = {
+        enable = true; # Usenet downloader
+        # Accessed directly at http://h001.net.joshuabell.xyz:6336 (no nginx
+        # proxy). openFirewall binds the GUI to 0.0.0.0 and opens port 6336;
+        # whitelistHostnames must include the FQDN or sabnzbd refuses the
+        # connection ("Refused connection with hostname ...").
+        openFirewall = true;
+        whitelistHostnames = [
+          "h001"
+          "h001.net.joshuabell.xyz"
+        ];
+      };
       transmission = {
         enable = true; # Torrent downloader
         vpn.enable = true;
