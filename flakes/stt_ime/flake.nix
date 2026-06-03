@@ -110,7 +110,9 @@
 
           nativeBuildInputs = with pkgs; [
             cmake
-            extra-cmake-modules
+            # `extra-cmake-modules` top-level alias was removed in nixpkgs 26.05
+            # (Plasma 5 / KDE Gear 5 EOL). Use the Qt6 kdePackages version.
+            kdePackages.extra-cmake-modules
             pkg-config
           ];
 
@@ -137,7 +139,9 @@
 
           nativeBuildInputs = with pkgs; [
             cmake
-            extra-cmake-modules
+            # `extra-cmake-modules` top-level alias was removed in nixpkgs 26.05
+            # (Plasma 5 / KDE Gear 5 EOL). Use the Qt6 kdePackages version.
+            kdePackages.extra-cmake-modules
             pkg-config
           ];
 
