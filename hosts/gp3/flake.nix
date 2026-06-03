@@ -122,6 +122,7 @@
               ffmpeg-full
               spotify
               bitwarden-desktop
+              firefox
             ];
           })
         ];
