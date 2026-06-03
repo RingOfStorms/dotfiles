@@ -86,6 +86,12 @@ in
     services.sabnzbd = {
       configFile = null;
 
+      # Keep using the existing nixarr state location (history db, queue, rss,
+      # totals) instead of the nixpkgs default /var/lib/sabnzbd. nixpkgs uses
+      # this as systemd StateDirectory (relative to /var/lib), so a nested path
+      # is fine and matches nixarr's old ${nixarr.stateDir}/sabnzbd.
+      stateDir = "nixarr/state/sabnzbd";
+
       # Runtime secret overlay (host-managed, never in git). Must exist before
       # sabnzbd starts. Expected contents (configobj ini):
       #
