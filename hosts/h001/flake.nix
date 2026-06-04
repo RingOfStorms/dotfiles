@@ -15,7 +15,13 @@
     dawarich-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     immich-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     paperless-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    matrix-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    # Pinned to the 2026-02-27 unstable rev that the matrix container ran on
+    # for months. A later unstable bump (during the 26.05 migration) shipped
+    # mautrix-signal 26.02.1-pre, whose libsignal SEGFAULTs in
+    # signal_encrypt_message (Element->Signal sends crash, receives hit
+    # libsignal null-pointer errors). Keep this pin until a newer unstable rev
+    # ships a working mautrix-signal/libsignal; then bump deliberately + test.
+    matrix-nixpkgs.url = "github:nixos/nixpkgs/dd9b079222d43e1943b6ebd802f04fd959dc8e61";
 
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
