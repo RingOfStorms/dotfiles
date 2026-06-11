@@ -5,7 +5,7 @@ nixpkg () {
     echo "Error: No arguments provided. Please specify at least one package."
     return 1
   fi
-  cmd="nix shell"
+  cmd="nix shell --impure"
   for pkg in "$@"; do
     cmd="$cmd \"nixpkgs#$pkg\""
   done
