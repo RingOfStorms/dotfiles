@@ -87,7 +87,13 @@ in
             };
           })
           [
-            "owl-alpha"
+            # NB: OpenRouter namespaces its own stealth/alpha models under
+            # the literal `openrouter/` vendor, so the slug is
+            # `openrouter/owl-alpha` (was bare `owl-alpha`, now 404s). The
+            # `openrouter/${m}` wrapper below therefore yields the litellm
+            # model `openrouter/openrouter/owl-alpha` — correct: litellm
+            # strips the first provider prefix and forwards the rest.
+            "openrouter/owl-alpha"
             "google/gemini-2.5-flash-lite"
             "nvidia/nemotron-3-super-120b-a12b:free"
           ]
@@ -160,8 +166,6 @@ in
             "gpt-4o-mini"
             "gpt-4o-mini-2024-07-18"
             "gpt-5-mini"
-            "gpt-5.2"
-            "gpt-5.2-codex"
             "gpt-5.3-codex"
             "gpt-5.4"
             "gpt-5.4-mini"
@@ -195,6 +199,7 @@ in
             "claude-opus-4.6"
             "claude-opus-4-7"
             "claude-opus-4.7"
+            "claude-opus-4-8"
             "claude-opus-4.8"
             "claude-sonnet-4"
             "claude-sonnet-4.5"
@@ -233,6 +238,7 @@ in
             "gpt-5.4-mini"
             "gpt-5.4-nano"
             "gpt-5.5"
+            "gpt-oss-120b"
             "kimi-2.5"
             "kimi-k2.6"
             "minimax-2.5"
