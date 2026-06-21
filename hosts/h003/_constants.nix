@@ -60,6 +60,7 @@
       { mac = "d4:a2:cd:39:4e:f0"; name = "ellawork-e"; ip = "10.12.14.132"; }
       { mac = "00:23:a4:0b:3b:be"; name = "TMREM"; ip = "10.12.14.181"; }
       { mac = "04:0e:3c:3a:0e:d1"; name = "JOE"; ip = "10.12.14.126"; }
+      { mac = "01:ca:0c:47:ab:d7:4d"; name = "Jos_Mac"; ip = "10.12.14.159"; }
     ];
 
     # DNS split-horizon records (resolve to local IPs when on home network)
