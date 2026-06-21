@@ -1193,20 +1193,14 @@
         "nixpkgs": "nixpkgs_8"
       },
       "locked": {
-        "dir": "flakes/stt_ime",
-        "lastModified": 1780453956,
-        "narHash": "sha256-MHEZCVIdkfCZ08pLWQiajpNKx5RbHmsNSwib+b8xJ0g=",
-        "ref": "refs/heads/master",
-        "rev": "7256cb4712597399ea17e52a984f3129d9c74e05",
-        "revCount": 1773,
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+        "path": "../../flakes/stt_ime",
+        "type": "path"
       },
       "original": {
-        "dir": "flakes/stt_ime",
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      }
+        "path": "../../flakes/stt_ime",
+        "type": "path"
+      },
+      "parent": []
     },
     "systems": {
       "locked": {

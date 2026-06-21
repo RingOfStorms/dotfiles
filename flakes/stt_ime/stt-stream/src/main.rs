@@ -13,7 +13,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
-use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
+use whisper_rs::{
+    FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperVadContext,
+    WhisperVadContextParams, WhisperVadParams,
+};
+
+mod postprocess;
 
 /// Operating mode for the STT engine
 #[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
@@ -27,7 +32,7 @@ pub enum Mode {
 }
 
 /// Whisper model size
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelSize {
     Tiny,
     TinyEn,
@@ -38,6 +43,7 @@ pub enum ModelSize {
     Medium,
     MediumEn,
     LargeV3,
+    LargeV3Turbo,
 }
 
 impl ModelSize {
@@ -52,15 +58,23 @@ impl ModelSize {
             ModelSize::Medium => "medium",
             ModelSize::MediumEn => "medium.en",
             ModelSize::LargeV3 => "large-v3",
+            ModelSize::LargeV3Turbo => "large-v3-turbo",
         }
     }
 
+    /// All accepted model names, for help/error messages.
+    const VALID_NAMES: &'static str =
+        "tiny, tiny.en, base, base.en, small, small.en, medium, medium.en, large-v3, large-v3-turbo";
+
+    /// Parse a model name. Accepts dot, dash, and underscore separators
+    /// interchangeably, plus a few convenient aliases.
     fn parse(input: &str) -> Option<Self> {
-        let normalized = input
+        let normalized: String = input
             .trim()
             .to_lowercase()
-            .replace('.', "-")
-            .replace('_', "-");
+            .chars()
+            .map(|c| if c == '.' || c == '_' { '-' } else { c })
+            .collect();
 
         match normalized.as_str() {
             "tiny" => Some(ModelSize::Tiny),
@@ -71,7 +85,10 @@ impl ModelSize {
             "small-en" => Some(ModelSize::SmallEn),
             "medium" => Some(ModelSize::Medium),
             "medium-en" => Some(ModelSize::MediumEn),
-            "large-v3" => Some(ModelSize::LargeV3),
+            // "large" historically meant the newest large model; map it (and
+            // common aliases) to large-v3 so config like model = "large" works.
+            "large" | "large-v3" | "v3" => Some(ModelSize::LargeV3),
+            "turbo" | "large-turbo" | "large-v3-turbo" => Some(ModelSize::LargeV3Turbo),
             _ => None,
         }
     }
@@ -85,6 +102,27 @@ impl ModelSize {
     }
 }
 
+/// clap value parser for `--model`, so the CLI and env var share the exact
+/// same parsing logic (including aliases) via `ModelSize::parse`.
+fn parse_model_size(s: &str) -> Result<ModelSize, String> {
+    ModelSize::parse(s).ok_or_else(|| {
+        format!(
+            "unknown model '{}'. Valid models: {}",
+            s,
+            ModelSize::VALID_NAMES
+        )
+    })
+}
+
+/// Which VAD implementation to use.
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
+pub enum VadKind {
+    /// Lightweight energy-based VAD (no extra model download).
+    Simple,
+    /// whisper.cpp's built-in Silero VAD (downloads a small VAD model).
+    Silero,
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "stt-stream")]
 #[command(about = "Local speech-to-text streaming for Fcitx5")]
@@ -93,13 +131,18 @@ struct Args {
     #[arg(short, long, value_enum, default_value = "manual")]
     mode: Mode,
 
-    /// Whisper model size
-    #[arg(short = 'M', long, value_enum, default_value = "base-en")]
+    /// Whisper model size (tiny, base, small, medium, large-v3, large-v3-turbo;
+    /// add .en for English-only variants)
+    #[arg(short = 'M', long, value_parser = parse_model_size, default_value = "base-en")]
     model: ModelSize,
 
     /// Path to whisper model file (overrides --model)
     #[arg(long)]
     model_path: Option<String>,
+
+    /// VAD implementation to use
+    #[arg(long, value_enum, default_value = "simple")]
+    vad: VadKind,
 
     /// VAD threshold (0.0-1.0)
     #[arg(long, default_value = "0.5")]
@@ -108,6 +151,15 @@ struct Args {
     /// Silence duration (ms) to end utterance
     #[arg(long, default_value = "800")]
     silence_ms: u64,
+
+    /// Minimum speech duration (ms) for Silero VAD to count as a real utterance
+    #[arg(long, default_value = "250")]
+    min_speech_ms: u64,
+
+    /// Padding (ms) added before/after detected speech (Silero VAD) to avoid
+    /// clipping word edges
+    #[arg(long, default_value = "150")]
+    speech_pad_ms: u64,
 
     /// Emit partial transcripts while speaking
     #[arg(long, default_value = "true")]
@@ -124,6 +176,20 @@ struct Args {
     /// Use GPU acceleration
     #[arg(long)]
     gpu: bool,
+
+    /// Use beam search for the final transcription (slower, more accurate).
+    /// Recommended on GPU.
+    #[arg(long, default_value = "false")]
+    beam_search: bool,
+
+    /// Initial prompt to bias transcription toward specific vocabulary
+    /// (names, jargon, code terms). Acts as a custom dictionary.
+    #[arg(long, default_value = "")]
+    prompt: String,
+
+    /// Remove standalone filler words (um, uh, erm) from final transcripts
+    #[arg(long, default_value = "false")]
+    remove_fillers: bool,
 
     /// Number of threads for transcription (default: auto-detect)
     #[arg(long)]
@@ -166,6 +232,11 @@ pub enum SttCommand {
     SetMode { mode: String },
 }
 
+/// Interpret an env var value as a boolean ("1"/"true"/"yes"/"on").
+fn env_is_true(v: &str) -> bool {
+    matches!(v.trim().to_lowercase().as_str(), "1" | "true" | "yes" | "on")
+}
+
 fn emit_event(event: &SttEvent) {
     if let Ok(json) = serde_json::to_string(event) {
         let mut stdout = std::io::stdout().lock();
@@ -174,8 +245,12 @@ fn emit_event(event: &SttEvent) {
     }
 }
 
-/// Simple energy-based VAD (placeholder for Silero VAD)
-/// Returns true if the audio chunk likely contains speech
+/// Simple energy-based VAD.
+/// Returns true if the audio chunk likely contains speech.
+///
+/// This is used for live (per-chunk) start/stop gating. When Silero VAD is
+/// enabled it is additionally used at finalize time to reject non-speech
+/// buffers and trim silence (see `silero_has_speech`).
 fn simple_vad(samples: &[f32], threshold: f32) -> bool {
     if samples.is_empty() {
         return false;
@@ -186,6 +261,31 @@ fn simple_vad(samples: &[f32], threshold: f32) -> bool {
     // Map threshold 0-1 to dB range -50 to -20
     let threshold_db = -50.0 + (threshold * 30.0);
     db > threshold_db
+}
+
+/// Run Silero VAD over an accumulated buffer to decide whether it actually
+/// contains speech. This is a cheap accuracy win: it rejects buffers that the
+/// energy gate let through (keyboard noise, fan, etc.) before we spend a full
+/// transcription pass on them.
+///
+/// Returns `true` if at least one speech segment was detected. On any VAD
+/// error we fail open (return `true`) so we never silently drop real speech.
+fn silero_has_speech(
+    vad: &Arc<Mutex<WhisperVadContext>>,
+    params: WhisperVadParams,
+    samples: &[f32],
+) -> bool {
+    let mut vad = match vad.lock() {
+        Ok(v) => v,
+        Err(_) => return true,
+    };
+    match vad.segments_from_samples(params, samples) {
+        Ok(segments) => segments.num_segments() > 0,
+        Err(e) => {
+            warn!("Silero VAD failed, treating buffer as speech: {}", e);
+            true
+        }
+    }
 }
 
 /// Download or locate the Whisper model
@@ -219,6 +319,34 @@ fn get_model_path(args: &Args) -> Result<String> {
     let api = hf_hub::api::sync::Api::new()?;
     let repo = api.model(args.model.hf_repo().to_string());
     let path = repo.get(&args.model.hf_filename())?;
+
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// HF repo and filename for the GGML Silero VAD model used by whisper.cpp's
+/// built-in VAD. These live in the dedicated `ggml-org/whisper-vad` repo, not
+/// in the main `ggerganov/whisper.cpp` model repo.
+const SILERO_VAD_REPO: &str = "ggml-org/whisper-vad";
+const SILERO_VAD_FILENAME: &str = "ggml-silero-v6.2.0.bin";
+
+/// Download or locate the Silero VAD model used by whisper.cpp's built-in VAD.
+fn get_vad_model_path() -> Result<String> {
+    let cache_dir = dirs::cache_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("stt-stream")
+        .join("models");
+
+    let model_file = cache_dir.join(SILERO_VAD_FILENAME);
+    if model_file.exists() {
+        return Ok(model_file.to_string_lossy().to_string());
+    }
+
+    info!("Downloading Silero VAD model from Hugging Face...");
+    std::fs::create_dir_all(&cache_dir)?;
+
+    let api = hf_hub::api::sync::Api::new()?;
+    let repo = api.model(SILERO_VAD_REPO.to_string());
+    let path = repo.get(SILERO_VAD_FILENAME)?;
 
     Ok(path.to_string_lossy().to_string())
 }
@@ -275,13 +403,62 @@ async fn main() -> Result<()> {
     // Allow Nix/session configuration via env vars.
     // Precedence: explicit CLI args > env vars > defaults.
     //
-    // `ringofstorms.sttIme.model` uses dot notation (e.g. "tiny.en"),
-    // while clap's value enum expects kebab-case (e.g. "tiny-en").
-    let cli_has_model_flag = std::env::args().any(|a| a == "--model" || a == "-M");
-    if !cli_has_model_flag && args.model_path.is_none() {
+    // The fcitx5 shim passes `--model` explicitly, but env vars remain the
+    // fallback for the standalone CLI and for the knobs the shim doesn't pass.
+    let raw_args: Vec<String> = std::env::args().collect();
+    let cli_has = |flags: &[&str]| raw_args.iter().any(|a| flags.contains(&a.as_str()));
+
+    // Model: dot/dash/underscore are all accepted by ModelSize::parse.
+    if !cli_has(&["--model", "-M"]) && args.model_path.is_none() {
         if let Ok(model) = std::env::var("STT_STREAM_MODEL") {
             if let Some(parsed) = ModelSize::parse(&model) {
                 args.model = parsed;
+            } else {
+                warn!(
+                    "STT_STREAM_MODEL='{}' is not a recognized model; using {:?}. Valid: {}",
+                    model, args.model, ModelSize::VALID_NAMES
+                );
+            }
+        }
+    }
+
+    // VAD implementation.
+    if !cli_has(&["--vad"]) {
+        if let Ok(v) = std::env::var("STT_STREAM_VAD") {
+            match v.trim().to_lowercase().as_str() {
+                "simple" => args.vad = VadKind::Simple,
+                "silero" => args.vad = VadKind::Silero,
+                _ => warn!("STT_STREAM_VAD='{}' invalid (expected simple|silero)", v),
+            }
+        }
+    }
+
+    // Beam search.
+    if !cli_has(&["--beam-search"]) {
+        if let Ok(v) = std::env::var("STT_STREAM_BEAM_SEARCH") {
+            args.beam_search = env_is_true(&v);
+        }
+    }
+
+    // Filler removal.
+    if !cli_has(&["--remove-fillers"]) {
+        if let Ok(v) = std::env::var("STT_STREAM_REMOVE_FILLERS") {
+            args.remove_fillers = env_is_true(&v);
+        }
+    }
+
+    // Custom vocabulary / initial prompt.
+    if !cli_has(&["--prompt"]) && args.prompt.is_empty() {
+        if let Ok(v) = std::env::var("STT_STREAM_PROMPT") {
+            args.prompt = v;
+        }
+    }
+
+    // VAD threshold.
+    if !cli_has(&["--vad-threshold"]) {
+        if let Ok(v) = std::env::var("STT_STREAM_VAD_THRESHOLD") {
+            if let Ok(parsed) = v.trim().parse::<f32>() {
+                args.vad_threshold = parsed;
             }
         }
     }
@@ -322,6 +499,10 @@ async fn main() -> Result<()> {
     );
     info!("  Flash attention: {}", gpu_enabled);
     info!("  Model: {:?}", args.model);
+    info!("  VAD: {:?}", args.vad);
+    info!("  Beam search: {}", args.beam_search);
+    info!("  Remove fillers: {}", args.remove_fillers);
+    info!("  Custom prompt: {}", if args.prompt.is_empty() { "none" } else { "set" });
     info!("  Threads (final/partial): {}/{}", final_threads, partial_threads);
     
     if gpu_enabled && !gpu_feature_compiled {
@@ -332,6 +513,46 @@ async fn main() -> Result<()> {
         .context("Failed to load Whisper model")?;
 
     let whisper_ctx = Arc::new(Mutex::new(whisper_ctx));
+
+    // Set up Silero VAD if requested. Built parameters are reused per finalize.
+    let vad_ctx: Option<Arc<Mutex<WhisperVadContext>>> = if args.vad == VadKind::Silero {
+        match get_vad_model_path() {
+            Ok(vad_path) => {
+                // The Silero VAD model is tiny (~0.9 MB) and whisper.cpp does
+                // not provide a working GPU backend for it: requesting GPU here
+                // crashes with "no GPU found" / tensor-buffer mismatch on ROCm.
+                // Always run the VAD on CPU; it is more than fast enough.
+                let mut vad_ctx_params = WhisperVadContextParams::default();
+                vad_ctx_params.set_use_gpu(false);
+                match WhisperVadContext::new(&vad_path, vad_ctx_params) {
+                    Ok(ctx) => {
+                        info!("Loaded Silero VAD model from: {}", vad_path);
+                        Some(Arc::new(Mutex::new(ctx)))
+                    }
+                    Err(e) => {
+                        warn!("Failed to load Silero VAD ({}); falling back to energy VAD", e);
+                        None
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Could not obtain Silero VAD model ({}); falling back to energy VAD", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    // Pre-built VAD params for finalize-time speech detection.
+    let vad_params = {
+        let mut p = WhisperVadParams::new();
+        p.set_threshold(args.vad_threshold);
+        p.set_min_speech_duration(args.min_speech_ms as i32);
+        p.set_min_silence_duration(args.silence_ms as i32);
+        p.set_speech_pad(args.speech_pad_ms as i32);
+        p
+    };
 
     // Audio capture setup
     let host = cpal::default_host();
@@ -494,6 +715,9 @@ async fn main() -> Result<()> {
     let partial_interval = std::time::Duration::from_millis(args.partial_interval_ms);
     let emit_partials = args.partials;
     let language = args.language.clone();
+    let beam_search = args.beam_search;
+    let remove_fillers = args.remove_fillers;
+    let prompt = args.prompt.clone();
 
     while running.load(Ordering::Relaxed) {
         // Receive audio data
@@ -560,10 +784,18 @@ async fn main() -> Result<()> {
             let ctx = whisper_ctx.clone();
             let lang = language.clone();
             let threads = partial_threads;
+            let partial_prompt = prompt.clone();
 
-            // Transcribe in background
+            // Transcribe in background. Partials always use greedy (fast) and
+            // are emitted raw (no post-processing) for low latency.
             tokio::task::spawn_blocking(move || {
-                if let Ok(text) = transcribe(&ctx, &buffer_copy, &lang, false, threads) {
+                let cfg = TranscribeConfig {
+                    is_final: false,
+                    threads,
+                    beam_search: false,
+                    prompt: &partial_prompt,
+                };
+                if let Ok(text) = transcribe(&ctx, &buffer_copy, &lang, &cfg) {
                     if !text.is_empty() {
                         emit_event(&SttEvent::Partial { text });
                     }
@@ -584,17 +816,34 @@ async fn main() -> Result<()> {
             let ctx = whisper_ctx.clone();
             let lang = language.clone();
 
-            // Final transcription
-            match transcribe(&ctx, &buffer_copy, &lang, true, final_threads) {
-                Ok(text) => {
-                    if !text.is_empty() {
-                        emit_event(&SttEvent::Final { text });
+            // If Silero VAD is enabled, verify the buffer actually contains
+            // speech before spending a full transcription pass on it. This
+            // rejects energy-gate false positives (fan, keyboard, etc.).
+            let has_real_speech = match &vad_ctx {
+                Some(v) => silero_has_speech(v, vad_params, &buffer_copy),
+                None => true,
+            };
+
+            if has_real_speech {
+                let cfg = TranscribeConfig {
+                    is_final: true,
+                    threads: final_threads,
+                    beam_search,
+                    prompt: &prompt,
+                };
+                // Final transcription
+                match transcribe(&ctx, &buffer_copy, &lang, &cfg) {
+                    Ok(text) => {
+                        let text = postprocess::clean(&text, remove_fillers);
+                        if !text.is_empty() {
+                            emit_event(&SttEvent::Final { text });
+                        }
                     }
-                }
-                Err(e) => {
-                    emit_event(&SttEvent::Error {
-                        message: e.to_string(),
-                    });
+                    Err(e) => {
+                        emit_event(&SttEvent::Error {
+                            message: e.to_string(),
+                        });
+                    }
                 }
             }
 
@@ -622,26 +871,47 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// Per-call transcription tuning.
+struct TranscribeConfig<'a> {
+    /// Final (committed) transcription vs. streaming partial.
+    is_final: bool,
+    /// Number of inference threads.
+    threads: i32,
+    /// Use beam search instead of greedy (final pass only; slower, better).
+    beam_search: bool,
+    /// Initial prompt to bias decoding toward custom vocabulary. Empty = none.
+    prompt: &'a str,
+}
+
 /// Transcribe audio buffer using Whisper
 fn transcribe(
     ctx: &Arc<Mutex<WhisperContext>>,
     samples: &[f32],
     language: &str,
-    is_final: bool,
-    threads: i32,
+    cfg: &TranscribeConfig,
 ) -> Result<String> {
     let start_time = std::time::Instant::now();
-    
+
     let ctx = ctx.lock().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
     let mut state = ctx.create_state()?;
 
-    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+    // Beam search (final pass) trades speed for accuracy; greedy is used for
+    // partials and for the final pass on slower (CPU) hosts.
+    let strategy = if cfg.is_final && cfg.beam_search {
+        SamplingStrategy::BeamSearch {
+            beam_size: 5,
+            patience: -1.0,
+        }
+    } else {
+        SamplingStrategy::Greedy { best_of: 1 }
+    };
+    let mut params = FullParams::new(strategy);
 
     // Configure threads
-    params.set_n_threads(threads);
+    params.set_n_threads(cfg.threads);
 
     // Configure for speed vs accuracy
-    if is_final {
+    if cfg.is_final {
         // Final transcription: balanced speed and accuracy
         params.set_single_segment(false);
     } else {
@@ -650,6 +920,11 @@ fn transcribe(
         params.set_single_segment(true);      // Faster for streaming
         params.set_no_timestamps(true);       // We don't use timestamps for partials
         params.set_temperature_inc(0.0);      // Disable fallback retries for speed
+    }
+
+    // Custom vocabulary bias (applies to both passes when set).
+    if !cfg.prompt.is_empty() {
+        params.set_initial_prompt(cfg.prompt);
     }
 
     params.set_language(Some(language));

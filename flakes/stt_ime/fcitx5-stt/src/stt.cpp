@@ -35,6 +35,7 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <cstring>
+#include <cstdlib>
 #include <sstream>
 
 #include "config.h"
@@ -362,7 +363,18 @@ void SttEngine::startProcess() {
             case SttMode::Manual: modeStr = "manual"; break;
         }
 
-        execlp(STT_STREAM_PATH, "stt-stream", "--mode", modeStr, nullptr);
+        // Pass the configured model explicitly when available. stt-stream also
+        // reads STT_STREAM_MODEL itself, but passing --model is more robust and
+        // makes the active model visible in the process args.
+        const char* modelStr = getenv("STT_STREAM_MODEL");
+        if (modelStr != nullptr && modelStr[0] != '\0') {
+            execlp(STT_STREAM_PATH, "stt-stream",
+                   "--mode", modeStr,
+                   "--model", modelStr,
+                   nullptr);
+        } else {
+            execlp(STT_STREAM_PATH, "stt-stream", "--mode", modeStr, nullptr);
+        }
         _exit(127);
     }
 

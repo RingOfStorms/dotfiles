@@ -233,9 +233,64 @@
             enable = lib.mkEnableOption "Speech-to-text input method for Fcitx5";
 
             model = lib.mkOption {
-              type = lib.types.str;
+              type = lib.types.enum [
+                "tiny"
+                "tiny.en"
+                "base"
+                "base.en"
+                "small"
+                "small.en"
+                "medium"
+                "medium.en"
+                "large-v3"
+                "large-v3-turbo"
+              ];
               default = "base.en";
-              description = "Whisper model to use (tiny, base, small, medium, large)";
+              description = ''
+                Whisper model to use. Add .en for English-only variants.
+                On GPU machines, large-v3-turbo is recommended: near large-v3
+                accuracy at a fraction of the latency.
+              '';
+            };
+
+            vad = lib.mkOption {
+              type = lib.types.enum [
+                "simple"
+                "silero"
+              ];
+              default = if cfg.useGpu then "silero" else "simple";
+              description = ''
+                Voice activity detection backend:
+                - simple: lightweight energy gate (no extra model)
+                - silero: whisper.cpp's built-in Silero VAD (more accurate,
+                  fewer false triggers; downloads a small VAD model)
+                Defaults to silero on GPU hosts, simple otherwise.
+              '';
+            };
+
+            beamSearch = lib.mkOption {
+              type = lib.types.bool;
+              default = cfg.useGpu;
+              description = ''
+                Use beam search for the final transcription (slower but more
+                accurate). Defaults to enabled on GPU hosts.
+              '';
+            };
+
+            vocabulary = lib.mkOption {
+              type = lib.types.str;
+              default = "";
+              description = ''
+                Custom vocabulary / initial prompt to bias transcription toward
+                specific names, jargon, or code terms. Acts as a lightweight
+                dictionary, e.g. "NixOS, fcitx5, Kubernetes, kubectl".
+              '';
+            };
+
+            removeFillers = lib.mkOption {
+              type = lib.types.bool;
+              default = false;
+              description = "Remove standalone filler words (um, uh, erm) from transcripts.";
             };
 
             gpuBackend = lib.mkOption {
@@ -271,10 +326,15 @@
             # Make stt-stream available system-wide
             environment.systemPackages = [ sttStreamPkg ];
 
-            # Set default model via environment
+            # Set default configuration via environment. stt-stream reads these
+            # as fallbacks (explicit CLI flags always take precedence).
             environment.sessionVariables = {
               STT_STREAM_MODEL = cfg.model;
               STT_STREAM_GPU = if cfg.useGpu then "1" else "0";
+              STT_STREAM_VAD = cfg.vad;
+              STT_STREAM_BEAM_SEARCH = if cfg.beamSearch then "1" else "0";
+              STT_STREAM_PROMPT = cfg.vocabulary;
+              STT_STREAM_REMOVE_FILLERS = if cfg.removeFillers then "1" else "0";
             };
           };
         };
