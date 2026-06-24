@@ -35,6 +35,7 @@
           inputs.common.nixosModules.tailnet
           ({ ringofstorms.tailnet.omitCaptivePortal = false; })
           inputs.common.nixosModules.zsh
+          inputs.common.nixosModules.backup
 
           inputs.beszel.nixosModules.agent
           ({
@@ -52,6 +53,7 @@
           ./containers/vaultwarden.nix
           ./mods/postgresql.nix
           ./mods/atuin.nix
+          ./mods/backup.nix
 
           # Host-specific packages
           (

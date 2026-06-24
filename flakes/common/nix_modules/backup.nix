@@ -19,8 +19,11 @@
 #   ringofstorms.backup = {
 #     enable = true;
 #     paths = [ "/var/lib/vaultwarden" "/var/lib/acme" ];
-#     postgresBackup = true;          # dumps all DBs before the rsync
 #   };
+#
+# Database dumps are a per-host concern: if a host wants its DBs backed
+# up, it enables services.postgresqlBackup (or equivalent) itself and
+# adds the dump directory (e.g. /var/backup/postgresql) to `paths`.
 #
 # Requires: the host is on the tailnet and has the nix2nix SSH key at
 # `sshKeyFile` (default /var/lib/openbao-secrets/nix2nix_2026-03-15),
@@ -38,7 +41,6 @@ let
     mkEnableOption
     mkIf
     types
-    optional
     concatStringsSep
     escapeShellArg
     ;
@@ -65,21 +67,6 @@ in
         "**/tmp/**"
       ];
       description = "rsync exclude patterns (applied to every path).";
-    };
-
-    postgresBackup = mkOption {
-      type = types.bool;
-      default = false;
-      description = ''
-        Enable services.postgresqlBackup (dump all DBs, zstd) before the
-        rsync run, and include the dump directory in the backup.
-      '';
-    };
-
-    postgresDumpDir = mkOption {
-      type = types.str;
-      default = "/var/backup/postgresql";
-      description = "Where postgresqlBackup writes its dumps.";
     };
 
     targetHost = mkOption {
@@ -128,23 +115,14 @@ in
   config = mkIf cfg.enable {
     assertions = [
       {
-        assertion = cfg.paths != [ ] || cfg.postgresBackup;
-        message = "ringofstorms.backup.enable is true but no paths and no postgresBackup are set on ${hostName}.";
+        assertion = cfg.paths != [ ];
+        message = "ringofstorms.backup.enable is true but no paths are set on ${hostName}.";
       }
     ];
 
-    services.postgresqlBackup = mkIf cfg.postgresBackup {
-      enable = true;
-      backupAll = true;
-      location = cfg.postgresDumpDir;
-      compression = "zstd";
-      # Run before the rsync push (which defaults to 03:00).
-      startAt = "02:30";
-    };
-
     systemd.services.ros-backup = {
       description = "rsync-push backup to h002 NAS";
-      after = [ "network-online.target" ] ++ optional cfg.postgresBackup "postgresqlBackup.service";
+      after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
 
       serviceConfig = {
@@ -157,8 +135,7 @@ in
 
       script =
         let
-          allPaths = cfg.paths ++ optional cfg.postgresBackup cfg.postgresDumpDir;
-          pathsLine = concatStringsSep " " (map escapeShellArg allPaths);
+          pathsLine = concatStringsSep " " (map escapeShellArg cfg.paths);
           excludeArgs = concatStringsSep " " (
             map (e: "--exclude=${escapeShellArg e}") cfg.exclude
           );
