@@ -169,12 +169,16 @@ in
 
           # rsync each declared path into the new timestamped snapshot.
           # -a archive, -R relative (preserves full source path under dest),
-          # --fake-super stores uid/gid/mode in xattrs on the receiver,
-          # --numeric-ids keeps numeric ownership.
-          rsync -aR --numeric-ids --fake-super --delete \
+          # --numeric-ids keeps numeric ownership. The sender runs as real
+          # root (sees true uid/gid); the receiver runs as an unprivileged
+          # user, so --rsync-path 'rsync --fake-super' makes the remote
+          # rsync store uid/gid/mode in xattrs instead of failing to chown.
+          # Restores must use the matching --fake-super to reproduce them.
+          rsync -aR --numeric-ids --delete \
             ${excludeArgs} \
             $LINKDEST \
-            -e "$SSH --rsync-path='rsync --fake-super'" \
+            -e "$SSH" \
+            --rsync-path="rsync --fake-super" \
             ${pathsLine} \
             "$REMOTE:$BASE/$TS/"
 
