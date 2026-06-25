@@ -9,6 +9,7 @@ let
 in
 {
   imports = [
+    ./atuin.nix
     ./dawarich.nix
     ./forgejo.nix
     ./immich.nix
@@ -16,6 +17,7 @@ in
     ./paperless.nix
     ./opengist.nix
     ./penpot.nix
+    ./vaultwarden.nix
     ./zitadel.nix
   ];
 

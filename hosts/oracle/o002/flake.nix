@@ -90,6 +90,8 @@
 
           diskoModule
           ./hardware-configuration.nix
+          ./configuration.nix
+          ./nginx.nix
         ] ++ impermanenceModules;
       };
     };

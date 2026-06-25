@@ -9,4 +9,9 @@
     publicIp = "164.152.19.60";
     overlayIp = "100.64.0.5";
   };
+
+  # The Tailscale IP of h001, used by nginx to proxy services. o002 only does
+  # TLS termination + reverse proxy now; all stateful services (incl. the
+  # migrated vaultwarden + atuin) live on h001 behind the tailnet.
+  upstreamHost = "100.64.0.13";
 }
