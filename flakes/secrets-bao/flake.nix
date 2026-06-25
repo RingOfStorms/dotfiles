@@ -84,6 +84,7 @@
         "l001" "l001_"
         "l002" "l002_"
         "o001" "o001_"
+        "o002" "o002_"
       ];
 
       # Generate common secrets based on role and primary user.

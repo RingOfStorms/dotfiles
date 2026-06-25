@@ -110,6 +110,13 @@ rec {
       trust = "high";
       flakePath = "hosts/oracle/o001";
     };
+    o002 = {
+      user = "root";
+      overlayIp = "100.64.0.5";
+      publicIp = "164.152.19.60";
+      trust = "high";
+      flakePath = "hosts/oracle/o002";
+    };
     # Non-deployable hosts referenced in SSH configs
     t = {
       user = "joshua.bell";
