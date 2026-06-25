@@ -1,11 +1,14 @@
 # Hardware configuration for an Oracle Cloud Ampere (aarch64) VM.
 #
-# Deliberately does NOT declare fileSystems/swapDevices: the
-# bcachefs-impermanence module (ringofstorms.impermanence) owns all the
-# boot-drive mounts (/, /boot, /nix, /persist, /.snapshots, swap).
+# Does NOT declare fileSystems/swapDevices: disko (disko.nix, enableConfig
+# = true) emits the runtime bcachefs mounts (/, /boot, /nix, /persist,
+# /.snapshots, swap).
 #
-# Oracle Ampere VMs are virtio/qemu guests with UEFI boot. GRUB installs
-# as removable (Oracle's UEFI looks for the fallback bootloader path).
+# Oracle Ampere VMs are virtio/qemu guests with UEFI boot. Use GRUB
+# installed as removable to the ESP fallback path (/EFI/BOOT/BOOTAA64.EFI)
+# WITHOUT writing EFI NVRAM vars (the kexec installer can't, and Oracle's
+# firmware boots the fallback path anyway). This is the EXACT config that
+# the working o001 box uses, confirmed booting on Oracle Ampere.
 { lib, modulesPath, ... }:
 {
   imports = [ (modulesPath + "/profiles/qemu-guest.nix") ];
@@ -27,12 +30,12 @@
     "ahci"
     "sd_mod"
   ];
-  boot.initrd.kernelModules = [ ];
+  # Force nvme early in initrd (matches the working o001 box).
+  boot.initrd.kernelModules = [ "nvme" ];
   boot.kernelModules = [ ];
   boot.extraModulePackages = [ ];
 
-  # bcachefs support in initrd + system (the impermanence module only sets
-  # this when encrypted = true; we run unencrypted, so set it here).
+  # bcachefs support in initrd + running system.
   boot.supportedFilesystems = [ "bcachefs" ];
 
   networking.useDHCP = lib.mkDefault true;

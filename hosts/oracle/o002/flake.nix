@@ -1,5 +1,5 @@
 {
-  description = "Reusable Oracle Ampere (aarch64) bootstrap: clean bcachefs + impermanence + secrets-bao NixOS, installable via nixos-anywhere. Copy to hosts/oracle/<name>/ and layer services on top.";
+  description = "o002: Oracle Ampere (aarch64) gateway rebuild. Clean bcachefs (persistent root, no impermanence yet) + secrets-bao NixOS, installed via nixos-anywhere.";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
@@ -8,6 +8,11 @@
     disko.url = "github:nix-community/disko/latest";
     disko.inputs.nixpkgs.follows = "nixpkgs";
 
+    # impermanence flake is referenced ONLY for its shared disko-bcachefs.nix
+    # layout file (disko.nix). The impermanence boot-time root-reset is NOT
+    # enabled here yet — see hardware-configuration.nix notes. We start with a
+    # plain persistent bcachefs root to de-risk the first boot, then can layer
+    # impermanence on as a validated second step.
     # impermanence.url = "path:../../../flakes/impermanence";
     impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
     # common.url = "path:../../../flakes/common";
@@ -23,7 +28,6 @@
     let
       fleet = import ../../fleet.nix;
       constants = import ./_constants.nix;
-      primaryUser = constants.host.primaryUser;
     in
     {
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
@@ -40,36 +44,14 @@
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.backup
 
-          # bcachefs + impermanence (boot-time root reset). Disk UUIDs are
-          # captured AFTER the disko partition step and filled in here.
-          inputs.impermanence.nixosModules.default
-          ({
-            ringofstorms.impermanence = {
-              enable = true;
-              encrypted = false;
-              # Use disko's deterministic GPT partition labels (the
-              # partition keys ESP/swap/primary in disko-bcachefs.nix), so
-              # these paths exist immediately after partitioning without
-              # needing to capture UUIDs first. Switch to by-uuid later if
-              # desired (capture via `lsblk -o name,uuid`).
-              disk = {
-                boot = "/dev/disk/by-partlabel/ESP";
-                primary = "/dev/disk/by-partlabel/primary";
-                swap = "/dev/disk/by-partlabel/swap";
-              };
-            };
-          })
-
-          # disko partition config (partition-only; impermanence owns mounts)
+          # disko: partitions AND emits the runtime fileSystems for the
+          # bcachefs subvolumes (enableConfig = true, set in disko.nix). No
+          # impermanence => disko owns the mounts. Plain persistent root.
           (import ./disko.nix {
             inherit (inputs) disko impermanence;
           })
 
           ./hardware-configuration.nix
-          (import ./impermanence.nix {
-            inherit primaryUser;
-            impermanence_mod = inputs.impermanence;
-          })
         ];
       };
     };
