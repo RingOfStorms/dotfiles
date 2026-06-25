@@ -4,6 +4,10 @@
 # tailnet via nix2nix). Database dumps are handled per-host:
 # services.postgresqlBackup is enabled in mods/postgresql.nix and its
 # dump directory (/var/backup/postgresql) is included in paths below.
+#
+# NOTE: /machine-key.json (the Zitadel/OpenBao bootstrap identity) is
+# deliberately NOT backed up — it's a secret that should not sit in
+# plaintext on the NAS. It's re-seeded manually per host from Zitadel.
 { ... }:
 {
   ringofstorms.backup = {
@@ -11,7 +15,6 @@
     paths = [
       "/var/lib/vaultwarden"    # CRITICAL: password vault (uid/gid 114)
       "/var/lib/acme"           # TLS certs for ~25 domains
-      "/machine-key.json"       # openbao/Zitadel bootstrap identity (irreplaceable)
       "/var/backup/postgresql"  # atuin DB dumps (postgresqlBackup, enabled in mods/postgresql.nix)
     ];
   };
