@@ -92,6 +92,7 @@
           ./hardware-configuration.nix
           ./configuration.nix
           ./nginx.nix
+          ./headscale.nix
         ] ++ impermanenceModules;
       };
     };

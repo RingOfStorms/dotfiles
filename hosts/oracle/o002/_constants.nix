@@ -14,4 +14,15 @@
   # TLS termination + reverse proxy now; all stateful services (incl. the
   # migrated vaultwarden + atuin) live on h001 behind the tailnet.
   upstreamHost = "100.64.0.13";
+
+  services = {
+    # Headscale coordination server, migrated off l001. Co-hosted with
+    # tailscaled (see headscale.nix for the co-host mitigations).
+    headscale = {
+      port = 8080;
+      dataDir = "/var/lib/headscale";
+      domain = "headscale.joshuabell.xyz";
+      baseDomain = "net.joshuabell.xyz";
+    };
+  };
 }

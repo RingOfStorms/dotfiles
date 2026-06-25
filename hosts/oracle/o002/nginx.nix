@@ -119,6 +119,18 @@ in
           };
         };
 
+        # ── Headscale coordination server (runs locally on o002) ──
+        # Proxy to 127.0.0.1 (not localhost) — headscale binds IPv4 only, and
+        # nginx resolving localhost to [::1] gives connection-refused.
+        "headscale.${domain}" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyWebsockets = true;
+            proxyPass = "http://127.0.0.1:${toString constants.services.headscale.port}";
+          };
+        };
+
         # ── Services migrated off o001 onto h001 (proxied over tailnet) ──
         "vault.${domain}" = proxyToUpstream;
         "atuin.${domain}" = proxyToUpstream;

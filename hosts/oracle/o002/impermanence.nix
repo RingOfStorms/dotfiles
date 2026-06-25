@@ -23,7 +23,25 @@ in
   environment.persistence."/persist" = {
     enable = true;
     hideMounts = true;
-    directories = shared.system.directories ++ [ ];
+    directories = shared.system.directories ++ [
+      # Headscale coordination DB (node registrations) — must survive the
+      # impermanence root-wipe or every node would have to re-register.
+      "/var/lib/headscale"
+      # ACME state: issued Let's Encrypt certs + the lego account key. MUST be
+      # persisted. o002 fronts ~25 vhosts; re-issuing them all on every boot
+      # risks LE rate limits, and — as actually happened — if a single re-order
+      # hits a transient LE error, nginx stays on the minica self-signed
+      # placeholder, which takes down headscale's TLS and therefore the entire
+      # tailnet control plane. Persisting the lego account key also avoids the
+      # new-account-per-boot limit.
+      #
+      # The earlier "empty /persist dir shadowed the live certs on first
+      # activation" failure is avoided by pre-seeding /persist from the live
+      # certs before the first deploy that enables this:
+      #   rsync -aH /var/lib/acme/ /persist/var/lib/acme/
+      # so the bind-mount surfaces real certs, never an empty dir.
+      "/var/lib/acme"
+    ];
     files = shared.system.files ++ [ ];
     users."${primaryUser}" = {
       directories = shared.user.directories ++ [ ];

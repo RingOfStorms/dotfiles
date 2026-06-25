@@ -18,7 +18,6 @@
     "sso"
     "gist"
     "git"
-    "blog"
     "etebase"
     "photos"
     "location"
