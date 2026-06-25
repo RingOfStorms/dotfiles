@@ -1,51 +1,44 @@
-# Boot debugging aids for diagnosing the impermanence-in-initrd failure on
-# o002 (Oracle Ampere aarch64). Two mechanisms:
+# initrd SSH recovery for o002 (Oracle Ampere aarch64, impermanence host).
 #
-# 1. Serial console output: force all kernel + initrd messages to the
-#    Oracle serial console (ttyAMA0, the pl011 SBSA UART at 0x9000000)
-#    AND tty1, so the OCI serial console shows exactly where boot hangs.
+# o002 runs bcachefs + impermanence with a boot-time root reset in initrd.
+# If that ever hangs on this headless cloud box, initrd SSH is the only way
+# in. We keep it as a permanent recovery aid:
 #
-# 2. initrd SSH: bring up networking + sshd in the initrd so that if the
-#    bcachefs-reset-root / mount path hangs BEFORE pivot, we can still SSH
-#    into the initrd (port 22) to inspect and recover. Essential on a
-#    headless cloud box with no physical console.
+#   - Serial console output to ttyAMA0 (Oracle's UART) so the OCI serial
+#     console shows boot messages.
+#   - sshd in the initrd (port 22) authorized with the fleet keys, using a
+#     persistent host key at /persist/initrd/ssh_host_ed25519_key (survives
+#     the root wipe; read at activation time on the target).
 #
-# Remove this module (and flip enableImpermanence) once impermanence boots
-# reliably or is abandoned.
+# To reach the initrd if a boot hangs:
+#   ssh -i <nix2nix-or-personal-key> root@<o002-ip>
+# (you'll land in the initrd shell environment before pivot).
 { config, lib, pkgs, ... }:
 {
-  # ── 1. Serial console ──────────────────────────────────────────────────
+  # Serial console on the Oracle UART (kernel auto-detects via ACPI SPCR,
+  # but make it explicit so initrd + early boot definitely log there).
   boot.kernelParams = [
     "console=ttyAMA0,115200"
     "console=tty1"
-    # Verbose initrd so we see each service in the serial log.
-    "systemd.log_level=debug"
-    "systemd.log_target=console"
-    "rd.systemd.show_status=true"
-    "rd.udev.log_level=info"
   ];
 
-  # ── 2. initrd SSH (systemd-initrd networking) ──────────────────────────
+  # initrd SSH (systemd-initrd networking) for recovery.
   boot.initrd.network = {
     enable = true;
     ssh = {
       enable = true;
       port = 22;
-      # Authorized key = the fleet nix2nix key (same one used for the
-      # normal-boot root login).
       authorizedKeys = [
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKxNhtJNx/y4W54kAGmm2pF80l437z1RLWl/GTVKy0Pd josh@lio"
       ];
-      # Dedicated initrd host key. Read at BUILD TIME from lio (the builder)
-      # and embedded in the initrd. Generated once at
-      # /tmp/o002-initrd/ssh_host_ed25519_key (debug-only; throwaway key).
-      # NOTE: embeds a private key in the world-readable nix store — fine for
-      # this short-lived debug cycle, remove with this module afterward.
-      hostKeys = [ /tmp/o002-initrd/ssh_host_ed25519_key ];
+      # Persistent initrd host key (survives the impermanence root wipe).
+      # Read at activation time on the target; generate once with:
+      #   ssh-keygen -t ed25519 -N "" -f /persist/initrd/ssh_host_ed25519_key
+      hostKeys = [ "/persist/initrd/ssh_host_ed25519_key" ];
     };
   };
 
-  # Ensure initrd has the virtio NIC driver so networking comes up early.
+  # Ensure the virtio NIC driver is in initrd so networking comes up early.
   boot.initrd.availableKernelModules = [ "virtio_net" "virtio_pci" ];
 }
