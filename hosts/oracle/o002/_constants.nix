@@ -7,6 +7,6 @@
     primaryUser = "root";
     stateVersion = "26.05";
     publicIp = "164.152.19.60";
-    # overlayIp filled in after first tailnet join.
+    overlayIp = "100.64.0.5";
   };
 }
