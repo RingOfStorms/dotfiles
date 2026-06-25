@@ -97,19 +97,6 @@ rec {
       lanIp = "10.12.14.144";
       trust = "low";
     };
-    l001 = {
-      user = "root";
-      publicIp = "172.236.111.33";
-      trust = "none";
-      flakePath = "hosts/linode/l001";
-    };
-    o001 = {
-      user = "root";
-      overlayIp = "100.64.0.11";
-      publicIp = "64.181.210.7";
-      trust = "high";
-      flakePath = "hosts/oracle/o001";
-    };
     o002 = {
       user = "root";
       overlayIp = "100.64.0.5";

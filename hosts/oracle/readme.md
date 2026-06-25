@@ -8,7 +8,6 @@ bcachefs with a 3 GB ESP, plus impermanence (boot-time root reset).
 
 - `bootstrap/` — reusable template host. Copy it to `hosts/oracle/<name>/`
   to onboard a new instance.
-- `o001/` — original gateway (nixos-infect, tiny `/boot`). Being decommissioned.
 - `o002/` — gateway rebuild on the clean bcachefs + impermanence stack.
 
 ---
