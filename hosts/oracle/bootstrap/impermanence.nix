@@ -2,8 +2,8 @@
 #
 # Base-survival set only: enough to boot, keep machine identity, join the
 # tailnet, and fetch secrets across the impermanence root-wipe. Service
-# data dirs (vaultwarden, postgres, acme, ...) are added per-host when
-# services are ported on top of this bootstrap.
+# data dirs (vaultwarden, postgres, acme, ...) are added when services are
+# ported on top.
 #
 # Takes the impermanence flake as `impermanence_mod` and the primary user
 # (root on cloud boxes) so the merged shared sets resolve user paths.
