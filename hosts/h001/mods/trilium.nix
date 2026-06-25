@@ -59,26 +59,6 @@ in
           };
         };
       };
-      "${c.blogDomain}" = {
-        addSSL = true;
-        sslCertificate = "/var/lib/acme/${fleet.global.domain}/fullchain.pem";
-        sslCertificateKey = "/var/lib/acme/${fleet.global.domain}/key.pem";
-        locations = {
-          "/share" = {
-            proxyWebsockets = true;
-            proxyPass = "http://127.0.0.1:${toString c.port}";
-            extraConfig = ''
-              auth_request off;
-            '';
-          };
-          "/assets" = {
-            proxyPass = "http://127.0.0.1:${toString c.port}";
-            extraConfig = ''
-              auth_request off;
-            '';
-          };
-        };
-      };
       # TODO revisit, am I going to use the native app or web version
       # this is only needed for the app that can't handle the oauth flow
       "trilium_overlay" = {

@@ -153,7 +153,6 @@
       overlayPort = 9112;
       dataDir = "/var/lib/trilium";
       domain = "notes.joshuabell.xyz";
-      blogDomain = "blog.joshuabell.xyz";
     };
 
     oauth2Proxy = {

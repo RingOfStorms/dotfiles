@@ -176,13 +176,6 @@ in
             };
           }
           {
-            "Blog" = {
-              description = "Trilium Blog";
-              href = "https://${s.trilium.blogDomain}";
-              icon = "mdi-post";
-            };
-          }
-          {
             "Location" = {
               description = "Dawarich";
               href = "https://${s.dawarich.domain}";

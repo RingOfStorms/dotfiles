@@ -141,7 +141,6 @@ in
         };
         "n8n.${domain}" = proxyToUpstream;
         "notes.${domain}" = proxyToUpstream;
-        "blog.${domain}" = proxyToUpstream;
         "sec.${domain}" = {
           enableACME = true;
           forceSSL = true;

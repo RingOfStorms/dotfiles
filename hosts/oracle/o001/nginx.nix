@@ -174,14 +174,6 @@ in
             proxyPass = "http://${upstream}";
           };
         };
-        "blog.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://${upstream}";
-          };
-        };
         "sec.${domain}" = {
           enableACME = true;
           forceSSL = true;
