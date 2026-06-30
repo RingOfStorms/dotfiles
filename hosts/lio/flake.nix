@@ -195,6 +195,7 @@
                 # attempt due to portal/pipewire sandboxing issues.
                 # Native binary uses host xdg-desktop-portal-kde directly.
                 vesktop
+                discord
               ];
               services.flatpak.packages = [
                 "org.signal.Signal"
