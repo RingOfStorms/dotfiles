@@ -8,28 +8,19 @@ let
   c = constants;
   domain = fleet.global.domain;
   upstream = c.upstreamHost;
+
+  # All public vhosts proxy to h001 over the tailnet. h001's own nginx
+  # terminates per-service and forwards to the right container.
+  proxyToUpstream = {
+    enableACME = true;
+    forceSSL = true;
+    locations."/" = {
+      proxyWebsockets = true;
+      proxyPass = "http://${upstream}";
+    };
+  };
 in
 {
-  # JUST A TEST TODO remove
-  containers.wasabi = {
-    ephemeral = true;
-    autoStart = true;
-    privateNetwork = true;
-    hostAddress = c.services.wasabi.hostAddress;
-    localAddress = c.services.wasabi.containerIp;
-    config =
-      { config, pkgs, ... }:
-      {
-        system.stateVersion = "24.11";
-        services.httpd.enable = true;
-        services.httpd.adminAddr = "foo@example.org";
-        networking.firewall = {
-          enable = true;
-          allowedTCPPorts = [ 80 ];
-        };
-      };
-  };
-
   # nginx proxies to tailscale overlay IPs and binds on overlayIp.
   # tailscaled-autoconnect.service (Type=notify) only finishes once `tailscale up`
   # has returned and tailscale0 has its address; tailscaled.service alone is just
@@ -74,14 +65,14 @@ in
       in
       {
         # Redirect self IP to domain
-        "64.181.210.7" = {
+        "${c.host.publicIp}" = {
           locations."/" = {
             return = "301 https://${domain}";
           };
         };
 
         "${c.host.overlayIp}" = tailnetConfig;
-        "o001.net.${domain}" = tailnetConfig;
+        "o002.net.${domain}" = tailnetConfig;
 
         "www.${domain}" = {
           enableACME = true;
@@ -94,14 +85,7 @@ in
           enableACME = true;
           forceSSL = true;
           locations = {
-            "/wasabi" = {
-              proxyPass = "http://${c.services.wasabi.containerIp}/";
-              extraConfig = ''
-                rewrite ^/wasabi/(.*) /$1 break;
-              '';
-            };
             "/" = {
-              # return = "200 '<html>Hello World</html>'";
               extraConfig = ''
                 default_type text/html;
                 return 200 '
@@ -135,15 +119,24 @@ in
           };
         };
 
-        # PROXY HOSTS
-        "chat.${domain}" = {
+        # ── Headscale coordination server (runs locally on o002) ──
+        # Proxy to 127.0.0.1 (not localhost) — headscale binds IPv4 only, and
+        # nginx resolving localhost to [::1] gives connection-refused.
+        "headscale.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
             proxyWebsockets = true;
-            proxyPass = "http://${upstream}";
+            proxyPass = "http://127.0.0.1:${toString constants.services.headscale.port}";
           };
         };
+
+        # ── Services migrated off o001 onto h001 (proxied over tailnet) ──
+        "vault.${domain}" = proxyToUpstream;
+        "atuin.${domain}" = proxyToUpstream;
+
+        # PROXY HOSTS (all forwarded to h001 over the tailnet)
+        "chat.${domain}" = proxyToUpstream;
         "gist.${domain}" = {
           enableACME = true;
           forceSSL = true;
@@ -158,30 +151,8 @@ in
             proxyPass = "http://${upstream}";
           };
         };
-        "n8n.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://${upstream}";
-          };
-        };
-        "notes.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://${upstream}";
-          };
-        };
-        "blog.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://${upstream}";
-          };
-        };
+        "n8n.${domain}" = proxyToUpstream;
+        "notes.${domain}" = proxyToUpstream;
         "sec.${domain}" = {
           enableACME = true;
           forceSSL = true;
@@ -241,14 +212,7 @@ in
             '';
           };
         };
-        "pim.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://${upstream}";
-          };
-        };
+        "pim.${domain}" = proxyToUpstream;
         "location.${domain}" = {
           enableACME = true;
           forceSSL = true;
@@ -346,11 +310,11 @@ in
     };
   };
 
-  # NOTE Oracle also has security rules that must expose these ports so this alone will not work! See readme
+  # NOTE Oracle also has security rules that must expose these ports so this
+  # alone will not work! See hosts/oracle/readme.md
   networking.firewall.allowedTCPPorts = [
     80 # web http
     443 # web https
-
     3032 # ssh for git server
   ];
 }

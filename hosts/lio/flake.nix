@@ -50,6 +50,7 @@
           "wheel"
           "networkmanager"
           "video"
+          "render" # AMD ROCm/HIP compute access (/dev/kfd, /dev/dri/renderD*)
           "input"
           "dialout"
         ];
@@ -94,7 +95,7 @@
               enable = true;
               gpuBackend = "hip"; # Use AMD ROCm/HIP acceleration
               useGpu = true;
-              model = "large";
+              model = "large-v3-turbo";
             };
           })
           inputs.ports.nixosModules.default
@@ -194,6 +195,7 @@
                 # attempt due to portal/pipewire sandboxing issues.
                 # Native binary uses host xdg-desktop-portal-kde directly.
                 vesktop
+                discord
               ];
               services.flatpak.packages = [
                 "org.signal.Signal"

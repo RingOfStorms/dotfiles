@@ -10,12 +10,8 @@ license = "MIT"
 cpal = "0.15"
 # Resampling (48k -> 16k)
 rubato = "0.15"
-# Whisper inference
-whisper-rs = "0.15"
-# Voice activity detection
-# Using silero via ONNX (reserved for future use)
-# ort = { version = "2.0.0-rc.9", default-features = false, features = ["load-dynamic"] }
-# ndarray = "0.16"
+# Whisper inference (with built-in Silero VAD support)
+whisper-rs = "0.16"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -35,11 +31,8 @@ thiserror = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Ring buffer for audio (reserved for future use)
-# ringbuf = "0.4"
-
 # For downloading models
-hf-hub = "0.3"
+hf-hub = "0.4"
 
 [features]
 default = []

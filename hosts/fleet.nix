@@ -97,18 +97,12 @@ rec {
       lanIp = "10.12.14.144";
       trust = "low";
     };
-    l001 = {
+    o002 = {
       user = "root";
-      publicIp = "172.236.111.33";
-      trust = "none";
-      flakePath = "hosts/linode/l001";
-    };
-    o001 = {
-      user = "root";
-      overlayIp = "100.64.0.11";
-      publicIp = "64.181.210.7";
+      overlayIp = "100.64.0.5";
+      publicIp = "164.152.19.60";
       trust = "high";
-      flakePath = "hosts/oracle/o001";
+      flakePath = "hosts/oracle/o002";
     };
     # Non-deployable hosts referenced in SSH configs
     t = {
@@ -192,7 +186,7 @@ rec {
   # Subdomains served by h001, used for headscale DNS splitting and /etc/hosts
   h001Subdomains = [
     "jellyfin" "media" "notes" "chat" "sso-proxy" "n8n"
-    "sec" "sso" "gist" "git" "blog" "etebase" "photos"
+    "sec" "sso" "gist" "git" "etebase" "photos"
     "location" "matrix" "element" "docs"
   ];
 
