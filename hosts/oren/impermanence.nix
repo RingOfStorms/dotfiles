@@ -46,6 +46,7 @@ in
         # by the `chrome` wrapper in ~/projects/flake_wrappers/tempus_wrapper
         # via `--user-data-dir=$HOME/.config/google-chrome-tempus`.
         ".config/google-chrome-tempus"
+        ".config/google-chrome-tempus-np"
       ];
       files = shared.user.files ++ [ ];
     };
