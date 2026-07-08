@@ -25,8 +25,8 @@
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
-    opencode.url = "github:anomalyco/opencode/88582566bf2bfd2d26000f0c25735bf48ddeca00";
-    nono.url = "github:always-further/nono/e61814f8a70a53346a1e9d0bcf7ba4f52e0e4d1d";
+    opencode.url = "github:anomalyco/opencode/eb6ff0c1e049e5dfb6f61eb74f925c0a8007490c";
+    nono.url = "github:always-further/nono/6118b79aeda1365da213d85457b4d3cf1201d575";
     nono.flake = false;
     # Used to pin a newer rustc than what nixpkgs ships (needed by nono).
     rust-overlay.url = "github:oxalica/rust-overlay";
