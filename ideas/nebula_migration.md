@@ -30,7 +30,7 @@ VMs (l001 + o001) down to one** — see §0.
   3. CA rotation ritual (default 1y) and how it interacts with
      impermanence.
   4. Service-by-service swap of `tailscaled.service` deps + overlay-IP
-     bindings on h001 (nginx, litellm, portkey, bifrost,
+     bindings on h001 (nginx, litellm, portkey,
      monitoring_hub, beszel, etc.) and on joe / oracle / lio.
 
 ## 0. The actual motivator: collapse l001 → o001
@@ -81,7 +81,7 @@ See `flakes/common/nix_modules/tailnet/default.nix` and
   (`flakes/impermanence/shared_persistence/tailscale.nix`)
 - Many host services bind/firewall on `tailscale0`:
   - h001: `nginx.nix:35`, `litellm.nix:31`, `litellm-public.nix:34`,
-    `portkey.nix:126`, `bifrost.nix:101`, `monitoring_hub.nix:24`
+    `portkey.nix:126`, `monitoring_hub.nix:24`
   - joe: `nginx.nix:14`
   - oracle/o001: `nginx.nix:42`
   - lio: `ttyd.nix:41`
@@ -404,7 +404,6 @@ Each phase is independent and reversible until phase 4.
   - `hosts/h001/litellm.nix:31`
   - `hosts/h001/litellm-public.nix:34`
   - `hosts/h001/portkey.nix:126`
-  - `hosts/h001/bifrost.nix:101`
   - `hosts/h001/monitoring_hub.nix:24`
   - `hosts/joe/nginx.nix:14`
   - `hosts/oracle/o001/nginx.nix:42`

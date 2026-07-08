@@ -47,13 +47,6 @@
       url = "github:strangeglyph/nixarr/dab8f236d6a1d81fa9af7a9d424de5cbdeab1aa1";
       flake = false;
     };
-
-    # LLM gateway bake-off
-    # Pinned to a commit BEFORE upstream PR #3107 (2026-04-28) bumped
-    # axios/uuid/postcss without updating the flake's npmDepsHash for
-    # bifrost-ui. Bump this when upstream cuts a release that fixes the
-    # hash, or override npmDepsHash locally.
-    bifrost.url = "github:maximhq/bifrost/c7aa3cab06b6c51ca782a34b92a7924fdd207b8a";
   };
 
   outputs =
@@ -94,7 +87,6 @@
 
           inputs.puzzles.nixosModules.default
           inputs.nixarr.nixosModules.default
-          inputs.bifrost.nixosModules.bifrost
           ./hardware-configuration.nix
           ./mods
           ./nginx.nix

@@ -18,7 +18,7 @@
 #    which the OSS image does honor at request time (only the documented
 #    enterprise allowlist is gated — env-var trust list works in OSS).
 #
-# Smoke-test scope mirrors bifrost.nix: OpenRouter + air_prd. No Copilot.
+# Smoke-test scope: OpenRouter + air_prd. No Copilot.
 let
   c = constants.services.portkey;
 

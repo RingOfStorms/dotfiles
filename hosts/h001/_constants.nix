@@ -129,14 +129,8 @@
       domain = null; # No public domain, accessed via Tailscale
     };
 
-    # LLM gateway bake-off: alternate gateways running alongside litellm
+    # LLM gateway bake-off: alternate gateway running alongside litellm
     # for testing. Tailscale-only exposure, same as litellm.
-    bifrost = {
-      port = 8097; # 8096 taken by jellyfin
-      dataDir = "/var/lib/bifrost";
-      domain = null;
-    };
-
     portkey = {
       port = 8098;
       dataDir = "/var/lib/portkey";
