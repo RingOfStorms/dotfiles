@@ -92,11 +92,6 @@ in
     foot
     vlc
     firefox
-    (google-chrome.override {
-      commandLineArgs = [
-        "--remote-debugging-port=9222"
-        "--remote-allow-origins=*"
-      ];
-    })
+    google-chrome
   ];
 }
