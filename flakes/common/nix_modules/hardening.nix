@@ -55,6 +55,12 @@
       # TODO revisit allowing root login
       PermitRootLogin = "yes";
       PasswordAuthentication = false;
+      # Disable keyboard-interactive auth. With UsePAM=yes
+      # (NixOS default), keyboard-interactive is a back door through which PAM
+      # password auth can sneak back in on any host that has a user password.
+      # Keep it off everywhere; override per-host only where truly needed
+      # (e.g. an interactive console box).
+      KbdInteractiveAuthentication = false;
     };
   };
 
