@@ -31,8 +31,8 @@ let
     bind-dynamic
     listen-address=${h003Overlay}
     port=53
-    # No DHCP, no resolv.conf, no /etc/hosts — pure authoritative + fallthrough.
-    no-dhcp-interface=
+    # No resolv.conf, no /etc/hosts — pure authoritative + fallthrough.
+    # (No dhcp-range defined here, so this instance serves no DHCP.)
     no-resolv
     no-hosts
     # All h001 service names -> h001 overlay IP.
