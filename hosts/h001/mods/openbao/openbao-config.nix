@@ -319,6 +319,30 @@ in
         done
 
         # ────────────────────────────────────────────────────────────────
+        # Step 1.5: Audit device (defense-in-depth for the public edge)
+        # ────────────────────────────────────────────────────────────────
+        # OpenBao is publicly reachable for machine bootstrap (see
+        # hosts/oracle/o002/nginx.nix). A syslog audit device records every
+        # request (auth attempts + KV reads) to journald so abuse of the
+        # public sec. endpoint is visible: `journalctl -t openbao-audit`.
+        #
+        # syslog (not file) is deliberate: no separate log file to fill the
+        # disk / rotate, and journald already handles retention. Sensitive
+        # values are HMAC'd by OpenBao, not logged in cleartext.
+        #
+        # AVAILABILITY NOTE: if the *only* audit device blocks, OpenBao stops
+        # serving requests (fail-closed by design). journald is highly
+        # reliable, but be aware a wedged journal would seal effective access.
+        echo "[config] Reconciling audit devices ..."
+        if bao audit list -format=json 2>/dev/null | jq -e 'has("syslog/")' >/dev/null 2>&1; then
+          echo "  [audit] syslog device already enabled"
+        else
+          echo "  [audit] Enabling syslog audit device (tag=openbao-audit)"
+          bao audit enable syslog tag="openbao-audit" facility="AUTH" \
+            || echo "  [audit] WARNING: could not enable syslog audit device" >&2
+        fi
+
+        # ────────────────────────────────────────────────────────────────
         # Step 2: Auth methods
         # ────────────────────────────────────────────────────────────────
         echo "[config] Reconciling auth methods ..."
