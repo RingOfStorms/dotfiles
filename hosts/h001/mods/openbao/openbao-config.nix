@@ -174,7 +174,11 @@ let
     "machines/high-trust/github_read_token_2026-03-15" = {};
 
     # ── high-trust: h001 service secrets ──────────────────────────────
-    "machines/high-trust/linode_rw_domains_2026-03-15"      = {};
+    # bunny.net DNS API key. Used by:
+    #   - h001 ACME wildcard cert (lego dnsProvider = "bunny")
+    #   - h003 DDNS updater (home.<domain> A record)
+    # Both hosts are high-trust, so a single shared KV entry serves both.
+    "machines/high-trust/bunny_rw_dns_2026-03-15"          = {};
     "machines/high-trust/us_chi_wg_2026-03-15"              = {};
     "machines/high-trust/zitadel_master_key_2026-03-15"     = {};
     "machines/high-trust/oauth2_proxy_key_file_2026-03-15"  = {};

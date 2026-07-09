@@ -144,6 +144,9 @@
   };
 
   secrets = {
-    linode_rw_domains_2026-03-15 = { };
+    # bunny.net DNS API key — used by ./mods/ddns.nix to keep home.<domain>
+    # pointed at the current WAN IP. Seeded declaratively by the OpenBao
+    # reconciler (hosts/h001/mods/openbao/openbao-config.nix).
+    bunny_rw_dns_2026-03-15 = { };
   };
 }

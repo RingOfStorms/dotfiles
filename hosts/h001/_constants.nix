@@ -256,9 +256,13 @@
     };
 
     # Service secrets
-    linode_rw_domains_2026-03-15 = {
+    # bunny.net DNS API key — used by lego (security.acme) for the
+    # DNS-01 wildcard challenge on *.${fleet.global.domain}. lego reads the
+    # key from the file named by BUNNY_API_KEY_FILE (dnsProvider = "bunny"
+    # in ./nginx.nix).
+    bunny_rw_dns_2026-03-15 = {
       configChanges = {
-        security.acme.certs.${fleet.global.domain}.credentialFiles.LINODE_TOKEN_FILE = "$SECRET_PATH";
+        security.acme.certs.${fleet.global.domain}.credentialFiles.BUNNY_API_KEY_FILE = "$SECRET_PATH";
       };
     };
 

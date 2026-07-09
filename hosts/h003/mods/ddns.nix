@@ -1,5 +1,14 @@
-# Dynamic DNS — keeps home.joshuabell.xyz pointed at WAN IP via Linode API
+# Dynamic DNS — keeps home.joshuabell.xyz pointed at WAN IP via the bunny.net DNS API
 # Runs as a systemd timer, checks every 5 minutes, only updates when IP changes.
+#
+# bunny.net API notes (https://docs.bunny.net/reference/dnszonepublic_index):
+#   - Auth header is `AccessKey: <api-key>` (NOT `Authorization: Bearer`).
+#   - Record `Type` is a numeric enum; A = 0.
+#   - `Name` is the record label relative to the zone ("home" for home.joshuabell.xyz).
+#   - Listing zones (view=Full, the default) embeds each zone's records, so a single
+#     GET /dnszone gives us both the zone id and the existing record — no extra call.
+#   - Add record:    PUT  /dnszone/{zoneId}/records        (returns 201)
+#   - Update record: POST /dnszone/{zoneId}/records/{id}   (returns 204)
 {
   config,
   constants,
@@ -11,8 +20,8 @@ let
   c = constants.services.ddns;
   baoSecrets = config.ringofstorms.secretsBao.secrets or {};
   tokenFile =
-    if baoSecrets ? "linode_rw_domains_2026-03-15"
-    then baoSecrets."linode_rw_domains_2026-03-15".path
+    if baoSecrets ? "bunny_rw_dns_2026-03-15"
+    then baoSecrets."bunny_rw_dns_2026-03-15".path
     else null;
 
   updateScript = pkgs.writeShellScript "ddns-update" ''
@@ -20,8 +29,29 @@ let
     TOKEN_FILE="$1"
     HOSTNAME="${c.hostname}"
     DOMAIN="${c.domain}"
+    TTL=300
+    API="https://api.bunny.net"
 
     TOKEN=$(cat "$TOKEN_FILE")
+
+    # Thin wrapper around curl that attaches the bunny.net auth header.
+    # Usage: curl_bunny METHOD PATH [json-body]
+    curl_bunny() {
+      local method="$1" path="$2"
+      if [ "$#" -eq 3 ]; then
+        ${lib.getExe pkgs.curl} -sf -X "$method" \
+          -H "AccessKey: $TOKEN" \
+          -H "Content-Type: application/json" \
+          -H "Accept: application/json" \
+          -d "$3" \
+          "$API$path"
+      else
+        ${lib.getExe pkgs.curl} -sf -X "$method" \
+          -H "AccessKey: $TOKEN" \
+          -H "Accept: application/json" \
+          "$API$path"
+      fi
+    }
 
     # Get current public IPv4 address (force IPv4 with -4 to avoid getting IPv6)
     CURRENT_IP=$(${lib.getExe pkgs.curl} -4 -sf https://api.ipify.org || ${lib.getExe pkgs.curl} -4 -sf https://ifconfig.me/ip)
@@ -30,59 +60,51 @@ let
       exit 1
     fi
 
-    # Get domain ID
-    DOMAIN_ID=$(${lib.getExe pkgs.curl} -sf \
-      -H "Authorization: Bearer $TOKEN" \
-      -H "Content-Type: application/json" \
-      "https://api.linode.com/v4/domains" \
-      | ${lib.getExe pkgs.jq} -r ".data[] | select(.domain == \"$DOMAIN\") | .id")
+    # Fetch all DNS zones (records are embedded in Full view, the default) and
+    # pick out the zone object for our domain.
+    ZONE=$(curl_bunny GET "/dnszone?page=1&perPage=1000" \
+      | ${lib.getExe pkgs.jq} -c --arg d "$DOMAIN" '.Items[] | select(.Domain == $d)')
 
-    if [ -z "$DOMAIN_ID" ]; then
-      echo "ERROR: Could not find domain $DOMAIN in Linode"
+    if [ -z "$ZONE" ]; then
+      echo "ERROR: Could not find DNS zone $DOMAIN in bunny.net"
       exit 1
     fi
 
-    # Find the A record for our hostname
-    RECORD=$(${lib.getExe pkgs.curl} -sf \
-      -H "Authorization: Bearer $TOKEN" \
-      -H "Content-Type: application/json" \
-      "https://api.linode.com/v4/domains/$DOMAIN_ID/records" \
-      | ${lib.getExe pkgs.jq} -r ".data[] | select(.type == \"A\" and .name == \"$HOSTNAME\")")
+    ZONE_ID=$(echo "$ZONE" | ${lib.getExe pkgs.jq} -r '.Id')
 
-    if [ -z "$RECORD" ]; then
-      # Record doesn't exist — create it
+    # Find the existing A record (Type == 0) for our hostname within the zone.
+    RECORD_ID=$(echo "$ZONE" | ${lib.getExe pkgs.jq} -r \
+      --arg n "$HOSTNAME" '[.Records[] | select(.Type == 0 and .Name == $n)][0].Id // empty')
+    RECORD_IP=$(echo "$ZONE" | ${lib.getExe pkgs.jq} -r \
+      --arg n "$HOSTNAME" '[.Records[] | select(.Type == 0 and .Name == $n)][0].Value // empty')
+
+    if [ -z "$RECORD_ID" ]; then
+      # Record doesn't exist — create it (Type 0 = A). bunny.net uses PUT to add.
       echo "Creating A record $HOSTNAME.$DOMAIN -> $CURRENT_IP"
-      ${lib.getExe pkgs.curl} -sf \
-        -H "Authorization: Bearer $TOKEN" \
-        -H "Content-Type: application/json" \
-        -X POST \
-        -d "{\"type\":\"A\",\"name\":\"$HOSTNAME\",\"target\":\"$CURRENT_IP\",\"ttl_sec\":300}" \
-        "https://api.linode.com/v4/domains/$DOMAIN_ID/records" > /dev/null
+      BODY=$(${lib.getExe pkgs.jq} -cn \
+        --arg name "$HOSTNAME" --arg value "$CURRENT_IP" --argjson ttl "$TTL" \
+        '{Type: 0, Name: $name, Value: $value, Ttl: $ttl}')
+      curl_bunny PUT "/dnszone/$ZONE_ID/records" "$BODY" > /dev/null
       echo "Created: $HOSTNAME.$DOMAIN -> $CURRENT_IP"
     else
-      RECORD_ID=$(echo "$RECORD" | ${lib.getExe pkgs.jq} -r '.id')
-      RECORD_IP=$(echo "$RECORD" | ${lib.getExe pkgs.jq} -r '.target')
-
       if [ "$CURRENT_IP" = "$RECORD_IP" ]; then
         echo "IP unchanged ($CURRENT_IP), skipping update"
         exit 0
       fi
 
-      # Update the record
+      # Update the record. bunny.net uses POST to update.
       echo "Updating $HOSTNAME.$DOMAIN: $RECORD_IP -> $CURRENT_IP"
-      ${lib.getExe pkgs.curl} -sf \
-        -H "Authorization: Bearer $TOKEN" \
-        -H "Content-Type: application/json" \
-        -X PUT \
-        -d "{\"target\":\"$CURRENT_IP\",\"ttl_sec\":300}" \
-        "https://api.linode.com/v4/domains/$DOMAIN_ID/records/$RECORD_ID" > /dev/null
+      BODY=$(${lib.getExe pkgs.jq} -cn \
+        --arg name "$HOSTNAME" --arg value "$CURRENT_IP" --argjson ttl "$TTL" \
+        '{Type: 0, Name: $name, Value: $value, Ttl: $ttl}')
+      curl_bunny POST "/dnszone/$ZONE_ID/records/$RECORD_ID" "$BODY" > /dev/null
       echo "Updated: $HOSTNAME.$DOMAIN -> $CURRENT_IP"
     fi
   '';
 in
 lib.mkIf (tokenFile != null) {
   systemd.services.ddns-update = {
-    description = "Dynamic DNS update for ${c.hostname}.${c.domain} via Linode API";
+    description = "Dynamic DNS update for ${c.hostname}.${c.domain} via bunny.net API";
     wants = [ "network-online.target" ];
     after = [ "network-online.target" "vault-agent.service" ];
     serviceConfig = {

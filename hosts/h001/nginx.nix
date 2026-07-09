@@ -23,8 +23,8 @@ in
     certs."${domain}" = {
       inherit domain;
       extraDomainNames = [ "*.${domain}" ];
-      # credentialFiles.LINODE_TOKEN_FILE injected via secrets-bao configChanges
-      dnsProvider = "linode";
+      # credentialFiles.BUNNY_API_KEY_FILE injected via secrets-bao configChanges
+      dnsProvider = "bunny";
       group = "nginx";
     };
   };
