@@ -179,7 +179,6 @@
           # ./i3_customizations.nix
           ./vms.nix
           ./nono.nix
-          # ./ttyd.nix  # replaced by SSH (see configuration.nix)
           ./homepage-dashboard.nix
           ./nginx.nix
 
