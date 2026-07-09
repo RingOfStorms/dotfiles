@@ -68,6 +68,41 @@
       { hostname = "media.joshuabell.xyz"; ip = "10.12.14.10"; }
       { hostname = "jellyfin.joshuabell.xyz"; ip = "10.12.14.10"; }
     ];
+
+    # ── Shared DNS upstreams (single source of truth) ──────────────────
+    # Consumed by BOTH AdGuard (adguardhome.nix) and dnsmasq (networking.nix).
+    # They accept different formats, so upstreams are split by kind:
+    #
+    #   plainIp   — bare IPs. Usable by dnsmasq (`server=`) AND AdGuard.
+    #   encrypted — DoH/DoT/DoQ URLs. AdGuard ONLY (dnsmasq can't do encrypted).
+    #
+    # dnsmasq uses `plainIp` for the joshuabell.xyz fallthrough (names not in
+    # localDnsRecords). AdGuard uses plainIp ++ encrypted as its global upstreams.
+    #
+    # NOTE: dnsmasq's fallthrough upstream MUST be external (never 127.0.0.1:53
+    # / AdGuard) or it would create an AdGuard<->dnsmasq loop. `plainIp` is all
+    # external resolvers, so it's safe.
+    dnsUpstreams = {
+      plainIp = [
+        # Cloudflare
+        "1.1.1.1"
+        "1.0.0.1"
+        "2606:4700:4700::1111"
+        "2606:4700:4700::1001"
+        # AdGuard unfiltered
+        "94.140.14.140"
+        "94.140.14.141"
+        "2a10:50c0::1:ff"
+        "2a10:50c0::2:ff"
+      ];
+      encrypted = [
+        "https://unfiltered.adguard-dns.com/dns-query"
+        "tls://unfiltered.adguard-dns.com"
+        "quic://unfiltered.adguard-dns.com"
+        "https://dns.cloudflare.com/dns-query"
+        "tls://one.one.one.one"
+      ];
+    };
   };
 
   services = {
@@ -77,6 +112,9 @@
 
     dnsmasq = {
       dnsPort = 9053;
+      # Upstreams for the joshuabell.xyz fallthrough live in the shared
+      # network.dnsUpstreams.plainIp list (single source of truth, also used
+      # by AdGuard). See networking.nix for where it's wired in.
     };
 
     ddns = {

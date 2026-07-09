@@ -20,7 +20,10 @@
 #
 # schema_version is supplied by the module from the adguardhome package
 # (nixpkgs 26.05 ships 0.107.77 / schema 34, matching the exported config).
-{ ... }:
+{ constants, ... }:
+let
+  dns = constants.network.dnsUpstreams;
+in
 {
   config = {
     services.adguardhome = {
@@ -57,31 +60,20 @@
           ratelimit_whitelist = [ ];
           refuse_any = true;
 
-          # Upstreams. The two `[/…/]127.0.0.1:9053` split lines send those
-          # names to the local dnsmasq (see networking.nix). Comment-only
-          # entries (lines starting with '#') are accepted by AdGuard as
-          # organizational separators, matching the exported config.
+          # Upstreams. The ENTIRE joshuabell.xyz zone is routed to the local
+          # dnsmasq (127.0.0.1:9053), which is the single authoritative source
+          # for all local records under that domain (see networking.nix +
+          # _constants.nix:localDnsRecords). Everything else uses the shared
+          # upstream set (plain IPs + encrypted), from _constants.nix so AdGuard
+          # and dnsmasq stay in sync.
           upstream_dns = [
-            "# Custom split DNS for local services"
-            "[/media.joshuabell.xyz/]127.0.0.1:9053"
-            "[/jellyfin.joshuabell.xyz/]127.0.0.1:9053"
-            "# Adguard non filtering"
-            "94.140.14.140"
-            "94.140.14.141"
-            "2a10:50c0::1:ff"
-            "2a10:50c0::2:ff"
-            "https://unfiltered.adguard-dns.com/dns-query"
-            "tls://unfiltered.adguard-dns.com"
-            "quic://unfiltered.adguard-dns.com"
-            "# Cloudflare standard"
-            "1.1.1.1"
-            "1.0.0.1"
-            "2606:4700:4700::1111"
-            "2606:4700:4700::1001"
-            "https://dns.cloudflare.com/dns-query"
-            "https://dns.cloudflare.com/dns-query"
-            "tls://one.one.one.one"
-          ];
+            "# Local zone -> dnsmasq (authoritative for all *.joshuabell.xyz)"
+            "[/joshuabell.xyz/]127.0.0.1:9053"
+            "# Shared upstreams (plain IP, also used by dnsmasq fallthrough)"
+          ]
+          ++ dns.plainIp
+          ++ [ "# Encrypted upstreams (AdGuard only)" ]
+          ++ dns.encrypted;
           upstream_dns_file = "";
           bootstrap_dns = [
             "9.9.9.10"

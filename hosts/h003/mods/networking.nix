@@ -170,20 +170,27 @@ in
       ];
       bind-interfaces = true;
 
-      # Shift DNS to localhost only on a separate non standard port
-      # We are using ./adguardhome.nix for DNS and we still run this one for reverse name lookups
-      # Note in Ad GuardHome in DNS Settings add localhost:9053 to Private reverse DNS servers and enable them
+      # dnsmasq is the authoritative resolver for the whole joshuabell.xyz zone.
+      # AdGuard routes that entire zone here with ONE upstream line (see
+      # adguardhome.nix):  [/joshuabell.xyz/]127.0.0.1:9053
+      # so ALL local DNS for joshuabell.xyz is configured HERE, declaratively,
+      # via `localDnsRecords` — single source of truth, no per-name AdGuard UI.
       listen-address = "127.0.0.1";
       port = constants.services.dnsmasq.dnsPort;
-      # NOTE these make it so my other devices don't hit the open net to stream movies
-      # while on the local network. Note that this is being paired with stateful settings
-      # in Adguardhome upstream dns servers:
-      # [/media.joshuabell.xyz/]127.0.0.1:9053
-      # [/jellyfin.joshuabell.xyz/]127.0.0.1:9053
+
+      # Local records: these names resolve to the configured IP. Any
+      # joshuabell.xyz name NOT listed falls through to `server=` below.
       host-record =
-        # DNS splitting on local network
-        # Basically these are intercepted and resolve to local IP's when anyone is connected to home network
         map (r: "${r.hostname},${r.ip}") net.localDnsRecords;
+
+      # Fallthrough for joshuabell.xyz names not in host-record: forward to the
+      # shared external plain-IP upstreams. Domain-scoped so dnsmasq only
+      # forwards THIS zone (it is not a general recursive resolver). Must be
+      # external resolvers (never AdGuard :53) to avoid an AdGuard<->dnsmasq
+      # loop; net.dnsUpstreams.plainIp is all external, so this is safe.
+      # TRADEOFF: these fallthrough lookups bypass AdGuard filtering (fine for
+      # our own domain).
+      server = map (u: "/joshuabell.xyz/${u}") net.dnsUpstreams.plainIp;
 
       # DHCP range and settings
       dhcp-range = [
