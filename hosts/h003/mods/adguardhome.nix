@@ -1,19 +1,22 @@
-# AdGuard Home — declarative config.
+# AdGuard Home — FULLY declarative config.
 #
-# Migrated from the runtime web-UI config (AdGuardHome.yaml) into Nix so the
-# whole setup lives in this repo. Semantics:
+# The entire runtime config lives in this repo. `mutableSettings = false` means
+# on every start the module does `cp --force` of the Nix-generated config over
+# /var/lib/AdGuardHome/AdGuardHome.yaml — so the web UI is effectively
+# read-only: any change made in the UI is REVERTED on the next service restart /
+# rebuild. Edit this file to change AdGuard.
 #
-#   mutableSettings = true  → on every start, these Nix `settings` are MERGED
-#   into the on-disk AdGuardHome.yaml, taking precedence for any key we declare
-#   (via yaml-merge: for keys present in both, the Nix value REPLACES the
-#   existing one — lists included, no duplication). Keys we do NOT declare are
-#   preserved from the running file.
-#
-# DELIBERATELY NOT DECLARED HERE (kept out of this PUBLIC repo, preserved from
-# the on-disk file via the merge):
-#   - `users:`  — the admin login + bcrypt password hash. Managed via the web
-#     UI; survives because mutableSettings=true and we don't set it. If you ever
-#     want it declarative, wire it through secrets-bao, NOT plaintext in Nix.
+# ADMIN PASSWORD (users:) — the bcrypt hash IS committed here in plaintext.
+# This is a DELIBERATE, accepted decision for THIS service because:
+#   - AdGuard's admin UI is reachable only from the internal LAN (firewalled;
+#     not exposed to the internet or, by policy, treated as LAN-only), and
+#   - the password is strong + random + unique (not reused anywhere), so even
+#     if the bcrypt hash were cracked offline it unlocks nothing beyond this
+#     LAN-only admin panel.
+# bcrypt is salted + adaptive, so the hash is not directly reversible; the only
+# risk is offline brute force, mitigated by the password's entropy. Do NOT copy
+# this pattern for internet-exposed services or shared/weak passwords — use
+# secrets-bao for those.
 #
 # `http.address` is injected automatically by the NixOS module from
 # `host`/`port` below — do not put it in `settings`.
@@ -30,12 +33,23 @@ in
       enable = true;
       allowDHCP = false; # DHCP is served by dnsmasq (see networking.nix); AdGuard DHCP is off.
       openFirewall = false;
-      mutableSettings = true; # merge Nix settings over the on-disk file; preserve `users:`
+      mutableSettings = false; # FULLY declarative: Nix config overwrites the on-disk file every start.
 
       host = "0.0.0.0";
       port = 3000; # admin UI (http.address = 0.0.0.0:3000)
 
       settings = {
+        # Admin web UI login. bcrypt hash committed intentionally — see the
+        # header comment (LAN-only + strong unique password). Generate a new
+        # hash with:  htpasswd -B -n -b <user> <password>   (take the part
+        # after the first ':'), or `mkpasswd -m bcrypt`.
+        users = [
+          {
+            name = "opidsjhpoidjsf";
+            password = "$2a$10$CvE8RfKNxrwxZjkltBoi2OJZCiYPnN2AiEsSfdX8MMkAxH8VGk9ta";
+          }
+        ];
+
         http = {
           pprof = {
             port = 6060;
@@ -165,36 +179,186 @@ in
         # Blocklists / filters. Declared here → Nix is authoritative (the whole
         # list is replaced on merge). Add/remove filters by editing this list.
         filters = [
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt"; name = "AdGuard DNS filter"; id = 1; }
-          { enabled = false; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_2.txt"; name = "AdAway Default Blocklist"; id = 2; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_24.txt"; name = "1Hosts (Lite)"; id = 1727639810; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_59.txt"; name = "AdGuard DNS Popup Hosts filter"; id = 1727639811; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_38.txt"; name = "1Hosts (mini)"; id = 1727639812; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_4.txt"; name = "Dan Pollock's List"; id = 1727639813; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_53.txt"; name = "AWAvenue Ads Rule"; id = 1727639814; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_34.txt"; name = "HaGeZi's Normal Blocklist"; id = 1727639815; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_48.txt"; name = "HaGeZi's Pro Blocklist"; id = 1727639816; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_51.txt"; name = "HaGeZi's Pro++ Blocklist"; id = 1727639817; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_49.txt"; name = "HaGeZi's Ultimate Blocklist"; id = 1727639818; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_5.txt"; name = "OISD Blocklist Small"; id = 1727639819; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_11.txt"; name = "Malicious URL Blocklist (URLHaus)"; id = 1727639820; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_27.txt"; name = "OISD Blocklist Big"; id = 1727639821; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_50.txt"; name = "uBlock₀ filters – Badware risks"; id = 1727639822; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_3.txt"; name = "Peter Lowe's Blocklist"; id = 1727639823; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_9.txt"; name = "The Big List of Hacked Malware Web Sites"; id = 1727639824; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_33.txt"; name = "Steven Black's List"; id = 1727639825; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_31.txt"; name = "Stalkerware Indicators List"; id = 1727639826; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_45.txt"; name = "HaGeZi's Allowlist Referral"; id = 1727639827; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_42.txt"; name = "ShadowWhisperer's Malware List"; id = 1727639828; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_7.txt"; name = "Perflyst and Dandelion Sprout's Smart-TV Blocklist"; id = 1727639829; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_10.txt"; name = "Scam Blocklist by DurableNapkin"; id = 1727639830; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_30.txt"; name = "Phishing URL Blocklist (PhishTank and OpenPhish)"; id = 1727639831; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_18.txt"; name = "Phishing Army"; id = 1727639832; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_12.txt"; name = "Dandelion Sprout's Anti-Malware List"; id = 1727639833; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_8.txt"; name = "NoCoin Filter List"; id = 1727639834; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_44.txt"; name = "HaGeZi's Threat Intelligence Feeds"; id = 1727639836; }
-          { enabled = true; url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_54.txt"; name = "HaGeZi's DynDNS Blocklist"; id = 1727639837; }
-          { enabled = true; url = "https://gist.joshuabell.xyz/ringofstorms/cc9a16c56fbb4a8fb1ec83cb59d68fe8/raw/HEAD/adguard-custom-blocklist.txt"; name = "RingOfStorms list custom"; id = 1727639841; }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt";
+            name = "AdGuard DNS filter";
+            id = 1;
+          }
+          {
+            enabled = false;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_2.txt";
+            name = "AdAway Default Blocklist";
+            id = 2;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_24.txt";
+            name = "1Hosts (Lite)";
+            id = 1727639810;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_59.txt";
+            name = "AdGuard DNS Popup Hosts filter";
+            id = 1727639811;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_38.txt";
+            name = "1Hosts (mini)";
+            id = 1727639812;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_4.txt";
+            name = "Dan Pollock's List";
+            id = 1727639813;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_53.txt";
+            name = "AWAvenue Ads Rule";
+            id = 1727639814;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_34.txt";
+            name = "HaGeZi's Normal Blocklist";
+            id = 1727639815;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_48.txt";
+            name = "HaGeZi's Pro Blocklist";
+            id = 1727639816;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_51.txt";
+            name = "HaGeZi's Pro++ Blocklist";
+            id = 1727639817;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_49.txt";
+            name = "HaGeZi's Ultimate Blocklist";
+            id = 1727639818;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_5.txt";
+            name = "OISD Blocklist Small";
+            id = 1727639819;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_11.txt";
+            name = "Malicious URL Blocklist (URLHaus)";
+            id = 1727639820;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_27.txt";
+            name = "OISD Blocklist Big";
+            id = 1727639821;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_50.txt";
+            name = "uBlock₀ filters – Badware risks";
+            id = 1727639822;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_3.txt";
+            name = "Peter Lowe's Blocklist";
+            id = 1727639823;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_9.txt";
+            name = "The Big List of Hacked Malware Web Sites";
+            id = 1727639824;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_33.txt";
+            name = "Steven Black's List";
+            id = 1727639825;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_31.txt";
+            name = "Stalkerware Indicators List";
+            id = 1727639826;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_45.txt";
+            name = "HaGeZi's Allowlist Referral";
+            id = 1727639827;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_42.txt";
+            name = "ShadowWhisperer's Malware List";
+            id = 1727639828;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_7.txt";
+            name = "Perflyst and Dandelion Sprout's Smart-TV Blocklist";
+            id = 1727639829;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_10.txt";
+            name = "Scam Blocklist by DurableNapkin";
+            id = 1727639830;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_30.txt";
+            name = "Phishing URL Blocklist (PhishTank and OpenPhish)";
+            id = 1727639831;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_18.txt";
+            name = "Phishing Army";
+            id = 1727639832;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_12.txt";
+            name = "Dandelion Sprout's Anti-Malware List";
+            id = 1727639833;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_8.txt";
+            name = "NoCoin Filter List";
+            id = 1727639834;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_44.txt";
+            name = "HaGeZi's Threat Intelligence Feeds";
+            id = 1727639836;
+          }
+          {
+            enabled = true;
+            url = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_54.txt";
+            name = "HaGeZi's DynDNS Blocklist";
+            id = 1727639837;
+          }
+          {
+            enabled = true;
+            url = "https://gist.joshuabell.xyz/ringofstorms/cc9a16c56fbb4a8fb1ec83cb59d68fe8/raw/HEAD/adguard-custom-blocklist.txt";
+            name = "RingOfStorms list custom";
+            id = 1727639841;
+          }
         ];
         whitelist_filters = [ ];
 
@@ -272,7 +436,10 @@ in
           persistent = [
             {
               name = "ellawork";
-              ids = [ "10.12.14.122" "10.12.14.132" ];
+              ids = [
+                "10.12.14.122"
+                "10.12.14.132"
+              ];
               tags = [ ];
               upstreams = [ ];
               uid = "019a27ac-dda3-70de-8481-976980da8f37";
