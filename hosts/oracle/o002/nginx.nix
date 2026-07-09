@@ -26,9 +26,10 @@ let
   # OpenBao is the fleet root-of-trust and MUST stay publicly reachable for
   # ONE reason only: a brand-new machine fetches its headscale join key
   # (`headscale_auth_*`) from OpenBao *before* it is on the tailnet. Once a
-  # machine has joined, MagicDNS resolves `sec.joshuabell.xyz` to h001's
-  # overlay IP (see flakes/common/nix_modules/tailnet/h001_dns.nix), so all
-  # steady-state traffic goes over the tailnet and never touches this vhost.
+  # machine has joined, the headscale split-DNS for joshuabell.xyz (see
+  # hosts/oracle/o002/headscale.nix -> h003's tailnet dnsmasq) resolves
+  # `sec.joshuabell.xyz` to h001's overlay IP, so all steady-state traffic goes
+  # over the tailnet and never touches this vhost.
   #
   # TWO layers protect this public edge:
   #
