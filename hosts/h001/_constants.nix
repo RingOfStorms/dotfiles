@@ -129,14 +129,6 @@
       domain = null; # No public domain, accessed via Tailscale
     };
 
-    # LLM gateway bake-off: alternate gateway running alongside litellm
-    # for testing. Tailscale-only exposure, same as litellm.
-    portkey = {
-      port = 8098;
-      dataDir = "/var/lib/portkey";
-      domain = null;
-    };
-
     openWebui = {
       port = 8084;
       domain = "chat.joshuabell.xyz";

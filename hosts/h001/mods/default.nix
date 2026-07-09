@@ -4,7 +4,6 @@
 {
   imports = [
     ./litellm.nix
-    ./portkey.nix
     ./nixarr.nix
     ./hardware-transcoding.nix
     ./monitoring_hub.nix
