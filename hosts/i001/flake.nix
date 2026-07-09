@@ -26,8 +26,9 @@
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
         secretsRole = "machines-lowtrust";
-        authMethod = "initialHashedPassword";
-        authValue = "$y$j9T$v1QhXiZMRY1pFkPmkLkdp0$451GvQt.XFU2qCAi4EQNd1BEqjM/CH6awU8gjcULps6";
+        authMethod = "hashedPassword";
+        authValue = "$y$j9T$gEfQmnTUrDRwmBHl5F9Jy/$s6UJyVizYX6kci7MgkG4uk/LesEfOPT56m.rQaeHtcB";
+        mutableUsers = false;
         extraGroups = [ "wheel" "networkmanager" ];
 
         hmModules = [
@@ -80,9 +81,7 @@
           })
 
           # Host-specific config
-          ({ pkgs, lib, ... }: {
-            # TODO allowing password auth for now
-            services.openssh.settings.PasswordAuthentication = lib.mkForce true;
+          ({ pkgs, ... }: {
             networking.networkmanager.enable = true;
             users.users.root.openssh.authorizedKeys.keys = [ fleet.global.sshPubKey ];
             environment.systemPackages = with pkgs; [

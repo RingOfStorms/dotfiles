@@ -78,6 +78,7 @@
         inherit inputs constants;
         secretsRole = "machines-hightrust";
         authMethod = "cloudUser";
+        mutableUsers = false;
 
         nixosModules = [
           inputs.common.nixosModules.essentials

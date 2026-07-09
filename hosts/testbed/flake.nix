@@ -95,7 +95,8 @@
                   users.users = {
                     "${primaryUser}" = {
                       isNormalUser = true;
-                      initialPassword = "password1";
+                      # `password1`
+                      hashedPassword = "$y$j9T$ACmz/g0EK1bTXuCbsGH1Z/$DeTpNoP2DclAW7cDKNBU8CxLhU06WXvmgVAA2sKdwQ1";
                       shell = pkgs.zsh;
                       extraGroups = [
                         "wheel"

@@ -25,8 +25,10 @@
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
         secretsRole = "machines-hightrust";
-        authMethod = "initialHashedPassword";
-        authValue = "$y$j9T$v1QhXiZMRY1pFkPmkLkdp0$451GvQt.XFU2qCAi4EQNd1BEqjM/CH6awU8gjcULps6";
+        # `mkpasswd -m yescrypt`
+        authMethod = "hashedPassword";
+        authValue = "$y$j9T$iM1fEKZQH9NGQd39OTUJI.$uxPdQ7EDf4wANcFs7QDSjDC8tV5ZW4cAuNXBdqibSX4";
+        mutableUsers = false;
         extraGroups = [
           "wheel"
           "networkmanager"

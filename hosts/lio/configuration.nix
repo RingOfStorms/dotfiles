@@ -8,17 +8,6 @@ let
   nixServe = constants.services.nixServe;
 in
 {
-  # ── SSH access policy ─────────────────────────────────────────────────────
-  # The common `hardening` module enables sshd and opens port 22 on every
-  # interface with PasswordAuthentication=false. On lio we want:
-  #   - password auth enabled for non-root users (root still keys-only)
-  #   - sshd reachable only over the tailnet (tailscale0) and the LAN
-  #     (10.12.14.0/10), never on Wi-Fi at a coffee shop / hotspot / etc.
-  services.openssh.settings = {
-    PasswordAuthentication = lib.mkForce true;
-    PermitRootLogin = lib.mkForce "prohibit-password";
-  };
-
   # Close port 22 on the global allow-list set by hardening.nix and re-open
   # it only on tailscale0 + the LAN CIDR. Using nftables source-address
   # filtering (rather than per-interface) means it keeps working regardless

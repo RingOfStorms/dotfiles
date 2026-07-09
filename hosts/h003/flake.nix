@@ -28,6 +28,11 @@
         inherit inputs constants;
         secretsRole = "machines-hightrust";
 
+        # `mkpasswd -m yescrypt` hash
+        authMethod = "hashedPassword";
+        authValue = "$y$j9T$Q7YjLw1PfGhkSeNp4e.xL1$G5iXBPQqmaSFMfRdYnat1uRfRi18Y/AeglETGfGUS9A";
+        mutableUsers = false;
+
         nixosModules = [
           inputs.ros_neovim.nixosModules.default
 
@@ -57,15 +62,22 @@
           ./containers.nix
 
           # Host-specific config
-          ({ pkgs, ... }: {
-            users.users.root = {
-              shell = pkgs.zsh;
-              openssh.authorizedKeys.keys = [ fleet.global.sshPubKey ];
-            };
-            environment.systemPackages = with pkgs; [
-              lua sqlite ttyd tcpdump dig
-            ];
-          })
+          (
+            { pkgs, ... }:
+            {
+              users.users.root = {
+                shell = pkgs.zsh;
+                openssh.authorizedKeys.keys = [ fleet.global.sshPubKey ];
+              };
+              environment.systemPackages = with pkgs; [
+                lua
+                sqlite
+                ttyd
+                tcpdump
+                dig
+              ];
+            }
+          )
         ];
       };
     };

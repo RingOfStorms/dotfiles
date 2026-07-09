@@ -60,6 +60,11 @@
         inherit inputs constants;
         secretsRole = "machines-hightrust";
 
+        # `mkpasswd -m yescrypt.
+        authMethod = "hashedPassword";
+        authValue = "$y$j9T$bM8vOOgaq5pmNKxyCH4FI0$jutaQjd3g9uVvTa2yecQihBCaH9PjOiYyt.HbLHnSh3";
+        mutableUsers = false;
+
         nixosModules = [
           inputs.ros_neovim.nixosModules.default
           ({ ringofstorms-nvim.includeAllRuntimeDependencies = true; })

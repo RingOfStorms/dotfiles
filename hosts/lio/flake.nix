@@ -46,6 +46,9 @@
         inherit inputs constants;
         nixpkgsUnstable = nixpkgs-unstable;
         secretsRole = "machines-hightrust";
+        authMethod = "hashedPassword";
+        authValue = "$y$j9T$GvwwBotPdCjybuJeTGeLe/$but0teo8CQusyzxurhb42vpt/Ox1EUmARb24VMSZz14";
+        mutableUsers = false;
         extraGroups = [
           "wheel"
           "networkmanager"

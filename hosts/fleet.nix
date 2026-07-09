@@ -218,9 +218,17 @@ rec {
       # "hashedPassword"        → users.users.*.hashedPassword = authValue
       # "initialHashedPassword" → users.users.*.initialHashedPassword = authValue
       # "cloudUser"             → no password attrs, user already exists (cloud/VPS root)
-      authMethod ? "initialPassword",
-      authValue ? "password1",
-      mutableUsers ? true,
+      #
+      # There is deliberately NO weak default password. `authValue` defaults to
+      # null; a password-based host that sets a secretsRole MUST pass an explicit
+      # authValue (a `mkpasswd`-style hash, or "!"/"*" to disable password login
+      # and go keys-only) or the build fails. See the guard below. This removes
+      # the old public `password1` default (pentest C2).
+      authMethod ? "hashedPassword",
+      authValue ? null,
+      # Immutable users by default — declarative passwords, no drift. Override
+      # to true only where you genuinely need runtime user/password mutation.
+      mutableUsers ? false,
       extraGroups ? [ "wheel" "networkmanager" "video" "input" ],
 
       # Secrets
@@ -236,6 +244,20 @@ rec {
       stateVersion = constants.host.stateVersion;
       primaryUser = constants.host.primaryUser;
       isCloudUser = authMethod == "cloudUser";
+
+      # ── Auth guard (pentest C2) ──
+      # Refuse to build a password-authenticated host that didn't declare its
+      # own credential. This makes the old silent `password1` default
+      # impossible to reintroduce: any secretsRole host using a password
+      # authMethod must pass an explicit authValue (a real hash, or "!"/"*" to
+      # disable password login and rely on SSH keys).
+      _authGuard =
+        if (!isCloudUser) && authValue == null then
+          throw ("fleet.mkHost: host '${hostName}' uses authMethod=\"${authMethod}\" "
+            + "but did not set an explicit `authValue`. There is no default "
+            + "password. Set a `mkpasswd`-generated hash, or authValue = \"!\" "
+            + "to disable password login (keys-only). See pentest C2.")
+        else null;
 
       fleetData = { inherit global hosts h001Subdomains mkSshMatchBlocks; };
 
@@ -308,11 +330,14 @@ rec {
         ] else [];
 
       # ── User auth config ──
-      userAuthAttrs =
+      # `builtins.seq _authGuard` forces the guard to evaluate (throwing for a
+      # password host with no authValue) before any auth attrs are produced.
+      userAuthAttrs = builtins.seq _authGuard (
         if authMethod == "initialPassword" then { initialPassword = authValue; }
         else if authMethod == "hashedPassword" then { hashedPassword = authValue; }
         else if authMethod == "initialHashedPassword" then { initialHashedPassword = authValue; }
-        else {}; # cloudUser — no password attrs
+        else {} # cloudUser — no password attrs
+      );
 
       # ── HM user set (explicit to avoid infinite recursion with config.users.users) ──
       hmUsers =

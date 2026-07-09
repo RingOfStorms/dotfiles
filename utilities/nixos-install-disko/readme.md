@@ -348,14 +348,23 @@ identity (7b) → **seed `/machine-key.json` (7c)** → kick the pipeline (7d).
 Steps 7c and 7d can also be done *before* the reboot (from the installer, over
 SSH) if you prefer — the key just has to be in place before the pipeline runs.
 
-### 7a. Set the user password
+### 7a. User password
 
-Default password from the install is `password1` (or whatever the host's
-`authValue`/`hashedPassword` was set to). Change it on first login:
+There is **no default install password** anymore (pentest C2). `mkHost` has no
+weak fallback: a host either ships a real `authValue` hash or `authValue = "!"`
+(password login disabled — SSH keys only). Access a fresh box via the SSH key
+(`nix2nix_2026-03-15`).
+
+Hosts are `mutableUsers = false` by default, so `passwd` will **not** persist a
+change — the password is declarative. To set/rotate a console password, put a
+`mkpasswd -m yescrypt` hash in the host's `flake.nix` `authValue` and redeploy:
 
 ```sh
-passwd
+mkpasswd -m yescrypt        # generate a hash, paste into authValue
 ```
+
+(If a host genuinely needs runtime `passwd`, set `mutableUsers = true` on it
+explicitly — but prefer the declarative hash.)
 
 ### 7b. Create the machine identity in Zitadel
 
