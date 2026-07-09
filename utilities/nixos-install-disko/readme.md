@@ -320,6 +320,34 @@ reboot
 
 Remove the USB stick. The machine boots into the new NixOS system.
 
+### How first-boot bootstrap works (read this once)
+
+If the host uses `secrets-bao`, there is a deliberate **chicken-and-egg** you
+need to satisfy in order:
+
+1. The host has **no secrets** until it can authenticate to OpenBao.
+2. To authenticate, `zitadel-mint-jwt` needs the host's **`/machine-key.json`**
+   (a Zitadel machine key). **If that file is missing, `zitadel-mint-jwt` fails
+   (exit 1) and the whole pipeline stalls** — the timer just keeps retrying
+   every 10 minutes. So the machine key **must be seeded first** (7c below).
+3. `vault-agent` logs into OpenBao at **`https://sec.joshuabell.xyz`** — the
+   **PUBLIC edge on o002**. This is intentional and required: a brand-new
+   machine is **not on the tailnet yet**, so it reaches OpenBao over the public
+   internet (`sec.joshuabell.xyz` → o002 nginx → h001 OpenBao).
+4. That public edge is **hardened** (default-deny path allowlist + an njs JWT
+   gate — see `hosts/oracle/o002/nginx.nix`). The gate is designed to **allow
+   exactly this bootstrap**: the minted Zitadel machine JWT is what passes it.
+   You do **not** need to disable or special-case the gate for onboarding.
+5. Only after `vault-agent` renders `headscale_auth_*` can the host join the
+   tailnet (`services.tailscale.authKeyFile` points at that rendered secret).
+   After joining, headscale split-DNS resolves `sec.joshuabell.xyz` to h001's
+   overlay IP, so steady-state OpenBao traffic stays on the tailnet.
+
+**So the required order is:** set password (7a) → create the Zitadel machine
+identity (7b) → **seed `/machine-key.json` (7c)** → kick the pipeline (7d).
+Steps 7c and 7d can also be done *before* the reboot (from the installer, over
+SSH) if you prefer — the key just has to be in place before the pipeline runs.
+
 ### 7a. Set the user password
 
 Default password from the install is `password1` (or whatever the host's
@@ -368,8 +396,9 @@ ssh josh@$HOST_IP '
 
 ### 7d. Kick the secret-fetch pipeline
 
-The `zitadel-mint-jwt` timer fires roughly every 30s, but you can
-force it immediately:
+The `zitadel-mint-jwt` timer first fires 30s after boot, then every 10 minutes
+(`OnBootSec=30s`, `OnUnitInactiveSec=10min`), so you don't have to wait — force
+the whole chain immediately:
 
 ```sh
 sudo systemctl start zitadel-mint-jwt.service &&
@@ -379,7 +408,8 @@ sudo ls -la /var/lib/openbao-secrets/
 ```
 
 Expected: a JWT lands at `/run/openbao/zitadel.jwt`, vault-agent
-authenticates, and the host's declared secrets render under
+authenticates **against the public edge `https://sec.joshuabell.xyz`** (the host
+isn't on the tailnet yet), and the host's declared secrets render under
 `/var/lib/openbao-secrets/` (e.g. `headscale_auth_2026-03-15`,
 `atuin-key-josh_2026-03-15`).
 
@@ -388,6 +418,20 @@ If something is empty, follow the logs:
 ```sh
 journalctl -u zitadel-mint-jwt -u vault-agent -u openbao-secrets-ready -f
 ```
+
+Common bootstrap failures and what they mean:
+
+- **`zitadel-mint-jwt` exits 1 / "Missing Zitadel key JSON at /machine-key.json"**
+  — you skipped or botched 7c. Seed the key, then re-run 7d.
+- **`vault-agent` gets `401`/`403` from `sec.joshuabell.xyz`** — the request
+  reached the hardened o002 edge but was rejected. `401` usually means the
+  minted JWT is invalid/expired (bad `machine-key.json`, wrong Zitadel machine
+  user, or the machine user lacks the trust-tier role from 7b step 2). `403`
+  means the njs gate/allowlist blocked the path — the bootstrap login path
+  (`/v1/auth/zitadel-jwt/login`) is allowed, so a 403 points at a config drift
+  on o002 (`hosts/oracle/o002/nginx.nix`), not something to fix on the new host.
+- **`vault-agent` connection refused / timeout** — public DNS or o002 down;
+  confirm `sec.joshuabell.xyz` resolves publicly and o002 nginx is up.
 
 ### 7e. Tailscale / Headscale auto-join
 
