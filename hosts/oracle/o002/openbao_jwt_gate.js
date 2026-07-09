@@ -1,18 +1,26 @@
 // openbao_jwt_gate.js — njs access gate for the public OpenBao bootstrap edge.
 //
-// Runs on o002 (the public gateway) in FRONT of OpenBao's own Zitadel-JWT auth.
-// A request may only *reach* OpenBao's login / KV endpoints from the public
-// internet if it presents a valid, unexpired, correctly-issued+audienced
-// Zitadel JWT (RS256, signature verified against Zitadel's JWKS). This is
-// defense-in-depth network-layer pre-auth — it does NOT replace OpenBao's auth.
+// Runs on o002 (the public gateway) in FRONT of OpenBao's own Zitadel-JWT auth,
+// on the LOGIN endpoint only. A request may only *reach* OpenBao's Zitadel-JWT
+// login handler from the public internet if it presents a valid, unexpired,
+// correctly-issued+audienced Zitadel JWT (RS256, verified against Zitadel's
+// JWKS). This is defense-in-depth network-layer pre-auth — it does NOT replace
+// OpenBao's auth.
 //
-// Why it's shaped this way (validated end-to-end against real nginx+njs):
+// SCOPE: login only. The subsequent KV reads carry an opaque OpenBao *token*
+// (minted BY this gated login), not a Zitadel JWT — so those paths are
+// self-protecting (OpenBao enforces the token) and are allowlisted directly in
+// nginx.nix, NOT routed through this gate. Sending an OpenBao token here would
+// fail JWT parsing (it is not a JWT).
+//
+// Why it's shaped this way (validated end-to-end against real nginx+njs AND a
+// live login through the public o002 edge):
 //   - vault-agent's auto_auth POSTs {"role":..,"jwt":".."} to the login
 //     endpoint — the JWT is in the BODY, not an Authorization header. So we run
-//     as a js_content handler, read the body, and pull out `.jwt`. For KV GETs
-//     (no body) and for curl / onboarding scripts we also accept
-//     `Authorization: Bearer <jwt>`. Either way it's the SAME Zitadel machine
-//     token the box already has — no second secret to transfer.
+//     as a js_content handler, read the body, and pull out `.jwt`. We also
+//     accept `Authorization: Bearer <jwt>` for manual/curl login. Either way
+//     it's the SAME Zitadel machine token the box already has — no second
+//     secret to transfer.
 //   - RS256 verify via crypto.subtle against Zitadel's JWKS, cached in a shared
 //     dict (js_shared_dict_zone) so we don't refetch per request.
 //   - On success we internalRedirect to @openbao_upstream (preserves method +

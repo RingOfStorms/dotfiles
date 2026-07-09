@@ -60,33 +60,38 @@ let
     return 403 '{"errors":["forbidden: reach OpenBao over the tailnet (this public edge only serves machine bootstrap)"]}';
   '';
 
-  # Layer-1 allowlist locations. When the JWT gate is ON, the login + KV
-  # locations instead run the njs handler (which internal-redirects to
-  # @openbao_upstream on success); everything else is identical.
-  proxyOrGate = extra:
+  # Layer-1 allowlist locations. When the JWT gate is ON, ONLY the login
+  # endpoint runs the njs handler (it's the unauthenticated entry point). KV
+  # reads carry an OpenBao *token* (not a Zitadel JWT) — vault-agent gets that
+  # token FROM the gated login, so those paths are self-protecting: allowlist
+  # them and let OpenBao enforce the token. Gating them would (and did) break
+  # vault-agent, which sends the opaque OpenBao token there, not a JWT.
+  loginLoc =
     if openbaoJwtGate
-    then { extraConfig = "js_content openbao_gate.gate;" + (if extra == "" then "" else "\n" + extra); }
-    else { proxyPass = "http://${upstream}"; extraConfig = extra; };
+    then { extraConfig = "js_content openbao_gate.gate;\nlimit_except POST PUT { deny all; }"; }
+    else { proxyPass = "http://${upstream}"; extraConfig = "limit_except POST PUT { deny all; }"; };
 
   secVhostLocations = {
-    # (1) Zitadel-JWT login — the only write the public edge allows.
+    # (1) Zitadel-JWT login — the only write the public edge allows, and the
+    # ONLY path the njs gate protects (unauthenticated entry point).
     # NB: the OpenBao Go client (vault-agent auto_auth) issues HTTP PUT for
     # logical writes; the endpoint also accepts POST. Allow both, deny the rest.
-    "= /v1/auth/zitadel-jwt/login" =
-      proxyOrGate "limit_except POST PUT { deny all; }";
+    "= /v1/auth/zitadel-jwt/login" = loginLoc;
 
-    # (2) KV reads for machine bootstrap secrets. OpenBao still enforces that
-    # the presented token's policy grants the path; this only narrows which
-    # paths are reachable from the public internet. GET-only.
-    "~ ^/v1/kv/(data|metadata)/machines/(high-trust|low-trust|by-host)/" =
-      proxyOrGate "limit_except GET { deny all; }";
+    # (2) KV reads for machine bootstrap secrets. Authenticated by the OpenBao
+    # token minted at login (which required a valid Zitadel JWT). OpenBao
+    # enforces that the token's policy grants the path; the edge only narrows
+    # WHICH paths are reachable (machines/* only) and to GET. No JWT gate here —
+    # the caller presents an opaque OpenBao token, not a Zitadel JWT.
+    "~ ^/v1/kv/(data|metadata)/machines/(high-trust|low-trust|by-host)/" = {
+      proxyPass = "http://${upstream}";
+      extraConfig = "limit_except GET { deny all; }";
+    };
 
     # (3) Token self-management + self capability check. vault-agent's
     # auto_auth calls these against ITS OWN token to set up renewal after
-    # login; machine-base grants sys/capabilities-self. All require an
-    # already-valid token, so they add no recon/data surface — but omitting
-    # them can make the agent's first render flaky. These carry a real OpenBao
-    # token (not the Zitadel JWT), so they always proxy directly (no js gate).
+    # login; machine-base grants sys/capabilities-self. All carry a real
+    # OpenBao token (not the Zitadel JWT), so they always proxy directly.
     "~ ^/v1/auth/token/(lookup-self|renew-self)$" = {
       proxyPass = "http://${upstream}";
     };
@@ -99,7 +104,7 @@ let
       extraConfig = openbaoDenyBody;
     };
   }
-  # Internal upstream target used by the njs gate after a successful verify.
+  # Internal upstream target used by the login njs gate after a successful verify.
   // lib.optionalAttrs openbaoJwtGate {
     "@openbao_upstream" = {
       extraConfig = ''
