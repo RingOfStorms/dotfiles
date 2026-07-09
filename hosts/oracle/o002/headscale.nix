@@ -13,7 +13,11 @@
 { pkgs, constants, ... }:
 let
   hs = constants.services.headscale;
-  h001Dns = import ../../../flakes/common/nix_modules/tailnet/h001_dns.nix;
+  # h003's tailnet dnsmasq listener — authoritative for *.joshuabell.xyz on the
+  # tailnet (answers h001 service names with h001's OVERLAY ip). See
+  # hosts/h003/mods/networking.nix (dnsmasq-tailnet instance).
+  h003OverlayIp = "100.64.0.14";
+  splitDomain = "joshuabell.xyz";
 
   # Headscale ACL policy (ported verbatim from l001).
   # Deny-by-default: only explicitly listed rules allow traffic.
@@ -75,11 +79,22 @@ in
         magic_dns = true;
         base_domain = hs.baseDomain;
         override_local_dns = false;
-        extra_records = map (name: {
-          type = "A";
-          name = "${name}.${h001Dns.baseDomain}";
-          value = h001Dns.ip;
-        }) h001Dns.subdomains;
+
+        # Split-DNS (restricted) nameserver: route ONLY joshuabell.xyz queries
+        # to h003's tailnet dnsmasq listener over the overlay. Everything else
+        # stays on the client's normal DNS path. This is what makes
+        # sec/git/notes/... resolve to h001's OVERLAY ip (100.64.0.13) when a
+        # machine is on the tailnet — h003's dnsmasq answers h001 service names
+        # with the overlay IP so they're reachable from ANY tailnet client.
+        #
+        # Replaces the old `extra_records` map, which was non-functional: those
+        # records used names under joshuabell.xyz while base_domain is
+        # net.joshuabell.xyz, so MagicDNS only advertised a split route for
+        # net.joshuabell.xyz and clients never sent joshuabell.xyz queries to
+        # MagicDNS at all.
+        nameservers.split = {
+          "${splitDomain}" = [ h003OverlayIp ];
+        };
       };
     };
   };

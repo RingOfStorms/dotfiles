@@ -82,7 +82,7 @@ in
           # and dnsmasq stay in sync.
           upstream_dns = [
             "# Local zone -> dnsmasq (authoritative for all *.joshuabell.xyz)"
-            "[/joshuabell.xyz/]127.0.0.1:9053"
+            "[/joshuabell.xyz/]127.0.0.1:9053
             "# Shared upstreams (plain IP, also used by dnsmasq fallthrough)"
           ]
           ++ dns.plainIp

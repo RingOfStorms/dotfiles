@@ -1,13 +1,50 @@
 {
   config,
   lib,
+  pkgs,
   constants,
+  fleet,
   ...
 }:
 let
   net = constants.network;
   mng = net.vlans.management;
   lan = net.vlans.lan;
+
+  # ── Tailnet DNS-split instance parameters ──────────────────────────
+  # h003's overlay IP (this box) — the tailnet dnsmasq listener binds here.
+  # headscale routes joshuabell.xyz split-DNS to this IP (see o002/headscale.nix).
+  h003Overlay = fleet.hosts.h003.overlayIp; # 100.64.0.14
+  h001Overlay = fleet.hosts.h001.overlayIp; # 100.64.0.13
+  # h001 service subdomains (single source of truth in fleet.nix).
+  h001Services = fleet.h001Subdomains;
+  # Tailnet clients get h001's OVERLAY ip for these names so they're reachable
+  # from ANY tailnet client (home or remote), unlike the LAN 10.12.14.10 answer
+  # the AdGuard/9053 path gives non-tailnet LAN clients.
+  tailnetDnsmasqConf = pkgs.writeText "dnsmasq-tailnet.conf" ''
+    # dnsmasq — TAILNET DNS-split instance (separate from the LAN instance).
+    # Answers *.joshuabell.xyz for tailnet clients with h001's OVERLAY ip.
+    # Bound ONLY to the overlay IP so it never affects LAN/DHCP DNS.
+    # bind-dynamic (not bind-interfaces) tolerates the overlay IP appearing
+    # AFTER dnsmasq starts (tailscaled boot race) — dnsmasq picks it up when
+    # it comes up instead of hard-failing to bind.
+    bind-dynamic
+    listen-address=${h003Overlay}
+    port=53
+    # No DHCP, no resolv.conf, no /etc/hosts — pure authoritative + fallthrough.
+    no-dhcp-interface=
+    no-resolv
+    no-hosts
+    # All h001 service names -> h001 overlay IP.
+    ${lib.concatMapStringsSep "\n"
+      (n: "host-record=${n}.${fleet.global.domain},${h001Overlay}")
+      h001Services}
+    # Fallthrough: any other joshuabell.xyz name -> external resolvers
+    # (domain-scoped; never AdGuard/127.0.0.1:53 -> no loop).
+    ${lib.concatMapStringsSep "\n"
+      (u: "server=/${fleet.global.domain}/${u}")
+      net.dnsUpstreams.plainIp}
+  '';
 in
 {
   networking = {
@@ -225,6 +262,36 @@ in
       #   "2606:4700:4700::1111" # Cloudflare IPv6
       #   "2001:4860:4860::8888" # Google IPv6
       # ];
+    };
+  };
+
+  # ── Second dnsmasq instance: TAILNET DNS split ─────────────────────
+  # The NixOS services.dnsmasq module is single-instance, and a single dnsmasq
+  # can't answer the SAME name two different ways by source. LAN clients need
+  # media/jellyfin -> 10.12.14.10 (via AdGuard -> the :9053 instance above);
+  # tailnet clients need *.joshuabell.xyz -> h001 OVERLAY (100.64.0.13) so the
+  # names are reachable from anywhere on the tailnet.
+  #
+  # So this is a SEPARATE dnsmasq bound ONLY to h003's overlay IP
+  # (100.64.0.14:53). headscale split-DNS routes joshuabell.xyz here for tailnet
+  # clients (see hosts/oracle/o002/headscale.nix). It never touches LAN/DHCP.
+  systemd.services.dnsmasq-tailnet = {
+    description = "dnsmasq (tailnet DNS-split for *.joshuabell.xyz -> h001 overlay)";
+    # Needs the overlay IP to exist -> tailscaled up first.
+    after = [ "network.target" "tailscaled.service" ];
+    wants = [ "tailscaled.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      ExecStart = "${pkgs.dnsmasq}/bin/dnsmasq -k --conf-file=${tailnetDnsmasqConf}";
+      # Bind-fail if the overlay IP isn't up yet -> retry until tailscale is ready.
+      Restart = "always";
+      RestartSec = 5;
+      DynamicUser = true;
+      AmbientCapabilities = [ "CAP_NET_BIND_SERVICE" ];
+      CapabilityBoundingSet = [ "CAP_NET_BIND_SERVICE" ];
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      NoNewPrivileges = true;
     };
   };
 

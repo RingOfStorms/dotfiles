@@ -5,18 +5,10 @@
   ...
 }:
 let
-  # Shared DNS records for h001 services - used for /etc/hosts fallback
-  h001Dns = import ./h001_dns.nix;
   cfg = config.ringofstorms.tailnet;
 in
 {
   options.ringofstorms.tailnet = {
-    h001DnsHosts = lib.mkOption {
-      type = lib.types.bool;
-      default = false;
-      description = "Add /etc/hosts entries for h001 services as fallback for headscale MagicDNS. Disable on hosts where the chicken-and-egg with secrets bootstrap is a problem.";
-    };
-
     omitCaptivePortal = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -50,10 +42,11 @@ in
   environment.systemPackages = with pkgs; [ tailscale ];
   boot.kernelModules = [ "tun" ];
 
-  # Add /etc/hosts entries for h001 services as fallback for headscale DNS
-  networking.hosts = lib.mkIf cfg.h001DnsHosts {
-    "${h001Dns.ip}" = map (name: "${name}.${h001Dns.baseDomain}") h001Dns.subdomains;
-  };
+  # NOTE: h001 service names (*.joshuabell.xyz) are resolved on the tailnet via a
+  # headscale split-DNS nameserver pointing at h003's tailnet dnsmasq listener
+  # (see hosts/oracle/o002/headscale.nix + hosts/h003/mods/networking.nix).
+  # The old `h001DnsHosts` /etc/hosts fallback option was removed: it was
+  # dangerous as a default (static pins break off-tailnet) and unused by any host.
 
   services.tailscale = {
     enable = true;
