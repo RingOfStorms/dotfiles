@@ -8,6 +8,7 @@
     ./hardware-transcoding.nix
     ./monitoring_hub.nix
     ./openwebui.nix
+    ./searx.nix
     ./trilium.nix
     ./oauth2-proxy.nix
     ./n8n.nix

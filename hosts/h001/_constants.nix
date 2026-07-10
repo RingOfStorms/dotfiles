@@ -134,6 +134,10 @@
       domain = "chat.joshuabell.xyz";
     };
 
+    searx = {
+      port = 8889;
+    };
+
     trilium = {
       port = 9111;
       overlayPort = 9112;
@@ -278,6 +282,8 @@
     };
 
     openwebui_env_2026-03-15 = {
+      # Preformatted root-only environment file. It must contain WEBUI_SECRET_KEY
+      # (stable across service restarts) plus the Zitadel OAuth client credentials.
       softDepend = [ "open-webui" ];
     };
 
