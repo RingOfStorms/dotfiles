@@ -13,6 +13,20 @@ let
   pkgsOpenWebui = import nixpkgsOpenWebui {
     inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
+    overlays = [
+      (_: prev: {
+        python314Packages = prev.python314Packages.overrideScope (
+          _: pythonPrev: {
+            # frictionless 5.18.1's upstream suite is incompatible with the
+            # current pandas/NumPy/charset-normalizer combination in unstable.
+            # Its runtime dependencies still build; omit only its failing tests.
+            frictionless = pythonPrev.frictionless.overridePythonAttrs (_: {
+              doCheck = false;
+            });
+          }
+        );
+      })
+    ];
   };
   baoSecrets = config.ringofstorms.secretsBao.secrets or {};
   hasOpenwebuiEnv = baoSecrets ? "openwebui_env_2026-03-15";
