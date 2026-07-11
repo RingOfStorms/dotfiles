@@ -329,6 +329,17 @@ rec {
         if includeBaseNixModules then [
         ] else [];
 
+      # ── Low-trust Tailnet DNS policy ──
+      # Headscale advertises one DNS configuration to the whole tailnet; ACL
+      # tags cannot select a different nameserver.split policy. Low-trust
+      # clients therefore keep using their LAN/public resolvers instead of
+      # accepting the tailnet-wide split DNS configuration.
+      lowTrustTailnetDnsModule =
+        lib.optional (secretsRole == "machines-lowtrust") {
+          services.tailscale.extraUpFlags = [ "--accept-dns=false" ];
+          services.tailscale.extraSetFlags = [ "--accept-dns=false" ];
+        };
+
       # ── User auth config ──
       # `builtins.seq _authGuard` forces the guard to evaluate (throwing for a
       # password host with no authValue) before any auth attrs are produced.
@@ -402,6 +413,10 @@ rec {
 
         # Core system boilerplate
         ++ [ coreModule ]
+
+        # Low-trust hosts must not accept the tailnet-wide Headscale DNS
+        # split; their normal LAN/public DNS provides the service records.
+        ++ lowTrustTailnetDnsModule
 
         # Host-specific modules
         ++ nixosModules;
