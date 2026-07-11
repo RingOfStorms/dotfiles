@@ -25,6 +25,19 @@ in
       };
     };
   };
+  # The Podman unit is generated as `podman-opengist.service`.  Wait for the
+  # network and Podman before it is started at boot; otherwise the generated
+  # container start may race their initialization.  Restart failures with a
+  # modest delay rather than rapidly exhausting systemd's start limit.
+  systemd.services."podman-${name}" = {
+    wants = [ "network-online.target" "podman.service" ];
+    after = [ "network-online.target" "podman.service" ];
+    serviceConfig = {
+      Restart = "on-failure";
+      RestartSec = "10s";
+    };
+  };
+
   system.activationScripts."${name}_directories" = ''
     mkdir -p ${hostDataDir}
     chown root:root ${hostDataDir}
