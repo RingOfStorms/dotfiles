@@ -122,5 +122,6 @@ with lib;
     (builtins.readFile ./envrc-import.func.sh)
     (builtins.readFile ./flake.func.sh)
     (builtins.readFile ./boot.func.sh)
+    (builtins.readFile ./command_propose.func.sh)
   ];
 }

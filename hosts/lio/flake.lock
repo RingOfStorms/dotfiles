@@ -38,20 +38,14 @@
     },
     "common": {
       "locked": {
-        "dir": "flakes/common",
-        "lastModified": 1783656390,
-        "narHash": "sha256-IF4TofR1KcKWSq6uCPklPcEVy92dr09tSl4U0vTuzJs=",
-        "ref": "refs/heads/master",
-        "rev": "adcf464be32056e5b0a776281b1bd851e198d058",
-        "revCount": 1853,
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+        "path": "../../flakes/common",
+        "type": "path"
       },
       "original": {
-        "dir": "flakes/common",
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      }
+        "path": "../../flakes/common",
+        "type": "path"
+      },
+      "parent": []
     },
     "containers": {
       "inputs": {
