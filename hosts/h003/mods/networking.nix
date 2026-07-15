@@ -18,6 +18,13 @@ let
   h001Overlay = fleet.hosts.h001.overlayIp; # 100.64.0.13
   # h001 service subdomains (single source of truth in fleet.nix).
   h001Services = fleet.h001Subdomains;
+
+  # Fully-qualified Tailnet-only aliases cannot be represented by
+  # `h001Subdomains` (which contains one-label public-zone service names).
+  # Keep them in this split-DNS authority because ~joshuabell.xyz takes
+  # precedence over MagicDNS's net.joshuabell.xyz zone.
+  h001TailnetAliases = [ "sec.h001.net.${fleet.global.domain}" ];
+
   # Tailnet clients get h001's OVERLAY ip for these names so they're reachable
   # from ANY tailnet client (home or remote), unlike the LAN 10.12.14.10 answer
   # the AdGuard/9053 path gives non-tailnet LAN clients.
@@ -39,6 +46,12 @@ let
     ${lib.concatMapStringsSep "\n"
       (n: "host-record=${n}.${fleet.global.domain},${h001Overlay}")
       h001Services}
+
+    # Fully-qualified Tailnet-only aliases -> h001 overlay IP.
+    ${lib.concatMapStringsSep "\n"
+      (n: "host-record=${n},${h001Overlay}")
+      h001TailnetAliases}
+
     # Fallthrough: any other joshuabell.xyz name -> external resolvers
     # (domain-scoped; never AdGuard/127.0.0.1:53 -> no loop).
     ${lib.concatMapStringsSep "\n"
