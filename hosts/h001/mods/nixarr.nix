@@ -3,19 +3,12 @@
   lib,
   constants,
   fleet,
-  inputs,
   ...
 }:
 let
   c = constants.services.nixarr;
 in
 {
-  # Swap nixarr's sabnzbd module for the PR #132 version that supports the
-  # nixpkgs 26.05 `services.sabnzbd.settings` API. See the nixarr-sabnzbd-fix
-  # input in flake.nix. Remove both once #132 merges into nixarr main.
-  disabledModules = [ "${inputs.nixarr}/nixarr/sabnzbd" ];
-  imports = [ "${inputs.nixarr-sabnzbd-fix}/nixarr/sabnzbd/default.nix" ];
-
   config = {
     nixarr = {
       enable = true;
@@ -81,7 +74,7 @@ in
     #
     # configFile = null switches the nixpkgs module from the deprecated
     # self-managed ini to declarative `settings` (read-only, since
-    # allowConfigWrite defaults to false on 26.05). The nixarr-sabnzbd-fix
+    # allowConfigWrite defaults to false on 26.05). The nixarr sabnzbd
     # module already populates settings.misc.{download_dir,complete_dir,
     # dirscan_dir,host,port,host_whitelist}; here we add the non-secret
     # categories + server scaffolding.
@@ -148,7 +141,7 @@ in
           sslCertificateKey = "/var/lib/acme/${fleet.global.domain}/key.pem";
           locations."/" = {
             proxyWebsockets = true;
-            proxyPass = "http://localhost:${toString c.jellyfinPort}";
+            proxyPass = "http://127.0.0.1:${toString c.jellyfinPort}";
           };
         };
         "${c.jellyseerrDomain}" = {
