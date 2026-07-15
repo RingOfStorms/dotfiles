@@ -165,8 +165,10 @@
               listen = "${overlayIp}:45876";
               token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
             };
+            # Match the stable mountpoint rather than /dev/nvme* naming, which
+            # can change between boots. The suffix keeps the dashboard label.
             services.beszel.agent.environment = {
-              EXTRA_FILESYSTEMS = "nvme0n1p1__nvme1tb";
+              EXTRA_FILESYSTEMS = "/mnt/nvme1tb__nvme1tb";
             };
           })
 

@@ -22,6 +22,7 @@ let
   # The host must override openBaoRole in its flake.nix to use "host-<name>".
   perHostSecrets = [
     { name = "gp3"; trust = "low"; }
+    { name = "h003"; trust = "high"; }
   ];
 
   mkHostPolicy = h: {
@@ -194,6 +195,10 @@ let
 
     # ── per-host: gp3 ─────────────────────────────────────────────────
     "machines/by-host/gp3/hass_token" = {};
+
+    # ── per-host: h003 ────────────────────────────────────────────────
+    # Replace the reconciler-created stub with a dedicated HA long-lived token.
+    "machines/by-host/h003/hass_isp_speedtest_token" = {};
   };
 
   # Normalize: fill in default fields where not specified
