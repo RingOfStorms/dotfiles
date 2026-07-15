@@ -22,7 +22,7 @@ in
     defaults.email = fleet.global.acmeEmail;
     certs."${domain}" = {
       inherit domain;
-      extraDomainNames = [ "*.${domain}" ];
+      extraDomainNames = [ "*.${domain}" c.tailnetDomain ];
       # credentialFiles.BUNNY_API_KEY_FILE injected via secrets-bao configChanges
       dnsProvider = "bunny";
       group = "nginx";

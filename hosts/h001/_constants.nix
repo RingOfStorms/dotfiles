@@ -172,6 +172,10 @@
       dataDir = "/var/lib/openbao";
       keysDir = "/bao-keys";
       domain = "sec.joshuabell.xyz";
+      # Tailnet-only HTTPS endpoint. Headscale publishes an explicit MagicDNS
+      # record for this two-label hostname; it cannot be covered by the
+      # single-label *.joshuabell.xyz wildcard certificate.
+      tailnetDomain = "sec.h001.net.joshuabell.xyz";
     };
 
     homepage = {

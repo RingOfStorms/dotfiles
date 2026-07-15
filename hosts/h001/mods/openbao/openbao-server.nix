@@ -26,6 +26,20 @@ in
           recommendedProxySettings = true;
         };
       };
+
+      # Tailnet-only backup endpoint for clients that need a stable OpenBao
+      # hostname independent of the public `sec.joshuabell.xyz` split route.
+      # Its explicit MagicDNS record is configured on o002/headscale.nix.
+      "${c.tailnetDomain}" = {
+        addSSL = true;
+        sslCertificate = "/var/lib/acme/${fleet.global.domain}/fullchain.pem";
+        sslCertificateKey = "/var/lib/acme/${fleet.global.domain}/key.pem";
+        locations."/" = {
+          proxyWebsockets = true;
+          proxyPass = "http://localhost:${toString c.port}";
+          recommendedProxySettings = true;
+        };
+      };
     };
   };
 

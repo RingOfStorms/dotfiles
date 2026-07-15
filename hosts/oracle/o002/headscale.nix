@@ -17,6 +17,7 @@ let
   # tailnet (answers h001 service names with h001's OVERLAY ip). See
   # hosts/h003/mods/networking.nix (dnsmasq-tailnet instance).
   h003OverlayIp = "100.64.0.14";
+  h001OverlayIp = "100.64.0.13";
   splitDomain = "joshuabell.xyz";
 
   # Headscale ACL policy (ported verbatim from l001).
@@ -75,6 +76,17 @@ in
         urls = [ ];
         auto_update_enable = false;
       };
+      # Explicit MagicDNS record for the Tailnet-only OpenBao endpoint.
+      # Unlike `sec.joshuabell.xyz`, this name has no public DNS record and
+      # remains available even if the public-zone split DNS answer is cached.
+      extra_records = [
+        {
+          name = "sec.h001.net.${splitDomain}";
+          type = "A";
+          value = h001OverlayIp;
+        }
+      ];
+
       dns = {
         magic_dns = true;
         base_domain = hs.baseDomain;
