@@ -128,6 +128,29 @@
       interval = 5;
     };
 
+    # Run the measurement on h003's WAN-side router hardware, then publish
+    # recorder-compatible entities to the Home Assistant Yellow on the LAN.
+    ispSpeedtest = {
+      hassUrl = "http://10.12.14.22:8123";
+      tokenPath = "/var/lib/openbao-secrets/hass_isp_speedtest_token";
+      entityPrefix = "sensor.isp_speedtest";
+      interface = "enp1s0";
+      onCalendar = "hourly";
+      randomizedDelay = "5min";
+      perServerTimeout = "5min";
+      serviceTimeout = "20min";
+
+      # Calibrated from Ookla's Chicago directory (2026-07-15). Pinning IDs
+      # stops automatic server selection from drifting to distant locations.
+      # Confirm sustained capacity after deployment and replace candidates that
+      # cannot saturate the WAN link.
+      servers = [
+        { id = 50826; name = "Highline — Chicago, IL"; }
+        { id = 14228; name = "Frontier — Chicago, IL"; }
+        { id = 71947; name = "EZEE Fiber — Chicago, IL"; }
+      ];
+    };
+
     # Imperative extra-container services (not part of host nixos-rebuild)
     minecraft = {
       port = 25565; # Velocity proxy (vanilla MC default port) -- must match flakes/containers/minecraft/container.nix
@@ -148,6 +171,13 @@
   };
 
   secrets = {
+    # Dedicated HA token for h003's scheduled speed-test publisher. Store the
+    # actual long-lived token in OpenBao; it must not be committed to Nix.
+    hass_isp_speedtest_token = {
+      kvPath = "kv/data/machines/by-host/h003/hass_isp_speedtest_token";
+      softDepend = [ "h003-isp-speedtest" ];
+    };
+
     # bunny.net DNS API key — used by ./mods/ddns.nix to keep home.<domain>
     # pointed at the current WAN IP. Seeded declaratively by the OpenBao
     # reconciler (hosts/h001/mods/openbao/openbao-config.nix).

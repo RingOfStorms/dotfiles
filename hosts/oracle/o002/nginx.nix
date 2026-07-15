@@ -48,7 +48,7 @@ let
   # The JWKS is fetched from h001 directly over the tailnet (not the public
   # sso. name), because o002 fetching its own public IP would hairpin through
   # Oracle's NAT (documented-broken; see configuration.nix headscale notes).
-  openbaoJwtGate = false;
+  openbaoJwtGate = true;
 
   # h001 overlay IP + the SSO Host header, for the tailnet-side JWKS fetch.
   ssoOverlayHost = fleet.hosts.h001.overlayIp; # 100.64.0.13

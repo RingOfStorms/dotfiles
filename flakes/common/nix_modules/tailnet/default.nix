@@ -48,6 +48,12 @@ in
   # The old `h001DnsHosts` /etc/hosts fallback option was removed: it was
   # dangerous as a default (static pins break off-tailnet) and unused by any host.
 
+  # Headscale split DNS needs a resolver that supports per-link routing domains.
+  # Tailscale integrates those routes (including ~joshuabell.xyz) with
+  # systemd-resolved; without it, the system resolver can retain or prefer a
+  # public answer instead of the Tailnet DNS view.
+  services.resolved.enable = true;
+
   services.tailscale = {
     enable = true;
     openFirewall = true;
@@ -84,6 +90,28 @@ in
     ];
     wants = [ "ensure-tun.service" ];
     requires = [ "ensure-tun.service" ];
+  };
+
+  # Headscale's split DNS is delivered asynchronously after tailscaled connects.
+  # `systemd-resolved` retains answers obtained before that route exists (including
+  # public answers for *.joshuabell.xyz), even after tailscale0 receives the
+  # ~joshuabell.xyz route. Clear that stale cache after autoconnect so subsequent
+  # lookups use the Tailnet DNS view. This is harmless on explicit DNS opt-out
+  # hosts: they have no Tailnet route and continue using their normal resolver.
+  systemd.services.tailscale-flush-resolved-dns = {
+    description = "Clear systemd-resolved cache after Tailscale DNS setup";
+    wantedBy = [ "multi-user.target" ];
+    wants = [ "tailscaled.service" "tailscaled-autoconnect.service" ];
+    after = [
+      "tailscaled.service"
+      "tailscaled-autoconnect.service"
+      "systemd-resolved.service"
+    ];
+    partOf = [ "tailscaled.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.systemd}/bin/resolvectl flush-caches";
+    };
   };
 
   networking.firewall.trustedInterfaces = [ config.services.tailscale.interfaceName ];

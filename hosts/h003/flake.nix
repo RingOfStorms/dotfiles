@@ -61,6 +61,12 @@
           ./mods
           ./containers.nix
 
+          # Override the shared high-trust role with h003's per-host role so
+          # only h003 can read its Home Assistant publishing token.
+          ({ lib, ... }: {
+            ringofstorms.secretsBao.openBaoRole = lib.mkForce "host-h003";
+          })
+
           # Host-specific config
           (
             { pkgs, ... }:
