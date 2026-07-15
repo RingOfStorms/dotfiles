@@ -26,6 +26,8 @@
 { constants, ... }:
 let
   dns = constants.network.dnsUpstreams;
+  mng = constants.network.vlans.management;
+  lan = constants.network.vlans.lan;
 in
 {
   config = {
@@ -65,7 +67,13 @@ in
         theme = "auto";
 
         dns = {
-          bind_hosts = [ "0.0.0.0" ];
+          # Bind only to home VLAN addresses. `100.64.0.14:53` is reserved for
+          # dnsmasq-tailnet, which provides the Headscale split-DNS authority
+          # for Tailnet clients (see networking.nix).
+          bind_hosts = [
+            mng.ipv4
+            lan.ipv4
+          ];
           port = 53;
           anonymize_client_ip = false;
           ratelimit = 0;
