@@ -80,6 +80,12 @@
     capSysNice = true; # Allow gamescope to set real-time scheduling
   };
 
+  # Allow the fleet nix2nix key to log in as root so deploy_joe (which targets
+  # root@<lanIp> with NIX_SSHOPTS="-i <nix2nix key>") and remote builds work.
+  users.users.root.openssh.authorizedKeys.keys = [
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
+  ];
+
   environment.systemPackages = with pkgs; [
     mangohud     # Performance overlay (MANGOHUD=1 %command% or mangohud %command%)
     protonup-qt  # GUI for managing custom Proton versions

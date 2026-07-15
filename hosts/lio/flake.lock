@@ -691,19 +691,6 @@
         "type": "github"
       }
     },
-    "nvim_plugin-joshuabell/pearing.nvim": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1777868839,
-        "narHash": "sha256-t1bsGX0WUI+KRGWyHNOMV7lDhld2EQyFrCWTRSmsJ2A=",
-        "path": "/home/josh/projects/pearing",
-        "type": "path"
-      },
-      "original": {
-        "path": "/home/josh/projects/pearing",
-        "type": "path"
-      }
-    },
     "nvim_plugin-lewis6991/gitsigns.nvim": {
       "flake": false,
       "locked": {
@@ -1106,7 +1093,6 @@
         "nvim_plugin-ivov/lisette": "nvim_plugin-ivov/lisette",
         "nvim_plugin-j-hui/fidget.nvim": "nvim_plugin-j-hui/fidget.nvim",
         "nvim_plugin-johmsalas/text-case.nvim": "nvim_plugin-johmsalas/text-case.nvim",
-        "nvim_plugin-joshuabell/pearing.nvim": "nvim_plugin-joshuabell/pearing.nvim",
         "nvim_plugin-lewis6991/gitsigns.nvim": "nvim_plugin-lewis6991/gitsigns.nvim",
         "nvim_plugin-lnc3l0t/glow.nvim": "nvim_plugin-lnc3l0t/glow.nvim",
         "nvim_plugin-m4xshen/hardtime.nvim": "nvim_plugin-m4xshen/hardtime.nvim",
@@ -1129,11 +1115,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1783453115,
-        "narHash": "sha256-B26L9GY48X4Aq8teGDIgssva/fKyQEinviV7iWnOREE=",
+        "lastModified": 1784079088,
+        "narHash": "sha256-7W8QaCSOSWAmUZnWH3nmMifAuqG0hrs0reh8q7lf25Q=",
         "ref": "refs/heads/master",
-        "rev": "7de85a2243aa0119ac2a115aec96bc0a928b8e11",
-        "revCount": 349,
+        "rev": "3345d0135fc776285cd1cde056c29a7875c83d37",
+        "revCount": 350,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/nvim"
       },

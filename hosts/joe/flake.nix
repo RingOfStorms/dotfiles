@@ -184,6 +184,7 @@
                 steam-run
                 prismlauncher-wayland
                 vesktop
+                discord
                 bitwarden-desktop
               ];
             }
