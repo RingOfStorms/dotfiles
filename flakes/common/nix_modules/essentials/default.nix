@@ -32,6 +32,7 @@ with lib;
     parted
     fio
     moreutils
+    ethtool
 
     # `rmrec <name> [name...]` - recursively find and delete dirs/files by
     # name under CWD (e.g. `rmrec node_modules dist target .direnv`).
