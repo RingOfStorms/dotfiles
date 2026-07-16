@@ -153,14 +153,14 @@ in
           {
             "Shelfmark" = {
               description = "Books & Audiobooks";
-              href = "http://h001.net.joshuabell.xyz:8084";
+              href = "http://h001.net.joshuabell.xyz:${toString s.nixarr.shelfmarkPort}";
               icon = "mdi-bookshelf";
             };
           }
           {
             "Audiobookshelf" = {
               description = "Audiobooks & Podcasts";
-              href = "http://h001.net.joshuabell.xyz:9292";
+              href = "http://h001.net.joshuabell.xyz:${toString s.nixarr.audiobookshelfPort}";
               icon = "audiobookshelf";
             };
           }

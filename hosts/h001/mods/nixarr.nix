@@ -174,11 +174,13 @@ in
       # accounts/libraries in their own UIs; nixarr manages service state/paths.
       shelfmark = {
         enable = true;
+        port = c.shelfmarkPort;
         host = "0.0.0.0";
         openFirewall = true;
       };
       audiobookshelf = {
         enable = true;
+        port = c.audiobookshelfPort;
         host = "0.0.0.0";
         openFirewall = true;
       };
