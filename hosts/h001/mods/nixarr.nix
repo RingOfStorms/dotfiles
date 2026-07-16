@@ -175,7 +175,7 @@ in
         # Profiles are declarative. Existing movies/series are deliberately not
         # reassigned until their current roots, tags, and profiles are inventoried.
         configuration = {
-          sonarr.main = {
+          sonarr.sonarr = {
             base_url = "http://127.0.0.1:8989";
             api_key = "!env_var SONARR_API_KEY";
             quality_definition.type = "series";
@@ -222,7 +222,7 @@ in
               }
             ];
           };
-          radarr.main = {
+          radarr.radarr = {
             base_url = "http://127.0.0.1:7878";
             api_key = "!env_var RADARR_API_KEY";
             quality_definition.type = "movie";
