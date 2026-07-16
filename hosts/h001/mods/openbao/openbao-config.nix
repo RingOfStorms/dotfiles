@@ -185,6 +185,10 @@ let
     "machines/high-trust/oauth2_proxy_key_file_2026-03-15"  = {};
     "machines/high-trust/openwebui_env_2026-03-15"          = {};
     "machines/high-trust/openrouter_2026-03-15"             = { fields = { api-key = "TODO:replace_me"; }; };
+    # Reconciler-created placeholders. Replace only the api-key field in the
+    # OpenBao UI; vault-agent will then render the raw value on h001.
+    "machines/high-trust/sabnzbd_api_key_2026-07-15"        = { fields = { api-key = "TODO:replace_me"; }; };
+    "machines/high-trust/nzbgeek_api_key_2026-07-15"        = { fields = { api-key = "TODO:replace_me"; }; };
 
     # ── high-trust: per-host service secrets ──────────────────────────
     "machines/high-trust/atuin-key-josh_2026-03-15"         = { fields = { user = "TODO:replace_me"; password = "TODO:replace_me"; value = "TODO:replace_me"; }; };
