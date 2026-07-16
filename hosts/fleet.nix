@@ -185,7 +185,7 @@ rec {
   # ─── h001 DNS RECORDS ─────────────────────────────────────────────
   # Subdomains served by h001, used for headscale DNS splitting and /etc/hosts
   h001Subdomains = [
-    "jellyfin" "media" "notes" "chat" "sso-proxy" "n8n"
+    "jellyfin" "media" "books" "notes" "chat" "sso-proxy" "n8n"
     "sec" "sso" "gist" "git" "etebase" "photos"
     "location" "matrix" "element" "docs"
   ];

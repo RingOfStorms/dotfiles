@@ -225,8 +225,9 @@
     nixarr = {
       jellyfinPort = 8096;
       jellyseerrPort = 5055;
-      shelfmarkPort = 8086;
+      shelfmarkPort = 8087;
       audiobookshelfPort = 9292;
+      kavitaPort = 5000;
       transmissionPeerPort = 51820;
       mediaDir = "/nfs/h002/nixarr/media";
       stateDir = "/var/lib/nixarr/state";
