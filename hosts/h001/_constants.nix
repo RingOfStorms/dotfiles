@@ -272,6 +272,20 @@
       };
     };
 
+    # Single raw API-key values rendered by OpenBao. The file group grants the
+    # corresponding nixarr API synchronizer access without placing secrets in
+    # Git or the Nix store.
+    sabnzbd_api_key_2026-07-15 = {
+      group = "media";
+      mode = "0440";
+      field = "api-key";
+    };
+    nzbgeek_api_key_2026-07-15 = {
+      group = "prowlarr-api";
+      mode = "0440";
+      field = "api-key";
+    };
+
     zitadel_master_key_2026-03-15 = {
       mode = "0444";
       template = ''

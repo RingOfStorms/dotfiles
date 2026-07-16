@@ -55,20 +55,222 @@ in
         extraSettings = {
           rpc-bind-address = "0.0.0.0";
           rpc-authentication-required = false;
-          rpc-username = "transmission";
-          rpc-password = "transmission";
           rpc-host-whitelist-enabled = false;
           rpc-whitelist-enabled = false;
           rpc-whitelist = "127.0.0.1,::1,192.168.1.71,100.64.0.0/10";
         };
       };
-      prowlarr.enable = true; # Index manager
-      sonarr.enable = true; # TV
-      radarr.enable = true; # Movies
-      bazarr.enable = true; # subtitles for sonarr and radarr
-      lidarr.enable = false; # music
-      # recyclarr.enable = true; # not sure how to use this yet
+      prowlarr = {
+        enable = true; # Index manager
+        settings-sync = {
+          # Nixarr keeps the existing names/implementations and updates only
+          # these explicit fields; credentials remain host-managed files.
+          enable-nixarr-apps = true;
+          sonarr.config.fields = {
+            syncCategories = [
+              5000 5010 5020 5030 5040 5045 5050 5090
+            ];
+            animeSyncCategories = [ 5070 ];
+            syncAnimeStandardFormatSearch = true;
+            syncRejectBlocklistedTorrentHashesWhileGrabbing = false;
+          };
+          radarr.config.fields = {
+            syncCategories = [
+              2000 2010 2020 2030 2040 2045 2050 2060 2070 2080 2090
+            ];
+            syncRejectBlocklistedTorrentHashesWhileGrabbing = false;
+          };
+          indexers = [
+            {
+              name = "AnimeTosho";
+              sort_name = "animetosho";
+              priority = 25;
+              fields = {
+                baseUrl = "https://feed.animetosho.org";
+                apiPath = "/api";
+                preferMagnetUrl = false;
+              };
+            }
+            {
+              name = "LimeTorrents";
+              sort_name = "limetorrents";
+              priority = 25;
+              fields = {
+                downloadlink = 1;
+                downloadlink2 = 0;
+                sort = 0;
+                preferMagnetUrl = false;
+              };
+            }
+            {
+              name = "NZBgeek";
+              sort_name = "nzbgeek";
+              priority = 25;
+              fields = {
+                baseUrl = "https://api.nzbgeek.info";
+                apiPath = "/api";
+                apiKey.secret = "/var/lib/openbao-secrets/nzbgeek_api_key_2026-07-15";
+              };
+            }
+            {
+              name = "The Pirate Bay";
+              sort_name = "thepiratebay";
+              priority = 25;
+              fields.preferMagnetUrl = false;
+            }
+          ];
+        };
+      };
+      sonarr = {
+        enable = true; # TV
+        settings-sync = {
+          transmission.enable = true;
+          downloadClients = [
+            {
+              name = "SABnzbd";
+              implementation = "Sabnzbd";
+              enable = true;
+              fields = {
+                host = "localhost";
+                port = 6336;
+                useSsl = false;
+                apiKey.secret = "/var/lib/openbao-secrets/sabnzbd_api_key_2026-07-15";
+                tvCategory = "tv";
+                recentTvPriority = -100;
+                olderTvPriority = -100;
+              };
+            }
+          ];
+        };
+      };
+      radarr = {
+        enable = true; # Movies
+        settings-sync = {
+          transmission.enable = true;
+          downloadClients = [
+            {
+              name = "SABnzbd";
+              implementation = "Sabnzbd";
+              enable = true;
+              fields = {
+                host = "localhost";
+                port = 6336;
+                useSsl = false;
+                apiKey.secret = "/var/lib/openbao-secrets/sabnzbd_api_key_2026-07-15";
+                movieCategory = "movies";
+                recentMoviePriority = -100;
+                olderMoviePriority = -100;
+              };
+            }
+          ];
+        };
+      };
+      bazarr = {
+        enable = true; # subtitles for sonarr and radarr
+        settings-sync = {
+          sonarr.enable = true;
+          radarr.enable = true;
+        };
+      };
+      lidarr.enable = false; # preserved in the h001 migration backup; out of scope
+      recyclarr = {
+        enable = true;
+        # Profiles are declarative. Existing movies/series are deliberately not
+        # reassigned until their current roots, tags, and profiles are inventoried.
+        configuration = {
+          sonarr.main = {
+            base_url = "http://127.0.0.1:8989";
+            api_key = "!env_var SONARR_API_KEY";
+            quality_definition.type = "series";
+            media_management.propers_and_repacks = "do_not_prefer";
+            quality_profiles = [
+              {
+                trash_id = "72dae194fc92bf828f32cde7744e51a1"; # WEB-1080p
+                name = "HD";
+                reset_unmatched_scores.enabled = true;
+              }
+              {
+                trash_id = "d1498e7d189fbe6c7110ceaabb7473e6"; # WEB-2160p
+                name = "UHD";
+                reset_unmatched_scores.enabled = true;
+              }
+              {
+                trash_id = "20e0fc959f1f1704bed501f23bdae76f"; # [Anime] Remux-1080p
+                name = "Anime";
+                reset_unmatched_scores.enabled = true;
+              }
+            ];
+            custom_format_groups.add = [
+              {
+                trash_id = "59c3af66780d08332fdc64e68297098f"; # [Unwanted] Unwanted Formats
+                select = [
+                  "32b367365729d530ca1c124a0b180c64" # Bad Dual Groups
+                  "85c61753df5da1fb2aab6f2a47426b09" # BR-DISK
+                  "9c11cd3f07101cdba90a2d81cf0e56b4" # LQ
+                  "e2315f990da2e2cbfc9fa5b7a6fcfe48" # LQ (Release Title)
+                  "23297a736ca77c0fc8e70f8edd7ee56c" # Upscaled
+                ];
+              }
+            ];
+            custom_formats = [
+              {
+                trash_ids = [ "418f50b10f1907201b6cfdf881f467b7" ]; # Anime Dual Audio
+                assign_scores_to = [{ name = "Anime"; score = 2000; }];
+              }
+              {
+                # Permit English-dub releases as a fallback when a recognized
+                # dual-audio release is unavailable.
+                trash_ids = [ "9c14d194486c4014d422adc64092d794" ]; # Dubs Only
+                assign_scores_to = [{ name = "Anime"; score = 0; }];
+              }
+            ];
+          };
+          radarr.main = {
+            base_url = "http://127.0.0.1:7878";
+            api_key = "!env_var RADARR_API_KEY";
+            quality_definition.type = "movie";
+            media_management.propers_and_repacks = "do_not_prefer";
+            quality_profiles = [
+              {
+                trash_id = "fd161a61e3ab826d3a22d53f935696dd"; # Remux + WEB 2160p
+                name = "Remux";
+                reset_unmatched_scores.enabled = true;
+              }
+            ];
+            custom_format_groups.add = [
+              {
+                trash_id = "a3ac6af01d78e4f21fcb75f601ac96df"; # [Unwanted] Unwanted Formats
+                select = [
+                  "b6832f586342ef70d9c128d40c07b872" # Bad Dual Groups
+                  "ed38b889b31be83fda192888e2286d83" # BR-DISK
+                  "90a6f9a284dff5103f6346090e6280c8" # LQ
+                  "e204b80c87be9497a8a6eaff48f72905" # LQ (Release Title)
+                  "bfd8eb01832d646a0a89c4deb46f8564" # Upscaled
+                ];
+              }
+            ];
+            custom_formats = [
+              {
+                # Reject CAM/TS releases with recorded theatre audio.
+                trash_ids = [ "c465ccc73923871b3eb1802042331306" ]; # Line/Mic Dubbed
+                assign_scores_to = [{ name = "Remux"; score = -10000; }];
+              }
+              {
+                # Avoid Dolby Vision-only releases on players without DV support.
+                trash_ids = [ "923b6abef9b17f937fab56cfcf89e1f1" ]; # DV (w/o HDR fallback)
+                assign_scores_to = [{ name = "Remux"; score = -10000; }];
+              }
+            ];
+          };
+        };
+      };
     };
+
+    # Nixarr's API synchronizers communicate over loopback. Keep Forms auth for
+    # remote UI access while bypassing it only for local service-to-service API calls.
+    services.prowlarr.settings.auth.required = "DisabledForLocalAddresses";
+    services.sonarr.settings.auth.required = "DisabledForLocalAddresses";
+    services.radarr.settings.auth.required = "DisabledForLocalAddresses";
 
     # SABnzbd: fully declarative config on nixpkgs 26.05.
     #
