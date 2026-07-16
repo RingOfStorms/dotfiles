@@ -88,7 +88,6 @@ in
               fields = {
                 baseUrl = "https://feed.animetosho.org";
                 apiPath = "/api";
-                preferMagnetUrl = false;
               };
             }
             {
@@ -99,7 +98,6 @@ in
                 downloadlink = 1;
                 downloadlink2 = 0;
                 sort = 0;
-                preferMagnetUrl = false;
               };
             }
             {
@@ -114,9 +112,8 @@ in
             }
             {
               name = "The Pirate Bay";
-              sort_name = "thepiratebay";
+              sort_name = "pirate bay";
               priority = 25;
-              fields.preferMagnetUrl = false;
             }
           ];
         };
