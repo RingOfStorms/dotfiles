@@ -106,6 +106,12 @@ in
         # MagicDNS at all.
         nameservers.split = {
           "${splitDomain}" = [ h003OverlayIp ];
+
+          # MagicDNS owns the more-specific `net.joshuabell.xyz` suffix, so it
+          # would otherwise win over the broad joshuabell.xyz split route for
+          # sec.h001.net.joshuabell.xyz. Route this backup hostname explicitly
+          # to h003's authoritative Tailnet dnsmasq instead.
+          "h001.net.${splitDomain}" = [ h003OverlayIp ];
         };
       };
     };
