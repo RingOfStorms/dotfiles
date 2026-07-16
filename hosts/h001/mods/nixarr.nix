@@ -162,12 +162,25 @@ in
           ];
         };
       };
-      bazarr = {
+       bazarr = {
         enable = true; # subtitles for sonarr and radarr
         settings-sync = {
           sonarr.enable = true;
           radarr.enable = true;
         };
+      };
+      # Direct tailnet/LAN access, matching SABnzbd and the existing *arr UIs.
+      # Configure Shelfmark's acquisition sources/destinations and both apps'
+      # accounts/libraries in their own UIs; nixarr manages service state/paths.
+      shelfmark = {
+        enable = true;
+        host = "0.0.0.0";
+        openFirewall = true;
+      };
+      audiobookshelf = {
+        enable = true;
+        host = "0.0.0.0";
+        openFirewall = true;
       };
       lidarr.enable = false; # preserved in the h001 migration backup; out of scope
       recyclarr = {

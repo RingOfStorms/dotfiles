@@ -150,6 +150,20 @@ in
               icon = "transmission";
             };
           }
+          {
+            "Shelfmark" = {
+              description = "Books & Audiobooks";
+              href = "http://h001.net.joshuabell.xyz:8084";
+              icon = "mdi-bookshelf";
+            };
+          }
+          {
+            "Audiobookshelf" = {
+              description = "Audiobooks & Podcasts";
+              href = "http://h001.net.joshuabell.xyz:9292";
+              icon = "audiobookshelf";
+            };
+          }
         ];
       }
       {

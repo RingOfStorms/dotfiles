@@ -11,7 +11,7 @@ let
   pinchflatId = constants.services.pinchflat.uid;
 
   # Matches up to my h001/mods/nixarr|pinchflat.nix files
-  audiobookshelf = false;
+  audiobookshelf = true;
   jellyfin = true;
   komga = false;
   lidarr = false;
