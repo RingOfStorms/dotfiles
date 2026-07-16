@@ -166,6 +166,12 @@ in
       Group = "root";
       RuntimeDirectory = runtimeDir;
       RuntimeDirectoryMode = "0700";
+      # Ookla persists its accepted-license setting under XDG_CONFIG_HOME.
+      # Give it a private, persistent directory rather than letting it attempt
+      # to write /root/.config, which ProtectSystem makes read-only.
+      StateDirectory = runtimeDir;
+      StateDirectoryMode = "0700";
+      Environment = [ "XDG_CONFIG_HOME=/var/lib/${runtimeDir}" ];
       TimeoutStartSec = cfg.serviceTimeout;
       Nice = 10;
       IOSchedulingClass = "best-effort";
