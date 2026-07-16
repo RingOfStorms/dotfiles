@@ -71,6 +71,7 @@ in
           # dnsmasq-tailnet, which provides the Headscale split-DNS authority
           # for Tailnet clients (see networking.nix).
           bind_hosts = [
+            "127.0.0.1"
             mng.ipv4
             lan.ipv4
           ];
