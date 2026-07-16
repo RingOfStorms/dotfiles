@@ -137,7 +137,9 @@
       interface = "enp1s0";
       onCalendar = "hourly";
       randomizedDelay = "5min";
-      perServerTimeout = "5min";
+      # Passed directly to GNU `timeout`, whose duration syntax uses `m`, not
+      # systemd-style `min`.
+      perServerTimeout = "5m";
       serviceTimeout = "20min";
 
       # Calibrated from Ookla's Chicago directory (2026-07-15). Pinning IDs
