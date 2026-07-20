@@ -29,6 +29,18 @@
       mergetool.meld.cmd = "meld \"$LOCAL\" \"$MERGED\" \"$REMOTE\" --output \"$MERGED\"";
     };
 
+    includes = [
+      {
+        condition = "gitdir:~/projects/puzzles/";
+        contents = {
+          user = {
+            name = "RingOfStormsBot";
+            email = "bot@joshuabell.dev";
+          };
+        };
+      }
+    ];
+
     ignores = [
       # --------------
       #    Intellij
