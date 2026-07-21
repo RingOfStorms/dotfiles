@@ -81,7 +81,15 @@
                 ttyd
                 tcpdump
                 dig
+                picocom # serial console for the Omada SG3210X-M2 switch
               ];
+
+              # `omada` — connect to the SG3210X-M2 serial console.
+              # 38400 8N1; --omap delbs fixes Backspace (keyboard sends DEL 0x7f,
+              # switch wants BS 0x08). Exit picocom with Ctrl-A then Ctrl-X.
+              # Needs sudo: /dev/ttyACM0 is root:dialout.
+              environment.shellAliases.omada =
+                "sudo ${pkgs.picocom}/bin/picocom -b 38400 --omap delbs /dev/ttyACM0";
             }
           )
         ];
