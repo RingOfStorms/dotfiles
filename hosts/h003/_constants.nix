@@ -78,6 +78,7 @@
     localDnsRecords = [
       { hostname = "media.joshuabell.xyz"; ip = "10.12.14.10"; }
       { hostname = "jellyfin.joshuabell.xyz"; ip = "10.12.14.10"; }
+      { hostname = "books.joshuabell.xyz"; ip = "10.12.14.10"; }
     ];
 
     # ── Shared DNS upstreams (single source of truth) ──────────────────

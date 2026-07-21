@@ -316,6 +316,13 @@ in
             proxyPass = "http://${upstream}";
           };
         };
+        "books.${domain}" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyPass = "http://${upstream}";
+          };
+        };
         "media.${domain}" = {
           enableACME = true;
           forceSSL = true;

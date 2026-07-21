@@ -150,6 +150,27 @@ in
               icon = "transmission";
             };
           }
+          {
+            "Shelfmark" = {
+              description = "Books & Audiobooks";
+              href = "http://h001.net.joshuabell.xyz:${toString s.nixarr.shelfmarkPort}";
+              icon = "mdi-bookshelf";
+            };
+          }
+          {
+            "Kavita" = {
+              description = "Ebook Library";
+              href = "https://books.joshuabell.xyz";
+              icon = "mdi-bookshelf";
+            };
+          }
+          {
+            "Audiobookshelf" = {
+              description = "Audiobooks & Podcasts";
+              href = "http://h001.net.joshuabell.xyz:${toString s.nixarr.audiobookshelfPort}";
+              icon = "audiobookshelf";
+            };
+          }
         ];
       }
       {
