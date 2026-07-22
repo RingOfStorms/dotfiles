@@ -76,6 +76,7 @@
           # Host-specific config
           ({
             networking.networkmanager.enable = true;
+            security.sudo.wheelNeedsPassword = false;
             users.users.root.openssh.authorizedKeys.keys = [
               fleet.global.sshPubKey
             ];

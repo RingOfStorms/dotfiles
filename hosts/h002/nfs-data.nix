@@ -12,10 +12,20 @@ lib.mkMerge [
   ({
     services.nfs.server = {
       enable = true;
+      # Export the Bcachefs mount itself, not /. If /data cannot mount, NFS has
+      # no usable export rather than exposing the empty /data mountpoint on the
+      # root filesystem to media clients.
       exports = ''
-        ${nfs.exportRoot} 100.64.0.0/10(rw,sync,no_subtree_check,no_root_squash,fsid=0,crossmnt)
-        ${nfs.exportRoot} 10.12.14.0/10(rw,sync,no_subtree_check,no_root_squash,fsid=0,crossmnt)
+        /data 100.64.0.0/10(rw,sync,no_subtree_check,no_root_squash,fsid=0)
+        /data 10.12.14.0/10(rw,sync,no_subtree_check,no_root_squash,fsid=0)
       '';
+    };
+
+    # Do not bring NFS up unless the actual Bcachefs media filesystem mounted.
+    systemd.services.nfs-server = {
+      requires = [ "data.mount" ];
+      after = [ "data.mount" ];
+      unitConfig.RequiresMountsFor = "/data";
     };
 
     environment.systemPackages = [
