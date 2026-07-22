@@ -49,9 +49,16 @@
 
     # Static DHCP reservations
     staticLeases = [
-      # VLAN10
-      { mac = "a8:29:48:94:23:dd"; name = "TL-SG1428PE"; ip = "10.12.16.2"; }
-      # VLAN20
+      # VLAN10 (management)
+      # Core managed switch (Omada SG3210X-M2). Mgmt IP is ALSO set statically
+      # on the switch itself (interface vlan 10 -> 10.12.16.2); this reservation
+      # documents it and keeps dnsmasq from ever handing 10.12.16.2 to anything.
+      { mac = "a8:29:48:e9:b2:ec"; name = "SG3210X-M2"; ip = "10.12.16.2"; }
+      # VLAN20 (lan)
+      # Easy Smart PoE switch, factory-reset -> flat/untagged, extends VLAN 20
+      # off SG3210X Te1/0/10. Reservation only takes effect if DHCP is enabled
+      # in the SG1428PE web UI (Easy Smart switches default to static 192.168.0.1).
+      { mac = "a8:29:48:94:23:dd"; name = "TL-SG1428PE"; ip = "10.12.14.4"; }
       { mac = "80:cc:9c:9e:e3:97"; name = "RAX70"; ip = "10.12.14.2"; }
       { mac = "94:83:C4:3C:AD:A0"; name = "AXT1800"; ip = "10.12.14.3"; }
       { mac = "00:be:43:b9:f4:e0"; name = "H001"; ip = "10.12.14.10"; }
