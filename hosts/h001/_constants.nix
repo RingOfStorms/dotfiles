@@ -182,9 +182,30 @@
       port = 8082;
     };
 
-    tdarr = {
-      webUIPort = 8265;
-      serverPort = 8266;
+    mediaIntegrity = {
+      dataDir = "/var/lib/media-integrity";
+      webPath = "/media-health/";
+      scanSubdirectories = [ "library/movies" ];
+      extensions = [
+        ".avi"
+        ".flv"
+        ".m2ts"
+        ".m4v"
+        ".mkv"
+        ".mov"
+        ".mp4"
+        ".mpeg"
+        ".mpg"
+        ".mts"
+        ".ogv"
+        ".ts"
+        ".vob"
+        ".webm"
+        ".wmv"
+      ];
+      onCalendar = "Sun *-*-* 03:00:00";
+      randomizedDelay = "30m";
+      perFileTimeoutSec = 43200;
     };
 
     puzzles = {

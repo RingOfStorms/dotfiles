@@ -5,7 +5,7 @@
   imports = [
     ./litellm.nix
     ./nixarr.nix
-    ./tdarr.nix
+    ./media-integrity.nix
     ./kavita.nix
     ./hardware-transcoding.nix
     ./monitoring_hub.nix

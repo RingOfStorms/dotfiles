@@ -172,10 +172,10 @@ in
             };
           }
           {
-            "Tdarr" = {
-              description = "Media Health Reports";
-              href = "http://h001.net.joshuabell.xyz:${toString s.tdarr.webUIPort}";
-              icon = "tdarr";
+            "Media Integrity" = {
+              description = "FFmpeg Integrity Report";
+              href = "http://h001.net.joshuabell.xyz${s.mediaIntegrity.webPath}";
+              icon = "mdi-file-video-outline";
             };
           }
         ];
