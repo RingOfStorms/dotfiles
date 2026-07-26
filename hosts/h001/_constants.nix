@@ -182,6 +182,11 @@
       port = 8082;
     };
 
+    tdarr = {
+      webUIPort = 8265;
+      serverPort = 8266;
+    };
+
     puzzles = {
       port = 8093;
       domain = "puzzles.joshuabell.xyz";

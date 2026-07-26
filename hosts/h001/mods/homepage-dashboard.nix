@@ -171,6 +171,13 @@ in
               icon = "audiobookshelf";
             };
           }
+          {
+            "Tdarr" = {
+              description = "Media Health Reports";
+              href = "http://h001.net.joshuabell.xyz:${toString s.tdarr.webUIPort}";
+              icon = "tdarr";
+            };
+          }
         ];
       }
       {
