@@ -31,6 +31,7 @@ let
     PER_FILE_TIMEOUT = ${toString c.perFileTimeoutSec}
     FFPROBE = ${builtins.toJSON "${pkgs.ffmpeg}/bin/ffprobe"}
     FFMPEG = ${builtins.toJSON "${pkgs.ffmpeg}/bin/ffmpeg"}
+    AUXILIARY_VIDEO_DISPOSITIONS = ("attached_pic", "still_image", "timed_thumbnails")
 
 
     def utc_now():
@@ -84,6 +85,36 @@ let
         if len(value) <= limit:
             return value
         return value[:limit] + "\n… output truncated …"
+
+
+    def summarize_stream(stream):
+        disposition = stream.get("disposition") or {}
+        return {
+            "index": stream["index"],
+            "codec_type": stream.get("codec_type", "unknown"),
+            "codec_name": stream.get("codec_name", "unknown"),
+            "dispositions": sorted(name for name, enabled in disposition.items() if enabled),
+        }
+
+
+    def auxiliary_video_reasons(stream):
+        if stream.get("codec_type") != "video":
+            return []
+        disposition = stream.get("disposition") or {}
+        return [name for name in AUXILIARY_VIDEO_DISPOSITIONS if disposition.get(name)]
+
+
+    def stream_description(stream):
+        description = (
+            f"stream #{stream.get('index', '?')}: "
+            f"{stream.get('codec_type', 'unknown')}/{stream.get('codec_name', 'unknown')}"
+        )
+        dispositions = stream.get("dispositions", [])
+        if dispositions:
+            description += f" ({', '.join(dispositions)})"
+        if stream.get("ignored_reason"):
+            description += f" — ignored: {stream['ignored_reason']}"
+        return description
 
 
     def render_html(state):
@@ -153,7 +184,10 @@ let
     <body><main>
     """]
         document.append("<h1>Media Integrity Report</h1>")
-        document.append("<p class=\"muted\">Read-only ffprobe metadata validation and full FFmpeg audio/video decode.</p>")
+        document.append(
+            "<p class=\"muted\">Read-only ffprobe metadata validation and full FFmpeg audio/video decode. "
+            "Attached pictures and thumbnail streams are inventoried but not decoded.</p>"
+        )
         document.append(f"<div class=\"banner {banner_class}\">{html.escape(banner_text)}</div>")
         document.append("<section class=\"summary\">")
         for label, value in (("Discovered", total), ("Passed", passed), ("Failed", failed), ("Pending", pending)):
@@ -200,10 +234,28 @@ let
             elapsed_text = human_duration(elapsed) if elapsed is not None else "—"
             checked = html.escape(result.get("checked_at", "—"))
             error = result.get("error", "")
+            details = []
+            ignored_streams = result.get("ignored_streams", [])
+            if ignored_streams:
+                ignored_text = "\n".join(stream_description(stream) for stream in ignored_streams)
+                details.append(
+                    f"<details><summary>{len(ignored_streams)} auxiliary video stream(s) ignored</summary>"
+                    f"<pre>{html.escape(ignored_text)}</pre></details>"
+                )
+            targeted_checks = result.get("targeted_checks", [])
+            if targeted_checks:
+                targeted_text = []
+                for check in targeted_checks:
+                    targeted_text.append(f"{stream_description(check)} — {check.get('status', 'failed')}")
+                    if check.get("error"):
+                        targeted_text.append(check["error"])
+                details.append(
+                    "<details><summary>Targeted stream verification</summary>"
+                    f"<pre>{html.escape(chr(10).join(targeted_text))}</pre></details>"
+                )
             if error:
-                detail = f"<details><summary>FFmpeg output</summary><pre>{html.escape(error)}</pre></details>"
-            else:
-                detail = "—"
+                details.append(f"<details><summary>FFmpeg output</summary><pre>{html.escape(error)}</pre></details>")
+            detail = "".join(details) or "—"
             document.append(
                 f"<tr class=\"{status}\"><td><span class=\"status {status}\">{html.escape(status)}</span></td>"
                 f"<td><code>{path}</code></td><td>{size}</td><td>{duration}</td><td>{streams}</td>"
@@ -211,7 +263,8 @@ let
             )
         document.append("""</tbody></table>
         <footer>
-          FFmpeg reads each selected file from beginning to end and writes decoded output only to the null muxer.
+          FFmpeg reads each selected audio stream and non-auxiliary video stream from beginning to end and writes
+          decoded output only to the null muxer. Attached pictures and thumbnails are reported but excluded.
           The scanner never writes to the media library. Raw results are available as <a href="results.json">results.json</a>.
         </footer>
         </main></body></html>
@@ -262,6 +315,53 @@ let
         )
 
 
+    def decode_command(path, streams):
+        command = [
+            FFMPEG,
+            "-nostdin",
+            "-hide_banner",
+            "-v", "error",
+            "-xerror",
+            "-i", str(path),
+        ]
+        for stream in streams:
+            command.extend(["-map", f"0:{stream['index']}"])
+        command.extend([
+            "-sn",
+            "-dn",
+            "-f", "null",
+            "-",
+        ])
+        return command
+
+
+    def targeted_stream_check(path, stream):
+        started = time.monotonic()
+        result = dict(stream)
+        result.update({"status": "failed", "error": ""})
+        try:
+            decode = run_command(decode_command(path, [stream]))
+            if decode.returncode != 0:
+                result["error"] = clipped_error(
+                    decode.stderr or decode.stdout or "FFmpeg stream decode failed without output"
+                )
+                return result
+            result["status"] = "passed"
+            return result
+        except subprocess.TimeoutExpired as error:
+            result["status"] = "timeout"
+            output = clipped_error(error.stderr or error.stdout)
+            result["error"] = f"stream check exceeded {PER_FILE_TIMEOUT} seconds"
+            if output:
+                result["error"] += "\n" + output
+            return result
+        except (OSError, ValueError) as error:
+            result["error"] = f"{type(error).__name__}: {error}"
+            return result
+        finally:
+            result["elapsed_seconds"] = round(time.monotonic() - started, 3)
+
+
     def check_file(path):
         started = time.monotonic()
         result = {
@@ -272,6 +372,9 @@ let
             "duration_seconds": None,
             "video_codecs": [],
             "audio_codecs": [],
+            "decoded_streams": [],
+            "ignored_streams": [],
+            "targeted_checks": [],
             "error": "",
         }
         try:
@@ -299,11 +402,26 @@ let
                 return result
 
             streams = metadata.get("streams", [])
+            decoded_streams = []
+            ignored_streams = []
+            for stream in streams:
+                if stream.get("codec_type") not in ("audio", "video"):
+                    continue
+                summary = summarize_stream(stream)
+                ignored_reasons = auxiliary_video_reasons(stream)
+                if ignored_reasons:
+                    summary["ignored_reason"] = "auxiliary video disposition: " + ", ".join(ignored_reasons)
+                    ignored_streams.append(summary)
+                else:
+                    decoded_streams.append(summary)
+
+            result["decoded_streams"] = decoded_streams
+            result["ignored_streams"] = ignored_streams
             result["video_codecs"] = sorted({
-                stream.get("codec_name", "unknown") for stream in streams if stream.get("codec_type") == "video"
+                stream["codec_name"] for stream in decoded_streams if stream["codec_type"] == "video"
             })
             result["audio_codecs"] = sorted({
-                stream.get("codec_name", "unknown") for stream in streams if stream.get("codec_type") == "audio"
+                stream["codec_name"] for stream in decoded_streams if stream["codec_type"] == "audio"
             })
             duration_value = metadata.get("format", {}).get("duration")
             if duration_value is not None:
@@ -314,26 +432,18 @@ let
                 except (TypeError, ValueError):
                     pass
 
-            if not result["video_codecs"] and not result["audio_codecs"]:
-                result["error"] = "ffprobe found no audio or video streams"
+            if not decoded_streams:
+                result["error"] = "ffprobe found no audio or non-auxiliary video streams"
                 return result
 
-            decode = run_command([
-                FFMPEG,
-                "-nostdin",
-                "-hide_banner",
-                "-v", "error",
-                "-xerror",
-                "-i", str(path),
-                "-map", "0:v?",
-                "-map", "0:a?",
-                "-sn",
-                "-dn",
-                "-f", "null",
-                "-",
-            ])
+            decode = run_command(decode_command(path, decoded_streams))
             if decode.returncode != 0:
                 result["error"] = clipped_error(decode.stderr or decode.stdout or "FFmpeg decode failed without output")
+                for stream in decoded_streams:
+                    check = targeted_stream_check(path, stream)
+                    result["targeted_checks"].append(check)
+                    if check["status"] != "passed":
+                        break
                 return result
 
             result["status"] = "passed"
@@ -354,7 +464,7 @@ let
 
     def main():
         state = {
-            "schema_version": 1,
+            "schema_version": 2,
             "status": "running",
             "started_at": utc_now(),
             "finished_at": None,
