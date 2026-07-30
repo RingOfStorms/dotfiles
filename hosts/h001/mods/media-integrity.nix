@@ -19,6 +19,7 @@ let
     import math
     import os
     import pathlib
+    import sqlite3
     import subprocess
     import sys
     import tempfile
@@ -28,6 +29,8 @@ let
     SCAN_ROOTS = ${builtins.toJSON scanPaths}
     EXTENSIONS = set(${builtins.toJSON c.extensions})
     REPORT_DIR = pathlib.Path(${builtins.toJSON c.dataDir})
+    CACHE_DB = REPORT_DIR / "cache.sqlite3"
+    VALIDATION_VERSION = 1
     PER_FILE_TIMEOUT = ${toString c.perFileTimeoutSec}
     FFPROBE = ${builtins.toJSON "${pkgs.ffmpeg}/bin/ffprobe"}
     FFMPEG = ${builtins.toJSON "${pkgs.ffmpeg}/bin/ffmpeg"}
@@ -87,6 +90,79 @@ let
         return value[:limit] + "\n… output truncated …"
 
 
+    def open_cache():
+        REPORT_DIR.mkdir(parents=True, exist_ok=True)
+        connection = sqlite3.connect(CACHE_DB)
+        try:
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS file_results (
+                    path TEXT PRIMARY KEY,
+                    size_bytes INTEGER NOT NULL,
+                    mtime_ns INTEGER NOT NULL,
+                    validation_version INTEGER NOT NULL,
+                    result_json TEXT NOT NULL
+                )
+            """)
+            connection.commit()
+            os.chmod(CACHE_DB, 0o600)
+            return connection
+        except BaseException:
+            connection.close()
+            raise
+
+
+    def load_cached_result(connection, path, file_stat):
+        row = connection.execute(
+            """
+                SELECT result_json FROM file_results
+                WHERE path = ? AND size_bytes = ? AND mtime_ns = ? AND validation_version = ?
+            """,
+            (str(path), file_stat.st_size, file_stat.st_mtime_ns, VALIDATION_VERSION),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            result = json.loads(row[0])
+        except (json.JSONDecodeError, TypeError):
+            connection.execute("DELETE FROM file_results WHERE path = ?", (str(path),))
+            connection.commit()
+            return None
+        if not isinstance(result, dict) or result.get("path") != str(path):
+            connection.execute("DELETE FROM file_results WHERE path = ?", (str(path),))
+            connection.commit()
+            return None
+        result["cached"] = True
+        return result
+
+
+    def store_cached_result(connection, result):
+        size_bytes = result.get("size_bytes")
+        mtime_ns = result.get("mtime_ns")
+        if not isinstance(size_bytes, int) or not isinstance(mtime_ns, int):
+            return
+        stored_result = dict(result)
+        stored_result.pop("cached", None)
+        connection.execute(
+            """
+                INSERT INTO file_results (path, size_bytes, mtime_ns, validation_version, result_json)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(path) DO UPDATE SET
+                    size_bytes = excluded.size_bytes,
+                    mtime_ns = excluded.mtime_ns,
+                    validation_version = excluded.validation_version,
+                    result_json = excluded.result_json
+            """,
+            (
+                stored_result["path"],
+                size_bytes,
+                mtime_ns,
+                VALIDATION_VERSION,
+                json.dumps(stored_result, sort_keys=True),
+            ),
+        )
+        connection.commit()
+
+
     def summarize_stream(stream):
         disposition = stream.get("disposition") or {}
         return {
@@ -121,6 +197,7 @@ let
         results = state.get("results", [])
         passed = sum(result.get("status") == "passed" for result in results)
         failed = sum(result.get("status") in ("failed", "timeout") for result in results)
+        cached = sum(bool(result.get("cached")) for result in results)
         completed = len(results)
         total = state.get("total_files", completed)
         pending = max(total - completed, 0)
@@ -186,11 +263,18 @@ let
         document.append("<h1>Media Integrity Report</h1>")
         document.append(
             "<p class=\"muted\">Read-only ffprobe metadata validation and full FFmpeg audio/video decode. "
-            "Attached pictures and thumbnail streams are inventoried but not decoded.</p>"
+            "Attached pictures and thumbnail streams are inventoried but not decoded. "
+            "Prior results are reused when a file's path, size, and modification time are unchanged.</p>"
         )
         document.append(f"<div class=\"banner {banner_class}\">{html.escape(banner_text)}</div>")
         document.append("<section class=\"summary\">")
-        for label, value in (("Discovered", total), ("Passed", passed), ("Failed", failed), ("Pending", pending)):
+        for label, value in (
+            ("Discovered", total),
+            ("Reused", cached),
+            ("Passed", passed),
+            ("Failed", failed),
+            ("Pending", pending),
+        ):
             document.append(f"<div class=\"card\"><span class=\"muted\">{label}</span><strong>{value}</strong></div>")
         document.append("</section>")
 
@@ -233,6 +317,8 @@ let
             elapsed = result.get("elapsed_seconds")
             elapsed_text = human_duration(elapsed) if elapsed is not None else "—"
             checked = html.escape(result.get("checked_at", "—"))
+            if result.get("cached"):
+                checked += "<br><span class=\"muted\">reused: size and mtime unchanged</span>"
             error = result.get("error", "")
             details = []
             ignored_streams = result.get("ignored_streams", [])
@@ -362,13 +448,14 @@ let
             result["elapsed_seconds"] = round(time.monotonic() - started, 3)
 
 
-    def check_file(path):
+    def check_file(path, file_stat=None):
         started = time.monotonic()
         result = {
             "path": str(path),
             "status": "failed",
             "checked_at": utc_now(),
             "size_bytes": None,
+            "mtime_ns": None,
             "duration_seconds": None,
             "video_codecs": [],
             "audio_codecs": [],
@@ -378,7 +465,10 @@ let
             "error": "",
         }
         try:
-            result["size_bytes"] = path.stat().st_size
+            if file_stat is None:
+                file_stat = path.stat()
+            result["size_bytes"] = file_stat.st_size
+            result["mtime_ns"] = file_stat.st_mtime_ns
             probe = run_command([
                 FFPROBE,
                 "-v", "error",
@@ -464,7 +554,7 @@ let
 
     def main():
         state = {
-            "schema_version": 2,
+            "schema_version": 3,
             "status": "running",
             "started_at": utc_now(),
             "finished_at": None,
@@ -476,12 +566,13 @@ let
             "results": [],
         }
         write_state(state)
+        cache = None
 
         try:
+            cache = open_cache()
             files, discovery_errors = discover_files()
             state["scan_errors"] = discovery_errors
             state["total_files"] = len(files)
-            write_state(state)
             print(f"media-integrity: discovered {len(files)} media file(s)", flush=True)
 
             if discovery_errors and not files:
@@ -492,11 +583,33 @@ let
                     print(f"media-integrity: {error}", file=sys.stderr, flush=True)
                 return 1
 
-            for position, path in enumerate(files, start=1):
+            work_items = []
+            for path in files:
+                try:
+                    file_stat = path.stat()
+                except OSError:
+                    work_items.append((path, None))
+                    continue
+                cached_result = load_cached_result(cache, path, file_stat)
+                if cached_result is None:
+                    work_items.append((path, file_stat))
+                else:
+                    state["results"].append(cached_result)
+
+            reused = len(state["results"])
+            write_state(state)
+            print(
+                f"media-integrity: reusing {reused} cached result(s); "
+                f"checking {len(work_items)} new or changed file(s)",
+                flush=True,
+            )
+
+            for position, (path, file_stat) in enumerate(work_items, start=1):
                 state["current_file"] = str(path)
                 write_state(state)
-                print(f"media-integrity: [{position}/{len(files)}] checking {path}", flush=True)
-                result = check_file(path)
+                print(f"media-integrity: [{position}/{len(work_items)}] checking {path}", flush=True)
+                result = check_file(path, file_stat)
+                store_cached_result(cache, result)
                 state["results"].append(result)
                 write_state(state)
                 if result["status"] != "passed":
@@ -507,7 +620,11 @@ let
             state["finished_at"] = utc_now()
             write_state(state)
             failed = sum(result["status"] != "passed" for result in state["results"])
-            print(f"media-integrity: scan complete; {len(files) - failed} passed, {failed} failed", flush=True)
+            print(
+                f"media-integrity: scan complete; {len(files) - failed} passed, "
+                f"{failed} failed, {reused} reused",
+                flush=True,
+            )
             return 1 if discovery_errors else 0
         except BaseException as error:
             state["status"] = "failed"
@@ -517,6 +634,9 @@ let
             state["scanner_traceback"] = traceback.format_exc()
             write_state(state)
             raise
+        finally:
+            if cache is not None:
+                cache.close()
 
 
     if __name__ == "__main__":
