@@ -168,10 +168,37 @@
     };
 
     ups = {
-      driver = "usbhid-ups";
-      vendorId = "051D";
-      productId = "0002";
-      description = "APC Back-UPS XS 1500M";
+      # Physical UPS units attached to h003 over USB. The attribute name is the
+      # NUT ups name (shows up as "<name>@localhost" in logs and upsc).
+      #
+      # Both units are the same model, so vendorid/productid alone cannot tell
+      # them apart -- the USB serial is the only stable matcher (bus/device
+      # numbers change across reboots and replugs). Get serials with:
+      #   sudo nut-scanner -U
+      #
+      # powerValue feeds MINSUPPLIES in hosts/h003/mods/ups.nix: the sum of all
+      # powerValues is used as MINSUPPLIES so that EITHER UPS going critical
+      # trips the shutdown sequence (OR semantics), regardless of which one
+      # actually feeds h003 itself.
+      devices = {
+        apc1 = {
+          driver = "usbhid-ups";
+          vendorId = "051D";
+          productId = "0002";
+          serial = "0B2507L36635";
+          description = "APC Back-UPS XS 1500M (#1)";
+          powerValue = 1;
+        };
+        apc2 = {
+          driver = "usbhid-ups";
+          vendorId = "051D";
+          productId = "0002";
+          serial = "0B2553L05396";
+          description = "APC Back-UPS XS 1500M (#2)";
+          powerValue = 1;
+        };
+      };
+
       # Remote hosts to shut down on critical battery
       remoteShutdownHosts = [
         { name = "h001"; host = "10.12.14.10"; user = "luser"; keyFile = "/var/lib/openbao-secrets/nix2nix_2026-03-15"; }
