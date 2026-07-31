@@ -22,7 +22,22 @@ in
       };
 
       jellyfin.enable = true; # jellyfinnnnnn!
-      jellyfin.vpn.enable = true;
+      # Jellyfin is deliberately NOT in the VPN namespace.
+      #
+      # With vpn.enable = true all Jellyfin egress leaves via the commercial
+      # wg endpoint, and TMDB/fanart.tv rate-limit or block those exit IPs.
+      # Metadata lookups then fail and Jellyfin falls back to an
+      # ffmpeg-extracted video frame as the Primary image, which is why the
+      # library showed generated thumbnails instead of real posters.
+      #
+      # Jellyfin only ever serves LAN/tailnet clients through the nginx vhost
+      # below, so it does not need VPN egress. openFirewall stays false: port
+      # 8096 is bound locally and only reachable via nginx.
+      #
+      # Side effect of flipping this off: nixarr stops synthesizing its own
+      # "127.0.0.1:8096" nginx vhost (which proxied to the netns address) and
+      # Jellyfin binds 8096 directly, so the vhost below keeps working as-is.
+      jellyfin.vpn.enable = false;
       seerr.enable = true; # request manager for media (was jellyseerr; renamed in nixarr)
       # seerr.vpn.enable = true; # NOTE makes it not able to communicate to *arr apps
       sabnzbd = {
