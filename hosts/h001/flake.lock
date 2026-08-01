@@ -6,11 +6,11 @@
       },
       "locked": {
         "dir": "flakes/beszel",
-        "lastModified": 1784170657,
-        "narHash": "sha256-ASj4S9jCjxs4RsvGVJypAZY5oR88ZdTreHMIYF5ACvo=",
+        "lastModified": 1785354934,
+        "narHash": "sha256-1gmY+X5nyerygeqelYgwQjcRRnG1btpbJ/12rHIEI34=",
         "ref": "refs/heads/master",
-        "rev": "ba7918a2967e8df930a6f4d7c067f01fea83cc86",
-        "revCount": 1891,
+        "rev": "09ac35fc97d396bf94238467a306264baa3d141b",
+        "revCount": 1911,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -38,11 +38,11 @@
     },
     "beszel-nixpkgs_2": {
       "locked": {
-        "lastModified": 1784007870,
-        "narHash": "sha256-djcLt/JJphyNt4eDY9XTly+/WbCK5lqWq9lSgCmJkkQ=",
+        "lastModified": 1785318670,
+        "narHash": "sha256-dN6Ou5x/+23FZLEpYP3IffO+NyJFzUlGumt1uu3MMaY=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "18b9261cb3294b6d2a06d03f96872827b8fe2698",
+        "rev": "0954f7ee2f6bb3dc7d4e3d0d8bcb8fd4bde4cfc5",
         "type": "github"
       },
       "original": {
@@ -55,11 +55,11 @@
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1784170657,
-        "narHash": "sha256-ASj4S9jCjxs4RsvGVJypAZY5oR88ZdTreHMIYF5ACvo=",
+        "lastModified": 1785354934,
+        "narHash": "sha256-1gmY+X5nyerygeqelYgwQjcRRnG1btpbJ/12rHIEI34=",
         "ref": "refs/heads/master",
-        "rev": "ba7918a2967e8df930a6f4d7c067f01fea83cc86",
-        "revCount": 1891,
+        "rev": "09ac35fc97d396bf94238467a306264baa3d141b",
+        "revCount": 1911,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -192,11 +192,11 @@
         "website-builder": "website-builder"
       },
       "locked": {
-        "lastModified": 1781774207,
-        "narHash": "sha256-pUHOn5uRbY1yOdeBgfm/UpkVkN9YrLUxl7jZnN1emyo=",
+        "lastModified": 1784997863,
+        "narHash": "sha256-oTMag4I9MW3bstuOKqzc0F1OqxO49lLa9jkSkRe3EqA=",
         "owner": "rasmus-kirk",
         "repo": "nixarr",
-        "rev": "67952a6e79a298396e909d35f7ee35b23f754c43",
+        "rev": "282ce99b31d52d72cca281e3d26d3dd267946800",
         "type": "github"
       },
       "original": {
@@ -239,11 +239,11 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1784011430,
-        "narHash": "sha256-lDebytrYdd47IBLwvNOD+6AGeoqZ78CIKlp70hzW280=",
+        "lastModified": 1785133411,
+        "narHash": "sha256-Yjv0WEg39KRYS0rBdTbu6Fc/or/ihAKk13W9sQ6VWd0=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "8eeec934ae0dbeca3d7868c059568a65c08b2fc3",
+        "rev": "2f5a153c270b70cb0f8c11f46d96d6d3bc39f4e3",
         "type": "github"
       },
       "original": {
@@ -993,11 +993,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1784133099,
-        "narHash": "sha256-q2fllhdx+wVpJf7Fug0P2wAnvnyCgKJfFQxODtP5wI4=",
+        "lastModified": 1784221694,
+        "narHash": "sha256-f3Jc6Gn9tNSyFxL1qMzqNtVkPuEUJm34nGaGzmHkXJc=",
         "ref": "refs/heads/master",
-        "rev": "8746622056d2ccb1c354fdc55e58241dfc9d5c07",
-        "revCount": 351,
+        "rev": "447a2ef92ec1bc314e0b240334e74a1a3299902f",
+        "revCount": 352,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/nvim"
       },
@@ -1030,11 +1030,11 @@
     "secrets-bao": {
       "locked": {
         "dir": "flakes/secrets-bao",
-        "lastModified": 1784170657,
-        "narHash": "sha256-ASj4S9jCjxs4RsvGVJypAZY5oR88ZdTreHMIYF5ACvo=",
+        "lastModified": 1785354934,
+        "narHash": "sha256-1gmY+X5nyerygeqelYgwQjcRRnG1btpbJ/12rHIEI34=",
         "ref": "refs/heads/master",
-        "rev": "ba7918a2967e8df930a6f4d7c067f01fea83cc86",
-        "revCount": 1891,
+        "rev": "09ac35fc97d396bf94238467a306264baa3d141b",
+        "revCount": 1911,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
