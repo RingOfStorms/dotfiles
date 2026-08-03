@@ -123,6 +123,23 @@
       domain = "vault.joshuabell.xyz";
     };
 
+    # pkm — personal knowledge system. Rust server + embedded Svelte frontend,
+    # its own Postgres (PostGIS, wal_level=logical) and a PowerSync service,
+    # all inside one NixOS container. The application itself is packaged in its
+    # own repo's flake; this host only supplies the container and the vhost.
+    #
+    # syncPort is the PowerSync service, reached through the same vhost under
+    # /powersync rather than on a second domain — it needs to be same-origin
+    # for the browser and needs no certificate of its own.
+    pkm = {
+      port = 3010;
+      syncPort = 8080;
+      dataDir = "/var/lib/pkm";
+      containerIp = "10.0.0.10";
+      containerIp6 = "fc00::10";
+      domain = "pkm.joshuabell.xyz";
+    };
+
     litellm = {
       port = 8094;
       dataDir = "/var/lib/litellm";

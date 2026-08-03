@@ -187,7 +187,7 @@ rec {
   h001Subdomains = [
     "jellyfin" "media" "books" "notes" "chat" "sso-proxy" "n8n"
     "sec" "sso" "gist" "git" "etebase" "photos"
-    "location" "matrix" "element" "docs"
+    "location" "matrix" "element" "docs" "pkm"
   ];
 
   # ─── HOST BUILDER ─────────────────────────────────────────────────

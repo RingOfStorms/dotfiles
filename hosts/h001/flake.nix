@@ -35,6 +35,11 @@
 
     puzzles.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/puzzles.git";
 
+    # pkm — personal knowledge system. Supplies both the NixOS module and the
+    # packages (server with the frontend embedded, and the PowerSync service
+    # built from source). See hosts/h001/containers/pkm.nix.
+    pkm.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/pkm.git";
+
     nixarr.url = "github:rasmus-kirk/nixarr";
   };
 
