@@ -932,11 +932,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1785818309,
-        "narHash": "sha256-bS0pQuBNgGc09XAdyYkNmXrvMDFqkd9wx3NWLl+SiLI=",
+        "lastModified": 1785853080,
+        "narHash": "sha256-Yl1kkMBkN+ns5DRKNTrrWIMa2a4sT+rWDGnPMEQPW0g=",
         "ref": "refs/heads/main",
-        "rev": "382152cc2601b921260dd266485be5ba2a45390f",
-        "revCount": 31,
+        "rev": "4c9221d12b1fee68d0a54651671d07d0700d7fa4",
+        "revCount": 32,
         "type": "git",
         "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/pkm.git"
       },
