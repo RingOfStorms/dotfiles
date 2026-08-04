@@ -1,5 +1,6 @@
 branch() {
   local branch_name=${1:-}
+  local base_ref=${2:-}
 
   # helper: set tmux window name. If tmux is in auto mode, always rename.
   # If tmux is manual but the current window name matches the previous branch,
@@ -61,7 +62,7 @@ branch() {
   # If no branch was provided, present an interactive selector combining local and remote branches
   if [ -z "$branch_name" ]; then
     if ! command -v fzf >/dev/null 2>&1; then
-      echo "Usage: branch <name>" >&2
+      echo "Usage: branch <name> [base]" >&2
       return 2
     fi
 
@@ -150,7 +151,7 @@ branch() {
     return 0
   fi
 
-  local branch_exists branch_from local_exists
+  local branch_exists branch_from local_exists no_track=""
   branch_exists=$(git -C "$repo_dir" ls-remote --heads origin "$branch_name" | wc -l)
   # check if a local branch exists
   if git -C "$repo_dir" show-ref --verify --quiet "refs/heads/$branch_name"; then
@@ -159,16 +160,44 @@ branch() {
     local_exists=0
   fi
 
+  # Resolve an explicit base ref, if the caller supplied one.
+  local resolved_base=""
+  if [ -n "$base_ref" ]; then
+    local candidate
+    for candidate in "refs/heads/$base_ref" "refs/remotes/origin/$base_ref" "$base_ref"; do
+      if git -C "$repo_dir" rev-parse --verify --quiet "$candidate^{commit}" >/dev/null 2>&1; then
+        resolved_base="$candidate"
+        break
+      fi
+    done
+    if [ -z "$resolved_base" ]; then
+      echo "Base ref '$base_ref' could not be resolved in '$repo_dir'." >&2
+      return 1
+    fi
+  fi
+
   branch_from="$default_branch"
   if [ "$branch_exists" -eq 0 ]; then
     if [ "$local_exists" -eq 1 ]; then
       branch_from="$branch_name"
+      if [ -n "$resolved_base" ]; then
+        echo "Branch '$branch_name' already exists locally; ignoring base '$base_ref'."
+      fi
       echo "Branch '$branch_name' exists locally; creating worktree from local branch."
     else
+      if [ -n "$resolved_base" ]; then
+        branch_from="$resolved_base"
+        # Don't inherit the base's upstream: a later bare `git push` must not
+        # target the branch we forked from.
+        no_track="--no-track"
+      fi
       echo "Branch '$branch_name' does not exist on remote; creating from '$branch_from'."
     fi
   else
     branch_from="origin/$branch_name"
+    if [ -n "$resolved_base" ]; then
+      echo "Branch '$branch_name' already exists on remote; ignoring base '$base_ref'."
+    fi
     echo "Branch '$branch_name' exists on remote; creating worktree tracking it."
   fi
 
@@ -234,7 +263,7 @@ branch() {
     fi
 
   else
-    if git -C "$repo_dir" worktree add -b "$branch_name" "$wt_path" "$branch_from" 2>/dev/null; then
+    if git -C "$repo_dir" worktree add ${no_track:+$no_track} -b "$branch_name" "$wt_path" "$branch_from" 2>/dev/null; then
       cd "$wt_path" || return 1
       _branch__maybe_set_tmux_name "$branch_name" "$prev_branch" || true
       _branch__post_setup "$repo_dir" "$wt_path" || true
