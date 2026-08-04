@@ -314,8 +314,37 @@ in
           powersync = {
             enable = true;
             port = c.syncPort;
-            replicationUri = "postgresql://pkm@localhost/pkm?host=/run/postgresql";
-            storageUri = "postgresql://pkm@localhost/powersync_storage?host=/run/postgresql";
+
+            # TCP on loopback, not the unix socket pkm-server uses — and with
+            # a password that is deliberately fake.
+            #
+            # Both details are forced by the sync service, and getting either
+            # wrong stops it booting at all:
+            #
+            #   1. PowerSync has no unix-socket support. It parses the URI
+            #      with urijs and reads only scheme/host/port/user/password/
+            #      path; `?host=/run/postgresql` is simply ignored, leaving an
+            #      empty hostname. The previous socket URI here therefore
+            #      failed with PSYNC_S1108 ("password required") on every
+            #      start, crash-looping ~128 times before this was found. The
+            #      symptom is not a sync error: nothing ever listens on the
+            #      sync port, so nginx returns 502 for /sync/stream and the
+            #      app silently serves reads from an empty local database.
+            #
+            #   2. normalizeConnectionConfig rejects an empty password
+            #      outright, before any connection is attempted. There is no
+            #      "trust me" option.
+            #
+            # So a non-empty password must appear here even though nothing
+            # verifies it: pg_hba above is `trust` for 127.0.0.1, and role
+            # `pkm` has no password set at all. This string is a placeholder
+            # to satisfy a client-side assertion, not a credential — which is
+            # why it is safe in the world-readable Nix store, and why it must
+            # stay meaningless. Should the pg_hba lines ever change to md5 or
+            # scram, this stops working immediately and loudly, which is the
+            # behaviour we want from a fake secret.
+            replicationUri = "postgresql://pkm:unused@127.0.0.1:5432/pkm";
+            storageUri = "postgresql://pkm:unused@127.0.0.1:5432/powersync_storage";
             sslmode = "disable";
           };
         };
