@@ -349,6 +349,25 @@ in
           };
         };
         "pim.${domain}" = proxyToUpstream;
+        # ── pkm — personal knowledge system (h001 container) ──────────────
+        # Blob uploads are whole photos and audio recordings, and the sync
+        # protocol holds a long-lived, deliberately idle response open. The
+        # 1m body limit and 60s read timeout that proxyToUpstream inherits
+        # would reject the former with a 413 and sever the latter roughly
+        # once a minute, so this vhost is spelled out rather than shared.
+        "pkm.${domain}" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyWebsockets = true;
+            proxyPass = "http://${upstream}";
+            extraConfig = ''
+              client_max_body_size 512m;
+              proxy_read_timeout 1h;
+              proxy_send_timeout 1h;
+            '';
+          };
+        };
         "location.${domain}" = {
           enableACME = true;
           forceSSL = true;

@@ -271,8 +271,21 @@ in
         # The `powersync_storage` database needs an owner, and
         # `ensureDBOwnership` only applies to a database matching the user's
         # name. Granting it explicitly is the remaining piece.
-        systemd.services.postgresql.postStart = lib.mkAfter ''
-          $PSQL -tAc "GRANT ALL ON DATABASE powersync_storage TO pkm;"
+        #
+        # This hangs off postgresql-setup, not postgresql, for two reasons.
+        # postgresql-setup is what `ensureDatabases` runs in, so it is the
+        # first point at which `powersync_storage` exists at all — the same
+        # statement on postgresql.service would run before the database was
+        # created and fail on a fresh volume. And a failing ExecStartPost on
+        # postgresql.service takes the *server* down with it, turning a
+        # one-line grant into a boot loop that also stops pkm-server and the
+        # sync service, since both require postgresql.service.
+        #
+        # `psql` and not `$PSQL`: no such variable is exported into these
+        # units. Referencing it produced `-tAc: command not found` (exit 127),
+        # which is precisely the boot loop described above.
+        systemd.services.postgresql-setup.postStart = lib.mkAfter ''
+          psql -tAc 'GRANT ALL ON DATABASE "powersync_storage" TO "pkm";'
         '';
 
         services.postgresqlBackup = {
