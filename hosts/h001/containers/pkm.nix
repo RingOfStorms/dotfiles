@@ -311,6 +311,32 @@ in
           # rather than the container-local port.
           syncEndpoint = "https://${c.domain}/powersync";
 
+          # The native apps — the Android APK and the desktop binary — serve
+          # their bundle from a `tauri://` origin, so they reach this server
+          # cross-origin even though it is their own backend. Without these
+          # every request they make fails preflight, which presents as the
+          # app being unable to load anything rather than as a CORS error.
+          #
+          # The browser is unaffected: it loads the frontend from this server
+          # and stays same-origin, which is why this list names only the
+          # webview origins.
+          #
+          # The two origins differ by platform, and not in the way the naming
+          # suggests. Tauri's `tauri_protocol_url` (manager/mod.rs) returns
+          # `{http,https}://tauri.localhost` only on Windows and Android — a
+          # workaround for what those webviews accept as a custom protocol —
+          # and plain `tauri://localhost` everywhere else, Linux included.
+          #
+          # So the desktop binary and the phone genuinely present different
+          # Origin headers, and listing only one silently breaks the other.
+          allowedOrigins = [
+            # Android (the APK's webview).
+            "http://tauri.localhost"
+            "https://tauri.localhost"
+            # Linux desktop (WebKitGTK).
+            "tauri://localhost"
+          ];
+
           powersync = {
             enable = true;
             port = c.syncPort;
