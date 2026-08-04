@@ -47,6 +47,15 @@ let
   # OpenBao.
   oidcClientId = "384694980708466691";
 
+  # The Zitadel *project* the application above belongs to. Roles are granted
+  # per project, and Zitadel puts them in a claim named after the project id
+  # ("urn:zitadel:iam:org:project:<id>:roles"), so the server needs the id to
+  # know which claim carries the authorization decision. Reading the roles out
+  # of the wrong claim, or guessing, fails closed: every request 403s.
+  #
+  # Public in the same way the client id is — it appears in issued tokens.
+  oidcProjectId = "384694626893692931";
+
   binds = [
     # Application state: blob bytes and the sync signing key.
     #
@@ -305,6 +314,7 @@ in
           oidc = {
             issuer = oidcIssuer;
             clientId = oidcClientId;
+            projectId = oidcProjectId;
           };
 
           # What the *browser* is told to connect to, so it is the public URL
