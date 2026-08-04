@@ -928,20 +928,38 @@
     "pkm": {
       "inputs": {
         "nixpkgs": "nixpkgs_4",
+        "powersync-service": "powersync-service",
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1785788220,
-        "narHash": "sha256-9QMbzUjDIdxBOZ0inacJ81Li0XSWqdc/tBVH7dhxrpU=",
+        "lastModified": 1785800359,
+        "narHash": "sha256-hYG83I41Br1lGob+4ANtmGRw+LTb3JQyJ9ZeAicQWRo=",
         "ref": "refs/heads/main",
-        "rev": "296cc888abb72c80100c2215b031a5a2b55b64bc",
-        "revCount": 27,
+        "rev": "09242720d10a67564c2f6a92d3cb708e9c8bf2a9",
+        "revCount": 29,
         "type": "git",
         "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/pkm.git"
       },
       "original": {
         "type": "git",
         "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/pkm.git"
+      }
+    },
+    "powersync-service": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1783442777,
+        "narHash": "sha256-msEO9yO+fu811JD8MUm7hVyO9doxw2f1OYtfcjfGsK4=",
+        "owner": "powersync-ja",
+        "repo": "powersync-service",
+        "rev": "6aab57d2602514bf090077a465a0e6a60a28749b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "powersync-ja",
+        "ref": "v1.23.3",
+        "repo": "powersync-service",
+        "type": "github"
       }
     },
     "puzzles": {
