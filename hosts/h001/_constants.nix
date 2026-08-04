@@ -178,15 +178,13 @@
 
     openbao = {
       port = 8200;
-      # Loopback-only second listener used by openbao-apply-config.service to
-      # call `bao operator generate-root` (which is disabled by default on the
-      # public-facing listener since OpenBao 2.5.3 / CVE-2026-5807). Never
-      # proxied by nginx, never exposed beyond 127.0.0.1.
-      #
-      # NOTE: avoid port+1 of the api listener — openbao auto-allocates that
-      # for its Raft cluster listener even on single-node file storage.
-      adminPort = 8210;
       dataDir = "/var/lib/openbao";
+      # Root-only, holds the Shamir unseal share(s) used by
+      # openbao-auto-unseal.service, plus the AppRole credential used by
+      # openbao-apply-config.service:
+      #   openbao-unseal-*                 unseal key share(s)
+      #   openbao-reconciler-role-id       AppRole role_id
+      #   openbao-reconciler-secret-id     AppRole secret_id
       keysDir = "/bao-keys";
       domain = "sec.joshuabell.xyz";
       # Tailnet-only HTTPS endpoint. Headscale publishes an explicit MagicDNS

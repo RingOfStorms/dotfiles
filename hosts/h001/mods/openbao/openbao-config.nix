@@ -10,7 +10,12 @@ let
 
   # ── Reserved / built-in names that must never be deleted ──────────────
   reservedPolicies = [ "default" "root" ];
-  reservedAuthMethods = [ "token/" ]; # always exists
+  # "token/" always exists. "approle/" is the reconciler's own login path —
+  # it IS declared in authMethods below, but it is also listed here as a
+  # belt-and-braces guard: if it ever fell out of authMethods, the orphan
+  # sweep in step 2 would disable the auth method this service depends on
+  # and lock the reconciler out permanently.
+  reservedAuthMethods = [ "token/" "approle/" ];
   builtinSecretsEngines = [ "cubbyhole/" "identity/" "sys/" ]; # always exist
 
   # ── Per-host secret access ─────────────────────────────────────────
@@ -77,6 +82,14 @@ let
         bound_issuer = "https://sso.${fleet.global.domain}";
       };
     };
+
+    # Login path for this very service. Machines never use AppRole — they
+    # authenticate with a Zitadel JWT via zitadel-jwt/ above. This mount
+    # exists solely so openbao-apply-config.service can obtain a token
+    # without an unseal-key-derived root token.
+    "approle/" = {
+      type = "approle";
+    };
   };
 
   # ── Roles under auth methods ─────────────────────────────────────────
@@ -107,7 +120,28 @@ let
       ];
       token_ttl = "1h";
     };
-  } // perHostAuthRoles;
+  } // perHostAuthRoles // {
+    # ── Reconciler login role ──────────────────────────────────────────
+    # Used by openbao-apply-config.service (this file's own systemd unit).
+    #
+    # secret_id_ttl / secret_id_num_uses are BOTH 0 (unlimited) on purpose.
+    # The 8210 break-glass listener has been removed, so this credential is
+    # the only way the reconciler can authenticate. If the secret_id were
+    # allowed to expire or exhaust its uses, every subsequent
+    # nixos-rebuild would silently fail to reconcile and recovery would
+    # require hand-editing the listener config and rebuilding first.
+    #
+    # Note this grants the "admin" policy, which is path "*" with sudo —
+    # i.e. root-equivalent. The credential lives in c.keysDir alongside the
+    # unseal shares and is protected by the same filesystem permissions.
+    "auth/approle/role/openbao-reconciler" = {
+      token_policies = [ "admin" ];
+      token_ttl = "20m";
+      token_max_ttl = "1h";
+      secret_id_ttl = 0;
+      secret_id_num_uses = 0;
+    };
+  };
 
   # ── Policies ─────────────────────────────────────────────────────────
   policies = {
@@ -255,10 +289,7 @@ in
     ];
 
     environment = {
-      # Use the loopback-only admin listener — that's where the
-      # `sys/generate-root/*` endpoints are enabled (the public listener
-      # keeps the post-CVE-2026-5807 default of disabled).
-      BAO_ADDR = "http://127.0.0.1:${toString c.adminPort}";
+      BAO_ADDR = "http://127.0.0.1:${toString c.port}";
     };
 
     serviceConfig = {
@@ -278,38 +309,61 @@ in
         STATE_FILE="${desiredState}"
 
         # ────────────────────────────────────────────────────────────────
-        # Step 0: Generate a short-lived root token using unseal key(s)
+        # Step 0: Authenticate via AppRole
         # ────────────────────────────────────────────────────────────────
-        echo "[config] Generating ephemeral root token via operator generate-root ..."
+        # This used to mint an ephemeral root token with
+        # `bao operator generate-root` fed from the unseal shares. That no
+        # longer works: OpenBao 2.6.0 (openbao/openbao#3190) switched the
+        # CLI and API client to the authenticated `sys/generate-root-token`
+        # endpoint, while the `disable_unauthed_generate_root_endpoints`
+        # listener flag only ever re-enabled the deprecated, unauthenticated
+        # `sys/generate-root/*` paths. The CLI and server no longer agree,
+        # and there is no flag to reconcile them — so root-token bootstrap
+        # from unseal keys is a dead end.
+        #
+        # BOOTSTRAP (one-time, by hand, with an existing root token):
+        #   bao auth enable approle
+        #   bao write auth/approle/role/openbao-reconciler \
+        #     token_policies=admin token_ttl=20m token_max_ttl=1h \
+        #     secret_id_ttl=0 secret_id_num_uses=0
+        #   bao read  -field=role_id   auth/approle/role/openbao-reconciler/role-id \
+        #     > ${c.keysDir}/openbao-reconciler-role-id
+        #   bao write -f -field=secret_id auth/approle/role/openbao-reconciler/secret-id \
+        #     > ${c.keysDir}/openbao-reconciler-secret-id
+        #   chmod 0600 ${c.keysDir}/openbao-reconciler-*
+        # Thereafter this file manages the role declaratively.
+        echo "[config] Authenticating via AppRole ..."
 
-        # Cancel any stale in-progress generate-root (e.g. from interrupted previous run)
-        bao operator generate-root -cancel 2>/dev/null || true
+        role_id_file="${c.keysDir}/openbao-reconciler-role-id"
+        secret_id_file="${c.keysDir}/openbao-reconciler-secret-id"
 
-        otp="$(bao operator generate-root -generate-otp)"
-        init_json="$(bao operator generate-root -init -otp="$otp" -format=json)"
-        nonce="$(printf '%s' "$init_json" | jq -r '.nonce')"
-
-        # Feed each unseal key share (via stdin to avoid /proc/cmdline leak)
-        encoded_token=""
-        for key_file in ${c.keysDir}/openbao-unseal-*; do
-          [ -f "$key_file" ] || continue
-          result="$(cat "$key_file" | bao operator generate-root -nonce="$nonce" -format=json -)"
-          complete="$(printf '%s' "$result" | jq -r '.complete')"
-          if [ "$complete" = "true" ]; then
-            encoded_token="$(printf '%s' "$result" | jq -r '.encoded_root_token // .encoded_token')"
-            break
+        for f in "$role_id_file" "$secret_id_file"; do
+          if [ ! -s "$f" ]; then
+            echo "[config] ERROR: missing or empty AppRole credential: $f" >&2
+            echo "[config] See the BOOTSTRAP comment in openbao-config.nix." >&2
+            exit 1
           fi
         done
 
-        if [ -z "$encoded_token" ]; then
-          echo "[config] ERROR: Failed to generate root token (not enough key shares?)" >&2
+        # Pass credentials via stdin, never argv — argv is world-readable
+        # through /proc/<pid>/cmdline for the lifetime of the process.
+        login_payload="$(jq -n \
+          --rawfile r "$role_id_file" \
+          --rawfile s "$secret_id_file" \
+          '{role_id: ($r | rtrimstr("\n")), secret_id: ($s | rtrimstr("\n"))}')"
+
+        if ! auth_token="$(printf '%s' "$login_payload" \
+          | bao write -field=token auth/approle/login -)"; then
+          echo "[config] ERROR: AppRole login failed." >&2
+          echo "[config] If the role or secret_id was lost, re-run the BOOTSTRAP" >&2
+          echo "[config] steps in openbao-config.nix with a root token." >&2
           exit 1
         fi
 
-        root_token="$(bao operator generate-root -decode="$encoded_token" -otp="$otp")"
-        export VAULT_TOKEN="$root_token"
+        export VAULT_TOKEN="$auth_token"
+        unset login_payload auth_token
 
-        echo "[config] Ephemeral root token obtained"
+        echo "[config] AppRole token obtained"
 
         # ────────────────────────────────────────────────────────────────
         # Step 1: Secrets engines
@@ -490,10 +544,12 @@ in
         done
 
         # ────────────────────────────────────────────────────────────────
-        # Step 7: Revoke ephemeral root token
+        # Step 7: Revoke the AppRole token
         # ────────────────────────────────────────────────────────────────
-        echo "[config] Revoking ephemeral root token ..."
-        bao token revoke -self || echo "  [warn] Could not revoke root token (may have expired)"
+        # Only the token is revoked. The secret_id remains valid (it is
+        # unlimited-use by design) so the next run can log in again.
+        echo "[config] Revoking AppRole token ..."
+        bao token revoke -self || echo "  [warn] Could not revoke token (may have expired)"
 
         echo "[config] OpenBao configuration reconciliation complete."
       '';
