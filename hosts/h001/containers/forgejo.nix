@@ -221,6 +221,15 @@ in
               ALLOWED_DOMAINS = "*.github.com,github.com,codeberg.org,*.codeberg.org";
               ALLOW_LOCALNETWORKS = true;
             };
+            # Map file extensions to Chroma lexers for syntax highlighting.
+            # Lisette (.lis) has no Chroma lexer; its syntax is Rust-derived
+            # (fn/let mut/match/impl/enum/Option/Result/closures/?), so the
+            # Rust lexer is the closest fit. Lisette-only constructs
+            # (|> pipeline, task/select/recover/try blocks, f-strings,
+            # `import "go:..."`) will not highlight correctly.
+            "highlight.mapping" = {
+              ".lis" = "rust";
+            };
           };
         };
       };

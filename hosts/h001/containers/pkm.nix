@@ -84,6 +84,29 @@ let
       uid = config.ids.uids.postgres;
       gid = config.ids.gids.postgres;
     }
+    # Published application artifacts — the signed Android APK the phone
+    # updates itself from, served over the authenticated /api/releases route.
+    #
+    # Deliberately the only bind here with no `user`. The activation script
+    # above chowns and `chmod 750`s every bind that names one, which is
+    # correct for state the service writes and exactly wrong for this: it is
+    # written from a laptop over `scp` as luser and only *read* by the
+    # container. Adding a `user` here would take away the write access that
+    # makes publishing a plain copy.
+    #
+    # `readOnly` for the same reason — the server has no business modifying a
+    # build artifact, and a signed APK it could rewrite is a worse thing to
+    # serve than one it cannot.
+    #
+    # The container path is under /var/lib rather than mirroring the host's
+    # /home/luser, because pkm-server runs with `ProtectHome = true`: /home is
+    # replaced by an empty tmpfs for that unit, so a release directory there
+    # would silently appear empty. The pkm module asserts against it.
+    {
+      host = "/home/luser/pkm-releases";
+      container = "/var/lib/pkm-releases";
+      readOnly = true;
+    }
   ];
 
   bindsWithUsers = lib.filter (b: b ? user) binds;
@@ -320,6 +343,12 @@ in
           # What the *browser* is told to connect to, so it is the public URL
           # rather than the container-local port.
           syncEndpoint = "https://${c.domain}/powersync";
+
+          # Signed builds, published by `scp`ing an APK to ~luser/pkm-releases
+          # on the host. The bind mount above makes that directory visible
+          # here read-only; the server parses the version out of each
+          # filename, so publishing is a copy and nothing else.
+          releaseDir = "/var/lib/pkm-releases";
 
           # The native apps — the Android APK and the desktop binary — serve
           # their bundle from a `tauri://` origin, so they reach this server
