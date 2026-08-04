@@ -350,6 +350,20 @@ in
           # filename, so publishing is a copy and nothing else.
           releaseDir = "/var/lib/pkm-releases";
 
+          # Local speech-to-text for uploaded recordings.
+          #
+          # CPU inference, which is the only option here: this machine has no
+          # discrete GPU, just the integrated one. It is better suited than
+          # that sounds -- the i5-11500 has AVX-512 including VNNI, which is
+          # exactly the instruction set whisper.cpp's CPU backend accelerates
+          # with, and the quantised turbo model is small enough to stay
+          # comfortably in RAM.
+          #
+          # Transcription is CPU-hungry while it runs, so it competes with the
+          # server and Postgres in this container. Jobs are queued rather than
+          # run on upload, which keeps that off the request path.
+          whisper.enable = true;
+
           # The native apps — the Android APK and the desktop binary — serve
           # their bundle from a `tauri://` origin, so they reach this server
           # cross-origin even though it is their own backend. Without these
