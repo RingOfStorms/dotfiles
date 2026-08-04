@@ -46,6 +46,14 @@ in
         ANONYMIZED_TELEMETRY = "False";
         GITHUB_COPILOT_TOKEN_DIR = "${c.dataDir}/github_copilot";
         XDG_CONFIG_HOME = "${c.dataDir}/.config";
+        # The unit runs under DynamicUser=true, so there is no passwd
+        # entry and systemd sets no $HOME. litellm >=1.89 imports prisma
+        # at module load, and prisma/_config.py evaluates `Path.home()`
+        # at class-definition time, which hard-fails with
+        # `RuntimeError: Could not determine home directory.`
+        # StateDirectory already creates c.dataDir writable by the
+        # dynamic user, so point HOME there.
+        HOME = c.dataDir;
       };
       settings = {
         environment_variables = {

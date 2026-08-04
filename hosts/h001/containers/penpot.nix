@@ -110,6 +110,30 @@ let
     "penpot-network.service"
     "penpot-secret-key.service"
   ];
+
+  # Units that publish ports on the tailscale overlay IP (100.64.0.13)
+  # cannot bind until tailscaled has actually assigned that address to
+  # tailscale0. `after = tailscaled.service` gets us most of the way but
+  # is NOT sufficient: tailscaled reports "active" as soon as the daemon
+  # is up, well before it has authenticated and configured the interface.
+  # On a cold boot the address lands several seconds late and podman
+  # dies with:
+  #
+  #   cannot listen on the TCP port: listen tcp4 100.64.0.13:8086:
+  #   bind: cannot assign requested address
+  #
+  # With the systemd defaults (RestartSec=100ms, 5 starts / 10s) the unit
+  # burns its entire restart budget in ~4 seconds and lands in
+  # start-limit-hit permanently. So we also slow the retries down and
+  # widen the budget: 20 attempts at 10s apart covers ~200s of waiting,
+  # far longer than tailscale needs to come up.
+  tailscaleBound = {
+    after = [ "tailscaled.service" ];
+    wants = [ "tailscaled.service" ];
+    startLimitIntervalSec = 300;
+    startLimitBurst = 20;
+    serviceConfig.RestartSec = 10;
+  };
 in
 {
   # Data layout under /var/lib/penpot:
@@ -136,7 +160,11 @@ in
   # match is stable across reboots / network re-creates.
   networking.firewall.trustedInterfaces = [ network ];
 
-  systemd.services = {
+  # mkMerge (not `//`) so the per-unit overrides below deep-merge with the
+  # genAttrs defaults. A shallow `//` would replace the whole unit attrset
+  # and silently drop `after`/`requires`.
+  systemd.services = lib.mkMerge [
+    {
     # One-shot: create the shared podman network if missing. Idempotent.
     # --interface-name pins the host-side bridge to the same name as
     # the network so the firewall trust above works.
@@ -183,29 +211,34 @@ in
         fi
       '';
     };
-  }
-  # Every podman-penpot-* unit waits for the network + secret-key oneshots.
-  // lib.genAttrs
-    (map (n: "podman-${n}") [
-      "penpot-postgres"
-      "penpot-valkey"
-      "penpot-backend"
-      "penpot-exporter"
-      "penpot-mcp"
-      "penpot-mcp-plugin"
-      "penpot-frontend"
-    ])
-    (_: {
-      after = commonAfter;
-      requires = commonAfter;
-    })
-  // {
-    # First-boot of penpot-mcp-plugin pays a full git clone +
-    # npm-install + vite build, which can easily exceed the default
-    # systemd start timeout (~90s on a slow disk). Give it 10 min.
-    podman-penpot-mcp-plugin.serviceConfig.TimeoutStartSec = lib.mkForce "10min";
-  }
-  ;
+    }
+    # Every podman-penpot-* unit waits for the network + secret-key oneshots.
+    (lib.genAttrs
+      (map (n: "podman-${n}") [
+        "penpot-postgres"
+        "penpot-valkey"
+        "penpot-backend"
+        "penpot-exporter"
+        "penpot-mcp"
+        "penpot-mcp-plugin"
+        "penpot-frontend"
+      ])
+      (_: {
+        after = commonAfter;
+        requires = commonAfter;
+      }))
+    {
+      # First-boot of penpot-mcp-plugin pays a full git clone +
+      # npm-install + vite build, which can easily exceed the default
+      # systemd start timeout (~90s on a slow disk). Give it 10 min.
+      podman-penpot-mcp-plugin.serviceConfig.TimeoutStartSec = lib.mkForce "10min";
+
+      # These two publish ports on the tailscale overlay IP, so they race
+      # tailscaled on a cold boot. See `tailscaleBound` above.
+      podman-penpot-frontend = tailscaleBound;
+      podman-penpot-mcp = tailscaleBound;
+    }
+  ];
 
   virtualisation.oci-containers.containers = {
     penpot-postgres = {
