@@ -59,7 +59,7 @@ in
       # client ID to switch it on — the server refuses the OIDC flow while
       # this is empty, so a half-finished setup fails closed rather than
       # accidentally exposing an unauthenticated UI.
-      clientId = "";
+      clientId = "384856081475633155";
       redirectUri = "https://${c.domain}/ui/callback";
     };
 
