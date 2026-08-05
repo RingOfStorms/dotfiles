@@ -162,8 +162,8 @@ in
 
       # ── high-trust: per-host service secrets ──────────────────────
       "machines/high-trust/atuin-key-josh_2026-03-15" = {
-        fields = [ "user" "password" "value" ];
-        description = "Atuin sync key for josh (user/password/token).";
+        fields = [ "value" ];
+        description = "Atuin sync key for josh (3-line: user, password, key).";
         access = [ { type = "role"; value = "device_high_trust"; } ];
       };
       "machines/high-trust/vaultwarden_env_2026-03-15" = {
