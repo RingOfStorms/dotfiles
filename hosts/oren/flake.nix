@@ -12,12 +12,6 @@
     impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # secrets-bao removed — oren is the first host cut over to sec.
-    # secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
-
-    # sec — the secrets manager replacing OpenBao. Supplies the NixOS
-    # agent module and the package.
-    secrets_manager.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/secrets_manager.git";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
     # de_plasma.url = "path:../../flakes/de_plasma";
@@ -25,6 +19,7 @@
     # ports.url = "path:../../flakes/ports";
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
 
+    secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
     # mva.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/mva.git";
 
