@@ -85,6 +85,24 @@
         "type": "github"
       }
     },
+    "flake-utils": {
+      "inputs": {
+        "systems": "systems"
+      },
+      "locked": {
+        "lastModified": 1731533236,
+        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
     "forgejo-nixpkgs": {
       "locked": {
         "lastModified": 1780243769,
@@ -296,6 +314,22 @@
       },
       "original": {
         "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_7": {
+      "locked": {
+        "lastModified": 1785828668,
+        "narHash": "sha256-8fsyqeO+mJqvIzeO4xIpgJe/f7MTbbVTEC6RT6WSXNs=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "e72e4f299401a3689d4b3d5fc6496b11db7064eb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
         "ref": "nixos-unstable",
         "repo": "nixpkgs",
         "type": "github"
@@ -1001,6 +1035,7 @@
         "puzzles": "puzzles",
         "ros_neovim": "ros_neovim",
         "secrets-bao": "secrets-bao",
+        "secrets_manager": "secrets_manager",
         "trilium-nixpkgs": "trilium-nixpkgs",
         "zitadel-nixpkgs": "zitadel-nixpkgs"
       }
@@ -1117,6 +1152,40 @@
         "dir": "flakes/secrets-bao",
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+      }
+    },
+    "secrets_manager": {
+      "inputs": {
+        "flake-utils": "flake-utils",
+        "nixpkgs": "nixpkgs_7"
+      },
+      "locked": {
+        "lastModified": 1785887551,
+        "narHash": "sha256-mPFoRs4N7zya0lcwuqxGOhWVRe9lHfTCudU0irysyb0=",
+        "ref": "refs/heads/main",
+        "rev": "38e2012e8867778ac659266b622808f9be1c31c7",
+        "revCount": 5,
+        "type": "git",
+        "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/secrets_manager.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/secrets_manager.git"
+      }
+    },
+    "systems": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
       }
     },
     "treefmt-nix": {

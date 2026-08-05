@@ -193,6 +193,19 @@
       tailnetDomain = "sec.h001.net.joshuabell.xyz";
     };
 
+    # `sec` — the replacement for openbao. Runs in parallel with it during
+    # the migration, so every name here is deliberately distinct from the
+    # openbao block above: different port, different data directory,
+    # different hostname, different systemd units. Nothing is shared, so
+    # neither service can break the other.
+    sec = {
+      port = 8300;
+      dataDir = "/var/lib/secrets_manager";
+      # Single-label, so the existing *.joshuabell.xyz wildcard cert
+      # covers it with no extraDomainNames entry.
+      domain = "secrets.joshuabell.xyz";
+    };
+
     homepage = {
       port = 8082;
     };

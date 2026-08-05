@@ -16,6 +16,7 @@
     ./n8n.nix
     ./postgresql.nix
     ./openbao
+    ./sec.nix
     ./homepage-dashboard.nix
     # ./vault.nix
     ./puzzles.nix

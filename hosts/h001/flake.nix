@@ -35,6 +35,12 @@
 
     puzzles.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/puzzles.git";
 
+    # sec — the secrets manager replacing OpenBao. Supplies the NixOS
+    # module and the package. Runs in parallel with OpenBao during the
+    # migration; see hosts/h001/mods/sec.nix.
+    # secrets_manager.url = "path:/home/josh/projects/secrets_manager";
+    secrets_manager.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/secrets_manager.git";
+
     # pkm — personal knowledge system. Supplies both the NixOS module and the
     # packages (server with the frontend embedded, and the PowerSync service
     # built from source). See hosts/h001/containers/pkm.nix.

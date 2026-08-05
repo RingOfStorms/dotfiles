@@ -289,6 +289,20 @@ in
         # Default-deny; only the two endpoints a joining machine needs are
         # reachable from the internet. See secVhost definition above.
         "sec.${domain}" = secVhost;
+
+        # ── sec (secrets.) — the OpenBao replacement ─────────────────────
+        # A plain proxy, unlike `sec.` above. The njs JWT gate and the path
+        # allowlist next door exist because OpenBao's login handler was
+        # considered too dangerous to expose; sec's login handler IS the
+        # JWT verifier, with rate limiting in front of it, and every other
+        # route authenticates for itself. Duplicating that check here would
+        # only mean the origin's own answer never gets exercised.
+        #
+        # Same bootstrap requirement as OpenBao: a brand-new machine reads
+        # its headscale join key over the public internet before it is on
+        # the tailnet. Once joined, split DNS resolves this name to h001's
+        # overlay IP and traffic stops touching this vhost.
+        "secrets.${domain}" = proxyToUpstream;
         "sso.${domain}" = {
           enableACME = true;
           forceSSL = true;

@@ -188,6 +188,10 @@ rec {
     "jellyfin" "media" "books" "notes" "chat" "sso-proxy" "n8n"
     "sec" "sso" "gist" "git" "etebase" "photos"
     "location" "matrix" "element" "docs" "pkm"
+    # `secrets` is the sec server (hosts/h001/mods/sec.nix), the eventual
+    # replacement for `sec` (OpenBao) above. Both are listed while the two
+    # run side by side.
+    "secrets"
   ];
 
   # ─── HOST BUILDER ─────────────────────────────────────────────────
