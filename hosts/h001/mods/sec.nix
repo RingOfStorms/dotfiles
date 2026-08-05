@@ -186,14 +186,14 @@ in
       "machines/by-host/gp3/hass_token" = {
         fields = [ "value" ];
         description = "Home Assistant long-lived token (gp3 battery manager).";
-        access = [ { type = "sub"; value = "@gp3-service-account-userId"; } ];
+        access = [ { type = "sub"; value = "364267179626987523"; } ];
       };
 
       # ── per-host: h003 ────────────────────────────────────────────
       "machines/by-host/h003/hass_isp_speedtest_token" = {
         fields = [ "value" ];
         description = "Home Assistant long-lived token (h003 ISP speedtest).";
-        access = [ { type = "sub"; value = "@h003-service-account-userId"; } ];
+        access = [ { type = "sub"; value = "364267072236027907"; } ];
       };
     };
   };
