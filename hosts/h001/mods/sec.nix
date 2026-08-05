@@ -47,6 +47,13 @@ in
     # permanently undecryptable — there is no recovery path.
     generateKey = true;
 
+    # Declarative mode: Nix owns the key set. The server refuses runtime
+    # key creation/deletion and grant mutation — only values may be
+    # written through the UI. The reconciler prunes any key not declared
+    # below (tombstoning it into secret_versions first). Flip this off
+    # only if you want the database to be the sole source of truth.
+    declarative = true;
+
     zitadel = {
       issuer = "https://${constants.services.zitadel.domain}";
       # Same Zitadel project the OpenBao JWT auth method binds to, so the
@@ -54,71 +61,34 @@ in
       projectId = "344379162166820867";
       claim = "flatRolesClaim";
 
-      # Admin UI sign-in stays OFF until the redirect URI below is
-      # registered in Zitadel. Set clientId to the Zitadel application's
-      # client ID to switch it on — the server refuses the OIDC flow while
-      # this is empty, so a half-finished setup fails closed rather than
-      # accidentally exposing an unauthenticated UI.
+      # Admin UI sign-in. The clientId is the Zitadel application's
+      # client ID; the server refuses the OIDC flow while this is empty,
+      # so a half-finished setup fails closed rather than accidentally
+      # exposing an unauthenticated UI.
       clientId = "384856081475633155";
       redirectUri = "https://${c.domain}/ui/callback";
-    };
-
-    # Mirrors the OpenBao policies in mods/openbao/openbao-config.nix.
-    # Prefix matching, not a policy language: `read = [ "" ]` is everything.
-    roles = {
-      machines-hightrust = {
-        boundClaim = "device_high_trust";
-        read = [ "machines/high-trust/" "machines/low-trust/" ];
-      };
-      machines-lowtrust = {
-        boundClaim = "device_low_trust";
-        read = [ "machines/low-trust/" ];
-      };
-      host-h003 = {
-        boundClaim = "device_high_trust";
-        read = [
-          "machines/high-trust/"
-          "machines/low-trust/"
-          "machines/by-host/h003/"
-        ];
-      };
-      host-gp3 = {
-        boundClaim = "device_low_trust";
-        read = [ "machines/low-trust/" "machines/by-host/gp3/" ];
-      };
-
-      # The only role permitted to write, and even then only to paths
-      # whose row already exists — the module asserts this.
-      #
-      # The attribute name `admin` is sec's own role (hardcoded as
-      # ADMIN_ROLE; do not rename it). `boundClaim` is the Zitadel role
-      # that grants it — the existing `admin` role in the project below,
-      # so no new Zitadel role has to be created. Anyone holding that
-      # role in project 344379162166820867 can read and write every
-      # secret here.
-      admin = {
-        boundClaim = "admin";
-        read = [ "" ];
-        write = [ "" ];
-      };
     };
 
     # Phase 1: one real path, to prove the round trip end to end without
     # touching anything OpenBao currently serves. Values start as
     # `TODO:replace_me` stubs and are filled in through the UI; the
     # reconciler never overwrites a value that is already set.
+    #
+    # Access is granted explicitly per key — no prefix matching. A
+    # `role` grant binds to a Zitadel role claim value; a `sub` grant
+    # binds to a specific machine identity's service-account userId.
+    # The old `machines-hightrust` role (bound to `device_high_trust`)
+    # could read everything under machines/high-trust/; the new model
+    # requires an explicit grant on each key, so this one grants read to
+    # any caller carrying the `device_high_trust` role claim.
     secrets = {
       "machines/high-trust/nix2nix_2026-03-15" = {
         fields = [ "value" ];
         description = "Inter-machine SSH key. Mirror of the OpenBao entry — NOT yet consumed from here.";
+        access = [
+          { type = "role"; value = "device_high_trust"; }
+        ];
       };
     };
-
-    # Empty on purpose. A prefix listed here is one the reconciler OWNS:
-    # any row under it that stops being declared above is tombstoned into
-    # secret_versions and deleted. With the registry still partial, an
-    # entry here would delete real data on the next rebuild. Add prefixes
-    # only once every path beneath them is declared.
-    managedPrefixes = [ ];
   };
 }
