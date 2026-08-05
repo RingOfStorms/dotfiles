@@ -12,8 +12,12 @@
     impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # secrets-bao.url = "path:../../flakes/secrets-bao";
-    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
+    # secrets-bao removed — oren is the first host cut over to sec.
+    # secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
+
+    # sec — the secrets manager replacing OpenBao. Supplies the NixOS
+    # agent module and the package.
+    secrets_manager.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/secrets_manager.git";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
     # de_plasma.url = "path:../../flakes/de_plasma";
@@ -44,7 +48,8 @@
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
         nixpkgsUnstable = nixpkgs-unstable;
-        secretsRole = "machines-hightrust";
+        # secrets-bao disabled — oren is cut over to sec-agent.
+        # secretsRole = "machines-hightrust";
         authMethod = "hashedPassword";
         authValue = "$y$j9T$NM2xVttDizbzqr4niZJd5.$4n9WQChL6x.yeDTcYRfh2PftKxY2qfEHpNvXiWobdt8";
         mutableUsers = false;
@@ -140,10 +145,18 @@
               autologin = {
                 enable = true;
                 user = primaryUser;
+                # sec-agent renders here now (clean cutover from secrets-bao).
                 secretFile = "/var/lib/openbao-secrets/atuin-key-josh_2026-03-15";
               };
             };
           })
+
+          # ── sec agent ──────────────────────────────────────────────
+          # oren is the first host cut over from secrets-bao to sec.
+          # The agent renders into /var/lib/openbao-secrets (the legacy
+          # default) because secrets-bao is now disabled on this host —
+          # no conflict, and every existing consumer path is unchanged.
+          (import ./sec-agent.nix { inherit inputs constants; })
 
           inputs.beszel.nixosModules.agent
           ({
