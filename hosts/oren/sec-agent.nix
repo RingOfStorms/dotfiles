@@ -43,6 +43,7 @@ let
       remotePath = "machines/high-trust/nix2nix_2026-03-15";
       owner = "josh";
       group = "users";
+      ensureNewline = true;
       hmChanges.programs.ssh.settings = builtins.listToAttrs (
         map (host: {
           name = host;
@@ -56,6 +57,7 @@ let
       remotePath = "machines/high-trust/nix2github_2026-03-15";
       owner = "josh";
       group = "users";
+      ensureNewline = true;
       hmChanges.programs.ssh.settings."github.com".IdentityFile = "$SECRET_PATH";
     };
 
@@ -64,6 +66,7 @@ let
       remotePath = "machines/high-trust/nix2gitforgejo_2026-03-15";
       owner = "josh";
       group = "users";
+      ensureNewline = true;
       hmChanges.programs.ssh.settings."git.joshuabell.xyz".IdentityFile = "$SECRET_PATH";
     };
 
@@ -95,7 +98,8 @@ in
 
   ringofstorms.secrets.agent = {
     enable = true;
-    allowSharedSecretsDir = true; # secrets-bao is gone from oren
+
+    secretsDir = "/var/lib/secrets_manager_hydrated";
 
     server = "https://secrets.joshuabell.xyz";
     machineKeyPath = "/machine-key.json";
