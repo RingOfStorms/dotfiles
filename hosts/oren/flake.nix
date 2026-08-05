@@ -146,7 +146,7 @@
                 enable = true;
                 user = primaryUser;
                 # sec-agent renders here now (clean cutover from secrets-bao).
-                secretFile = "/var/lib/openbao-secrets/atuin-key-josh_2026-03-15";
+                secretFile = "/var/lib/secrets_manager_hydrated/atuin-key-josh_2026-03-15";
               };
             };
           })
