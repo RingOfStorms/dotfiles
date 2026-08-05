@@ -39,6 +39,15 @@
           };
         };
       }
+      {
+        condition = "gitdir:~/projects/secrets_manager/";
+        contents = {
+          user = {
+            name = "RingOfStormsBot";
+            email = "bot@joshuabell.dev";
+          };
+        };
+      }
     ];
 
     ignores = [

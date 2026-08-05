@@ -39,11 +39,11 @@
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1784171614,
-        "narHash": "sha256-/wcbLyU6saddKOUaMqxoCUyZ+o49d5zpQvl7lWIpRiI=",
+        "lastModified": 1785918778,
+        "narHash": "sha256-F43k4dPQUvPq6jV/Y+JaunXPW/8f+XKPlObqy4hPexw=",
         "ref": "refs/heads/master",
-        "rev": "c18bb36c5f55deb30f9999eda3020d5ca7db5c6d",
-        "revCount": 1892,
+        "rev": "e463e7291e1aa1358d6eff223ea459d8564ee458",
+        "revCount": 1956,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -95,6 +95,24 @@
     "flake-utils": {
       "inputs": {
         "systems": "systems"
+      },
+      "locked": {
+        "lastModified": 1731533236,
+        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
+    "flake-utils_2": {
+      "inputs": {
+        "systems": "systems_2"
       },
       "locked": {
         "lastModified": 1731533236,
@@ -259,6 +277,22 @@
       },
       "original": {
         "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_10": {
+      "locked": {
+        "lastModified": 1785828668,
+        "narHash": "sha256-8fsyqeO+mJqvIzeO4xIpgJe/f7MTbbVTEC6RT6WSXNs=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "e72e4f299401a3689d4b3d5fc6496b11db7064eb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
         "ref": "nixos-unstable",
         "repo": "nixpkgs",
         "type": "github"
@@ -1056,7 +1090,7 @@
         "ports": "ports",
         "ros_neovim": "ros_neovim",
         "rust-overlay": "rust-overlay_2",
-        "secrets-bao": "secrets-bao"
+        "secrets_manager": "secrets_manager"
       }
     },
     "ros_neovim": {
@@ -1155,24 +1189,41 @@
         "type": "github"
       }
     },
-    "secrets-bao": {
+    "secrets_manager": {
+      "inputs": {
+        "flake-utils": "flake-utils_2",
+        "nixpkgs": "nixpkgs_10"
+      },
       "locked": {
-        "dir": "flakes/secrets-bao",
-        "lastModified": 1784171614,
-        "narHash": "sha256-/wcbLyU6saddKOUaMqxoCUyZ+o49d5zpQvl7lWIpRiI=",
-        "ref": "refs/heads/master",
-        "rev": "c18bb36c5f55deb30f9999eda3020d5ca7db5c6d",
-        "revCount": 1892,
+        "lastModified": 1785918469,
+        "narHash": "sha256-Y9k1u/q2/+t5OsPMbukjP1fJ6HWkBmMtMEpnF871WLs=",
+        "ref": "refs/heads/main",
+        "rev": "65ee9044d10816e5516754a4667482a81815be3d",
+        "revCount": 26,
         "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+        "url": "https://git.joshuabell.xyz/ringofstorms/secrets_manager.git"
       },
       "original": {
-        "dir": "flakes/secrets-bao",
         "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+        "url": "https://git.joshuabell.xyz/ringofstorms/secrets_manager.git"
       }
     },
     "systems": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
+      }
+    },
+    "systems_2": {
       "locked": {
         "lastModified": 1681028828,
         "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
