@@ -26,9 +26,72 @@ let
     "l002" "l002_"
     "o002" "o002_"
   ];
+
+  # The secrets attrset is defined once and passed to both the agent
+  # module and applyChanges. applyChanges needs the raw attrset (not
+  # from config) to avoid an infinite recursion.
+  secrets = {
+    # ── headscale auth key ───────────────────────────────────────
+    "headscale_auth_2026-03-15" = {
+      remotePath = "machines/high-trust/headscale_auth_2026-03-15";
+      softDepend = [ "tailscaled" ];
+      configChanges.services.tailscale.authKeyFile = "$SECRET_PATH";
+    };
+
+    # ── inter-machine SSH key ────────────────────────────────────
+    "nix2nix_2026-03-15" = {
+      remotePath = "machines/high-trust/nix2nix_2026-03-15";
+      owner = "josh";
+      group = "users";
+      hmChanges.programs.ssh.settings = builtins.listToAttrs (
+        map (host: {
+          name = host;
+          value = { IdentityFile = "$SECRET_PATH"; };
+        }) nix2nixMatchBlockHosts
+      );
+    };
+
+    # ── GitHub SSH key ───────────────────────────────────────────
+    "nix2github_2026-03-15" = {
+      remotePath = "machines/high-trust/nix2github_2026-03-15";
+      owner = "josh";
+      group = "users";
+      hmChanges.programs.ssh.settings."github.com".IdentityFile = "$SECRET_PATH";
+    };
+
+    # ── Forgejo SSH key ──────────────────────────────────────────
+    "nix2gitforgejo_2026-03-15" = {
+      remotePath = "machines/high-trust/nix2gitforgejo_2026-03-15";
+      owner = "josh";
+      group = "users";
+      hmChanges.programs.ssh.settings."git.joshuabell.xyz".IdentityFile = "$SECRET_PATH";
+    };
+
+    # ── GitHub read token (nix fetches) ──────────────────────────
+    "github_read_token_2026-03-15" = {
+      remotePath = "machines/high-trust/github_read_token_2026-03-15";
+      configChanges.nix.extraOptions = "!include $SECRET_PATH";
+    };
+
+    # ── atuin sync key (per-host) ─────────────────────────────────
+    # The atuin module reads this via secretFile in flake.nix.
+    # The single `value` field holds the pre-formatted 3-line content
+    # (user\npassword\nkey) that atuin-autologin parses with sed.
+    "atuin-key-josh_2026-03-15" = {
+      remotePath = "machines/high-trust/atuin-key-josh_2026-03-15";
+      field = "value";
+      owner = "josh";
+      group = "users";
+      mode = "0400";
+      hardDepend = [ "atuin-autologin" ];
+    };
+  };
 in
 {
-  imports = [ inputs.secrets_manager.nixosModules.agent ];
+  imports = [
+    inputs.secrets_manager.nixosModules.agent
+    (inputs.secrets_manager.lib.applyChanges secrets)
+  ];
 
   ringofstorms.secrets.agent = {
     enable = true;
@@ -42,61 +105,6 @@ in
       projectId = "344379162166820867";
     };
 
-    secrets = {
-      # ── headscale auth key ───────────────────────────────────────
-      "headscale_auth_2026-03-15" = {
-        remotePath = "machines/high-trust/headscale_auth_2026-03-15";
-        softDepend = [ "tailscaled" ];
-        configChanges.services.tailscale.authKeyFile = "$SECRET_PATH";
-      };
-
-      # ── inter-machine SSH key ────────────────────────────────────
-      "nix2nix_2026-03-15" = {
-        remotePath = "machines/high-trust/nix2nix_2026-03-15";
-        owner = "josh";
-        group = "users";
-        hmChanges.programs.ssh.settings = builtins.listToAttrs (
-          map (host: {
-            name = host;
-            value = { IdentityFile = "$SECRET_PATH"; };
-          }) nix2nixMatchBlockHosts
-        );
-      };
-
-      # ── GitHub SSH key ───────────────────────────────────────────
-      "nix2github_2026-03-15" = {
-        remotePath = "machines/high-trust/nix2github_2026-03-15";
-        owner = "josh";
-        group = "users";
-        hmChanges.programs.ssh.settings."github.com".IdentityFile = "$SECRET_PATH";
-      };
-
-      # ── Forgejo SSH key ──────────────────────────────────────────
-      "nix2gitforgejo_2026-03-15" = {
-        remotePath = "machines/high-trust/nix2gitforgejo_2026-03-15";
-        owner = "josh";
-        group = "users";
-        hmChanges.programs.ssh.settings."git.joshuabell.xyz".IdentityFile = "$SECRET_PATH";
-      };
-
-      # ── GitHub read token (nix fetches) ──────────────────────────
-      "github_read_token_2026-03-15" = {
-        remotePath = "machines/high-trust/github_read_token_2026-03-15";
-        configChanges.nix.extraOptions = "!include $SECRET_PATH";
-      };
-
-      # ── atuin sync key (per-host) ─────────────────────────────────
-      # The atuin module reads this via secretFile in flake.nix.
-      # The single `value` field holds the pre-formatted 3-line content
-      # (user\npassword\nkey) that atuin-autologin parses with sed.
-      "atuin-key-josh_2026-03-15" = {
-        remotePath = "machines/high-trust/atuin-key-josh_2026-03-15";
-        field = "value";
-        owner = "josh";
-        group = "users";
-        mode = "0400";
-        hardDepend = [ "atuin-autologin" ];
-      };
-    };
+    inherit secrets;
   };
 }
