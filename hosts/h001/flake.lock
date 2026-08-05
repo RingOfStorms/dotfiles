@@ -1160,11 +1160,11 @@
         "nixpkgs": "nixpkgs_7"
       },
       "locked": {
-        "lastModified": 1785889965,
-        "narHash": "sha256-ms1T1mwLL/Ij3n+HvMMTrKSkOx3I0KzlioeloQcmZYo=",
+        "lastModified": 1785890426,
+        "narHash": "sha256-7OQ4pLBDtt2vbjIiaQfLW2L6ho6oqT8jSGQ9dpiI0uc=",
         "ref": "refs/heads/main",
-        "rev": "98c8d4e3134c2fb18d3af08f4872d8ff073610de",
-        "revCount": 6,
+        "rev": "34fe42d1e8a485f68fecc6b2559c388c3ac63093",
+        "revCount": 8,
         "type": "git",
         "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/secrets_manager.git"
       },

@@ -409,13 +409,42 @@ in
           "olm-3.2.16"
         ];
 
-        # TODO: override mautrix-signal once nixpkgs has >= v26.02.1
-        # (fixes "sync message sent destination is nil" with Signal Android 8.x)
-        # See: https://github.com/mautrix/signal/issues/637
-        # For now, update matrix-nixpkgs input to get v26.02 + libsignal-ffi 0.87.1,
-        # then apply the fix patches on top.
         nixpkgs.overlays = [
           (final: prev: {
+            # mautrix-gmessages v26.05 — fixes duplicate SMS messages plus the
+            # "phone has not confirmed message delivery" status in bridged rooms.
+            #
+            # The pinned 25.11 has a hard type assert in handleRemoteEcho
+            # (rawEvt.(*MessageEvent)). When the echo arrives through the
+            # backfill dedup path the event is a *BackfillMessage, so it panics.
+            # The panic is recovered, but checkPendingMessage has already
+            # dropped the txn ID from outgoingMessages and the DB row was never
+            # inserted — so the message never gets confirmed (NoEchoTimeout
+            # fires after 1min) and the later OUTGOING_COMPLETE finds no match
+            # and re-injects it as a new double-puppeted event = duplicate.
+            #
+            # Fixed upstream in 632b7da (mautrix/gmessages#54), released v26.05.
+            # Drop this override once matrix-nixpkgs is bumped past 26.05.
+            mautrix-gmessages = prev.mautrix-gmessages.override {
+              buildGoModule = args: prev.buildGoModule (args // {
+                version = "26.05";
+                src = final.fetchFromGitHub {
+                  owner = "mautrix";
+                  repo = "gmessages";
+                  tag = "v0.2605.0";
+                  hash = "sha256-ScsjUmQZsB86hT+EqIoI4V3KX3T1sV9C4/3ytcLV8O0=";
+                };
+                vendorHash = "sha256-rEcPW/egdx2AhXWqpjpaXbIjbmU9fShOKSv4fUZiX0w=";
+                ldflags = [ "-s" "-w" "-X" "main.Tag=v0.2605.0" ];
+                doCheck = false;
+              });
+            };
+
+            # mautrix-signal pinned to a 26.02.1-pre rev — fixes "sync message
+            # sent destination is nil" with Signal Android 8.x.
+            # See: https://github.com/mautrix/signal/issues/637
+            # Drop this override once matrix-nixpkgs is bumped past 26.02.1
+            # (see the staged-bump TODO on the pin in flake.nix).
             mautrix-signal = prev.mautrix-signal.override {
               buildGoModule = args: prev.buildGoModule (args // {
                 version = "26.02.1-pre";

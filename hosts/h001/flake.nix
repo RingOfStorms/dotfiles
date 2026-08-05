@@ -21,6 +21,14 @@
     # signal_encrypt_message (Element->Signal sends crash, receives hit
     # libsignal null-pointer errors). Keep this pin until a newer unstable rev
     # ships a working mautrix-signal/libsignal; then bump deliberately + test.
+    #
+    # TODO (staged bump): unstable e72e4f299401a3689d4b3d5fc6496b11db7064eb has
+    # mautrix-gmessages 26.05, mautrix-signal 26.07, libsignal-ffi 0.97.2,
+    # synapse 1.157.2, element-web 1.12.24, postgresql_17 17.10. Bumping to it
+    # would let BOTH overlays in containers/matrix.nix be deleted — but it also
+    # re-tests the signal/libsignal combination that segfaulted above, so do it
+    # when you can verify Element->Signal sends by hand. Until then the
+    # gmessages 26.05 overlay backports just the SMS duplicate-message fix.
     matrix-nixpkgs.url = "github:nixos/nixpkgs/dd9b079222d43e1943b6ebd802f04fd959dc8e61";
 
     # Use relative to get current version for testing
