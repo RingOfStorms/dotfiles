@@ -966,11 +966,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1786721507,
-        "narHash": "sha256-Vssx7e5MkWJzuwrtZ/sqZyGb1HW5u4rCH+6hcudSgdE=",
+        "lastModified": 1786757776,
+        "narHash": "sha256-y1uYoyZoOk9TFDS3IQTHccT3DCXiQLMIVuBUKtAMvqQ=",
         "ref": "refs/heads/main",
-        "rev": "072ef0a0a664521139f34d12b4572f2a3666a97f",
-        "revCount": 51,
+        "rev": "50e0fece54ad94bbaf5921f5409343d633a02091",
+        "revCount": 54,
         "type": "git",
         "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/pkm.git"
       },
@@ -1160,11 +1160,11 @@
         "nixpkgs": "nixpkgs_7"
       },
       "locked": {
-        "lastModified": 1786748134,
-        "narHash": "sha256-9NfuDn7B6b0heRIP+GPnNnJBMx++xNlrLSmhUCM6l1o=",
+        "lastModified": 1786750117,
+        "narHash": "sha256-TJGpgh2+lG/lU+tPpvq4RLvE6Xi5WVhJ0kIWzDGHlhs=",
         "ref": "refs/heads/main",
-        "rev": "40f1b257d85aa3127f0993778aec4079187cc1d5",
-        "revCount": 27,
+        "rev": "72a1e3b7080d7f4fa22bbc03787755393d503721",
+        "revCount": 28,
         "type": "git",
         "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/secrets_manager.git"
       },

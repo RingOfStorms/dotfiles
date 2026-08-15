@@ -16,7 +16,6 @@ in
     ./matrix.nix
     ./paperless.nix
     ./opengist.nix
-    ./pkm.nix
     ./penpot.nix
     ./vaultwarden.nix
     ./zitadel.nix
