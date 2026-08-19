@@ -80,6 +80,10 @@ in
         WEBUI_NAME = "Josh AI";
         ENV = "prod";
 
+        # NLTK, newly imported through LangChain, requires a usable home
+        # directory even before it downloads any data. DynamicUser has none.
+        HOME = "/var/lib/open-webui";
+
         # Connect to LiteLLM proxy for all OpenAI-compatible APIs.
         OPENAI_API_BASE_URL = openaiBaseUrl;
         OPENAI_API_KEY = "na";
