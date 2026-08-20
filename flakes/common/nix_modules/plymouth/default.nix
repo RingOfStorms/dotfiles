@@ -88,23 +88,22 @@ let
       set -euo pipefail
       mkdir -p $out
       maxw=$(cat $maxWidthPath)
+      maxh=$(( maxw * 5 / 8 ))
       nframes=$(cat $frameCountPath)
 
-      # Snowflake takes ~62% of canvas width so the circuits (which
-      # extend nearly to the SVG edge) frame it without crowding.
-      sw=$(( maxw * 62 / 100 ))
+      # The source composition is 16:10. Plymouth crops it centrally to
+      # cover the active framebuffer, so the logo remains prominent on
+      # 16:9, 16:10, ultrawide, and narrower displays.
+      sw=$(( maxh * 62 / 100 ))
 
       # ---------- 1. Rasterize SVGs ----------
-      resvg --width "$maxw" ${./assets/circuits.svg}             circuits.png
-      resvg --width "$sw"   ${./assets/snowflake-mask.svg}       mask.png
-      resvg --width "$sw"   ${./assets/snowflake-arms-dark.svg}  arms-dark.png
-      resvg --width "$sw"   ${./assets/snowflake-arms-light.svg} arms-light.png
+      resvg --width "$maxw" ${./assets/circuits.svg}  circuits.png
+      resvg --width "$sw"   ${./assets/snowflake.svg} snowflake.png
 
-      # Pad to maxw×maxw on transparent background, centered, so every
-      # layer shares dimensions for clean compositing.
-      magick mask.png       -background none -gravity center -extent "''${maxw}x''${maxw}" mask-c.png
-      magick arms-dark.png  -background none -gravity center -extent "''${maxw}x''${maxw}" dark-c.png
-      magick arms-light.png -background none -gravity center -extent "''${maxw}x''${maxw}" light-c.png
+      # Pad the official logo to the canvas, centered, so it shares
+      # dimensions with the circuit background and glow.
+      magick snowflake.png -background none -gravity center -extent "''${maxw}x''${maxh}" logo-c.png
+      magick logo-c.png -alpha extract logo-alpha.png
 
       # ---------- 2. Background (transparent + circuits) ----------
       # Frames are transparent outside the lit areas. The Plymouth
@@ -117,73 +116,27 @@ let
       #
       # `-compose over` is the default but we name it explicitly
       # because the rest of the pipeline switches between operators.
-      magick -size "''${maxw}x''${maxw}" canvas:none \
+      magick -size "''${maxw}x''${maxh}" canvas:none \
         circuits.png -gravity center -compose over -composite \
         background.png
 
-      # ---------- 3. Neon stack ----------
-      # Two-tone gradient tubes + a single soft halo. See the long
-      # comment at the top of this file for the why.
-
-      # Helper: build a colored tube layer from one arm-class silhouette.
-      #   $1 = input mask png, $2 = output png,
-      #   $3 = edge color (deep), $4 = inner color (bright)
-      # Steps:
-      #   - distance transform inside the silhouette → grayscale where
-      #     deeper interior = brighter
-      #   - colorize via gradient CLUT (must promote distance to sRGB
-      #     first, otherwise CLUT collapses to grayscale)
-      #   - reattach the original binary mask as alpha so the tube is
-      #     fully opaque inside the silhouette and the *color* varies
-      #     by depth (NOT the alpha — varying alpha would let the dark
-      #     background bleed through and the snowflake would look
-      #     hollow/translucent rather than glowing)
-      make_tube() {
-        local in="$1" out="$2" cedge="$3" cinner="$4"
-        magick "$in" -alpha extract \
-          -morphology Distance Euclidean:4 \
-          -auto-level dist.png
-        magick -size 1x256 "gradient:''${cedge}-''${cinner}" -colorspace sRGB grad.png
-        magick dist.png -colorspace sRGB grad.png -clut tube-rgb.png
-        magick "$in" -alpha extract mask-a.png
-        magick tube-rgb.png mask-a.png \
-          -compose CopyOpacity -composite \
-          -define png:color-type=6 \
-          "$out"
-      }
-
-      # Dark arms: deeper, redder gradient (#f24005 family)
-      make_tube dark-c.png  tube-dark.png  '#2a0700' '#F24005'
-      # Light arms: brighter, hotter gradient
-      make_tube light-c.png tube-light.png '#5a1a02' '#FF8030'
-
-      # Halo: tight outer aura, kept off the circuits.
-      # NOTE: don't use `+level-colors` here — it resets the alpha
-      # channel to fully opaque (transparent areas become solid black
-      # at the chosen color), which then leaks through every subsequent
-      # screen-compose and lifts the corner alpha of every frame above
-      # zero. That made the splash render as a slightly-lighter-than-
-      # true-black square around the snowflake on real displays.
-      #
-      # Instead: blur the mask alpha, multiply down to the desired
-      # opacity, and attach it to a solid-color image.
-      magick mask-c.png -alpha extract \
+      # ---------- 3. Logo glow ----------
+      # Keep the official logo’s two-color geometry intact.  A restrained
+      # amber halo gives the reference image its illuminated edge without
+      # turning the snowflake into a fuzzy sticker.
+      magick logo-alpha.png \
         -filter Gaussian -blur 0x12 \
-        -evaluate Multiply 0.40 \
+        -evaluate Multiply 0.38 \
         halo-alpha.png
-      magick -size "''${maxw}x''${maxw}" canvas:'#FF5A00' \
+      magick -size "''${maxw}x''${maxh}" canvas:'#FF5A00' \
         halo-alpha.png \
         -compose CopyOpacity -composite \
         -define png:color-type=6 \
         halo.png
 
-      # Stack: halo → dark tubes → light tubes. Light goes on top
-      # because at the central hex (where dark and light arms meet)
-      # we want the brighter color to win.
-      magick -size "''${maxw}x''${maxw}" canvas:none \
+      magick -size "''${maxw}x''${maxh}" canvas:none \
         halo.png       -compose screen -composite \
-        tube-dark.png  -compose over   -composite \
-        tube-light.png -compose over   -composite \
+        logo-c.png     -compose over   -composite \
         neon.png
 
       # ---------- 4. Generate per-frame brightness schedule ----------
@@ -229,7 +182,7 @@ let
 
       mv frame-*.png "$out/"
 
-      echo "infinite-frames: rendered $i frames at ''${maxw}px wide" >&2
+      echo "infinite-frames: rendered $i frames at ''${maxw}x''${maxh}" >&2
       du -sh "$out" >&2
     '';
 
@@ -251,25 +204,21 @@ in
 
     frameCount = lib.mkOption {
       type = lib.types.ints.positive;
-      default = 60;
+      default = 1;
       description = ''
-        Number of flicker frames to generate. Played back at the fps
-        baked into infinite.script (15 fps → 60 frames = 4 s loop).
-        Higher = smoother / more variety in the flicker pattern,
-        larger initrd. Each quantized PNG is ~50–200 KB depending
-        on maxWidth.
+        Number of frames to generate. The default is one static frame: the
+        artwork is deliberately polished and stable while Plymouth handles
+        framebuffer/KMS transitions. Set higher only if an animation is added.
       '';
     };
 
     maxWidth = lib.mkOption {
       type = lib.types.ints.positive;
-      default = 1080;
+      default = 1920;
       description = ''
-        Frame width (and height — frames are square). The neon stack
-        gets blurry-but-acceptable downscale-on-display for hosts with
-        wider screens; the glow blur radii are tuned for ~1080. If you
-        bump this, also bump the blur sigmas in default.nix or the
-        glow will look tight/anemic at the new size.
+        Width of the generated 16:10 source frame. Plymouth performs a
+        centered aspect-preserving crop and scales the frame to cover the
+        active display, so one source works across common wide resolutions.
       '';
     };
 
