@@ -50,6 +50,25 @@
 
         hmModules = [
           inputs.common.homeManagerModules.kitty
+
+          # ── On-screen keyboard (tablet mode) ────────────────────────────
+          # juni is a Framework 12 convertible. In tablet mode the physical
+          # keyboard is disabled; KWin only shows an on-screen keyboard when a
+          # virtual-keyboard input method is registered in kwinrc's
+          # [Wayland] InputMethod slot. The shared de_plasma module points that
+          # slot at fcitx5 (for Japanese/Mozc), which is a text input method,
+          # not an OSK — so nothing popped up on text-field focus.
+          #
+          # Override the slot to maliit-keyboard here. fcitx5 continues to work
+          # via its own Wayland text-input frontend (waylandFrontend = true in
+          # the shared module), so Japanese input is unaffected.
+          (
+            { pkgs, lib, ... }:
+            {
+              programs.plasma.configFile.kwinrc.Wayland.InputMethod = lib.mkForce
+                "${pkgs.maliit-keyboard}/share/applications/com.github.maliit.keyboard.desktop";
+            }
+          )
         ];
 
         nixosModules = [
@@ -160,6 +179,8 @@
                 "electron-39.8.10"
               ];
               environment.systemPackages = with pkgs; [
+                # On-screen keyboard for tablet mode (see hmModules override).
+                maliit-keyboard
                 qdirstat
                 vlc
                 google-chrome
