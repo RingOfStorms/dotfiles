@@ -19,12 +19,6 @@ import ../sec-agent.nix {
       configChanges.nixarr.vpn.wgConf = "$SECRET_PATH";
     };
 
-    zitadel_master_key_2026-03-15 = {
-      remotePath = "machines/high-trust/zitadel_master_key_2026-03-15";
-      mode = "0444";
-      softDepend = [ "container@zitadel" ];
-    };
-
     oauth2_proxy_key_file_2026-03-15 = {
       remotePath = "machines/high-trust/oauth2_proxy_key_file_2026-03-15";
       configChanges.services.oauth2-proxy.keyFile = "$SECRET_PATH";
