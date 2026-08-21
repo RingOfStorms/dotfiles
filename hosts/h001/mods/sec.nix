@@ -8,11 +8,9 @@
 #   hostname    secrets.joshuabell.xyz      (openbao: sec.joshuabell.xyz)
 #   units       sec.service                 (openbao: openbao*.service)
 #
-# The `sec` CLI is deliberately NOT installed (installCli stays false):
-# the secrets-bao module already puts a shell script named `sec` on PATH,
-# and two different programs with one name is a footgun. The server does
-# not need the binary on PATH — its unit calls an absolute store path.
-# Flip installCli on once secrets-bao is gone from this host.
+# The `sec` CLI is installed because h001 no longer loads the secrets-bao
+# client module. OpenBao's server and its `bao` CLI remain isolated under
+# hosts/h001/mods/openbao.
 #
 # The desired state below mirrors the full OpenBao KV registry from
 # hosts/h001/mods/openbao/openbao-config.nix. Values start as
@@ -33,6 +31,7 @@ in
 
   ringofstorms.secrets.server = {
     enable = true;
+    installCli = true;
 
     listen = "127.0.0.1:${toString c.port}";
     inherit (c) dataDir domain;
@@ -147,6 +146,11 @@ in
       "machines/high-trust/openrouter_2026-03-15" = {
         fields = [ "api-key" ];
         description = "OpenRouter API key.";
+        access = [ { type = "role"; value = "device_high_trust"; } ];
+      };
+      "machines/high-trust/litellm-env" = {
+        fields = [ "value" ];
+        description = "LiteLLM EnvironmentFile (OpenRouter API key).";
         access = [ { type = "role"; value = "device_high_trust"; } ];
       };
       "machines/high-trust/sabnzbd_api_key_2026-07-15" = {

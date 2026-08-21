@@ -21,8 +21,8 @@
     # beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
     # de_plasma.url = "path:../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
-    # secrets-bao.url = "path:../../flakes/secrets-bao";
-    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
+    # sec-agent replaces secrets-bao on this host.
+    secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     # impermanence_mod.url = "path:../../flakes/impermanence";
     impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
 
@@ -120,6 +120,11 @@
           inputs.common.nixosModules.more_filesystems
           inputs.common.nixosModules.tailnet
           inputs.common.nixosModules.podman
+
+          (import ../sec-agent.nix {
+            inherit inputs constants;
+            role = "machines-lowtrust";
+          })
 
           # TODO beszel agent -- needs overlay IP assigned first
           # beszel.nixosModules.agent

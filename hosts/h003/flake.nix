@@ -6,8 +6,8 @@
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # secrets-bao.url = "path:../../flakes/secrets-bao";
-    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
+    # sec-agent replaces secrets-bao on this host.
+    secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
     # containers.url = "path:../../flakes/containers";
@@ -48,6 +48,8 @@
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.rage
 
+          (import ./sec-agent.nix { inherit inputs constants; })
+
           inputs.containers.nixosModules.default
           inputs.beszel.nixosModules.agent
           ({
@@ -60,12 +62,6 @@
           ./hardware-configuration.nix
           ./mods
           ./containers.nix
-
-          # Override the shared high-trust role with h003's per-host role so
-          # only h003 can read its Home Assistant publishing token.
-          ({ lib, ... }: {
-            ringofstorms.secretsBao.openBaoRole = lib.mkForce "host-h003";
-          })
 
           # Host-specific config
           (

@@ -26,9 +26,12 @@ rec {
     # SSH public key used across all hosts for authorized_keys
     sshPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15";
     sshKeyName = "nix2nix_2026-03-15";
+    # Keep the deployer's legacy cache path during host-by-host migration;
+    # switch this after every deployer has a populated sec cache.
     secretsKeyPath = "/var/lib/openbao-secrets/nix2nix_2026-03-15";
 
     openbaoAddr = "https://sec.joshuabell.xyz";
+    secretsDir = "/var/lib/secrets_manager_hydrated";
     gitUrl = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
   };
 

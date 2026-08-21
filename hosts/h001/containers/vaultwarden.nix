@@ -2,14 +2,13 @@
 #
 # SQLite-backed (single-user vault); data + backups bind-mounted from the
 # host (uid/gid 114, matching the o001 layout so the Phase 0 backup restores
-# 1:1). The vaultwarden_env secret is rendered on h001 via secrets-bao
-# (declared in _constants.nix:secrets) and bind-mounted read-only.
+# 1:1). The vaultwarden_env secret is rendered on h001 via sec-agent
+# (declared in hosts/h001/sec-agent.nix) and bind-mounted read-only.
 #
 # o002's nginx proxies vault.joshuabell.xyz over the tailnet to h001; this
 # module's vhost terminates TLS (wildcard cert) and proxies to the container.
 {
   constants,
-  config,
   lib,
   fleet,
   ...
@@ -26,9 +25,9 @@ let
   hostAddress6 = net.hostAddress6;
   containerAddress6 = c.containerIp6;
 
-  baoSecrets = config.ringofstorms.secretsBao.secrets or { };
   envSecret = "vaultwarden_env_2026-03-15";
-  hasVaultwardenEnv = baoSecrets ? ${envSecret};
+  envPath = "${fleet.global.secretsDir}/${envSecret}";
+  hasVaultwardenEnv = true;
 
   # Host user (uid/gid 114) owning the bind-mounted data dirs.
   users = {
@@ -84,7 +83,7 @@ in
         isReadOnly = false;
       };
       "/var/secrets/vaultwarden.env" = {
-        hostPath = baoSecrets.${envSecret}.path;
+        hostPath = envPath;
         isReadOnly = true;
       };
     };

@@ -12,8 +12,8 @@
     impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # secrets-bao.url = "path:../../flakes/secrets-bao";
-    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
+    # sec-agent replaces secrets-bao on this host.
+    secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
     # de_plasma.url = "path:../../flakes/de_plasma";
@@ -43,7 +43,7 @@
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
         nixpkgsUnstable = nixpkgs-unstable;
-        secretsRole = "machines-hightrust";
+        # secrets-bao disabled — juni is cut over to sec-agent.
         authMethod = "hashedPassword";
         authValue = "$y$j9T$b66ZAxtTo75paZx.mnXyK.$ej0eKS3Wx4488qDfjUJSP0nsUe5TBzw31VbXR19XrQ4";
         mutableUsers = false;
@@ -132,10 +132,12 @@
               autologin = {
                 enable = true;
                 user = primaryUser;
-                secretFile = "/var/lib/openbao-secrets/atuin-key-josh_2026-03-15";
+                secretFile = "/var/lib/secrets_manager_hydrated/atuin-key-josh_2026-03-15";
               };
             };
           })
+
+          (import ./sec-agent.nix { inherit inputs constants; })
 
           (
             { pkgs, ... }:

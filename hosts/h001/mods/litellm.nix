@@ -2,6 +2,7 @@
   inputs,
   pkgs,
   constants,
+  fleet,
   ...
 }:
 let
@@ -39,7 +40,7 @@ in
       openFirewall = false;
       package = pkgsLitellm.litellm;
       # gives openrouter key
-      environmentFile = "/var/lib/openbao-secrets/litellm-env";
+      environmentFile = "${fleet.global.secretsDir}/litellm-env";
       environment = {
         SCARF_NO_ANALYTICS = "True";
         DO_NOT_TRACK = "True";

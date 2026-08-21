@@ -31,7 +31,7 @@ in
       redirectURL = "https://${c.domain}/oauth2/callback";
       validateURL = "https://${zitadel.domain}/oauth2/";
       oidcIssuerUrl = "https://${zitadel.domain}";
-      # keyFile injected via secrets-bao configChanges
+      # keyFile injected via sec-agent configChanges
       nginx.domain = c.domain;
       email.domains = [ "*" ];
       extraConfig = {

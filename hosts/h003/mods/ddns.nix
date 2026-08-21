@@ -10,7 +10,6 @@
 #   - Add record:    PUT  /dnszone/{zoneId}/records        (returns 201)
 #   - Update record: POST /dnszone/{zoneId}/records/{id}   (returns 204)
 {
-  config,
   constants,
   pkgs,
   lib,
@@ -18,11 +17,7 @@
 }:
 let
   c = constants.services.ddns;
-  baoSecrets = config.ringofstorms.secretsBao.secrets or {};
-  tokenFile =
-    if baoSecrets ? "bunny_rw_dns_2026-03-15"
-    then baoSecrets."bunny_rw_dns_2026-03-15".path
-    else null;
+  tokenFile = c.tokenPath;
 
   updateScript = pkgs.writeShellScript "ddns-update" ''
     set -euo pipefail
@@ -105,8 +100,8 @@ in
 lib.mkIf (tokenFile != null) {
   systemd.services.ddns-update = {
     description = "Dynamic DNS update for ${c.hostname}.${c.domain} via bunny.net API";
-    wants = [ "network-online.target" ];
-    after = [ "network-online.target" "vault-agent.service" ];
+    wants = [ "network-online.target" "sec-secrets-ready.service" ];
+    after = [ "network-online.target" "sec-secrets-ready.service" ];
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "${updateScript} ${tokenFile}";
