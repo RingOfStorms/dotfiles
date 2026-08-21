@@ -147,10 +147,9 @@
           })
 
           # ── sec agent ──────────────────────────────────────────────
-          # oren is the first host cut over from secrets-bao to sec.
-          # The agent renders into /var/lib/openbao-secrets (the legacy
-          # default) because secrets-bao is now disabled on this host —
-          # no conflict, and every existing consumer path is unchanged.
+          # Oren is cut over from secrets-bao to sec-agent. The shared
+          # helper renders into /var/lib/secrets_manager_hydrated, and the
+          # explicit consumer paths below point there as well.
           (import ./sec-agent.nix { inherit inputs constants; })
 
           inputs.beszel.nixosModules.agent

@@ -28,8 +28,8 @@ let
       })
     ];
   };
-  baoSecrets = config.ringofstorms.secretsBao.secrets or {};
-  hasOpenwebuiEnv = baoSecrets ? "openwebui_env_2026-03-15";
+  hasOpenwebuiEnv = true;
+  openwebuiEnvPath = "${fleet.global.secretsDir}/openwebui_env_2026-03-15";
   c = constants.services.openWebui;
   litellm = constants.services.litellm;
   searx = constants.services.searx;
@@ -69,7 +69,7 @@ in
       host = "127.0.0.1";
       openFirewall = false;
       package = pkgsOpenWebui.open-webui;
-      environmentFile = lib.mkIf hasOpenwebuiEnv baoSecrets."openwebui_env_2026-03-15".path;
+      environmentFile = openwebuiEnvPath;
       environment = {
         # Keep all ConfigVar settings below declarative; admin-UI changes vanish
         # after restart instead of overriding this configuration.

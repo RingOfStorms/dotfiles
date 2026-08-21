@@ -8,8 +8,8 @@
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # secrets-bao.url = "path:../../flakes/secrets-bao";
-    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
+    # sec-agent replaces secrets-bao on this host.
+    secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     # flatpaks.url = "path:../../flakes/flatpaks";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     # beszel.url = "path:../../flakes/beszel";
@@ -45,7 +45,7 @@
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
         nixpkgsUnstable = nixpkgs-unstable;
-        secretsRole = "machines-hightrust";
+        # secrets-bao disabled — lio is cut over to sec-agent.
         authMethod = "hashedPassword";
         authValue = "$y$j9T$GvwwBotPdCjybuJeTGeLe/$but0teo8CQusyzxurhb42vpt/Ox1EUmARb24VMSZz14";
         mutableUsers = false;
@@ -120,6 +120,12 @@
           inputs.common.nixosModules.podman
           inputs.common.nixosModules.q_flipper
           inputs.common.nixosModules.tailnet
+
+          (import ../sec-agent.nix {
+            inherit inputs constants;
+            role = "machines-hightrust";
+          })
+
           inputs.common.nixosModules.timezone_chi
           inputs.common.nixosModules.tty_caps_esc
           inputs.common.nixosModules.zsh

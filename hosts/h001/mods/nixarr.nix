@@ -18,7 +18,7 @@ in
 
       vpn = {
         enable = true;
-        # wgConf injected via secrets-bao configChanges
+        # wgConf injected via sec-agent configChanges
       };
 
       jellyfin.enable = true; # jellyfinnnnnn!
@@ -122,7 +122,7 @@ in
               fields = {
                 baseUrl = "https://api.nzbgeek.info";
                 apiPath = "/api";
-                apiKey.secret = "/var/lib/openbao-secrets/nzbgeek_api_key_2026-07-15";
+                apiKey.secret = "${fleet.global.secretsDir}/nzbgeek_api_key_2026-07-15";
               };
             }
             {
@@ -146,7 +146,7 @@ in
                 host = "localhost";
                 port = 6336;
                 useSsl = false;
-                apiKey.secret = "/var/lib/openbao-secrets/sabnzbd_api_key_2026-07-15";
+                apiKey.secret = "${fleet.global.secretsDir}/sabnzbd_api_key_2026-07-15";
                 tvCategory = "tv";
                 recentTvPriority = -100;
                 olderTvPriority = -100;
@@ -168,7 +168,7 @@ in
                 host = "localhost";
                 port = 6336;
                 useSsl = false;
-                apiKey.secret = "/var/lib/openbao-secrets/sabnzbd_api_key_2026-07-15";
+                apiKey.secret = "${fleet.global.secretsDir}/sabnzbd_api_key_2026-07-15";
                 movieCategory = "movies";
                 recentMoviePriority = -100;
                 olderMoviePriority = -100;

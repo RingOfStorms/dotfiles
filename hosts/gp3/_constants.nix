@@ -13,19 +13,11 @@
   batteryManager = {
     hassUrl = "http://10.12.14.22:8123";
     entityId = "switch.smart_plug_b_switch";
-    tokenPath = "/var/lib/openbao-secrets/hass_token";
+    tokenPath = "/var/lib/secrets_manager_hydrated/hass_token";
     chargeOnPercent = 30;
     chargeOffPercent = 70;
     checkIntervalMin = 5;
   };
 
   services = { };
-
-  # ── Per-host secrets (merged with mkAutoSecrets in fleet.mkHost) ────
-  secrets = {
-    "hass_token" = {
-      kvPath = "kv/data/machines/by-host/gp3/hass_token";
-      softDepend = [ "battery-manager" ];
-    };
-  };
 }

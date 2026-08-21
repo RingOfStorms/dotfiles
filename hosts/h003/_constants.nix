@@ -134,13 +134,14 @@
       domain = "joshuabell.xyz";
       # Check interval in minutes
       interval = 5;
+      tokenPath = "/var/lib/secrets_manager_hydrated/bunny_rw_dns_2026-03-15";
     };
 
     # Run the measurement on h003's WAN-side router hardware, then publish
     # recorder-compatible entities to the Home Assistant Yellow on the LAN.
     ispSpeedtest = {
       hassUrl = "http://10.12.14.22:8123";
-      tokenPath = "/var/lib/openbao-secrets/hass_isp_speedtest_token";
+      tokenPath = "/var/lib/secrets_manager_hydrated/hass_isp_speedtest_token";
       entityPrefix = "sensor.isp_speedtest";
       interface = "enp1s0";
       onCalendar = "hourly";
@@ -201,23 +202,10 @@
 
       # Remote hosts to shut down on critical battery
       remoteShutdownHosts = [
-        { name = "h001"; host = "10.12.14.10"; user = "luser"; keyFile = "/var/lib/openbao-secrets/nix2nix_2026-03-15"; }
-        { name = "h002"; host = "10.12.14.183"; user = "luser"; keyFile = "/var/lib/openbao-secrets/nix2nix_2026-03-15"; }
+        { name = "h001"; host = "10.12.14.10"; user = "luser"; keyFile = "/var/lib/secrets_manager_hydrated/nix2nix_2026-03-15"; }
+        { name = "h002"; host = "10.12.14.183"; user = "luser"; keyFile = "/var/lib/secrets_manager_hydrated/nix2nix_2026-03-15"; }
       ];
     };
   };
 
-  secrets = {
-    # Dedicated HA token for h003's scheduled speed-test publisher. Store the
-    # actual long-lived token in OpenBao; it must not be committed to Nix.
-    hass_isp_speedtest_token = {
-      kvPath = "kv/data/machines/by-host/h003/hass_isp_speedtest_token";
-      softDepend = [ "h003-isp-speedtest" ];
-    };
-
-    # bunny.net DNS API key — used by ./mods/ddns.nix to keep home.<domain>
-    # pointed at the current WAN IP. Seeded declaratively by the OpenBao
-    # reconciler (hosts/h001/mods/openbao/openbao-config.nix).
-    bunny_rw_dns_2026-03-15 = { };
-  };
 }

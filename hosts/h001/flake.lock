@@ -1034,7 +1034,6 @@
         "pkm": "pkm",
         "puzzles": "puzzles",
         "ros_neovim": "ros_neovim",
-        "secrets-bao": "secrets-bao",
         "secrets_manager": "secrets_manager",
         "trilium-nixpkgs": "trilium-nixpkgs",
         "zitadel-nixpkgs": "zitadel-nixpkgs"
@@ -1135,23 +1134,6 @@
         "owner": "oxalica",
         "repo": "rust-overlay",
         "type": "github"
-      }
-    },
-    "secrets-bao": {
-      "locked": {
-        "dir": "flakes/secrets-bao",
-        "lastModified": 1785890492,
-        "narHash": "sha256-aRLxUs20hhI8Hx77tq5vuDWuu0dn3cE3hPEiwiaH23c=",
-        "ref": "refs/heads/master",
-        "rev": "5c2041bd8389d7b85c31cb4b861ed5e49d1ab1b1",
-        "revCount": 1938,
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      },
-      "original": {
-        "dir": "flakes/secrets-bao",
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       }
     },
     "secrets_manager": {
