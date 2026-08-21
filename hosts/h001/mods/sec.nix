@@ -128,11 +128,6 @@ in
         description = "WireGuard config for US-Chicago exit node (nixarr VPN).";
         access = [ { type = "role"; value = "device_high_trust"; } ];
       };
-      "machines/high-trust/zitadel_master_key_2026-03-15" = {
-        fields = [ "value" ];
-        description = "Zitadel master encryption key (base64-encoded).";
-        access = [ { type = "role"; value = "device_high_trust"; } ];
-      };
       "machines/high-trust/oauth2_proxy_key_file_2026-03-15" = {
         fields = [ "value" ];
         description = "oauth2-proxy session key file.";
