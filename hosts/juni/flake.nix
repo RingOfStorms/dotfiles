@@ -62,11 +62,92 @@
           # Override the slot to maliit-keyboard here. fcitx5 continues to work
           # via its own Wayland text-input frontend (waylandFrontend = true in
           # the shared module), so Japanese input is unaffected.
+          #
+          # KWin 6.5 has no hide method for the virtual keyboard. A key
+          # press from the built-in keyboard is unambiguous evidence that
+          # the laptop is back in laptop mode, so hide Maliit through the
+          # KWin D-Bus API. This does not disable Maliit; touching a text
+          # field in tablet mode can show it again.
           (
             { pkgs, lib, ... }:
             {
               programs.plasma.configFile.kwinrc.Wayland.InputMethod = lib.mkForce
                 "${pkgs.maliit-keyboard}/share/applications/com.github.maliit.keyboard.desktop";
+
+              # Watch the stable built-in keyboard device. The keyboard is
+              # disabled/inaccessible in tablet mode, so virtual keyboard
+              # presses never trigger this watcher.
+              systemd.user.services.maliit-hide-on-physical-keyboard = {
+                Unit = {
+                  Description = "Hide Maliit after returning to the physical keyboard";
+                  PartOf = [ "plasma-workspace.target" ];
+                  After = [ "plasma-kwin_wayland.service" ];
+                };
+                Service = {
+                  ExecStart = pkgs.writeShellScript "maliit-hide-on-physical-keyboard" ''
+                    set -euo pipefail
+                    device=/dev/input/by-path/platform-i8042-serio-0-event-kbd
+                    visible_command="${pkgs.systemd}/bin/busctl --user get-property org.kde.KWin /VirtualKeyboard org.kde.kwin.VirtualKeyboard visible | ${pkgs.gnugrep}/bin/grep -q 'b true'"
+                    hide_command="${pkgs.systemd}/bin/busctl --user set-property org.kde.KWin /VirtualKeyboard org.kde.kwin.VirtualKeyboard active b false"
+
+                    while [ ! -r "$device" ]; do
+                      ${pkgs.coreutils}/bin/sleep 1
+                    done
+
+                    # Check visibility at most once every two seconds so normal
+                    # typing does not spawn a D-Bus process for every key.
+                    ${pkgs.coreutils}/bin/stdbuf -oL ${pkgs.evtest}/bin/evtest "$device" 2>/dev/null \
+                      | ${pkgs.gawk}/bin/awk -v visibleCmd="$visible_command" -v hideCmd="$hide_command" '
+                          BEGIN { lastCheck = -2 }
+                          /type 1 \(EV_KEY\).*value 1/ {
+                            now = systime();
+                            if (now - lastCheck >= 2) {
+                              lastCheck = now;
+                              if (system(visibleCmd) == 0) {
+                                system(hideCmd);
+                              }
+                            }
+                          }
+                        '
+                  '';
+                  Restart = "always";
+                  RestartSec = 1;
+                };
+                Install.WantedBy = [ "plasma-workspace.target" ];
+              };
+            }
+          )
+
+          # ── Silence fcitx5's KDE Wayland startup nag ────────────────────
+          # Because maliit occupies KWin's single [Wayland] InputMethod slot,
+          # fcitx5 is no longer KWin's *registered* input method and shows a
+          # "Fcitx should be launched by KWin ... select Fcitx 5 in Virtual
+          # keyboard" tip on every login. Japanese input still works fine via
+          # fcitx5's text-input frontend, so this tip is pure noise here.
+          # The tip's id (found in fcitx5's libwayland.so) is
+          # "wayland-diagnose-kde"; listing it in the notifications addon's
+          # HiddenNotifications permanently suppresses just that message.
+          #
+          # NOTE 1: HiddenNotifications is a *list* option. fcitx5 unmarshals
+          # list options from indexed subkeys ("Key/0", "Key/1", ...), NOT
+          # from a bare "Key=value". A plain
+          # `HiddenNotifications=wayland-diagnose-kde` parses to an empty list
+          # and does nothing. The correct INI form is:
+          #   HiddenNotifications=
+          #   HiddenNotifications/0=wayland-diagnose-kde
+          #
+          # NOTE 2: fcitx5 on NixOS does NOT read ~/.config/fcitx5 for its user
+          # config. Its StandardPaths PkgConfig user dir resolves (via
+          # XDG_CONFIG_DIRS, which contains ~/.config/kdedefaults) to
+          # ~/.config/kdedefaults/fcitx5. A file at ~/.config/fcitx5/conf/... is
+          # never opened — confirmed by strace. So the suppression must live
+          # under kdedefaults/fcitx5, not fcitx5.
+          (
+            {
+              xdg.configFile."kdedefaults/fcitx5/conf/notifications.conf".text = ''
+                HiddenNotifications=
+                HiddenNotifications/0=wayland-diagnose-kde
+              '';
             }
           )
         ];
