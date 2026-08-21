@@ -15,7 +15,6 @@ let
     [
       essentials # /var/log, /var/lib/nixos, /machine-key.json, /etc/machine-id, ...
       tailscale  # /var/lib/tailscale node identity
-      openbao    # /run/openbao, /var/lib/openbao-secrets
     ]
   );
 in

@@ -15,9 +15,9 @@ let
   primaryUser = constants.host.primaryUser;
   group = if primaryUser == "root" then "root" else "users";
 
-  # Must match hosts/fleet.nix and flakes/secrets-bao/flake.nix. The old
-  # OpenBao module generated these SSH match blocks automatically; sec-agent
-  # keeps that behavior without depending on the old input.
+  # Must match hosts/fleet.nix. The old OpenBao module generated these SSH
+  # match blocks automatically; sec-agent keeps that behavior without
+  # depending on the old input.
   nix2nixMatchBlockHosts = [
     "lio" "lio_"
     "oren"

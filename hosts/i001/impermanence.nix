@@ -15,7 +15,6 @@ let
       iwd
       hardening
       tailscale
-      openbao
       pipewire
       timezone_cache
       atuin

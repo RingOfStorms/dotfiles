@@ -16,7 +16,6 @@ let
       hardening
       upower
       tailscale
-      openbao
       pipewire
       timezone_cache
       flatpak

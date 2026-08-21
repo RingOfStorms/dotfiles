@@ -17,7 +17,6 @@ let
       tailscale
       upower
       pipewire
-      openbao
       timezone_cache
       atuin
       zoxide
