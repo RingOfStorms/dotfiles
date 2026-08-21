@@ -7,7 +7,6 @@
 }:
 let
   c = constants.host;
-  openbao = constants.services.openbao;
   domain = fleet.global.domain;
   homepagePort = constants.services.homepage.port;
   homepage = {
@@ -23,7 +22,7 @@ in
     defaults.email = fleet.global.acmeEmail;
     certs."${domain}" = {
       inherit domain;
-      extraDomainNames = [ "*.${domain}" openbao.tailnetDomain ];
+      extraDomainNames = [ "*.${domain}" ];
       # credentialFiles.BUNNY_API_KEY_FILE injected via sec-agent configChanges
       dnsProvider = "bunny";
       group = "nginx";

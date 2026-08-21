@@ -176,28 +176,9 @@
       port = 8090;
     };
 
-    openbao = {
-      port = 8200;
-      dataDir = "/var/lib/openbao";
-      # Root-only, holds the Shamir unseal share(s) used by
-      # openbao-auto-unseal.service, plus the AppRole credential used by
-      # openbao-apply-config.service:
-      #   openbao-unseal-*                 unseal key share(s)
-      #   openbao-reconciler-role-id       AppRole role_id
-      #   openbao-reconciler-secret-id     AppRole secret_id
-      keysDir = "/bao-keys";
-      domain = "sec.joshuabell.xyz";
-      # Tailnet-only HTTPS endpoint. Headscale publishes an explicit MagicDNS
-      # record for this two-label hostname; it cannot be covered by the
-      # single-label *.joshuabell.xyz wildcard certificate.
-      tailnetDomain = "sec.h001.net.joshuabell.xyz";
-    };
-
-    # `sec` — the replacement for openbao. Runs in parallel with it during
-    # the migration, so every name here is deliberately distinct from the
-    # openbao block above: different port, different data directory,
-    # different hostname, different systemd units. Nothing is shared, so
-    # neither service can break the other.
+    # `sec` — the secrets manager server. Runs on h001 (port 8300,
+    # secrets.joshuabell.xyz). Replaced the old OpenBao server that used to
+    # run here.
     sec = {
       port = 8300;
       dataDir = "/var/lib/secrets_manager";

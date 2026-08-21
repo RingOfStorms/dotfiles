@@ -36,8 +36,6 @@
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
-    # secrets-bao disabled — h001's OpenBao server remains for the migration,
-    # while this host's consumers use sec-agent.
     secrets_manager.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/secrets_manager.git";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
@@ -61,8 +59,8 @@
     {
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
-        # OpenBao remains enabled by hosts/h001/mods/openbao for other hosts; h001
-        # itself reads its rendered values from sec-agent.
+        # h001 reads its rendered values from sec-agent and runs the
+        # secrets_manager server (hosts/h001/mods/sec.nix).
 
         # `mkpasswd -m yescrypt.
         authMethod = "hashedPassword";

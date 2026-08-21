@@ -1,20 +1,15 @@
-# `sec` — the secrets manager that will replace OpenBao.
+# `sec` — the secrets manager that replaced OpenBao.
 #
-# During the migration this runs ALONGSIDE OpenBao on the same host. That
-# is only safe because nothing is shared:
+#   port        8300
+#   data        /var/lib/secrets_manager
+#   hostname    secrets.joshuabell.xyz
+#   units       sec.service
 #
-#   port        8300                       (openbao: 8200)
-#   data        /var/lib/secrets_manager    (openbao: /var/lib/openbao)
-#   hostname    secrets.joshuabell.xyz      (openbao: sec.joshuabell.xyz)
-#   units       sec.service                 (openbao: openbao*.service)
+# The `sec` CLI is installed for local administration. Values are
+# managed through the web UI or the declarative registry below.
 #
-# The `sec` CLI is installed because h001 no longer loads the secrets-bao
-# client module. OpenBao's server and its `bao` CLI remain isolated under
-# hosts/h001/mods/openbao.
-#
-# The desired state below mirrors the full OpenBao KV registry from
-# hosts/h001/mods/openbao/openbao-config.nix. Values start as
-# `TODO:replace_me` stubs and are filled in through the UI; the
+# The desired state below mirrors the full KV registry. Values start
+# as `TODO:replace_me` stubs and are filled in through the UI; the
 # reconciler never overwrites a value that is already set.
 {
   inputs,
@@ -55,7 +50,7 @@ in
 
     zitadel = {
       issuer = "https://${constants.services.zitadel.domain}";
-      # Same Zitadel project the OpenBao JWT auth method binds to, so the
+      # Same Zitadel project the machine JWT auth binds to, so the
       # machine identities that exist today work here unchanged.
       projectId = "344379162166820867";
       claim = "flatRolesClaim";
@@ -68,10 +63,9 @@ in
       redirectUri = "https://${c.domain}/ui/callback";
     };
 
-    # Full mirror of the OpenBao KV registry. Every key that OpenBao
-    # declares in hosts/h001/mods/openbao/openbao-config.nix is listed
-    # here so the reconciler creates stubs for all of them. Values
-    # start as `TODO:replace_me` and are filled in through the UI; the
+    # Full mirror of the KV registry. Every key is listed here so the
+    # reconciler creates stubs for all of them. Values start as
+    # `TODO:replace_me` and are filled in through the UI; the
     # reconciler never overwrites a value that is already set.
     #
     # Access is granted explicitly per key — no prefix matching. A
