@@ -133,6 +133,10 @@
                 enable = true;
                 user = primaryUser;
                 secretFile = "/var/lib/secrets_manager_hydrated/atuin-key-josh_2026-03-15";
+                # Order after sec-agent has rendered the secret. Without this
+                # the oneshot races the hydration and fails on switch/boot with
+                # "Missing atuin secret" (self-heals via the secret .path unit).
+                afterUnits = [ "sec-secrets-ready.service" ];
               };
             };
           })
