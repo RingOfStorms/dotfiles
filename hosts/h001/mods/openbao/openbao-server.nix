@@ -26,6 +26,20 @@ in
           recommendedProxySettings = true;
         };
       };
+
+      # Tailnet-only backup endpoint for clients that need a stable OpenBao
+      # hostname independent of the public `sec.joshuabell.xyz` split route.
+      # Its explicit MagicDNS record is configured on o002/headscale.nix.
+      "${c.tailnetDomain}" = {
+        addSSL = true;
+        sslCertificate = "/var/lib/acme/${fleet.global.domain}/fullchain.pem";
+        sslCertificateKey = "/var/lib/acme/${fleet.global.domain}/key.pem";
+        locations."/" = {
+          proxyWebsockets = true;
+          proxyPass = "http://localhost:${toString c.port}";
+          recommendedProxySettings = true;
+        };
+      };
     };
   };
 
@@ -36,28 +50,19 @@ in
     settings = {
       ui = true;
 
-      # Public-facing listener (nginx terminates TLS for sec.joshuabell.xyz
-      # and proxies here). Keeps the OpenBao 2.5.3 / CVE-2026-5807 default
-      # of disabled `sys/generate-root/*` endpoints — internet-reachable
-      # callers can NOT spam-cancel an in-progress root-generation.
+      # Single listener. nginx terminates TLS for sec.joshuabell.xyz and
+      # proxies here.
+      #
+      # `disable_unauthed_generate_root_endpoints` is left at its default
+      # (true — the OpenBao 2.5.3 / CVE-2026-5807 hardening), so the
+      # unauthenticated `sys/generate-root/*` endpoints stay off. Nothing
+      # needs them any more: openbao-apply-config.service authenticates via
+      # AppRole rather than minting an ephemeral root token from the unseal
+      # shares. See openbao-config.nix for the bootstrap procedure.
       listener.default = {
         type = "tcp";
         address = "127.0.0.1:${toString c.port}";
         tls_disable = true; # nginx handles TLS
-        # disable_unauthed_generate_root_endpoints defaults to true (CVE fix)
-      };
-
-      # Loopback-only admin listener. Used by openbao-apply-config.service
-      # to mint an ephemeral root token via `bao operator generate-root`
-      # from the on-disk unseal key shares, apply declarative config,
-      # then revoke. Bound to 127.0.0.1 ONLY and never fronted by nginx,
-      # so the CVE-2026-5807 attack surface (unauthenticated DoS via
-      # spam-cancel) is restricted to processes already on this host.
-      listener.admin = {
-        type = "tcp";
-        address = "127.0.0.1:${toString c.adminPort}";
-        tls_disable = true;
-        disable_unauthed_generate_root_endpoints = false;
       };
 
       storage.file = {

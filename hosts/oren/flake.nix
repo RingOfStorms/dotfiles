@@ -1,7 +1,7 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
-    home-manager.url = "github:rycee/home-manager/release-25.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
+    home-manager.url = "github:rycee/home-manager/release-26.05";
 
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
@@ -12,8 +12,6 @@
     impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # secrets-bao.url = "path:../../flakes/secrets-bao";
-    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
     # de_plasma.url = "path:../../flakes/de_plasma";
@@ -21,6 +19,7 @@
     # ports.url = "path:../../flakes/ports";
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
 
+    secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
     # mva.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/mva.git";
 
@@ -44,7 +43,8 @@
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
         nixpkgsUnstable = nixpkgs-unstable;
-        secretsRole = "machines-hightrust";
+        # secrets-bao disabled — oren is cut over to sec-agent.
+        # secretsRole = "machines-hightrust";
         authMethod = "hashedPassword";
         authValue = "$y$j9T$NM2xVttDizbzqr4niZJd5.$4n9WQChL6x.yeDTcYRfh2PftKxY2qfEHpNvXiWobdt8";
         mutableUsers = false;
@@ -140,10 +140,17 @@
               autologin = {
                 enable = true;
                 user = primaryUser;
-                secretFile = "/var/lib/openbao-secrets/atuin-key-josh_2026-03-15";
+                # sec-agent renders here now (clean cutover from secrets-bao).
+                secretFile = "/var/lib/secrets_manager_hydrated/atuin-key-josh_2026-03-15";
               };
             };
           })
+
+          # ── sec agent ──────────────────────────────────────────────
+          # Oren is cut over from secrets-bao to sec-agent. The shared
+          # helper renders into /var/lib/secrets_manager_hydrated, and the
+          # explicit consumer paths below point there as well.
+          (import ./sec-agent.nix { inherit inputs constants; })
 
           inputs.beszel.nixosModules.agent
           ({
@@ -164,6 +171,9 @@
           (
             { pkgs, ... }:
             {
+              nixpkgs.config.permittedInsecurePackages = [
+                "electron-39.8.10"
+              ];
               environment.systemPackages = with pkgs; [
                 # Dev/CLI
                 lua

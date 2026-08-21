@@ -84,6 +84,36 @@
               impermanence.nixosModules.impermanence
               ./bcachefs-impermanence.nix
             ];
+
+            # Upstream impermanence's `parentsOf` (lib.nix) computes
+            # `take ((length split) - 1) split` to enumerate the parent
+            # directories of a persisted path. For a file persisted at the
+            # filesystem root (e.g. `/machine-key.json`, whose parent is
+            # `/`), `splitPath [ "/" ]` yields `[]`, so `take (-1) []` is
+            # evaluated. Older nixpkgs made `lib.take`/`genList` clamp a
+            # negative size to an empty list; nixpkgs ffb3c9b (and later)
+            # made `genList` throw `cannot create list of size -1`, which
+            # breaks evaluation of `system.activationScripts
+            # .createPersistentStorageDirs` for any host that persists a
+            # root-level file and has bumped its nixpkgs lock.
+            #
+            # Rather than vendor/replace the whole upstream module, restore
+            # the historical `take` semantics for non-positive counts via a
+            # scoped overlay on `pkgs.lib`. Upstream impermanence obtains
+            # `parentsOf` through `pkgs.callPackage ./lib.nix { }`, so it
+            # picks up this guarded `take` automatically. The guard only
+            # changes behaviour for counts that would otherwise throw; a
+            # zero or negative `take` returning `[]` is what older nixpkgs
+            # already did and is the correct "no parents" result for a
+            # root-level path.
+            nixpkgs.overlays = [
+              (_final: prev: {
+                lib = prev.lib.extend (_self: super: {
+                  take = count: list:
+                    if count <= 0 then [ ] else super.take count list;
+                });
+              })
+            ];
           };
       };
 

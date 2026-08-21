@@ -13,12 +13,29 @@ let
   pkgsOpenWebui = import nixpkgsOpenWebui {
     inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
+    overlays = [
+      (_: prev: {
+        python314Packages = prev.python314Packages.overrideScope (
+          _: pythonPrev: {
+            # frictionless 5.18.1's upstream suite is incompatible with the
+            # current pandas/NumPy/charset-normalizer combination in unstable.
+            # Its runtime dependencies still build; omit only its failing tests.
+            frictionless = pythonPrev.frictionless.overridePythonAttrs (_: {
+              doCheck = false;
+            });
+          }
+        );
+      })
+    ];
   };
-  baoSecrets = config.ringofstorms.secretsBao.secrets or {};
-  hasOpenwebuiEnv = baoSecrets ? "openwebui_env_2026-03-15";
+  hasOpenwebuiEnv = true;
+  openwebuiEnvPath = "${fleet.global.secretsDir}/openwebui_env_2026-03-15";
   c = constants.services.openWebui;
   litellm = constants.services.litellm;
+  searx = constants.services.searx;
+  penpot = constants.services.penpot;
   zitadel = constants.services.zitadel;
+  openaiBaseUrl = "http://127.0.0.1:${toString litellm.port}/v1";
 in
 {
   disabledModules = [ declaration ];
@@ -41,54 +58,102 @@ in
       };
     };
 
+    systemd.services.open-webui = {
+      after = [ "litellm.service" "searx.service" ];
+      wants = [ "litellm.service" "searx.service" ];
+    };
+
     services.open-webui = {
       enable = true;
       port = c.port;
       host = "127.0.0.1";
       openFirewall = false;
       package = pkgsOpenWebui.open-webui;
-      environmentFile = lib.mkIf hasOpenwebuiEnv baoSecrets."openwebui_env_2026-03-15".path;
+      environmentFile = openwebuiEnvPath;
       environment = {
-        # Declarative config, we don't use admin panel for anything
-        # ENABLE_PERSISTENT_CONFIG = "False";
-        # ENABLE_OAUTH_PERSISTENT_CONFIG = "False";
+        # Keep all ConfigVar settings below declarative; admin-UI changes vanish
+        # after restart instead of overriding this configuration.
+        ENABLE_PERSISTENT_CONFIG = "False";
+        ENABLE_OAUTH_PERSISTENT_CONFIG = "False";
 
         WEBUI_URL = "https://${c.domain}";
-        CUSTOM_NAME = "Josh AI";
+        WEBUI_NAME = "Josh AI";
         ENV = "prod";
 
-        # Connect to LiteLLM proxy for all models (OpenAI-compatible API)
-        OPENAI_API_BASE_URL = "http://127.0.0.1:${toString litellm.port}/v1";
+        # NLTK, newly imported through LangChain, requires a usable home
+        # directory even before it downloads any data. DynamicUser has none.
+        HOME = "/var/lib/open-webui";
+
+        # Connect to LiteLLM proxy for all OpenAI-compatible APIs.
+        OPENAI_API_BASE_URL = openaiBaseUrl;
         OPENAI_API_KEY = "na";
-        # Disable Ollama (not running on this host)
+        # Disable Ollama (not running on this host).
         OLLAMA_BASE_URL = "";
         ENABLE_OLLAMA_API = "False";
 
+        # SSO is the only password-capable authentication path.
         ENABLE_SIGNUP = "False";
         ENABLE_LOGIN_FORM = "False";
+        ENABLE_PASSWORD_AUTH = "False";
+        ENABLE_PASSWORD_CHANGE_FORM = "False";
         ENABLE_OAUTH_SIGNUP = "True";
         WEBUI_SESSION_COOKIE_SAME_SITE = "lax";
-        # OAUTH_SUB_CLAIM = "";
-        # WEBUI_AUTH_TRUSTED_EMAIL_HEADER
 
-        # https://self-hosted.tools/p/openwebui-with-zitadel-oidc/
-        # OAUTH_CLIENT_ID = ""; provided in the secret file
-        # OAUTH_CLIENT_SECRET = "";
+        # OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET are in the OpenBao env file.
         OPENID_PROVIDER_URL = "https://${zitadel.domain}/.well-known/openid-configuration";
         OAUTH_PROVIDER_NAME = "SSO";
         OPENID_REDIRECT_URI = "https://${c.domain}/oauth/oidc/callback";
-        OAUTH_SCOPES = "openid email profiles";
-        ENABLE_OAUTH_ROLE_MANAGEMENT = "true";
+        OAUTH_SCOPES = "openid email profile";
+        ENABLE_OAUTH_ROLE_MANAGEMENT = "True";
         OAUTH_ROLES_CLAIM = "flatRolesClaim";
         OAUTH_ALLOWED_ROLES = "openwebui_user";
         OAUTH_ADMIN_ROLES = "admin";
-        # OAUTH_PICTURE_CLAIM = "picture";
-        # OAUTH_UPDATE_PICTURE_ON_LOGIN = "True";
 
+        # All SSO-authorized users can select every model.
         BYPASS_MODEL_ACCESS_CONTROL = "True";
 
-        # Other settings
-        CHAT_STREAM_RESPONSE_CHUNK_MAX_BUFFER_SIZE = "10485760";
+        # Use the loopback-only SearXNG instance for web search.
+        ENABLE_WEB_SEARCH = "True";
+        ENABLE_WEB_SEARCH_CONFIRMATION = "True";
+        WEB_SEARCH_ENGINE = "searxng";
+        SEARXNG_QUERY_URL = "http://127.0.0.1:${toString searx.port}/search?q=<query>&format=json";
+        WEB_SEARCH_RESULT_COUNT = "5";
+        WEB_SEARCH_CONCURRENT_REQUESTS = "2";
+        WEB_LOADER_CONCURRENT_REQUESTS = "2";
+        WEB_LOADER_TIMEOUT = "15";
+
+        # Route OpenAI-compatible image generation through LiteLLM.
+        ENABLE_IMAGE_GENERATION = "True";
+        IMAGE_GENERATION_ENGINE = "openai";
+        IMAGE_GENERATION_MODEL = "air-gemini-2.5-flash-image";
+        IMAGES_OPENAI_API_BASE_URL = openaiBaseUrl;
+        IMAGES_OPENAI_API_KEY = "na";
+        IMAGE_SIZE = "1024x1024";
+
+        # Seed Penpot's private Streamable HTTP MCP server. In multi-user mode,
+        # tool calls require a matching Penpot browser plugin session.
+        TOOL_SERVER_CONNECTIONS = builtins.toJSON [
+          {
+            type = "mcp";
+            url = "http://${constants.host.overlayIp}:${toString penpot.mcpServerPort}/mcp";
+            path = "";
+            auth_type = "none";
+            key = "";
+            config = {
+              enable = true;
+              function_name_filter_list = "";
+              access_grants = [ ];
+            };
+            info = {
+              id = "penpot";
+              name = "Penpot";
+              description = "Penpot design tools";
+            };
+          }
+        ];
+        MCP_INITIALIZE_TIMEOUT = "30";
+
+        CHAT_STREAM_RESPONSE_CHUNK_MAX_BUFFER_SIZE = "20971520";
         REPLACE_IMAGE_URLS_IN_CHAT_RESPONSE = "True";
       };
     };

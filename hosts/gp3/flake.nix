@@ -12,8 +12,8 @@
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # de_plasma.url = "path:../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
-    # secrets-bao.url = "path:../../flakes/secrets-bao";
-    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
+    # sec-agent replaces secrets-bao on this host.
+    secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
 
     opencode.url = "github:anomalyco/opencode/c6262f9d4002d86a1f1795c306aa329d45361d12";
 
@@ -88,6 +88,8 @@
           inputs.common.nixosModules.more_filesystems
           inputs.common.nixosModules.tailnet
 
+          (import ./sec-agent.nix { inherit inputs constants; })
+
           ({ pkgs, ... }: {
             environment.systemPackages = [
               inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default
@@ -105,13 +107,6 @@
           })
           ./configuration.nix
           ./battery-manager.nix
-
-          # Override vault-agent role to host-gp3 so it gets the per-host
-          # policy (host-gp3) on top of the shared machines-low-trust policy.
-          # secretsRole stays "machines-lowtrust" for mkAutoSecrets compatibility.
-          ({ lib, ... }: {
-            ringofstorms.secretsBao.openBaoRole = lib.mkForce "host-gp3";
-          })
 
           # Host-specific config
           ({ pkgs, ... }: {

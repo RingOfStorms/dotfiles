@@ -1,150 +1,111 @@
-# TODO a good readme
+<div align="center">
+  <img src="icon.png" width="120" alt="logo" />
+  <h1>nixos-config</h1>
+  <p>Declarative NixOS configuration for my personal fleet — servers, desktops, laptops, handhelds, and cloud VMs.</p>
+</div>
 
-```nix
-swapDevices = [
-  {
-    device = "/.swapfile";
-    size = 32 * 1024; # 32GB
-  }
-];
+---
+
+Every machine is its own flake under `hosts/`, built from a shared registry
+(`hosts/fleet.nix`) and a library of reusable modules under `flakes/`. Common
+infrastructure — secrets, impermanence, monitoring, desktops — is factored into
+standalone flakes that any host can import.
+
+## Repository layout
+
+```
+.
+├── flake.nix              # Root dev flake: deploy_<host> scripts + `nix run .#audit`
+├── hosts/                 # One flake per machine
+│   ├── fleet.nix          #   Fleet registry + mkHost builder (single source of truth)
+│   ├── README.md          #   Explains _constants.nix convention
+│   └── <host>/            #   Per-host flake, _constants.nix, hardware-configuration.nix, service mods/
+├── flakes/                # Reusable, independently-versioned modules (imported by hosts)
+│   ├── common/            #   Shared NixOS + Home Manager modules (the base layer)
+│   ├── secrets-bao/       #   OpenBao + Zitadel secret management
+│   ├── impermanence/      #   Boot-time root wipe (bcachefs) + shared persistence sets
+│   ├── containers/        #   Independently deployable NixOS containers (extra-container)
+│   ├── beszel/            #   Beszel monitoring agent/hub
+│   ├── de_plasma/         #   KDE Plasma desktop (plasma-manager)
+│   ├── hyprland/          #   Hyprland desktop
+│   ├── flatpaks/          #   nix-flatpak integration
+│   ├── stt_ime/           #   Local speech-to-text input method for Fcitx5
+│   └── ports/             #   SSH port-forwarding TUI (Go)
+├── utilities/
+│   ├── nixos-install-disko/  # Installer ISO + full bring-up guide (see below)
+│   └── impermanence.md       # Diffing the live root against the last snapshot
+├── scripts/
+│   ├── audit/             #   Security auditor (lock staleness + CVE scan)
+│   └── probe-copilot-models.sh
+└── ideas/                 # Design docs / future-work notes
 ```
 
-- Copy keyfile for auto-unlock (optional)
-  - `cp /tmp/keyfile_DEVICE_1 /mnt/boot/keyfile_DEVICE_1`
-  - `chmod 400 /mnt/boot/keyfile_DEVICE_1`
-- If Encrypted keyfile exists
-  - Add to hardware config
+## The fleet
 
-```nix
-boot.initrd.secrets = {
-  "/keyfile_DEVICE_1" = "/boot/keyfile_DEVICE_1";
-};
+Each host is a standalone flake. `fleet.nix` holds the registry (IPs, trust
+tier, SSH config) and `mkHost`, which eliminates per-host boilerplate (users,
+Home Manager, secrets wiring, state version). Every host also has a
+`_constants.nix` — the single source of truth for its service ports, data
+directories, and domains.
 
-boot.initrd.luks.devices
-```
+| Host | Role | Hardware (mem, cpu, gfx)|
+|------|------|----------|
+| **h001** | Primary home server — media, matrix, immich, paperless, vaultwarden, git, LLM gateways, SSO, secrets | OptiPlex 7090 (64GB, i5-11500, Intel UHD Grpahics 750) |
+| **h002** | NAS (multi-disk bcachefs array) | My first PC's 14+ year old mobo in a case with many drives (18GB, i7-3770K, AMD Radeon HD 7950/8950 OEM / R9 280)|
+| **h003** | WAN / local networking box | GMKtec M5 PLUS (32GB, AMD Ryzen 7 5825U, AMD Barcelo)|
+| **i001** | Intel NUC testbed | Amazon mini pc (16GB, Intel N95, UHD Graphics)|
+| **lio** | Main workstation | System76 Thelio (64GB, AMD Ryzen 9 9950X, AMD Radeon RX 7900 GRE)|
+| **oren** | Mobile workstation | Framework 16 (...)|
+| **juni** | Mobile terminal | Framework 12 (...)|
+| **joe** | Gaming PC | HP Omen 30L (32GB, i7-10700K, RTX 3080)|
+| **gp3** | Media box in living room| GPD Pocket 3 (16GB, i7-1195G7, Iris Xe Graphics)|
+| **oracle/o002** | Public static IP gateway | Oracle aarch64 VM, 50% free tier (12GB, Neoverse-N1*2, Virtio)|
+| **testbed** | Throwaway VM for disko/impermanence experiments ||
 
-2. Install and setup nixos
+## Deploying
 
-- nixos config and hardware config
-  - `export HOSTNAME=desired_hostname_for_this_machine`
-  - `export USERNAME=desired_username_for_admin_on_this_machine` (josh)
-  - `nixos-generate-config --root /mnt`
-  - `cd /mnt/etc/nixos`
-  - `curl -O --proto '=https' --tlsv1.2 -sSf https://git.joshuabell.xyz/ringofstorms/dotfiles/raw/branch/master/onboard.sh`
-  - `chmod +x onboard.sh && ./onboard.sh`
-  - verify hardware config, run `nixos-install`
-  - `reboot`
-- log into USERNAME with `password1`, use `passwd` to change the password
-
-> Easiest to ssh into the machine for these steps so you can copy paste...
-
-- `cat /etc/ssh/ssh_host_ed25519_key.pub ~/.ssh/id_ed25519.pub`
-  - On an already onboarded computer copy these and add them to secrets/secrets.nix file
-    - `nix run github:yaxitech/ragenix -- --rules ~/.config/nixos-config/flakes/secrets/secrets.nix -r`
-    - `ragenix -i ~/.ssh/ragenix_authority --rules ~/.config/nixos-config/flakes/secrets/secrets.nix -r
-  - Maybe copy hardware/configs over and setup, otherwise do it on the client machine
-- git clone nixos-config `git clone https://git.joshuabell.xyz/ringofstorms/dotfiles ~/.config/nixos-config`
-- Setup config as needed
-  - add hosts dir and files needed
-- `sudo nixos-rebuild switch --flake ~/.config/nixos-config/hosts/$HOSTNAME`
-- Update remote, ssh should work now: `cd ~/.config/nixos-config && git remote remove origin && git remote add origin "ssh://git.joshuabell.xyz:3032/ringofstorms/dotfiles" && git pull origin master`
-
-## Local tooling
-
-- bitwarden setup/sign into self hosted vault
-
-- atuin setup
-  - if atuin is on enable that mod in configuration.nix, make sure to `atuin login` get key from existing device
-  - TODO move key into secrets and mount it to atuin local share
-- ssh key access, ssh iden in config in nix config
-
-### Security auditing
-
-Scan flake locks and built closures for security-relevant issues:
+The root dev shell exposes a `deploy_<host>` script for every deployable host:
 
 ```sh
-nix run .#audit                 # staleness (all locks) + CVE (current host)
-nix run .#audit -- --all        # staleness + CVE for every deployable host (beefy box)
-nix run .#audit -- --host lio   # staleness + CVE for one host
-nix run .#audit -- --stale-only # only the staleness / rev-drift passes (no builds)
-nix run .#audit -- --cve-only   # only the CVE pass
+nix develop            # or: direnv allow  (auto-loads via .envrc)
+deploy_lio             # build + push to the host over SSH
 ```
 
-Two layers (see `scripts/audit/audit.sh`):
-
-1. **Staleness scan** — runs DeterminateSystems/flake-checker (fetched at runtime)
-   against every `flake.lock`, flagging nixpkgs inputs that are stale (>30d),
-   off a supported branch, or not upstream nixpkgs. Also prints a nixpkgs
-   **rev-drift report** so lock divergence across hosts is visible at a glance.
-2. **CVE scan** — `vulnix` matches known CVEs against the package versions in a
-   built system closure. Default is the current host (`vulnix --system`);
-   `--host`/`--all` build each host's `system.build.toplevel` and scan that.
-   Foreign-arch / cloud hosts are skipped unless `--build-remote` is passed.
-
-Caveat: vulnix only matches **nixpkgs-derived** store paths — third-party git
-inputs (e.g. `git.joshuabell.xyz/...`, rust-overlay) get no CVE coverage, so the
-staleness scan + rev-drift report are the safety net for those.
-
-Suppress reviewed/accepted CVEs with a whitelist so they stop re-alarming:
+Or drive `nixos-rebuild` directly against a host's flake:
 
 ```sh
-nix run .#audit -- --whitelist scripts/audit/whitelist.toml
+nixos-rebuild switch --flake ./hosts/<host>#<host> --target-host <host>
 ```
 
-vulnix downloads the NVD database on first run (slow, needs network). Exit code:
-`0` clean, `1` staleness/config warnings, `2` vulnerabilities found.
+Most machines pull the shared `flakes/*` from the git remote, so **commit and
+push before deploying** a host that isn't building from a local path.
 
-### Notes
+## Installing a new machine
 
-Dual booting windows?
+Bring-up (custom ISO → disko + bcachefs → impermanence → secrets bootstrap) is
+documented separately:
 
-- If there is a new boot partition being used than the old windows one, copy over the /boot/EFI/Microsoft folder into the new boot partition, same place
-- If the above auto probing for windows does not work, you can also manually add in a windows.conf in the loader entries: /boot/loader/entries/windows.conf:
+➡️ **[`utilities/nixos-install-disko/readme.md`](utilities/nixos-install-disko/readme.md)**
 
+New Oracle Cloud instances follow [`hosts/oracle/readme.md`](hosts/oracle/readme.md).
+
+## Security auditing
+
+Scan every `flake.lock` for stale/off-branch nixpkgs inputs and match CVEs
+against built host closures:
+
+```sh
+nix run .#audit                 # lock staleness (all) + CVE scan (current host)
+nix run .#audit -- --all        # CVE scan every deployable host
+nix run .#audit -- --host lio   # one host
+nix run .#audit -- --stale-only # skip the (slow) CVE builds
 ```
-title Windows 11
-efi   /EFI/Microsoft/Boot/bootmgfw.efi
-```
 
-# Settings references
+See [`scripts/audit/audit.sh`](scripts/audit/audit.sh) for details. `0` clean,
+`1` staleness warnings, `2` vulnerabilities found.
 
-- Flake docs: <https://nixos.wiki/wiki/Flakes>
-- nixos: <https://search.nixos.org/options>
-- home manager: <https://nix-community.github.io/home-manager/options.xhtml>
-  TODO make an offline version of this, does someone else have this already?
+## References
 
-# TODO
-
-# Nix Infrastructure & Automation Improvements
-
-- [ ] **Add `isoImage` outputs for every host for instant USB/boot media creation.**  
-    Use:  
-
-    ```
-    packages.x86_64-linux.install-iso = nixosConfigurations.<host>.config.system.build.isoImage;
-    ```
-
-    Then:  
-
-    ```
-    nix build .#packages.x86_64-linux.install-iso
-    ```
-
-- [ ] **Document or automate new host bootstrap:**  
-  - Script or steps: boot custom ISO, git clone config, secrets onboarding (agenix), nixos-install with flake config.
-  - Provide an example shell script or README note for a single-command initial setup.
-- [ ] **(Optional) Add an ephemeral “vm-experiment” target for NixOS VM/dev testing.**  
-  - Use new host config with minimal stateful services, then  
-      `nixos-rebuild build-vm --flake .#vm-experiment`
-- [ ] **Remote build reliability:**  
-  - Parametrize/automate remote builder enable/disable.
-  - Add quickstart SSH builder key setup instructions per-host in README.
-- [ ] **Add [disko](https://github.com/nix-community/disko) to declaratively manage disk/partition creation for new installs and reinstalls.**
-
-- work on secrets pre ragenix, stormd pre install for all the above bootstrapping steps would be ideal
-- reduce home manager, make per user modules support instead
-- Ensure my neovim undohistory/auto saves don't save `.age` files as they can be sensitive.
-
-# Server hosts
-
-simply run `deploy` in the host root and it will push changes to the server (or `deploy_[oracle|linode] <name>` from root)
+- Flakes: <https://nixos.wiki/wiki/Flakes>
+- NixOS options: <https://search.nixos.org/options>
+- Home Manager options: <https://nix-community.github.io/home-manager/options.xhtml>

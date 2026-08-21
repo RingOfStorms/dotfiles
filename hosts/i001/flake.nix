@@ -1,7 +1,7 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
-    home-manager.url = "github:rycee/home-manager/release-25.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
+    home-manager.url = "github:rycee/home-manager/release-26.05";
 
     # common.url = "path:../../../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
@@ -9,8 +9,8 @@
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     # impermanence_mod.url = "path:../../flakes/impermanence";
     impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
-    # secrets-bao.url = "path:../../flakes/secrets-bao";
-    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
+    # sec-agent replaces secrets-bao on this host.
+    secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -26,8 +26,9 @@
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
         secretsRole = "machines-lowtrust";
-        authMethod = "initialHashedPassword";
-        authValue = "$y$j9T$v1QhXiZMRY1pFkPmkLkdp0$451GvQt.XFU2qCAi4EQNd1BEqjM/CH6awU8gjcULps6";
+        authMethod = "hashedPassword";
+        authValue = "$y$j9T$gEfQmnTUrDRwmBHl5F9Jy/$s6UJyVizYX6kci7MgkG4uk/LesEfOPT56m.rQaeHtcB";
+        mutableUsers = false;
         extraGroups = [ "wheel" "networkmanager" ];
 
         hmModules = [
@@ -58,7 +59,6 @@
               enable = true;
               gpu.intel.enable = true;
               sddm.autologinUser = "luser";
-              disableKeyd = true;
             };
           })
 
@@ -75,15 +75,18 @@
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.tailnet
 
+          (import ../sec-agent.nix {
+            inherit inputs constants;
+            role = "machines-lowtrust";
+          })
+
           ./hardware-configuration.nix
           (import ./impermanence.nix {
             impermanence_mod = inputs.impermanence_mod;
           })
 
           # Host-specific config
-          ({ pkgs, lib, ... }: {
-            # TODO allowing password auth for now
-            services.openssh.settings.PasswordAuthentication = lib.mkForce true;
+          ({ pkgs, ... }: {
             networking.networkmanager.enable = true;
             users.users.root.openssh.authorizedKeys.keys = [ fleet.global.sshPubKey ];
             environment.systemPackages = with pkgs; [

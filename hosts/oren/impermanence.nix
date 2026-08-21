@@ -38,7 +38,9 @@ in
   environment.persistence."/persist" = {
     enable = true;
     hideMounts = true;
-    directories = shared.system.directories ++ [ ];
+    directories = shared.system.directories ++ [
+      "/var/lib/secrets_manager_hydrated"
+    ];
     files = shared.system.files ++ [ ];
     users."${primaryUser}" = {
       directories = shared.user.directories ++ [
@@ -46,6 +48,7 @@ in
         # by the `chrome` wrapper in ~/projects/flake_wrappers/tempus_wrapper
         # via `--user-data-dir=$HOME/.config/google-chrome-tempus`.
         ".config/google-chrome-tempus"
+        ".config/google-chrome-tempus-np"
       ];
       files = shared.user.files ++ [ ];
     };

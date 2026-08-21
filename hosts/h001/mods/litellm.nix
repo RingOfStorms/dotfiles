@@ -2,6 +2,7 @@
   inputs,
   pkgs,
   constants,
+  fleet,
   ...
 }:
 let
@@ -39,13 +40,21 @@ in
       openFirewall = false;
       package = pkgsLitellm.litellm;
       # gives openrouter key
-      environmentFile = "/var/lib/openbao-secrets/litellm-env";
+      environmentFile = "${fleet.global.secretsDir}/litellm-env";
       environment = {
         SCARF_NO_ANALYTICS = "True";
         DO_NOT_TRACK = "True";
         ANONYMIZED_TELEMETRY = "False";
         GITHUB_COPILOT_TOKEN_DIR = "${c.dataDir}/github_copilot";
         XDG_CONFIG_HOME = "${c.dataDir}/.config";
+        # The unit runs under DynamicUser=true, so there is no passwd
+        # entry and systemd sets no $HOME. litellm >=1.89 imports prisma
+        # at module load, and prisma/_config.py evaluates `Path.home()`
+        # at class-definition time, which hard-fails with
+        # `RuntimeError: Could not determine home directory.`
+        # StateDirectory already creates c.dataDir writable by the
+        # dynamic user, so point HOME there.
+        HOME = c.dataDir;
       };
       settings = {
         environment_variables = {
@@ -87,7 +96,13 @@ in
             };
           })
           [
-            "owl-alpha"
+            # NB: OpenRouter namespaces its own stealth/alpha models under
+            # the literal `openrouter/` vendor, so the slug is
+            # `openrouter/owl-alpha` (was bare `owl-alpha`, now 404s). The
+            # `openrouter/${m}` wrapper below therefore yields the litellm
+            # model `openrouter/openrouter/owl-alpha` — correct: litellm
+            # strips the first provider prefix and forwards the rest.
+            "openrouter/owl-alpha"
             "google/gemini-2.5-flash-lite"
             "nvidia/nemotron-3-super-120b-a12b:free"
           ]
@@ -142,8 +157,10 @@ in
             "claude-opus-4.8"
             "claude-sonnet-4.5"
             "claude-sonnet-4.6"
+            "claude-sonnet-5"
             "gemini-2.5-pro"
             "gemini-3.5-flash"
+            "gemini-3.6-flash"
             "gpt-3.5-turbo"
             "gpt-3.5-turbo-0613"
             "gpt-4"
@@ -160,12 +177,13 @@ in
             "gpt-4o-mini"
             "gpt-4o-mini-2024-07-18"
             "gpt-5-mini"
-            "gpt-5.2"
-            "gpt-5.2-codex"
             "gpt-5.3-codex"
             "gpt-5.4"
             "gpt-5.4-mini"
             "gpt-5.5"
+            "gpt-5.6-luna"
+            "gpt-5.6-sol"
+            "gpt-5.6-terra"
             "text-embedding-3-small"
             "text-embedding-3-small-inference"
             "text-embedding-ada-002"
@@ -187,24 +205,35 @@ in
           })
           # curl -L t:9010/air_prd/models | jq '.data.[].id'
           [
-            "claude-3.7-sonnet"
+            "BGE-small-en-v1.5-BEI"
             "claude-haiku-4.5"
+            "claude-haiku-4-5-20251001"
             "claude-opus-4"
+            "claude-opus-4-20250514"
             "claude-opus-4.1"
+            "claude-opus-4-1-20250805"
             "claude-opus-4.5"
+            "claude-opus-4-5-20251101"
+            "claude-opus-4-6"
             "claude-opus-4.6"
             "claude-opus-4-7"
             "claude-opus-4.7"
+            "claude-opus-4-8"
             "claude-opus-4.8"
+            "claude-opus-5"
             "claude-sonnet-4"
+            "claude-sonnet-4-20250514"
             "claude-sonnet-4.5"
+            "claude-sonnet-4-5-20250929"
             "claude-sonnet-4-6"
             "claude-sonnet-4.6"
+            "claude-sonnet-5"
             "codex-auto-review"
             "deepseek-3.1"
-            "gemini-2.0-flash"
-            "gemini-2.0-flash-lite"
+            "deepseek-4-flash-0731"
+            "deepseek-4-pro"
             "gemini-2.5-flash"
+            "gemini-2.5-flash-batch"
             "gemini-2.5-flash-image"
             "gemini-2.5-flash-lite"
             "gemini-2.5-pro"
@@ -213,11 +242,15 @@ in
             "gemini-3.1-flash-lite"
             "gemini-3.1-flash-lite-passthrough"
             "gemini-3.5-flash"
+            "gemini-3.5-flash-lite"
             "gemini-3.5-flash-passthrough"
+            "gemini-3.7-flash"
             "gemini-embedding-001"
             "gemini-embedding-2"
             "glm-4.7"
             "glm-5"
+            "glm-5.1"
+            "glm-5.2"
             "gpt-4.1"
             "gpt-4.1-mini"
             "gpt-4o"
@@ -233,8 +266,14 @@ in
             "gpt-5.4-mini"
             "gpt-5.4-nano"
             "gpt-5.5"
+            "gpt-5.6-luna"
+            "gpt-5.6-sol"
+            "gpt-5.6-terra"
+            "gpt-oss-120b"
             "kimi-2.5"
             "kimi-k2.6"
+            "kimi-k2.7-code"
+            "kimi-k3"
             "minimax-2.5"
             "o3-mini"
             "o4-mini"

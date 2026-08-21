@@ -8,6 +8,9 @@
 let
   ups = constants.services.ups;
 
+  # Attrset of physical UPS units; attr name == NUT ups name.
+  devices = ups.devices;
+
   # Remote hosts to shut down before this machine, in order.
   # Each entry specifies the SSH connection details explicitly so the
   # shutdown script works as root without depending on any user's SSH config.
@@ -56,6 +59,16 @@ let
   # Password file path for NUT internal auth between upsd and upsmon.
   # This is local-only auth, the actual value doesn't matter much.
   upsmonPasswordFile = "/etc/nut/upsmon.password";
+
+  # MINSUPPLIES is compared against the summed powerValue of all UPSes that are
+  # still considered "good". By setting it to the total, losing ANY single UPS
+  # drops the sum below the threshold and fires SHUTDOWNCMD -- i.e. OR
+  # semantics: either UPS going critical shuts the whole fleet down.
+  #
+  # Caveat (accepted deliberately): DEADTIME means a UPS that stops answering
+  # while on battery is treated as low-battery, so a comms glitch on either
+  # unit during an outage can trigger the shutdown. That fails safe.
+  minSupplies = lib.foldl' lib.add 0 (map (d: d.powerValue) (lib.attrValues devices));
 in
 {
   # NUT - Network UPS Tools
@@ -63,16 +76,20 @@ in
     enable = true;
     mode = "standalone";
 
-    ups.apc = {
-      driver = ups.driver;
+    # One [section] in ups.conf per physical unit. Both units share the same
+    # vendor/product id, so the serial is what actually binds a driver instance
+    # to a specific UPS.
+    ups = lib.mapAttrs (_name: dev: {
+      driver = dev.driver;
       port = "auto";
-      description = ups.description;
+      description = dev.description;
       directives = [
-        "vendorid = ${ups.vendorId}"
-        "productid = ${ups.productId}"
+        "vendorid = ${dev.vendorId}"
+        "productid = ${dev.productId}"
+        "serial = ${dev.serial}"
         "pollinterv = 15"
       ];
-    };
+    }) devices;
 
     users.upsmon_local = {
       upsmon = "primary";
@@ -80,16 +97,20 @@ in
     };
 
     upsmon = {
-      monitor.apc = {
-        system = "apc@localhost";
-        powerValue = 1;
+      # Monitor every unit. Only one of these actually feeds h003's own PSU,
+      # but both are declared with powerValue = 1 so each counts toward
+      # MINSUPPLIES -- that is what gives us the "either UPS trips everything"
+      # behaviour.
+      monitor = lib.mapAttrs (name: dev: {
+        system = "${name}@localhost";
+        powerValue = dev.powerValue;
         user = "upsmon_local";
         passwordFile = upsmonPasswordFile;
         type = "primary";
-      };
+      }) devices;
 
       settings = {
-        MINSUPPLIES = 1;
+        MINSUPPLIES = minSupplies;
         SHUTDOWNCMD = "${shutdownScript}";
         NOTIFYCMD = "${notifyScript}";
         POLLFREQ = 5;
@@ -144,8 +165,12 @@ in
     '';
   };
 
-  # Ensure NUT can access the USB device
-  services.udev.extraRules = ''
-    SUBSYSTEM=="usb", ATTR{idVendor}=="${lib.toLower ups.vendorId}", ATTR{idProduct}=="${lib.toLower ups.productId}", MODE="0660", GROUP="nut"
-  '';
+  # Ensure NUT can access the USB devices. Rules are per vendor/product pair,
+  # not per serial, so identical models collapse to a single rule.
+  services.udev.extraRules = lib.concatMapStringsSep "\n" (pair:
+    ''SUBSYSTEM=="usb", ATTR{idVendor}=="${pair.vendorId}", ATTR{idProduct}=="${pair.productId}", MODE="0660", GROUP="nut"''
+  ) (lib.unique (map (dev: {
+    vendorId = lib.toLower dev.vendorId;
+    productId = lib.toLower dev.productId;
+  }) (lib.attrValues devices))) + "\n";
 }

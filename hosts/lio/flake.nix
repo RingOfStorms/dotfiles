@@ -1,15 +1,15 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
-    home-manager.url = "github:rycee/home-manager/release-25.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
+    home-manager.url = "github:rycee/home-manager/release-26.05";
 
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # secrets-bao.url = "path:../../flakes/secrets-bao";
-    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
+    # sec-agent replaces secrets-bao on this host.
+    secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     # flatpaks.url = "path:../../flakes/flatpaks";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     # beszel.url = "path:../../flakes/beszel";
@@ -25,8 +25,8 @@
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
-    opencode.url = "github:anomalyco/opencode/88582566bf2bfd2d26000f0c25735bf48ddeca00";
-    nono.url = "github:always-further/nono/e61814f8a70a53346a1e9d0bcf7ba4f52e0e4d1d";
+    opencode.url = "github:anomalyco/opencode/eb6ff0c1e049e5dfb6f61eb74f925c0a8007490c";
+    nono.url = "github:always-further/nono/6118b79aeda1365da213d85457b4d3cf1201d575";
     nono.flake = false;
     # Used to pin a newer rustc than what nixpkgs ships (needed by nono).
     rust-overlay.url = "github:oxalica/rust-overlay";
@@ -45,11 +45,15 @@
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
         nixpkgsUnstable = nixpkgs-unstable;
-        secretsRole = "machines-hightrust";
+        # secrets-bao disabled — lio is cut over to sec-agent.
+        authMethod = "hashedPassword";
+        authValue = "$y$j9T$GvwwBotPdCjybuJeTGeLe/$but0teo8CQusyzxurhb42vpt/Ox1EUmARb24VMSZz14";
+        mutableUsers = false;
         extraGroups = [
           "wheel"
           "networkmanager"
           "video"
+          "render" # AMD ROCm/HIP compute access (/dev/kfd, /dev/dri/renderD*)
           "input"
           "dialout"
         ];
@@ -94,7 +98,7 @@
               enable = true;
               gpuBackend = "hip"; # Use AMD ROCm/HIP acceleration
               useGpu = true;
-              model = "large";
+              model = "large-v3-turbo";
             };
           })
           inputs.ports.nixosModules.default
@@ -116,6 +120,12 @@
           inputs.common.nixosModules.podman
           inputs.common.nixosModules.q_flipper
           inputs.common.nixosModules.tailnet
+
+          (import ../sec-agent.nix {
+            inherit inputs constants;
+            role = "machines-hightrust";
+          })
+
           inputs.common.nixosModules.timezone_chi
           inputs.common.nixosModules.tty_caps_esc
           inputs.common.nixosModules.zsh
@@ -161,8 +171,10 @@
               listen = "${overlayIp}:45876";
               token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
             };
+            # Match the stable mountpoint rather than /dev/nvme* naming, which
+            # can change between boots. The suffix keeps the dashboard label.
             services.beszel.agent.environment = {
-              EXTRA_FILESYSTEMS = "nvme0n1p1__nvme1tb";
+              EXTRA_FILESYSTEMS = "/mnt/nvme1tb__nvme1tb";
             };
           })
 
@@ -175,7 +187,6 @@
           # ./i3_customizations.nix
           ./vms.nix
           ./nono.nix
-          # ./ttyd.nix  # replaced by SSH (see configuration.nix)
           ./homepage-dashboard.nix
           ./nginx.nix
 
@@ -194,6 +205,7 @@
                 # attempt due to portal/pipewire sandboxing issues.
                 # Native binary uses host xdg-desktop-portal-kde directly.
                 vesktop
+                discord
               ];
               services.flatpak.packages = [
                 "org.signal.Signal"

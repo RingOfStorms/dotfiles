@@ -4,8 +4,9 @@
     home-manager.url = "github:rycee/home-manager/release-26.05";
 
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    # secrets-bao disabled — h002 is cut over to sec-agent.
     # secrets-bao.url = "path:../../flakes/secrets-bao";
-    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
+    secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
 
@@ -24,9 +25,12 @@
     {
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
-        secretsRole = "machines-hightrust";
-        authMethod = "initialHashedPassword";
-        authValue = "$y$j9T$v1QhXiZMRY1pFkPmkLkdp0$451GvQt.XFU2qCAi4EQNd1BEqjM/CH6awU8gjcULps6";
+        # secrets-bao disabled — h002 is cut over to sec-agent.
+        # secretsRole = "machines-hightrust";
+        # `mkpasswd -m yescrypt`
+        authMethod = "hashedPassword";
+        authValue = "$y$j9T$iM1fEKZQH9NGQd39OTUJI.$uxPdQ7EDf4wANcFs7QDSjDC8tV5ZW4cAuNXBdqibSX4";
+        mutableUsers = false;
         extraGroups = [
           "wheel"
           "networkmanager"
@@ -55,6 +59,9 @@
           inputs.common.nixosModules.rage
           inputs.common.nixosModules.tailnet
 
+          # h002 is cut over from secrets-bao to sec-agent.
+          (import ./sec-agent.nix { inherit inputs constants; })
+
           inputs.beszel.nixosModules.agent
           ({
             beszelAgent = {
@@ -74,6 +81,7 @@
           # Host-specific config
           ({
             networking.networkmanager.enable = true;
+            security.sudo.wheelNeedsPassword = false;
             users.users.root.openssh.authorizedKeys.keys = [
               fleet.global.sshPubKey
             ];

@@ -1,7 +1,7 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
-    home-manager.url = "github:rycee/home-manager/release-25.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
+    home-manager.url = "github:rycee/home-manager/release-26.05";
 
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
@@ -95,7 +95,8 @@
                   users.users = {
                     "${primaryUser}" = {
                       isNormalUser = true;
-                      initialPassword = "password1";
+                      # `password1`
+                      hashedPassword = "$y$j9T$ACmz/g0EK1bTXuCbsGH1Z/$DeTpNoP2DclAW7cDKNBU8CxLhU06WXvmgVAA2sKdwQ1";
                       shell = pkgs.zsh;
                       extraGroups = [
                         "wheel"

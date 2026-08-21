@@ -5,18 +5,10 @@
   ...
 }:
 let
-  # Shared DNS records for h001 services - used for /etc/hosts fallback
-  h001Dns = import ./h001_dns.nix;
   cfg = config.ringofstorms.tailnet;
 in
 {
   options.ringofstorms.tailnet = {
-    h001DnsHosts = lib.mkOption {
-      type = lib.types.bool;
-      default = false;
-      description = "Add /etc/hosts entries for h001 services as fallback for headscale MagicDNS. Disable on hosts where the chicken-and-egg with secrets bootstrap is a problem.";
-    };
-
     omitCaptivePortal = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -50,10 +42,17 @@ in
   environment.systemPackages = with pkgs; [ tailscale ];
   boot.kernelModules = [ "tun" ];
 
-  # Add /etc/hosts entries for h001 services as fallback for headscale DNS
-  networking.hosts = lib.mkIf cfg.h001DnsHosts {
-    "${h001Dns.ip}" = map (name: "${name}.${h001Dns.baseDomain}") h001Dns.subdomains;
-  };
+  # NOTE: h001 service names (*.joshuabell.xyz) are resolved on the tailnet via a
+  # headscale split-DNS nameserver pointing at h003's tailnet dnsmasq listener
+  # (see hosts/oracle/o002/headscale.nix + hosts/h003/mods/networking.nix).
+  # The old `h001DnsHosts` /etc/hosts fallback option was removed: it was
+  # dangerous as a default (static pins break off-tailnet) and unused by any host.
+
+  # Headscale split DNS needs a resolver that supports per-link routing domains.
+  # Tailscale integrates those routes (including ~joshuabell.xyz) with
+  # systemd-resolved; without it, the system resolver can retain or prefer a
+  # public answer instead of the Tailnet DNS view.
+  services.resolved.enable = true;
 
   services.tailscale = {
     enable = true;
@@ -91,6 +90,28 @@ in
     ];
     wants = [ "ensure-tun.service" ];
     requires = [ "ensure-tun.service" ];
+  };
+
+  # Headscale's split DNS is delivered asynchronously after tailscaled connects.
+  # `systemd-resolved` retains answers obtained before that route exists (including
+  # public answers for *.joshuabell.xyz), even after tailscale0 receives the
+  # ~joshuabell.xyz route. Clear that stale cache after autoconnect so subsequent
+  # lookups use the Tailnet DNS view. This is harmless on explicit DNS opt-out
+  # hosts: they have no Tailnet route and continue using their normal resolver.
+  systemd.services.tailscale-flush-resolved-dns = {
+    description = "Clear systemd-resolved cache after Tailscale DNS setup";
+    wantedBy = [ "multi-user.target" ];
+    wants = [ "tailscaled.service" "tailscaled-autoconnect.service" ];
+    after = [
+      "tailscaled.service"
+      "tailscaled-autoconnect.service"
+      "systemd-resolved.service"
+    ];
+    partOf = [ "tailscaled.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.systemd}/bin/resolvectl flush-caches";
+    };
   };
 
   networking.firewall.trustedInterfaces = [ config.services.tailscale.interfaceName ];

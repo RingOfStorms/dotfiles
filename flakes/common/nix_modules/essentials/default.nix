@@ -32,6 +32,7 @@ with lib;
     parted
     fio
     moreutils
+    ethtool
 
     # `rmrec <name> [name...]` - recursively find and delete dirs/files by
     # name under CWD (e.g. `rmrec node_modules dist target .direnv`).
@@ -122,5 +123,6 @@ with lib;
     (builtins.readFile ./envrc-import.func.sh)
     (builtins.readFile ./flake.func.sh)
     (builtins.readFile ./boot.func.sh)
+    (builtins.readFile ./command_propose.func.sh)
   ];
 }

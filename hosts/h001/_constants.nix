@@ -101,24 +101,49 @@
       domain = "gist.joshuabell.xyz";
     };
 
+    # atuin shell-history sync — migrated off o001. Own internal postgres
+    # in a NixOS container; o002 nginx proxies over the tailnet to h001.
+    atuin = {
+      port = 8888;
+      dataDir = "/var/lib/atuin";
+      containerIp = "10.0.0.8";
+      containerIp6 = "fc00::8";
+      domain = "atuin.joshuabell.xyz";
+    };
+
+    # vaultwarden — migrated off o001. SQLite, uid/gid 114 (matches o001 so
+    # the Phase 0 backup restores 1:1). o002 nginx proxies over the tailnet.
+    vaultwarden = {
+      port = 8222;
+      uid = 114;
+      gid = 114;
+      dataDir = "/var/lib/vaultwarden";
+      containerIp = "10.0.0.9";
+      containerIp6 = "fc00::9";
+      domain = "vault.joshuabell.xyz";
+    };
+
+    # pkm — personal knowledge system. Rust server + embedded Svelte frontend,
+    # its own Postgres (PostGIS, wal_level=logical) and a PowerSync service,
+    # all inside one NixOS container. The application itself is packaged in its
+    # own repo's flake; this host only supplies the container and the vhost.
+    #
+    # syncPort is the PowerSync service, reached through the same vhost under
+    # /powersync rather than on a second domain — it needs to be same-origin
+    # for the browser and needs no certificate of its own.
+    pkm = {
+      port = 3010;
+      syncPort = 8080;
+      dataDir = "/var/lib/pkm";
+      containerIp = "10.0.0.10";
+      containerIp6 = "fc00::10";
+      domain = "pkm.joshuabell.xyz";
+    };
+
     litellm = {
       port = 8094;
       dataDir = "/var/lib/litellm";
       domain = null; # No public domain, accessed via Tailscale
-    };
-
-    # LLM gateway bake-off: alternate gateways running alongside litellm
-    # for testing. Tailscale-only exposure, same as litellm.
-    bifrost = {
-      port = 8097; # 8096 taken by jellyfin
-      dataDir = "/var/lib/bifrost";
-      domain = null;
-    };
-
-    portkey = {
-      port = 8098;
-      dataDir = "/var/lib/portkey";
-      domain = null;
     };
 
     openWebui = {
@@ -126,12 +151,15 @@
       domain = "chat.joshuabell.xyz";
     };
 
+    searx = {
+      port = 8889;
+    };
+
     trilium = {
       port = 9111;
       overlayPort = 9112;
       dataDir = "/var/lib/trilium";
       domain = "notes.joshuabell.xyz";
-      blogDomain = "blog.joshuabell.xyz";
     };
 
     oauth2Proxy = {
@@ -150,21 +178,62 @@
 
     openbao = {
       port = 8200;
-      # Loopback-only second listener used by openbao-apply-config.service to
-      # call `bao operator generate-root` (which is disabled by default on the
-      # public-facing listener since OpenBao 2.5.3 / CVE-2026-5807). Never
-      # proxied by nginx, never exposed beyond 127.0.0.1.
-      #
-      # NOTE: avoid port+1 of the api listener — openbao auto-allocates that
-      # for its Raft cluster listener even on single-node file storage.
-      adminPort = 8210;
       dataDir = "/var/lib/openbao";
+      # Root-only, holds the Shamir unseal share(s) used by
+      # openbao-auto-unseal.service, plus the AppRole credential used by
+      # openbao-apply-config.service:
+      #   openbao-unseal-*                 unseal key share(s)
+      #   openbao-reconciler-role-id       AppRole role_id
+      #   openbao-reconciler-secret-id     AppRole secret_id
       keysDir = "/bao-keys";
       domain = "sec.joshuabell.xyz";
+      # Tailnet-only HTTPS endpoint. Headscale publishes an explicit MagicDNS
+      # record for this two-label hostname; it cannot be covered by the
+      # single-label *.joshuabell.xyz wildcard certificate.
+      tailnetDomain = "sec.h001.net.joshuabell.xyz";
+    };
+
+    # `sec` — the replacement for openbao. Runs in parallel with it during
+    # the migration, so every name here is deliberately distinct from the
+    # openbao block above: different port, different data directory,
+    # different hostname, different systemd units. Nothing is shared, so
+    # neither service can break the other.
+    sec = {
+      port = 8300;
+      dataDir = "/var/lib/secrets_manager";
+      # Single-label, so the existing *.joshuabell.xyz wildcard cert
+      # covers it with no extraDomainNames entry.
+      domain = "secrets.joshuabell.xyz";
     };
 
     homepage = {
       port = 8082;
+    };
+
+    mediaIntegrity = {
+      dataDir = "/var/lib/media-integrity";
+      webPath = "/media-health/";
+      scanSubdirectories = [ "library/movies" ];
+      extensions = [
+        ".avi"
+        ".flv"
+        ".m2ts"
+        ".m4v"
+        ".mkv"
+        ".mov"
+        ".mp4"
+        ".mpeg"
+        ".mpg"
+        ".mts"
+        ".ogv"
+        ".ts"
+        ".vob"
+        ".webm"
+        ".wmv"
+      ];
+      onCalendar = "Sun *-*-* 03:00:00";
+      randomizedDelay = "30m";
+      perFileTimeoutSec = 43200;
     };
 
     puzzles = {
@@ -210,6 +279,9 @@
     nixarr = {
       jellyfinPort = 8096;
       jellyseerrPort = 5055;
+      shelfmarkPort = 8087;
+      audiobookshelfPort = 9292;
+      kavitaPort = 5000;
       transmissionPeerPort = 51820;
       mediaDir = "/nfs/h002/nixarr/media";
       stateDir = "/var/lib/nixarr/state";
@@ -227,51 +299,4 @@
     };
   };
 
-  secrets = {
-    litellm-env = {
-      owner = "root";
-      group = "root";
-      mode = "0400";
-      softDepend = [ "litellm" ];
-      template = ''
-        {{- with secret "kv/data/machines/high-trust/openrouter_2026-03-15" -}}
-        OPENROUTER_API_KEY={{ index .Data.data "api-key" }}
-        {{- end -}}
-      '';
-    };
-
-    # Service secrets
-    linode_rw_domains_2026-03-15 = {
-      configChanges = {
-        security.acme.certs.${fleet.global.domain}.credentialFiles.LINODE_TOKEN_FILE = "$SECRET_PATH";
-      };
-    };
-
-    us_chi_wg_2026-03-15 = {
-      configChanges = {
-        nixarr.vpn.wgConf = "$SECRET_PATH";
-      };
-    };
-
-    zitadel_master_key_2026-03-15 = {
-      mode = "0444";
-      template = ''
-        {{- with secret "kv/data/machines/high-trust/zitadel_master_key_2026-03-15" -}}{{- .Data.data.value | base64Decode -}}{{- end -}}
-      '';
-    };
-
-    oauth2_proxy_key_file_2026-03-15 = {
-      configChanges = {
-        services.oauth2-proxy.keyFile = "$SECRET_PATH";
-      };
-    };
-
-    openwebui_env_2026-03-15 = {
-      softDepend = [ "open-webui" ];
-    };
-
-    openrouter_2026-03-15 = {
-      field = "api-key";
-    };
-  };
 }

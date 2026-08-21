@@ -7,5 +7,6 @@
     ./adguardhome.nix
     ./ddns.nix
     ./ups.nix
+    ./speedtest.nix
   ];
 }

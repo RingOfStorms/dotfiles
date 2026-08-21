@@ -26,9 +26,12 @@ rec {
     # SSH public key used across all hosts for authorized_keys
     sshPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15";
     sshKeyName = "nix2nix_2026-03-15";
+    # Keep the deployer's legacy cache path during host-by-host migration;
+    # switch this after every deployer has a populated sec cache.
     secretsKeyPath = "/var/lib/openbao-secrets/nix2nix_2026-03-15";
 
     openbaoAddr = "https://sec.joshuabell.xyz";
+    secretsDir = "/var/lib/secrets_manager_hydrated";
     gitUrl = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
   };
 
@@ -97,18 +100,12 @@ rec {
       lanIp = "10.12.14.144";
       trust = "low";
     };
-    l001 = {
+    o002 = {
       user = "root";
-      publicIp = "172.236.111.33";
-      trust = "none";
-      flakePath = "hosts/linode/l001";
-    };
-    o001 = {
-      user = "root";
-      overlayIp = "100.64.0.11";
-      publicIp = "64.181.210.7";
+      overlayIp = "100.64.0.5";
+      publicIp = "164.152.19.60";
       trust = "high";
-      flakePath = "hosts/oracle/o001";
+      flakePath = "hosts/oracle/o002";
     };
     # Non-deployable hosts referenced in SSH configs
     t = {
@@ -191,9 +188,13 @@ rec {
   # ─── h001 DNS RECORDS ─────────────────────────────────────────────
   # Subdomains served by h001, used for headscale DNS splitting and /etc/hosts
   h001Subdomains = [
-    "jellyfin" "media" "notes" "chat" "sso-proxy" "n8n"
-    "sec" "sso" "gist" "git" "blog" "etebase" "photos"
-    "location" "matrix" "element" "docs"
+    "jellyfin" "media" "books" "notes" "chat" "sso-proxy" "n8n"
+    "sec" "sso" "gist" "git" "etebase" "photos"
+    "location" "matrix" "element" "docs" "pkm"
+    # `secrets` is the sec server (hosts/h001/mods/sec.nix), the eventual
+    # replacement for `sec` (OpenBao) above. Both are listed while the two
+    # run side by side.
+    "secrets"
   ];
 
   # ─── HOST BUILDER ─────────────────────────────────────────────────
@@ -224,9 +225,17 @@ rec {
       # "hashedPassword"        → users.users.*.hashedPassword = authValue
       # "initialHashedPassword" → users.users.*.initialHashedPassword = authValue
       # "cloudUser"             → no password attrs, user already exists (cloud/VPS root)
-      authMethod ? "initialPassword",
-      authValue ? "password1",
-      mutableUsers ? true,
+      #
+      # There is deliberately NO weak default password. `authValue` defaults to
+      # null; a password-based host that sets a secretsRole MUST pass an explicit
+      # authValue (a `mkpasswd`-style hash, or "!"/"*" to disable password login
+      # and go keys-only) or the build fails. See the guard below. This removes
+      # the old public `password1` default (pentest C2).
+      authMethod ? "hashedPassword",
+      authValue ? null,
+      # Immutable users by default — declarative passwords, no drift. Override
+      # to true only where you genuinely need runtime user/password mutation.
+      mutableUsers ? false,
       extraGroups ? [ "wheel" "networkmanager" "video" "input" ],
 
       # Secrets
@@ -242,6 +251,20 @@ rec {
       stateVersion = constants.host.stateVersion;
       primaryUser = constants.host.primaryUser;
       isCloudUser = authMethod == "cloudUser";
+
+      # ── Auth guard (pentest C2) ──
+      # Refuse to build a password-authenticated host that didn't declare its
+      # own credential. This makes the old silent `password1` default
+      # impossible to reintroduce: any secretsRole host using a password
+      # authMethod must pass an explicit authValue (a real hash, or "!"/"*" to
+      # disable password login and rely on SSH keys).
+      _authGuard =
+        if (!isCloudUser) && authValue == null then
+          throw ("fleet.mkHost: host '${hostName}' uses authMethod=\"${authMethod}\" "
+            + "but did not set an explicit `authValue`. There is no default "
+            + "password. Set a `mkpasswd`-generated hash, or authValue = \"!\" "
+            + "to disable password login (keys-only). See pentest C2.")
+        else null;
 
       fleetData = { inherit global hosts h001Subdomains mkSshMatchBlocks; };
 
@@ -313,12 +336,26 @@ rec {
         if includeBaseNixModules then [
         ] else [];
 
+      # ── Low-trust Tailnet DNS policy ──
+      # Headscale advertises one DNS configuration to the whole tailnet; ACL
+      # tags cannot select a different nameserver.split policy. Low-trust
+      # clients therefore keep using their LAN/public resolvers instead of
+      # accepting the tailnet-wide split DNS configuration.
+      lowTrustTailnetDnsModule =
+        lib.optional (secretsRole == "machines-lowtrust") {
+          services.tailscale.extraUpFlags = [ "--accept-dns=false" ];
+          services.tailscale.extraSetFlags = [ "--accept-dns=false" ];
+        };
+
       # ── User auth config ──
-      userAuthAttrs =
+      # `builtins.seq _authGuard` forces the guard to evaluate (throwing for a
+      # password host with no authValue) before any auth attrs are produced.
+      userAuthAttrs = builtins.seq _authGuard (
         if authMethod == "initialPassword" then { initialPassword = authValue; }
         else if authMethod == "hashedPassword" then { hashedPassword = authValue; }
         else if authMethod == "initialHashedPassword" then { initialHashedPassword = authValue; }
-        else {}; # cloudUser — no password attrs
+        else {} # cloudUser — no password attrs
+      );
 
       # ── HM user set (explicit to avoid infinite recursion with config.users.users) ──
       hmUsers =
@@ -383,6 +420,10 @@ rec {
 
         # Core system boilerplate
         ++ [ coreModule ]
+
+        # Low-trust hosts must not accept the tailnet-wide Headscale DNS
+        # split; their normal LAN/public DNS provides the service records.
+        ++ lowTrustTailnetDnsModule
 
         # Host-specific modules
         ++ nixosModules;
