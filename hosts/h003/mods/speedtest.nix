@@ -155,8 +155,8 @@ in
 {
   systemd.services.h003-isp-speedtest = {
     description = "Measure ISP throughput from h003 and publish to Home Assistant";
-    wants = [ "network-online.target" "openbao-secrets-ready.service" ];
-    after = [ "network-online.target" "openbao-secrets-ready.service" ];
+    wants = [ "network-online.target" "sec-secrets-ready.service" ];
+    after = [ "network-online.target" "sec-secrets-ready.service" ];
     path = [ pkgs.coreutils pkgs.curl pkgs.jq pkgs.ookla-speedtest ];
 
     serviceConfig = {
@@ -179,7 +179,7 @@ in
       PrivateTmp = true;
       ProtectHome = true;
       ProtectSystem = "strict";
-      ReadOnlyPaths = [ "/var/lib/openbao-secrets" ];
+      ReadOnlyPaths = [ "/var/lib/secrets_manager_hydrated" ];
       NoNewPrivileges = true;
       LockPersonality = true;
       RestrictSUIDSGID = true;

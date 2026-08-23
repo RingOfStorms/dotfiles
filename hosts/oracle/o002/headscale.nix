@@ -76,12 +76,12 @@ in
         urls = [ ];
         auto_update_enable = false;
       };
-      # Explicit MagicDNS record for the Tailnet-only OpenBao endpoint.
-      # Unlike `sec.joshuabell.xyz`, this name has no public DNS record and
+      # Explicit MagicDNS record for the Tailnet-only secrets manager endpoint.
+      # Unlike `secrets.joshuabell.xyz`, this name has no public DNS record and
       # remains available even if the public-zone split DNS answer is cached.
       extra_records = [
         {
-          name = "sec.h001.net.${splitDomain}";
+          name = "secrets.h001.net.${splitDomain}";
           type = "A";
           value = h001OverlayIp;
         }
@@ -95,7 +95,7 @@ in
         # Split-DNS (restricted) nameserver: route ONLY joshuabell.xyz queries
         # to h003's tailnet dnsmasq listener over the overlay. Everything else
         # stays on the client's normal DNS path. This is what makes
-        # sec/git/notes/... resolve to h001's OVERLAY ip (100.64.0.13) when a
+        # secrets/git/notes/... resolve to h001's OVERLAY ip (100.64.0.13) when a
         # machine is on the tailnet — h003's dnsmasq answers h001 service names
         # with the overlay IP so they're reachable from ANY tailnet client.
         #

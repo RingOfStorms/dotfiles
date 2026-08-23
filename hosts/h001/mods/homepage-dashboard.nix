@@ -240,10 +240,10 @@ in
             };
           }
           {
-            "Vault" = {
-              description = "OpenBao";
-              href = "https://${s.openbao.domain}";
-              icon = "vault";
+            "Secrets" = {
+              description = "Secrets Manager";
+              href = "https://${s.sec.domain}";
+              icon = "mdi-lock";
             };
           }
           {

@@ -1,5 +1,5 @@
 {
-  description = "Reusable Oracle Ampere (aarch64) bootstrap: clean bcachefs + impermanence + secrets-bao NixOS, installable via nixos-anywhere. Copy to hosts/oracle/<name>/ and layer services on top. See hosts/oracle/readme.md for the full onboarding runbook.";
+  description = "Reusable Oracle Ampere (aarch64) bootstrap: clean bcachefs + impermanence + sec-agent NixOS, installable via nixos-anywhere. Copy to hosts/oracle/<name>/ and layer services on top. See hosts/oracle/readme.md for the full onboarding runbook.";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
@@ -12,8 +12,8 @@
     impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
     # common.url = "path:../../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # secrets-bao.url = "path:../../../flakes/secrets-bao";
-    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
+    # sec-agent replaces secrets-bao on new hosts.
+    secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     # beszel.url = "path:../../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
   };
@@ -85,7 +85,6 @@
     {
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
-        secretsRole = "machines-hightrust";
         authMethod = "cloudUser";
         mutableUsers = false;
 
@@ -95,6 +94,7 @@
           inputs.common.nixosModules.hardening
           inputs.common.nixosModules.nix_options
           inputs.common.nixosModules.tailnet
+          (import ../../sec-agent.nix { inherit inputs constants; role = "machines-hightrust"; })
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.backup
 

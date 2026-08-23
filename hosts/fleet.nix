@@ -26,9 +26,8 @@ rec {
     # SSH public key used across all hosts for authorized_keys
     sshPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15";
     sshKeyName = "nix2nix_2026-03-15";
-    secretsKeyPath = "/var/lib/openbao-secrets/nix2nix_2026-03-15";
 
-    openbaoAddr = "https://sec.joshuabell.xyz";
+    secretsDir = "/var/lib/secrets_manager_hydrated";
     gitUrl = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
   };
 
@@ -41,7 +40,7 @@ rec {
   #   overlayIp   - Tailscale overlay IP (null if not on tailnet)
   #   lanIp       - LAN IP address (null if not on LAN / cloud host)
   #   publicIp    - Public IP (for cloud/VPS hosts)
-  #   trust       - "high" | "low" | "none" (determines secrets-bao role)
+  #   trust       - "high" | "low" | "none" (determines tailnet DNS policy)
   #   flakePath   - path to host's flake dir relative to repo root (auto-derived from name if omitted)
   #   sshTermEnv  - custom TERM for SSH (null for default xterm-256color)
   hosts = {
@@ -121,7 +120,7 @@ rec {
   deployableHosts = builtins.removeAttrs hosts [ "t" "l002" ];
 
   # ─── SSH MATCH BLOCK HOSTS ────────────────────────────────────────
-  # Used by secrets-bao mkAutoSecrets to wire nix2nix identity.
+  # Used by sec-agent to wire nix2nix identity.
   # Generates the list of all SSH matchBlock host names (including _ variants).
   # An `_` variant is emitted for any host with a direct IP (lanIp or publicIp).
   sshMatchBlockHosts =
@@ -186,11 +185,9 @@ rec {
   # Subdomains served by h001, used for headscale DNS splitting and /etc/hosts
   h001Subdomains = [
     "jellyfin" "media" "books" "notes" "chat" "sso-proxy" "n8n"
-    "sec" "sso" "gist" "git" "etebase" "photos"
+    "sso" "gist" "git" "etebase" "photos"
     "location" "matrix" "element" "docs" "pkm"
-    # `secrets` is the sec server (hosts/h001/mods/sec.nix), the eventual
-    # replacement for `sec` (OpenBao) above. Both are listed while the two
-    # run side by side.
+    # `secrets` is the secrets manager server (hosts/h001/mods/sec.nix).
     "secrets"
   ];
 
@@ -202,7 +199,6 @@ rec {
   #   - Base NixOS modules (empty for now) — toggle with includeBaseNixModules
   #   - System config (stateVersion, hostName, nh.flake, allowUnfree)
   #   - User creation with SSH authorized key
-  #   - secrets-bao integration (if secretsRole is set)
   #   - specialArgs passing (inputs, constants, fleet)
   #
   mkHost =
@@ -236,7 +232,7 @@ rec {
       extraGroups ? [ "wheel" "networkmanager" "video" "input" ],
 
       # Secrets
-      secretsRole ? null,  # "machines-hightrust" | "machines-lowtrust" | null (no secrets)
+      secretsRole ? null,  # "machines-hightrust" | "machines-lowtrust" | null (determines tailnet DNS policy)
 
       # Unstable overlay — pass the nixpkgs-unstable input to get pkgs.unstable
       nixpkgsUnstable ? null,
@@ -264,38 +260,6 @@ rec {
         else null;
 
       fleetData = { inherit global hosts h001Subdomains mkSshMatchBlocks; };
-
-      # ── secrets-bao integration ──
-      hasSecretsBao = secretsRole != null && inputs ? secrets-bao;
-      autoSecrets =
-        if hasSecretsBao then
-          inputs.secrets-bao.lib.mkAutoSecrets {
-            role = secretsRole;
-            inherit primaryUser;
-          }
-        else {};
-      allSecrets =
-        if hasSecretsBao then
-          autoSecrets // (constants.secrets or {})
-        else {};
-
-      secretsBaoModules =
-        if hasSecretsBao then [
-          inputs.secrets-bao.nixosModules.default
-          (
-            { lib, ... }:
-            lib.mkMerge [
-              {
-                ringofstorms.secretsBao = {
-                  enable = true;
-                  openBaoRole = secretsRole;
-                  secrets = allSecrets;
-                };
-              }
-              (inputs.secrets-bao.lib.applyChanges allSecrets)
-            ]
-          )
-        ] else [];
 
       # ── Unstable overlay ──
       unstableOverlay =
@@ -408,9 +372,6 @@ rec {
 
         # Home Manager
         ++ [ inputs.home-manager.nixosModules.default ]
-
-        # secrets-bao (if role is set)
-        ++ secretsBaoModules
 
         # Base NixOS modules
         ++ baseNixModules

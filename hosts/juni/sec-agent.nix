@@ -1,4 +1,4 @@
-# Host-specific sec-agent additions for oren.
+# Host-specific sec-agent additions for juni.
 { inputs, constants, ... }:
 import ../sec-agent.nix {
   inherit inputs constants;

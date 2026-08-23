@@ -1,5 +1,5 @@
 {
-  description = "o002: Oracle Ampere (aarch64) gateway rebuild. Clean bcachefs + secrets-bao NixOS, installed via nixos-anywhere. Impermanence is toggleable for debugging (enableImpermanence below).";
+  description = "o002: Oracle Ampere (aarch64) gateway rebuild. Clean bcachefs + sec-agent NixOS, installed via nixos-anywhere. Impermanence is toggleable (enableImpermanence below).";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
@@ -12,8 +12,8 @@
     impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
     # common.url = "path:../../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # secrets-bao.url = "path:../../../flakes/secrets-bao";
-    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
+    # sec-agent replaces secrets-bao on this host.
+    secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     # beszel.url = "path:../../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
   };
@@ -76,7 +76,7 @@
     {
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
-        secretsRole = "machines-hightrust";
+        # secrets-bao disabled — o002 is cut over to sec-agent.
         authMethod = "cloudUser";
         mutableUsers = false;
 
@@ -86,6 +86,7 @@
           inputs.common.nixosModules.hardening
           inputs.common.nixosModules.nix_options
           inputs.common.nixosModules.tailnet
+          (import ../../sec-agent.nix { inherit inputs constants; role = "machines-hightrust"; })
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.backup
 

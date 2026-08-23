@@ -15,7 +15,6 @@ let
       iwd
       hardening
       tailscale
-      openbao
       pipewire
       timezone_cache
       atuin
@@ -30,7 +29,9 @@ in
   environment.persistence."/persist" = {
     enable = true;
     hideMounts = true;
-    directories = shared.system.directories ++ [ ];
+    directories = shared.system.directories ++ [
+      "/var/lib/secrets_manager_hydrated"
+    ];
     files = shared.system.files ++ [ ];
     users."${user}" = {
       directories = shared.user.directories ++ [ ];

@@ -20,8 +20,15 @@ let
 
   zitadelNixpkgs = inputs.zitadel-nixpkgs;
 
-  baoSecrets = config.ringofstorms.secretsBao.secrets or {};
-  hasZitadelKey = baoSecrets ? "zitadel_master_key_2026-03-15";
+  hasZitadelKey = true;
+  # Dedicated on-host path for the Zitadel master key, OUTSIDE the sec-agent
+  # hydrated cache. Zitadel is the identity provider that sec-agent authenticates
+  # against to fetch its secrets, so the master key cannot itself depend on
+  # sec-agent being up. This file must contain exactly 32 raw bytes and is
+  # placed manually on the operator (it survives reboots; h001 has no impermanence).
+  # The file must be world-readable (0444) because the zitadel user inside the
+  # ephemeral nspawn container has no UID mapping to a host user.
+  zitadelKeyPath = "${hostDataDir}/masterkey";
 
   binds = [
     # Postgres data, must use postgres user in container and host
@@ -45,7 +52,7 @@ let
   ++ lib.optionals hasZitadelKey [
     # secret
     {
-      host = baoSecrets."zitadel_master_key_2026-03-15".path;
+      host = zitadelKeyPath;
       container = "/var/secrets/zitadel_master_key.age";
       readOnly = true;
     }
@@ -108,6 +115,15 @@ in
         '') bindsWithUsers
       )}
     '';
+
+    # Ensure the master key directory exists. The key file itself is placed
+    # manually by the operator (32 raw bytes, mode 0444 so the in-container
+    # zitadel user can read it without UID mapping). h001 has no impermanence,
+    # so this survives reboots. We only create the parent dir here — the postgres
+    # and backups subdirs are handled by the activation script above.
+    systemd.tmpfiles.rules = [
+      "d ${hostDataDir} 0755 root root -"
+    ];
 
     containers.${name} = {
       ephemeral = true;

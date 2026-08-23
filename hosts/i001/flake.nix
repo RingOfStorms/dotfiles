@@ -9,8 +9,8 @@
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     # impermanence_mod.url = "path:../../flakes/impermanence";
     impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
-    # secrets-bao.url = "path:../../flakes/secrets-bao";
-    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
+    # sec-agent replaces secrets-bao on this host.
+    secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -74,6 +74,11 @@
           inputs.common.nixosModules.tty_caps_esc
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.tailnet
+
+          (import ../sec-agent.nix {
+            inherit inputs constants;
+            role = "machines-lowtrust";
+          })
 
           ./hardware-configuration.nix
           (import ./impermanence.nix {

@@ -4,7 +4,7 @@
 # - /var/lib/nixos: nixos-generated state (uid map, etc.)
 # - /var/lib/systemd/{coredump,timers}: systemd state
 # - /etc/nixos: legacy config dir (some tools still read it)
-# - /machine-key.json: openbao machine identity (if used)
+# - /machine-key.json: sec-agent machine identity (Zitadel JWT key)
 # - /etc/machine-id: stable machine id across boots
 # - /etc/adjtime: hwclock drift correction
 #

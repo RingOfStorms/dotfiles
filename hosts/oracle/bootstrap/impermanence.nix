@@ -15,7 +15,6 @@ let
     [
       essentials # /var/log, /var/lib/nixos, /machine-key.json, /etc/machine-id, ...
       tailscale  # /var/lib/tailscale node identity
-      openbao    # /run/openbao, /var/lib/openbao-secrets
     ]
   );
 in
@@ -23,7 +22,12 @@ in
   environment.persistence."/persist" = {
     enable = true;
     hideMounts = true;
-    directories = shared.system.directories ++ [ ];
+    directories = shared.system.directories ++ [
+      # sec-agent: rendered secret blobs written by the secrets manager
+      # agent. Must survive the impermanence root-wipe so services can
+      # read their secrets across reboots even before the agent re-fetches.
+      "/var/lib/secrets_manager_hydrated"
+    ];
     files = shared.system.files ++ [ ];
     users."${primaryUser}" = {
       directories = shared.user.directories ++ [ ];

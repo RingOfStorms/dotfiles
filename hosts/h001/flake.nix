@@ -36,18 +36,11 @@
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
-    # secrets-bao.url = "path:../../flakes/secrets-bao";
-    secrets-bao.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/secrets-bao";
+    secrets_manager.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/secrets_manager.git";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
     puzzles.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/puzzles.git";
-
-    # sec — the secrets manager replacing OpenBao. Supplies the NixOS
-    # module and the package. Runs in parallel with OpenBao during the
-    # migration; see hosts/h001/mods/sec.nix.
-    # secrets_manager.url = "path:/home/josh/projects/secrets_manager";
-    secrets_manager.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/secrets_manager.git";
 
     # pkm — personal knowledge system. Supplies both the NixOS module and the
     # packages (server with the frontend embedded, and the PowerSync service
@@ -66,7 +59,8 @@
     {
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
-        secretsRole = "machines-hightrust";
+        # h001 reads its rendered values from sec-agent and runs the
+        # secrets_manager server (hosts/h001/mods/sec.nix).
 
         # `mkpasswd -m yescrypt.
         authMethod = "hashedPassword";
@@ -102,6 +96,7 @@
           inputs.nixarr.nixosModules.default
           ./hardware-configuration.nix
           ./mods
+          (import ./sec-agent.nix { inherit inputs constants; })
           ./nginx.nix
           ./containers
           ./autofs.nix

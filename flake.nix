@@ -34,7 +34,7 @@
           needsKey = hostDef ? lanIp;
           sshOpts =
             if needsKey
-            then ''NIX_SSHOPTS="-i ${fleet.global.secretsKeyPath}" ''
+            then ''NIX_SSHOPTS="-i ${fleet.global.secretsDir}/nix2nix_2026-03-15" ''
             else "";
         in
         pkgs.writeShellScriptBin "deploy_${name}" ''

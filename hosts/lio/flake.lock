@@ -181,6 +181,24 @@
         "type": "github"
       }
     },
+    "flake-utils_4": {
+      "inputs": {
+        "systems": "systems_4"
+      },
+      "locked": {
+        "lastModified": 1731533236,
+        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
     "flatpaks": {
       "inputs": {
         "nix-flatpak": "nix-flatpak"
@@ -387,6 +405,22 @@
       }
     },
     "nixpkgs_8": {
+      "locked": {
+        "lastModified": 1785828668,
+        "narHash": "sha256-8fsyqeO+mJqvIzeO4xIpgJe/f7MTbbVTEC6RT6WSXNs=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "e72e4f299401a3689d4b3d5fc6496b11db7064eb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_9": {
       "locked": {
         "lastModified": 1784007870,
         "narHash": "sha256-djcLt/JJphyNt4eDY9XTly+/WbCK5lqWq9lSgCmJkkQ=",
@@ -1069,7 +1103,7 @@
         "ports": "ports",
         "ros_neovim": "ros_neovim",
         "rust-overlay": "rust-overlay_2",
-        "secrets-bao": "secrets-bao",
+        "secrets_manager": "secrets_manager",
         "stt_ime": "stt_ime"
       }
     },
@@ -1169,28 +1203,30 @@
         "type": "github"
       }
     },
-    "secrets-bao": {
+    "secrets_manager": {
+      "inputs": {
+        "flake-utils": "flake-utils_3",
+        "nixpkgs": "nixpkgs_8"
+      },
       "locked": {
-        "dir": "flakes/secrets-bao",
-        "lastModified": 1785386813,
-        "narHash": "sha256-bXOjjaxVMVe1UpngV4Do3WmPwUg20bFZrIR4veaYtwU=",
-        "ref": "refs/heads/master",
-        "rev": "d14ac0853523cde78d5a5d5547b9db0ade4e7c60",
-        "revCount": 1913,
+        "lastModified": 1786750117,
+        "narHash": "sha256-TJGpgh2+lG/lU+tPpvq4RLvE6Xi5WVhJ0kIWzDGHlhs=",
+        "ref": "refs/heads/main",
+        "rev": "72a1e3b7080d7f4fa22bbc03787755393d503721",
+        "revCount": 28,
         "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+        "url": "https://git.joshuabell.xyz/ringofstorms/secrets_manager.git"
       },
       "original": {
-        "dir": "flakes/secrets-bao",
         "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+        "url": "https://git.joshuabell.xyz/ringofstorms/secrets_manager.git"
       }
     },
     "stt_ime": {
       "inputs": {
         "crane": "crane",
-        "flake-utils": "flake-utils_3",
-        "nixpkgs": "nixpkgs_8"
+        "flake-utils": "flake-utils_4",
+        "nixpkgs": "nixpkgs_9"
       },
       "locked": {
         "dir": "flakes/stt_ime",
@@ -1239,6 +1275,21 @@
       }
     },
     "systems_3": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
+      }
+    },
+    "systems_4": {
       "locked": {
         "lastModified": 1681028828,
         "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",

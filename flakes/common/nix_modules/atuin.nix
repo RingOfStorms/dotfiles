@@ -84,6 +84,26 @@ in
           HTTPS works fine. Set to "" to skip the check entirely.
         '';
       };
+
+      afterUnits = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = [ "sec-secrets-ready.service" ];
+        description = ''
+          Extra systemd units the autologin oneshot must wait for
+          (added to both `after` and `wants`). Use this to order the
+          service after whatever hydrates `secretFile` so it doesn't
+          race the secret into existence.
+
+          On sec-agent hosts this should be
+          [ "sec-secrets-ready.service" ]; on the older secrets-bao
+          hosts the ordering came from the secret's `hardDepend`.
+          Without it, atuin-autologin can start before the secret is
+          rendered and fail with "Missing atuin secret" during a
+          switch/boot (it then self-heals via the secret's .path unit,
+          but the transient failure is reported by the activation).
+        '';
+      };
     };
   };
 
@@ -96,8 +116,8 @@ in
       systemd.services.atuin-autologin = {
         description = "Auto-login to Atuin (if logged out)";
         wantedBy = [ "multi-user.target" ];
-        after = [ "network-online.target" ];
-        wants = [ "network-online.target" ];
+        after = [ "network-online.target" ] ++ cfg.autologin.afterUnits;
+        wants = [ "network-online.target" ] ++ cfg.autologin.afterUnits;
         serviceConfig = {
           Type = "oneshot";
           User = cfg.autologin.user;

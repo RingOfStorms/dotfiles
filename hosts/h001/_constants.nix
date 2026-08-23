@@ -176,28 +176,9 @@
       port = 8090;
     };
 
-    openbao = {
-      port = 8200;
-      dataDir = "/var/lib/openbao";
-      # Root-only, holds the Shamir unseal share(s) used by
-      # openbao-auto-unseal.service, plus the AppRole credential used by
-      # openbao-apply-config.service:
-      #   openbao-unseal-*                 unseal key share(s)
-      #   openbao-reconciler-role-id       AppRole role_id
-      #   openbao-reconciler-secret-id     AppRole secret_id
-      keysDir = "/bao-keys";
-      domain = "sec.joshuabell.xyz";
-      # Tailnet-only HTTPS endpoint. Headscale publishes an explicit MagicDNS
-      # record for this two-label hostname; it cannot be covered by the
-      # single-label *.joshuabell.xyz wildcard certificate.
-      tailnetDomain = "sec.h001.net.joshuabell.xyz";
-    };
-
-    # `sec` — the replacement for openbao. Runs in parallel with it during
-    # the migration, so every name here is deliberately distinct from the
-    # openbao block above: different port, different data directory,
-    # different hostname, different systemd units. Nothing is shared, so
-    # neither service can break the other.
+    # `sec` — the secrets manager server. Runs on h001 (port 8300,
+    # secrets.joshuabell.xyz). Replaced the old OpenBao server that used to
+    # run here.
     sec = {
       port = 8300;
       dataDir = "/var/lib/secrets_manager";
@@ -299,79 +280,4 @@
     };
   };
 
-  secrets = {
-    litellm-env = {
-      owner = "root";
-      group = "root";
-      mode = "0400";
-      softDepend = [ "litellm" ];
-      template = ''
-        {{- with secret "kv/data/machines/high-trust/openrouter_2026-03-15" -}}
-        OPENROUTER_API_KEY={{ index .Data.data "api-key" }}
-        {{- end -}}
-      '';
-    };
-
-    # Service secrets
-    # bunny.net DNS API key — used by lego (security.acme) for the
-    # DNS-01 wildcard challenge on *.${fleet.global.domain}. lego reads the
-    # key from the file named by BUNNY_API_KEY_FILE (dnsProvider = "bunny"
-    # in ./nginx.nix).
-    bunny_rw_dns_2026-03-15 = {
-      configChanges = {
-        security.acme.certs.${fleet.global.domain}.credentialFiles.BUNNY_API_KEY_FILE = "$SECRET_PATH";
-      };
-    };
-
-    us_chi_wg_2026-03-15 = {
-      configChanges = {
-        nixarr.vpn.wgConf = "$SECRET_PATH";
-      };
-    };
-
-    # Single raw API-key values rendered by OpenBao. The file group grants the
-    # corresponding nixarr API synchronizer access without placing secrets in
-    # Git or the Nix store.
-    sabnzbd_api_key_2026-07-15 = {
-      group = "media";
-      mode = "0440";
-      field = "api-key";
-    };
-    nzbgeek_api_key_2026-07-15 = {
-      group = "prowlarr-api";
-      mode = "0440";
-      field = "api-key";
-    };
-
-    zitadel_master_key_2026-03-15 = {
-      mode = "0444";
-      template = ''
-        {{- with secret "kv/data/machines/high-trust/zitadel_master_key_2026-03-15" -}}{{- .Data.data.value | base64Decode -}}{{- end -}}
-      '';
-    };
-
-    oauth2_proxy_key_file_2026-03-15 = {
-      configChanges = {
-        services.oauth2-proxy.keyFile = "$SECRET_PATH";
-      };
-    };
-
-    openwebui_env_2026-03-15 = {
-      # Preformatted root-only environment file. It must contain WEBUI_SECRET_KEY
-      # (stable across service restarts) plus the Zitadel OAuth client credentials.
-      softDepend = [ "open-webui" ];
-    };
-
-    openrouter_2026-03-15 = {
-      field = "api-key";
-    };
-
-    # vaultwarden env file (migrated from o001). Same OpenBao kv secret
-    # (kv/data/machines/high-trust/vaultwarden_env_2026-03-15); the whole
-    # env file is stored in the `value` field. Bind-mounted into the
-    # vaultwarden container read-only.
-    vaultwarden_env_2026-03-15 = {
-      softDepend = [ "container@vaultwarden" ];
-    };
-  };
 }

@@ -1,3 +1,4 @@
+# Reference only: llama-cpp is no longer enabled on joe; keep this file for reference.
 {
   inputs,
   constants,
@@ -21,6 +22,51 @@ let
       cudaSupport = true;
     };
   };
+
+  modelPresets = pkgs.writeText "llama-cpp-models.ini" ''
+    # Primary: Gemma 4 26B-A4B (general purpose, multimodal).
+    # 26B total / 4B activated. Dense attention layers, MoE FFNs.
+    # At Q4_K_XL the file is ~16 GB; with n-cpu-moe=99 only the
+    # ~2 GB of attention/embedding stays on GPU, which fits.
+    [gemma-4-26b-a4b]
+    hf-repo = unsloth/gemma-4-26B-A4B-it-GGUF
+    hf-file = gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf
+    alias = gemma-4-26b-a4b
+    ngl = 99
+    n-cpu-moe = 99
+    ctx-size = 32768
+    parallel = 1
+    flash-attn = on
+    cache-type-k = q8_0
+    cache-type-v = q8_0
+    jinja = on
+    reasoning = on
+    temp = 1.0
+    top-p = 0.95
+    top-k = 64
+
+    # Secondary: Qwen3.5-35B-A3B (agentic coding).
+    # 35B total / 3B activated, hybrid SSM+MoE. This needs an extra
+    # recurrent state cache GPU buffer on top of normal KV.
+    [qwen3.5-35b-a3b]
+    hf-repo = unsloth/Qwen3.5-35B-A3B-GGUF
+    hf-file = Qwen3.5-35B-A3B-UD-Q4_K_XL.gguf
+    alias = qwen3.5-35b-a3b
+    ngl = 99
+    n-cpu-moe = 99
+    ctx-size = 32768
+    parallel = 1
+    flash-attn = on
+    cache-type-k = q8_0
+    cache-type-v = q8_0
+    jinja = on
+    reasoning = on
+    temp = 0.7
+    top-p = 0.8
+    top-k = 20
+    min-p = 0.0
+    presence-penalty = 1.5
+  '';
 in
 {
   # Enable CUDA globally on this host so any other package that wants CUDA
@@ -32,13 +78,10 @@ in
   services.llama-cpp = {
     enable = true;
     package = pkgsLlamaCpp.llama-cpp;
-    host = "0.0.0.0";
-    port = c.port;
-
     # Router-mode model presets.
     # Models are downloaded from Hugging Face on first request and cached in
     # /var/cache/llama-cpp (LLAMA_CACHE). The router loads/unloads models
-    # on demand, capped by --models-max below (mirrors the old
+    # on demand, capped by models-max below (mirrors the old
     # OLLAMA_KEEP_ALIVE=0 behavior on a single 24GB GPU).
     # Model picks driven by the r/LocalLLaMA "Best Local LLMs Apr 2026"
     # megathread, filtered to what fits joe (RTX 3080 10GB + 32GB DDR4).
@@ -63,61 +106,13 @@ in
     #                           --chat-template-kwargs '{"enable_thinking":true}'.
     #                           litellm flips it off per-call for the
     #                           `-no_think` model variants.
-    modelsPreset = {
-      # Primary: Gemma 4 26B-A4B (general purpose, multimodal).
-      # 26B total / 4B activated. Dense attention layers, MoE FFNs.
-      # At Q4_K_XL the file is ~16 GB; with n-cpu-moe=99 only the
-      # ~2 GB of attention/embedding stays on GPU, which fits.
-      "gemma-4-26b-a4b" = {
-        hf-repo = "unsloth/gemma-4-26B-A4B-it-GGUF";
-        hf-file = "gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf";
-        alias = "gemma-4-26b-a4b";
-        ngl = "99";
-        n-cpu-moe = "99"; # send ALL MoE experts to CPU
-        ctx-size = "32768";
-        parallel = "1";
-        flash-attn = "on";
-        cache-type-k = "q8_0";
-        cache-type-v = "q8_0";
-        jinja = "on";
-        reasoning = "on"; # `-no_think` variant flips this per-request
-        # Sampling per Gemma 4 model card (thread: false79, truthputer).
-        temp = "1.0";
-        top-p = "0.95";
-        top-k = "64";
-      };
-
-      # Secondary: Qwen3.5-35B-A3B (agentic coding).
-      # 35B total / 3B activated, hybrid SSM+MoE — note this needs an
-      # extra "recurrent state cache" GPU buffer on top of normal KV,
-      # which is what was OOMing previously.
-      "qwen3.5-35b-a3b" = {
-        hf-repo = "unsloth/Qwen3.5-35B-A3B-GGUF";
-        hf-file = "Qwen3.5-35B-A3B-UD-Q4_K_XL.gguf";
-        alias = "qwen3.5-35b-a3b";
-        ngl = "99";
-        n-cpu-moe = "99"; # all 256 experts on CPU; only hot path on GPU
-        ctx-size = "32768";
-        parallel = "1";
-        flash-attn = "on";
-        cache-type-k = "q8_0";
-        cache-type-v = "q8_0";
-        jinja = "on";
-        reasoning = "on";
-        # Sampling per u/awitod's Qwen3.5-35B-A3B unsloth-guide config.
-        temp = "0.7";
-        top-p = "0.8";
-        top-k = "20";
-        min-p = "0.0";
-        presence-penalty = "1.5";
-      };
+    settings = {
+      host = "0.0.0.0";
+      port = c.port;
+      models-preset = modelPresets;
+      models-max = 1; # Single GPU — keep at most one model resident at a time.
+      metrics = true; # Prometheus-compatible /metrics endpoint.
     };
-
-    extraFlags = [
-      "--models-max"
-      "1" # Single GPU — keep at most one model resident at a time.
-      "--metrics" # Prometheus-compatible /metrics endpoint.
-    ];
   };
 
   # The upstream services.llama-cpp module uses DynamicUser=true, which

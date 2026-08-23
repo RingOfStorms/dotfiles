@@ -23,7 +23,7 @@ let
   # `h001Subdomains` (which contains one-label public-zone service names).
   # Keep them in this split-DNS authority because ~joshuabell.xyz takes
   # precedence over MagicDNS's net.joshuabell.xyz zone.
-  h001TailnetAliases = [ "sec.h001.net.${fleet.global.domain}" ];
+  h001TailnetAliases = [ "secrets.h001.net.${fleet.global.domain}" ];
 
   # Tailnet clients get h001's OVERLAY ip for these names so they're reachable
   # from ANY tailnet client (home or remote), unlike the LAN 10.12.14.10 answer
