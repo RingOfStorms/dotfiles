@@ -39,11 +39,11 @@
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1782345539,
-        "narHash": "sha256-x2fLNdffIeINnruR5b6fK02ChP64kfUqr7thO4fFy9M=",
+        "lastModified": 1787627670,
+        "narHash": "sha256-frLkSzhu7/R48Hl/bA+l/K4w2hSIzjocXkXSduA8enM=",
         "ref": "refs/heads/master",
-        "rev": "5cc9b5c6e29c8783eef7ec9e2cef378312515ba5",
-        "revCount": 1801,
+        "rev": "639c275901b171ec7e91aa2cdcd88d84c04b1194",
+        "revCount": 2000,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },

@@ -47,6 +47,13 @@ let
       (n: "host-record=${n}.${fleet.global.domain},${h001Overlay}")
       h001Services}
 
+    # Keep listed service names local for every RR type. `host-record` supplies
+    # the local A/PTR data; without this rule, AAAA/CNAME/HTTPS queries fall
+    # through to the public CNAME chain and can poison client resolver caches.
+    ${lib.concatMapStringsSep "\n"
+      (n: "local=/${n}.${fleet.global.domain}/")
+      h001Services}
+
     # Fully-qualified Tailnet-only aliases -> h001 overlay IP.
     ${lib.concatMapStringsSep "\n"
       (n: "host-record=${n},${h001Overlay}")
