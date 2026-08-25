@@ -6,6 +6,29 @@
 }:
 let
   cfg = config.ringofstorms.tailnet;
+
+  # Keep the resolver cache aligned with link/address/route changes. Tailscale
+  # installs its split-DNS route asynchronously, and NetworkManager/DHCP can
+  # replace the active DNS link while the machine remains up.
+  flushResolvedDnsMonitor = pkgs.writeShellScript "tailscale-resolved-dns-monitor" ''
+    set -euo pipefail
+
+    flush_caches() {
+      ${pkgs.systemd}/bin/resolvectl flush-caches
+    }
+
+    # Cover the initial Tailscale DNS setup and any later daemon restart.
+    flush_caches
+
+    # Coalesce a burst of netlink events and flush once after two quiet seconds.
+    # The monitor exits if iproute2 stops; systemd then restarts this service.
+    while IFS= read -r _event; do
+      while IFS= read -r -t 2 _event; do
+        :
+      done
+      flush_caches
+    done < <(${pkgs.iproute2}/bin/ip monitor link address route)
+  '';
 in
 {
   options.ringofstorms.tailnet = {
@@ -111,6 +134,33 @@ in
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "${pkgs.systemd}/bin/resolvectl flush-caches";
+    };
+  };
+
+  # Keep flushing after the initial setup: Tailscale and DHCP changes can
+  # invalidate resolved's cached answer without restarting the host. The
+  # iproute2 monitor covers link, address, and route changes on every host,
+  # including tailscale0; the helper coalesces event bursts before flushing.
+  systemd.services.tailscale-resolved-dns-monitor = {
+    description = "Flush systemd-resolved cache after network state changes";
+    wantedBy = [ "multi-user.target" ];
+    wants = [
+      "tailscaled.service"
+      "tailscaled-autoconnect.service"
+      "tailscale-flush-resolved-dns.service"
+    ];
+    after = [
+      "tailscaled.service"
+      "tailscaled-autoconnect.service"
+      "tailscale-flush-resolved-dns.service"
+      "systemd-resolved.service"
+    ];
+    partOf = [ "tailscaled.service" ];
+    serviceConfig = {
+      Type = "simple";
+      ExecStart = flushResolvedDnsMonitor;
+      Restart = "always";
+      RestartSec = "2s";
     };
   };
 
