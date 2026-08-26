@@ -364,6 +364,15 @@ in
           # run on upload, which keeps that off the request path.
           whisper.enable = true;
 
+          # CPU-first PaddleOCR-VL service for image fields and handwriting
+          # drawing OCR. The cache lives under the persistent application bind
+          # mounted at /var/lib/pkm, so the model is downloaded only once and
+          # survives container restarts and host rebuilds.
+          ocr = {
+            enable = true;
+            dataDir = "${c.dataDir}/ocr";
+          };
+
           # The native apps — the Android APK and the desktop binary — serve
           # their bundle from a `tauri://` origin, so they reach this server
           # cross-origin even though it is their own backend. Without these

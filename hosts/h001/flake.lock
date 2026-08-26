@@ -6,11 +6,11 @@
       },
       "locked": {
         "dir": "flakes/beszel",
-        "lastModified": 1787283432,
-        "narHash": "sha256-C9rHMyMcLR3RwCzuLjzCv3Ou/xGQGyEa2PVVhm4GSGQ=",
+        "lastModified": 1787691131,
+        "narHash": "sha256-MeDMeGfGfADeELql7y23xGi1PLC9rHn/IDxP2VGEUKo=",
         "ref": "refs/heads/master",
-        "rev": "950c79e1689cf8067230448ca1a16f2b1adcaa49",
-        "revCount": 1989,
+        "rev": "147ae443ca7a9a4f7de215bb1d14fab82ecf70ec",
+        "revCount": 2002,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -38,11 +38,11 @@
     },
     "beszel-nixpkgs_2": {
       "locked": {
-        "lastModified": 1787135253,
-        "narHash": "sha256-RD2kNWCG+Bjo6h+JVjWVNntZs2GtRoeY2xHjts/FNkA=",
+        "lastModified": 1787498568,
+        "narHash": "sha256-9i/VTdusq/+NM/tz+J1Re+ojkMB8MBf0QshnYfzHz30=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "ffb3c9b700e759be2ef13237c9d8f953b32a1e46",
+        "rev": "56c02bc00adcf003215cc4bd996d6efaf4cff188",
         "type": "github"
       },
       "original": {
@@ -55,11 +55,11 @@
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1787627670,
-        "narHash": "sha256-frLkSzhu7/R48Hl/bA+l/K4w2hSIzjocXkXSduA8enM=",
+        "lastModified": 1787691131,
+        "narHash": "sha256-MeDMeGfGfADeELql7y23xGi1PLC9rHn/IDxP2VGEUKo=",
         "ref": "refs/heads/master",
-        "rev": "639c275901b171ec7e91aa2cdcd88d84c04b1194",
-        "revCount": 2000,
+        "rev": "147ae443ca7a9a4f7de215bb1d14fab82ecf70ec",
+        "revCount": 2002,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -966,11 +966,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1787520561,
-        "narHash": "sha256-4mwDgMRqbh12ea5s9k1ydElk+z28q1eXhGM7pac4ZDw=",
+        "lastModified": 1787771831,
+        "narHash": "sha256-xoUt+3iC3G8YDHrX7l+LMVuOJaqM2qJgUC6Wn695xPk=",
         "ref": "refs/heads/main",
-        "rev": "27c5e64eecdf577033dcf79e8174d8e898b7778a",
-        "revCount": 72,
+        "rev": "3b912188517edd9020549c1e87b7951df7c2807c",
+        "revCount": 91,
         "type": "git",
         "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/pkm.git"
       },
@@ -1001,11 +1001,11 @@
         "nixpkgs": "nixpkgs_5"
       },
       "locked": {
-        "lastModified": 1784589036,
-        "narHash": "sha256-gcM5NOISMOLWpgn9YKn6mgajKJYCM29dzIFn/D1Evmo=",
+        "lastModified": 1787290557,
+        "narHash": "sha256-xqe2n+H3aUKSbTpubbisj1Fw+Mp71M4RZxP2paTPRZE=",
         "ref": "refs/heads/main",
-        "rev": "5f4fa0d3cd56202ac9d0c7342d44818594cbd105",
-        "revCount": 90,
+        "rev": "a3e1f7d37dc38652f3765269709f1ebdd9cc325f",
+        "revCount": 91,
         "type": "git",
         "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/puzzles.git"
       },
