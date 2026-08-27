@@ -231,6 +231,12 @@ in
       {
         imports = [ inputs.pkm.nixosModules.pkm ];
 
+        # The outer host's Podman configuration is not inherited by this
+        # systemd-nspawn guest. The OCR service invokes rootful Podman here,
+        # so enable the guest's common containers configuration as well; this
+        # provides /etc/containers/policy.json.
+        virtualisation.podman.enable = true;
+
         system.stateVersion = "25.05";
 
         networking = {
