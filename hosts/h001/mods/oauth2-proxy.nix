@@ -25,6 +25,7 @@ in
     services.oauth2-proxy = {
       enable = true;
       httpAddress = "http://127.0.0.1:${toString c.port}";
+      trustedProxyIP = [ "127.0.0.1" ];
       package = pkgsOauth2Proxy.oauth2-proxy;
       provider = "oidc";
       reverseProxy = true;

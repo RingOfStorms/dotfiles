@@ -228,6 +228,34 @@ in
         lib,
         ...
       }:
+      let
+        # The nspawn guest cannot load the cgroup-v2 device BPF program that
+        # rootful Podman/crun normally installs for each container. Keep this
+        # workaround scoped to OCR rather than granting CAP_BPF to the whole
+        # guest or weakening the host's other container workloads.
+        ocrPodman = pkgs.writeShellScriptBin "pkm-ocr-podman" ''
+          set -eu
+          case "''${1:-}" in
+            build)
+              shift
+              exec ${lib.getExe pkgs.podman} \
+                --cgroup-manager=cgroupfs \
+                --runtime-flag=cgroup-manager=disabled \
+                build "$@"
+              ;;
+            run)
+              shift
+              exec ${lib.getExe pkgs.podman} \
+                --cgroup-manager=cgroupfs \
+                --runtime-flag=cgroup-manager=disabled \
+                run --cgroups=disabled "$@"
+              ;;
+            *)
+              exec ${lib.getExe pkgs.podman} "$@"
+              ;;
+          esac
+        '';
+      in
       {
         imports = [ inputs.pkm.nixosModules.pkm ];
 
@@ -377,6 +405,7 @@ in
           ocr = {
             enable = true;
             dataDir = "${c.dataDir}/ocr";
+            podmanPackage = ocrPodman;
           };
 
           # The native apps — the Android APK and the desktop binary — serve
