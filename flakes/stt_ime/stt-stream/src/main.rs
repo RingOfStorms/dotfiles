@@ -240,8 +240,10 @@ fn env_is_true(v: &str) -> bool {
 fn emit_event(event: &SttEvent) {
     if let Ok(json) = serde_json::to_string(event) {
         let mut stdout = std::io::stdout().lock();
-        let _ = writeln!(stdout, "{}", json);
-        let _ = stdout.flush();
+        if writeln!(stdout, "{}", json).is_err() || stdout.flush().is_err() {
+            // Broken pipe to parent stdout
+            std::process::exit(0);
+        }
     }
 }
 
@@ -638,6 +640,26 @@ async fn main() -> Result<()> {
     stream.play()?;
     emit_event(&SttEvent::Ready);
 
+    // Signal handlers for graceful termination
+    let running_sig = running.clone();
+    tokio::spawn(async move {
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("Failed to register SIGTERM handler");
+        let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+            .expect("Failed to register SIGINT handler");
+
+        tokio::select! {
+            _ = sigterm.recv() => {
+                info!("Received SIGTERM, shutting down");
+                running_sig.store(false, Ordering::Relaxed);
+            }
+            _ = sigint.recv() => {
+                info!("Received SIGINT, shutting down");
+                running_sig.store(false, Ordering::Relaxed);
+            }
+        }
+    });
+
     // Stdin command reader
     let running_stdin = running.clone();
     let mode_stdin = mode.clone();
@@ -645,21 +667,40 @@ async fn main() -> Result<()> {
 
     let stdin_handle = std::thread::spawn(move || {
         let stdin = std::io::stdin();
-        for line in stdin.lock().lines() {
+        let mut handle = stdin.lock();
+        let mut line_buf = String::new();
+
+        loop {
             if !running_stdin.load(Ordering::Relaxed) {
                 break;
             }
 
-            let line = match line {
-                Ok(l) => l,
-                Err(_) => continue,
-            };
+            line_buf.clear();
+            match handle.read_line(&mut line_buf) {
+                Ok(0) => {
+                    // EOF reached (parent closed stdin or died)
+                    info!("Stdin EOF encountered, shutting down stt-stream");
+                    running_stdin.store(false, Ordering::Relaxed);
+                    break;
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    error!("Error reading stdin: {}, shutting down stt-stream", e);
+                    running_stdin.store(false, Ordering::Relaxed);
+                    break;
+                }
+            }
 
-            let cmd: SttCommand = match serde_json::from_str(&line) {
+            let line = line_buf.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            let cmd: SttCommand = match serde_json::from_str(line) {
                 Ok(c) => c,
                 Err(_) => {
                     // Try simple text commands
-                    match line.trim().to_lowercase().as_str() {
+                    match line.to_lowercase().as_str() {
                         "start" => SttCommand::Start,
                         "stop" => SttCommand::Stop,
                         "cancel" => SttCommand::Cancel,

@@ -33,6 +33,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <sys/prctl.h>
 #include <fcntl.h>
 #include <cstring>
 #include <cstdlib>
@@ -334,6 +335,7 @@ void SttEngine::startProcess() {
         return;
     }
 
+    pid_t parentPid = getpid();
     pid_t pid = fork();
     if (pid < 0) {
         STT_ERROR() << "Failed to fork";
@@ -346,6 +348,14 @@ void SttEngine::startProcess() {
 
     if (pid == 0) {
         // Child process
+        // Ask kernel to deliver SIGTERM if parent (fcitx5) exits/dies
+        prctl(PR_SET_PDEATHSIG, SIGTERM);
+
+        // Check if parent already died before prctl call
+        if (getppid() != parentPid) {
+            _exit(0);
+        }
+
         close(stdinPipe[1]);
         close(stdoutPipe[0]);
 
@@ -411,17 +421,22 @@ void SttEngine::stopProcess() {
     ioEvent_.reset();
 
     sendCommand("shutdown");
-    close(stdinFd_);
-    close(stdoutFd_);
+    if (stdinFd_ >= 0) {
+        close(stdinFd_);
+        stdinFd_ = -1;
+    }
+    if (stdoutFd_ >= 0) {
+        close(stdoutFd_);
+        stdoutFd_ = -1;
+    }
 
     // Wait for child to exit
     int status;
     waitpid(childPid_, &status, 0);
 
-    stdinFd_ = -1;
-    stdoutFd_ = -1;
     childPid_ = -1;
     ready_ = false;
+    readBuffer_.clear();
 
     STT_INFO() << "Stopped stt-stream process";
 }
@@ -432,14 +447,20 @@ void SttEngine::sendCommand(const std::string& cmd) {
     }
 
     std::string line = cmd + "\n";
-    write(stdinFd_, line.c_str(), line.length());
+    ssize_t written = write(stdinFd_, line.c_str(), line.length());
+    if (written < 0) {
+        if (errno == EPIPE || errno == EBADF) {
+            STT_WARN() << "Broken pipe writing to stt-stream, stopping process";
+            stopProcess();
+        }
+    }
 }
 
 void SttEngine::onProcessOutput() {
     char buf[4096];
     ssize_t n;
 
-    while ((n = read(stdoutFd_, buf, sizeof(buf) - 1)) > 0) {
+    while (stdoutFd_ >= 0 && (n = read(stdoutFd_, buf, sizeof(buf) - 1)) > 0) {
         buf[n] = '\0';
         readBuffer_ += buf;
 
@@ -454,6 +475,12 @@ void SttEngine::onProcessOutput() {
                 handleEvent(ev);
             }
         }
+    }
+
+    if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)) {
+        // EOF or fatal socket error -> child terminated or closed pipe
+        STT_INFO() << "stt-stream pipe closed (n=" << n << ", errno=" << (n < 0 ? errno : 0) << ")";
+        stopProcess();
     }
 }
 
