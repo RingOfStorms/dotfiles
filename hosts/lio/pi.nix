@@ -111,7 +111,7 @@ let
         models.insert(0, pi_model({"id": default_id}))
 
     document = {"providers": {"litellm": {
-        "baseUrl": "http://h001.net.joshuabell.xyz:8094",
+        "baseUrl": "http://h001.net.joshuabell.xyz:8094/v1",
         "api": "openai-completions",
         "apiKey": "na",
         "models": models,
