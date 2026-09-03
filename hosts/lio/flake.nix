@@ -132,6 +132,8 @@
           inputs.common.nixosModules.rage
           inputs.common.nixosModules.more_filesystems
 
+          ./pi.nix
+
           (
             { pkgs, ... }:
             {
@@ -161,6 +163,8 @@
                   "zed" = "${no_proxy} ${nono_base} --profile claude-code-full -- zeditor";
                   # npm
                   "npm" = "${no_proxy} ${nono_base} --profile npm -- npm";
+                  "pi" = "${no_proxy} ${nono_base} --profile pi -- pi";
+                  "pi_" = "${no_proxy} pi";
                 };
             }
           )
