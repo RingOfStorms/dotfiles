@@ -208,7 +208,19 @@ in
           sonarr.sonarr = {
             base_url = "http://127.0.0.1:8989";
             api_key = "!env_var SONARR_API_KEY";
-            quality_definition.type = "series";
+            quality_definition = {
+              type = "series";
+              qualities = [
+                {
+                  name = "Bluray-1080p";
+                  min = 45;
+                }
+                {
+                  name = "WEBDL-1080p";
+                  min = 45;
+                }
+              ];
+            };
             media_management.propers_and_repacks = "do_not_prefer";
             quality_profiles = [
               {
@@ -225,6 +237,27 @@ in
                 trash_id = "20e0fc959f1f1704bed501f23bdae76f"; # [Anime] Remux-1080p
                 name = "Anime";
                 reset_unmatched_scores.enabled = true;
+                min_format_score = 100;
+                min_upgrade_format_score = 1;
+                upgrade = {
+                  allowed = true;
+                  until_quality = "Bluray 1080p";
+                  until_score = 10000;
+                };
+              }
+              {
+                # Assign this to shows where no release should be accepted
+                # until Sonarr recognizes it as English dub-only.
+                trash_id = "20e0fc959f1f1704bed501f23bdae76f"; # [Anime] Remux-1080p
+                name = "Anime English Dub Only";
+                reset_unmatched_scores.enabled = true;
+                min_format_score = 2000;
+                min_upgrade_format_score = 2000;
+                upgrade = {
+                  allowed = true;
+                  until_quality = "Bluray 1080p";
+                  until_score = 2000;
+                };
               }
             ];
             custom_format_groups.add = [
@@ -241,14 +274,21 @@ in
             ];
             custom_formats = [
               {
+                # Prefer dual-audio releases as an upgrade, without making
+                # them mandatory for the initial original-language download.
                 trash_ids = [ "418f50b10f1907201b6cfdf881f467b7" ]; # Anime Dual Audio
-                assign_scores_to = [{ name = "Anime"; score = 2000; }];
+                assign_scores_to = [
+                  { name = "Anime"; score = 10; }
+                ];
               }
               {
-                # Permit English-dub releases as a fallback when a recognized
-                # dual-audio release is unavailable.
+                # Dubs-only is not a fallback: it is excluded from the normal
+                # profile and is the required format for the dub-only profile.
                 trash_ids = [ "9c14d194486c4014d422adc64092d794" ]; # Dubs Only
-                assign_scores_to = [{ name = "Anime"; score = 0; }];
+                assign_scores_to = [
+                  { name = "Anime"; score = -10000; }
+                  { name = "Anime English Dub Only"; score = 2000; }
+                ];
               }
             ];
           };
