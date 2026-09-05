@@ -245,6 +245,7 @@ in
             "gemini-3.5-flash-lite"
             "gemini-3.5-flash-passthrough"
             "gemini-3.7-flash"
+            "gemini-3.8-flash"
             "gemini-embedding-001"
             "gemini-embedding-2"
             "glm-4.7"
