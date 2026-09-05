@@ -1,5 +1,37 @@
 { pkgs, lib, ... }:
 let
+  jiti = pkgs.fetchurl {
+    url = "https://registry.npmjs.org/jiti/-/jiti-2.7.0.tgz";
+    hash = "sha256-jdDTZftJwOfMQtagDfb7LakFb8JEkglDRvw07NvPKMo=";
+  };
+
+  typebox = pkgs.fetchurl {
+    url = "https://registry.npmjs.org/typebox/-/typebox-1.3.7.tgz";
+    hash = "sha256-sdCUJWDmSTbKnOMolJtabIJY6NCFEa3bfuu1TP2ghjo=";
+  };
+
+  jitiPackage = pkgs.stdenvNoCC.mkDerivation {
+    pname = "jiti-node-module";
+    version = "2.7.0";
+    src = jiti;
+    dontBuild = true;
+    installPhase = ''
+      mkdir -p "$out/node_modules/jiti"
+      cp -r . "$out/node_modules/jiti/"
+    '';
+  };
+
+  typeboxPackage = pkgs.stdenvNoCC.mkDerivation {
+    pname = "typebox-node-module";
+    version = "1.3.7";
+    src = typebox;
+    dontBuild = true;
+    installPhase = ''
+      mkdir -p "$out/node_modules/typebox"
+      cp -r . "$out/node_modules/typebox/"
+    '';
+  };
+
   pi = pkgs.stdenvNoCC.mkDerivation {
     pname = "pi-coding-agent";
     version = "0.84.4";
@@ -16,7 +48,8 @@ let
       mkdir -p "$out/lib/pi-coding-agent" "$out/bin"
       cp -r . "$out/lib/pi-coding-agent/"
       makeWrapper ${pkgs.nodejs_24}/bin/node "$out/bin/pi" \
-        --add-flags "$out/lib/pi-coding-agent/dist/bundle/cli.js"
+        --add-flags "$out/lib/pi-coding-agent/dist/bundle/cli.js" \
+        --prefix NODE_PATH : "${jitiPackage}/node_modules:${typeboxPackage}/node_modules"
       runHook postInstall
     '';
 
@@ -124,12 +157,18 @@ let
     PY
   '';
 
+  extensions = [
+    ./pi-extension/mva-workflow.js
+    ./pi-extension/pi-josh-utils.js
+  ];
+
   settings = pkgs.writeText "pi-settings.json" (builtins.toJSON {
     defaultProvider = "litellm";
     defaultModel = "air-gemini-3.8-flash";
     defaultProjectTrust = "ask";
     enableInstallTelemetry = false;
     enableAnalytics = false;
+    extensions = extensions;
     defaultTools = [ "read" "grep" "find" "ls" "edit" "write" "bash" ];
     compaction = {
       enabled = true;

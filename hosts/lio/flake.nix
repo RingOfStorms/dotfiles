@@ -25,7 +25,7 @@
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
-    opencode.url = "github:anomalyco/opencode/eb6ff0c1e049e5dfb6f61eb74f925c0a8007490c";
+    opencode.url = "github:anomalyco/opencode/3a9d4e78b6b4509c2f7e91812a735e568e7f3f84";
     omp.url = "github:can1357/oh-my-pi";
     nono.url = "github:always-further/nono/6118b79aeda1365da213d85457b4d3cf1201d575";
     nono.flake = false;
