@@ -142,6 +142,11 @@ in
         description = "LiteLLM EnvironmentFile (OpenRouter API key).";
         access = [ { type = "role"; value = "device_high_trust"; } ];
       };
+      "machines/high-trust/kura_env_2026-09-05" = {
+        fields = [ "value" ];
+        description = "Kura EnvironmentFile (JWT master secret and PowerSync API token).";
+        access = [ { type = "role"; value = "device_high_trust"; } ];
+      };
       "machines/high-trust/sabnzbd_api_key_2026-07-15" = {
         fields = [ "api-key" ];
         description = "Sabnzbd API key (nixarr).";
