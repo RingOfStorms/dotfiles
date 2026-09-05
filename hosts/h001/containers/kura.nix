@@ -43,6 +43,13 @@ let
       uid = 0;
       gid = 0;
     }
+    {
+      host = "${c.dataDir}/podman";
+      container = "/var/lib/containers";
+      user = "root";
+      uid = 0;
+      gid = 0;
+    }
   ];
 
   users = {
@@ -77,7 +84,7 @@ in
         proxyPass = "http://${c.containerIp}:${toString c.port}";
         extraConfig = ''
           proxy_set_header X-Forwarded-Proto https;
-          client_max_body_size 512m;
+          client_max_body_size 10m;
         '';
       };
 

@@ -186,7 +186,7 @@ rec {
   h001Subdomains = [
     "jellyfin" "media" "books" "notes" "chat" "sso-proxy" "n8n"
     "sso" "gist" "git" "etebase" "photos"
-    "location" "matrix" "element" "docs" "pkm"
+    "location" "matrix" "element" "docs" "pkm" "kura"
     # `secrets` is the secrets manager server (hosts/h001/mods/sec.nix).
     "secrets"
   ];

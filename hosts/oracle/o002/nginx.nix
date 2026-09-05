@@ -246,6 +246,20 @@ in
             '';
           };
         };
+        # ── kura — successor knowledge system (h001 container) ──────────
+        "kura.${domain}" = {
+          enableACME = true;
+          forceSSL = true;
+          locations."/" = {
+            proxyWebsockets = true;
+            proxyPass = "http://${upstream}";
+            extraConfig = ''
+              client_max_body_size 10m;
+              proxy_read_timeout 1h;
+              proxy_send_timeout 1h;
+            '';
+          };
+        };
         "location.${domain}" = {
           enableACME = true;
           forceSSL = true;
