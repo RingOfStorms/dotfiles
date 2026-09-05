@@ -154,6 +154,25 @@
         "type": "github"
       }
     },
+    "kura": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_2",
+        "rust-overlay": "rust-overlay"
+      },
+      "locked": {
+        "lastModified": 1788586223,
+        "narHash": "sha256-Z/kS+/VPxQos7MSLGMSGwxGoBb5JB8XPtr4zRmZH0ow=",
+        "ref": "refs/heads/main",
+        "rev": "77a1b9c4a28f4c20b637e675029f035b9ffcda83",
+        "revCount": 13,
+        "type": "git",
+        "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/kura.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/kura.git"
+      }
+    },
     "litellm-nixpkgs": {
       "locked": {
         "lastModified": 1786862985,
@@ -204,7 +223,7 @@
     },
     "nixarr": {
       "inputs": {
-        "nixpkgs": "nixpkgs_2",
+        "nixpkgs": "nixpkgs_3",
         "treefmt-nix": "treefmt-nix",
         "vpnconfinement": "vpnconfinement",
         "website-builder": "website-builder"
@@ -241,6 +260,22 @@
     },
     "nixpkgs_2": {
       "locked": {
+        "lastModified": 1788316716,
+        "narHash": "sha256-bc7rSpXIdn9QWGNqfWcPZWOhEVF8NoeAZkWq0XWnf/k=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "3ed67ec0a4d3c7ab4ae1f04f8ee8df07bfa506a2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_3": {
+      "locked": {
         "lastModified": 1775595990,
         "narHash": "sha256-OEf7YqhF9IjJFYZJyuhAypgU+VsRB5lD4DuiMws5Ltc=",
         "owner": "nixos",
@@ -255,7 +290,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_3": {
+    "nixpkgs_4": {
       "locked": {
         "lastModified": 1787101114,
         "narHash": "sha256-gwrPcFf/rDjHPaVflbDZ040ZDmBTRj/7+s8ZmE2SaIM=",
@@ -271,7 +306,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_4": {
+    "nixpkgs_5": {
       "locked": {
         "lastModified": 1785090369,
         "narHash": "sha256-m0pDuRJG7EDo9ri+4Ksu83VsI+PlxNC9lNBfydejce4=",
@@ -287,7 +322,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_5": {
+    "nixpkgs_6": {
       "locked": {
         "lastModified": 1769861202,
         "narHash": "sha256-JwhbEHmbFFH754loOPbpjPHf9EAi+oMm2RsFXnlbt1g=",
@@ -303,7 +338,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_6": {
+    "nixpkgs_7": {
       "locked": {
         "lastModified": 1777578337,
         "narHash": "sha256-Ad49moKWeXtKBJNy2ebiTQUEgdLyvGmTeykAQ9xM+Z4=",
@@ -319,7 +354,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_7": {
+    "nixpkgs_8": {
       "locked": {
         "lastModified": 1785828668,
         "narHash": "sha256-8fsyqeO+mJqvIzeO4xIpgJe/f7MTbbVTEC6RT6WSXNs=",
@@ -961,9 +996,9 @@
     },
     "pkm": {
       "inputs": {
-        "nixpkgs": "nixpkgs_4",
+        "nixpkgs": "nixpkgs_5",
         "powersync-service": "powersync-service",
-        "rust-overlay": "rust-overlay"
+        "rust-overlay": "rust-overlay_2"
       },
       "locked": {
         "lastModified": 1788324524,
@@ -998,7 +1033,7 @@
     },
     "puzzles": {
       "inputs": {
-        "nixpkgs": "nixpkgs_5"
+        "nixpkgs": "nixpkgs_6"
       },
       "locked": {
         "lastModified": 1787290557,
@@ -1023,11 +1058,12 @@
         "forgejo-nixpkgs": "forgejo-nixpkgs",
         "home-manager": "home-manager",
         "immich-nixpkgs": "immich-nixpkgs",
+        "kura": "kura",
         "litellm-nixpkgs": "litellm-nixpkgs",
         "matrix-nixpkgs": "matrix-nixpkgs",
         "n8n-nixpkgs": "n8n-nixpkgs",
         "nixarr": "nixarr",
-        "nixpkgs": "nixpkgs_3",
+        "nixpkgs": "nixpkgs_4",
         "oauth2-proxy-nixpkgs": "oauth2-proxy-nixpkgs",
         "open-webui-nixpkgs": "open-webui-nixpkgs",
         "paperless-nixpkgs": "paperless-nixpkgs",
@@ -1041,7 +1077,7 @@
     },
     "ros_neovim": {
       "inputs": {
-        "nixpkgs": "nixpkgs_6",
+        "nixpkgs": "nixpkgs_7",
         "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring": "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring",
         "nvim_plugin-MunifTanjim/nui.nvim": "nvim_plugin-MunifTanjim/nui.nvim",
         "nvim_plugin-Saecki/crates.nvim": "nvim_plugin-Saecki/crates.nvim",
@@ -1078,7 +1114,7 @@
         "nvim_plugin-tpope/vim-sleuth": "nvim_plugin-tpope/vim-sleuth",
         "nvim_plugin-uga-rosa/ccc.nvim": "nvim_plugin-uga-rosa/ccc.nvim",
         "nvim_plugin-windwp/nvim-ts-autotag": "nvim_plugin-windwp/nvim-ts-autotag",
-        "rust-overlay": "rust-overlay_2"
+        "rust-overlay": "rust-overlay_3"
       },
       "locked": {
         "lastModified": 1784221694,
@@ -1095,6 +1131,27 @@
       }
     },
     "rust-overlay": {
+      "inputs": {
+        "nixpkgs": [
+          "kura",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1788419040,
+        "narHash": "sha256-Itdv4WV5z+U0VpseZ/f4uvYmULVPxsV3Hc2l9HrCyY4=",
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "1af4dd0db58d4adde06f0840ce28da90f9c66c50",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "rust-overlay_2": {
       "inputs": {
         "nixpkgs": [
           "pkm",
@@ -1115,7 +1172,7 @@
         "type": "github"
       }
     },
-    "rust-overlay_2": {
+    "rust-overlay_3": {
       "inputs": {
         "nixpkgs": [
           "ros_neovim",
@@ -1139,7 +1196,7 @@
     "secrets_manager": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs_7"
+        "nixpkgs": "nixpkgs_8"
       },
       "locked": {
         "lastModified": 1786750117,

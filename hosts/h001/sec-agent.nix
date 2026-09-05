@@ -38,6 +38,11 @@ import ../sec-agent.nix {
       softDepend = [ "litellm" ];
     };
 
+    kura_env_2026-09-05 = {
+      remotePath = "machines/high-trust/kura_env_2026-09-05";
+      softDepend = [ "container@kura" ];
+    };
+
     sabnzbd_api_key_2026-07-15 = {
       remotePath = "machines/high-trust/sabnzbd_api_key_2026-07-15";
       field = "api-key";

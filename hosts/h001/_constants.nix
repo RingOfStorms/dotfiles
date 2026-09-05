@@ -140,6 +140,19 @@
       domain = "pkm.joshuabell.xyz";
     };
 
+    # Kura — independent successor stack alongside legacy PKM. Its server,
+    # PowerSync service, Postgres, and private OCR sidecar share one isolated
+    # NixOS container; only the server and authenticated sync path are proxied.
+    kura = {
+      port = 3020;
+      syncPort = 8080;
+      ocrPort = 8990;
+      dataDir = "/var/lib/kura";
+      containerIp = "10.0.0.11";
+      containerIp6 = "fc00::11";
+      domain = "kura.joshuabell.xyz";
+    };
+
     litellm = {
       port = 8094;
       dataDir = "/var/lib/litellm";

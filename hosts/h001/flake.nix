@@ -47,6 +47,9 @@
     # built from source). See hosts/h001/containers/pkm.nix.
     pkm.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/pkm.git";
 
+    # Kura — independently deployed successor stack alongside legacy PKM.
+    kura.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/kura.git";
+
     nixarr.url = "github:rasmus-kirk/nixarr";
   };
 
