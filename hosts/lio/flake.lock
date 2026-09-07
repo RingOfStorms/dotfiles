@@ -1207,14 +1207,20 @@
         "omp": "omp"
       },
       "locked": {
-        "path": "../../flakes/omp",
-        "type": "path"
+        "dir": "flakes/omp",
+        "lastModified": 1788806156,
+        "narHash": "sha256-2SWaXi45/BFfXkK2I97zhzIlTxrCruYj8JgoP6Bx31k=",
+        "ref": "refs/heads/master",
+        "rev": "b09fd0780e08da3078180dffcdfee1259a3b38b5",
+        "revCount": 2046,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
       "original": {
-        "path": "../../flakes/omp",
-        "type": "path"
-      },
-      "parent": []
+        "dir": "flakes/omp",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+      }
     },
     "opencode": {
       "inputs": {
