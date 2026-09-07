@@ -254,9 +254,31 @@ in
             proxyWebsockets = true;
             proxyPass = "http://${upstream}";
             extraConfig = ''
-              client_max_body_size 10m;
+              client_max_body_size 500m;
               proxy_read_timeout 1h;
               proxy_send_timeout 1h;
+            '';
+          };
+          locations."= /powersync" = {
+            proxyWebsockets = true;
+            proxyPass = "http://${upstream}";
+            extraConfig = ''
+              proxy_buffering off;
+              proxy_cache off;
+              chunked_transfer_encoding on;
+              proxy_read_timeout 86400s;
+              proxy_send_timeout 86400s;
+            '';
+          };
+          locations."/powersync/" = {
+            proxyWebsockets = true;
+            proxyPass = "http://${upstream}";
+            extraConfig = ''
+              proxy_buffering off;
+              proxy_cache off;
+              chunked_transfer_encoding on;
+              proxy_read_timeout 86400s;
+              proxy_send_timeout 86400s;
             '';
           };
         };

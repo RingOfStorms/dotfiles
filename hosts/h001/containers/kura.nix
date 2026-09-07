@@ -93,7 +93,7 @@ in
         proxyPass = "http://${c.containerIp}:${toString c.port}";
         extraConfig = ''
           proxy_set_header X-Forwarded-Proto https;
-          client_max_body_size 10m;
+          client_max_body_size 500m;
         '';
       };
 
@@ -103,12 +103,14 @@ in
       "= /powersync" = {
         proxyWebsockets = true;
         recommendedProxySettings = true;
-        proxyPass = "http://${c.containerIp}:${toString c.syncPort}/";
+        proxyPass = "http://${c.containerIp}:${toString c.syncPort}/probes/readiness";
         extraConfig = ''
           proxy_set_header X-Forwarded-Proto https;
-          proxy_read_timeout 1h;
-          proxy_send_timeout 1h;
+          proxy_read_timeout 86400s;
+          proxy_send_timeout 86400s;
           proxy_buffering off;
+          proxy_cache off;
+          chunked_transfer_encoding on;
         '';
       };
 
@@ -118,9 +120,11 @@ in
         proxyPass = "http://${c.containerIp}:${toString c.syncPort}/";
         extraConfig = ''
           proxy_set_header X-Forwarded-Proto https;
-          proxy_read_timeout 1h;
-          proxy_send_timeout 1h;
+          proxy_read_timeout 86400s;
+          proxy_send_timeout 86400s;
           proxy_buffering off;
+          proxy_cache off;
+          chunked_transfer_encoding on;
         '';
       };
     };
