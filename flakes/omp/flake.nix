@@ -24,11 +24,8 @@
           };
 
           config = lib.mkIf cfg.enable {
+            programs.omp.enable = true;
             home-manager.sharedModules = [ self.homeManagerModules.default ];
-            environment.shellAliases = {
-              omp = "nono run --allow-cwd --silent --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\" --profile omp -- omp";
-              omp_ = "command omp";
-            };
           };
         };
       homeManagerModules.default =

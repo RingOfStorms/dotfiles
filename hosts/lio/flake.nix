@@ -26,7 +26,7 @@
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
     opencode.url = "github:anomalyco/opencode/3a9d4e78b6b4509c2f7e91812a735e568e7f3f84";
-    omp.url = "github:can1357/oh-my-pi";
+    omp-flake.url = "path:../../flakes/omp";
     nono.url = "github:always-further/nono/6118b79aeda1365da213d85457b4d3cf1201d575";
     nono.flake = false;
     # Used to pin a newer rustc than what nixpkgs ships (needed by nono).
@@ -64,33 +64,6 @@
           inputs.common.homeManagerModules.foot
           inputs.common.homeManagerModules.launcher_rofi
           inputs.common.homeManagerModules.slicer
-          inputs.omp.homeManagerModules.default
-          (
-            { ... }:
-            {
-              programs.omp = {
-                enable = true;
-                settings = {
-                  modelRoles.default = "litellm/air-gemini-3.8-flash";
-                  startup.quiet = true;
-                };
-              };
-              home.file.".omp/agent/models.yml".text = ''
-                providers:
-                  litellm:
-                    baseUrl: http://h001.net.joshuabell.xyz:8094/v1
-                    api: openai-completions
-                    auth: none
-                    discovery:
-                      type: litellm
-                    models:
-                      - id: air-gemini-3.8-flash
-                        name: air-gemini-3.8-flash
-                        contextWindow: 128000
-                        maxTokens: 16384
-              '';
-            }
-          )
           # Local network SSH entries for joe and gp3
           (
             { ... }:
@@ -160,6 +133,7 @@
           inputs.common.nixosModules.rage
           inputs.common.nixosModules.more_filesystems
 
+          inputs.omp-flake.nixosModules.default
           ./pi.nix
 
           (
@@ -167,7 +141,6 @@
             {
               environment.systemPackages = [
                 inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default
-                inputs.omp.packages.${pkgs.stdenv.hostPlatform.system}.default
                 pkgs.claude-code
                 pkgs.code-cursor
                 pkgs.zed-editor
@@ -194,8 +167,6 @@
                   "npm" = "${no_proxy} ${nono_base} --profile npm -- npm";
                   "pi" = "${no_proxy} ${nono_base} --profile pi -- pi";
                   "pi_" = "${no_proxy} command pi";
-                  "omp" = "${no_proxy} ${nono_base} --profile omp -- omp";
-                  "omp_" = "${no_proxy} command omp";
                 };
             }
           )

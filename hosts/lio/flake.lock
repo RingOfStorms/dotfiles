@@ -40,6 +40,7 @@
       "inputs": {
         "flake-parts": "flake-parts",
         "nixpkgs": [
+          "omp-flake",
           "omp",
           "nixpkgs"
         ],
@@ -64,6 +65,7 @@
       "inputs": {
         "flake-parts": "flake-parts_2",
         "nixpkgs": [
+          "omp-flake",
           "omp",
           "nixpkgs-darwin-x64"
         ],
@@ -178,6 +180,7 @@
     "flake-parts": {
       "inputs": {
         "nixpkgs-lib": [
+          "omp-flake",
           "omp",
           "bun2nix",
           "nixpkgs"
@@ -200,6 +203,7 @@
     "flake-parts_2": {
       "inputs": {
         "nixpkgs-lib": [
+          "omp-flake",
           "omp",
           "bun2nix-darwin-x64",
           "nixpkgs"
@@ -355,6 +359,7 @@
     "nix-bun": {
       "inputs": {
         "nixpkgs": [
+          "omp-flake",
           "omp",
           "nixpkgs"
         ]
@@ -1184,11 +1189,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1788470540,
-        "narHash": "sha256-snRMMs8KLxQRpqjridTrM+L+O1C1N6FOh1RR2CgvLTI=",
+        "lastModified": 1788804019,
+        "narHash": "sha256-vlirKRJ9FKrjvqKzdQbIqMzZ+slA++MbI28ZEmWNNCM=",
         "owner": "can1357",
         "repo": "oh-my-pi",
-        "rev": "aa183397dcdc0e3db2954ad427aa72e1fb3c4a95",
+        "rev": "daf07999c2fee9b22edc7bf8fea1fb6272e0df5e",
         "type": "github"
       },
       "original": {
@@ -1196,6 +1201,20 @@
         "repo": "oh-my-pi",
         "type": "github"
       }
+    },
+    "omp-flake": {
+      "inputs": {
+        "omp": "omp"
+      },
+      "locked": {
+        "path": "../../flakes/omp",
+        "type": "path"
+      },
+      "original": {
+        "path": "../../flakes/omp",
+        "type": "path"
+      },
+      "parent": []
     },
     "opencode": {
       "inputs": {
@@ -1267,7 +1286,7 @@
         "nixpkgs": "nixpkgs_4",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "nono": "nono",
-        "omp": "omp",
+        "omp-flake": "omp-flake",
         "opencode": "opencode",
         "ports": "ports",
         "ros_neovim": "ros_neovim",
@@ -1334,6 +1353,7 @@
     "rust-overlay": {
       "inputs": {
         "nixpkgs": [
+          "omp-flake",
           "omp",
           "nixpkgs"
         ]
@@ -1527,6 +1547,7 @@
     "treefmt-nix": {
       "inputs": {
         "nixpkgs": [
+          "omp-flake",
           "omp",
           "bun2nix",
           "nixpkgs"
@@ -1549,6 +1570,7 @@
     "treefmt-nix_2": {
       "inputs": {
         "nixpkgs": [
+          "omp-flake",
           "omp",
           "bun2nix-darwin-x64",
           "nixpkgs"
