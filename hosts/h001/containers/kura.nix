@@ -50,7 +50,16 @@ let
       uid = 0;
       gid = 0;
     }
+    # Published application artifacts — the signed Android APK the phone
+    # updates itself from, served over the authenticated /releases route.
+    # Deliberately read-only and no user: written via scp as luser.
+    {
+      host = "/home/luser/releases";
+      container = "/var/lib/kura-releases";
+      readOnly = true;
+    }
   ];
+  bindsWithUsers = lib.filter (b: b ? uid) binds;
 
   users = {
     users = {
@@ -124,7 +133,7 @@ in
       mkdir -p ${bind.host}
       chown ${toString bind.uid}:${toString bind.gid} ${bind.host}
       chmod 750 ${bind.host}
-    '') binds}
+    '') bindsWithUsers}
   '';
 
   containers.${name} = {
@@ -140,7 +149,7 @@ in
       name = bind.container;
       value = {
         hostPath = bind.host;
-        isReadOnly = false;
+        isReadOnly = bind.readOnly or false;
       };
     }) binds)) // {
       "${secretContainerPath}" = {
@@ -218,6 +227,7 @@ in
           port = c.port;
           serverPort = c.port + 1;
           dataDir = "/var/lib/kura";
+          releaseDir = "/var/lib/kura-releases";
           databaseUrl = "postgresql:///kura?host=/run/postgresql&user=kura";
           environmentFiles = [ secretContainerPath ];
           extraEnvironment.OCR_SERVICE_URL = "http://127.0.0.1:${toString c.ocrPort}";
