@@ -88,6 +88,21 @@ in
         '';
       };
 
+      # PowerSync SDK endpoints must not end in `/`. Handle the bare public
+      # endpoint directly so nginx does not generate an HTTP-scheme slash
+      # redirect after TLS has terminated on o002.
+      "= /powersync" = {
+        proxyWebsockets = true;
+        recommendedProxySettings = true;
+        proxyPass = "http://${c.containerIp}:${toString c.syncPort}/";
+        extraConfig = ''
+          proxy_set_header X-Forwarded-Proto https;
+          proxy_read_timeout 1h;
+          proxy_send_timeout 1h;
+          proxy_buffering off;
+        '';
+      };
+
       "/powersync/" = {
         proxyWebsockets = true;
         recommendedProxySettings = true;
