@@ -141,6 +141,11 @@ in
   '';
 
   containers.${name} = {
+    # Application/service changes are reloaded inside the ephemeral container;
+    # avoid tearing down PostgreSQL and all active PowerSync streams for every
+    # generated config change. Full restarts remain explicit for container,
+    # network, bind-mount, and storage changes.
+    restartIfChanged = false;
     ephemeral = true;
     autoStart = true;
     privateNetwork = true;
@@ -273,10 +278,12 @@ in
           kura-server = {
             requires = [ "postgresql.service" ];
             after = [ "postgresql.service" ];
+            restartIfChanged = true;
           };
           kura-powersync = {
             requires = [ "postgresql.service" ];
             after = [ "postgresql.service" ];
+            restartIfChanged = true;
           };
         };
       };

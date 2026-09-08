@@ -10,8 +10,8 @@
     # Use relative to get current version for testing
     # impermanence.url = "path:../../flakes/impermanence";
     impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
-    # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    omp-flake.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/omp";
     # sec-agent replaces secrets-bao on this host.
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     # beszel.url = "path:../../flakes/beszel";
@@ -204,6 +204,7 @@
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.rage
           inputs.common.nixosModules.tailnet
+          inputs.omp-flake.nixosModules.default
           inputs.common.nixosModules.remote_lio_builds
 
           inputs.common.nixosModules.atuin
