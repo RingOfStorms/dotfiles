@@ -160,11 +160,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1788793854,
-        "narHash": "sha256-nysAEUyc8A2vCRWoXYyuJ2QsWHQJE8Rc6ZzZ7/cpBz8=",
+        "lastModified": 1788846286,
+        "narHash": "sha256-2FlBdrV06/mtmAJDp6zJkD1orxfG/hMYdR0GZ/n5X4o=",
         "ref": "refs/heads/main",
-        "rev": "1488073ea34c5f45bf38595d7e534343d8790713",
-        "revCount": 45,
+        "rev": "b99d6c86431eda2f1c5534b1a3cacc5ca72afb76",
+        "revCount": 64,
         "type": "git",
         "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/kura.git"
       },
