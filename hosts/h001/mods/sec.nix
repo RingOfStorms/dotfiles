@@ -147,6 +147,11 @@ in
         description = "Kura EnvironmentFile (JWT master secret and PowerSync API token).";
         access = [ { type = "role"; value = "device_high_trust"; } ];
       };
+      "machines/high-trust/paseo_agent_env_2026-09-21" = {
+        fields = [ "value" ];
+        description = "Paseo EnvironmentFile (daemon authentication and explicitly provisioned provider credentials).";
+        access = [ { type = "role"; value = "device_high_trust"; } ];
+      };
       "machines/high-trust/sabnzbd_api_key_2026-07-15" = {
         fields = [ "api-key" ];
         description = "Sabnzbd API key (nixarr).";
