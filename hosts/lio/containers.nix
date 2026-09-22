@@ -14,6 +14,7 @@ in
 
   imports = [
     # common.nixosModules.containers.obsidian_sync
+    ./paseo.nix
   ];
 
   config = {

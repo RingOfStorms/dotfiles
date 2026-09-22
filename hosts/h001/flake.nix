@@ -51,6 +51,18 @@
     kura.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/kura.git";
 
     nixarr.url = "github:rasmus-kirk/nixarr";
+
+    # Local wrapper around the pinned upstream Paseo package/module.
+    paseo.url = "path:../../flakes/paseo";
+    paseo.inputs.nixpkgs.follows = "nixpkgs";
+
+    # OMP wrapper plus the same provider pins used on lio.
+    omp-flake.url = "path:../../flakes/omp";
+    opencode.url = "github:anomalyco/opencode/ca27d3328fcd0d470588149c902a963452f1abaf";
+    nono.url = "github:always-further/nono/6118b79aeda1365da213d85457b4d3cf1201d575";
+    nono.flake = false;
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -97,6 +109,10 @@
 
           inputs.puzzles.nixosModules.default
           inputs.nixarr.nixosModules.default
+          # Host-native Paseo baseline: keep the upstream module available on
+          # h001, while the recommended service runs in containers/paseo.nix.
+          inputs.paseo.nixosModules.upstream
+          ({ services.paseo.enable = false; })
           ./hardware-configuration.nix
           ./mods
           (import ./sec-agent.nix { inherit inputs constants; })

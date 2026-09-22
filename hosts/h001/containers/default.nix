@@ -19,6 +19,7 @@ in
     ./pkm.nix
     ./kura.nix
     ./penpot.nix
+    # Paseo is intentionally disabled on h001 for now.
     ./vaultwarden.nix
     ./zitadel.nix
   ];

@@ -24,6 +24,10 @@
     containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers";
     omp-flake.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/omp";
 
+    # Local wrapper around the pinned upstream Paseo package/module.
+    paseo.url = "path:../../flakes/paseo";
+    paseo.inputs.nixpkgs.follows = "nixpkgs";
+
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
     opencode.url = "github:anomalyco/opencode/ca27d3328fcd0d470588149c902a963452f1abaf";
@@ -122,10 +126,7 @@
           inputs.common.nixosModules.q_flipper
           inputs.common.nixosModules.tailnet
 
-          (import ../sec-agent.nix {
-            inherit inputs constants;
-            role = "machines-hightrust";
-          })
+          (import ./sec-agent.nix { inherit inputs constants; })
 
           inputs.common.nixosModules.timezone_chi
           inputs.common.nixosModules.tty_caps_esc
@@ -134,6 +135,8 @@
           inputs.common.nixosModules.more_filesystems
 
           inputs.omp-flake.nixosModules.default
+          inputs.paseo.nixosModules.upstream
+          ({ services.paseo.enable = false; })
           ./pi.nix
 
           (
