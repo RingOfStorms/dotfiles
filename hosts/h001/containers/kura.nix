@@ -187,6 +187,7 @@ in
       in
       {
         imports = [ inputs.kura.nixosModules.kura ];
+        boot.isNspawnContainer = true;
         system.stateVersion = "26.05";
 
         virtualisation.podman.enable = true;
