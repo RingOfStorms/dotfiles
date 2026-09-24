@@ -189,21 +189,6 @@
       port = 8090;
     };
 
-    paseo = {
-      port = 6767;
-      # Not 983 as on lio: h001 already allocated uid 983 (searx) and gid 983
-      # (bazarr-api) dynamically. 960 was free in passwd/group and in
-      # /var/lib/nixos/{uid,gid}-map.
-      uid = 960;
-      gid = 960;
-      dataDir = "/var/lib/paseo";
-      projectsDir = "/var/lib/paseo-projects";
-      containerIp = "10.0.0.12";
-      containerIp6 = "fc00::12";
-      # Tailnet-only vhost (hosts/h001/containers/paseo.nix); not on o002.
-      domain = "paseo.joshuabell.xyz";
-    };
-
     # `sec` — the secrets manager server. Runs on h001 (port 8300,
     # secrets.joshuabell.xyz). Replaced the old OpenBao server that used to
     # run here.

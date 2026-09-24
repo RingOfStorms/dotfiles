@@ -18,6 +18,9 @@ let
   h001Overlay = fleet.hosts.h001.overlayIp; # 100.64.0.13
   # h001 service subdomains (single source of truth in fleet.nix).
   h001Services = fleet.h001Subdomains;
+  lioOverlay = fleet.hosts.lio.overlayIp; # 100.64.0.1
+  # lio service subdomains (single source of truth in fleet.nix).
+  lioServices = fleet.lioSubdomains;
 
   # Fully-qualified Tailnet-only aliases cannot be represented by
   # `h001Subdomains` (which contains one-label public-zone service names).
@@ -25,12 +28,14 @@ let
   # precedence over MagicDNS's net.joshuabell.xyz zone.
   h001TailnetAliases = [ "secrets.h001.net.${fleet.global.domain}" ];
 
-  # Tailnet clients get h001's OVERLAY ip for these names so they're reachable
-  # from ANY tailnet client (home or remote), unlike the LAN 10.12.14.10 answer
-  # the AdGuard/9053 path gives non-tailnet LAN clients.
+  # Tailnet clients get the OVERLAY ip of the host serving each listed name
+  # (h001 or lio) so they're reachable from ANY tailnet client (home or
+  # remote), unlike the LAN answer the AdGuard/9053 path gives non-tailnet LAN
+  # clients.
   tailnetDnsmasqConf = pkgs.writeText "dnsmasq-tailnet.conf" ''
     # dnsmasq — TAILNET DNS-split instance (separate from the LAN instance).
-    # Answers *.joshuabell.xyz for tailnet clients with h001's OVERLAY ip.
+    # Answers listed *.joshuabell.xyz service names for tailnet clients with
+    # the OVERLAY ip of the host that serves them (h001 or lio).
     # Bound ONLY to the overlay IP so it never affects LAN/DHCP DNS.
     # bind-dynamic (not bind-interfaces) tolerates the overlay IP appearing
     # AFTER dnsmasq starts (tailscaled boot race) — dnsmasq picks it up when
@@ -52,12 +57,17 @@ let
     # through to the public CNAME chain and can poison client resolver caches.
     ${lib.concatMapStringsSep "\n"
       (n: "local=/${n}.${fleet.global.domain}/")
-      h001Services}
+      (h001Services ++ lioServices)}
 
     # Fully-qualified Tailnet-only aliases -> h001 overlay IP.
     ${lib.concatMapStringsSep "\n"
       (n: "host-record=${n},${h001Overlay}")
       h001TailnetAliases}
+
+    # All lio service names -> lio overlay IP.
+    ${lib.concatMapStringsSep "\n"
+      (n: "host-record=${n}.${fleet.global.domain},${lioOverlay}")
+      lioServices}
 
     # Fallthrough: any other joshuabell.xyz name -> external resolvers
     # (domain-scoped; never AdGuard/127.0.0.1:53 -> no loop).
@@ -289,14 +299,15 @@ in
   # The NixOS services.dnsmasq module is single-instance, and a single dnsmasq
   # can't answer the SAME name two different ways by source. LAN clients need
   # media/jellyfin -> 10.12.14.10 (via AdGuard -> the :9053 instance above);
-  # tailnet clients need *.joshuabell.xyz -> h001 OVERLAY (100.64.0.13) so the
-  # names are reachable from anywhere on the tailnet.
+  # tailnet clients need listed *.joshuabell.xyz names -> the serving host's
+  # OVERLAY ip (h001 or lio) so the names are reachable from anywhere on the
+  # tailnet.
   #
   # So this is a SEPARATE dnsmasq bound ONLY to h003's overlay IP
   # (100.64.0.14:53). headscale split-DNS routes joshuabell.xyz here for tailnet
   # clients (see hosts/oracle/o002/headscale.nix). It never touches LAN/DHCP.
   systemd.services.dnsmasq-tailnet = {
-    description = "dnsmasq (tailnet DNS-split for *.joshuabell.xyz -> h001 overlay)";
+    description = "dnsmasq (tailnet DNS-split for *.joshuabell.xyz -> serving host's overlay)";
     # Needs the overlay IP to exist -> tailscaled up first.
     after = [ "network.target" "tailscaled.service" ];
     wants = [ "tailscaled.service" ];

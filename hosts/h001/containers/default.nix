@@ -19,7 +19,6 @@ in
     ./pkm.nix
     # ./kura.nix
     ./penpot.nix
-    ./paseo.nix
     ./vaultwarden.nix
     ./zitadel.nix
   ];

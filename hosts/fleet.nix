@@ -181,17 +181,19 @@ rec {
     builtins.foldl' (acc: name: acc // mkBlock name hosts.${name})
       {} (builtins.attrNames hosts);
 
-  # ─── h001 DNS RECORDS ─────────────────────────────────────────────
-  # Subdomains served by h001, used for headscale DNS splitting and /etc/hosts
+  # ─── SERVICE DNS RECORDS ──────────────────────────────────────────
+  # Subdomains served by h001. Consumed by h003's tailnet dnsmasq
+  # (hosts/h003/mods/networking.nix), which resolves them to h001's overlay IP.
   h001Subdomains = [
     "jellyfin" "media" "books" "notes" "chat" "sso-proxy" "n8n"
     "sso" "gist" "git" "etebase" "photos"
     "location" "matrix" "element" "docs" "pkm" "kura"
     # `secrets` is the secrets manager server (hosts/h001/mods/sec.nix).
     "secrets"
-    # Tailnet-only (not proxied by o002): hosts/h001/containers/paseo.nix.
-    "paseo"
   ];
+
+  # Subdomains served by lio. Tailnet-only (not proxied by o002).
+  lioSubdomains = [ "paseo" ];
 
   # ─── HOST BUILDER ─────────────────────────────────────────────────
   #
@@ -261,7 +263,7 @@ rec {
             + "to disable password login (keys-only). See pentest C2.")
         else null;
 
-      fleetData = { inherit global hosts h001Subdomains mkSshMatchBlocks; };
+      fleetData = { inherit global hosts h001Subdomains lioSubdomains mkSshMatchBlocks; };
 
       # ── Unstable overlay ──
       unstableOverlay =

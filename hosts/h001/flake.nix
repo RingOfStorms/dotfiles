@@ -51,13 +51,6 @@
     kura.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/kura.git";
 
     nixarr.url = "github:rasmus-kirk/nixarr";
-
-    # Patched Paseo, nono, and the Paseo container module (containers/paseo.nix).
-    paseo.url = "path:../../flakes/paseo";
-    paseo.inputs.nixpkgs.follows = "nixpkgs";
-
-    # omp for the Paseo container.
-    omp-flake.url = "path:../../flakes/omp";
   };
 
   outputs =

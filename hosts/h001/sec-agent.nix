@@ -43,11 +43,6 @@ import ../sec-agent.nix {
       softDepend = [ "container@kura" ];
     };
 
-    paseo_agent_env_2026-09-21 = {
-      remotePath = "machines/high-trust/paseo_agent_env_2026-09-21";
-      softDepend = [ "container@paseo" ];
-    };
-
     sabnzbd_api_key_2026-07-15 = {
       remotePath = "machines/high-trust/sabnzbd_api_key_2026-07-15";
       field = "api-key";
