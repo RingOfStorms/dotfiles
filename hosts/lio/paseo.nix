@@ -38,11 +38,15 @@ in
     uid = 1000;
     worktreesDir = "/home/josh/.paseo/worktrees";
     port = upstreamPort;
+    listenAddress = "0.0.0.0";
+    extraHostnames = [ overlayIp "${overlayIp}:${toString upstreamPort}" ];
     environmentFile = "${fleet.global.secretsDir}/paseo_agent_env_2026-09-21";
     proxy.domain = "paseo.${domain}";
     opencodePackage = inputs.paseo.packages.${pkgs.stdenv.hostPlatform.system}.opencode;
     ompPackage = inputs.omp-flake.inputs.omp.packages.${pkgs.stdenv.hostPlatform.system}.default;
   };
+
+  networking.firewall.interfaces."tailscale0".allowedTCPPorts = [ upstreamPort ];
 
   systemd.services.nginx = {
     wants = [ "network-online.target" "tailscaled-autoconnect.service" ];

@@ -4,10 +4,10 @@ let
   cfg = config.services.paseoBareMetal;
   inherit (lib) mkIf mkOption types;
   launcher = self.lib.mkProviderLauncher { inherit pkgs; };
-  hostnames = [ "localhost" ] ++ lib.optional (cfg.proxy.domain != null) cfg.proxy.domain;
+  hostnames = [ "localhost" ] ++ cfg.extraHostnames ++ lib.optional (cfg.proxy.domain != null) cfg.proxy.domain;
   opencodeConfig = {
     daemon = {
-      listen = "127.0.0.1:${toString cfg.port}";
+      listen = "${cfg.listenAddress}:${toString cfg.port}";
       hostnames = hostnames ++ lib.optional (cfg.proxy.domain != null) "${cfg.proxy.domain}:443";
       relay.enabled = false;
     }
@@ -53,6 +53,8 @@ in
     };
     worktreesDir = mkOption { type = types.str; default = "/home/josh/.paseo/worktrees"; };
     port = mkOption { type = types.port; default = 6767; };
+    listenAddress = mkOption { type = types.str; default = "127.0.0.1"; description = "Daemon listen address; restrict non-loopback access with the host firewall."; };
+    extraHostnames = mkOption { type = types.listOf types.str; default = [ ]; description = "Additional hostnames or addresses accepted by the daemon."; };
     proxy.domain = mkOption { type = types.nullOr types.str; default = null; };
     environmentFile = mkOption {
       type = types.str;
@@ -82,7 +84,7 @@ in
       group = cfg.group;
       dataDir = cfg.dataDir;
       port = cfg.port;
-      listenAddress = "127.0.0.1";
+      listenAddress = cfg.listenAddress;
       openFirewall = false;
       hostnames = hostnames ++ lib.optional (cfg.proxy.domain != null) "${cfg.proxy.domain}:443";
       relay.enable = false;
