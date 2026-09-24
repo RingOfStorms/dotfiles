@@ -1,5 +1,5 @@
 {
-  description = "Patched Paseo, nono, and a NixOS module for a sandboxed Paseo container";
+  description = "Patched Paseo and nono with a mandatory provider sandbox NixOS module";
 
   inputs = {
     paseo = {
@@ -40,6 +40,9 @@
       #   node-pty (a @getpaseo/server dependency) under
       #   packages/server/node_modules, so the addon was never copied and the
       #   terminal worker died on startup ("Terminal worker is not running").
+      # - mandatory-provider-sandbox patch: only OpenCode and OMP remain enabled;
+      #   custom providers/plugins and daemon-mediated ACP execution are disabled,
+      #   while their provider processes are forced through Nono.
       # - procps on PATH: the daemon shells out to `ps` to kill provider process
       #   trees (tree-kill) and to reconcile managed helpers. Without it a
       #   systemd unit with a minimal PATH crashes the worker (uncaught
@@ -48,10 +51,14 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           upstream = paseo.packages.${system};
+          patchedOpencode = pkgs.opencode.overrideAttrs (old: {
+            patches = (old.patches or [ ]) ++ [ ./patches/opencode-config-isolation.patch ];
+          });
           patched = upstream.paseo.overrideAttrs (old: {
             patches = (old.patches or [ ]) ++ [
               ./patches/per-worktree-nono.patch
               ./patches/ship-node-pty-prebuild.patch
+              ./patches/mandatory-provider-sandbox.patch
             ];
             postFixup = (old.postFixup or "") + ''
               wrapProgram $out/bin/paseo-server \
@@ -63,11 +70,12 @@
             overlays = [ rust-overlay.overlays.default ];
           };
           rustToolchain = rustPkgs.rust-bin.stable.latest.default;
+          opencode = patchedOpencode;
         in
         {
           default = patched;
           paseo = patched;
-          desktop = upstream.desktop;
+          opencode = patchedOpencode;
           nono = rustPkgs.callPackage ./nono.nix {
             rustPlatform = rustPkgs.makeRustPlatform {
               cargo = rustToolchain;
@@ -78,19 +86,38 @@
           };
         });
 
-      nixosModules = {
-        # The upstream services.paseo module, unmodified; the container
-        # module imports it inside the guest.
-        upstream = paseo.nixosModules.default;
-        # Host-side module declaring the Paseo container (options under
-        # ringofstorms.paseo); see README.md.
-        container = import ./container.nix { inherit self; };
-      };
+      lib.mkProviderLauncher = { pkgs, nonoPackage ? self.packages.${pkgs.stdenv.hostPlatform.system}.nono }:
+        pkgs.writeShellApplication {
+          name = "paseo-nono-launch";
+          runtimeInputs = [ nonoPackage ];
+          text = ''
+            if [ "''${PASEO_PROVIDER_SANDBOX_REQUIRED:-}" != 1 ]; then
+              echo "paseo-nono-launch: mandatory sandbox flag missing" >&2
+              exit 126
+            fi
+            case "''${PASEO_PROVIDER_ID:-}" in
+              opencode) profile="$HOME/.config/nono/profiles/opencode.json"; store_args=(--read /nix/store) ;;
+              omp) profile="$HOME/.config/nono/profiles/omp.json"; store_args=() ;;
+              *) echo "paseo-nono-launch: invalid or missing provider ID" >&2; exit 126 ;;
+            esac
+            : "''${HOME:?HOME must be set}"
+            cwd="''${PASEO_PROVIDER_CWD:?PASEO_PROVIDER_CWD must be set}"
+            case "$cwd" in /*) ;; *) echo "paseo-nono-launch: cwd must be absolute" >&2; exit 126 ;; esac
+            if [ ! -d "$cwd" ]; then
+              echo "paseo-nono-launch: provider workdir is not a directory: $cwd" >&2
+              exit 126
+            fi
+            if [ ! -r "$profile" ]; then
+              echo "paseo-nono-launch: mandatory Nono profile missing or unreadable: $profile" >&2
+              exit 126
+            fi
+            exec ${pkgs.lib.getExe nonoPackage} --silent run --profile "$profile" --workdir "$cwd" "''${store_args[@]}" --allow "$cwd" -- "$@"
+          '';
+        };
 
-      lib = {
-        # Guest module giving the container the host primary user's CLI
-        # setup; pass it via ringofstorms.paseo.extraGuestModules.
-        toolsModule = import ./tools.nix;
+      nixosModules = {
+        upstream = paseo.nixosModules.default;
+        default = import ./module.nix { inherit self; };
       };
 
       overlays.default = final: prev: {
@@ -98,5 +125,6 @@
       };
 
       formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.nixfmt-rfc-style);
+
     };
 }

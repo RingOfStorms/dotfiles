@@ -21,14 +21,7 @@
     };
     paseo = {
       port = 6767;
-      uid = 983;
-      gid = 983;
-      dataDir = "/var/lib/paseo";
-      projectsDir = "/var/lib/paseo-projects";
-      containerIp = "10.0.0.12";
-      containerIp6 = "fc00::12";
-      # Private by default: use the tailnet address or an SSH tunnel.
-      domain = null;
+      domain = "paseo.joshuabell.xyz";
     };
   };
 

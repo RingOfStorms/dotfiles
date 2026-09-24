@@ -14,7 +14,6 @@ in
 
   imports = [
     # common.nixosModules.containers.obsidian_sync
-    ./paseo.nix
   ];
 
   config = {
@@ -65,14 +64,6 @@ in
       recommendedOptimisation = true;
       recommendedProxySettings = true;
       recommendedTlsSettings = true;
-      virtualHosts = {
-        "_" = {
-          default = true;
-          locations."/" = {
-            return = "404"; # or 444 for drop
-          };
-        };
-      };
     };
 
     # NOTE: configuration.nix uses `lib.mkForce` on `allowedTCPPorts` to

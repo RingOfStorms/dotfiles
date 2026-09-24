@@ -1,0 +1,845 @@
+diff --git a/packages/server/src/server/agent/agent-manager.ts b/packages/server/src/server/agent/agent-manager.ts
+--- a/packages/server/src/server/agent/agent-manager.ts
++++ b/packages/server/src/server/agent/agent-manager.ts
+@@ -80,6 +80,7 @@
+ import { isSystemInjectedEnvelope } from "./agent-prompt.js";
+ import { isStaleProviderSessionError } from "./stale-provider-session-error.js";
+ import { stripInternalPaseoMcpServer, withRuntimePaseoMcpServer } from "./runtime-mcp-config.js";
++import { isRequiredProviderSandbox } from "./provider-launch-config.js";
+ import { resolveCreateAgentTitles } from "./create-agent-title.js";
+ import type { PaseoToolCatalogFactory } from "./tools/types.js";
+ import { isPaseoToolPolicyEnabled } from "./paseo-tool-policy.js";
+@@ -767,11 +768,14 @@
+   }
+ 
+   private configurePaseoTools(options: AgentManagerOptions): void {
+-    this.paseoToolsEnabled = options.paseoToolsEnabled ?? true;
+-    this.paseoToolCatalogFactory = options.paseoToolCatalogFactory ?? null;
++    this.paseoToolsEnabled = !isRequiredProviderSandbox() && (options.paseoToolsEnabled ?? true);
++    this.paseoToolCatalogFactory = isRequiredProviderSandbox() ? null : options.paseoToolCatalogFactory ?? null;
+   }
+ 
+   registerClient(provider: AgentProvider, client: AgentClient): void {
++    if (isRequiredProviderSandbox() && provider !== "opencode" && provider !== "omp") {
++      throw new Error("Provider disabled by the mandatory sandbox policy");
++    }
+     this.clients.set(provider, client);
+   }
+ 
+@@ -783,7 +787,7 @@
+     this.providerEnabled.clear();
+     this.providerDefinitions.clear();
+     for (const [provider, definition] of Object.entries(input.providerDefinitions)) {
+-      if (definition) {
++      if (definition && (!isRequiredProviderSandbox() || provider === "opencode" || provider === "omp")) {
+         this.providerEnabled.set(provider, definition.enabled);
+         this.providerDefinitions.set(provider, definition);
+       }
+@@ -791,7 +795,7 @@
+ 
+     this.clients.clear();
+     for (const [provider, client] of Object.entries(input.clients)) {
+-      if (client) {
++      if (client && (!isRequiredProviderSandbox() || provider === "opencode" || provider === "omp")) {
+         this.clients.set(provider, client);
+       }
+     }
+@@ -822,7 +826,7 @@
+   }
+ 
+   setMcpBaseUrl(url: string | null): void {
+-    this.mcpBaseUrl = url;
++    this.mcpBaseUrl = isRequiredProviderSandbox() ? null : url;
+   }
+ 
+   prepareForShutdown(): void {
+@@ -830,11 +834,11 @@
+   }
+ 
+   setPaseoToolsEnabled(enabled: boolean): void {
+-    this.paseoToolsEnabled = enabled;
++    this.paseoToolsEnabled = !isRequiredProviderSandbox() && enabled;
+   }
+ 
+   setPaseoToolCatalogFactory(factory: PaseoToolCatalogFactory | null): void {
+-    this.paseoToolCatalogFactory = factory;
++    this.paseoToolCatalogFactory = isRequiredProviderSandbox() ? null : factory;
+   }
+ 
+   getPaseoToolPolicy(agentId: string): ProviderPaseoToolsPolicy | undefined {
+@@ -1041,6 +1045,9 @@
+   }
+ 
+   async getProviderAvailability(provider: AgentProvider): Promise<ProviderAvailability> {
++    if (isRequiredProviderSandbox() && provider !== "opencode" && provider !== "omp") {
++      return { provider, available: false, error: "Provider disabled by the mandatory sandbox policy" };
++    }
+     const client = this.clients.get(provider);
+     if (!client) {
+       return {
+@@ -5090,7 +5097,11 @@
+     agentId: string,
+     env?: Record<string, string>,
+   ): Promise<PreparedSessionConfig> {
+-    const storedConfig = await this.normalizeConfig(stripInternalPaseoMcpServer(config), { env });
++    if (isRequiredProviderSandbox() && config.provider !== "opencode" && config.provider !== "omp") {
++      throw new Error("Provider disabled by the mandatory sandbox policy");
++    }
++    const safeConfig = isRequiredProviderSandbox() ? { ...config, mcpServers: undefined } : config;
++    const storedConfig = await this.normalizeConfig(stripInternalPaseoMcpServer(safeConfig), { env });
+     const paseoToolPolicy = this.paseoToolsEnabled
+       ? this.resolvePaseoToolPolicy(storedConfig.provider)
+       : { enabled: false };
+@@ -5176,6 +5187,9 @@
+   }
+ 
+   private async requireAvailableClient(options: { provider: AgentProvider }): Promise<AgentClient> {
++    if (isRequiredProviderSandbox() && options.provider !== "opencode" && options.provider !== "omp") {
++      throw new Error("Provider disabled by the mandatory sandbox policy");
++    }
+     const client = this.clients.get(options.provider);
+     if (!client) {
+       const configuredProviders = this.getConfiguredProviderIds();
+@@ -5207,6 +5221,9 @@
+   }
+ 
+   private requireEnabledProvider(provider: AgentProvider): void {
++    if (isRequiredProviderSandbox() && provider !== "opencode" && provider !== "omp") {
++      throw new Error("Provider disabled by the mandatory sandbox policy");
++    }
+     if (this.providerEnabled.get(provider) === false) {
+       throw new Error(`Provider '${provider}' is disabled`);
+     }
+@@ -5217,6 +5234,9 @@
+   }
+ 
+   private requireClient(provider: AgentProvider): AgentClient {
++    if (isRequiredProviderSandbox() && provider !== "opencode" && provider !== "omp") {
++      throw new Error("Provider disabled by the mandatory sandbox policy");
++    }
+     const client = this.clients.get(provider);
+     if (!client) {
+       throw new Error(`No client registered for provider '${provider}'`);
+diff --git a/packages/server/src/server/agent/provider-launch-config.ts b/packages/server/src/server/agent/provider-launch-config.ts
+--- a/packages/server/src/server/agent/provider-launch-config.ts
++++ b/packages/server/src/server/agent/provider-launch-config.ts
+@@ -28,6 +28,58 @@
+   type ProviderRuntimeSettings,
+ } from "@getpaseo/protocol/provider-config";
+ 
++const REQUIRED_PROVIDER_SANDBOX_ENV = "PASEO_PROVIDER_SANDBOX_REQUIRED";
++const REQUIRED_PROVIDER_LAUNCHER_ENV = "PASEO_PROVIDER_LAUNCHER";
++
++export function isRequiredProviderSandbox(): boolean { return process.env[REQUIRED_PROVIDER_SANDBOX_ENV] === "1"; }
++function requiredProviderLauncher(): string {
++  const value = process.env[REQUIRED_PROVIDER_LAUNCHER_ENV];
++  if (!value || !isAbsolute(value)) throw new Error("PASEO_PROVIDER_LAUNCHER must be absolute in mandatory sandbox mode");
++  return value;
++}
++function requiredProviderRuntime(providerId: "opencode" | "omp"): string {
++  const name = providerId === "opencode" ? "PASEO_OPENCODE_RUNTIME" : "PASEO_OMP_RUNTIME";
++  const value = process.env[name];
++  if (!value || !isAbsolute(value)) throw new Error(name + " must be absolute in mandatory sandbox mode");
++  return value;
++}
++export function requiredProviderRuntimeCommand(providerId: "opencode" | "omp"): string {
++  return requiredProviderRuntime(providerId);
++}
++export function requiredProviderDefaultCwd(): string {
++  const value = process.env.PASEO_PROVIDER_DEFAULT_CWD;
++  if (!value || !isAbsolute(value)) throw new Error("PASEO_PROVIDER_DEFAULT_CWD must be absolute in mandatory sandbox mode");
++  return value;
++}
++export function applyRequiredProviderLauncher(providerId: string, command: string, args: string[]) {
++  if (!isRequiredProviderSandbox()) return { command, args };
++  if (providerId !== "opencode" && providerId !== "omp") throw new Error("Provider disabled by mandatory sandbox policy");
++  return { command: requiredProviderLauncher(), args: [command, ...args] };
++}
++export function createRequiredProviderEnvSpec(options: ProviderEnvOptions & { cwd: string; providerId: "opencode" | "omp" }): ProviderEnvSpec {
++  if (!isRequiredProviderSandbox()) return createProviderEnvSpec(options);
++  const controls = [
++    "PASEO_PROVIDER_SANDBOX_REQUIRED", "PASEO_PROVIDER_LAUNCHER", "PASEO_PROVIDER_CWD", "PASEO_PROVIDER_DEFAULT_CWD", "PASEO_PROVIDER_ID",
++    "PASEO_OPENCODE_RUNTIME", "PASEO_OMP_RUNTIME", "PASEO_UNSANDBOXED", "OPENCODE_CONFIG", "OPENCODE_CONFIG_CONTENT",
++    "OPENCODE_CONFIG_DIR", "OPENCODE_DISABLE_PROJECT_CONFIG", "OMP_PROFILE", "PI_PROFILE", "PI_CONFIG_DIR", "HOME",
++    "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
++  ];
++  const envOverlay = Object.assign({}, ...collectProviderEnvOverlays(options.runtimeSettings, options.overlays ?? []));
++  for (const key of controls) delete envOverlay[key];
++  for (const key of PARENT_SESSION_ENV_VARS) envOverlay[key] = undefined;
++  Object.assign(envOverlay, {
++    PASEO_PROVIDER_SANDBOX_REQUIRED: "1", PASEO_PROVIDER_LAUNCHER: requiredProviderLauncher(),
++    PASEO_PROVIDER_CWD: options.cwd, PASEO_PROVIDER_DEFAULT_CWD: requiredProviderDefaultCwd(), PASEO_PROVIDER_ID: options.providerId,
++    PASEO_OPENCODE_RUNTIME: requiredProviderRuntime("opencode"), PASEO_OMP_RUNTIME: process.env.PASEO_OMP_RUNTIME, PASEO_UNSANDBOXED: undefined,
++    HOME: process.env.HOME, XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
++    XDG_DATA_HOME: process.env.XDG_DATA_HOME, XDG_STATE_HOME: process.env.XDG_STATE_HOME, XDG_CACHE_HOME: process.env.XDG_CACHE_HOME,
++    OPENCODE_CONFIG: process.env.OPENCODE_CONFIG, OPENCODE_DISABLE_PROJECT_CONFIG: "1",
++    OPENCODE_CONFIG_CONTENT: undefined, OPENCODE_CONFIG_DIR: undefined,
++    OMP_PROFILE: undefined, PI_PROFILE: undefined, PI_CONFIG_DIR: undefined,
++  });
++  return { ...(options.baseEnv ? { baseEnv: options.baseEnv } : {}), envOverlay };
++}
++
+ export interface ProviderCommandPrefix {
+   command: string;
+   args: string[];
+@@ -126,7 +178,12 @@
+ export async function resolveProviderCommandPrefix(
+   commandConfig: ProviderCommand | undefined,
+   resolveDefaultCommand: () => string | Promise<string>,
++  sandboxDefaultCommand = "opencode",
+ ): Promise<ProviderCommandPrefix> {
++  if (isRequiredProviderSandbox()) {
++    const providerId = sandboxDefaultCommand === "omp" ? "omp" : "opencode";
++    return { command: requiredProviderRuntimeCommand(providerId), args: [] };
++  }
+   if (commandConfig?.mode === "replace") {
+     const launch = await resolveProviderLaunch({
+       commandConfig,
+@@ -252,6 +309,7 @@
+   resolveDefaultCommand: () => string | Promise<string>,
+ ): Promise<boolean> {
+   try {
++    if (isRequiredProviderSandbox()) return false;
+     if (commandConfig?.mode === "replace") {
+       const launch = await resolveProviderLaunch({
+         commandConfig,
+diff --git a/packages/server/src/server/agent/provider-registry.ts b/packages/server/src/server/agent/provider-registry.ts
+--- a/packages/server/src/server/agent/provider-registry.ts
++++ b/packages/server/src/server/agent/provider-registry.ts
+@@ -34,6 +34,7 @@
+   ProviderProfileModel,
+   ProviderRuntimeSettings,
+ } from "./provider-launch-config.js";
++import { isRequiredProviderSandbox } from "./provider-launch-config.js";
+ import { ClaudeAgentClient } from "./providers/claude/agent.js";
+ import { CodexAppServerAgentClient } from "./providers/codex-app-server-agent.js";
+ import { CopilotACPAgentClient } from "./providers/copilot-acp-agent.js";
+@@ -716,9 +717,12 @@
+ ): Map<string, ResolvedProvider> {
+   const resolvedProviders = new Map<string, ResolvedProvider>();
+ 
+-  const definitions = isDev
++  const availableDefinitions = isDev
+     ? [...AGENT_PROVIDER_DEFINITIONS, ...DEV_AGENT_PROVIDER_DEFINITIONS]
+     : AGENT_PROVIDER_DEFINITIONS;
++  const definitions = isRequiredProviderSandbox()
++    ? availableDefinitions.filter((definition) => definition.id === "opencode" || definition.id === "omp")
++    : availableDefinitions;
+ 
+   for (const definition of definitions) {
+     const override = providerOverrides[definition.id];
+@@ -734,7 +738,9 @@
+       profileModels: override?.models ?? [],
+       additionalModels: override?.additionalModels ?? [],
+       profileModelsAreAdditive: false,
+-      enabled: override?.enabled ?? definition.enabledByDefault ?? true,
++      enabled: isRequiredProviderSandbox()
++        ? definition.id === "opencode" || definition.id === "omp"
++        : override?.enabled ?? definition.enabledByDefault ?? true,
+       derivedFromProviderId: null,
+       providerParams: override?.params,
+       createBaseClient: (logger) =>
+@@ -757,6 +763,7 @@
+   providerOverrides: Record<string, ProviderOverride>,
+   options: Pick<BuildProviderRegistryOptions, "managedProcesses" | "openCodeBridge">,
+ ): void {
++  if (isRequiredProviderSandbox()) return;
+   for (const [providerId, override] of Object.entries(providerOverrides)) {
+     if (resolvedProviders.has(providerId) || BUILTIN_PROVIDER_IDS.includes(providerId)) {
+       continue;
+diff --git a/packages/server/src/server/agent/providers/acp-agent.ts b/packages/server/src/server/agent/providers/acp-agent.ts
+--- a/packages/server/src/server/agent/providers/acp-agent.ts
++++ b/packages/server/src/server/agent/providers/acp-agent.ts
+@@ -109,6 +109,7 @@
+ import {
+   checkProviderLaunchAvailable,
+   createProviderEnvSpec,
++  isRequiredProviderSandbox,
+   resolveProviderLaunch,
+   type ProviderRuntimeSettings,
+ } from "../provider-launch-config.js";
+@@ -252,7 +253,7 @@
+     readTextFile: false,
+     writeTextFile: false,
+   },
+-  terminal: true,
++  terminal: false,
+ };
+ 
+ export type ACPClientCapabilityMeta = Record<string, unknown>;
+@@ -1334,6 +1335,7 @@
+     launchEnv?: Record<string, string>,
+     client: ACPClient = this.buildProbeClient(),
+   ): Promise<ACPProcessTransport> {
++    if (isRequiredProviderSandbox()) throw new Error("ACP providers are disabled by the mandatory sandbox policy");
+     const { command, args } = await this.resolveLaunchCommand();
+     const child = spawnProcess(command, args, {
+       cwd: process.cwd(),
+@@ -1424,10 +1426,12 @@
+         await onSessionUpdate?.(params);
+       },
+       async readTextFile(params: ReadTextFileRequest) {
++        if (isRequiredProviderSandbox()) throw new Error("ACP filesystem access is disabled by Paseo policy");
+         const content = await fs.readFile(params.path, "utf8");
+         return { content };
+       },
+       async writeTextFile(params: WriteTextFileRequest) {
++        if (isRequiredProviderSandbox()) throw new Error("ACP filesystem access is disabled by Paseo policy");
+         await fs.mkdir(path.dirname(params.path), { recursive: true });
+         await fs.writeFile(params.path, params.content, "utf8");
+         return {};
+@@ -2592,6 +2596,7 @@
+   }
+ 
+   async readTextFile(params: ReadTextFileRequest): Promise<{ content: string }> {
++    if (isRequiredProviderSandbox()) throw new Error("ACP filesystem access is disabled by Paseo policy");
+     const raw = await fs.readFile(params.path, "utf8");
+     if (!params.line && !params.limit) {
+       return { content: raw };
+@@ -2603,12 +2608,14 @@
+   }
+ 
+   async writeTextFile(params: WriteTextFileRequest): Promise<Record<string, never>> {
++    if (isRequiredProviderSandbox()) throw new Error("ACP filesystem access is disabled by Paseo policy");
+     await fs.mkdir(path.dirname(params.path), { recursive: true });
+     await fs.writeFile(params.path, params.content, "utf8");
+     return {};
+   }
+ 
+   async createTerminal(params: CreateTerminalRequest): Promise<{ terminalId: string }> {
++    if (isRequiredProviderSandbox()) throw new Error("ACP terminal access is disabled by Paseo policy");
+     const terminalId = randomUUID();
+     const env = Object.fromEntries(
+       (params.env ?? []).map((entry: EnvVariable) => [entry.name, entry.value]),
+diff --git a/packages/server/src/server/agent/providers/jsonl-rpc-process.ts b/packages/server/src/server/agent/providers/jsonl-rpc-process.ts
+--- a/packages/server/src/server/agent/providers/jsonl-rpc-process.ts
++++ b/packages/server/src/server/agent/providers/jsonl-rpc-process.ts
+@@ -2,6 +2,7 @@
+ import type { Logger } from "pino";
+ 
+ import { spawnProcess } from "../../../utils/spawn.js";
++import { applyRequiredProviderLauncher, createRequiredProviderEnvSpec, isRequiredProviderSandbox } from "../provider-launch-config.js";
+ import { terminateWithTreeKill } from "../../../utils/tree-kill.js";
+ import { JsonlFrameDecoder } from "./jsonl-frame-decoder.js";
+ export { supportsJsonlRpcProtocolV2 } from "./jsonl-frame-decoder.js";
+@@ -23,6 +24,7 @@
+   args: string[];
+   cwd: string;
+   env?: Record<string, string>;
++  provider?: string;
+ }
+ 
+ interface JsonlRpcResponse {
+@@ -63,9 +65,11 @@
+ }
+ 
+ function spawnJsonlRpcProcess(launch: JsonlRpcLaunch): ChildProcessWithoutNullStreams {
+-  const child = spawnProcess(launch.command, launch.args, {
++  if (isRequiredProviderSandbox() && launch.provider !== "omp") throw new Error("Only the OMP provider may use JSON-RPC in mandatory sandbox mode");
++  const wrapped = isRequiredProviderSandbox() ? applyRequiredProviderLauncher("omp", launch.command, launch.args) : { command: launch.command, args: launch.args };
++  const child = spawnProcess(wrapped.command, wrapped.args, {
+     cwd: launch.cwd,
+-    envOverlay: launch.env,
++    ...(isRequiredProviderSandbox() ? createRequiredProviderEnvSpec({ cwd: launch.cwd, providerId: "omp", overlays: [launch.env] }) : { envOverlay: launch.env }),
+     stdio: ["pipe", "pipe", "pipe"],
+   });
+   assertChildWithPipes(child);
+diff --git a/packages/server/src/server/agent/providers/omp/agent.ts b/packages/server/src/server/agent/providers/omp/agent.ts
+--- a/packages/server/src/server/agent/providers/omp/agent.ts
++++ b/packages/server/src/server/agent/providers/omp/agent.ts
+@@ -42,6 +42,8 @@
+ import { runProviderTurn } from "../provider-runner.js";
+ import {
+   checkProviderLaunchAvailable,
++  isRequiredProviderSandbox,
++  requiredProviderDefaultCwd,
+   resolveProviderLaunch,
+   type ProviderRuntimeSettings,
+   type ResolvedProviderLaunch,
+@@ -2326,7 +2328,7 @@
+     try {
+       await runProviderRefreshActivity(context, "runtime.start", async () => {
+         runtimeSession = await this.runtime.startSession({
+-          cwd: options.scope === "global" ? homedir() : options.cwd,
++          cwd: options.scope === "workspace" ? options.cwd : isRequiredProviderSandbox() ? requiredProviderDefaultCwd() : homedir(),
+           protocolMode: "rpc-ui",
+           modeId: launchMode.modeId,
+           extraArgs: launchMode.extraArgs,
+@@ -2376,6 +2378,7 @@
+   }
+ 
+   async isAvailable(): Promise<boolean> {
++    if (isRequiredProviderSandbox()) return true;
+     try {
+       const launch = await this.resolveOmpLaunch();
+       const availability = await checkProviderLaunchAvailable(launch);
+@@ -2386,6 +2389,7 @@
+   }
+ 
+   async getDiagnostic(): Promise<{ diagnostic: string }> {
++    if (isRequiredProviderSandbox()) return { diagnostic: "OMP: mandatory provider sandbox; direct probes disabled" };
+     try {
+       const launch = await this.resolveOmpLaunch();
+       const availability = await checkProviderLaunchAvailable(launch);
+diff --git a/packages/server/src/server/agent/providers/omp/cli-runtime.ts b/packages/server/src/server/agent/providers/omp/cli-runtime.ts
+--- a/packages/server/src/server/agent/providers/omp/cli-runtime.ts
++++ b/packages/server/src/server/agent/providers/omp/cli-runtime.ts
+@@ -1,7 +1,7 @@
+ import type { ChildProcessWithoutNullStreams } from "node:child_process";
+ import type { Logger } from "pino";
+ 
+-import type { ProviderRuntimeSettings } from "../../provider-launch-config.js";
++import { isRequiredProviderSandbox, type ProviderRuntimeSettings } from "../../provider-launch-config.js";
+ import { JsonlRpcProcess, type JsonlRpcLaunch } from "../jsonl-rpc-process.js";
+ import { establishOmpProtocol } from "./protocol-session.js";
+ import {
+@@ -39,7 +39,7 @@
+   type OmpSubagentSubscriptionLevel,
+ } from "./rpc-types.js";
+ 
+-const DEFAULT_OMP_COMMAND: [string, ...string[]] = [process.env.OMP_COMMAND ?? "omp"];
++const DEFAULT_OMP_COMMAND: [string, ...string[]] = [process.env.PASEO_OMP_RUNTIME || process.env.OMP_COMMAND || "omp"];
+ const DEFAULT_COMMANDS_RPC_NAME = "get_available_commands";
+ 
+ export interface OmpCliRuntimeOptions {
+@@ -75,6 +75,7 @@
+       args,
+       cwd: launch.cwd,
+       env: launch.env,
++      provider: "omp",
+     };
+     const spawn = this.spawnProcess;
+     const processOptions = {
+@@ -82,7 +83,7 @@
+       logger: this.options.logger,
+       diagnosticName: "OMP RPC",
+       defaultRequestTimeoutMs: this.options.requestTimeoutMs,
+-      ...(spawn ? { spawn: () => spawn(launch) } : {}),
++      ...(spawn && !isRequiredProviderSandbox() ? { spawn: () => spawn(launch) } : {}),
+     };
+     const process = new JsonlRpcProcess(processOptions);
+     const handleAbort = () => void process.close(input.signal?.reason).catch(() => undefined);
+diff --git a/packages/server/src/server/agent/providers/omp/runtime.ts b/packages/server/src/server/agent/providers/omp/runtime.ts
+--- a/packages/server/src/server/agent/providers/omp/runtime.ts
++++ b/packages/server/src/server/agent/providers/omp/runtime.ts
+@@ -12,7 +12,7 @@
+   OmpSubagentSubscriptionLevel,
+   OmpThinkingLevel,
+ } from "./rpc-types.js";
+-import type { ProviderRuntimeSettings } from "../../provider-launch-config.js";
++import { isRequiredProviderSandbox, requiredProviderRuntimeCommand, type ProviderRuntimeSettings } from "../../provider-launch-config.js";
+ 
+ export interface OmpRuntimeLaunch {
+   cwd: string;
+@@ -88,8 +88,9 @@
+   runtimeSettings?: ProviderRuntimeSettings;
+   session: OmpStartSessionInput;
+ }): OmpRuntimeLaunch {
+-  const command =
+-    input.runtimeSettings?.command?.mode === "replace" && input.runtimeSettings.command.argv[0]
++  const command = isRequiredProviderSandbox()
++    ? [requiredProviderRuntimeCommand("omp")]
++    : input.runtimeSettings?.command?.mode === "replace" && input.runtimeSettings.command.argv[0]
+       ? input.runtimeSettings.command.argv
+       : input.command;
+   const argv = [...command];
+diff --git a/packages/server/src/server/agent/providers/opencode/server-manager.ts b/packages/server/src/server/agent/providers/opencode/server-manager.ts
+--- a/packages/server/src/server/agent/providers/opencode/server-manager.ts
++++ b/packages/server/src/server/agent/providers/opencode/server-manager.ts
+@@ -11,6 +11,10 @@
+ import type { ManagedProcessRegistry } from "../../../managed-processes/managed-processes.js";
+ import {
+   createProviderEnvSpec,
++  applyRequiredProviderLauncher,
++  createRequiredProviderEnvSpec,
++  isRequiredProviderSandbox,
++  requiredProviderDefaultCwd,
+   resolveProviderCommandPrefix,
+   type ProviderRuntimeSettings,
+ } from "../../provider-launch-config.js";
+@@ -316,31 +320,40 @@
+     const url = `http://127.0.0.1:${port}`;
+     const launchPrefix = await this.resolveCommandPrefix();
+     const serverArgs = [...launchPrefix.args, "serve", "--port", String(port)];
+-    // Use a neutral OpenCode home as the server cwd. Launching from the user's
+-    // home directory causes OpenCode to treat it as the default workspace and
+-    // index the entire home tree.
+-    const serverCwd = launchEnv?.PASEO_AGENT_CWD ?? this.resolveHomeDir();
++    // Use a neutral OpenCode home as the server cwd outside mandatory mode.
++    const serverCwd = isRequiredProviderSandbox()
++      ? launchEnv?.PASEO_PROVIDER_CWD ?? requiredProviderDefaultCwd()
++      : launchEnv?.PASEO_AGENT_CWD ?? this.resolveHomeDir();
+     mkdirSync(serverCwd, { recursive: true });
+ 
+-    const existingConfigContent =
+-      launchEnv?.OPENCODE_CONFIG_CONTENT ??
+-      this.runtimeSettings?.env?.OPENCODE_CONFIG_CONTENT ??
+-      (typeof this.baseEnv?.OPENCODE_CONFIG_CONTENT === "string"
+-        ? this.baseEnv.OPENCODE_CONFIG_CONTENT
+-        : process.env.OPENCODE_CONFIG_CONTENT);
+-    const bridgeEnv = this.decorateServerEnv?.(
+-      existingConfigContent ? { OPENCODE_CONFIG_CONTENT: existingConfigContent } : {},
+-    );
+-    const serverProcess = this.spawnServerProcess(launchPrefix.command, serverArgs, {
+-      cwd: serverCwd,
+-      detached: process.platform !== "win32",
+-      stdio: ["ignore", "pipe", "pipe"],
+-      ...createProviderEnvSpec({
+-        baseEnv: this.baseEnv,
+-        runtimeSettings: this.runtimeSettings,
+-        overlays: [launchEnv, bridgeEnv],
+-      }),
+-    });
++    const existingConfigContent = isRequiredProviderSandbox()
++      ? undefined
++      : launchEnv?.OPENCODE_CONFIG_CONTENT ??
++        this.runtimeSettings?.env?.OPENCODE_CONFIG_CONTENT ??
++        (typeof this.baseEnv?.OPENCODE_CONFIG_CONTENT === "string"
++          ? this.baseEnv.OPENCODE_CONFIG_CONTENT
++          : process.env.OPENCODE_CONFIG_CONTENT);
++    const bridgeEnv = isRequiredProviderSandbox()
++      ? undefined
++      : this.decorateServerEnv?.(
++          existingConfigContent ? { OPENCODE_CONFIG_CONTENT: existingConfigContent } : {},
++        );
++    const serverProcess = isRequiredProviderSandbox()
++      ? (() => {
++          const wrapped = applyRequiredProviderLauncher("opencode", launchPrefix.command, serverArgs);
++          return this.spawnServerProcess(wrapped.command, wrapped.args, {
++            cwd: serverCwd,
++            detached: process.platform !== "win32",
++            stdio: ["ignore", "pipe", "pipe"],
++            ...createRequiredProviderEnvSpec({ baseEnv: this.baseEnv, runtimeSettings: this.runtimeSettings, overlays: [launchEnv, bridgeEnv], cwd: serverCwd, providerId: "opencode" }),
++          });
++        })()
++      : this.spawnServerProcess(launchPrefix.command, serverArgs, {
++          cwd: serverCwd,
++          detached: process.platform !== "win32",
++          stdio: ["ignore", "pipe", "pipe"],
++          ...createProviderEnvSpec({ baseEnv: this.baseEnv, runtimeSettings: this.runtimeSettings, overlays: [launchEnv, bridgeEnv] }),
++        });
+     const managedProcessRecord = this.recordManagedServerProcess({
+       process: serverProcess,
+       command: launchPrefix.command,
+diff --git a/packages/server/src/server/agent/providers/opencode-agent.ts b/packages/server/src/server/agent/providers/opencode-agent.ts
+--- a/packages/server/src/server/agent/providers/opencode-agent.ts
++++ b/packages/server/src/server/agent/providers/opencode-agent.ts
+@@ -69,6 +69,8 @@
+ import {
+   checkProviderLaunchAvailable,
+   createProviderEnvSpec,
++  isRequiredProviderSandbox,
++  requiredProviderDefaultCwd,
+   resolveProviderLaunch,
+   type ProviderRuntimeSettings,
+ } from "../provider-launch-config.js";
+@@ -354,7 +356,6 @@
+   config: OpenCodeAgentConfig,
+   launchContext?: AgentLaunchContext,
+ ): boolean {
+-  if (launchContext?.env?.PASEO_AGENT_CWD) return true;
+   if (config.mcpServers && Object.keys(config.mcpServers).length > 0) return true;
+   return Object.keys(launchContext?.env ?? {}).some((key) => !OPENCODE_SESSION_ENV_KEYS.has(key));
+ }
+@@ -1102,7 +1103,7 @@
+   if (options.scope === "workspace") {
+     return { directory: options.cwd, needsDirectory: false };
+   }
+-  return { directory: resolveHomeDir(), needsDirectory: true };
++  return { directory: isRequiredProviderSandbox() ? requiredProviderDefaultCwd() : resolveHomeDir(), needsDirectory: true };
+ }
+ 
+ function normalizeOpenCodeSessionTitle(title: string | null | undefined): string | null {
+@@ -1414,10 +1415,10 @@
+     deps: OpenCodeAgentClientDeps = {},
+   ) {
+     this.logger = logger.child({ module: "agent", provider: "opencode" });
+-    this.bridge = deps.bridge;
++    this.bridge = isRequiredProviderSandbox() ? undefined : deps.bridge;
+     this.capabilities = {
+       ...OPENCODE_CAPABILITIES,
+-      ...(this.bridge ? { supportsNativePaseoTools: true } : {}),
++      ...(this.bridge && !isRequiredProviderSandbox() ? { supportsNativePaseoTools: true } : {}),
+     };
+     this.runtimeSettings = runtimeSettings;
+     this.createOpenCodeClient = deps.createClient ?? createSdkOpenCodeClient;
+@@ -1555,10 +1556,9 @@
+     config: OpenCodeAgentConfig,
+     launchContext?: AgentLaunchContext,
+   ): Promise<OpenCodeServerAcquisition> {
+-    if (!this.bridge || requiresDedicatedOpenCodeServer(config, launchContext)) {
+-      return launchContext?.env
+-        ? this.serverManager.acquireDedicated(launchContext.env)
+-        : this.serverManager.acquireCurrent();
++    if (isRequiredProviderSandbox() || !this.bridge || requiresDedicatedOpenCodeServer(config, launchContext)) {
++      const env = { ...(launchContext?.env ?? {}), ...(isRequiredProviderSandbox() ? { PASEO_PROVIDER_CWD: config.cwd } : {}) };
++      return Object.keys(env).length > 0 ? this.serverManager.acquireDedicated(env) : this.serverManager.acquireCurrent();
+     }
+     return this.serverManager.acquireCurrent();
+   }
+@@ -1582,9 +1582,12 @@
+     let acquisition: OpenCodeServerAcquisition | undefined;
+     try {
+       await runProviderRefreshActivity(context, "server.acquire", async () => {
+-        acquisition = options.force
+-          ? await this.serverManager.acquireNew(context?.signal)
+-          : await this.serverManager.acquireCurrent(context?.signal);
++        const cwd = options.scope === "workspace" ? options.cwd : isRequiredProviderSandbox() ? requiredProviderDefaultCwd() : this.resolveHomeDir();
++        acquisition = isRequiredProviderSandbox()
++          ? await this.serverManager.acquireDedicated({ PASEO_PROVIDER_CWD: cwd })
++          : options.force
++            ? await this.serverManager.acquireNew(context?.signal)
++            : await this.serverManager.acquireCurrent(context?.signal);
+       });
+       if (!acquisition) throw new Error("OpenCode server acquisition did not complete");
+       context?.signal.throwIfAborted();
+@@ -1613,7 +1616,9 @@
+ 
+   async listCommands(config: AgentSessionConfig): Promise<AgentSlashCommand[]> {
+     const openCodeConfig = this.assertConfig(config);
+-    const acquisition = await this.serverManager.acquireCurrent();
++    const acquisition = isRequiredProviderSandbox()
++      ? await this.serverManager.acquireDedicated({ PASEO_PROVIDER_CWD: openCodeConfig.cwd })
++      : await this.serverManager.acquireCurrent();
+     const { url } = acquisition.server;
+     const client = this.createOpenCodeClient({
+       baseUrl: url,
+@@ -1634,7 +1639,10 @@
+   async listImportableSessions(
+     options?: ListImportableSessionsOptions,
+   ): Promise<ImportableProviderSession[]> {
+-    const acquisition = await this.serverManager.acquireCurrent();
++    if (isRequiredProviderSandbox() && !options?.cwd) return [];
++    const acquisition = isRequiredProviderSandbox()
++      ? await this.serverManager.acquireDedicated({ PASEO_PROVIDER_CWD: options!.cwd! })
++      : await this.serverManager.acquireCurrent();
+     const { url } = acquisition.server;
+     const client = this.createOpenCodeClient({
+       baseUrl: url,
+@@ -1649,7 +1657,9 @@
+   }
+ 
+   async importSession(input: ImportProviderSessionInput, context: ImportProviderSessionContext) {
+-    const acquisition = await this.serverManager.acquireCurrent();
++    const acquisition = isRequiredProviderSandbox()
++      ? await this.serverManager.acquireDedicated({ PASEO_PROVIDER_CWD: input.cwd })
++      : await this.serverManager.acquireCurrent();
+     const { url } = acquisition.server;
+     const client = this.createOpenCodeClient({
+       baseUrl: url,
+@@ -1703,9 +1713,10 @@
+     }
+ 
+     const registeredServerUrl = getOpenCodeChildSessionServerUrl(handle.sessionId);
+-    const acquisition =
+-      (registeredServerUrl ? this.serverManager.acquireExisting(registeredServerUrl) : null) ??
+-      (await this.serverManager.acquireCurrent());
++    const acquisition = isRequiredProviderSandbox()
++      ? await this.serverManager.acquireDedicated({ PASEO_PROVIDER_CWD: metadata.cwd })
++      : (registeredServerUrl ? this.serverManager.acquireExisting(registeredServerUrl) : null) ??
++        (await this.serverManager.acquireCurrent());
+     const client = this.createOpenCodeClient({
+       baseUrl: acquisition.server.url,
+       directory: metadata.cwd,
+@@ -1729,6 +1740,7 @@
+   }
+ 
+   async isAvailable(): Promise<boolean> {
++    if (isRequiredProviderSandbox()) return true;
+     const launch = await resolveProviderLaunch({
+       commandConfig: this.runtimeSettings?.command,
+       defaultBinary: "opencode",
+@@ -1742,6 +1754,7 @@
+   }
+ 
+   async getDiagnostic(): Promise<{ diagnostic: string }> {
++    if (isRequiredProviderSandbox()) return { diagnostic: "OpenCode: mandatory provider sandbox; direct probes disabled" };
+     try {
+       const launch = await resolveProviderLaunch({
+         commandConfig: this.runtimeSettings?.command,
+diff --git a/packages/server/src/server/agent/provider-snapshot-manager.ts b/packages/server/src/server/agent/provider-snapshot-manager.ts
+--- a/packages/server/src/server/agent/provider-snapshot-manager.ts
++++ b/packages/server/src/server/agent/provider-snapshot-manager.ts
+@@ -28,9 +28,10 @@
+ import type { WorkspaceGitService } from "../workspace-git-service.js";
+ import type { ManagedProcessRegistry } from "../managed-processes/managed-processes.js";
+ import type { OpenCodeBridge } from "./providers/opencode/bridge.js";
+-import type {
+-  AgentProviderRuntimeSettingsMap,
+-  ProviderOverride,
++import {
++  isRequiredProviderSandbox,
++  type AgentProviderRuntimeSettingsMap,
++  type ProviderOverride,
+ } from "./provider-launch-config.js";
+ import {
+   buildProviderRegistry,
+@@ -266,7 +267,7 @@
+     this.managedProcesses = options.managedProcesses;
+     this.openCodeBridge = options.openCodeBridge;
+     this.isDev = options.isDev === true;
+-    this.extraClients = options.extraClients ?? {};
++    this.extraClients = isRequiredProviderSandbox() ? {} : options.extraClients ?? {};
+     this.runtimeSettings = options.runtimeSettings;
+     this.providerOverrides = options.providerOverrides;
+     this.baseProviderOverrides = options.providerOverrides;
+@@ -388,6 +389,7 @@
+   replacePluginProviders(
+     registrations: readonly ProviderRegistration[],
+   ): AgentManagerProviderState {
++    if (isRequiredProviderSandbox()) registrations = [];
+     for (const registration of registrations) {
+       if (
+         (this.generation.definitions[registration.id] || this.extraClients[registration.id]) &&
+@@ -560,6 +562,9 @@
+       };
+     }
+ 
++    if (isRequiredProviderSandbox() && !definition.enabled) {
++      return { provider, diagnostic: formatProviderDiagnostic(provider, [{ label: "Error", value: "Provider is disabled by mandatory sandbox policy" }]) };
++    }
+     const baseDiagnosticPromise = this.getBaseProviderDiagnostic(provider, definition);
+     const snapshotEntryPromise = this.refreshDiagnosticSnapshotEntry(provider);
+     const [baseDiagnostic, entry] = await Promise.all([
+@@ -586,6 +591,9 @@
+     mutableProviders: MutableDaemonConfig["providers"] | undefined,
+     options: ApplyMutableProviderConfigOptions = {},
+   ): PreparedMutableProviderConfig {
++    if (isRequiredProviderSandbox() && mutableProviders && Object.keys(mutableProviders).length > 0) {
++      throw new Error("Provider configuration is immutable while mandatory sandbox mode is active");
++    }
+     const baseProviderOverrides = options.replace
+       ? undefined
+       : omitProviderOverrides(this.baseProviderOverrides, options.removeProviders ?? []);
+@@ -695,12 +703,14 @@
+       isDev: this.isDev,
+     });
+ 
++    if (!isRequiredProviderSandbox()) {
+     for (const [provider, definition] of Object.entries(this.pluginProviders.definitions())) {
+       if (registry[provider]) {
+         throw new Error(`Plugin provider '${provider}' conflicts with a configured provider`);
+       }
+       registry[provider] = definition;
+     }
++    }
+ 
+     for (const [provider, client] of Object.entries(this.extraClients) as Array<
+       [AgentProvider, AgentClient]
+diff --git a/packages/server/src/server/bootstrap.ts b/packages/server/src/server/bootstrap.ts
+--- a/packages/server/src/server/bootstrap.ts
++++ b/packages/server/src/server/bootstrap.ts
+@@ -1427,13 +1427,15 @@
+   const createAgentToolCatalog = (runtime: PaseoToolRuntimeContext) =>
+     createPaseoToolCatalog(createAgentToolHostDependencies(runtime));
+   const setAgentProviderToolsEnabled = (enabled: boolean) => {
+-    agentProviderRuntime.setPaseoToolCatalog(enabled ? createAgentToolCatalog({}) : null);
++    agentProviderRuntime.setPaseoToolCatalog(
++      process.env.PASEO_PROVIDER_SANDBOX_REQUIRED === "1" || !enabled ? null : createAgentToolCatalog({}),
++    );
+   };
+-  agentManager.setPaseoToolCatalogFactory(createAgentToolCatalog);
+-  agentManager.setPaseoToolsEnabled(config.mcpInjectIntoAgents !== false);
+-  setAgentProviderToolsEnabled(config.mcpEnabled !== false && config.mcpInjectIntoAgents !== false);
++  agentManager.setPaseoToolCatalogFactory(process.env.PASEO_PROVIDER_SANDBOX_REQUIRED === "1" ? null : createAgentToolCatalog);
++  agentManager.setPaseoToolsEnabled(process.env.PASEO_PROVIDER_SANDBOX_REQUIRED !== "1" && config.mcpInjectIntoAgents !== false);
++  setAgentProviderToolsEnabled(process.env.PASEO_PROVIDER_SANDBOX_REQUIRED !== "1" && config.mcpEnabled !== false && config.mcpInjectIntoAgents !== false);
+ 
+-  let mcpEnabled = config.mcpEnabled ?? true;
++  let mcpEnabled = process.env.PASEO_PROVIDER_SANDBOX_REQUIRED === "1" ? false : config.mcpEnabled ?? true;
+   let agentMcpBaseUrl: string | null = null;
+   {
+     const agentMcpRoute = "/mcp/agents";
+@@ -1601,18 +1603,18 @@
+             boundListenTarget = resolveBoundListenTarget(listenTarget, httpServer);
+             const mcpBaseUrl = createAgentMcpBaseUrl(boundListenTarget);
+             agentMcpBaseUrl =
+-              !mcpEnabled || config.mcpInjectIntoAgents === false ? null : mcpBaseUrl;
++              process.env.PASEO_PROVIDER_SANDBOX_REQUIRED === "1" || !mcpEnabled || config.mcpInjectIntoAgents === false ? null : mcpBaseUrl;
+             agentManager.setMcpBaseUrl(agentMcpBaseUrl);
+             agentManager.setPaseoToolsEnabled(mcpEnabled && config.mcpInjectIntoAgents !== false);
+             daemonConfigStore.onFieldChange("mcp.enabled", (value) => {
+-              mcpEnabled = value !== false;
++              mcpEnabled = process.env.PASEO_PROVIDER_SANDBOX_REQUIRED === "1" ? false : value !== false;
+               const inject = daemonConfigStore.get().mcp.injectIntoAgents !== false;
+               agentManager.setMcpBaseUrl(mcpEnabled && inject ? mcpBaseUrl : null);
+               agentManager.setPaseoToolsEnabled(mcpEnabled && inject);
+               setAgentProviderToolsEnabled(mcpEnabled && inject);
+             });
+             daemonConfigStore.onFieldChange("mcp.injectIntoAgents", (value) => {
+-              agentManager.setMcpBaseUrl(mcpEnabled && value ? mcpBaseUrl : null);
++              agentManager.setMcpBaseUrl(process.env.PASEO_PROVIDER_SANDBOX_REQUIRED === "1" || !mcpEnabled || !value ? null : mcpBaseUrl);
+               agentManager.setPaseoToolsEnabled(mcpEnabled && value !== false);
+               setAgentProviderToolsEnabled(mcpEnabled && value !== false);
+             });
+diff --git a/packages/server/src/server/plugins/index.ts b/packages/server/src/server/plugins/index.ts
+--- a/packages/server/src/server/plugins/index.ts
++++ b/packages/server/src/server/plugins/index.ts
+@@ -135,6 +135,11 @@
+   async start(): Promise<void> {
+     if (this.started) return;
+     this.started = true;
++    if (process.env.PASEO_PROVIDER_SANDBOX_REQUIRED === "1") {
++      this.globalStartsBlocked = true;
++      await this.runtime.stopAll();
++      return;
++    }
+     const config = this.configStore.get();
+     this.globalStartsBlocked = config.pluginsEnabled !== true;
+     if (config.pluginsEnabled === true) {
+@@ -195,6 +200,7 @@
+   }
+ 
+   async installDirectory(input: { path: string; id?: string }): Promise<PluginListItem> {
++    if (process.env.PASEO_PROVIDER_SANDBOX_REQUIRED === "1") throw new Error("Plugins are disabled by the mandatory provider sandbox policy");
+     return this.enqueue(async () => {
+       const directory = path.resolve(input.path);
+       const manifest = await readPluginManifest(directory);
+@@ -229,6 +235,7 @@
+     id?: string;
+     ref?: string;
+   }): Promise<PluginListItem> {
++    if (process.env.PASEO_PROVIDER_SANDBOX_REQUIRED === "1") throw new Error("Plugins are disabled by the mandatory provider sandbox policy");
+     const directDirectory = path.resolve(input.source);
+     const explicit = /^(npm:|github:|git:(?!\/\/))/.test(input.source);
+     const directInfo = await stat(directDirectory).catch(() => null);
+@@ -335,6 +342,7 @@
+   }
+ 
+   async applyUpdates(proposals: PluginUpdateProposal[]): Promise<PluginUpdateResult[]> {
++    if (process.env.PASEO_PROVIDER_SANDBOX_REQUIRED === "1") throw new Error("Plugins are disabled by the mandatory provider sandbox policy");
+     return this.enqueue(async () => {
+       const results: PluginUpdateResult[] = [];
+       for (const proposal of proposals) {
+@@ -353,6 +361,7 @@
+   }
+ 
+   async reloadPlugin(pluginId: string): Promise<PluginListItem> {
++    if (process.env.PASEO_PROVIDER_SANDBOX_REQUIRED === "1") throw new Error("Plugins are disabled by the mandatory provider sandbox policy");
+     return this.enqueue(async () => {
+       const source = this.requireEnabledSource(pluginId);
+       if (this.configStore.get().pluginsEnabled !== true) {
+@@ -367,6 +376,7 @@
+   }
+ 
+   async enablePlugin(pluginId: string): Promise<PluginListItem> {
++    if (process.env.PASEO_PROVIDER_SANDBOX_REQUIRED === "1") throw new Error("Plugins are disabled by the mandatory provider sandbox policy");
+     const source = this.requireSource(pluginId);
+     this.patchSource(pluginId, { ...source, enabled: true });
+     this.errors.delete(pluginId);
+@@ -413,6 +423,7 @@
+   }
+ 
+   invokePluginRpc(pluginId: string, method: string, input: unknown): Promise<unknown> {
++    if (process.env.PASEO_PROVIDER_SANDBOX_REQUIRED === "1") throw new Error("Plugins are disabled by the mandatory provider sandbox policy");
+     return this.runtime.invoke(pluginId, method, input);
+   }
+ 
+@@ -478,6 +489,7 @@
+   }
+ 
+   private async startPlugin(pluginId: string, sourcePath: string): Promise<void> {
++    if (process.env.PASEO_PROVIDER_SANDBOX_REQUIRED === "1") throw new Error("Plugins are disabled by the mandatory provider sandbox policy");
+     await this.runtime.startPlugin(pluginId, sourcePath, () => this.canPublish(pluginId));
+     try {
+       await this.publishProviderRegistrations(pluginId, sourcePath);
