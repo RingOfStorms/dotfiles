@@ -22,14 +22,13 @@ services.paseoBareMetal = {
   home = "/home/josh";
   catalogWorkdir = "/home/josh/projects"; # Existing, writable project root used for global Settings catalogs.
   port = 6767;
-  proxy.domain = "paseo.example.com";
   environmentFile = "/var/lib/secrets/paseo.env";
 };
 ```
 
-The module sets a boot-starting `services.paseo` unit that survives logout and binds only to `127.0.0.1` by default (use `http://localhost:6767` on the host). On lio, it binds to `0.0.0.0` so both localhost and the tailnet IP work; only `tailscale0` permits incoming port 6767, not the LAN. Use `http://100.64.0.1:6767` on the tailnet or `https://paseo.joshuabell.xyz` through the existing tailnet-only nginx proxy. `PASEO_HOME` remains `~/.paseo`. `catalogWorkdir` must be an existing writable directory listed in `projects`; it is used for global Settings model discovery, while workspace discovery uses the selected workspace cwd. Global discovery is still wrapped by Nono with only that exact project directory as `--workdir` and `--allow`. Existing project directories are never created, chowned, or chmodded. The service gets a minimal PATH; provider binaries are fixed store paths behind the Nono launcher. `inheritUserEnvironment = false` keeps host-wide CLI aliases and user PATH from changing normal shell behavior.
+The module sets a boot-starting `services.paseo` unit that survives logout and binds only to `127.0.0.1` by default (use `http://localhost:6767` on the host). On lio, it binds to `0.0.0.0` so both localhost and the tailnet IP work; only `tailscale0` permits incoming port 6767, not the LAN. Use `http://100.64.0.1:6767` on the tailnet. The lio config advertises this URL via `baseUrl`. `PASEO_HOME` remains `~/.paseo`. `catalogWorkdir` must be an existing writable directory listed in `projects`; it is used for global Settings model discovery, while workspace discovery uses the selected workspace cwd. Global discovery is still wrapped by Nono with only that exact project directory as `--workdir` and `--allow`. Existing project directories are never created, chowned, or chmodded. The service gets a minimal PATH; provider binaries are fixed store paths behind the Nono launcher. `inheritUserEnvironment = false` keeps host-wide CLI aliases and user PATH from changing normal shell behavior.
 
-When `proxy.domain` is set, the daemon allowlists that host, trusts loopback for forwarded proto, permits only the matching browser origin and uses the HTTPS URL as `app.baseUrl`. The host reverse proxy remains responsible for TLS and access controls. Serve only an exact, tailnet-filtered hostname: workspace service subdomains are unauthenticated and must not resolve to Paseo's vhost.
+When `proxy.domain` is set, the daemon allowlists that host, trusts loopback for forwarded proto, permits only the matching browser origin and uses the HTTPS URL as `app.baseUrl` unless `baseUrl` is explicitly set. The host reverse proxy remains responsible for TLS and access controls. Do not expose workspace service subdomains: they are unauthenticated.
 
 ## Security boundary
 

@@ -16,8 +16,9 @@ let
       cors.allowedOrigins = [ "https://${cfg.proxy.domain}" ];
     };
     app.baseUrl =
-      if cfg.proxy.domain == null then "http://127.0.0.1:${toString cfg.port}"
-      else "https://${cfg.proxy.domain}";
+      if cfg.baseUrl != null then cfg.baseUrl
+      else if cfg.proxy.domain != null then "https://${cfg.proxy.domain}"
+      else "http://127.0.0.1:${toString cfg.port}";
     features.webUi.enabled = true;
     worktrees.root = cfg.worktreesDir;
     agents.providers = {
@@ -55,6 +56,7 @@ in
     port = mkOption { type = types.port; default = 6767; };
     listenAddress = mkOption { type = types.str; default = "127.0.0.1"; description = "Daemon listen address; restrict non-loopback access with the host firewall."; };
     extraHostnames = mkOption { type = types.listOf types.str; default = [ ]; description = "Additional hostnames or addresses accepted by the daemon."; };
+    baseUrl = mkOption { type = types.nullOr types.str; default = null; description = "URL advertised by Paseo; defaults to the proxy URL or localhost."; };
     proxy.domain = mkOption { type = types.nullOr types.str; default = null; };
     environmentFile = mkOption {
       type = types.str;

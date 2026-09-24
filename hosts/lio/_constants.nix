@@ -21,7 +21,6 @@
     };
     paseo = {
       port = 6767;
-      domain = "paseo.joshuabell.xyz";
     };
   };
 
