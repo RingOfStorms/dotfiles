@@ -17,7 +17,7 @@ in
     ./paperless.nix
     ./opengist.nix
     ./pkm.nix
-    ./kura.nix
+    # ./kura.nix
     ./penpot.nix
     ./paseo.nix
     ./vaultwarden.nix
