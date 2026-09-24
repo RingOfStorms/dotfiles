@@ -1,25 +1,25 @@
 diff --git a/packages/server/src/server/agent/providers/opencode-agent.ts b/packages/server/src/server/agent/providers/opencode-agent.ts
+index 084ca70..06a721a 100644
 --- a/packages/server/src/server/agent/providers/opencode-agent.ts
 +++ b/packages/server/src/server/agent/providers/opencode-agent.ts
-@@ -353,6 +353,11 @@ function requiresDedicatedOpenCodeServer(
+@@ -354,6 +354,7 @@ function requiresDedicatedOpenCodeServer(
    config: OpenCodeAgentConfig,
    launchContext?: AgentLaunchContext,
  ): boolean {
-+  // PASEO_AGENT_CWD identifies a concrete worktree. A shared helper would
-+  // make the helper's filesystem boundary broader than the selected agent.
-+  // Keep one helper generation per Paseo worktree instead.
 +  if (launchContext?.env?.PASEO_AGENT_CWD) return true;
    if (config.mcpServers && Object.keys(config.mcpServers).length > 0) return true;
    return Object.keys(launchContext?.env ?? {}).some((key) => !OPENCODE_SESSION_ENV_KEYS.has(key));
  }
-*** Update File: packages/server/src/server/agent/providers/opencode/server-manager.ts
-@@
--    // Use a neutral OpenCode home as the server cwd. Launching from the user's
--    // home directory causes OpenCode to treat it as the default workspace and
--    // index the entire home tree.
+diff --git a/packages/server/src/server/agent/providers/opencode/server-manager.ts b/packages/server/src/server/agent/providers/opencode/server-manager.ts
+index 4161cd9..5e9a4a4 100644
+--- a/packages/server/src/server/agent/providers/opencode/server-manager.ts
++++ b/packages/server/src/server/agent/providers/opencode/server-manager.ts
+@@ -319,7 +319,7 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
+     // Use a neutral OpenCode home as the server cwd. Launching from the user's
+     // home directory causes OpenCode to treat it as the default workspace and
+     // index the entire home tree.
 -    const serverCwd = this.resolveHomeDir();
-+    // Dedicated Paseo launches carry their worktree in PASEO_AGENT_CWD. Start
-+    // the helper there so the nono wrapper grants exactly that worktree;
-+    // shared helpers continue to use the neutral OpenCode home.
 +    const serverCwd = launchEnv?.PASEO_AGENT_CWD ?? this.resolveHomeDir();
-*** End Patch
+     mkdirSync(serverCwd, { recursive: true });
+ 
+     const existingConfigContent =

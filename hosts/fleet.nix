@@ -189,6 +189,8 @@ rec {
     "location" "matrix" "element" "docs" "pkm" "kura"
     # `secrets` is the secrets manager server (hosts/h001/mods/sec.nix).
     "secrets"
+    # Tailnet-only (not proxied by o002): hosts/h001/containers/paseo.nix.
+    "paseo"
   ];
 
   # ─── HOST BUILDER ─────────────────────────────────────────────────

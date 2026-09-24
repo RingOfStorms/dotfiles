@@ -24,7 +24,7 @@
     containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers";
     omp-flake.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/omp";
 
-    # Local wrapper around the pinned upstream Paseo package/module.
+    # Patched Paseo, nono, and the Paseo container module (./paseo.nix).
     paseo.url = "path:../../flakes/paseo";
     paseo.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -135,8 +135,6 @@
           inputs.common.nixosModules.more_filesystems
 
           inputs.omp-flake.nixosModules.default
-          inputs.paseo.nixosModules.upstream
-          ({ services.paseo.enable = false; })
           ./pi.nix
 
           (
@@ -154,7 +152,8 @@
                   nono_base = "nono run --allow-cwd --silent --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\"";
                 in
                 {
-                  "mva" = "${no_proxy} ${nono_base} --profile mva-full  -- /home/josh/projects/mva/target/release/mva";
+                  "mva" =
+                    "${no_proxy} ${nono_base} --profile mva-full  -- /home/josh/projects/mva/target/release/mva";
                   "mva_" = "${no_proxy} /home/josh/projects/mva/target/release/mva";
                   # open code
                   "oc" = "${no_proxy} ${nono_base} --profile opencode-full -- opencode";

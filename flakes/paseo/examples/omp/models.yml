@@ -1,0 +1,12 @@
+providers:
+  litellm:
+    baseUrl: http://h001.net.joshuabell.xyz:8094/v1
+    api: openai-completions
+    auth: none
+    discovery:
+      type: litellm
+    models:
+      - id: air-gemini-3.8-flash
+        name: air-gemini-3.8-flash
+        contextWindow: 128000
+        maxTokens: 16384
