@@ -1,0 +1,53 @@
+diff --git a/packages/opencode/src/config/config.ts b/packages/opencode/src/config/config.ts
+--- a/packages/opencode/src/config/config.ts
++++ b/packages/opencode/src/config/config.ts
+@@ -131,6 +131,10 @@
+   description: "Log level",
+ })
+ 
++function isolateFromLegacyHostConfig(): boolean {
++  return process.env.PASEO_PROVIDER_SANDBOX_REQUIRED === "1";
++}
++
+ export const Info = Schema.Struct({
+   $schema: Schema.optional(Schema.String).annotate({
+     description: "JSON schema reference for configuration validation",
+@@ -442,6 +446,7 @@
+ 
+     const loadGlobal = Effect.fnUntraced(function* (env?: Record<string, string>) {
+       let result: Info = {}
++      if (isolateFromLegacyHostConfig()) return result
+       // Seed the default global config with the schema for editor completion, but avoid writing when the user
+       // explicitly routes config through env-provided paths or content.
+       if (!Flag.OPENCODE_CONFIG && !Flag.OPENCODE_CONFIG_DIR && !Flag.OPENCODE_CONFIG_CONTENT) {
+@@ -591,7 +596,9 @@
+           }
+         }
+ 
+-        const global = Object.keys(authEnv).length ? yield* loadGlobal(authEnv) : yield* getGlobal()
++        const global = isolateFromLegacyHostConfig()
++          ? {}
++          : Object.keys(authEnv).length ? yield* loadGlobal(authEnv) : yield* getGlobal()
+         yield* merge(Global.Path.config, global, "global")
+ 
+         if (Flag.OPENCODE_CONFIG) {
+@@ -827,7 +834,7 @@
+     })
+ 
+     const updateGlobal = Effect.fn("Config.updateGlobal")(function* (config: Info) {
+-      const file = globalConfigFile()
++      const file = isolateFromLegacyHostConfig() && Flag.OPENCODE_CONFIG ? Flag.OPENCODE_CONFIG : globalConfigFile()
+       const before = (yield* readConfigFile(file)) ?? "{}"
+       const patch = writableGlobal(config)
+ 
+diff --git a/packages/opencode/src/config/paths.ts b/packages/opencode/src/config/paths.ts
+--- a/packages/opencode/src/config/paths.ts
++++ b/packages/opencode/src/config/paths.ts
+@@ -21,6 +21,7 @@
+ })
+ 
+ export const directories = Effect.fn("ConfigPaths.directories")(function* (directory: string, worktree?: string) {
++  if (process.env.PASEO_PROVIDER_SANDBOX_REQUIRED === "1") return []
+   const afs = yield* AppFileSystem.Service
+   return unique([
+     Global.Path.config,

@@ -6,7 +6,7 @@ import ../sec-agent.nix {
   extraSecrets = {
     paseo_agent_env_2026-09-21 = {
       remotePath = "machines/high-trust/paseo_agent_env_2026-09-21";
-      softDepend = [ "container@paseo" ];
+      softDepend = [ "paseo.service" ];
     };
   };
 }

@@ -1,4 +1,0 @@
-modelRoles:
-  default: litellm/air-gemini-3.8-flash
-startup:
-  quiet: true

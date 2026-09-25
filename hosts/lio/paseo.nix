@@ -1,53 +1,27 @@
-# Experimental Paseo execution environment for lio (shared module:
-# flakes/paseo). Private and authenticated by default; populate the
-# operator-owned secret file and the hand-maintained provider/nono configs in
-# /var/lib/paseo (flakes/paseo/README.md) before starting the container.
-{
-  config,
-  constants,
-  fleet,
-  inputs,
-  pkgs,
-  ...
-}:
+{ constants, fleet, inputs, pkgs, ... }:
 let
-  c = constants.services.paseo;
+  overlayIp = constants.host.overlayIp;
+  upstreamPort = constants.services.paseo.port;
 in
 {
-  imports = [ inputs.paseo.nixosModules.container ];
-
-  ringofstorms.paseo = {
+  services.paseoBareMetal = {
     enable = true;
-    inherit (c)
-      port
-      uid
-      gid
-      dataDir
-      projectsDir
-      containerIp
-      containerIp6
-      ;
-    hostAddress = "10.0.0.1";
-    hostAddress6 = "fc00::1";
-    secretFile = "${fleet.global.secretsDir}/paseo_agent_env_2026-09-21";
-    extraHostnames = [ constants.host.overlayIp ];
-    # Mirror headscale's DNS view (MagicDNS base domain + split domain,
-    # hosts/oracle/o002/headscale.nix), so tailnet names such as h001's
-    # LiteLLM resolve and bare `h001` expands via the search domain.
-    tailnet = {
-      enable = true;
-      domains = [
-        "net.${fleet.global.domain}"
-        "~${fleet.global.domain}"
-      ];
-    };
+    user = constants.host.primaryUser;
+    group = "users";
+    home = "/home/josh";
+    dataDir = "/home/josh/.paseo";
+    projects = [ "/home/josh/projects" "/home/josh/other" ];
+    catalogWorkdir = "/home/josh/projects";
+    uid = 1000;
+    worktreesDir = "/home/josh/.paseo/worktrees";
+    port = upstreamPort;
+    listenAddress = "0.0.0.0";
+    extraHostnames = [ overlayIp "${overlayIp}:${toString upstreamPort}" ];
+    baseUrl = "http://${overlayIp}:${toString upstreamPort}";
+    environmentFile = "${fleet.global.secretsDir}/paseo_agent_env_2026-09-21";
+    opencodePackage = inputs.paseo.packages.${pkgs.stdenv.hostPlatform.system}.opencode;
     ompPackage = inputs.omp-flake.inputs.omp.packages.${pkgs.stdenv.hostPlatform.system}.default;
-    extraGuestModules = [
-      (inputs.paseo.lib.toolsModule {
-        inherit (inputs) common ros_neovim;
-        hostConfig = config;
-        inherit (constants.host) primaryUser;
-      })
-    ];
   };
+
+  networking.firewall.interfaces."tailscale0".allowedTCPPorts = [ upstreamPort ];
 }
