@@ -1,6 +1,6 @@
 # Paseo on bare-metal NixOS
 
-This flake builds the pinned Paseo daemon plus a mandatory Nono provider launcher. Its NixOS module runs Paseo as an existing user rather than in a container. The daemon and provider isolation are separate: the daemon inherits normal host identity/filesystem access, while every provider launch is forced through Nono.
+This flake builds the pinned Paseo daemon plus a Nono provider launcher. Its NixOS module runs Paseo as an existing user rather than in a container. The daemon and provider isolation are separate: providers default to Nono, while explicitly trusted agent profiles can run directly with host-user access and receive Paseo tools.
 
 ## Outputs
 
@@ -34,11 +34,22 @@ When `proxy.domain` is set, the daemon allowlists that host, trusts loopback for
 
 Paseo runs as the existing host user with the normal home, git identity, SSH agent, `~/.omp`, and XDG defaults. Its daemon terminals remain ordinary host terminals by design; Nono wraps provider processes only. Do not expose `paseo` on a wildcard workspace-service hostname.
 
-The mandatory package policy exposes only the built-in OpenCode and OMP providers. Every OpenCode server and OMP RPC process is started as `nono run`; other built-ins, custom/derived providers, plugins, provider-side ACP filesystem/terminal operations, provider-facing Paseo tools, and MCP injection are disabled. The launcher selects only the existing profile by a trusted provider ID and requires the daemon's absolute launcher path and exact session cwd. Missing profiles fail closed. There is no unsandboxed opt-out.
+The package exposes only the built-in OpenCode and OMP providers. Other built-ins, custom/derived providers, plugins, and provider-side ACP filesystem/terminal operations remain disabled. OpenCode servers and OMP RPC processes default to `nono run`; catalog probes always use Nono. The launcher selects the existing Nono profile by trusted provider ID and requires the daemon's absolute launcher path and exact session cwd. Missing profiles fail closed for sandboxed launches. Both launch modes retain the pinned runtime and protected environment settings.
 
 The selected profiles are the user's existing files: OpenCode uses `~/.config/nono/profiles/opencode.json`; OMP uses `~/.config/nono/profiles/omp.json`. They are not modified by Nix. Their current grants are broader than the per-agent workdir: OpenCode allows read/write access to `~/.opencode`, `~/.config/opencode`, `~/.cache/opencode`, `~/.local/share/opencode`, `~/.local/state/opencode`, `~/.local/share/opentui`, and `$TMPDIR`, and read access to the configured Tempus/Okta paths. OMP allows read/write `~/.omp`, all of `~/.cache`, and `$TMPDIR`, plus read-only `~/.gitconfig`. Both allow outbound networking and set `workdir.access` to `readwrite`. The launcher adds only the exact agent cwd; it does not grant all of `/home/josh`.
 
-The Nix-packaged OpenCode executable starts under the existing `~/.config/nono/profiles/opencode.json` profile without changing it. Its existing `~/.config/opencode` grant covers the operator-managed `~/.config/opencode/paseo-1.x.json`; the package runtime is in the Nix store and remains unchanged. Paseo does not overwrite either `opencode.json` or the user's Nono profiles.
+By default, the Nix-packaged OpenCode executable starts under the existing `~/.config/nono/profiles/opencode.json` profile without changing it. Its existing `~/.config/opencode` grant covers the operator-managed `~/.config/opencode/paseo-1.x.json`; the package runtime is in the Nix store and remains unchanged. Paseo does not overwrite either `opencode.json` or the user's Nono profiles.
+
+### Enable Paseo tools for a trusted agent profile
+
+1. Deploy the updated flake, then open **Settings → your host → Agents → Agent profiles**.
+2. Create or edit an **OMP** or **OpenCode** profile. Under its feature settings, turn **Nono sandbox** off and save. Give it an obvious name such as **Trusted OMP — host access**.
+3. Enable **Enable Paseo tools** in the host settings.
+4. Start a **new agent** using that profile. Existing agents keep the sandbox mode with which they started; applying a profile with a different mode is rejected. Resuming an agent preserves its saved mode.
+
+The saved setting is `featureValues.nonoSandbox: false`. Missing values default to `true`; only a boolean `false` opts out. It is a per-agent launch decision, not an environment-variable override or a change to the user's Nono JSON profiles. Sandboxed agents never receive the Paseo tool catalog or injected MCP servers, even when the host tools toggle is enabled. Unsandboxed agents use OMP's native host-tool RPC or OpenCode's native bridge, subject to the normal host tools setting. OpenCode still uses the separate 1.x configuration described below.
+
+**Unsandboxed means host-user authority**, including Paseo tools that create terminals, worktrees, agents, and schedules. This is not a restricted orchestration-only mode. The tools toggle does not install orchestration skill files; use the separate skills installer if desired. No existing profile is opted out automatically.
 
 ### Operator-managed OpenCode 1.x config
 

@@ -40,9 +40,9 @@
       #   node-pty (a @getpaseo/server dependency) under
       #   packages/server/node_modules, so the addon was never copied and the
       #   terminal worker died on startup ("Terminal worker is not running").
-      # - mandatory-provider-sandbox patch: only OpenCode and OMP remain enabled;
-      #   custom providers/plugins and daemon-mediated ACP execution are disabled,
-      #   while their provider processes are forced through Nono.
+      # - mandatory-provider-sandbox patch: OpenCode and OMP default to Nono;
+      #   trusted agent profiles can opt out and receive Paseo tools. Custom
+      #   providers/plugins and daemon-mediated ACP execution stay disabled.
       # - procps on PATH: the daemon shells out to `ps` to kill provider process
       #   trees (tree-kill) and to reconcile managed helpers. Without it a
       #   systemd unit with a minimal PATH crashes the worker (uncaught
