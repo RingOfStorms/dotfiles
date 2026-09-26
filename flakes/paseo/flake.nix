@@ -3,7 +3,7 @@
 
   inputs = {
     paseo = {
-      url = "github:getpaseo/paseo/135a3b4c9e49a28b9d16ced8fc0e45b4da9fc502";
+      url = "github:getpaseo/paseo/c67b7158b441bb09026b38d86ae335cc4b49190a";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
@@ -54,7 +54,10 @@
           patchedOpencode = pkgs.opencode.overrideAttrs (old: {
             patches = (old.patches or [ ]) ++ [ ./patches/opencode-config-isolation.patch ];
           });
-          patched = upstream.paseo.overrideAttrs (old: {
+          # Upstream's npm hash targets its nixpkgs; this flake follows the host's nixpkgs.
+          patched = (upstream.paseo.override {
+            npmDepsHash = "sha256-UXnB6q5tubKpTs+A5+u/NLSzc8ZK6rAsQs+kEphEKd8=";
+          }).overrideAttrs (old: {
             patches = (old.patches or [ ]) ++ [
               ./patches/per-worktree-nono.patch
               ./patches/ship-node-pty-prebuild.patch

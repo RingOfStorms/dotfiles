@@ -1,6 +1,6 @@
 # Paseo on bare-metal NixOS
 
-This flake builds the pinned Paseo daemon plus a Nono provider launcher. Its NixOS module runs Paseo as an existing user rather than in a container. The daemon and provider isolation are separate: providers default to Nono, while explicitly trusted agent profiles can run directly with host-user access and receive Paseo tools.
+This flake builds Paseo v0.9.2 plus a Nono provider launcher. Its NixOS module runs Paseo as an existing user rather than in a container. The daemon and provider isolation are separate: providers default to Nono, while explicitly trusted agent profiles can run directly with host-user access and receive Paseo tools.
 
 ## Outputs
 

@@ -86,11 +86,11 @@ diff --git a/packages/server/src/server/agent/agent-manager.ts b/packages/server
  
      // Always resolve cwd to absolute path for consistent history file lookup
      if (normalized.cwd) {
-@@ -5090,10 +5122,23 @@
-     agentId: string,
-     env?: Record<string, string>,
-   ): Promise<PreparedSessionConfig> {
--    const storedConfig = await this.normalizeConfig(stripInternalPaseoMcpServer(config), { env });
+@@ -5126,10 +5126,21 @@
+-    const storedConfig = await this.normalizeConfig(stripInternalPaseoMcpServer(config), {
+-      env: options.env,
+-      purpose: options.purpose,
+-    });
 -    const paseoToolPolicy = this.paseoToolsEnabled
 -      ? this.resolvePaseoToolPolicy(storedConfig.provider)
 -      : { enabled: false };
@@ -105,7 +105,8 @@ diff --git a/packages/server/src/server/agent/agent-manager.ts b/packages/server
 +      ? { ...config, mcpServers: undefined }
 +      : config;
 +    const storedConfig = await this.normalizeConfig(stripInternalPaseoMcpServer(safeConfig), {
-+      env,
++      env: options.env,
++      purpose: options.purpose,
 +    });
 +    const paseoToolPolicy =
 +      this.paseoToolsEnabled && !isSessionSandboxRequired(storedConfig)
@@ -159,7 +160,7 @@ diff --git a/packages/server/src/server/agent/provider-launch-config.ts b/packag
  export {
    AgentProviderRuntimeSettingsMapSchema,
    ProviderCommandSchema,
-@@ -28,6 +29,120 @@
+@@ -28,6 +29,121 @@
    type ProviderRuntimeSettings,
  } from "@getpaseo/protocol/provider-config";
  
@@ -259,7 +260,8 @@ diff --git a/packages/server/src/server/agent/provider-launch-config.ts b/packag
 +    PASEO_PROVIDER_DEFAULT_CWD: requiredProviderDefaultCwd(),
 +    PASEO_PROVIDER_ID: options.providerId,
 +    PASEO_OPENCODE_RUNTIME: requiredProviderRuntime("opencode"),
-+    PASEO_OMP_RUNTIME: process.env.PASEO_OMP_RUNTIME,
++    PASEO_OMP_RUNTIME:
++      options.providerId === "omp" ? requiredProviderRuntime("omp") : process.env.PASEO_OMP_RUNTIME,
 +    PASEO_UNSANDBOXED: undefined,
 +    HOME: process.env.HOME,
 +    XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
@@ -901,7 +903,7 @@ diff --git a/packages/server/src/server/agent/providers/opencode/server-manager.
 +    // Mandatory-mode env sanitization still applies to direct launches so provider
 +    // settings cannot replace the trusted runtime or the operator's config paths.
 +    const bridgeEnv =
-+      sandbox === false
++      !isRequiredProviderSandbox() || sandbox === false
 +        ? this.decorateServerEnv?.(
 +            existingConfigContent ? { OPENCODE_CONFIG_CONTENT: existingConfigContent } : {},
 +          )
@@ -1004,15 +1006,11 @@ diff --git a/packages/server/src/server/agent/providers/opencode-agent.ts b/pack
        : null;
      const acquisition =
        registeredAcquisition ?? (await this.acquireServer(openCodeConfig, launchContext));
-@@ -1529,7 +1529,7 @@
- 
-     try {
+@@ -1542,3 +1542,3 @@
        await this.populateModelContextWindowCache(client, openCodeConfig.cwd);
 -      const unbindBridge = this.bindBridgeSession(handle.sessionId, launchContext);
 +      const unbindBridge = this.bindBridgeSession(handle.sessionId, openCodeConfig, launchContext);
  
-       return new OpenCodeAgentSession(
-         openCodeConfig,
 @@ -1555,19 +1555,18 @@
      config: OpenCodeAgentConfig,
      launchContext?: AgentLaunchContext,
@@ -1276,12 +1274,12 @@ diff --git a/packages/server/src/server/bootstrap.ts b/packages/server/src/serve
  import { loadPersistedConfig, type PersistedConfig } from "./persisted-config.js";
  import { createServiceProxySubsystem, type ServiceProxySubsystem } from "./service-proxy.js";
  import { releaseWorkspaceServicePortPlan } from "./workspace-service-port-registry.js";
-@@ -1525,6 +1529,13 @@
+@@ -1524,6 +1528,13 @@
          } else if (Array.isArray(callerAgentIdRaw) && typeof callerAgentIdRaw[0] === "string") {
            callerAgentId = callerAgentIdRaw[0];
          }
-+        if (isRequiredProviderSandbox() && callerAgentId) {
-+          const caller = agentManager.getAgent(callerAgentId);
++        if (isRequiredProviderSandbox()) {
++          const caller = callerAgentId ? agentManager.getAgent(callerAgentId) : null;
 +          if (!caller || isSessionSandboxRequired(caller.config)) {
 +            res.status(403).json({ error: "Paseo tools require an unsandboxed agent profile" });
 +            return;

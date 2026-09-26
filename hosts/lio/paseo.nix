@@ -19,6 +19,7 @@ in
     extraHostnames = [ overlayIp "${overlayIp}:${toString upstreamPort}" ];
     baseUrl = "http://${overlayIp}:${toString upstreamPort}";
     environmentFile = "${fleet.global.secretsDir}/paseo_agent_env_2026-09-21";
+    paseoPackage = inputs.paseo.packages.${pkgs.stdenv.hostPlatform.system}.paseo;
     opencodePackage = inputs.paseo.packages.${pkgs.stdenv.hostPlatform.system}.opencode;
     ompPackage = inputs.omp-flake.inputs.omp.packages.${pkgs.stdenv.hostPlatform.system}.default;
   };
