@@ -3,7 +3,7 @@
 
   inputs = {
     paseo = {
-      url = "github:getpaseo/paseo/c67b7158b441bb09026b38d86ae335cc4b49190a";
+      url = "github:getpaseo/paseo/c481ecf3e101326e3758d419341bc4faaf5b4f98";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
@@ -33,7 +33,7 @@
     in
     {
       # Upstream paseo plus local fixes:
-      # - per-worktree-nono patch: every OpenCode agent gets a dedicated server
+      # - per-worktree-nono patch: every OpenCode v1 agent gets a dedicated server
       #   whose cwd is the agent cwd, so the nono launcher can scope it.
       # - ship-node-pty-prebuild patch: the install closure listed node-pty's
       #   prebuilt pty.node under the root node_modules, but npm installs
@@ -51,12 +51,9 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           upstream = paseo.packages.${system};
-          patchedOpencode = pkgs.opencode.overrideAttrs (old: {
-            patches = (old.patches or [ ]) ++ [ ./patches/opencode-config-isolation.patch ];
-          });
           # Upstream's npm hash targets its nixpkgs; this flake follows the host's nixpkgs.
           patched = (upstream.paseo.override {
-            npmDepsHash = "sha256-UXnB6q5tubKpTs+A5+u/NLSzc8ZK6rAsQs+kEphEKd8=";
+            npmDepsHash = "sha256-zhJ9vf0n5wmOP3Hg20vua91TWJcOIbm6kTSXCcryOlg=";
           }).overrideAttrs (old: {
             patches = (old.patches or [ ]) ++ [
               ./patches/per-worktree-nono.patch
@@ -73,12 +70,10 @@
             overlays = [ rust-overlay.overlays.default ];
           };
           rustToolchain = rustPkgs.rust-bin.stable.latest.default;
-          opencode = patchedOpencode;
         in
         {
           default = patched;
           paseo = patched;
-          opencode = patchedOpencode;
           nono = rustPkgs.callPackage ./nono.nix {
             rustPlatform = rustPkgs.makeRustPlatform {
               cargo = rustToolchain;

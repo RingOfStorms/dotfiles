@@ -20,7 +20,7 @@ in
     baseUrl = "http://${overlayIp}:${toString upstreamPort}";
     environmentFile = "${fleet.global.secretsDir}/paseo_agent_env_2026-09-21";
     paseoPackage = inputs.paseo.packages.${pkgs.stdenv.hostPlatform.system}.paseo;
-    opencodePackage = inputs.paseo.packages.${pkgs.stdenv.hostPlatform.system}.opencode;
+    opencodePackage = inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default;
     ompPackage = inputs.omp-flake.inputs.omp.packages.${pkgs.stdenv.hostPlatform.system}.default;
   };
 

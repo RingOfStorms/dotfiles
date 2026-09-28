@@ -63,7 +63,7 @@ in
       default = "/var/lib/secrets_manager_hydrated/paseo_agent_env_2026-09-21";
       description = "Secret EnvironmentFile containing PASEO_PASSWORD_BCRYPT.";
     };
-    opencodePackage = mkOption { type = types.package; default = self.packages.${pkgs.stdenv.hostPlatform.system}.opencode; description = "OpenCode 1.x runtime used only inside the mandatory provider launcher."; };
+    opencodePackage = mkOption { type = types.package; default = pkgs.opencode; description = "OpenCode runtime selected by Paseo's version-aware provider adapter."; };
     paseoPackage = mkOption { type = types.package; default = self.packages.${pkgs.stdenv.hostPlatform.system}.paseo; };
     ompPackage = mkOption { type = types.nullOr types.package; default = null; };
   };
@@ -100,13 +100,11 @@ in
         XDG_DATA_HOME = "${cfg.home}/.local/share";
         XDG_STATE_HOME = "${cfg.home}/.local/state";
         XDG_CACHE_HOME = "${cfg.home}/.cache";
-        OPENCODE_CONFIG = "${cfg.home}/.config/opencode/paseo-1.x.json";
         PASEO_PROVIDER_LAUNCHER = lib.getExe launcher;
         PASEO_PROVIDER_SANDBOX_REQUIRED = "1";
         PASEO_OPENCODE_RUNTIME = lib.getExe cfg.opencodePackage;
         PASEO_OMP_RUNTIME = if cfg.ompPackage != null then lib.getExe cfg.ompPackage else "";
         PASEO_PROVIDER_DEFAULT_CWD = if cfg.catalogWorkdir != null then toString cfg.catalogWorkdir else "";
-        OPENCODE_DISABLE_PROJECT_CONFIG = "1";
         XDG_RUNTIME_DIR = "/run/user/${toString cfg.uid}";
         SSH_AUTH_SOCK = "/run/user/${toString cfg.uid}/ssh-agent";
       };

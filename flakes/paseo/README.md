@@ -1,6 +1,6 @@
 # Paseo on bare-metal NixOS
 
-This flake builds Paseo v0.9.2 plus a Nono provider launcher. Its NixOS module runs Paseo as an existing user rather than in a container. The daemon and provider isolation are separate: providers default to Nono, while explicitly trusted agent profiles can run directly with host-user access and receive Paseo tools.
+This flake builds Paseo v0.10.0 plus a Nono provider launcher. Its NixOS module runs Paseo as an existing user rather than in a container. The daemon and provider isolation are separate: providers default to Nono, while explicitly trusted agent profiles can run directly with host-user access and receive Paseo tools.
 
 ## Outputs
 
@@ -38,7 +38,7 @@ The package exposes only the built-in OpenCode and OMP providers. Other built-in
 
 The selected profiles are the user's existing files: OpenCode uses `~/.config/nono/profiles/opencode.json`; OMP uses `~/.config/nono/profiles/omp.json`. They are not modified by Nix. Their current grants are broader than the per-agent workdir: OpenCode allows read/write access to `~/.opencode`, `~/.config/opencode`, `~/.cache/opencode`, `~/.local/share/opencode`, `~/.local/state/opencode`, `~/.local/share/opentui`, and `$TMPDIR`, and read access to the configured Tempus/Okta paths. OMP allows read/write `~/.omp`, all of `~/.cache`, and `$TMPDIR`, plus read-only `~/.gitconfig`. Both allow outbound networking and set `workdir.access` to `readwrite`. The launcher adds only the exact agent cwd; it does not grant all of `/home/josh`.
 
-By default, the Nix-packaged OpenCode executable starts under the existing `~/.config/nono/profiles/opencode.json` profile without changing it. Its existing `~/.config/opencode` grant covers the operator-managed `~/.config/opencode/paseo-1.x.json`; the package runtime is in the Nix store and remains unchanged. Paseo does not overwrite either `opencode.json` or the user's Nono profiles.
+Paseo uses the host's separately configured OpenCode package and detects v1/v2 at runtime. Paseo v0.10.0 supports OpenCode v2, which uses the normal operator-managed OpenCode configuration. The mandatory Nono wrapping in this flake currently covers OpenCode v1 and OMP only; v2 sandbox wrapping is not implemented. Do not rely on Nono isolation or Paseo tools for OpenCode v2 sessions. Paseo does not modify OpenCode or Nono user configuration.
 
 ### Enable Paseo tools for a trusted agent profile
 
@@ -47,32 +47,9 @@ By default, the Nix-packaged OpenCode executable starts under the existing `~/.c
 3. Enable **Enable Paseo tools** in the host settings.
 4. Start a **new agent** using that profile. Existing agents keep the sandbox mode with which they started; applying a profile with a different mode is rejected. Resuming an agent preserves its saved mode.
 
-The saved setting is `featureValues.nonoSandbox: false`. Missing values default to `true`; only a boolean `false` opts out. It is a per-agent launch decision, not an environment-variable override or a change to the user's Nono JSON profiles. Sandboxed agents never receive the Paseo tool catalog or injected MCP servers, even when the host tools toggle is enabled. Unsandboxed agents use OMP's native host-tool RPC or OpenCode's native bridge, subject to the normal host tools setting. OpenCode still uses the separate 1.x configuration described below.
+The saved setting is `featureValues.nonoSandbox: false`. Missing values default to `true`; only a boolean `false` opts out. It is a per-agent launch decision, not an environment-variable override or a change to the user's Nono JSON profiles. Sandboxed agents never receive the Paseo tool catalog or injected MCP servers, even when the host tools toggle is enabled. Unsandboxed agents use OMP's native host-tool RPC or OpenCode's native bridge, subject to the normal host tools setting.
 
 **Unsandboxed means host-user authority**, including Paseo tools that create terminals, worktrees, agents, and schedules. This is not a restricted orchestration-only mode. The tools toggle does not install orchestration skill files; use the separate skills installer if desired. No existing profile is opted out automatically.
-
-### Operator-managed OpenCode 1.x config
-
-Paseo's pinned SDK requires OpenCode 1.15.10. The host's OpenCode 2.x server is incompatible, and its v2 config is rejected by 1.15.10 (`agents` and `commands` are unrecognized). Do not convert or overwrite `~/.config/opencode/opencode.json`. The module selects the distinct operator-owned `~/.config/opencode/paseo-1.x.json` using OpenCode's `OPENCODE_CONFIG` file mechanism. A package patch prevents the 1.x process from loading or writing the host's default global config and global plugin/command directories; XDG and `~/.omp` remain at their normal locations. The daemon boots without this file, but OpenCode cannot list Settings models until you create a valid v1 config at `~/.config/opencode/paseo-1.x.json` using the no-clobber instructions below.
-
-Create the separate file only after inspecting the host config. Use a no-clobber creation command so an existing `paseo-1.x.json` is never overwritten; review the result and edit it manually before starting an OpenCode agent:
-
-```sh
-umask 077
-( set -o noclobber; jq --arg model 'h001/air-gpt-6-luna' '{
-  "$schema": "https://opencode.ai/config.json",
-  autoupdate: false,
-  share: "disabled",
-  enabled_providers: ["h001"],
-  disabled_providers: ["openai", "opencode", "openrouter"],
-  model: $model,
-  provider: { h001: .provider.h001 },
-  plugin: [],
-  mcp: {}
-}' ~/.config/opencode/opencode.json > ~/.config/opencode/paseo-1.x.json )
-```
-
-This copies only the current `h001` provider entry and selected model into a new v1-shaped config. Inspect it: OpenCode 1.x differs from 2.x, so do not copy the complete host configuration or assume every nested option is compatible. The source `~/.config/opencode/opencode.json` is read only.
 
 ### First-time setup on lio
 

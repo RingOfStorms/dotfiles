@@ -152,14 +152,8 @@ diff --git a/packages/server/src/server/agent/agent-manager.ts b/packages/server
 diff --git a/packages/server/src/server/agent/provider-launch-config.ts b/packages/server/src/server/agent/provider-launch-config.ts
 --- a/packages/server/src/server/agent/provider-launch-config.ts
 +++ b/packages/server/src/server/agent/provider-launch-config.ts
-@@ -4,6 +4,7 @@
-   findExecutable,
- } from "../../executable-resolution/executable-resolution.js";
- import { createExternalProcessEnv, type ProcessEnvRecord } from "../paseo-env.js";
+@@ -10,0 +11 @@
 +import type { AgentFeature, AgentSessionConfig } from "@getpaseo/protocol/agent-types";
- export {
-   AgentProviderRuntimeSettingsMapSchema,
-   ProviderCommandSchema,
 @@ -28,6 +29,121 @@
    type ProviderRuntimeSettings,
  } from "@getpaseo/protocol/provider-config";
@@ -1167,18 +1161,15 @@ diff --git a/packages/server/src/server/agent/providers/opencode-agent.ts b/pack
        },
      };
    }
-@@ -4992,6 +5024,11 @@
-       return;
-     }
- 
+@@ -5106,5 +5106,8 @@
+   private async ensureMcpServersConfigured(): Promise<void> {
 +    if (isSessionSandboxRequired(this.config)) {
-+      this.mcpConfigured = true;
 +      return;
 +    }
-+
      const mcpServers = this.config.mcpServers;
      if (!mcpServers || Object.keys(mcpServers).length === 0) {
-       this.mcpConfigured = true;
+       return;
+     }
 diff --git a/packages/server/src/server/agent/provider-snapshot-manager.ts b/packages/server/src/server/agent/provider-snapshot-manager.ts
 --- a/packages/server/src/server/agent/provider-snapshot-manager.ts
 +++ b/packages/server/src/server/agent/provider-snapshot-manager.ts

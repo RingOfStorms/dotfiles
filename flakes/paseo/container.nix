@@ -227,14 +227,11 @@ in
       description = "Patched Paseo daemon package.";
     };
 
-    # paseo 0.9.0-beta.2 speaks the OpenCode 1.x HTTP API (SDK 1.14.46).
-    # OpenCode 2.x serves its web UI on those routes, so every SDK call fails
-    # with "Server responded with text/html"; hence nixpkgs' 1.x by default.
     opencodePackage = mkOption {
       type = types.package;
       default = pkgs.opencode;
       defaultText = lib.literalExpression "pkgs.opencode";
-      description = "OpenCode package (must speak the 1.x HTTP API).";
+      description = "OpenCode runtime selected by Paseo's version-aware provider adapter.";
     };
 
     ompPackage = mkOption {
