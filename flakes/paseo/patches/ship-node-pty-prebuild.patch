@@ -1,5 +1,13 @@
 --- a/scripts/trace-daemon.mjs
 +++ b/scripts/trace-daemon.mjs
+@@ -59,6 +59,7 @@
+   "packages/server/dist/server/server/speech/providers/local/sherpa/assets/silero_vad.onnx",
+   // OpenCode loads this plugin from a content-addressed runtime copy.
+   "packages/server/dist/server/server/agent/providers/opencode/bridge-plugin.bundle.mjs",
++  "packages/server/dist/server/server/agent/providers/opencode/v2/bridge-plugin.bundle.mjs",
+   // Server runtime config files (read by path, not require)
+   "packages/server/.env.example",
+   // CLI shebang script wrapping dist/index.js
 @@ -67,8 +67,9 @@
    // node-pty loads it via `require(path.join(__dirname, 'prebuilds/<plat>/pty.node'))`
    // with a runtime-computed platform suffix. Pin to the host platform —

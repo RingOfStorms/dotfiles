@@ -1227,17 +1227,17 @@
         "nixpkgs": "nixpkgs_6"
       },
       "locked": {
-        "lastModified": 1789673391,
-        "narHash": "sha256-ZBHz1HRj/LpBIEYpYclmZ1WVEvnQojkwKPvGoU/OiIc=",
+        "lastModified": 1790380652,
+        "narHash": "sha256-QyzzA9SUnnCunYucJPjZAw/EkUN1EKoDcrFalIOYVps=",
         "owner": "anomalyco",
         "repo": "opencode",
-        "rev": "ca27d3328fcd0d470588149c902a963452f1abaf",
+        "rev": "cd9a14a6b688d4021bee381dfd39d2cef9c0f862",
         "type": "github"
       },
       "original": {
         "owner": "anomalyco",
         "repo": "opencode",
-        "rev": "ca27d3328fcd0d470588149c902a963452f1abaf",
+        "rev": "cd9a14a6b688d4021bee381dfd39d2cef9c0f862",
         "type": "github"
       }
     },

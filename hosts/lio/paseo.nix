@@ -2,6 +2,32 @@
 let
   overlayIp = constants.host.overlayIp;
   upstreamPort = constants.services.paseo.port;
+  # OpenCode v2.0.18 ships a stale x86_64-linux node_modules hash.
+  opencode = inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  opencodePackage = (opencode.override {
+    node_modules = opencode.node_modules.override {
+      hash = "sha256-9gJjhes2ueYckAgdeGlPwZcaIDdwB3ZnqK/XHHXhWNs=";
+    };
+  }).overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [
+      (pkgs.writeText "opencode-optional-plugin-entry.patch" ''
+        --- a/packages/plugin/src/host.ts
+        +++ b/packages/plugin/src/host.ts
+        @@ -24,8 +24,7 @@
+                 return resolveModule(specifier, target.directory)
+               } catch (error) {
+                 if (
+        -          !(error instanceof Error) ||
+        -          !("code" in error) ||
+        +          !error || typeof error !== "object" || !("code" in error) ||
+                   ![
+                     "ENOENT",
+                     "ENOTDIR",
+      '')
+    ];
+    # The upstream Nix expression calls `opencode completion`, removed in v2.
+    postInstall = "";
+  });
 in
 {
   services.paseoBareMetal = {
@@ -20,7 +46,7 @@ in
     baseUrl = "http://${overlayIp}:${toString upstreamPort}";
     environmentFile = "${fleet.global.secretsDir}/paseo_agent_env_2026-09-21";
     paseoPackage = inputs.paseo.packages.${pkgs.stdenv.hostPlatform.system}.paseo;
-    opencodePackage = inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default;
+    inherit opencodePackage;
     ompPackage = inputs.omp-flake.inputs.omp.packages.${pkgs.stdenv.hostPlatform.system}.default;
   };
 

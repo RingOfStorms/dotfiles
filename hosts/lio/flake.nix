@@ -15,7 +15,7 @@
     paseo.url = "path:../../flakes/paseo";
     paseo.inputs.nixpkgs.follows = "nixpkgs";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
-    opencode.url = "github:anomalyco/opencode/ca27d3328fcd0d470588149c902a963452f1abaf";
+    opencode.url = "github:anomalyco/opencode/cd9a14a6b688d4021bee381dfd39d2cef9c0f862";
   };
 
   outputs = { nixpkgs-unstable, ... }@inputs:
@@ -77,16 +77,16 @@
           ./paseo.nix
           inputs.omp-flake.nixosModules.default
           ./pi.nix
-          ({ pkgs, ... }: {
-            environment.systemPackages = [ inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default pkgs.claude-code pkgs.code-cursor pkgs.zed-editor ];
+          ({ pkgs, config, ... }: {
+            environment.systemPackages = [ config.services.paseoBareMetal.opencodePackage pkgs.claude-code pkgs.code-cursor pkgs.zed-editor ];
             environment.shellAliases = let
               no_proxy = "NO_PROXY='h001.net.joshuabell.xyz,*.ts.net,127.0.0.1,localhost,100.64.0.0/10'";
               nono_base = "nono run --allow-cwd --silent --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\"";
             in {
               mva = "${no_proxy} ${nono_base} --profile mva-full -- /home/josh/projects/mva/target/release/mva";
               mva_ = "${no_proxy} /home/josh/projects/mva/target/release/mva";
-              oc = "${no_proxy} ${nono_base} --profile opencode-full -- opencode";
-              oc_ = "${no_proxy} opencode";
+              oc = "${no_proxy} ${nono_base} --profile opencode-full -- opencode --standalone";
+              oc_ = "${no_proxy} opencode --standalone";
               occ = "oc -c";
               cc = "${no_proxy} ${nono_base} --profile claude-code-full -- claude";
               cur = "${no_proxy} ${nono_base} --profile claude-code-full -- cursor";
