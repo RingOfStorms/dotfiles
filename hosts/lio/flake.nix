@@ -25,7 +25,7 @@
     herdr-nix.url = "github:herdrdev/herdr-nix";
     herdr-nix.inputs.nixpkgs.follows = "nixpkgs";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
-    opencode.url = "github:anomalyco/opencode/cd9a14a6b688d4021bee381dfd39d2cef9c0f862";
+    opencode.url = "github:anomalyco/opencode/74dbc509d74df46a2523676dd4068225c4f0c9b0";
   };
 
   outputs = { nixpkgs-unstable, ... }@inputs:
@@ -87,11 +87,11 @@
           ./herdr.nix
           ({ pkgs, ... }:
             let
-              # OpenCode v2.0.18 ships a stale x86_64-linux node_modules hash.
+              # OpenCode v2.0.20 ships a stale x86_64-linux node_modules hash.
               opencode = inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default;
               opencodePackage = (opencode.override {
                 node_modules = opencode.node_modules.override {
-                  hash = "sha256-9gJjhes2ueYckAgdeGlPwZcaIDdwB3ZnqK/XHHXhWNs=";
+                  hash = "sha256-QWsrFuaDMPzlLYaDKmy5bS5eZtLP29Y+Yfq/rqa/lkc=";
                 };
               }).overrideAttrs (old: {
                 patches = (old.patches or [ ]) ++ [
@@ -116,6 +116,15 @@
             in
           {
             environment.systemPackages = [ opencodePackage pkgs.claude-code pkgs.code-cursor pkgs.zed-editor ];
+            # Keep OpenCode off the shared background service; every CLI call starts a private standalone server.
+            # The service config file also stores a generated password, so set the key via the CLI instead of owning the file.
+            home-manager.users.josh = { lib, ... }: {
+              home.activation.opencodeServiceDisabled = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+                if [ "$(${opencodePackage}/bin/opencode service get disabled)" != true ]; then
+                  run ${opencodePackage}/bin/opencode service set disabled true
+                fi
+              '';
+            };
             environment.shellAliases = let
               no_proxy = "NO_PROXY='h001.net.joshuabell.xyz,*.ts.net,127.0.0.1,localhost,100.64.0.0/10'";
               nono_base = "nono run --allow-cwd --silent --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\"";
@@ -124,8 +133,8 @@
             in {
               mva = "${no_proxy} ${nono_base} --profile mva-full -- /home/josh/projects/mva/target/release/mva";
               mva_ = "${no_proxy} /home/josh/projects/mva/target/release/mva";
-              oc = herdr_nono "opencode" "opencode-full" "opencode --standalone";
-              oc_ = "${no_proxy} opencode --standalone";
+              oc = herdr_nono "opencode" "opencode-full" "opencode";
+              oc_ = "${no_proxy} opencode";
               occ = "oc -c";
               cc = "${no_proxy} ${nono_base} --profile claude-code-full -- claude";
               cur = "${no_proxy} ${nono_base} --profile claude-code-full -- cursor";
