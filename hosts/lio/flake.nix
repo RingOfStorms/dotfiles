@@ -1,9 +1,15 @@
 {
+  nixConfig = {
+    extra-substituters = [ "https://herdr.cachix.org" ];
+    extra-trusted-public-keys = [ "herdr.cachix.org-1:3nH7IStRsS0ASfdonA0DCRR2ZrSCeWitZ7Kwew0cR4I=" ];
+  };
+
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     home-manager.url = "github:rycee/home-manager/release-26.05";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    common.url = "path:../../flakes/common";
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
@@ -14,6 +20,8 @@
     omp-flake.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/omp";
     paseo.url = "path:../../flakes/paseo";
     paseo.inputs.nixpkgs.follows = "nixpkgs";
+    herdr-nix.url = "github:herdrdev/herdr-nix";
+    herdr-nix.inputs.nixpkgs.follows = "nixpkgs";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
     opencode.url = "github:anomalyco/opencode/cd9a14a6b688d4021bee381dfd39d2cef9c0f862";
   };
@@ -57,7 +65,7 @@
           inputs.flatpaks.nixosModules.default
           inputs.containers.nixosModules.default
           inputs.common.nixosModules.essentials
-          inputs.common.nixosModules.git
+          (import ../../flakes/common/nix_modules/git/default.nix)
           inputs.common.nixosModules.tmux
           inputs.common.nixosModules.boot_systemd
           inputs.common.nixosModules.hardening
@@ -68,8 +76,6 @@
           inputs.common.nixosModules.q_flipper
           inputs.common.nixosModules.tailnet
           (import ./sec-agent.nix { inherit inputs constants; })
-          inputs.common.nixosModules.timezone_chi
-          inputs.common.nixosModules.tty_caps_esc
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.rage
           inputs.common.nixosModules.more_filesystems
@@ -77,6 +83,7 @@
           ./paseo.nix
           inputs.omp-flake.nixosModules.default
           ./pi.nix
+          ./herdr.nix
           ({ pkgs, config, ... }: {
             environment.systemPackages = [ config.services.paseoBareMetal.opencodePackage pkgs.claude-code pkgs.code-cursor pkgs.zed-editor ];
             environment.shellAliases = let

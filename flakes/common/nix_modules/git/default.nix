@@ -29,6 +29,7 @@ with lib;
 
   environment.shellInit = lib.concatStringsSep "\n\n" [
     (builtins.readFile ./utils.func.sh)
+    (builtins.readFile ./plugin/worktree_setup.sh)
     (builtins.readFile ./branch.func.sh)
     (builtins.readFile ./branchd.func.sh)
     (builtins.readFile ./link_ignored.func.sh)

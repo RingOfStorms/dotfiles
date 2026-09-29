@@ -2,6 +2,7 @@ link_ignored() {
   local DRY_RUN=0
   local USE_FZF=1
   local AUTO=0
+  local COPY=0
   local -a PATTERNS=()
 
   while [ $# -gt 0 ]; do
@@ -9,6 +10,7 @@ link_ignored() {
       --dry-run) DRY_RUN=1; shift ;;
       --no-fzf) USE_FZF=0; shift ;;
       --auto) AUTO=1; shift ;;
+      --copy) COPY=1; shift ;;
       -h|--help) link_ignored_usage; return 0 ;;
       --) shift; break ;;
       *) PATTERNS+=("$1"); shift ;;
@@ -17,46 +19,38 @@ link_ignored() {
 
   link_ignored_usage() {
     cat <<EOF
-Usage: link_ignored [--dry-run] [--no-fzf] [--auto] [pattern ...]
+Usage: link_ignored [--dry-run] [--no-fzf] [--auto] [--copy] [pattern ...]
 
-Interactively or non-interactively create symlinks in the current worktree
-for files/dirs that exist in the main repository root but are git-ignored /
-untracked.
+Interactively or non-interactively create symlinks (or opt-in copies) in the
+current worktree for top-level entries ignored/untracked in the main root.
 
 Defaults:
 - If no patterns provided, tries git config worktree.autolink (multi)
-- Else falls back to env LINK_IGNORED_DEFAULTS (space-separated)
+- --copy reads only explicit patterns or git config worktree.autocopy (multi)
+- --copy matches exact top-level names only; never infers a copy from a link pattern
 - With --auto and defaults present, skips fzf and links immediately
 EOF
   }
 
-  # Determine the main repo root using git-common-dir (handles worktrees)
-  local common_dir repo_root
-  if ! common_dir=$(git rev-parse --git-common-dir 2>/dev/null); then
-    echo "Error: not in a git repository." >&2
+  local repo_root
+  repo_root=$(_branch__repo_root) || {
+    echo "Error: not in a non-bare Git repository." >&2
     return 2
-  fi
-  if [ "${common_dir#/}" = "$common_dir" ]; then
-    common_dir="$(pwd)/$common_dir"
-  fi
-  repo_root="${common_dir%%/.git*}"
-  if [ -z "$repo_root" ]; then
-    echo "Error: unable to determine repository root." >&2
-    return 2
-  fi
+  }
 
   _li_load_defaults() {
     local -a cfg=()
+    local config_key=worktree.autolink
+    [ "$COPY" -eq 0 ] || config_key=worktree.autocopy
     while IFS= read -r line; do
       [ -n "$line" ] && cfg+=("$line")
-    done < <(git -C "$repo_root" config --get-all worktree.autolink 2>/dev/null || true)
-
+    done < <(git -C "$repo_root" config --get-all "$config_key" 2>/dev/null || true)
     if [ ${#cfg[@]} -gt 0 ]; then
       PATTERNS=("${cfg[@]}")
       return 0
     fi
 
-    if [ -n "${LINK_IGNORED_DEFAULTS:-}" ]; then
+    if [ "$COPY" -eq 0 ] && [ -n "${LINK_IGNORED_DEFAULTS:-}" ]; then
       if [ -n "${ZSH_VERSION:-}" ]; then
         eval "PATTERNS=(${=LINK_IGNORED_DEFAULTS})"
       else
@@ -72,6 +66,10 @@ EOF
     _li_load_defaults || true
   fi
 
+  if [ "$COPY" -eq 1 ] && [ ${#PATTERNS[@]} -eq 0 ]; then
+    echo "No worktree.autocopy entries configured; nothing copied."
+    return 0
+  fi
   # If AUTO requested and we have patterns, skip fzf
   if [ $AUTO -eq 1 ] && [ ${#PATTERNS[@]} -gt 0 ]; then
     USE_FZF=0
@@ -120,7 +118,7 @@ EOF
   if [ ${#PATTERNS[@]} -gt 0 ]; then
     for t in "${tops[@]}"; do
       for p in "${PATTERNS[@]}"; do
-        if [[ "$t" == *"$p"* ]]; then
+        if { [ "$COPY" -eq 1 ] && [ "$t" = "$p" ]; } || { [ "$COPY" -eq 0 ] && [[ "$t" == *"$p"* ]]; }; then
           filtered+=("$t")
           break
         fi
@@ -129,10 +127,20 @@ EOF
   else
     filtered=("${tops[@]}")
   fi
+  if [ "$COPY" -eq 1 ]; then
+    for p in "${PATTERNS[@]}"; do
+      local found=0
+      for t in "${filtered[@]}"; do [ "$t" != "$p" ] || { found=1; break; }; done
+      if [ "$found" -eq 0 ]; then
+        printf 'Not a top-level ignored/untracked copy entry: %s\n' "$p" >&2
+        return 1
+      fi
+    done
+  fi
 
   if [ ${#filtered[@]} -eq 0 ]; then
     echo "No candidates match the provided patterns." >&2
-    return 0
+    [ "$COPY" -eq 0 ] && return 0 || return 1
   fi
 
   local -a chosen
@@ -166,6 +174,12 @@ EOF
     rel=${rel%%$'\n'}
     local src="${repo_root}/${rel}"
     local dst="${worktree_root}/${rel}"
+    # Copying a mixed tracked/untracked directory would duplicate tracked
+    # project content. Explicit copy selections must have no tracked files.
+    if [ "$COPY" -eq 1 ] && [ "$(git -C "$repo_root" ls-files -z -- ":(literal)$rel" | wc -c)" -gt 0 ]; then
+      errors+=("$rel (contains tracked files; not copied)")
+      continue
+    fi
 
     if [ ! -e "$src" ]; then
       errors+=("$rel (source missing)")
@@ -183,28 +197,38 @@ EOF
       continue
     fi
 
-    mkdir -p "$(dirname "$dst")"
+    if ! mkdir -p "$(dirname "$dst")"; then
+      errors+=("$rel (destination parent failed)")
+      continue
+    fi
     if [ "$DRY_RUN" -eq 1 ]; then
-      echo "DRY RUN: ln -s '$src' '$dst'"
-    else
-      if ln -s "$src" "$dst"; then
-        echo "Linked: $rel"
+      if [ "$COPY" -eq 1 ]; then echo "DRY RUN: cp -R '$src' '$dst'"
+      else echo "DRY RUN: ln -s '$src' '$dst'"; fi
+    elif [ "$COPY" -eq 1 ]; then
+      if cp -R -- "$src" "$dst"; then
+        echo "Copied: $rel"
         created+=("$rel")
       else
-        echo "Failed to link: $rel" >&2
-        errors+=("$rel (link failed)")
+        echo "Failed to copy: $rel" >&2
+        errors+=("$rel (copy failed)")
       fi
+    elif ln -s "$src" "$dst"; then
+      echo "Linked: $rel"
+      created+=("$rel")
+    else
+      echo "Failed to link: $rel" >&2
+      errors+=("$rel (link failed)")
     fi
   done
 
   echo
   echo "Summary:"
-  echo "  Linked: ${#created[@]}"
+  if [ "$COPY" -eq 1 ]; then echo "  Copied: ${#created[@]}"; else echo "  Linked: ${#created[@]}"; fi
   [ ${#created[@]} -gt 0 ] && printf '    %s\n' "${created[@]}"
   echo "  Skipped: ${#skipped[@]}"
   [ ${#skipped[@]} -gt 0 ] && printf '    %s\n' "${skipped[@]}"
   echo "  Errors: ${#errors[@]}"
   [ ${#errors[@]} -gt 0 ] && printf '    %s\n' "${errors[@]}"
 
-  return 0
+  [ ${#errors[@]} -eq 0 ]
 }
