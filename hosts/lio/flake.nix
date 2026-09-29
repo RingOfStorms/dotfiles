@@ -1,9 +1,15 @@
 {
+  nixConfig = {
+    extra-substituters = [ "https://herdr.cachix.org" ];
+    extra-trusted-public-keys = [ "herdr.cachix.org-1:3nH7IStRsS0ASfdonA0DCRR2ZrSCeWitZ7Kwew0cR4I=" ];
+  };
+
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     home-manager.url = "github:rycee/home-manager/release-26.05";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
-    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    common.url = "path:../../flakes/common";
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
@@ -12,10 +18,14 @@
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
     containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers";
     omp-flake.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/omp";
-    paseo.url = "path:../../flakes/paseo";
-    paseo.inputs.nixpkgs.follows = "nixpkgs";
+    nono.url = "github:always-further/nono/6118b79aeda1365da213d85457b4d3cf1201d575";
+    nono.flake = false;
+    rust-overlay.url = "github:oxalica/rust-overlay/26a71e661c47bd21a05d06fec749f3f7c75e9d12";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+    herdr-nix.url = "github:herdrdev/herdr-nix";
+    herdr-nix.inputs.nixpkgs.follows = "nixpkgs";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
-    opencode.url = "github:anomalyco/opencode/ca27d3328fcd0d470588149c902a963452f1abaf";
+    opencode.url = "github:anomalyco/opencode/cd9a14a6b688d4021bee381dfd39d2cef9c0f862";
   };
 
   outputs = { nixpkgs-unstable, ... }@inputs:
@@ -57,7 +67,7 @@
           inputs.flatpaks.nixosModules.default
           inputs.containers.nixosModules.default
           inputs.common.nixosModules.essentials
-          inputs.common.nixosModules.git
+          (import ../../flakes/common/nix_modules/git/default.nix)
           inputs.common.nixosModules.tmux
           inputs.common.nixosModules.boot_systemd
           inputs.common.nixosModules.hardening
@@ -67,26 +77,53 @@
           inputs.common.nixosModules.podman
           inputs.common.nixosModules.q_flipper
           inputs.common.nixosModules.tailnet
-          (import ./sec-agent.nix { inherit inputs constants; })
           inputs.common.nixosModules.timezone_chi
-          inputs.common.nixosModules.tty_caps_esc
+          (import ./sec-agent.nix { inherit inputs constants; })
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.rage
           inputs.common.nixosModules.more_filesystems
-          inputs.paseo.nixosModules.default
-          ./paseo.nix
           inputs.omp-flake.nixosModules.default
           ./pi.nix
-          ({ pkgs, ... }: {
-            environment.systemPackages = [ inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default pkgs.claude-code pkgs.code-cursor pkgs.zed-editor ];
+          ./herdr.nix
+          ({ pkgs, ... }:
+            let
+              # OpenCode v2.0.18 ships a stale x86_64-linux node_modules hash.
+              opencode = inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default;
+              opencodePackage = (opencode.override {
+                node_modules = opencode.node_modules.override {
+                  hash = "sha256-9gJjhes2ueYckAgdeGlPwZcaIDdwB3ZnqK/XHHXhWNs=";
+                };
+              }).overrideAttrs (old: {
+                patches = (old.patches or [ ]) ++ [
+                  (pkgs.writeText "opencode-optional-plugin-entry.patch" ''
+                    --- a/packages/plugin/src/host.ts
+                    +++ b/packages/plugin/src/host.ts
+                    @@ -24,8 +24,7 @@
+                             return resolveModule(specifier, target.directory)
+                           } catch (error) {
+                             if (
+                    -          !(error instanceof Error) ||
+                    -          !("code" in error) ||
+                    +          !error || typeof error !== "object" || !("code" in error) ||
+                               ![
+                                 "ENOENT",
+                                 "ENOTDIR",
+                  '')
+                ];
+                # The upstream Nix expression calls `opencode completion`, removed in v2.
+                postInstall = "";
+              });
+            in
+          {
+            environment.systemPackages = [ opencodePackage pkgs.claude-code pkgs.code-cursor pkgs.zed-editor ];
             environment.shellAliases = let
               no_proxy = "NO_PROXY='h001.net.joshuabell.xyz,*.ts.net,127.0.0.1,localhost,100.64.0.0/10'";
               nono_base = "nono run --allow-cwd --silent --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\"";
             in {
               mva = "${no_proxy} ${nono_base} --profile mva-full -- /home/josh/projects/mva/target/release/mva";
               mva_ = "${no_proxy} /home/josh/projects/mva/target/release/mva";
-              oc = "${no_proxy} ${nono_base} --profile opencode-full -- opencode";
-              oc_ = "${no_proxy} opencode";
+              oc = "${no_proxy} ${nono_base} --profile opencode-full -- opencode --standalone";
+              oc_ = "${no_proxy} opencode --standalone";
               occ = "oc -c";
               cc = "${no_proxy} ${nono_base} --profile claude-code-full -- claude";
               cur = "${no_proxy} ${nono_base} --profile claude-code-full -- cursor";

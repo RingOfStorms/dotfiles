@@ -192,8 +192,8 @@ rec {
     "secrets"
   ];
 
-  # Subdomains served by lio. Tailnet-only (not proxied by o002).
-  lioSubdomains = [ "paseo" ];
+  # Tailnet-only subdomains served by lio (currently none).
+  lioSubdomains = [ ];
 
   # ─── HOST BUILDER ─────────────────────────────────────────────────
   #

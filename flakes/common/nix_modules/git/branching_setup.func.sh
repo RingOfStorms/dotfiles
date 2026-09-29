@@ -1,18 +1,10 @@
 branching_setup() {
-  # Interactive helper to manage worktree.autolink and worktree.bootstrap
-  local common_dir repo_root
-  if ! common_dir=$(git rev-parse --git-common-dir 2>/dev/null); then
-    echo "Not inside a git repository." >&2
+  # Interactive helper for worktree.autolink, worktree.autocopy and worktree.bootstrap
+  local repo_root
+  repo_root=$(_branch__repo_root) || {
+    echo "Not inside a non-bare Git repository." >&2
     return 1
-  fi
-  if [ "${common_dir#/}" = "$common_dir" ]; then
-    common_dir="$(pwd)/$common_dir"
-  fi
-  repo_root="${common_dir%%/.git*}"
-  if [ -z "$repo_root" ]; then
-    echo "Unable to determine repository root." >&2
-    return 1
-  fi
+  }
 
   # Build candidate ignored/untracked top-level entries
   local -a raw=()
@@ -67,21 +59,72 @@ branching_setup() {
 
   if ! command -v fzf >/dev/null 2>&1; then
     echo "fzf not found; printing candidates. Use git config --local --add worktree.autolink <item> to add." >&2
-    printf "%s\n" "$unique"
+    printf '%s\n' "${filtered[@]}"
   else
-    local selection
-    selection=$(printf "%s\n" "$list" | sed 's/^\*//' | fzf --multi --prompt="Select autolink items: " --preview "if [ -f '$repo_root'/{} ]; then bat --color always --paging=never --style=plain '$repo_root'/{}; else ls -la '$repo_root'/{}; fi")
-    # Reset existing values
-    git -C "$repo_root" config --unset-all worktree.autolink 2>/dev/null || true
-    # Apply selection
-    if [ -n "$selection" ]; then
-      while IFS= read -r line; do
-        [ -n "$line" ] && git -C "$repo_root" config --add worktree.autolink "$line"
-      done <<EOF
+    local selection selection_status
+    selection=$(printf "%s\n" "$list" | sed 's/^\*//' | fzf --multi --prompt="Select autolink items: " --header="Current links: $(git -C "$repo_root" config --get-all worktree.autolink 2>/dev/null || true)" --preview "if [ -f '$repo_root'/{} ]; then bat --color always --paging=never --style=plain '$repo_root'/{}; else ls -la '$repo_root'/{}; fi")
+    selection_status=$?
+    if [ "$selection_status" -eq 130 ]; then
+      echo "Link selection cancelled; leaving worktree.autolink unchanged."
+    elif [ "$selection_status" -gt 1 ]; then
+      echo "Link selection failed; leaving worktree.autolink unchanged." >&2
+      return "$selection_status"
+    else
+      git -C "$repo_root" config --unset-all worktree.autolink 2>/dev/null || true
+      if [ -n "$selection" ]; then
+        while IFS= read -r line; do
+          [ -n "$line" ] && git -C "$repo_root" config --add worktree.autolink "$line"
+        done <<EOF
 $selection
 EOF
+      fi
+      echo "Updated worktree.autolink entries."
     fi
-    echo "Updated worktree.autolink entries."
+  fi
+  # Copies are opt-in and must name ignored/untracked top-level entries.
+  if ! command -v fzf >/dev/null 2>&1; then
+    echo "For copies: git config --local --add worktree.autocopy <top-level ignored entry>" >&2
+  else
+    local copy_selection copy_status prior_copies line copied
+    prior_copies=$(git -C "$repo_root" config --get-all worktree.autocopy 2>/dev/null || true)
+    copy_selection=$(printf '%s\n' "${raw[@]}" | sed 's#/.*##' | sort -u |
+      fzf --multi --prompt="Select entries to copy (optional): " --header="Current copies: ${prior_copies:-<none>}")
+    copy_status=$?
+    if [ "$copy_status" -eq 130 ]; then
+      echo "Copy selection cancelled; leaving worktree.autocopy unchanged."
+    elif [ "$copy_status" -gt 1 ]; then
+      echo "Copy selection failed; leaving worktree.autocopy unchanged." >&2
+      return "$copy_status"
+    else
+      git -C "$repo_root" config --unset-all worktree.autocopy 2>/dev/null || true
+      if [ -n "$copy_selection" ]; then
+        while IFS= read -r line; do
+          [ -n "$line" ] && git -C "$repo_root" config --add worktree.autocopy "$line"
+        done <<EOF
+$copy_selection
+EOF
+      fi
+      # A copy and a link must not compete for the same configured name.
+      # Rebuild autolink by exact string comparison, never regex matching.
+      if [ -n "$copy_selection" ]; then
+        local -a remaining_links=()
+        while IFS= read -r line; do
+          [ -n "$line" ] || continue
+          copied=0
+          while IFS= read -r selected; do
+            [ "$line" != "$selected" ] || { copied=1; break; }
+          done <<EOF
+$copy_selection
+EOF
+          [ "$copied" -eq 1 ] || remaining_links+=("$line")
+        done < <(git -C "$repo_root" config --get-all worktree.autolink 2>/dev/null || true)
+        git -C "$repo_root" config --unset-all worktree.autolink 2>/dev/null || true
+        for line in "${remaining_links[@]}"; do
+          git -C "$repo_root" config --add worktree.autolink "$line"
+        done
+      fi
+      echo "Updated worktree.autocopy entries."
+    fi
   fi
 
   # Bootstrap mode

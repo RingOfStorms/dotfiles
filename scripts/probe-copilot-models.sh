@@ -7,16 +7,15 @@
 #
 # Token lookup order:
 #   1. --token-dir DIR  (e.g. /var/lib/litellm/github_copilot)
-#   2. GH_COPILOT_TOKEN env var (raw oauth token)
+#   2. GH_COPILOT_TOKEN env var (raw OAuth token)
 #   3. ~/.config/github-copilot/hosts.json or apps.json
+#   4. `gh auth token` (direct models-endpoint authentication)
+# Output: model IDs, one per line. With --nix it emits four Nix list
+# literals (chat-only, both APIs, responses-only, embeddings) ready to
+# paste into the LiteLLM config.
 #
-# Output: a list of model IDs, one per line.  With --nix it emits two
-# nix list literals (chat models and responses-only models) ready to
-# paste into the litellm config.
-#
-# Some models (codex variants, gpt-5.4+) only support the /responses
-# API, not /chat/completions.  The --nix output separates these so
-# litellm can be configured with model_info.mode = "responses".
+# The upstream /models catalog provides supported endpoints; classification
+# uses that metadata instead of model-name heuristics.
 
 set -euo pipefail
 
@@ -77,35 +76,36 @@ if [[ -z "$OAUTH_TOKEN" ]]; then
 fi
 
 if [[ -z "$OAUTH_TOKEN" ]]; then
-  echo "ERROR: No GitHub Copilot OAuth token found." >&2
-  echo "Searched:" >&2
-  [[ -n "$TOKEN_DIR" ]] && echo "  ${TOKEN_DIR}/hosts.json|apps.json" >&2
-  echo "  GH_COPILOT_TOKEN env var" >&2
-  echo "  ~/.config/github-copilot/hosts.json|apps.json" >&2
-  exit 1
+  echo "No GitHub Copilot OAuth token found; will try gh auth token." >&2
 fi
 
 # ── exchange for Copilot API token ───────────────────────────────────
 echo "Exchanging OAuth token for Copilot API token ..." >&2
 
-TOKEN_RESPONSE=$(curl -sf \
-  -H "authorization: token ${OAUTH_TOKEN}" \
-  -H "accept: application/json" \
-  -H "editor-version: vscode/1.95.0" \
-  -H "editor-plugin-version: copilot-chat/0.26.7" \
-  -H "user-agent: GitHubCopilotChat/0.26.7" \
-  "https://api.github.com/copilot_internal/v2/token" 2>/dev/null) || {
-    echo "ERROR: Token exchange request failed." >&2
-    exit 1
-  }
+TOKEN_RESPONSE=""
+if [[ -n "$OAUTH_TOKEN" ]]; then
+  TOKEN_RESPONSE=$(curl -sf \
+    -H "authorization: token ${OAUTH_TOKEN}" \
+    -H "accept: application/json" \
+    -H "editor-version: vscode/1.95.0" \
+    -H "editor-plugin-version: copilot-chat/0.26.7" \
+    -H "user-agent: GitHubCopilotChat/0.26.7" \
+    "https://api.github.com/copilot_internal/v2/token" 2>/dev/null) || TOKEN_RESPONSE=""
+fi
 
 API_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.token // empty')
 API_BASE=$(echo "$TOKEN_RESPONSE" | jq -r '.endpoints.api // "https://api.githubcopilot.com"')
 
 if [[ -z "$API_TOKEN" ]]; then
-  echo "ERROR: Failed to obtain API token. Response:" >&2
-  echo "$TOKEN_RESPONSE" | jq . >&2
-  exit 1
+  # `gh auth token` also authenticates directly to the upstream /models
+  # endpoint. This is useful when the stored Copilot OAuth token is stale.
+  API_TOKEN=$(gh auth token 2>/dev/null || true)
+  if [[ -z "$API_TOKEN" ]]; then
+    echo "ERROR: Failed to obtain Copilot API token. Check OAuth credentials or run gh auth login." >&2
+    exit 1
+  fi
+  API_BASE="https://api.githubcopilot.com"
+  echo "Using GitHub CLI token for the models endpoint." >&2
 fi
 
 echo "API base: ${API_BASE}" >&2
@@ -126,86 +126,84 @@ MODELS_RESPONSE=$(curl -sf \
     exit 1
   }
 
-# Extract model IDs, optionally filtering by capability type
-if [[ -n "$FILTER" ]]; then
-  MODEL_IDS=$(echo "$MODELS_RESPONSE" | jq -r --arg f "$FILTER" \
-    '[.data[] | select(.capabilities.type == $f)] | sort_by(.id) | .[].id')
-else
-  MODEL_IDS=$(echo "$MODELS_RESPONSE" | jq -r '[.data[]] | sort_by(.id) | .[].id')
-fi
+# The upstream catalog includes legacy IDs without supported endpoints.
+# Keep picker models, plus embedding models that the API exposes separately.
+AVAILABLE_MODELS=$(echo "$MODELS_RESPONSE" | jq --arg f "$FILTER" '
+  [.data[]
+    | select(($f == "") or (.capabilities.type == $f))
+    | select(.model_picker_enabled == true or .capabilities.type == "embeddings")
+    | select(
+        ((.supported_endpoints // []) | index("/chat/completions") != null)
+        or ((.supported_endpoints // []) | index("/responses") != null)
+        or (.capabilities.type == "embeddings")
+      )]
+  | sort_by(.id)
+')
+MODEL_IDS=$(echo "$AVAILABLE_MODELS" | jq -r '.[].id')
 
 TOTAL=$(echo "$MODEL_IDS" | grep -c . || true)
 
 # ── summary table (stderr) ──────────────────────────────────────────
 echo "" >&2
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
-echo "Found ${TOTAL} models" >&2
+echo "Found ${TOTAL} supported models" >&2
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
 echo "" >&2
 
-# Print a table to stderr with extra info
-echo "$MODELS_RESPONSE" | jq -r '
-  .data | sort_by(.id) | .[] |
+echo "$AVAILABLE_MODELS" | jq -r '
+  .[] |
   "  \(.id)\t\(.vendor // "-")\t\(.capabilities.type // "-")\t\(if .billing.is_premium then "premium" else "included" end)"
 ' >&2
-
 echo "" >&2
 
-# ── classify models ──────────────────────────────────────────────────
-# Models matching these patterns only support the /responses endpoint,
-# not /chat/completions.  This list is maintained manually since the
-# /models API does not expose endpoint capabilities.
-is_responses_only() {
-  local m="$1"
-  # codex models and gpt-5.4+ are responses-only
-  [[ "$m" == *codex* ]] && return 0
-  [[ "$m" == gpt-5.4* ]] && return 0
-  return 1
-}
+# Classify by actual upstream endpoint support.
+CHAT_ONLY_MODELS=$(echo "$AVAILABLE_MODELS" | jq -r '
+  [.[] | select((.supported_endpoints // []) | index("/chat/completions") != null)
+        | select((.supported_endpoints // []) | index("/responses") == null)]
+  | .[].id
+')
+BOTH_MODELS=$(echo "$AVAILABLE_MODELS" | jq -r '
+  [.[] | select((.supported_endpoints // []) | index("/chat/completions") != null)
+        | select((.supported_endpoints // []) | index("/responses") != null)]
+  | .[].id
+')
+RESPONSES_MODELS=$(echo "$AVAILABLE_MODELS" | jq -r '
+  [.[] | select((.supported_endpoints // []) | index("/responses") != null)
+        | select((.supported_endpoints // []) | index("/chat/completions") == null)]
+  | .[].id
+')
+EMBEDDING_MODELS=$(echo "$AVAILABLE_MODELS" | jq -r '
+  [.[] | select(.capabilities.type == "embeddings")]
+  | .[].id
+')
 
-CHAT_MODELS=""
-RESPONSES_MODELS=""
-echo "$MODEL_IDS" | while read -r m; do
-  [[ -z "$m" ]] && continue
-  if is_responses_only "$m"; then
-    RESPONSES_MODELS="${RESPONSES_MODELS}${m}\n"
-  else
-    CHAT_MODELS="${CHAT_MODELS}${m}\n"
-  fi
-done
-
-# Subshell piping loses variables, so re-classify here
-CHAT_MODELS=$(echo "$MODEL_IDS" | while read -r m; do
-  [[ -z "$m" ]] && continue
-  is_responses_only "$m" || echo "$m"
-done)
-RESPONSES_MODELS=$(echo "$MODEL_IDS" | while read -r m; do
-  [[ -z "$m" ]] && continue
-  is_responses_only "$m" && echo "$m"
-done)
-
-CHAT_COUNT=$(echo "$CHAT_MODELS" | grep -c . || true)
+CHAT_ONLY_COUNT=$(echo "$CHAT_ONLY_MODELS" | grep -c . || true)
+BOTH_COUNT=$(echo "$BOTH_MODELS" | grep -c . || true)
 RESPONSES_COUNT=$(echo "$RESPONSES_MODELS" | grep -c . || true)
-echo "  Chat models: ${CHAT_COUNT}, Responses-only models: ${RESPONSES_COUNT}" >&2
+EMBEDDING_COUNT=$(echo "$EMBEDDING_MODELS" | grep -c . || true)
+echo "  Chat-only: ${CHAT_ONLY_COUNT}, both APIs: ${BOTH_COUNT}, responses-only: ${RESPONSES_COUNT}, embeddings: ${EMBEDDING_COUNT}" >&2
 echo "" >&2
 
 # ── output (stdout) ─────────────────────────────────────────────────
 if [[ "$OUTPUT_FORMAT" == "nix" ]]; then
-  echo "# Chat models (/chat/completions)"
-  echo "["
-  echo "$CHAT_MODELS" | while read -r m; do
-    [[ -z "$m" ]] && continue
-    echo "  \"${m}\""
+  for group in CHAT_ONLY BOTH RESPONSES EMBEDDING; do
+    case "$group" in
+      CHAT_ONLY) models="$CHAT_ONLY_MODELS"; label="Chat-only models" ;;
+      BOTH) models="$BOTH_MODELS"; label="Models supporting both APIs" ;;
+      RESPONSES) models="$RESPONSES_MODELS"; label="Responses-only models" ;;
+      EMBEDDING) models="$EMBEDDING_MODELS"; label="Embedding models" ;;
+    esac
+    echo "# ${label}"
+    echo "["
+    echo "$models" | while read -r m; do
+      [[ -z "$m" ]] && continue
+      echo "  \"${m}\""
+    done
+    echo "]"
+    if [[ "$group" != "EMBEDDING" ]]; then
+      echo ""
+    fi
   done
-  echo "]"
-  echo ""
-  echo "# Responses-only models (/responses) — need model_info.mode = \"responses\""
-  echo "["
-  echo "$RESPONSES_MODELS" | while read -r m; do
-    [[ -z "$m" ]] && continue
-    echo "  \"${m}\""
-  done
-  echo "]"
 else
   echo "$MODEL_IDS"
 fi
