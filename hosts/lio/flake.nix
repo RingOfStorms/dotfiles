@@ -77,6 +77,7 @@
           inputs.common.nixosModules.podman
           inputs.common.nixosModules.q_flipper
           inputs.common.nixosModules.tailnet
+          inputs.common.nixosModules.timezone_chi
           (import ./sec-agent.nix { inherit inputs constants; })
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.rage
