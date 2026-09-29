@@ -119,10 +119,12 @@
             environment.shellAliases = let
               no_proxy = "NO_PROXY='h001.net.joshuabell.xyz,*.ts.net,127.0.0.1,localhost,100.64.0.0/10'";
               nono_base = "nono run --allow-cwd --silent --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\"";
+              herdr_nono = agent: profile: command:
+                "${no_proxy} HERDR_AGENT=${agent} sh -c 'if [ -n \"\${HERDR_SOCKET_PATH:-}\" ]; then set -- --allow-unix-socket \"$HERDR_SOCKET_PATH\" -- \"$@\"; else set -- -- \"$@\"; fi; ${nono_base} --profile ${profile} \"$@\"; exit \"$?\"' sh ${command}";
             in {
               mva = "${no_proxy} ${nono_base} --profile mva-full -- /home/josh/projects/mva/target/release/mva";
               mva_ = "${no_proxy} /home/josh/projects/mva/target/release/mva";
-              oc = "${no_proxy} ${nono_base} --profile opencode-full -- opencode --standalone";
+              oc = herdr_nono "opencode" "opencode-full" "opencode --standalone";
               oc_ = "${no_proxy} opencode --standalone";
               occ = "oc -c";
               cc = "${no_proxy} ${nono_base} --profile claude-code-full -- claude";
@@ -131,6 +133,8 @@
               npm = "${no_proxy} ${nono_base} --profile npm -- npm";
               pi = "${no_proxy} ${nono_base} --profile pi -- pi";
               pi_ = "${no_proxy} command pi";
+              omp = herdr_nono "omp" "omp" "omp";
+              omp_ = "${no_proxy} command omp";
             };
           })
           inputs.beszel.nixosModules.agent
