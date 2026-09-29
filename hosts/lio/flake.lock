@@ -1274,47 +1274,6 @@
         "type": "github"
       }
     },
-    "paseo": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "nono": "nono",
-        "paseo": "paseo_2",
-        "rust-overlay": "rust-overlay_2"
-      },
-      "locked": {
-        "path": "../../flakes/paseo",
-        "type": "path"
-      },
-      "original": {
-        "path": "../../flakes/paseo",
-        "type": "path"
-      },
-      "parent": []
-    },
-    "paseo_2": {
-      "inputs": {
-        "nixpkgs": [
-          "paseo",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1790598421,
-        "narHash": "sha256-VPb93efmu9S9HAooWLtK1qXOBmclG9wXwjQ8Inbqf8U=",
-        "owner": "getpaseo",
-        "repo": "paseo",
-        "rev": "c481ecf3e101326e3758d419341bc4faaf5b4f98",
-        "type": "github"
-      },
-      "original": {
-        "owner": "getpaseo",
-        "repo": "paseo",
-        "rev": "c481ecf3e101326e3758d419341bc4faaf5b4f98",
-        "type": "github"
-      }
-    },
     "plasma-manager": {
       "inputs": {
         "home-manager": "home-manager",
@@ -1366,11 +1325,12 @@
         "home-manager": "home-manager_2",
         "nixpkgs": "nixpkgs_4",
         "nixpkgs-unstable": "nixpkgs-unstable",
+        "nono": "nono",
         "omp-flake": "omp-flake",
         "opencode": "opencode",
-        "paseo": "paseo",
         "ports": "ports",
         "ros_neovim": "ros_neovim",
+        "rust-overlay": "rust-overlay_3",
         "secrets_manager": "secrets_manager",
         "stt_ime": "stt_ime"
       }
@@ -1414,7 +1374,7 @@
         "nvim_plugin-tpope/vim-sleuth": "nvim_plugin-tpope/vim-sleuth",
         "nvim_plugin-uga-rosa/ccc.nvim": "nvim_plugin-uga-rosa/ccc.nvim",
         "nvim_plugin-windwp/nvim-ts-autotag": "nvim_plugin-windwp/nvim-ts-autotag",
-        "rust-overlay": "rust-overlay_3"
+        "rust-overlay": "rust-overlay_2"
       },
       "locked": {
         "lastModified": 1784221694,
@@ -1455,27 +1415,6 @@
     "rust-overlay_2": {
       "inputs": {
         "nixpkgs": [
-          "paseo",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1789802016,
-        "narHash": "sha256-QVFfArbYaQMGK4dFV+5RUL72Ci+hNHVhaF/R9qJfDhs=",
-        "owner": "oxalica",
-        "repo": "rust-overlay",
-        "rev": "26a71e661c47bd21a05d06fec749f3f7c75e9d12",
-        "type": "github"
-      },
-      "original": {
-        "owner": "oxalica",
-        "repo": "rust-overlay",
-        "type": "github"
-      }
-    },
-    "rust-overlay_3": {
-      "inputs": {
-        "nixpkgs": [
           "ros_neovim",
           "nixpkgs"
         ]
@@ -1491,6 +1430,27 @@
       "original": {
         "owner": "oxalica",
         "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "rust-overlay_3": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1789802016,
+        "narHash": "sha256-QVFfArbYaQMGK4dFV+5RUL72Ci+hNHVhaF/R9qJfDhs=",
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "26a71e661c47bd21a05d06fec749f3f7c75e9d12",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "26a71e661c47bd21a05d06fec749f3f7c75e9d12",
         "type": "github"
       }
     },

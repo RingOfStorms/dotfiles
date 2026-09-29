@@ -18,8 +18,10 @@
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
     containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers";
     omp-flake.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/omp";
-    paseo.url = "path:../../flakes/paseo";
-    paseo.inputs.nixpkgs.follows = "nixpkgs";
+    nono.url = "github:always-further/nono/6118b79aeda1365da213d85457b4d3cf1201d575";
+    nono.flake = false;
+    rust-overlay.url = "github:oxalica/rust-overlay/26a71e661c47bd21a05d06fec749f3f7c75e9d12";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     herdr-nix.url = "github:herdrdev/herdr-nix";
     herdr-nix.inputs.nixpkgs.follows = "nixpkgs";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
@@ -79,13 +81,40 @@
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.rage
           inputs.common.nixosModules.more_filesystems
-          inputs.paseo.nixosModules.default
-          ./paseo.nix
           inputs.omp-flake.nixosModules.default
           ./pi.nix
           ./herdr.nix
-          ({ pkgs, config, ... }: {
-            environment.systemPackages = [ config.services.paseoBareMetal.opencodePackage pkgs.claude-code pkgs.code-cursor pkgs.zed-editor ];
+          ({ pkgs, ... }:
+            let
+              # OpenCode v2.0.18 ships a stale x86_64-linux node_modules hash.
+              opencode = inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default;
+              opencodePackage = (opencode.override {
+                node_modules = opencode.node_modules.override {
+                  hash = "sha256-9gJjhes2ueYckAgdeGlPwZcaIDdwB3ZnqK/XHHXhWNs=";
+                };
+              }).overrideAttrs (old: {
+                patches = (old.patches or [ ]) ++ [
+                  (pkgs.writeText "opencode-optional-plugin-entry.patch" ''
+                    --- a/packages/plugin/src/host.ts
+                    +++ b/packages/plugin/src/host.ts
+                    @@ -24,8 +24,7 @@
+                             return resolveModule(specifier, target.directory)
+                           } catch (error) {
+                             if (
+                    -          !(error instanceof Error) ||
+                    -          !("code" in error) ||
+                    +          !error || typeof error !== "object" || !("code" in error) ||
+                               ![
+                                 "ENOENT",
+                                 "ENOTDIR",
+                  '')
+                ];
+                # The upstream Nix expression calls `opencode completion`, removed in v2.
+                postInstall = "";
+              });
+            in
+          {
+            environment.systemPackages = [ opencodePackage pkgs.claude-code pkgs.code-cursor pkgs.zed-editor ];
             environment.shellAliases = let
               no_proxy = "NO_PROXY='h001.net.joshuabell.xyz,*.ts.net,127.0.0.1,localhost,100.64.0.0/10'";
               nono_base = "nono run --allow-cwd --silent --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\"";

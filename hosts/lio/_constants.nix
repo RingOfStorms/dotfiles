@@ -19,9 +19,6 @@
     homepage = {
       port = 8082;
     };
-    paseo = {
-      port = 6767;
-    };
   };
 
   # ── Per-host secrets (merged with mkAutoSecrets in fleet.mkHost) ────
