@@ -13,6 +13,10 @@ let
     config.allowUnfree = true;
   };
   c = constants.services.litellm;
+  copilotModel = mode: m: {
+    model_name = "copilot-${m}";
+    litellm_params.model = "github_copilot/${m}";
+  } // (if mode == null then {} else { model_info.mode = mode; });
 in
 {
   disabledModules = [ declaration ];
@@ -99,82 +103,51 @@ in
             # NB: OpenRouter namespaces its own stealth/alpha models under
             # the literal `openrouter/` vendor, so the slug is
             # `openrouter/owl-alpha` (was bare `owl-alpha`, now 404s). The
-            # `openrouter/${m}` wrapper below therefore yields the litellm
-            # model `openrouter/openrouter/owl-alpha` — correct: litellm
-            # strips the first provider prefix and forwards the rest.
             "openrouter/owl-alpha"
             "google/gemini-2.5-flash-lite"
             "nvidia/nemotron-3-super-120b-a12b:free"
           ]
         )
-        # Copilot
-        # Probed with: ./scripts/probe-copilot-models.sh --nix
-        #
-        # Claude / Gemini / Grok models on Copilot Business do NOT support the
-        # /responses endpoint — only /chat/completions. Tagging them with
-        # `mode = "chat"` tells litellm to bridge MVA's /v1/responses requests
-        # down to /chat/completions upstream instead of forwarding 1:1 (which
-        # gets a 400 "unsupported_api_for_model" from githubcopilot).
-        ++ (builtins.map
-          (m: let
-            # responses-only: codex variants and gpt-5.4+ (incl. 5.5, 5.6, …).
-            # GitHub Copilot rejects /chat/completions for these with
-            # "unsupported_api_for_model"; they only speak /responses.
-            isResponsesOnly =
-              (builtins.match ".*codex.*" m != null)
-              || (builtins.match "gpt-5\\.[4-9].*" m != null);
-            # chat-only on Copilot: claude-*, gemini-*, grok-*, embeddings
-            isChatOnly =
-              (builtins.match "claude-.*" m != null)
-              || (builtins.match "gemini-.*" m != null)
-              || (builtins.match "grok-.*" m != null)
-              || (builtins.match "text-embedding-.*" m != null)
-              || (m == "trajectory-compaction");
-          in {
-            model_name = "copilot-${m}";
-            litellm_params = {
-              model = "github_copilot/${m}";
-              # NB: do NOT set extra_headers here. Recent litellm
-              # (get_copilot_default_headers + GithubCopilotResponsesAPIConfig)
-              # already injects copilot-integration-id, editor-version,
-              # editor-plugin-version, user-agent, x-github-api-version, etc.
-              # Adding our own with different casing (Copilot-Integration-Id vs
-              # copilot-integration-id) causes httpx to emit BOTH header
-              # lines, which GitHub concatenates and rejects as
-              # "unknown Copilot-Integration-Id". Copilot-Vision-Request and
-              # X-Initiator are also computed per-request automatically.
-            };
-          } // (
-            if isResponsesOnly then { model_info.mode = "responses"; }
-            else if isChatOnly then { model_info.mode = "chat"; }
-            else {}
-          ))
-          [
-            "claude-haiku-4.5"
-            "claude-opus-4.7"
-            "claude-opus-4.8"
-            "claude-opus-5"
-            "claude-opus-5.5"
-            "claude-sonnet-5"
-            "gemini-3.5-flash"
-            "gemini-3.6-flash"
-            "gemini-3.7-flash"
-            "gemini-3.8-flash"
-            "gpt-5.4"
-            "gpt-5.4-mini"
-            "gpt-5.5"
-            "gpt-5.6-luna"
-            "gpt-5.6-sol"
-            "gpt-5.6-terra"
-            "gpt-6-astra"
-            "gpt-6-sol"
-            "gpt-6-luna"
-            "gpt-5-mini"
-            "mai-code-1.1-flash"
-            "kimi-k2.7-code"
-            "kimi-k3"
-          ]
-        )
+        # Copilot models from ./scripts/probe-copilot-models.sh --nix.
+        # Classify from upstream /models supported_endpoints. Chat-only models
+        # bridge responses requests; responses-only models bypass chat; models
+        # supporting both APIs use LiteLLM's native routing. Embeddings use the
+        # /v1/embeddings endpoint.
+        ++ (builtins.map (copilotModel "chat") [
+          "claude-haiku-4.5"
+          "claude-opus-4.7"
+          "claude-opus-4.8"
+          "claude-opus-5"
+          "claude-opus-5.5"
+          "claude-sonnet-5"
+          "gemini-3.5-flash"
+          "gemini-3.6-flash"
+          "gemini-3.7-flash"
+          "gemini-3.8-flash"
+          "kimi-k2.7-code"
+          "kimi-k3"
+        ])
+        ++ (builtins.map (copilotModel null) [
+          "gpt-5-mini"
+          "gpt-5.4"
+        ])
+        ++ (builtins.map (copilotModel "responses") [
+          "gpt-5.3-codex"
+          "gpt-5.4-mini"
+          "gpt-5.5"
+          "gpt-5.6-luna"
+          "gpt-5.6-sol"
+          "gpt-5.6-terra"
+          "gpt-6-astra"
+          "gpt-6-luna"
+          "gpt-6-sol"
+          "mai-code-1.1-flash"
+        ])
+        ++ (builtins.map (copilotModel "embedding") [
+          "text-embedding-3-small"
+          "text-embedding-3-small-inference"
+          "text-embedding-ada-002"
+        ])
         # 宙 Proxy
         ++ (builtins.map
           (m: {
