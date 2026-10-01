@@ -43,12 +43,13 @@
               description = "Enable OMP for this Home Manager user.";
             };
             settings = lib.mkOption {
-              type = lib.types.attrs;
-              default = {
-                modelRoles.default = "litellm/air-gemini-3.8-flash";
-                startup.quiet = true;
-              };
-              description = "OMP settings written by its Home Manager module.";
+              type = lib.types.nullOr lib.types.attrs;
+              default = null;
+              description = ''
+                Declarative OMP settings. null (default) leaves
+                ~/.omp/agent/config.yml stateful and untouched by activation;
+                non-null overwrites it on every switch.
+              '';
             };
             modelsFile = lib.mkOption {
               type = lib.types.lines;
@@ -73,8 +74,8 @@
           config = lib.mkIf cfg.enable {
             programs.omp = {
               enable = true;
-              settings = cfg.settings;
-            };
+            }
+            // lib.optionalAttrs (cfg.settings != null) { settings = cfg.settings; };
             home.file.".omp/agent/models.yml".text = cfg.modelsFile;
           };
         };

@@ -32,10 +32,6 @@ let
   worktreesDirectory = "~/.local/share/git_worktrees/herdr-worktrees";
   integrationTargets = [
     {
-      name = "pi";
-      directory = "$HOME/.pi/agent";
-    }
-    {
       name = "omp";
       directory = "$HOME/.omp/agent";
     }
