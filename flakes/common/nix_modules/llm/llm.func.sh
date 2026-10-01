@@ -45,8 +45,12 @@ llm_chat() {
       ]
     } + (if $reasoning == "" then {} else { reasoning_effort: $reasoning } end)') || return 1
 
+  # Fail fast when the endpoint is unreachable. LLM_MAX_TIME (seconds) caps the
+  # whole request for background callers; interactive tools leave it unset
+  # since reasoning models can take a while.
   # An empty "Authorization:" header makes curl send no Authorization header.
   curl_out=$(printf '%s' "$payload" | curl -sS --noproxy '*' -w '\n%{http_code}' \
+    --connect-timeout 5 ${LLM_MAX_TIME:+--max-time "$LLM_MAX_TIME"} \
     -X POST "${LLM_BASE_URL%/}/v1/chat/completions" \
     -H 'Content-Type: application/json' \
     -H "Authorization:${LITELLM_API_KEY:+ Bearer ${LITELLM_API_KEY}}" \
