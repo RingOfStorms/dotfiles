@@ -335,7 +335,7 @@ cmd_rows() {
 		idx=$((idx + 1))
 		# shellcheck disable=SC2086 # pane IDs contain no whitespace
 		for pane in ${s_panes[$s]}; do
-			printf 'p:%s\t%s\t%s%s %s > %s\n' "$pane" "$pane" "$indent" "$(glyph "${p_rank[$pane]}")" "${p_window[$pane]}" "${p_name[$pane]}"
+			printf 'p:%s\t%s\t%s%s %s > %s > %s\n' "$pane" "$pane" "$indent" "$(glyph "${p_rank[$pane]}")" "$s" "${p_window[$pane]}" "${p_name[$pane]}"
 			idx=$((idx + 1))
 			[ "$pane" = "$current" ] && CUR_POS=$idx
 		done
