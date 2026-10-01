@@ -14,6 +14,21 @@ let
     cp ${gitModule}/plugin/worktree_setup.sh "$out/worktree_setup.sh"
     cp ${gitModule}/link_ignored.func.sh "$out/link_ignored.func.sh"
   '';
+  terminalBrowser = pkgs.callPackage ./terminal-browser.nix { };
+  terminalBrowserSource = pkgs.fetchFromGitHub {
+    owner = "zenbu-labs";
+    repo = "terminal-browser";
+    rev = "v${terminalBrowser.version}";
+    hash = "sha256-ZVya0BonXSlxcVby0OsJ5esP5bK6ix7yx7FsgHY+vhM=";
+  };
+  # `plugin link` skips the manifest's curl-installer build step; Nix provides the binary instead.
+  herdrTerminalBrowserPlugin = pkgs.runCommand "herdr-terminal-browser-plugin" { } ''
+    cp -r ${terminalBrowserSource}/herdr-plugin "$out"
+    chmod -R u+w "$out"
+    substituteInPlace "$out/open-split.sh" \
+      --replace-fail "command -v terminal-browser" "command -v ${lib.getExe terminalBrowser}" \
+      --replace-fail "exec terminal-browser" "exec ${lib.getExe terminalBrowser}"
+  '';
   worktreesDirectory = "~/.local/share/git_worktrees/herdr-worktrees";
   integrationTargets = [
     {
@@ -167,6 +182,7 @@ in
 
   environment.systemPackages = with pkgs; [
     herdr
+    terminalBrowser
     jq
     util-linux
     git
@@ -190,6 +206,14 @@ in
         echo "Would link the Herdr Git worktree plugin at ${herdrGitPlugin}"
       else
         ${herdr}/bin/herdr plugin link "${herdrGitPlugin}"
+      fi
+    '';
+
+    home.activation.herdrTerminalBrowserPlugin = lib.hm.dag.entryAfter [ "herdrIntegrations" ] ''
+      if [ "''${DRY_RUN:-0}" = 1 ]; then
+        echo "Would link the Herdr terminal-browser plugin at ${herdrTerminalBrowserPlugin}"
+      else
+        ${herdr}/bin/herdr plugin link "${herdrTerminalBrowserPlugin}" --enabled
       fi
     '';
   };
