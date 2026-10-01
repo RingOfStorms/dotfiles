@@ -19,6 +19,23 @@ _branch__worktree_for_branch() {
   return 1
 }
 
+# Linked checkouts live at <root>/<branch>/<repo basename>, so the cwd leaf
+# keeps the main checkout's name. $xdg overrides the data dir if set.
+_branch__worktree_root() {
+  local repo_dir=$1 repo_hash
+  repo_hash=$(printf '%s' "$repo_dir" | sha1sum | awk '{print $1}')
+  printf '%s/git_worktrees/%s_%s\n' "${xdg:-${XDG_DATA_HOME:-$HOME/.local/share}}" "$(basename -- "$repo_dir")" "$repo_hash"
+}
+
+# Remove now-empty directories from $2 upward, stopping below root $1.
+_branch__prune_empty_dirs() {
+  local root=${1%/} dir=${2%/}
+  while case "$dir/" in "$root/"?*) true ;; *) false ;; esac; do
+    rmdir -- "$dir" 2>/dev/null || return 0
+    dir=$(dirname -- "$dir")
+  done
+}
+
 _branch__setup_worktree() {
   local repo_dir=$1 wt_path=$2 actual_root git_dir mode cmd
   repo_dir=$(builtin cd -P -- "$repo_dir" && pwd -P) || return 1

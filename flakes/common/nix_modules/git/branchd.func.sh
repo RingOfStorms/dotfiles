@@ -35,6 +35,8 @@ branchdel() {
     return 1
   fi
   printf 'Removed worktree: %s\n' "$target_wt"
+  # Git removes only the checkout; drop the now-empty <branch>/ parents.
+  _branch__prune_empty_dirs "$(_branch__worktree_root "$repo_dir")" "$(dirname -- "$target_wt")"
   _branch__herdr_close "$repo_dir" "$target_wt"
 
   if git -C "$repo_dir" show-ref --verify --quiet "refs/heads/$branch"; then
