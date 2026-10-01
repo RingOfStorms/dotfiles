@@ -9,12 +9,6 @@ gcmp() {
 }
 
 gcpropose() {
-  export all_proxy=''
-  export http_proxy=''
-  export https_proxy=''
-  local LITELLM_BASE_URL="http://h001.net.joshuabell.xyz:8094"
-  local LITELLM_MODEL="copilot-gpt-5-mini"
-
   local mode="staged"
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -23,7 +17,7 @@ gcpropose() {
         cat <<EOF
 Usage: gcpropose [-a]
 
-Propose a short git commit subject line using a LiteLLM model.
+Propose a short git commit subject line using the fast LLM tier (${MODEL_FAST:-unset}).
 
 Defaults:
   - without -a: uses staged diff (git diff --staged)
@@ -40,15 +34,6 @@ EOF
 
   if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "Not inside a git repository." >&2
-    return 1
-  fi
-
-  if ! command -v curl >/dev/null 2>&1; then
-    echo "Missing dependency: curl" >&2
-    return 1
-  fi
-  if ! command -v jq >/dev/null 2>&1; then
-    echo "Missing dependency: jq" >&2
     return 1
   fi
 
@@ -102,87 +87,14 @@ ${diff}
 EOF
   )
 
-  local payload_chat
-  payload_chat=$(jq -n \
-    --arg model "$LITELLM_MODEL" \
-    --arg content "$prompt" \
-    '{
-      model: $model,
-      messages: [
-        {
-          role: "system",
-          content: "You write excellent, conventional git commit subject lines."
-        },
-        {
-          role: "user",
-          content: $content
-        }
-      ],
-      temperature: 0.2
-    }')
-
-  local curl_out http_code body
-  curl_out=$(curl -sS -w "\n%{http_code}" \
-    -X POST "${LITELLM_BASE_URL}/v1/chat/completions" \
-    -H "Content-Type: application/json" \
-    ${LITELLM_API_KEY:+-H "Authorization: Bearer ${LITELLM_API_KEY}"} \
-    -d "$payload_chat") || return 1
-
-  http_code=$(printf "%s" "$curl_out" | tail -n 1)
-  body=$(printf "%s" "$curl_out" | sed '$d')
-
-  if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
-    echo "LiteLLM request failed (HTTP $http_code)." >&2
-    printf "%s\n" "$body" >&2
-    return 1
-  fi
-
   local message
-  message=$(printf "%s" "$body" | jq -r '
-    .choices[0].message.content
-    | if type == "string" then .
-      elif type == "array" then (map(select(.type=="text") | .text) | join(""))
-      else ""
-      end
-  ' 2>/dev/null || true)
+  message=$(llm_chat fast \
+    "You write excellent, conventional git commit subject lines." \
+    "$prompt") || return 1
   message=$(printf "%s" "$message" | sed -n '1p' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
-  if [ -n "$message" ] && [ "$message" != "null" ]; then
-    printf "%s\n" "$message"
-    return 0
-  fi
-
-  local payload_responses
-  payload_responses=$(jq -n \
-    --arg model "$LITELLM_MODEL" \
-    --arg input "$prompt" \
-    '{
-      model: $model,
-      input: $input,
-      max_output_tokens: 64
-    }')
-
-  curl_out=$(curl -sS -w "\n%{http_code}" \
-    -X POST "${LITELLM_BASE_URL}/v1/responses" \
-    -H "Content-Type: application/json" \
-    ${LITELLM_API_KEY:+-H "Authorization: Bearer ${LITELLM_API_KEY}"} \
-    -d "$payload_responses") || return 1
-
-  http_code=$(printf "%s" "$curl_out" | tail -n 1)
-  body=$(printf "%s" "$curl_out" | sed '$d')
-
-  if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
-    echo "LiteLLM request failed (HTTP $http_code)." >&2
-    printf "%s\n" "$body" >&2
-    return 1
-  fi
-
-  message=$(printf "%s" "$body" | jq -r '(.output_text // empty)' 2>/dev/null || true)
-  message=$(printf "%s" "$message" | sed -n '1p' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-
-  if [ -z "$message" ] || [ "$message" = "null" ]; then
-    echo "Failed to parse model response." >&2
-    printf "%s\n" "$body" >&2
+  if [ -z "$message" ]; then
+    echo "Model returned an empty commit subject." >&2
     return 1
   fi
 

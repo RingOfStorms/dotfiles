@@ -5,6 +5,8 @@
 }:
 with lib;
 {
+  imports = [ ../llm ];
+
   environment.systemPackages = with pkgs; [
     git
     gh

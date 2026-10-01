@@ -18,7 +18,8 @@ Commands:
   create    Create a new PR from current branch
   update    Update existing PR description
 
-Both commands generate a PR description using LLM based on:
+Both commands generate a PR description using the smart LLM tier
+(\$MODEL_SMART) and a title using the fast tier (\$MODEL_FAST) based on:
   - Full diff against base branch
   - All commit messages on the branch
   - Opens in \$EDITOR for review before submitting
@@ -41,11 +42,6 @@ _gpr_check_deps() {
 
   if ! command -v gh >/dev/null 2>&1; then
     echo "Missing dependency: gh (GitHub CLI)" >&2
-    return 1
-  fi
-
-  if ! command -v curl >/dev/null 2>&1; then
-    echo "Missing dependency: curl" >&2
     return 1
   fi
 
@@ -77,10 +73,6 @@ _gpr_get_current_branch() {
 _gpr_generate_description() {
   local base_branch="$1"
   local existing_description="${2:-}"
-
-  local LITELLM_BASE_URL="http://h001.net.joshuabell.xyz:8094"
-  local LITELLM_MODEL="copilot-gpt-5-mini"
-
   local current_branch
   current_branch=$(_gpr_get_current_branch)
 
@@ -171,66 +163,13 @@ EOF
     )
   fi
 
-  local payload
-  payload=$(jq -n \
-    --arg model "$LITELLM_MODEL" \
-    --arg content "$prompt" \
-    '{
-      model: $model,
-      messages: [
-        {
-          role: "system",
-          content: "You write clear, concise GitHub Pull Request descriptions. Focus on the what and why of changes."
-        },
-        {
-          role: "user",
-          content: $content
-        }
-      ],
-      temperature: 0.3,
-      max_tokens: 1024
-    }')
-
-  local curl_out http_code body
-  curl_out=$(curl -sS -w "\n%{http_code}" \
-    -X POST "${LITELLM_BASE_URL}/v1/chat/completions" \
-    -H "Content-Type: application/json" \
-    ${LITELLM_API_KEY:+-H "Authorization: Bearer ${LITELLM_API_KEY}"} \
-    -d "$payload") || return 1
-
-  http_code=$(printf "%s" "$curl_out" | tail -n 1)
-  body=$(printf "%s" "$curl_out" | sed '$d')
-
-  if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
-    echo "LiteLLM request failed (HTTP $http_code)." >&2
-    printf "%s\n" "$body" >&2
-    return 1
-  fi
-
-  local message
-  message=$(printf "%s" "$body" | jq -r '
-    .choices[0].message.content
-    | if type == "string" then .
-      elif type == "array" then (map(select(.type=="text") | .text) | join(""))
-      else ""
-      end
-  ' 2>/dev/null || true)
-
-  if [ -z "$message" ] || [ "$message" = "null" ]; then
-    echo "Failed to parse model response." >&2
-    printf "%s\n" "$body" >&2
-    return 1
-  fi
-
-  printf "%s" "$message"
+  llm_chat smart \
+    "You write clear, concise GitHub Pull Request descriptions. Focus on the what and why of changes." \
+    "$prompt"
 }
 
 _gpr_generate_title() {
   local base_branch="$1"
-
-  local LITELLM_BASE_URL="http://h001.net.joshuabell.xyz:8094"
-  local LITELLM_MODEL="copilot-gpt-5-mini"
-
   local current_branch
   current_branch=$(_gpr_get_current_branch)
 
@@ -254,46 +193,11 @@ Rules:
 EOF
   )
 
-  local payload
-  payload=$(jq -n \
-    --arg model "$LITELLM_MODEL" \
-    --arg content "$prompt" \
-    '{
-      model: $model,
-      messages: [
-        {
-          role: "system",
-          content: "You write concise PR titles."
-        },
-        {
-          role: "user",
-          content: $content
-        }
-      ],
-      temperature: 0.2,
-      max_tokens: 64
-    }')
-
-  local curl_out http_code body
-  curl_out=$(curl -sS -w "\n%{http_code}" \
-    -X POST "${LITELLM_BASE_URL}/v1/chat/completions" \
-    -H "Content-Type: application/json" \
-    ${LITELLM_API_KEY:+-H "Authorization: Bearer ${LITELLM_API_KEY}"} \
-    -d "$payload") || return 1
-
-  http_code=$(printf "%s" "$curl_out" | tail -n 1)
-  body=$(printf "%s" "$curl_out" | sed '$d')
-
-  if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
-    echo "LiteLLM request failed (HTTP $http_code)." >&2
-    return 1
-  fi
-
   local message
-  message=$(printf "%s" "$body" | jq -r '.choices[0].message.content' 2>/dev/null || true)
+  message=$(llm_chat fast "You write concise PR titles." "$prompt" 2>/dev/null) || message=""
   message=$(printf "%s" "$message" | sed -n '1p' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
-  if [ -z "$message" ] || [ "$message" = "null" ]; then
+  if [ -z "$message" ]; then
     # Fallback to branch name
     echo "$current_branch"
     return 0

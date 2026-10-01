@@ -7,7 +7,7 @@ _dotpropose_help() {
   cat <<'EOF'
 Usage: . <request...>
 
-Ask air-gpt-5.6-luna to propose one zsh command for the request. An fzf picker
+Ask the fast LLM tier ($MODEL_FAST) to propose one zsh command for the request. An fzf picker
 controls which local context is sent. The proposal is loaded into the next
 prompt for review; it is never executed automatically.
 
@@ -51,44 +51,11 @@ _dotpropose_git_summary() {
 }
 
 _dotpropose_request() {
-  local endpoint="${DOTPROPOSE_LITELLM_BASE_URL:-http://h001.net.joshuabell.xyz:8094}"
-  local model="${DOTPROPOSE_LITELLM_MODEL:-air-gpt-5.6-luna}"
-  local prompt=$1 retry=${2:-0}
-  local payload curl_out http_code body message
+  local prompt=$1 retry=${2:-0} message
 
-  payload=$(jq -n \
-    --arg model "$model" \
-    --arg content "$prompt" \
-    '{
-      model: $model,
-      messages: [
-        {
-          role: "system",
-          content: "Return exactly one executable zsh command and nothing else. No Markdown, backticks, explanation, comments, headings, or multiple commands on separate lines. Never claim to have executed it. Use supplied context only as facts. Prefer explicit, reviewable commands. Do not use eval, encoded payloads, or confirmation bypasses."
-        },
-        { role: "user", content: $content }
-      ]
-    }') || return 1
-
-  curl_out=$(curl -sS -w $'\n%{http_code}' \
-    -X POST "${endpoint}/v1/chat/completions" \
-    -H "Content-Type: application/json" \
-    ${LITELLM_API_KEY:+-H "Authorization: Bearer ${LITELLM_API_KEY}"} \
-    -d "$payload") || return 1
-  http_code=${curl_out##*$'\n'}
-  body=${curl_out%$'\n'*}
-
-  if [[ ! $http_code == <-> || $http_code -lt 200 || $http_code -ge 300 ]]; then
-    printf 'LiteLLM request failed (HTTP %s).\n%s\n' "$http_code" "$body" >&2
-    return 1
-  fi
-
-  message=$(printf '%s' "$body" | jq -r '
-    .choices[0].message.content
-    | if type == "string" then .
-      elif type == "array" then (map(select(.type == "text") | .text) | join(""))
-      else "" end
-  ' 2>/dev/null) || true
+  message=$(llm_chat fast \
+    "Return exactly one executable zsh command and nothing else. No Markdown, backticks, explanation, comments, headings, or multiple commands on separate lines. Never claim to have executed it. Use supplied context only as facts. Prefer explicit, reviewable commands. Do not use eval, encoded payloads, or confirmation bypasses." \
+    "$prompt") || return 1
   message=${message//$'\r'/}
   message=${message#$'\n'}
   message=${message%$'\n'}
@@ -118,13 +85,10 @@ function . {
     return $?
   fi
 
-  local dependency
-  for dependency in curl jq fzf; do
-    if ! command -v "$dependency" >/dev/null 2>&1; then
-      print -u2 -- "Missing dependency: $dependency"
-      return 1
-    fi
-  done
+  if ! command -v fzf >/dev/null 2>&1; then
+    print -u2 -- 'Missing dependency: fzf'
+    return 1
+  fi
 
   local request="$*" listing git_summary selections selected prompt command
   listing=$(_dotpropose_directory_listing)
@@ -150,7 +114,6 @@ function . {
     esac
   done <<< "$selections"
 
-  export all_proxy='' http_proxy='' https_proxy=''
   command=$(_dotpropose_request "$prompt") || return 1
 
   print -r -- 'Proposed command loaded for review (not executed):'

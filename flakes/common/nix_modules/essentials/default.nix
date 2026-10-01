@@ -5,6 +5,8 @@
 }:
 with lib;
 {
+  imports = [ ../llm ];
+
   security.sudo = {
     extraConfig = ''
       Defaults lecture="never"
