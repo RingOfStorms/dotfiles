@@ -247,104 +247,100 @@ git_info() {
 
 tilde() { REPLY=${1/#"$HOME"/\~}; }
 
-# Prints "target<TAB>display" rows, grouped repo -> worktree session -> windows.
-# Grouping is recomputed from git each call, so a session that cd's into a
-# worktree moves under its repo without any registration step.
+# Rows: stable ID, pane target (empty for headings), display. Assign an entire
+# session to its most represented Git repo; first pane wins equal counts.
 CUR_POS=1
 cmd_rows() {
 	local current fmt
-	current=$(tmux display-message -p '#{session_name}' 2>/dev/null || true)
-	fmt="#{session_name}${TAB}#{window_index}${TAB}$(field window_name)${TAB}#{pane_id}${TAB}#{pane_active}${TAB}#{window_active}${TAB}$(field @agent_state)${TAB}$(field @agent_unseen)${TAB}$(field pane_current_path)"
-
+	current=$(tmux display-message -p '#{pane_id}' 2>/dev/null || true)
+	fmt="#{session_name}${TAB}#{window_index}${TAB}$(field window_name)${TAB}#{pane_id}${TAB}#{pane_index}${TAB}$(field pane_current_command)${TAB}$(field @agent_state)${TAB}$(field @agent_unseen)${TAB}$(field pane_current_path)${TAB}#{pane_title}"
 	local -a sessions=()
-	local -A s_rank=() s_pane=() s_path=() s_wins=() w_rank=() w_name=() w_pane=()
-	local s wi wn pane pact wact st unseen path key
-	while IFS=$TAB read -r s wi wn pane pact wact st unseen path; do
+	local -A s_panes=() s_path=() s_rank=() counts=() s_repo=() s_branch=() s_main=()
+	local -A s_repos=() branches=() worktrees=()
+	local -A p_window=() p_name=() p_rank=() repo_name=() repo_root=()
+	local s wi wn pane pi command st unseen path title common top branch main repo key
+	while IFS=$TAB read -r s wi wn pane pi command st unseen path title; do
+		undash "$path" && path=$REPLY
 		undash "$st" && st=$REPLY
 		undash "$unseen" && unseen=$REPLY
-		undash "$path" && path=$REPLY
-		key="$s:$wi"
-		if [ -z "${s_rank[$s]+x}" ]; then
+		if [ -z "${s_panes[$s]+x}" ]; then
 			sessions+=("$s")
+			s_panes[$s]=""
+			s_path[$s]=$path
 			s_rank[$s]=0
-			s_pane[$s]=$pane
-			s_path[$s]=$path
-			s_wins[$s]=""
 		fi
-		if [ -z "${w_rank[$key]+x}" ]; then
-			s_wins[$s]+="$wi "
-			w_rank[$key]=0
-			w_name[$key]=$wn
-			w_pane[$key]=$pane
-		fi
+		s_panes[$s]+="$pane "
+		p_window[$pane]="$wi:$wn"
+		classify "$title"
+		if [ "$REPLY" != none ]; then agent_label "$title"; else REPLY=$command; fi
+		p_name[$pane]="$pi:$REPLY"
 		rank "$st" "$unseen"
-		[ "$REPLY" -gt "${w_rank[$key]}" ] && w_rank[$key]=$REPLY
+		p_rank[$pane]=$REPLY
 		[ "$REPLY" -gt "${s_rank[$s]}" ] && s_rank[$s]=$REPLY
-		if [ "$pact" = 1 ]; then w_pane[$key]=$pane; fi
-		if [ "$pact" = 1 ] && [ "$wact" = 1 ]; then
-			s_pane[$s]=$pane
-			s_path[$s]=$path
+		git_info "$path"
+		[ -n "$REPLY" ] || continue
+		IFS=$TAB read -r common top branch <<<"$REPLY"
+		if [[ $common == */.git ]]; then main=${common%/.git}; else main=$common; fi
+		repo_name[$common]=${main##*/}
+		repo_root[$common]=$main
+		key="$s$TAB$common"
+		if [ -z "${counts[$key]+x}" ]; then
+			s_repos[$s]+="$common"$'\n'
+			[ "$branch" = HEAD ] && branch=detached
+			branches[$key]=$branch
+			if [ "$top" = "$main" ]; then worktrees[$key]=0; else worktrees[$key]=1; fi
 		fi
+		counts[$key]=$(( ${counts[$key]:-0} + 1 ))
 	done < <(tmux list-panes -a -F "$fmt")
 
-	local -A s_repo=() s_branch=() s_main=() repo_name=() repo_root=()
-	local common top branch main name sortable=""
+	local sortable="" best
 	for s in "${sessions[@]}"; do
-		git_info "${s_path[$s]}"
-		if [ -n "$REPLY" ]; then
-			IFS=$TAB read -r common top branch <<<"$REPLY"
-			if [[ $common == */.git ]]; then main=${common%/.git}; else main=$common; fi
-			name=${main##*/}
-			name=${name%.git}
-			[ "$branch" = HEAD ] && branch=detached
-			s_repo[$s]=$common
-			s_branch[$s]=$branch
-			if [ "$top" = "$main" ]; then s_main[$s]=0; else s_main[$s]=1; fi
-			repo_name[$common]=$name
-			repo_root[$common]=$main
-			sortable+="0${TAB}${name}${TAB}${common}${TAB}${s_main[$s]}${TAB}${branch}${TAB}${s}"$'\n'
+		best=0
+		while IFS= read -r common; do
+			[ -n "$common" ] || continue
+			key="$s$TAB$common"
+			if [ "${counts[$key]}" -gt "$best" ]; then
+				best=${counts[$key]}
+				s_repo[$s]=$common
+				s_branch[$s]=${branches[$key]}
+				s_main[$s]=${worktrees[$key]}
+			fi
+		done <<<"${s_repos[$s]:-}"
+		repo=${s_repo[$s]:-}
+		if [ -n "$repo" ]; then
+			sortable+="0${TAB}${repo_name[$repo]}${TAB}${repo}${TAB}${s_main[$s]}${TAB}${s}"$'\n'
 		else
-			s_repo[$s]="~other"
-			sortable+="1${TAB}~${TAB}~other${TAB}0${TAB}-${TAB}${s}"$'\n'
+			sortable+="1${TAB}${s}${TAB}-${TAB}0${TAB}${s}"$'\n'
 		fi
 	done
-
-	local idx=0 prev="" _g _n _c _m _b repo row
-	while IFS=$TAB read -r _g _n _c _m _b s; do
+	local idx=0 prev="" group _name _main row indent
+	while IFS=$TAB read -r group _name repo _main s; do
 		[ -n "$s" ] || continue
-		repo=${s_repo[$s]}
-		if [ "$repo" != "$prev" ]; then
-			prev=$repo
-			if [ "$repo" = "~other" ]; then
-				row=$'\033[1;35mother\033[0m'
-			else
+		if [ "$group" = 0 ]; then
+			if [ "$repo" != "$prev" ]; then
+				prev=$repo
 				tilde "${repo_root[$repo]}"
-				row=$'\033[1;34m'"${repo_name[$repo]}"$'\033[0m  \033[2m'"$REPLY"$'\033[0m'
-			fi
-			printf 'h:%s\t%s\t%s\n' "$repo" "${s_pane[$s]}" "$row"
-			idx=$((idx + 1))
-		fi
-		row="  $(glyph "${s_rank[$s]}") $s"
-		if [ "$repo" = "~other" ]; then
-			tilde "${s_path[$s]}"
-			row+=$'  \033[2m'"$REPLY"$'\033[0m'
-		else
-			row+=$'  \033[36m['"${s_branch[$s]}"$']\033[0m'
-			if [ "${s_main[$s]}" = 1 ]; then row+=$' \033[2mworktree\033[0m'; fi
-		fi
-		printf 's:%s\t%s\t%s\n' "$s" "${s_pane[$s]}" "$row"
-		idx=$((idx + 1))
-		[ "$s" = "$current" ] && CUR_POS=$idx
-		# shellcheck disable=SC2086 # window index list is space separated
-		set -- ${s_wins[$s]}
-		if [ "$#" -gt 1 ]; then
-			for wi in "$@"; do
-				key="$s:$wi"
-				printf 'w:%s\t%s\t      %s %s:%s\n' "$key" "${w_pane[$key]}" "$(glyph "${w_rank[$key]}")" "$wi" "${w_name[$key]}"
+				printf 'h:%s\t-\t\033[1;34m%s\033[0m  \033[2m%s\033[0m\n' "$repo" "${repo_name[$repo]}" "$REPLY"
 				idx=$((idx + 1))
-			done
+			fi
+			row="  $(glyph "${s_rank[$s]}") $s"$'  \033[36m['"${s_branch[$s]}"$']\033[0m'
+			[ "${s_main[$s]}" = 1 ] && row+=$' \033[2mworktree\033[0m'
+			indent="      "
+		else
+			tilde "${s_path[$s]}"
+			row=$'\033[1;35m'"$s"$'\033[0m  \033[2m'"$REPLY"$'\033[0m'
+			indent="  "
 		fi
-	done < <(printf '%s' "$sortable" | LC_ALL=C sort -t "$TAB" -k1,1 -k2,2 -k3,3 -k4,4n -k5,5 -k6,6)
+		printf 's:%s\t-\t%s\n' "$s" "$row"
+		idx=$((idx + 1))
+		# shellcheck disable=SC2086 # pane IDs contain no whitespace
+		for pane in ${s_panes[$s]}; do
+			printf 'p:%s\t%s\t%s%s %s > %s\n' "$pane" "$pane" "$indent" "$(glyph "${p_rank[$pane]}")" "${p_window[$pane]}" "${p_name[$pane]}"
+			idx=$((idx + 1))
+			[ "$pane" = "$current" ] && CUR_POS=$idx
+		done
+	done < <(printf '%s' "$sortable" | LC_ALL=C sort -t "$TAB" -k1,1 -k2,2 -k3,3 -k4,4n -k5,5)
+	return 0
 }
 
 cmd_preview() {
@@ -353,14 +349,14 @@ cmd_preview() {
 	printf '%s\n' "$out" | tail -n "${FZF_PREVIEW_LINES:-40}"
 }
 
-# Navigator ctrl-x: confirm, then kill the session or window under the cursor
-# and rewrite the rows file the caller reloads. Repo headers are left alone.
+# Navigator ctrl-x: confirm, then kill the session heading or individual pane.
+# Repo headers are left alone.
 cmd_kill() {
 	local id=$1 rows=$2 kind target what ans
 	kind=${id%%:*} target=${id#*:}
 	case "$kind" in
 	s) what="session '$target'" ;;
-	w) what="window '$target'" ;;
+	p) what="pane '$target'" ;;
 	*) return 0 ;;
 	esac
 	printf 'Kill %s? [y/N] ' "$what" >/dev/tty
@@ -374,7 +370,7 @@ cmd_kill() {
 		fi
 		tmux kill-session -t "=$target"
 	else
-		tmux kill-window -t "=$target"
+		tmux kill-pane -t "$target"
 	fi
 	cmd_rows >"$rows.tmp" && mv -f "$rows.tmp" "$rows"
 }
@@ -407,9 +403,11 @@ cmd_navigator() {
 	sel=$(fzf --ansi --no-sort --layout=reverse --delimiter="$TAB" --with-nth=3.. \
 		--track --id-nth=1 --listen="$sock" \
 		--prompt='agents> ' --info=inline-right \
-		--bind 'left-click:accept' \
+		--cycle --bind 'ctrl-j:down,ctrl-k:up' \
+		--bind 'enter:transform:case {1} in p:*) echo accept ;; *) echo ignore ;; esac' \
+		--bind 'left-click:transform:case {1} in p:*) echo accept ;; *) echo ignore ;; esac' \
 		--bind "ctrl-x:execute($self kill {1} $rows)+reload-sync(cat $rows)" \
-		--header 'enter/click: switch   ctrl-x: kill session/window' \
+		--header 'enter/click: switch pane   ctrl-x: kill session/pane' \
 		--bind "load:pos($CUR_POS)+unbind(load)" \
 		--preview "$self preview {2}" --preview-window='right,55%,border-left,<80(down,40%,border-top)' \
 		<"$rows") || sel=""
@@ -417,7 +415,9 @@ cmd_navigator() {
 	rm -f "$rows" "$rows.tmp" "$sock"
 	[ -n "$sel" ] || return 0
 	sel=${sel#*"$TAB"}
-	tmux switch-client -t "${sel%%"$TAB"*}"
+	sel=${sel%%"$TAB"*}
+	tmux select-pane -t "$sel"
+	tmux switch-client -t "$sel"
 }
 
 # Nix substitutes the store path; a checkout falls back to the sibling file.
