@@ -3,10 +3,12 @@
 - termux, termux api, widget, boot, styling
 
 ```
-pkg install sshd
+pkg install sshd termux-services
 pkg install nvim
 pkg install starship
 pkg install termux-api tergent openssh jq netcat-openbsd
+
+sv-enable sshd
 ```
 
 # FILES
@@ -32,13 +34,13 @@ ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDCDxClNxMHqXy3cwj6wGx3r16/fKclgef5LPlt9cqrF
 ```
 #!/data/data/com.termux/files/usr/bin/sh
 termux-wake-lock
-sshd
+. $PREFIX/etc/profile
 ```
 
 ~/.shortcuts/ssh_lio
 ```
 #!/data/data/com.termux/files/usr/bin/sh
-ssh lio
+ssh -tt lio tat
 ```
 
 # Biometic ssh key
