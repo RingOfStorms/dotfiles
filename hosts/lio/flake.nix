@@ -13,6 +13,7 @@
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
     containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers";
     omp-flake.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/omp";
+    tmux-agents.url = "path:../../flakes/tmux-agents";
     nono.url = "github:always-further/nono/6118b79aeda1365da213d85457b4d3cf1201d575";
     nono.flake = false;
     rust-overlay.url = "github:oxalica/rust-overlay/26a71e661c47bd21a05d06fec749f3f7c75e9d12";
@@ -20,7 +21,7 @@
     herdr-nix.url = "github:herdrdev/herdr-nix";
     herdr-nix.inputs.nixpkgs.follows = "nixpkgs";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
-    opencode.url = "github:anomalyco/opencode/74dbc509d74df46a2523676dd4068225c4f0c9b0";
+    opencode.url = "github:anomalyco/opencode/8a8bd622a3d7dc29ccf30ec17f84e363ed95ed72";
   };
 
   outputs = { nixpkgs-unstable, ... }@inputs:
@@ -43,6 +44,7 @@
           inputs.common.homeManagerModules.foot
           inputs.common.homeManagerModules.launcher_rofi
           inputs.common.homeManagerModules.slicer
+          inputs.tmux-agents.homeManagerModules.defaultEnabled
           ({ ... }: {
             programs.ssh.matchBlocks = {
               "joe_" = { hostname = fleet.hosts.joe.lanIp; user = fleet.hosts.joe.user; };
@@ -78,15 +80,14 @@
           inputs.common.nixosModules.rage
           inputs.common.nixosModules.more_filesystems
           inputs.omp-flake.nixosModules.default
-          ./pi.nix
           ./herdr.nix
           ({ pkgs, ... }:
             let
-              # OpenCode v2.0.20 ships a stale x86_64-linux node_modules hash.
+              # OpenCode v2.0.21 ships a stale x86_64-linux node_modules hash.
               opencode = inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default;
               opencodePackage = (opencode.override {
                 node_modules = opencode.node_modules.override {
-                  hash = "sha256-QWsrFuaDMPzlLYaDKmy5bS5eZtLP29Y+Yfq/rqa/lkc=";
+                  hash = "sha256-8c/wmYczopurElpy8jNYH66TlHG8RAQ1FGSGKqbQEaA=";
                 };
               }).overrideAttrs (old: {
                 patches = (old.patches or [ ]) ++ [
@@ -135,8 +136,6 @@
               cur = "${no_proxy} ${nono_base} --profile claude-code-full -- cursor";
               zed = "${no_proxy} ${nono_base} --profile claude-code-full -- zeditor";
               npm = "${no_proxy} ${nono_base} --profile npm -- npm";
-              pi = "${no_proxy} ${nono_base} --profile pi -- pi";
-              pi_ = "${no_proxy} command pi";
               omp = herdr_nono "omp" "omp" "omp";
               omp_ = "${no_proxy} command omp";
             };
