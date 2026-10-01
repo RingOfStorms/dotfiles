@@ -1,14 +1,12 @@
 # tmux-agents: agent-aware state, navigator, and resume for tmux.
-# Subcommands: tick [quiet] | navigator | rows | preview <target> | save | restore
+# Subcommands: tick [quiet] | navigator | rows | preview <target> | kill <id> <rows> | save | restore
+# Resume (save/restore) lives in resume.sh, sourced below.
 #
 # Detection is external only: coding agents announce their state through the
 # terminal title (`#{pane_title}`). omp writes `π <spinner> label` while
 # working, `π > label` when idle, and `π ! label` when blocked on the user.
 
 TAB=$'\t'
-agent_dir="${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}"
-state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/tmux-agents"
-resume_file="$state_dir/resume.tsv"
 
 opt() {
 	local v
@@ -148,7 +146,7 @@ cmd_tick() {
 
 	local -A win_want=() win_have=()
 	local -a cmds=()
-	local n_work=0 n_input=0 n_done=0
+	local n_work=0 n_input=0 n_done=0 agents_sig=""
 	local pane win sess widx wname pact wact attached zoom st unseen walert title cur seen new_unseen
 	while IFS=$TAB read -r pane win sess widx wname pact wact attached zoom st unseen walert title; do
 		undash "$st" && st=$REPLY
@@ -165,6 +163,7 @@ cmd_tick() {
 
 		new_unseen=$unseen
 		agent_label "$title"
+		if [ "$cur" != none ]; then agents_sig+="$pane=$REPLY;"; fi
 		case "$cur" in
 		none | working) new_unseen="" ;;
 		idle)
@@ -221,6 +220,7 @@ cmd_tick() {
 		tmux "${cmds[@]}" >/dev/null 2>&1 || true
 	fi
 	deliver
+	resume_track "$agents_sig"
 
 	local seg=""
 	if [ "$n_input" -gt 0 ]; then seg+="#[fg=red,bold]! $n_input#[default] "; fi
@@ -420,44 +420,11 @@ cmd_navigator() {
 	tmux switch-client -t "${sel%%"$TAB"*}"
 }
 
-# tmux-resurrect post-save hook: map each live agent pane to its session file
-# using omp's per-terminal breadcrumb (line 1 cwd, line 2 session file).
-cmd_save() {
-	mkdir -p "$state_dir"
-	local tmp="$resume_file.tmp" s wi pi tty pane title name crumb cwd file
-	local -a lines
-	: >"$tmp"
-	while IFS=$TAB read -r s wi pi tty pane title; do
-		classify "$title"
-		[ "$REPLY" = none ] && continue
-		name=${tty#/dev/}
-		crumb="$agent_dir/terminal-sessions/${name//\//-}"
-		[ -r "$crumb" ] || crumb="$agent_dir/terminal-sessions/tmux-$pane"
-		[ -r "$crumb" ] || continue
-		mapfile -t -n 2 lines <"$crumb"
-		cwd=${lines[0]:-}
-		file=${lines[1]:-}
-		[ -n "$file" ] || continue
-		case "$file" in /*) ;; *) file="$cwd/$file" ;; esac
-		printf '%s\t%s\t%s\t%s\t%s\n' "$s" "$wi" "$pi" "$cwd" "$file" >>"$tmp"
-	done < <(tmux list-panes -a -F "#{session_name}${TAB}#{window_index}${TAB}#{pane_index}${TAB}#{pane_tty}${TAB}#{pane_id}${TAB}#{pane_title}")
-	mv -f "$tmp" "$resume_file"
-}
-
-# tmux-resurrect post-restore hook: relaunch agents in restored shell panes.
-cmd_restore() {
-	[ -r "$resume_file" ] || return 0
-	local resume s wi pi cwd file target cmd
-	resume=$(opt @tmux-agents-resume-command 'omp --resume=')
-	while IFS=$TAB read -r s wi pi cwd file; do
-		[ -e "$file" ] || continue
-		target="=$s:$wi.$pi"
-		cmd=$(tmux display-message -p -t "$target" '#{pane_current_command}' 2>/dev/null) || continue
-		case "$cmd" in zsh | bash | sh | fish | dash | nu) ;; *) continue ;; esac
-		tmux send-keys -t "$target" -l "$resume$(printf '%q' "$file")"
-		tmux send-keys -t "$target" Enter
-	done <"$resume_file"
-}
+# Nix substitutes the store path; a checkout falls back to the sibling file.
+resume_lib="@resume_lib@"
+[ -r "$resume_lib" ] || resume_lib="$(dirname "${BASH_SOURCE[0]}")/resume.sh"
+# shellcheck disable=SC1090,SC1091
+. "$resume_lib"
 
 case "${1:-}" in
 tick) cmd_tick "${2:-}" ;;
@@ -465,10 +432,12 @@ rows) cmd_rows ;;
 preview) cmd_preview "${2:?target}" ;;
 kill) cmd_kill "${2:?id}" "${3:?rows file}" ;;
 navigator) cmd_navigator ;;
-save) cmd_save ;;
-restore) cmd_restore ;;
+save) if resume_on; then cmd_save; fi ;;
+restore) if resume_on; then cmd_restore; fi ;;
+restore-begin) if resume_on; then cmd_restore_begin; fi ;;
+resume-init) cmd_resume_init ;;
 *)
-	printf 'usage: tmux-agents {tick [quiet]|navigator|rows|preview TARGET|kill ID ROWS|save|restore}\n' >&2
+	printf 'usage: tmux-agents {tick [quiet]|navigator|rows|preview TARGET|kill ID ROWS|save|restore|restore-begin|resume-init}\n' >&2
 	exit 2
 	;;
 esac

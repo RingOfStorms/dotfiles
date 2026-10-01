@@ -27,9 +27,12 @@
               fzf
               git
               libnotify
+              procps
               util-linux
             ];
-            text = builtins.readFile ./tmux-agents.sh;
+            text = builtins.replaceStrings [ "@resume_lib@" ] [ "${./resume.sh}" ] (
+              builtins.readFile ./tmux-agents.sh
+            );
           };
         in
         pkgs.tmuxPlugins.mkTmuxPlugin {
@@ -64,6 +67,7 @@
           cfg = config.ringofstorms.tmuxAgents;
           n = cfg.notifications;
           onOff = b: if b then "on" else "off";
+          plugin = self.lib.mkPlugin pkgs;
         in
         {
           options.ringofstorms.tmuxAgents = {
@@ -122,18 +126,40 @@
                 description = "Playback volume in percent of the needs-input sound (sound = \"local\").";
               };
             };
-            resume = lib.mkOption {
-              type = lib.types.bool;
-              default = true;
-              description = "Relaunch agents with their sessions after tmux-resurrect restores.";
+            resume = {
+              enable = lib.mkOption {
+                type = lib.types.bool;
+                default = true;
+                description = ''
+                  tmux-resurrect integration (resume.sh): track which omp session each agent
+                  pane runs and resume it after a restore. Off removes the resurrect hooks.
+                '';
+              };
+              mode = lib.mkOption {
+                type = lib.types.enum [
+                  "auto"
+                  "prompt"
+                ];
+                default = "auto";
+                description = ''
+                  "auto" runs the resume command in each restored agent pane;
+                  "prompt" only types it at the shell prompt for you to confirm.
+                '';
+              };
             };
           };
 
           config = lib.mkIf cfg.enable {
+            # Continuum may restore before the late theme/status loader runs.
+            xdg.configFile."tmux/tmux.conf".text = lib.mkBefore ''
+              set -g @tmux-agents-resume '${onOff cfg.resume.enable}'
+              set -g @tmux-agents-resume-mode '${cfg.resume.mode}'
+              run-shell '${plugin}/share/tmux-plugins/tmux-agents/bin/tmux-agents resume-init'
+            '';
             # mkAfter: must load after catppuccin (formats) and resurrect.
             programs.tmux.plugins = lib.mkAfter [
               {
-                plugin = self.lib.mkPlugin pkgs;
+                inherit plugin;
                 extraConfig = ''
                   set -g @tmux-agents-key '${cfg.key}'
                   set -g @tmux-agents-notify '${onOff n.enable}'
@@ -144,7 +170,8 @@
                   set -g @tmux-agents-sound-input '${n.soundInput}'
                   set -g @tmux-agents-sound-done-volume '${toString n.doneVolume}'
                   set -g @tmux-agents-sound-input-volume '${toString n.inputVolume}'
-                  set -g @tmux-agents-resume '${onOff cfg.resume}'
+                  set -g @tmux-agents-resume '${onOff cfg.resume.enable}'
+                  set -g @tmux-agents-resume-mode '${cfg.resume.mode}'
                 '';
               }
             ];

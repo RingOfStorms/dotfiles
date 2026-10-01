@@ -66,18 +66,7 @@ for hook in after-select-window after-select-pane client-session-changed session
 	tmux set-hook -g "${hook}[87]" "run-shell -b '$bin tick quiet'"
 done
 
-# Resume agents through tmux-resurrect. The hooks are read when resurrect
-# saves/restores, so setting them after resurrect loads is fine.
-chain_hook() {
-	local name=$1 cmd=$2 existing
-	existing=$(tmux show-option -gqv "$name")
-	case "$existing" in
-	*"$bin"*) ;;
-	'') tmux set-option -g "$name" "$cmd" ;;
-	*) tmux set-option -g "$name" "$existing; $cmd" ;;
-	esac
-}
-if [ "$(opt @tmux-agents-resume on)" = on ]; then
-	chain_hook @resurrect-hook-post-save-all "$bin save"
-	chain_hook @resurrect-hook-post-restore-all "$bin restore"
-fi
+# Resume agents after tmux-resurrect (resume.sh). Adds or removes our resurrect
+# hooks per @tmux-agents-resume; hook options are read at save/restore time,
+# so this works after resurrect has loaded.
+"$bin" resume-init
