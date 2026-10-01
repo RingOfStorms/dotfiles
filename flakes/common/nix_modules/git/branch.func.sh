@@ -117,7 +117,6 @@ branch() {
     echo "Opening existing worktree for branch '$branch_name' at '$existing'."
     builtin cd -- "$existing" || return 1
     _branch__setup_worktree "$repo_dir" "$existing" || printf 'Worktree setup did not complete for %s\n' "$existing" >&2
-    _branch__herdr_open "$repo_dir" "$existing"
     _branch__maybe_set_tmux_name "$branch_name" "$prev_branch" || true
     return 0
   fi
@@ -204,7 +203,6 @@ branch() {
     if ! _branch__setup_worktree "$1" "$2"; then
       printf 'Worktree setup did not complete for %s\n' "$2" >&2
     fi
-    _branch__herdr_open "$1" "$2"
   }
 
   if [ "$local_exists" -eq 1 ]; then
