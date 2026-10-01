@@ -165,11 +165,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1790794989,
-        "narHash": "sha256-Z2hu9qqFlzQ3UL0x0t5OVpTczBRLlhXbJjyZKZD+CDw=",
+        "lastModified": 1790874059,
+        "narHash": "sha256-0Dp2l3Np2W/WyQmaAwJBLK62l6zI3Agrjwz19hw0uDo=",
         "ref": "refs/heads/main",
-        "rev": "22e17242591c390d46453d042516e51be7ca14ae",
-        "revCount": 10,
+        "rev": "5fd2e7c105e445393ddc04006861511a5b517561",
+        "revCount": 13,
         "type": "git",
         "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/life.git"
       },
@@ -180,11 +180,11 @@
     },
     "litellm-nixpkgs": {
       "locked": {
-        "lastModified": 1790578696,
-        "narHash": "sha256-ZoxIApko70jCdbH3l20HWXOBaT2HZd87orzd2yJ9dVE=",
+        "lastModified": 1790822859,
+        "narHash": "sha256-69xHQhAeMAD2wDXO7T2pcOZIF9Sga2W+JkmY2a11Ops=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "7a0f122f5090cf4c2ade2a13a0e229d4e19ba71f",
+        "rev": "c59305bab2065cfecc4944690d9eedbb56f3a9fa",
         "type": "github"
       },
       "original": {
