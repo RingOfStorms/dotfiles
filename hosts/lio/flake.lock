@@ -1332,7 +1332,8 @@
         "ros_neovim": "ros_neovim",
         "rust-overlay": "rust-overlay_3",
         "secrets_manager": "secrets_manager",
-        "stt_ime": "stt_ime"
+        "stt_ime": "stt_ime",
+        "tmux-agents": "tmux-agents"
       }
     },
     "ros_neovim": {
@@ -1599,6 +1600,17 @@
         "repo": "default",
         "type": "github"
       }
+    },
+    "tmux-agents": {
+      "locked": {
+        "path": "../../flakes/tmux-agents",
+        "type": "path"
+      },
+      "original": {
+        "path": "../../flakes/tmux-agents",
+        "type": "path"
+      },
+      "parent": []
     },
     "treefmt-nix": {
       "inputs": {
