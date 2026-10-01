@@ -123,34 +123,18 @@
       domain = "vault.joshuabell.xyz";
     };
 
-    # pkm — personal knowledge system. Rust server + embedded Svelte frontend,
-    # its own Postgres (PostGIS, wal_level=logical) and a PowerSync service,
-    # all inside one NixOS container. The application itself is packaged in its
-    # own repo's flake; this host only supplies the container and the vhost.
-    #
-    # syncPort is the PowerSync service, reached through the same vhost under
-    # /powersync rather than on a second domain — it needs to be same-origin
-    # for the browser and needs no certificate of its own.
-    pkm = {
-      port = 3010;
-      syncPort = 8080;
-      dataDir = "/var/lib/pkm";
-      containerIp = "10.0.0.10";
-      containerIp6 = "fc00::10";
-      domain = "pkm.joshuabell.xyz";
-    };
-
-    # Kura — independent successor stack alongside legacy PKM. Its server,
-    # PowerSync service, Postgres, and private OCR sidecar share one isolated
-    # NixOS container; only the server and authenticated sync path are proxied.
-    kura = {
-      port = 3020;
-      syncPort = 8080;
-      ocrPort = 8990;
-      dataDir = "/var/lib/kura";
-      containerIp = "10.0.0.11";
-      containerIp6 = "fc00::11";
-      domain = "kura.joshuabell.xyz";
+    # Life — personal life server (Rust server serving its own web client) with
+    # its own PostgreSQL 18 inside one NixOS container. The application and its
+    # NixOS module come from the life repo's flake; this host supplies the
+    # container, the bind mounts and the vhost.
+    life = {
+      port = 8080;
+      uid = 917;
+      gid = 917;
+      dataDir = "/var/lib/life";
+      containerIp = "10.0.0.12";
+      containerIp6 = "fc00::12";
+      domain = "life.joshuabell.xyz";
     };
 
     litellm = {

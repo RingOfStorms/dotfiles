@@ -13,11 +13,10 @@ in
     ./dawarich.nix
     ./forgejo.nix
     ./immich.nix
+    ./life.nix
     ./matrix.nix
     ./paperless.nix
     ./opengist.nix
-    ./pkm.nix
-    # ./kura.nix
     ./penpot.nix
     ./vaultwarden.nix
     ./zitadel.nix

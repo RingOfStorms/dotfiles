@@ -38,9 +38,21 @@ import ../sec-agent.nix {
       softDepend = [ "litellm" ];
     };
 
-    kura_env_2026-09-05 = {
-      remotePath = "machines/high-trust/kura_env_2026-09-05";
-      softDepend = [ "container@kura" ];
+    # pgBackRest conf fragment for the Life container ([global]
+    # repo1-cipher-pass=...). Read by postgres inside the container; the host
+    # postgres group has the same gid (config.ids.gids.postgres).
+    life_pgbackrest_2026-09-30 = {
+      remotePath = "machines/high-trust/life_pgbackrest_2026-09-30";
+      group = "postgres";
+      mode = "0440";
+      softDepend = [ "container@life" ];
+    };
+
+    # EnvironmentFile for Life's nightly restic backup. systemd reads it as
+    # root before dropping to `life`, so the default root:root 0400 is right.
+    life_backup_env_2026-09-30 = {
+      remotePath = "machines/high-trust/life_backup_env_2026-09-30";
+      softDepend = [ "container@life" ];
     };
 
     sabnzbd_api_key_2026-07-15 = {

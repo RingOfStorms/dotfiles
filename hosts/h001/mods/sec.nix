@@ -142,9 +142,14 @@ in
         description = "LiteLLM EnvironmentFile (OpenRouter API key).";
         access = [ { type = "role"; value = "device_high_trust"; } ];
       };
-      "machines/high-trust/kura_env_2026-09-05" = {
+      "machines/high-trust/life_pgbackrest_2026-09-30" = {
         fields = [ "value" ];
-        description = "Kura EnvironmentFile (JWT master secret and PowerSync API token).";
+        description = "Life pgBackRest conf fragment ([global] repo1-cipher-pass=...).";
+        access = [ { type = "role"; value = "device_high_trust"; } ];
+      };
+      "machines/high-trust/life_backup_env_2026-09-30" = {
+        fields = [ "value" ];
+        description = "Life nightly backup EnvironmentFile (RESTIC_REPOSITORY, RESTIC_PASSWORD, offsite creds).";
         access = [ { type = "role"; value = "device_high_trust"; } ];
       };
       "machines/high-trust/sabnzbd_api_key_2026-07-15" = {

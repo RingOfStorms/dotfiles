@@ -227,58 +227,21 @@ in
           };
         };
         "pim.${domain}" = proxyToUpstream;
-        # ── pkm — personal knowledge system (h001 container) ──────────────
-        # Blob uploads are whole photos and audio recordings, and the sync
-        # protocol holds a long-lived, deliberately idle response open. The
-        # 1m body limit and 60s read timeout that proxyToUpstream inherits
-        # would reject the former with a 413 and sever the latter roughly
-        # once a minute, so this vhost is spelled out rather than shared.
-        "pkm.${domain}" = {
+        # ── life — Life server (h001 container) ─────────────────────────
+        # Spelled out rather than proxyToUpstream: blob uploads are up to
+        # 100 MiB and streamed (no request buffering), and downloads plus the
+        # coming live sync outlast the 60s default timeouts.
+        "life.${domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {
             proxyWebsockets = true;
             proxyPass = "http://${upstream}";
             extraConfig = ''
-              client_max_body_size 512m;
+              client_max_body_size 110m;
+              proxy_request_buffering off;
               proxy_read_timeout 1h;
               proxy_send_timeout 1h;
-            '';
-          };
-        };
-        # ── kura — successor knowledge system (h001 container) ──────────
-        "kura.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://${upstream}";
-            extraConfig = ''
-              client_max_body_size 500m;
-              proxy_read_timeout 1h;
-              proxy_send_timeout 1h;
-            '';
-          };
-          locations."= /powersync" = {
-            proxyWebsockets = true;
-            proxyPass = "http://${upstream}";
-            extraConfig = ''
-              proxy_buffering off;
-              proxy_cache off;
-              chunked_transfer_encoding on;
-              proxy_read_timeout 86400s;
-              proxy_send_timeout 86400s;
-            '';
-          };
-          locations."/powersync/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://${upstream}";
-            extraConfig = ''
-              proxy_buffering off;
-              proxy_cache off;
-              chunked_transfer_encoding on;
-              proxy_read_timeout 86400s;
-              proxy_send_timeout 86400s;
             '';
           };
         };
