@@ -71,6 +71,8 @@ resume_track() {
 declare -A ps_children=() ps_comm=()
 load_ps() {
 	local pid ppid comm
+	ps_children=()
+	ps_comm=()
 	while read -r pid ppid comm; do
 		ps_children[$ppid]+="$pid "
 		ps_comm[$pid]=$comm
@@ -153,7 +155,7 @@ cmd_save() (
 # ~15s) for each to reach a shell. Mode `auto` runs the resume command;
 # `prompt` only types it so you can press Enter (or not).
 cmd_restore() {
-	local resume mode s wi pi file target cmd i line rt ppid shell
+	local resume mode s wi pi file target cmd i line rt ppid shell r
 	rt=$(runtime_dir)
 	if [ ! -r "$resume_file" ]; then rm -f "$rt/restoring"; return 0; fi
 	resume=$(opt @tmux-agents-resume-command 'omp --resume=')
@@ -167,7 +169,8 @@ cmd_restore() {
 		line="$resume$(printf '%q' "$file")"
 		# A manual restore can leave existing agent panes untouched.
 		ppid=$(tmux display-message -p -t "$target" '#{pane_pid}' 2>/dev/null) || continue
-		session_for_pane "$ppid" && continue
+		session_for_pane "$ppid" && r=0 || r=$?
+		[ "$r" = 2 ] || continue # unresolved agents are still running agents
 		(
 			for ((i = 0; i < 30; i++)); do
 				cmd=$(tmux display-message -p -t "$target" '#{pane_current_command}' 2>/dev/null) || exit 0

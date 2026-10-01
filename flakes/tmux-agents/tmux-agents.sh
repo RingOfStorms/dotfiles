@@ -247,7 +247,7 @@ git_info() {
 
 tilde() { REPLY=${1/#"$HOME"/\~}; }
 
-# Rows: stable ID, pane target (empty for headings), display. Assign an entire
+# Rows: stable ID, first available pane target, display. Assign an entire
 # session to its most represented Git repo; first pane wins equal counts.
 CUR_POS=1
 cmd_rows() {
@@ -313,29 +313,28 @@ cmd_rows() {
 			sortable+="1${TAB}${s}${TAB}-${TAB}0${TAB}${s}"$'\n'
 		fi
 	done
-	local idx=0 prev="" group _name _main row indent
+	local idx=0 prev="" group _name _main row first
 	while IFS=$TAB read -r group _name repo _main s; do
 		[ -n "$s" ] || continue
+		first=${s_panes[$s]%% *}
 		if [ "$group" = 0 ]; then
+			row=$'\033[1;34m'"${repo_name[$repo]}"$'\033[0m - \033[1;35m'"$s"$'\033[0m  \033[2;37m['"${s_branch[$s]}"$']\033[0m'
+			[ "${s_main[$s]}" = 1 ] && row+=$' \033[2mworktree\033[0m'
 			if [ "$repo" != "$prev" ]; then
 				prev=$repo
 				tilde "${repo_root[$repo]}"
-				printf 'h:%s\t-\t\033[1;34m%s\033[0m  \033[2m%s\033[0m\n' "$repo" "${repo_name[$repo]}" "$REPLY"
-				idx=$((idx + 1))
+				row+=$'  \033[2m'"$REPLY"$'\033[0m'
 			fi
-			row="  $(glyph "${s_rank[$s]}") $s"$'  \033[36m['"${s_branch[$s]}"$']\033[0m'
-			[ "${s_main[$s]}" = 1 ] && row+=$' \033[2mworktree\033[0m'
-			indent="      "
 		else
 			tilde "${s_path[$s]}"
 			row=$'\033[1;35m'"$s"$'\033[0m  \033[2m'"$REPLY"$'\033[0m'
-			indent="  "
 		fi
-		printf 's:%s\t-\t%s\n' "$s" "$row"
+		if [ "${s_rank[$s]}" -gt 0 ]; then row+=" $(glyph "${s_rank[$s]}")"; fi
+		printf 's:%s\t%s\t%s\n' "$s" "$first" "$row"
 		idx=$((idx + 1))
 		# shellcheck disable=SC2086 # pane IDs contain no whitespace
 		for pane in ${s_panes[$s]}; do
-			printf 'p:%s\t%s\t%s%s %s > %s > %s\n' "$pane" "$pane" "$indent" "$(glyph "${p_rank[$pane]}")" "$s" "${p_window[$pane]}" "${p_name[$pane]}"
+			printf 'p:%s\t%s\t  %s %s > %s > %s\n' "$pane" "$pane" "$(glyph "${p_rank[$pane]}")" "$s" "${p_window[$pane]}" "${p_name[$pane]}"
 			idx=$((idx + 1))
 			[ "$pane" = "$current" ] && CUR_POS=$idx
 		done
@@ -350,7 +349,6 @@ cmd_preview() {
 }
 
 # Navigator ctrl-x: confirm, then kill the session heading or individual pane.
-# Repo headers are left alone.
 cmd_kill() {
 	local id=$1 rows=$2 kind target what ans
 	kind=${id%%:*} target=${id#*:}
@@ -375,13 +373,31 @@ cmd_kill() {
 	cmd_rows >"$rows.tmp" && mv -f "$rows.tmp" "$rows"
 }
 
+# Run only after the navigator fzf exits, so two readers never share the tty.
+cmd_create() {
+	local target=$1 rows=$2 name path error
+	name=$(fzf --phony --layout=reverse --no-info --no-preview \
+		--prompt='new session> ' --header='Enter: create   Esc: cancel' \
+		--bind 'enter:print-query+abort,esc:abort,ctrl-c:abort' </dev/null) || true
+	[ -n "$name" ] || return 0
+	path=$(tmux display-message -p -t "$target" '#{pane_current_path}' 2>/dev/null) || path=$PWD
+	if ! error=$(tmux new-session -d -s "$name" -c "$path" 2>&1); then
+		printf '\n%s\nPress any key to return…' "$error" >/dev/tty
+		read -r -n 1 </dev/tty || true
+		return 0
+	fi
+	git_cache=()
+	cmd_rows >"$rows.tmp" && mv -f "$rows.tmp" "$rows"
+}
+
 # Live view: fzf listens on a socket; a background loop rebuilds the rows and
 # pushes a reload only when they changed, so typing and the cursor are left
 # alone. --track with --id-nth keeps the cursor on the same row across reloads.
 cmd_navigator() {
-	local rt sock rows sel self loop interval next
+	local rt sock rows sel self loop interval next action target current
 	self=$(command -v "$0" || printf '%s' "$0")
 	rt=$(runtime_dir)
+	current=$(tmux display-message -p '#{pane_id}')
 	sock="$rt/nav-$$.sock"
 	rows="$rt/nav-$$.rows"
 	interval=$(opt @tmux-agents-navigator-interval 1)
@@ -400,17 +416,32 @@ cmd_navigator() {
 		done
 	) &
 	loop=$!
+	while :; do
+		sel=""
 	sel=$(fzf --ansi --no-sort --layout=reverse --delimiter="$TAB" --with-nth=3.. \
 		--track --id-nth=1 --listen="$sock" \
 		--prompt='agents> ' --info=inline-right \
-		--cycle --bind 'ctrl-j:down,ctrl-k:up' \
-		--bind 'enter:transform:case {1} in p:*) echo accept ;; *) echo ignore ;; esac' \
-		--bind 'left-click:transform:case {1} in p:*) echo accept ;; *) echo ignore ;; esac' \
+		--cycle --bind 'ctrl-j:down,ctrl-k:up,ctrl-d:page-down,ctrl-u:page-up' \
+		--bind 'enter:accept,left-click:accept,ctrl-c:print(create)+accept' \
 		--bind "ctrl-x:execute($self kill {1} $rows)+reload-sync(cat $rows)" \
-		--header 'enter/click: switch pane   ctrl-x: kill session/pane' \
+		--header 'enter/click: switch   ctrl-c: create   ctrl-x: kill   ctrl-d/u: page' \
 		--bind "load:pos($CUR_POS)+unbind(load)" \
 		--preview "$self preview {2}" --preview-window='right,55%,border-left,<80(down,40%,border-top)' \
-		<"$rows") || sel=""
+		<"$rows") || true
+		action=${sel%%$'\n'*}
+		[ "$action" = create ] || break
+		target=$current
+		if [[ $sel == *$'\n'* ]]; then
+			sel=${sel#*$'\n'}
+			if [[ $sel == *"$TAB"* ]]; then
+				target=${sel#*"$TAB"}
+				target=${target%%"$TAB"*}
+			fi
+		fi
+		cmd_create "$target" "$rows"
+		git_cache=()
+		cmd_rows >"$rows"
+	done
 	kill "$loop" 2>/dev/null
 	rm -f "$rows" "$rows.tmp" "$sock"
 	[ -n "$sel" ] || return 0
@@ -431,13 +462,14 @@ tick) cmd_tick "${2:-}" ;;
 rows) cmd_rows ;;
 preview) cmd_preview "${2:?target}" ;;
 kill) cmd_kill "${2:?id}" "${3:?rows file}" ;;
+create) cmd_create "${2:?target}" "${3:?rows file}" ;;
 navigator) cmd_navigator ;;
 save) if resume_on; then cmd_save; fi ;;
 restore) if resume_on; then cmd_restore; fi ;;
 restore-begin) if resume_on; then cmd_restore_begin; fi ;;
 resume-init) cmd_resume_init ;;
 *)
-	printf 'usage: tmux-agents {tick [quiet]|navigator|rows|preview TARGET|kill ID ROWS|save|restore|restore-begin|resume-init}\n' >&2
+	printf 'usage: tmux-agents {tick [quiet]|navigator|rows|preview TARGET|kill ID ROWS|create TARGET ROWS|save|restore|restore-begin|resume-init}\n' >&2
 	exit 2
 	;;
 esac
