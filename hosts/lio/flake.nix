@@ -1,9 +1,4 @@
 {
-  nixConfig = {
-    extra-substituters = [ "https://herdr.cachix.org" ];
-    extra-trusted-public-keys = [ "herdr.cachix.org-1:3nH7IStRsS0ASfdonA0DCRR2ZrSCeWitZ7Kwew0cR4I=" ];
-  };
-
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     home-manager.url = "github:rycee/home-manager/release-26.05";
@@ -153,8 +148,6 @@
           (import ./containers.nix { inherit inputs; })
           ./vms.nix
           ./nono.nix
-          ./homepage-dashboard.nix
-          ./nginx.nix
           ({ pkgs, ... }: {
             environment.systemPackages = with pkgs; [ vlang pavucontrol nfs-utils jellyfin-media-player element-desktop vesktop discord ];
             services.flatpak.packages = [ "org.signal.Signal" "com.spotify.Client" "com.bitwarden.desktop" "org.openscad.OpenSCAD" "org.blender.Blender" ];

@@ -54,7 +54,8 @@
   swapDevices = [
     {
       device = "/.swapfile";
-      size = 64 * 1024; # 64GB
+      size = 16 * 1024; # 16GB, overflow behind zram
+      priority = 0;
     }
   ];
 

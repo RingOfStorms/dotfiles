@@ -57,21 +57,5 @@ in
     # };
 
     # virtualisation.oci-containers.backend = "docker";
-
-    services.nginx = {
-      enable = true;
-      recommendedGzipSettings = true;
-      recommendedOptimisation = true;
-      recommendedProxySettings = true;
-      recommendedTlsSettings = true;
-    };
-
-    # NOTE: configuration.nix uses `lib.mkForce` on `allowedTCPPorts` to
-    # restrict SSH to tailnet+LAN, which replaces (not merges) this list.
-    # If you add a port here, also add it to the mkForce list there.
-    networking.firewall.allowedTCPPorts = [
-      80
-      443
-    ];
   };
 }

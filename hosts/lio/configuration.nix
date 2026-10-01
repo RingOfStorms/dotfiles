@@ -14,13 +14,16 @@ in
   # of whether the LAN is reached via wired or Wi-Fi.
   #
   # `allowedTCPPorts` has list-merge semantics across modules, and `mkForce`
-  # replaces *all* contributions — so we have to re-list everything else
-  # this host opens globally (currently just nginx in containers.nix).
-  networking.firewall.allowedTCPPorts = lib.mkForce [ 80 443 ];
+  # replaces *all* contributions — so any port this host should open
+  # globally must be re-listed here (currently none).
+  networking.firewall.allowedTCPPorts = lib.mkForce [ ];
   networking.firewall.interfaces."tailscale0".allowedTCPPorts = [ 22 ];
   networking.firewall.extraInputRules = ''
-    ip saddr 10.12.14.0/10 tcp dport 22 accept
+    ip saddr 10.12.14.0/24 tcp dport 22 accept
   '';
+
+  # No root SSH on lio (overrides the shared hardening module).
+  services.openssh.settings.PermitRootLogin = lib.mkForce "no";
 
   hardware.enableAllFirmware = true;
 
@@ -32,13 +35,34 @@ in
   # System76
   hardware.system76.enableAll = true;
 
-  # Hardware watchdog for freeze detection and recovery
-  boot.kernelParams = [ "nmi_watchdog=1" ];
-  systemd.settings.Manager = {
-    RuntimeWatchdogSec = "30s";      # Reboot if system hangs for 30 seconds
-    RebootWatchdogSec = "10m";       # Timeout for reboot to complete
-    KExecWatchdogSec = "10m";        # Timeout for kexec to complete
+  # Memory: compressed RAM swap first, small disk swapfile (hardware-configuration.nix) as overflow.
+  zramSwap = {
+    enable = true;
+    algorithm = "zstd";
+    memoryPercent = 50;
+    priority = 100;
   };
+  boot.kernel.sysctl = {
+    # zram is cheap to swap to; tuned per the Fedora/Pop!_OS zram defaults
+    "vm.swappiness" = 180;
+    "vm.page-cluster" = 0;
+    "vm.watermark_boost_factor" = 0;
+    "vm.watermark_scale_factor" = 125;
+    # Start writeback at 256MiB dirty, throttle writers at 1GiB
+    "vm.dirty_background_bytes" = 268435456;
+    "vm.dirty_bytes" = 1073741824;
+  };
+  # MGLRU thrashing protection: keep the last 1s of working set resident
+  systemd.tmpfiles.rules = [ "w- /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 1000" ];
+  systemd.oomd = {
+    enableRootSlice = true;
+    enableSystemSlice = true;
+    enableUserSlices = true;
+  };
+
+  # Deduplicate the store on a timer instead of inline during every build
+  nix.settings.auto-optimise-store = lib.mkForce false;
+  nix.optimise.automatic = true;
 
   # ── Meshtastic / serial device access ──────────────────────────────────────
   # CH340/CH341 USB-to-serial (used by ThinkNode M5, many ESP32 boards, etc.)
@@ -51,19 +75,11 @@ in
   '';
 
   services = {
-    # https://discourse.nixos.org/t/very-high-fan-noises-on-nixos-using-a-system76-thelio/23875/10
-    # Fixes insane jet speed fan noise
+    # system76-power (via hardware.system76.enableAll) manages power profiles;
+    # it conflicts with power-profiles-daemon. The earlier jet-engine fan fix
+    # (https://discourse.nixos.org/t/very-high-fan-noises-on-nixos-using-a-system76-thelio/23875/10)
+    # used TLP; if fans get loud, run `system76-power profile balanced`.
     power-profiles-daemon.enable = false;
-    tlp = {
-      enable = true;
-      # settings = {
-      #   CPU_BOOST_ON_AC = 1;
-      #   CPU_BOOST_ON_BAT = 0;
-      #   CPU_SCALING_GOVERNOR_ON_AC = "performance";
-      #   CPU_SCALING_GOVERNOR_ON_BAT = "powersave";
-      #   STOP_CHARGE_THRESH_BAT0 = 95;
-      # };
-    };
 
     # Binary cache server (drop-in nix-serve replacement)
     nix-serve = {
@@ -75,10 +91,6 @@ in
     };
   };
 
-  # Also allow this key to work for root user, this will let us use this as a remote builder easier
-  users.users.root.openssh.authorizedKeys.keys = [
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15"
-  ];
   nix.distributedBuilds = true;
   # Allow emulation of aarch64-linux binaries for cross compiling
   boot.binfmt.emulatedSystems = [ "aarch64-linux" ];

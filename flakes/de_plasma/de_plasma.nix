@@ -96,10 +96,6 @@ in
           type = types.bool;
           default = false;
         };
-        useAmdvlk = mkOption {
-          type = types.bool;
-          default = false;
-        };
       };
       intel = {
         enable = mkOption {
@@ -251,7 +247,6 @@ in
         libva-vdpau-driver
         libvdpau-va-gl
       ];
-      environment.systemPackages = optionals cfg.gpu.amd.useAmdvlk [ pkgs.amdvlk ];
     })
 
     (mkIf cfg.gpu.intel.enable {
