@@ -13,6 +13,7 @@
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
     containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers";
     omp-flake.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/omp";
+    tmux-agents.url = "path:../../flakes/tmux-agents";
     nono.url = "github:always-further/nono/6118b79aeda1365da213d85457b4d3cf1201d575";
     nono.flake = false;
     rust-overlay.url = "github:oxalica/rust-overlay/26a71e661c47bd21a05d06fec749f3f7c75e9d12";
@@ -43,6 +44,7 @@
           inputs.common.homeManagerModules.foot
           inputs.common.homeManagerModules.launcher_rofi
           inputs.common.homeManagerModules.slicer
+          inputs.tmux-agents.homeManagerModules.defaultEnabled
           ({ ... }: {
             programs.ssh.matchBlocks = {
               "joe_" = { hostname = fleet.hosts.joe.lanIp; user = fleet.hosts.joe.user; };
