@@ -1,4 +1,4 @@
-# Shared by the interactive Bash/Zsh functions and Herdr's Bash event hook.
+# Shared worktree helpers for branch, branchdel, link_ignored and branching_setup.
 # Use builtin cd internally: zoxide's cd function treats -P as a search term.
 _branch__repo_root() {
   local common_dir repo_root
@@ -30,11 +30,8 @@ _branch__setup_worktree() {
   }
   git_dir=$(git -C "$wt_path" rev-parse --path-format=absolute --git-dir 2>/dev/null) || return 1
 
-  # A Herdr event hook can race the interactive branch command. Lock and mark
-  # the per-worktree Git dir, not the checkout, so both entrypoints agree.
+  # Mark the per-worktree Git dir, not the checkout, so setup runs once.
   (
-    exec 9>"$git_dir/post-setup.lock" || return 1
-    flock -x 9 || return 1
     [ ! -f "$git_dir/post-setup.done" ] || return 0
 
     # Copy wins when a name is configured both ways. Neither operation
@@ -72,52 +69,4 @@ _branch__setup_worktree() {
     fi
     : > "$git_dir/post-setup.done"
   )
-}
-
-_branch__herdr_open() {
-  local repo_dir=$1 wt_path=$2 output
-  command -v herdr >/dev/null 2>&1 || return 0
-  # --cwd resolves the main checkout; Herdr worktree.open creates its parent
-  # workspace if absent and groups this already-existing checkout with it.
-  if ! output=$(herdr worktree open --cwd "$repo_dir" --path "$wt_path" --no-focus 2>&1); then
-    printf 'Herdr could not open worktree %s: %s\n' "$wt_path" "$output" >&2
-  fi
-}
-
-_branch__herdr_close() {
-  local repo_dir=$1 wt_path=$2 output workspace_id details
-  command -v herdr >/dev/null 2>&1 || return 0
-  command -v jq >/dev/null 2>&1 || {
-    printf 'Herdr registration for %s was not closed: jq unavailable\n' "$wt_path" >&2
-    return 0
-  }
-  if ! output=$(herdr workspace list 2>&1); then
-    printf 'Herdr registrations could not be listed: %s\n' "$output" >&2
-    return 0
-  fi
-  if ! workspace_id=$(printf '%s\n' "$output" | jq -er --arg path "$wt_path" --arg root "$repo_dir" '
-      [.result.workspaces[] | select(.worktree.is_linked_worktree == true
-        and .worktree.checkout_path == $path and .worktree.repo_root == $root)
-        | .workspace_id] | if length == 0 then "" elif length == 1 then .[0] else error("ambiguous worktree workspace") end
-    '); then
-    printf 'Herdr workspace listing for %s was invalid or ambiguous\n' "$wt_path" >&2
-    return 0
-  fi
-  [ -n "$workspace_id" ] || return 0
-  if ! details=$(herdr workspace get "$workspace_id" 2>&1); then
-    printf 'Herdr workspace %s could not be checked: %s\n' "$workspace_id" "$details" >&2
-    return 0
-  fi
-  # Recheck the exact identity before closing: workspace close is state-only,
-  # but it must never close the main root or an unrelated workspace.
-  if ! printf '%s\n' "$details" | jq -e --arg path "$wt_path" --arg root "$repo_dir" --arg id "$workspace_id" '
-      .result.workspace | .workspace_id == $id and .worktree.is_linked_worktree == true
-        and .worktree.checkout_path == $path and .worktree.repo_root == $root
-    ' >/dev/null; then
-    printf 'Herdr workspace %s no longer matches removed worktree %s; not closing\n' "$workspace_id" "$wt_path" >&2
-    return 0
-  fi
-  if ! output=$(herdr workspace close "$workspace_id" 2>&1); then
-    printf 'Herdr workspace %s could not be closed: %s\n' "$workspace_id" "$output" >&2
-  fi
 }
