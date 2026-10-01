@@ -20,5 +20,6 @@
     # ./vault.nix
     ./puzzles.nix
     ./etebase.nix
+    ./restic-backup.nix
   ];
 }

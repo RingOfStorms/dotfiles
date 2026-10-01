@@ -152,6 +152,11 @@ in
         description = "Life nightly backup EnvironmentFile (RESTIC_REPOSITORY, RESTIC_PASSWORD, offsite creds).";
         access = [ { type = "role"; value = "device_high_trust"; } ];
       };
+      "machines/high-trust/restic_h001_env_2026-10-01" = {
+        fields = [ "value" ];
+        description = "h001 restic EnvironmentFile (RESTIC_REPOSITORY, RESTIC_PASSWORD, offsite backend creds).";
+        access = [ { type = "role"; value = "device_high_trust"; } ];
+      };
       "machines/high-trust/sabnzbd_api_key_2026-07-15" = {
         fields = [ "api-key" ];
         description = "Sabnzbd API key (nixarr).";

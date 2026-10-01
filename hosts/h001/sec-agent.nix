@@ -55,6 +55,13 @@ import ../sec-agent.nix {
       softDepend = [ "container@life" ];
     };
 
+    # EnvironmentFile for h001's restic backup (mods/restic-backup.nix):
+    # RESTIC_REPOSITORY, RESTIC_PASSWORD and the backend credentials.
+    restic_h001_env_2026-10-01 = {
+      remotePath = "machines/high-trust/restic_h001_env_2026-10-01";
+      configChanges.services.restic.backups.h001.environmentFile = "$SECRET_PATH";
+    };
+
     sabnzbd_api_key_2026-07-15 = {
       remotePath = "machines/high-trust/sabnzbd_api_key_2026-07-15";
       field = "api-key";
