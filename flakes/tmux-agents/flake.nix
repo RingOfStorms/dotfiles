@@ -28,6 +28,7 @@
               git
               libnotify
               procps
+              sqlite
               util-linux
             ];
             text = builtins.replaceStrings [ "@resume_lib@" ] [ "${./resume.sh}" ] (
@@ -131,8 +132,8 @@
                 type = lib.types.bool;
                 default = true;
                 description = ''
-                  tmux-resurrect integration (resume.sh): track which omp session each agent
-                  pane runs and resume it after a restore. Off removes the resurrect hooks.
+                  tmux-resurrect integration (resume.sh): track which omp or opencode session
+                  each agent pane runs and resume it after a restore. Off removes the resurrect hooks.
                 '';
               };
               mode = lib.mkOption {
@@ -146,6 +147,16 @@
                   "prompt" only types it at the shell prompt for you to confirm.
                 '';
               };
+              ompCommand = lib.mkOption {
+                type = lib.types.str;
+                default = "omp --resume=";
+                description = "Command prefix that resumes an omp session; the session file path is appended.";
+              };
+              opencodeCommand = lib.mkOption {
+                type = lib.types.str;
+                default = "opencode -s ";
+                description = "Command prefix that resumes an opencode session; the session ID is appended.";
+              };
             };
           };
 
@@ -154,6 +165,8 @@
             xdg.configFile."tmux/tmux.conf".text = lib.mkBefore ''
               set -g @tmux-agents-resume '${onOff cfg.resume.enable}'
               set -g @tmux-agents-resume-mode '${cfg.resume.mode}'
+              set -g @tmux-agents-resume-command '${cfg.resume.ompCommand}'
+              set -g @tmux-agents-resume-command-opencode '${cfg.resume.opencodeCommand}'
               run-shell '${plugin}/share/tmux-plugins/tmux-agents/bin/tmux-agents resume-init'
             '';
             # mkAfter: must load after catppuccin (formats) and resurrect.
@@ -172,6 +185,8 @@
                   set -g @tmux-agents-sound-input-volume '${toString n.inputVolume}'
                   set -g @tmux-agents-resume '${onOff cfg.resume.enable}'
                   set -g @tmux-agents-resume-mode '${cfg.resume.mode}'
+                  set -g @tmux-agents-resume-command '${cfg.resume.ompCommand}'
+                  set -g @tmux-agents-resume-command-opencode '${cfg.resume.opencodeCommand}'
                 '';
               }
             ];

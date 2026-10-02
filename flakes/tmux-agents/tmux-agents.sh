@@ -2,9 +2,12 @@
 # Subcommands: tick [quiet] | navigator | rows | preview <target> | kill <id> <rows> | save | restore
 # Resume (save/restore) lives in resume.sh, sourced below.
 #
-# Detection is external only: coding agents announce their state through the
-# terminal title (`#{pane_title}`). omp writes `π <spinner> label` while
-# working, `π > label` when idle, and `π ! label` when blocked on the user.
+# Detection is external only. omp announces its state through the terminal
+# title (`#{pane_title}`): `π <spinner> label` while working, `π > label` when
+# idle, and `π ! label` when blocked on the user. opencode's title (`OpenCode`
+# or `OC | <session>`) names the agent but not its state, and survives in
+# restored/stale panes, so it only counts while the pane runs opencode (or the
+# nono sandbox); its state is read from the bottom rows of the screen.
 
 TAB=$'\t'
 
@@ -19,16 +22,61 @@ opt() {
 field() { printf '#{?%s,#{%s},-}' "$1" "$1"; }
 undash() { [ "$1" = - ] && REPLY="" || REPLY=$1; }
 
-# Sets REPLY to none|idle|working|input. One function per harness keeps room
-# for title conventions other than omp's.
+# Sets REPLY to omp|opencode or empty (not an agent) from a pane's title and
+# #{pane_current_command}; no tmux calls. resume.sh calls
+# `agent_kind "$title" "$cmd"` too, so keep this name and contract stable.
+agent_kind() {
+	case "$1" in
+	'π' | 'π:'* | 'π '?*) REPLY=omp ;;
+	OpenCode | 'OC | '*)
+		case "$2" in
+		opencode | nono) REPLY=opencode ;;
+		*) REPLY="" ;;
+		esac
+		;;
+	*) REPLY="" ;;
+	esac
+}
+
+# classify KIND TITLE PANE: sets REPLY to none|idle|working|input.
 classify() {
+	case "$1" in
+	omp) classify_omp "$2" ;;
+	opencode) classify_opencode "$3" ;;
+	*) REPLY=none ;;
+	esac
+}
+
+classify_omp() {
 	case "$1" in
 	'π >'*) REPLY=idle ;;
 	'π !'*) REPLY=input ;;
 	'π' | 'π:'*) REPLY=idle ;; # title state disabled: presence only
-	'π '?*) REPLY=working ;;
-	*) REPLY=none ;;
+	*) REPLY=working ;;
 	esac
+}
+
+# Reads the last 4 non-blank screen rows. Input: a permission prompt's buttons
+# (wrapped onto their own row on narrow panes) or a question prompt's footer,
+# both inside the `┃` dialog border. Working: the spinner footer is the last
+# row. The anchors keep chat text quoting these markers (indented, no `┃`) and
+# the composer from matching.
+classify_opencode() {
+	local line re_input re_work n
+	local -a lines=()
+	re_input='^ +┃ +(Allow once +Always allow +Reject|.*enter submit +esc (dismiss|close))'
+	re_work='^ +((■|⬝){8}|\[⋯\]) esc (again to )?interrupt'
+	while IFS= read -r line; do
+		[[ $line == *[![:space:]]* ]] && lines+=("$line")
+	done < <(tmux capture-pane -p -t "$1" 2>/dev/null)
+	REPLY=idle
+	n=${#lines[@]}
+	[ "$n" -gt 0 ] || return 0
+	for line in "${lines[@]:n > 4 ? n - 4 : 0}"; do
+		if [[ $line =~ $re_input ]]; then REPLY=input && return 0; fi
+	done
+	if [[ ${lines[-1]} =~ $re_work ]]; then REPLY=working; fi
+	return 0
 }
 
 # Rank used for roll-ups: input > working > done (idle, unseen) > idle > none.
@@ -64,11 +112,19 @@ runtime_dir() {
 	printf '%s' "$dir"
 }
 
+# agent_label KIND TITLE: the agent's session label from its title.
 agent_label() {
-	local l=${1#π}
-	l=${l# }
-	l=${l#?} # state glyph: spinner frame, '>', '!' or ':'
-	REPLY=${l# }
+	local l
+	case "$1" in
+	omp)
+		l=${2#π}
+		l=${l# }
+		l=${l#?} # state glyph: spinner frame, '>', '!' or ':'
+		REPLY=${l# }
+		;;
+	opencode) if [ "$2" = OpenCode ]; then REPLY=opencode; else REPLY=${2#'OC | '}; fi ;;
+	*) REPLY="" ;;
+	esac
 }
 
 # Events are queued during a tick and delivered once at the end, so several
@@ -142,19 +198,21 @@ cmd_tick() {
 	fi
 
 	local fmt
-	fmt="#{pane_id}${TAB}#{window_id}${TAB}#{session_name}${TAB}#{window_index}${TAB}$(field window_name)${TAB}#{pane_active}${TAB}#{window_active}${TAB}#{session_attached}${TAB}#{window_zoomed_flag}${TAB}$(field @agent_state)${TAB}$(field @agent_unseen)${TAB}$(field @agent_win)${TAB}#{pane_title}"
+	fmt="#{pane_id}${TAB}#{window_id}${TAB}#{session_name}${TAB}#{window_index}${TAB}$(field window_name)${TAB}#{pane_active}${TAB}#{window_active}${TAB}#{session_attached}${TAB}#{window_zoomed_flag}${TAB}$(field @agent_state)${TAB}$(field @agent_unseen)${TAB}$(field @agent_win)${TAB}$(field pane_current_command)${TAB}#{pane_title}"
 
 	local -A win_want=() win_have=()
 	local -a cmds=()
 	local n_work=0 n_input=0 n_done=0 agents_sig=""
-	local pane win sess widx wname pact wact attached zoom st unseen walert title cur seen new_unseen
-	while IFS=$TAB read -r pane win sess widx wname pact wact attached zoom st unseen walert title; do
+	local pane win sess widx wname pact wact attached zoom st unseen walert command title kind label cur seen new_unseen
+	while IFS=$TAB read -r pane win sess widx wname pact wact attached zoom st unseen walert command title; do
 		undash "$st" && st=$REPLY
 		undash "$unseen" && unseen=$REPLY
 		undash "$walert" && walert=$REPLY
 		win_have[$win]=$walert
 		[ -n "${win_want[$win]+x}" ] || win_want[$win]=""
-		classify "$title" && cur=$REPLY
+		agent_kind "$title" "$command" && kind=$REPLY
+		classify "$kind" "$title" "$pane" && cur=$REPLY
+		agent_label "$kind" "$title" && label=$REPLY
 
 		seen=0
 		if [ "$attached" != 0 ] && [ "$wact" = 1 ] && { [ "$zoom" = 0 ] || [ "$pact" = 1 ]; }; then
@@ -162,20 +220,19 @@ cmd_tick() {
 		fi
 
 		new_unseen=$unseen
-		agent_label "$title"
-		if [ "$cur" != none ]; then agents_sig+="$pane=$REPLY;"; fi
+		if [ -n "$kind" ]; then agents_sig+="$pane=$label;"; fi
 		case "$cur" in
 		none | working) new_unseen="" ;;
 		idle)
 			if [ "$st" = working ] && [ "$seen" = 0 ]; then
 				new_unseen=1
-				notify "Agent finished" "$sess:$widx $wname — $REPLY" "done"
+				notify "Agent finished" "$sess:$widx $wname — $label" "done"
 			fi
 			;;
 		input)
 			if [ "$st" != input ] && [ "$seen" = 0 ]; then
 				new_unseen=1
-				notify "Agent needs input" "$sess:$widx $wname — $REPLY" input
+				notify "Agent needs input" "$sess:$widx $wname — $label" input
 			fi
 			;;
 		esac
@@ -271,8 +328,8 @@ cmd_rows() {
 		fi
 		s_panes[$s]+="$pane "
 		p_window[$pane]="$wi:$wn"
-		classify "$title"
-		if [ "$REPLY" != none ]; then agent_label "$title"; else REPLY=$command; fi
+		agent_kind "$title" "$command"
+		if [ -n "$REPLY" ]; then agent_label "$REPLY" "$title"; else REPLY=$command; fi
 		p_name[$pane]="$pi:$REPLY"
 		rank "$st" "$unseen"
 		p_rank[$pane]=$REPLY
