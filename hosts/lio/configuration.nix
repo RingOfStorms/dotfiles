@@ -102,7 +102,7 @@ in
     appimage-run
     nodejs_24
     foot
-    vlc
+    mpv
     firefox
     google-chrome
   ];
