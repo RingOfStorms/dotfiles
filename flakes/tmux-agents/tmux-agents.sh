@@ -304,36 +304,50 @@ git_info() {
 
 tilde() { REPLY=${1/#"$HOME"/\~}; }
 
-# Rows: stable ID, first available pane target, display. Assign an entire
-# session to its most represented Git repo; first pane wins equal counts.
+# Rows: stable ID, target pane, display. Tree: Git project (blue) > session
+# (purple, AI label, branch, pane count) > agent panes only. A session belongs
+# to its most represented Git repo; first pane wins equal counts. Sessions
+# outside Git are top-level. Session/project rows target the session's active
+# pane.
 CUR_POS=1
 cmd_rows() {
 	local current fmt
 	current=$(tmux display-message -p '#{pane_id}' 2>/dev/null || true)
-	fmt="#{session_name}${TAB}#{window_index}${TAB}$(field window_name)${TAB}#{pane_id}${TAB}#{pane_index}${TAB}$(field pane_current_command)${TAB}$(field @agent_state)${TAB}$(field @agent_unseen)${TAB}$(field pane_current_path)${TAB}#{pane_title}"
+	fmt="#{session_name}${TAB}#{window_index}${TAB}$(field window_name)${TAB}#{pane_id}${TAB}#{?#{&&:#{window_active},#{pane_active}},1,0}${TAB}$(field pane_current_command)${TAB}$(field @agent_state)${TAB}$(field @agent_unseen)${TAB}$(field pane_current_path)${TAB}$(field @session_ai_name)${TAB}#{pane_title}"
 	local -a sessions=()
-	local -A s_panes=() s_path=() s_rank=() counts=() s_repo=() s_branch=() s_main=()
+	local -A s_count=() s_agents=() s_active=() s_path=() s_rank=() s_ai=() counts=() s_repo=() s_branch=() s_main=()
 	local -A s_repos=() branches=() worktrees=()
-	local -A p_window=() p_name=() p_rank=() repo_name=() repo_root=()
-	local s wi wn pane pi command st unseen path title common top branch main repo key
-	while IFS=$TAB read -r s wi wn pane pi command st unseen path title; do
+	local -A p_label=() p_rank=() repo_name=() repo_root=()
+	local s wi wn pane act command st unseen path ai title common top branch main repo key label
+	while IFS=$TAB read -r s wi wn pane act command st unseen path ai title; do
 		undash "$path" && path=$REPLY
 		undash "$st" && st=$REPLY
 		undash "$unseen" && unseen=$REPLY
-		if [ -z "${s_panes[$s]+x}" ]; then
+		if [ -z "${s_count[$s]+x}" ]; then
 			sessions+=("$s")
-			s_panes[$s]=""
+			s_count[$s]=0
+			s_agents[$s]=""
+			s_active[$s]=$pane
 			s_path[$s]=$path
 			s_rank[$s]=0
+			undash "$ai" && s_ai[$s]=$REPLY
 		fi
-		s_panes[$s]+="$pane "
-		p_window[$pane]="$wi:$wn"
+		s_count[$s]=$((s_count[$s] + 1))
+		if [ "$act" = 1 ]; then
+			s_active[$s]=$pane
+			s_path[$s]=$path
+		fi
 		agent_kind "$title" "$command"
-		if [ -n "$REPLY" ]; then agent_label "$REPLY" "$title"; else REPLY=$command; fi
-		p_name[$pane]="$pi:$REPLY"
-		rank "$st" "$unseen"
-		p_rank[$pane]=$REPLY
-		[ "$REPLY" -gt "${s_rank[$s]}" ] && s_rank[$s]=$REPLY
+		if [ -n "$REPLY" ]; then
+			agent_label "$REPLY" "$title"
+			label=$REPLY
+			undash "$wn"
+			p_label[$pane]="$label"$'  \033[2m('"$wi:$REPLY"$')\033[0m'
+			s_agents[$s]+="$pane "
+			rank "$st" "$unseen"
+			p_rank[$pane]=$REPLY
+			[ "$REPLY" -gt "${s_rank[$s]}" ] && s_rank[$s]=$REPLY
+		fi
 		git_info "$path"
 		[ -n "$REPLY" ] || continue
 		IFS=$TAB read -r common top branch <<<"$REPLY"
@@ -347,7 +361,7 @@ cmd_rows() {
 			branches[$key]=$branch
 			if [ "$top" = "$main" ]; then worktrees[$key]=0; else worktrees[$key]=1; fi
 		fi
-		counts[$key]=$(( ${counts[$key]:-0} + 1 ))
+		counts[$key]=$((${counts[$key]:-0} + 1))
 	done < <(tmux list-panes -a -F "$fmt")
 
 	local sortable="" best
@@ -370,28 +384,50 @@ cmd_rows() {
 			sortable+="1${TAB}${s}${TAB}-${TAB}0${TAB}${s}"$'\n'
 		fi
 	done
-	local idx=0 prev="" group _name _main row first
+	local idx=0 prev="" group _name _main row indent n leaf=0 label
+	# Nav-mode jump keys, one per leaf row (agent panes, and sessions without
+	# agent rows) in display order. Field 3 is the rendered 2-column label;
+	# the navigator hides it in search mode.
+	local -a jump=(1 2 3 4 5 6 7 8 9 q w e r t y u i o p)
+	jump_label() {
+		if [ -n "${jump[leaf]:-}" ]; then label=$'\033[1;33m'"${jump[leaf]^^}"$'\033[0m'; else label=" "; fi
+		leaf=$((leaf + 1))
+	}
 	while IFS=$TAB read -r group _name repo _main s; do
 		[ -n "$s" ] || continue
-		first=${s_panes[$s]%% *}
 		if [ "$group" = 0 ]; then
-			row=$'\033[1;34m'"${repo_name[$repo]}"$'\033[0m - \033[1;35m'"$s"$'\033[0m  \033[2;37m['"${s_branch[$s]}"$']\033[0m'
-			[ "${s_main[$s]}" = 1 ] && row+=$' \033[2mworktree\033[0m'
 			if [ "$repo" != "$prev" ]; then
 				prev=$repo
 				tilde "${repo_root[$repo]}"
-				row+=$'  \033[2m'"$REPLY"$'\033[0m'
+				printf 'r:%s\t%s\t \t\033[1;34m%s\033[0m  \033[2m%s\033[0m\n' "$repo" "${s_active[$s]}" "${repo_name[$repo]}" "$REPLY"
+				idx=$((idx + 1))
 			fi
+			indent="  "
+			row=$'  \033[1;35m'"$s"$'\033[0m'
+		else
+			indent=""
+			row=$'\033[1;35m'"$s"$'\033[0m'
+		fi
+		[ -n "${s_ai[$s]:-}" ] && row+="  ${s_ai[$s]}"
+		if [ "$group" = 0 ]; then
+			row+=$'  \033[2;37m['"${s_branch[$s]}"$']\033[0m'
+			[ "${s_main[$s]}" = 1 ] && row+=$' \033[2mworktree\033[0m'
 		else
 			tilde "${s_path[$s]}"
-			row=$'\033[1;35m'"$s"$'\033[0m  \033[2m'"$REPLY"$'\033[0m'
+			row+=$'  \033[2m'"$REPLY"$'\033[0m'
 		fi
+		n=${s_count[$s]}
+		if [ "$n" = 1 ]; then row+=$'  \033[2m(1 pane)\033[0m'; else row+=$'  \033[2m('"$n"$' panes)\033[0m'; fi
 		if [ "${s_rank[$s]}" -gt 0 ]; then row+=" $(glyph "${s_rank[$s]}")"; fi
-		printf 's:%s\t%s\t%s\n' "$s" "$first" "$row"
+		label=" "
+		[ -n "${s_agents[$s]}" ] || jump_label
+		printf 's:%s\t%s\t%s\t%s\n' "$s" "${s_active[$s]}" "$label" "$row"
 		idx=$((idx + 1))
+		[ "${s_active[$s]}" = "$current" ] && CUR_POS=$idx
 		# shellcheck disable=SC2086 # pane IDs contain no whitespace
-		for pane in ${s_panes[$s]}; do
-			printf 'p:%s\t%s\t  %s %s > %s > %s\n' "$pane" "$pane" "$(glyph "${p_rank[$pane]}")" "$s" "${p_window[$pane]}" "${p_name[$pane]}"
+		for pane in ${s_agents[$s]}; do
+			jump_label
+			printf 'p:%s\t%s\t%s\t%s  %s %s\n' "$pane" "$pane" "$label" "$indent" "$(glyph "${p_rank[$pane]}")" "${p_label[$pane]}"
 			idx=$((idx + 1))
 			[ "$pane" = "$current" ] && CUR_POS=$idx
 		done
@@ -403,6 +439,21 @@ cmd_preview() {
 	local out
 	out=$(tmux capture-pane -ep -t "$1" 2>/dev/null || true)
 	printf '%s\n' "$out" | tail -n "${FZF_PREVIEW_LINES:-40}"
+}
+
+# Navigator jump key (fzf transform): prints `pos(N)+accept` for the row whose
+# label (field 3, ANSI-colored) is KEY, nothing when no row has it. Nav mode
+# never has a query, so the line number in the rows file is the fzf position.
+cmd_jump() {
+	local want=$'\033[1;33m'"${1^^}"$'\033[0m' rows=$2 line rest n=0
+	while IFS= read -r line; do
+		n=$((n + 1))
+		rest=${line#*"$TAB"*"$TAB"}
+		if [ "${rest%%"$TAB"*}" = "$want" ]; then
+			printf 'pos(%d)+accept' "$n"
+			return 0
+		fi
+	done <"$rows"
 }
 
 # Navigator ctrl-x: confirm, then kill the session heading or individual pane.
@@ -450,8 +501,19 @@ cmd_create() {
 # Live view: fzf listens on a socket; a background loop rebuilds the rows and
 # pushes a reload only when they changed, so typing and the cursor are left
 # alone. --track with --id-nth keeps the cursor on the same row across reloads.
+# Starts in nav mode (input hidden, plain keys act); `/` shows the input,
+# hides the jump-label column and unbinds the plain keys so they type,
+# leaving the ctrl- variants. Esc closes.
+# Jump keys: field 3 holds each leaf row's label (see cmd_rows). Nav mode
+# never has a query, so the label's row number in the rows file is its fzf
+# position; a key with no row is a no-op.
+JUMP_KEYS='1 2 3 4 5 6 7 8 9 q w e r t y u i o p'
+NAV_KEYS="j,k,c,x,/,${JUMP_KEYS// /,}"
+NAV_HEADER='j/k: move   1-9/q-p: jump   enter: switch   c: create   x: kill   /: search   esc: close'
+SEARCH_HEADER='ctrl-j/k: move   enter: switch   ctrl-c: create   ctrl-x: kill   ctrl-d/u: page   esc: close'
 cmd_navigator() {
-	local rt sock rows sel self loop interval next action target current
+	local rt sock rows sel self loop interval next action target current key
+	local -a jump_binds=()
 	self=$(command -v "$0" || printf '%s' "$0")
 	rt=$(runtime_dir)
 	current=$(tmux display-message -p '#{pane_id}')
@@ -473,15 +535,20 @@ cmd_navigator() {
 		done
 	) &
 	loop=$!
+	for key in $JUMP_KEYS; do
+		jump_binds+=(--bind "$key:transform:$self jump $key $rows")
+	done
 	while :; do
 		sel=""
-	sel=$(fzf --ansi --no-sort --layout=reverse --delimiter="$TAB" --with-nth=3.. \
+		sel=$(fzf --ansi --exact --no-sort --layout=reverse --delimiter="$TAB" --with-nth='{3} {4..}' \
 		--track --id-nth=1 --listen="$sock" \
-		--prompt='agents> ' --info=inline-right \
-		--cycle --bind 'ctrl-j:down,ctrl-k:up,ctrl-d:page-down,ctrl-u:page-up' \
-		--bind 'enter:accept,left-click:accept,ctrl-c:print(create)+accept' \
-		--bind "ctrl-x:execute($self kill {1} $rows)+reload-sync(cat $rows)" \
-		--header 'enter/click: switch   ctrl-c: create   ctrl-x: kill   ctrl-d/u: page' \
+		--no-input --prompt='search> ' --info=inline-right \
+		--cycle --bind 'ctrl-j:down,ctrl-k:up,ctrl-d:page-down,ctrl-u:page-up,j:down,k:up' \
+		--bind 'enter:accept,left-click:accept,esc:abort,ctrl-c:print(create)+accept,c:print(create)+accept' \
+		--bind "ctrl-x:execute($self kill {1} $rows)+reload-sync(cat $rows),x:execute($self kill {1} $rows)+reload-sync(cat $rows)" \
+		"${jump_binds[@]}" \
+		--bind "/:show-input+unbind($NAV_KEYS)+change-with-nth(4..)+change-header($SEARCH_HEADER)" \
+		--header "$NAV_HEADER" \
 		--bind "load:pos($CUR_POS)+unbind(load)" \
 		--preview "$self preview {2}" --preview-window='right,55%,border-left,<80(down,40%,border-top)' \
 		<"$rows") || true
@@ -518,6 +585,7 @@ case "${1:-}" in
 tick) cmd_tick "${2:-}" ;;
 rows) cmd_rows ;;
 preview) cmd_preview "${2:?target}" ;;
+jump) cmd_jump "${2:?key}" "${3:?rows file}" ;;
 kill) cmd_kill "${2:?id}" "${3:?rows file}" ;;
 create) cmd_create "${2:?target}" "${3:?rows file}" ;;
 navigator) cmd_navigator ;;
@@ -526,7 +594,7 @@ restore) if resume_on; then cmd_restore; fi ;;
 restore-begin) if resume_on; then cmd_restore_begin; fi ;;
 resume-init) cmd_resume_init ;;
 *)
-	printf 'usage: tmux-agents {tick [quiet]|navigator|rows|preview TARGET|kill ID ROWS|create TARGET ROWS|save|restore|restore-begin|resume-init}\n' >&2
+	printf 'usage: tmux-agents {tick [quiet]|navigator|rows|preview TARGET|jump KEY ROWS|kill ID ROWS|create TARGET ROWS|save|restore|restore-begin|resume-init}\n' >&2
 	exit 2
 	;;
 esac

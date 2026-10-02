@@ -1,35 +1,41 @@
-# tmux-ai-names: name tmux windows and panes with the fast LLM tier.
+# tmux-ai-names: label tmux sessions and name windows with the fast LLM tier.
 #
 # One background instance per tmux server, started from tmux.conf. Every TICK
-# seconds each window is fingerprinted from its panes' cwd, git branch and
-# foreground command. When a fingerprint changes and stays stable for one more
-# tick, the window's context (plus a short tail of each pane's screen) goes to
-# the fast model, which returns a 1-2 word window name (@window_ai_name, shown
-# through automatic-rename-format) and pane names (@pane_name, shown in pane
-# borders).
+# seconds each session is fingerprinted from its panes' cwd, git branch,
+# foreground program and agent title. When a fingerprint changes and stays
+# stable for one more tick, the session's context goes to the fast model, which
+# returns a short session label (@session_ai_name, shown in the tmux-agents
+# navigator beside the real session name) and 1-2 word window names
+# (@window_ai_name, shown through automatic-rename-format). Session names
+# themselves are never changed, so attach targets and resurrect are unaffected.
+#
+# Privacy: only metadata leaves the machine, never screen contents or full
+# command lines. Per pane: cwd, git repo/branch, the program name plus at most
+# one lowercase subcommand word (`cargo test`, `nix develop`), the host for
+# ssh, and agent titles (omp/opencode session labels).
 #
 # Never blocking: tmux only ever reads user options, so if the model is slow or
-# h001 is down tmux keeps its normal names (current command) and nothing waits.
-# Requests are capped at LLM_MAX_TIME, and repeated failures back off.
+# h001 is down tmux keeps its normal names and nothing waits. Requests are
+# capped at LLM_MAX_TIME, and repeated failures back off.
 #
-# Humans win: windows renamed manually (automatic-rename off, `prefix ,`) and
-# panes named with `prefix .` (@pane_name_manual) are never renamed.
+# Humans win: windows renamed manually (automatic-rename off, `prefix ,`) are
+# never renamed.
 #   tmux set -g @ai_names off|on             toggle (`prefix A`); off clears AI names
 #   tmux set -g @ai_names_model <model>      override the model live
 #   tmux set -g @ai_names_reasoning <effort>
 # Log: $XDG_RUNTIME_DIR/tmux-ai-names_<socket>.log
 
-readonly TICK=3 MIN_INTERVAL=15 MAX_JOBS=4 SCREEN_LINES=15
+readonly TICK=3 MIN_INTERVAL=15 MAX_JOBS=4
 readonly S=$'\x1f'
-readonly FMT="$S#{window_id}$S#{automatic-rename}$S#{@ai_fp}$S#{session_name}$S#{window_name}$S#{@window_ai_name}$S#{pane_id}$S#{pane_pid}$S#{pane_current_path}$S#{pane_current_command}$S#{pane_active}$S#{@pane_name_manual}$S#{@pane_name}$S#{pane_dead}"
+readonly FMT="$S#{session_id}$S#{session_name}$S#{@session_ai_name}$S#{@session_ai_fp}$S#{window_id}$S#{window_index}$S#{automatic-rename}$S#{window_name}$S#{@window_ai_name}$S#{pane_pid}$S#{pane_current_path}$S#{pane_current_command}$S#{@agent_state}$S#{pane_dead}$S#{pane_title}"
 export LLM_MAX_TIME=30
 
-readonly SYSTEM_PROMPT='You label tmux windows and panes so a developer can tell them apart at a glance.
-Return only a JSON object: {"window": "<name>", "panes": {"<pane number>": "<name>"}}.
-Every name is 1 word, 2 at most, max 16 characters, lowercase except ticket ids (e.g. ABC-123).
-Window name: what the window is about. Prefer a ticket id from the git branch, else the project or repo, else the remote host for ssh. Never use generic words like shell, terminal, zsh, home, window.
-Pane names: what each pane is doing, so panes in the same window are distinguishable (e.g. server, tests, editor, logs, agent, build, or a host). Do not just repeat the window name.
-Keep a current name when it is still accurate. Omit the window key or a pane key when it is locked.'
+readonly SYSTEM_PROMPT='You label tmux sessions and windows so a developer can jump to a piece of work by typing a few letters into a fuzzy finder.
+Return only a JSON object: {"session": "<label>", "windows": {"<window index>": "<name>"}}.
+Session label: 1-2 words, max 20 characters, lowercase except ticket ids (e.g. ABC-123). Name what makes this session distinct: a ticket id or topic from the git branch, the feature an agent is working on, or the remote host for ssh. Prefer something more specific than the session or project name; use the project name only when nothing more specific exists. It must differ from the other sessions labels.
+Window names: 1 word, 2 at most, max 16 characters, lowercase except ticket ids. Say what the window is for (e.g. server, tests, editor, logs, agent topic, or a host) so windows in the session are distinguishable.
+Never use generic words like shell, terminal, zsh, home, session, window.
+Keep a current name when it is still accurate. Omit locked windows.'
 
 if [ -z "${TMUX:-}" ]; then
   echo "tmux-ai-names: run inside tmux (it is started from tmux.conf)." >&2
@@ -45,11 +51,13 @@ self=$(readlink -f "$0")
 fail_file="$state.fail"
 rm -f "$fail_file"
 
-# fg_cmd <pane-pid> <pane-current-command>: sets fg to the pane's foreground
-# command line, or "" when the pane's own shell is idle at a prompt.
-fg_cmd() {
+# fg_desc <pane-pid> <pane-current-command>: sets fg to a secret-free summary
+# of the pane's foreground program, or "" when the pane's shell is idle.
+# Arguments are dropped except one plain lowercase subcommand word and the ssh
+# destination host: tokens, passwords and paths rarely match that shape.
+fg_desc() {
   fg=
-  local stat rest tpgid
+  local stat rest tpgid prog a host skip=
   read -r stat <"/proc/$1/stat" 2>/dev/null || return 0
   rest=${stat##*) }
   read -r _ _ _ _ _ tpgid _ <<<"$rest"
@@ -59,9 +67,37 @@ fg_cmd() {
   fi
   local -a argv=()
   mapfile -d '' -t argv <"/proc/$tpgid/cmdline" 2>/dev/null
-  fg="${argv[*]}"
-  fg=${fg//[$'\n\t\x1f']/ }
-  fg=${fg:0:200}
+  prog=${argv[0]:-$2}
+  prog=${prog##*/}
+  prog=${prog#.}
+  prog=${prog%-wrapped}
+  [[ $prog =~ ^[A-Za-z0-9._+-]{1,32}$ ]] || prog=$2
+  fg=$prog
+  case $prog in
+    ssh)
+      for a in "${argv[@]:1}"; do
+        if [ -n "$skip" ]; then
+          skip=
+          continue
+        fi
+        case $a in
+          -[BbcDEeFIiJLlmOopQRSWw]) skip=1 ;;
+          -*) ;;
+          *)
+            host=${a#ssh://}
+            host=${host##*@}
+            host=${host%%[:/]*}
+            [[ $host =~ ^[A-Za-z0-9.-]{1,64}$ ]] && fg+=" $host"
+            break
+            ;;
+        esac
+      done
+      ;;
+    *)
+      a=${argv[1]:-}
+      [[ $a =~ ^[a-z][a-z-]{1,15}$ ]] && fg+=" $a"
+      ;;
+  esac
 }
 
 # Sets g_repo/g_branch for a directory by reading .git directly (no forks).
@@ -97,29 +133,31 @@ git_info() {
   esac
 }
 
-# Sets screen to the last SCREEN_LINES non-blank lines of a pane, indented.
-screen_tail() {
-  screen=
-  local -a lines=() keep=()
-  local l start
-  mapfile -t lines < <(tmux capture-pane -p -J -t "$1" 2>/dev/null)
-  for l in "${lines[@]}"; do
-    l=${l%"${l##*[![:space:]]}"}
-    [ -n "$l" ] && keep+=("    ${l:0:160}")
-  done
-  start=$((${#keep[@]} > SCREEN_LINES ? ${#keep[@]} - SCREEN_LINES : 0))
-  [ ${#keep[@]} -gt 0 ] && screen=$(printf '%s\n' "${keep[@]:start}")
+# Sets agent to the agent session label of a pane tmux-agents marked as an
+# agent (@agent_state set): omp `π <glyph> label`, opencode `OC | label`.
+agent_desc() {
+  agent=
+  [ -n "$1" ] || return 0
+  case $2 in
+    'π'*)
+      agent=${2#π}
+      agent=${agent# }
+      agent=${agent#?}
+      agent="omp: ${agent# }"
+      ;;
+    'OC | '*) agent="opencode: ${2#'OC | '}" ;;
+    *) agent=agent ;;
+  esac
+  agent=${agent//[$'\n\t\x1f"']/ }
+  agent=${agent:0:80}
 }
 
-# name_window <window-id> <fingerprint-hash> <header> <pane-context> <"n:%id ...">
-name_window() {
-  local wid=$1 hash=$2 prompt=$3$'\n'$4 entry n reply parsed key name
-  local -A pane_of=()
-  for entry in $5; do
-    n=${entry%%:*}
-    pane_of[$n]=${entry#*:}
-    screen_tail "${pane_of[$n]}"
-    [ -n "$screen" ] && prompt+=$'\n'"Pane $n recent screen:"$'\n'"$screen"$'\n'
+# name_session <session-id> <fingerprint-hash> <prompt> <"index:@wid ...">
+name_session() {
+  local sid=$1 hash=$2 prompt=$3 entry reply parsed key name
+  local -A wid_of=()
+  for entry in $4; do
+    wid_of[${entry%%:*}]=${entry#*:}
   done
 
   # Model: tmux option @ai_names_model / @ai_names_reasoning, else the module
@@ -131,7 +169,7 @@ name_window() {
   MODEL_FAST_REASONING=${MODEL_FAST_REASONING:-$AI_NAMES_REASONING}
 
   if ! reply=$(llm_chat fast "$SYSTEM_PROMPT" "$prompt"); then
-    # Endpoint down/slow: leave the fingerprint unrecorded so the window is
+    # Endpoint down/slow: leave the fingerprint unrecorded so the session is
     # renamed once it is back, and record the failure for the global backoff.
     local fails=0
     [ -r "$fail_file" ] && read -r _ fails <"$fail_file"
@@ -140,46 +178,52 @@ name_window() {
   fi
   rm -f "$fail_file"
   parsed=$(printf '%s' "$reply" | sed '/^[[:space:]]*```/d' | jq -r '
-    def clean: tostring | gsub("[^A-Za-z0-9 ._/-]"; "") | [splits(" +")]
-      | map(select(length > 0)) | .[:2] | join(" ") | .[:24];
-    ("w\t" + (.window // "" | clean)),
-    ((.panes // {}) | to_entries[] | "\(.key | ltrimstr("pane ") | ltrimstr("Pane "))\t\(.value | clean)")
+    def clean(n): tostring | gsub("[^A-Za-z0-9 ._/-]"; "") | [splits(" +")]
+      | map(select(length > 0)) | .[:2] | join(" ") | .[:n];
+    ("s\t" + (.session // "" | clean(20))),
+    ((.windows // {}) | to_entries[] | "\(.key | gsub("[^0-9]"; ""))\t\(.value | clean(16))")
   ' 2>/dev/null)
   if [ -z "$parsed" ]; then
-    printf '%s: unusable reply for %s: %s\n' "$(date -Is)" "$wid" "$reply"
+    printf '%s: unusable reply for %s: %s\n' "$(date -Is)" "$sid" "$reply"
   fi
 
   # Names are reduced to [A-Za-z0-9 ._/-] above, so they are safe inside tmux
-  # double quotes. The lock and on/off checks run inside tmux, atomically with
-  # the set, so a manual rename is never overwritten. Setting automatic-rename
-  # forces tmux to re-evaluate automatic-rename-format right away.
+  # double quotes. The window lock and on/off checks run inside tmux,
+  # atomically with the set, so a manual rename is never overwritten. Setting
+  # automatic-rename forces tmux to re-evaluate automatic-rename-format.
   while IFS=$'\t' read -r key name; do
     [ -n "$name" ] || continue
-    if [ "$key" = w ]; then
+    if [ "$key" = s ]; then
+      tmux set -t "$sid" @session_ai_name "$name"
+    elif [ -n "${wid_of[$key]:-}" ]; then
+      local wid=${wid_of[$key]}
       tmux if -F -t "$wid" '#{&&:#{automatic-rename},#{!=:#{@ai_names},off}}' \
         "set -w -t $wid @window_ai_name \"$name\" ; set -w -t $wid automatic-rename on"
-    elif [ -n "${pane_of[$key]:-}" ]; then
-      tmux if -F -t "${pane_of[$key]}" '#{||:#{@pane_name_manual},#{==:#{@ai_names},off}}' '' \
-        "set -p -t ${pane_of[$key]} @pane_name \"$name\""
     fi
   done <<<"$parsed"
-  # Recorded even for an unusable reply so a stable window is not re-asked.
-  tmux set -w -t "$wid" @ai_fp "$hash"
+  # Recorded even for an unusable reply so a stable session is not re-asked.
+  tmux set -t "$sid" @session_ai_fp "$hash"
 }
 
-# Drop every AI name so tmux shows its normal names again. Manual pane names
-# (@pane_name_manual) and manual window names (automatic-rename off) are kept.
+# Drop every AI name so tmux shows its normal names again. Manual window names
+# (automatic-rename off) are kept.
 clear_ai_names() {
-  local id auto manual
+  local id auto
+  tmux list-sessions -F '#{session_id}' | while read -r id; do
+    tmux set -u -t "$id" @session_ai_name \; set -u -t "$id" @session_ai_fp
+  done
   tmux list-windows -a -F "#{window_id}$S#{automatic-rename}" | while IFS=$S read -r id auto; do
-    tmux set -wu -t "$id" @window_ai_name \; set -wu -t "$id" @ai_fp
+    tmux set -wu -t "$id" @window_ai_name
     # Re-setting automatic-rename makes tmux re-evaluate the name right away.
     [ "$auto" = 1 ] && tmux set -w -t "$id" automatic-rename on
   done
-  tmux list-panes -a -F "#{pane_id}$S#{@pane_name_manual}" | while IFS=$S read -r id manual; do
-    [ -n "$manual" ] || tmux set -pu -t "$id" @pane_name
-  done
 }
+
+# Pane names are no longer AI-set; drop ones left by earlier versions. Manual
+# names (`prefix .`, @pane_name_manual) stay.
+tmux list-panes -a -F "#{pane_id}$S#{@pane_name_manual}$S#{@pane_name}" | while IFS=$S read -r id manual pname; do
+  [ -z "$manual" ] && [ -n "$pname" ] && tmux set -pu -t "$id" @pane_name
+done
 
 declare -A pending=() last_try=() job_of=()
 enabled=1
@@ -222,75 +266,69 @@ while :; do
 
   out=$(tmux list-panes -a -F "$FMT") || exit 0
 
-  declare -A fp=() named=() hdr=() ctx=() unlocked=() count=() wlocked=()
-  while IFS=$S read -r _ wid wauto wfp session wname wai pane panepid path cmd active manual pname dead; do
+  declare -A fp=() named=() ctx=() wins=() labels=() seen_win=()
+  while IFS=$S read -r _ sid session sai sfp wid widx wauto wname wai panepid path cmd astate dead title; do
     [ "$dead" = 1 ] && continue
-    n=$((${count[$wid]:-0} + 1))
-    count[$wid]=$n
-    named[$wid]=$wfp
-
-    if [ -z "${hdr[$wid]+x}" ]; then
-      hdr[$wid]="Session: $session"
+    if [ -z "${fp[$sid]+x}" ]; then
+      named[$sid]=$sfp
+      ctx[$sid]="Session \"$session\" (current label \"${sai:-none}\")"
+      [ -n "$sai" ] && labels[$sid]="$session = \"$sai\""
+    fi
+    if [ -z "${seen_win[$wid]+x}" ]; then
+      seen_win[$wid]=1
       if [ "$wauto" = 1 ]; then
-        hdr[$wid]+=$'\n'"Window: current name \"${wai:-none}\""
-        fp[$wid]="auto;"
+        ctx[$sid]+=$'\n'"Window $widx (current name \"${wai:-none}\"):"
+        wins[$sid]+="$widx:$wid "
+        fp[$sid]+="w$widx;"
       else
-        hdr[$wid]+=$'\n'"Window: locked by user as \"$wname\""
-        fp[$wid]="locked;"
-        wlocked[$wid]=1
+        ctx[$sid]+=$'\n'"Window $widx (locked by user as \"$wname\"):"
+        fp[$sid]+="w$widx|locked;"
       fi
     fi
 
-    block="Pane $n"
-    [ "$active" = 1 ] && block+=" (active)"
-    if [ -n "$manual" ]; then
-      ctx[$wid]+=$'\n'"$block: locked by user as \"$pname\""$'\n'
-      fp[$wid]+="$pane|locked;"
-      continue
-    fi
-
-    fg_cmd "$panepid" "$cmd"
+    fg_desc "$panepid" "$cmd"
     git_info "$path"
-    block+=$':\n'"  cwd: ${path/#$HOME/\~}"
-    [ -n "$g_repo" ] && block+=$'\n'"  git: repo $g_repo, branch ${g_branch:-unknown}"
-    if [ -n "$fg" ]; then
-      block+=$'\n'"  running: $fg"
-    else
-      block+=$'\n'"  running: idle shell ($cmd)"
-    fi
-    block+=$'\n'"  current name: \"${pname:-none}\""
-    ctx[$wid]+=$'\n'"$block"$'\n'
-    fp[$wid]+="$pane|$path|$g_branch|$fg;"
-    unlocked[$wid]+="$n:$pane "
+    agent_desc "$astate" "$title"
+    line="  Pane: cwd ${path/#$HOME/\~}"
+    [ -n "$g_repo" ] && line+="; git $g_repo, branch ${g_branch:-unknown}"
+    line+="; running ${fg:-idle shell}"
+    [ -n "$agent" ] && line+="; agent $agent"
+    ctx[$sid]+=$'\n'"$line"
+    fp[$sid]+="$path|$g_branch|$fg|$agent;"
   done <<<"$out"
 
   jobs >/dev/null
   running=$(jobs -rp | wc -l)
-  for wid in "${!fp[@]}"; do
-    hash=$(cksum <<<"${fp[$wid]}")
+  for sid in "${!fp[@]}"; do
+    hash=$(cksum <<<"${fp[$sid]}")
     hash=${hash%% *}
-    if [ "$hash" = "${named[$wid]}" ]; then
-      unset 'pending[$wid]'
+    if [ "$hash" = "${named[$sid]}" ]; then
+      unset 'pending[$sid]'
       continue
     fi
-    [ -n "${wlocked[$wid]:-}" ] && [ -z "${unlocked[$wid]:-}" ] && continue
-    if [ "${pending[$wid]:-}" != "$hash" ]; then
-      pending[$wid]=$hash
+    if [ "${pending[$sid]:-}" != "$hash" ]; then
+      pending[$sid]=$hash
       continue
     fi
-    [ -n "${job_of[$wid]:-}" ] && kill -0 "${job_of[$wid]}" 2>/dev/null && continue
-    ((EPOCHSECONDS - ${last_try[$wid]:-0} < MIN_INTERVAL)) && continue
+    [ -n "${job_of[$sid]:-}" ] && kill -0 "${job_of[$sid]}" 2>/dev/null && continue
+    ((EPOCHSECONDS - ${last_try[$sid]:-0} < MIN_INTERVAL)) && continue
     ((running >= MAX_JOBS)) && break
-    last_try[$wid]=$EPOCHSECONDS
-    name_window "$wid" "$hash" "${hdr[$wid]}" "${ctx[$wid]}" "${unlocked[$wid]:-}" &
-    job_of[$wid]=$!
+    others=
+    for o in "${!labels[@]}"; do
+      [ "$o" = "$sid" ] || others+=$'\n'"  ${labels[$o]}"
+    done
+    prompt=${ctx[$sid]}
+    [ -n "$others" ] && prompt+=$'\n\n'"Other sessions' labels (yours must differ):$others"
+    last_try[$sid]=$EPOCHSECONDS
+    name_session "$sid" "$hash" "$prompt" "${wins[$sid]:-}" &
+    job_of[$sid]=$!
     running=$((running + 1))
   done
 
-  for wid in "${!last_try[@]}"; do
-    [ -n "${fp[$wid]+x}" ] || unset 'last_try[$wid]' 'job_of[$wid]' 'pending[$wid]'
+  for sid in "${!last_try[@]}"; do
+    [ -n "${fp[$sid]+x}" ] || unset 'last_try[$sid]' 'job_of[$sid]' 'pending[$sid]'
   done
-  unset fp named hdr ctx unlocked count wlocked
+  unset fp named ctx wins labels seen_win
 
   sleep "$TICK"
 done

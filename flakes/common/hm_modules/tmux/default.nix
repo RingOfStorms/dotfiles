@@ -9,8 +9,8 @@
     type = lib.types.bool;
     default = true;
     description = ''
-      Initial state of AI window/pane naming (tmux-ai-names, installed by the
-      tmux NixOS module). Toggle at runtime with `prefix A` or
+      Initial state of AI session labels and window naming (tmux-ai-names,
+      installed by the tmux NixOS module). Toggle at runtime with `prefix A` or
       `tmux set -g @ai_names on|off`.
     '';
   };
@@ -47,8 +47,8 @@
       set -g pane-border-format ' #{?@pane_name,#{@pane_name},#{pane_current_command}} '
       set-hook -g 'window-layout-changed[90]' 'set -wF pane-border-status "#{?#{e|>:#{window_panes},1},top,off}"'
       set-hook -g 'after-new-window[90]' 'set -wF pane-border-status "#{?#{e|>:#{window_panes},1},top,off}"'
-      # `prefix .` locks a manual pane name; an empty name returns it to AI naming.
-      bind . command-prompt -p "pane name (empty = auto):" { set -p @pane_name_input "%1" ; if -F "#{==:#{@pane_name_input},}" { set -pu @pane_name ; set -pu @pane_name_manual } { set -pF @pane_name "#{@pane_name_input}" ; set -p @pane_name_manual 1 } ; set -pu @pane_name_input }
+      # `prefix .` sets a manual pane name; an empty name clears it.
+      bind . command-prompt -p "pane name (empty = clear):" { set -p @pane_name_input "%1" ; if -F "#{==:#{@pane_name_input},}" { set -pu @pane_name ; set -pu @pane_name_manual } { set -pF @pane_name "#{@pane_name_input}" ; set -p @pane_name_manual 1 } ; set -pu @pane_name_input }
 
       # Global on/off: `prefix A` or `tmux set -g @ai_names on|off`. Off (or
       # h001 down) leaves plain tmux names; nothing ever waits on the model.
