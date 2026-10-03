@@ -1,11 +1,44 @@
+# Commit with an AI-proposed message. Commits directly by default; pass -e to
+# review/edit the message in vi first.
+_gcpropose_commit() {
+  local edit=0 msg
+  local -a propose_args commit_args
+  propose_args=()
+  commit_args=()
+  if [ "$1" = "-a" ]; then
+    propose_args=(-a)
+    commit_args=(-a)
+    shift
+  fi
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -e|--edit) edit=1 ;;
+      -h|--help)
+        echo "Usage: gcamp|gcmp [-e]  (-e: review message in vi before committing)"
+        return 0
+        ;;
+      *) echo "Unknown argument: $1" >&2; return 1 ;;
+    esac
+    shift
+  done
+
+  msg=$(gcpropose "${propose_args[@]}") || return 1
+  if [ "$edit" -eq 1 ]; then
+    msg=$(printf '%s\n' "$msg" | VISUAL=vi EDITOR=vi vipe) || return 1
+  fi
+  if [ -z "${msg//[[:space:]]/}" ]; then
+    echo "Empty commit message; aborting." >&2
+    return 1
+  fi
+  git commit "${commit_args[@]}" -m "$msg"
+}
+
 gcamp() {
-  export VISUAL=vi EDITOR=vi
-  git commit -a -m "$(gcpropose -a | vipe)"
+  _gcpropose_commit -a "$@"
 }
 
 gcmp() {
-  export VISUAL=vi EDITOR=vi
-  git commit -m "$(gcpropose | vipe)"
+  _gcpropose_commit "$@"
 }
 
 gcpropose() {
