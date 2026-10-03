@@ -43,6 +43,19 @@ termux-wake-lock
 ssh -tt lio tat
 ```
 
+~/.termux/termux.properties (append to the default file, apply with `termux-reload-settings`)
+
+- Arrows are an inverted T (UP above DOWN); both rows have 6 keys so the columns line up.
+- ZOOM sends the tmux prefix (Ctrl+Space) then Space to zoom/unzoom a pane. Use `'CTRL SPACE z'` if the Space binding doesn't work.
+- KEYBOARD toggles the Android keyboard, since tapping inside tmux with mouse mode on doesn't bring it up.
+
+```
+extra-keys = [ \
+  ['ESC', 'CTRL', 'UP', 'ALT', 'TAB', {macro: 'CTRL SPACE SPACE', display: 'ZOOM'}], \
+  ['/', 'LEFT', 'DOWN', 'RIGHT', 'ENTER', 'KEYBOARD'] \
+]
+```
+
 # Biometic ssh key
 
 ```

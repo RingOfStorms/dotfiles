@@ -1,7 +1,25 @@
 # Restic backups: design (h001 primary repo + offsite)
 
-Status: DESIGN ONLY. Nothing here is deployed. File:line refs are relative to the repo root.
+Status: h001 → B2 backup deployed (see checklist below); everything else is design only. File:line refs are relative to the repo root.
 Pinned nixpkgs: h001 `b18a4b9` and lio `78e9c78`, both nixos-26.05 (restic 0.18.1, rest-server 0.14.0).
+
+## Status / resume checklist (2026-10-02)
+
+Decision: **h001 backs up directly to Backblaze B2** (S3 endpoint), not via a local repo + `restic copy`. Sections 3–5 below describe the original plan and still apply to lio later.
+
+Done:
+- `hosts/h001/mods/restic-backup.nix` deployed; env secret `restic_h001_env_2026-10-01` holds `RESTIC_REPOSITORY=s3:https://<b2-endpoint>/<bucket>/h001`, `RESTIC_PASSWORD`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`.
+- `restic-h001 init` run; first backup started 2026-10-02 18:48 (~2 TB, multi-day upload). Interrupting is safe; re-running resumes (already-uploaded data is skipped).
+
+When the first run finishes, on h001:
+1. Confirm success: `systemctl status restic-backups-h001` (exit 0) and the summary at the end of `journalctl -u restic-backups-h001`.
+2. `sudo restic-h001 snapshots` -> one snapshot tagged `h001`.
+3. `sudo restic-h001 check` (metadata), then `sudo restic-h001 check --read-data-subset=2%` (downloads ~2% from B2; egress free up to 3x stored).
+4. Restore test: `sudo restic-h001 restore latest --target /tmp/rt --include /drives/wd10/paperless` (or one immich album dir); open a few files; `zcat` one `*.sql.gz` dump | head. `rm -rf /tmp/rt`.
+5. Enable schedule in `restic-backup.nix`: `timerConfig = { OnCalendar = "03:00"; Persistent = true; RandomizedDelaySec = "15m"; };` and update its header comment; deploy. Nightly runs then also `forget --prune` per `pruneOpts`.
+6. Offline recovery sheet: B2 bucket + endpoint, key ID/key, `RESTIC_PASSWORD` stored outside sec (Bitwarden + paper). Without it a dead h001 = unreadable backup.
+7. Failure notification (section 7): `notify-failure@` ntfy hook on `restic-backups-h001`.
+8. Later: lio backup (section 2.1/5.5, Q2), point the `life` container's restic at B2 too (Q6), quarterly restore drill (section 8).
 
 ## 0. TL;DR
 
