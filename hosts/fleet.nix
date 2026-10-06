@@ -42,7 +42,6 @@ rec {
   #   publicIp    - Public IP (for cloud/VPS hosts)
   #   trust       - "high" | "low" | "none" (determines tailnet DNS policy)
   #   flakePath   - path to host's flake dir relative to repo root (auto-derived from name if omitted)
-  #   sshTermEnv  - custom TERM for SSH (null for default xterm-256color)
   hosts = {
     h001 = {
       user = "luser";
@@ -107,7 +106,6 @@ rec {
     t = {
       user = "joshua.bell";
       lanIp = "10.12.14.181";
-      sshTermEnv = "vt100";
     };
     l002 = {
       user = "root";
@@ -152,7 +150,6 @@ rec {
           # directive names (User, HostName, SetEnv) instead of the old
           # camelCase matchBlocks option names.
           user = h.user;
-          termEnvAttrs = if h ? sshTermEnv then { SetEnv.TERM = h.sshTermEnv; } else {};
           hasOverlay = h ? overlayIp;
           hasPublic = h ? publicIp;
           hasLan = h ? lanIp;
@@ -168,12 +165,12 @@ rec {
             if !hasOverlay && directIp != null then { HostName = directIp; }
             else {};
 
-          baseBlock = { User = user; } // termEnvAttrs // mainHostname;
+          baseBlock = { User = user; } // mainHostname;
 
           # The `_` variant exists whenever a direct IP is available.
           underscoreBlock =
             if directIp != null then {
-              "${name}_" = { User = user; } // termEnvAttrs // { HostName = directIp; };
+              "${name}_" = { User = user; HostName = directIp; };
             } else {};
         in
         { "${name}" = baseBlock; } // underscoreBlock;
