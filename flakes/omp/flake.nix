@@ -66,6 +66,24 @@
                         name: air-gemini-3.8-flash
                         contextWindow: 128000
                         maxTokens: 16384
+                    # LiteLLM reports no reasoning metadata for Copilot models, so
+                    # omp would clamp role thinking suffixes (:high etc.) to off.
+                    modelOverrides:
+                      copilot-claude-opus-5.5:
+                        reasoning: true
+                        thinking:
+                          mode: effort
+                          efforts: [low, medium, high, xhigh]
+                      copilot-claude-sonnet-5:
+                        reasoning: true
+                        thinking:
+                          mode: effort
+                          efforts: [low, medium, high, xhigh]
+                      copilot-gpt-6-astra:
+                        reasoning: true
+                        thinking:
+                          mode: effort
+                          efforts: [low, medium, high, xhigh, max]
               '';
               description = "YAML model catalog written to ~/.omp/agent/models.yml.";
             };

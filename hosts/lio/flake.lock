@@ -6,11 +6,11 @@
       },
       "locked": {
         "dir": "flakes/beszel",
-        "lastModified": 1790874531,
-        "narHash": "sha256-Psk6Arn/zQTBhMjDZhXPjh8P0cn366woAraTi2/anSI=",
+        "lastModified": 1791007550,
+        "narHash": "sha256-B775v4YCnGrYZGQ6yvy3NB3RMF+/JkBoU6liml6FQFk=",
         "ref": "refs/heads/master",
-        "rev": "03d8d8b8798021b5bcb4f9cd7f4d45ae0a401d50",
-        "revCount": 2108,
+        "rev": "6c666d1c6a88b971f5782f9652e428d15504b414",
+        "revCount": 2131,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -44,7 +44,7 @@
           "omp",
           "nixpkgs"
         ],
-        "systems": "systems_3",
+        "systems": "systems_2",
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
@@ -69,7 +69,7 @@
           "omp",
           "nixpkgs-darwin-x64"
         ],
-        "systems": "systems_4",
+        "systems": "systems_3",
         "treefmt-nix": "treefmt-nix_2"
       },
       "locked": {
@@ -103,11 +103,11 @@
       },
       "locked": {
         "dir": "flakes/containers",
-        "lastModified": 1790874531,
-        "narHash": "sha256-Psk6Arn/zQTBhMjDZhXPjh8P0cn366woAraTi2/anSI=",
+        "lastModified": 1791007550,
+        "narHash": "sha256-B775v4YCnGrYZGQ6yvy3NB3RMF+/JkBoU6liml6FQFk=",
         "ref": "refs/heads/master",
-        "rev": "03d8d8b8798021b5bcb4f9cd7f4d45ae0a401d50",
-        "revCount": 2108,
+        "rev": "6c666d1c6a88b971f5782f9652e428d15504b414",
+        "revCount": 2131,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -138,11 +138,11 @@
       },
       "locked": {
         "dir": "flakes/de_plasma",
-        "lastModified": 1790874531,
-        "narHash": "sha256-Psk6Arn/zQTBhMjDZhXPjh8P0cn366woAraTi2/anSI=",
+        "lastModified": 1791007550,
+        "narHash": "sha256-B775v4YCnGrYZGQ6yvy3NB3RMF+/JkBoU6liml6FQFk=",
         "ref": "refs/heads/master",
-        "rev": "03d8d8b8798021b5bcb4f9cd7f4d45ae0a401d50",
-        "revCount": 2108,
+        "rev": "6c666d1c6a88b971f5782f9652e428d15504b414",
+        "revCount": 2131,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -237,7 +237,7 @@
     },
     "flake-utils_2": {
       "inputs": {
-        "systems": "systems_2"
+        "systems": "systems_4"
       },
       "locked": {
         "lastModified": 1731533236,
@@ -289,35 +289,17 @@
         "type": "github"
       }
     },
-    "flake-utils_5": {
-      "inputs": {
-        "systems": "systems_7"
-      },
-      "locked": {
-        "lastModified": 1731533236,
-        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
-        "owner": "numtide",
-        "repo": "flake-utils",
-        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
-        "type": "github"
-      },
-      "original": {
-        "owner": "numtide",
-        "repo": "flake-utils",
-        "type": "github"
-      }
-    },
     "flatpaks": {
       "inputs": {
         "nix-flatpak": "nix-flatpak"
       },
       "locked": {
         "dir": "flakes/flatpaks",
-        "lastModified": 1790874531,
-        "narHash": "sha256-Psk6Arn/zQTBhMjDZhXPjh8P0cn366woAraTi2/anSI=",
+        "lastModified": 1791007550,
+        "narHash": "sha256-B775v4YCnGrYZGQ6yvy3NB3RMF+/JkBoU6liml6FQFk=",
         "ref": "refs/heads/master",
-        "rev": "03d8d8b8798021b5bcb4f9cd7f4d45ae0a401d50",
-        "revCount": 2108,
+        "rev": "6c666d1c6a88b971f5782f9652e428d15504b414",
+        "revCount": 2131,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -325,27 +307,6 @@
         "dir": "flakes/flatpaks",
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      }
-    },
-    "herdr-nix": {
-      "inputs": {
-        "flake-utils": "flake-utils_2",
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1790710339,
-        "narHash": "sha256-PSVLZbAfIeM/aCEG08eu0qlMjN6vHikc2F6H0Y2XNZ0=",
-        "owner": "herdrdev",
-        "repo": "herdr-nix",
-        "rev": "2298bb926bee66b70b2f9a51de8649aa127d50e6",
-        "type": "github"
-      },
-      "original": {
-        "owner": "herdrdev",
-        "repo": "herdr-nix",
-        "type": "github"
       }
     },
     "home-manager": {
@@ -375,11 +336,11 @@
         "nixpkgs": "nixpkgs_3"
       },
       "locked": {
-        "lastModified": 1790742243,
-        "narHash": "sha256-kaNo6xHiL31AbNNEreG0OTKf4j6Cxlo5bPawjX7lnbQ=",
+        "lastModified": 1790996401,
+        "narHash": "sha256-f+kOxEmOUnQazVAmGg0i8hzwgd1kX/geY+k/Dpheye8=",
         "owner": "rycee",
         "repo": "home-manager",
-        "rev": "e5fcd298a00f08b6e8390baf04aa8edb62203070",
+        "rev": "db7d5e2332710f5abb088f6b5de927d7f9511b35",
         "type": "github"
       },
       "original": {
@@ -461,11 +422,11 @@
     },
     "nixpkgs-unstable": {
       "locked": {
-        "lastModified": 1790822859,
-        "narHash": "sha256-69xHQhAeMAD2wDXO7T2pcOZIF9Sga2W+JkmY2a11Ops=",
+        "lastModified": 1791048980,
+        "narHash": "sha256-KgItSKML8Xvte0B7/uGnBDsYzSnnKHcOaiUbgWBXLXw=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "c59305bab2065cfecc4944690d9eedbb56f3a9fa",
+        "rev": "a7868a727837f3c09cee2ce0ca671c76b1589fed",
         "type": "github"
       },
       "original": {
@@ -509,11 +470,11 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1789998861,
-        "narHash": "sha256-62XMQD4WLdMAfdT0/8gJmPH2dKeTw908ryNloAplTr8=",
+        "lastModified": 1790635395,
+        "narHash": "sha256-bNyvoIyOCu7lzoCpWKWGIsHpTtERUWzqYWFPlN++WTw=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "1e8bc658fc985ef27ccd66d107d767b32bb7ef98",
+        "rev": "7fc6f2c20af09cdcaf48b92ec3121860139ec668",
         "type": "github"
       },
       "original": {
@@ -525,11 +486,11 @@
     },
     "nixpkgs_4": {
       "locked": {
-        "lastModified": 1790750587,
-        "narHash": "sha256-VfjaoJ1Uyb7JZTrBgE5Jf2nhjtQPmD9KOd19HJwmZwM=",
+        "lastModified": 1791143449,
+        "narHash": "sha256-9+n3ReS2y9xS199LoJjKUWHwZrISGHWgkD/LUZTDZyA=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "78e9c786dc08cd4f3420c2395cd977206a9b1da2",
+        "rev": "0d9e9b832d03ac387417e16ce1febf73b2e631e1",
         "type": "github"
       },
       "original": {
@@ -1222,11 +1183,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1789743164,
-        "narHash": "sha256-JLMMJDE2qYcb6A2EeqdlAYSMDi27WwV5VXlzu668V8g=",
+        "lastModified": 1790883199,
+        "narHash": "sha256-Tot1PyG1B2ejhLC0/Wu2ndJca2YTqFQmA2+PAJOLf4Q=",
         "owner": "can1357",
         "repo": "oh-my-pi",
-        "rev": "04728e6226ef7ab9db321edc9b31cc8968bc6544",
+        "rev": "95acb042e7d70725a372b1034458145349c1d86f",
         "type": "github"
       },
       "original": {
@@ -1241,11 +1202,11 @@
       },
       "locked": {
         "dir": "flakes/omp",
-        "lastModified": 1790874531,
-        "narHash": "sha256-Psk6Arn/zQTBhMjDZhXPjh8P0cn366woAraTi2/anSI=",
+        "lastModified": 1791007550,
+        "narHash": "sha256-B775v4YCnGrYZGQ6yvy3NB3RMF+/JkBoU6liml6FQFk=",
         "ref": "refs/heads/master",
-        "rev": "03d8d8b8798021b5bcb4f9cd7f4d45ae0a401d50",
-        "revCount": 2108,
+        "rev": "6c666d1c6a88b971f5782f9652e428d15504b414",
+        "revCount": 2131,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -1295,16 +1256,16 @@
     },
     "ports": {
       "inputs": {
-        "flake-utils": "flake-utils_3",
+        "flake-utils": "flake-utils_2",
         "nixpkgs": "nixpkgs_7"
       },
       "locked": {
         "dir": "flakes/ports",
-        "lastModified": 1790874531,
-        "narHash": "sha256-Psk6Arn/zQTBhMjDZhXPjh8P0cn366woAraTi2/anSI=",
+        "lastModified": 1791007550,
+        "narHash": "sha256-B775v4YCnGrYZGQ6yvy3NB3RMF+/JkBoU6liml6FQFk=",
         "ref": "refs/heads/master",
-        "rev": "03d8d8b8798021b5bcb4f9cd7f4d45ae0a401d50",
-        "revCount": 2108,
+        "rev": "6c666d1c6a88b971f5782f9652e428d15504b414",
+        "revCount": 2131,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -1321,7 +1282,6 @@
         "containers": "containers",
         "de_plasma": "de_plasma",
         "flatpaks": "flatpaks",
-        "herdr-nix": "herdr-nix",
         "home-manager": "home-manager_2",
         "nixpkgs": "nixpkgs_4",
         "nixpkgs-unstable": "nixpkgs-unstable",
@@ -1457,7 +1417,7 @@
     },
     "secrets_manager": {
       "inputs": {
-        "flake-utils": "flake-utils_4",
+        "flake-utils": "flake-utils_3",
         "nixpkgs": "nixpkgs_9"
       },
       "locked": {
@@ -1477,16 +1437,16 @@
     "stt_ime": {
       "inputs": {
         "crane": "crane",
-        "flake-utils": "flake-utils_5",
+        "flake-utils": "flake-utils_4",
         "nixpkgs": "nixpkgs_10"
       },
       "locked": {
         "dir": "flakes/stt_ime",
-        "lastModified": 1790874531,
-        "narHash": "sha256-Psk6Arn/zQTBhMjDZhXPjh8P0cn366woAraTi2/anSI=",
+        "lastModified": 1791007550,
+        "narHash": "sha256-B775v4YCnGrYZGQ6yvy3NB3RMF+/JkBoU6liml6FQFk=",
         "ref": "refs/heads/master",
-        "rev": "03d8d8b8798021b5bcb4f9cd7f4d45ae0a401d50",
-        "revCount": 2108,
+        "rev": "6c666d1c6a88b971f5782f9652e428d15504b414",
+        "revCount": 2131,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -1513,21 +1473,6 @@
     },
     "systems_2": {
       "locked": {
-        "lastModified": 1681028828,
-        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
-        "owner": "nix-systems",
-        "repo": "default",
-        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nix-systems",
-        "repo": "default",
-        "type": "github"
-      }
-    },
-    "systems_3": {
-      "locked": {
         "lastModified": 1776166891,
         "narHash": "sha256-bI8yrEGjrohR5hkQox7UrxDH7XqrYMwI8SL/LrJ1+S8=",
         "owner": "nix-systems",
@@ -1541,7 +1486,7 @@
         "type": "github"
       }
     },
-    "systems_4": {
+    "systems_3": {
       "locked": {
         "lastModified": 1680978224,
         "narHash": "sha256-+xT9B1ZbhMg/zpJqd00S06UCZb/A2URW9bqqrZ/JTOg=",
@@ -1553,6 +1498,21 @@
       "original": {
         "owner": "nix-systems",
         "repo": "x86_64-darwin",
+        "type": "github"
+      }
+    },
+    "systems_4": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
         "type": "github"
       }
     },
@@ -1572,21 +1532,6 @@
       }
     },
     "systems_6": {
-      "locked": {
-        "lastModified": 1681028828,
-        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
-        "owner": "nix-systems",
-        "repo": "default",
-        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nix-systems",
-        "repo": "default",
-        "type": "github"
-      }
-    },
-    "systems_7": {
       "locked": {
         "lastModified": 1681028828,
         "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",

@@ -4,11 +4,9 @@
 # `restic_h001_env_2026-10-01` EnvironmentFile (sec-agent.nix), so the
 # offsite backend can be chosen without touching this file.
 #
-# Manual-only for now: no timer and `initialize = false`. First run:
-#   sudo restic-h001 init
-#   sudo systemctl start restic-backups-h001
-# To schedule it, set `timerConfig`, e.g.
-#   { OnCalendar = "03:00"; Persistent = true; RandomizedDelaySec = "15m"; }
+# Runs nightly at ~03:00 and prunes per pruneOpts. `initialize = false`, so a
+# new repository must be created by hand first: `sudo restic-h001 init`.
+# Manual run: `sudo systemctl start restic-backups-h001`.
 #
 # Databases are backed up as dumps, never as live cluster directories.
 {
@@ -26,7 +24,11 @@ in
 
   services.restic.backups.h001 = {
     initialize = false;
-    timerConfig = null;
+    timerConfig = {
+      OnCalendar = "03:00";
+      Persistent = true;
+      RandomizedDelaySec = "15m";
+    };
     # environmentFile is set by sec-agent configChanges.
 
     backupPrepareCommand = ''

@@ -3,7 +3,9 @@ tmux_window () {
   case "${cmd}" in
     rename)
       if [ -z "${2:-}" ]; then
-        tmux setw automatic-rename
+        # Unset (not toggle) so the window follows the global automatic-rename
+        # again, which shows the AI name from tmux-ai-names.
+        tmux setw -u automatic-rename
       else
         tmux rename-window "$2"
       fi

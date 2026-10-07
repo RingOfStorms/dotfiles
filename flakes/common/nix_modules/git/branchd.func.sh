@@ -31,11 +31,12 @@ branchdel() {
   esac
   if ! git -C "$repo_dir" worktree remove "$target_wt" &&
       ! git -C "$repo_dir" worktree remove --force "$target_wt"; then
-    printf 'Worktree was not removed; Herdr registration left untouched: %s\n' "$target_wt" >&2
+    printf 'Worktree was not removed: %s\n' "$target_wt" >&2
     return 1
   fi
   printf 'Removed worktree: %s\n' "$target_wt"
-  _branch__herdr_close "$repo_dir" "$target_wt"
+  # Git removes only the checkout; drop the now-empty <branch>/ parents.
+  _branch__prune_empty_dirs "$(_branch__worktree_root "$repo_dir")" "$(dirname -- "$target_wt")"
 
   if git -C "$repo_dir" show-ref --verify --quiet "refs/heads/$branch"; then
     if git -C "$repo_dir" branch -D "$branch"; then

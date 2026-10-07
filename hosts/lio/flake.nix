@@ -18,8 +18,6 @@
     nono.flake = false;
     rust-overlay.url = "github:oxalica/rust-overlay/26a71e661c47bd21a05d06fec749f3f7c75e9d12";
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
-    herdr-nix.url = "github:herdrdev/herdr-nix";
-    herdr-nix.inputs.nixpkgs.follows = "nixpkgs";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
     opencode.url = "github:anomalyco/opencode/8a8bd622a3d7dc29ccf30ec17f84e363ed95ed72";
   };
@@ -80,7 +78,6 @@
           inputs.common.nixosModules.rage
           inputs.common.nixosModules.more_filesystems
           inputs.omp-flake.nixosModules.default
-          ./herdr.nix
           ({ pkgs, ... }:
             let
               # OpenCode v2.0.21 ships a stale x86_64-linux node_modules hash.
@@ -124,19 +121,17 @@
             environment.shellAliases = let
               no_proxy = "NO_PROXY='h001.net.joshuabell.xyz,*.ts.net,127.0.0.1,localhost,100.64.0.0/10'";
               nono_base = "nono run --allow-cwd --silent --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\"";
-              herdr_nono = agent: profile: command:
-                "${no_proxy} HERDR_AGENT=${agent} sh -c 'if [ -n \"\${HERDR_SOCKET_PATH:-}\" ]; then set -- --allow-unix-socket \"$HERDR_SOCKET_PATH\" -- \"$@\"; else set -- -- \"$@\"; fi; ${nono_base} --profile ${profile} \"$@\"; exit \"$?\"' sh ${command}";
             in {
               mva = "${no_proxy} ${nono_base} --profile mva-full -- /home/josh/projects/mva/target/release/mva";
               mva_ = "${no_proxy} /home/josh/projects/mva/target/release/mva";
-              oc = herdr_nono "opencode" "opencode-full" "opencode";
+              oc = "${no_proxy} ${nono_base} --profile opencode-full -- opencode";
               oc_ = "${no_proxy} opencode";
               occ = "oc -c";
               cc = "${no_proxy} ${nono_base} --profile claude-code-full -- claude";
               cur = "${no_proxy} ${nono_base} --profile claude-code-full -- cursor";
               zed = "${no_proxy} ${nono_base} --profile claude-code-full -- zeditor";
               npm = "${no_proxy} ${nono_base} --profile npm -- npm";
-              omp = herdr_nono "omp" "omp" "omp";
+              omp = "${no_proxy} ${nono_base} --profile omp -- omp";
               omp_ = "${no_proxy} command omp";
             };
           })
@@ -147,9 +142,10 @@
           (import ./containers.nix { inherit inputs; })
           ./vms.nix
           ./nono.nix
+          ./blender.nix
           ({ pkgs, ... }: {
             environment.systemPackages = with pkgs; [ vlang pavucontrol nfs-utils jellyfin-media-player element-desktop vesktop discord ];
-            services.flatpak.packages = [ "org.signal.Signal" "com.spotify.Client" "com.bitwarden.desktop" "org.openscad.OpenSCAD" "org.blender.Blender" ];
+            services.flatpak.packages = [ "org.signal.Signal" "com.spotify.Client" "com.bitwarden.desktop" "org.openscad.OpenSCAD" ];
           })
         ];
       };

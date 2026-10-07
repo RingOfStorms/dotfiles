@@ -87,9 +87,7 @@ branch() {
     fi
   fi
 
-  local repo_base repo_hash default_branch
-  repo_base=$(basename "$repo_dir")
-  repo_hash=$(printf "%s" "$repo_dir" | sha1sum | awk '{print $1}')
+  local default_branch
 
   default_branch=$(getdefault 2>/dev/null)
   [ -n "$default_branch" ] || default_branch=$(git -C "$repo_dir" symbolic-ref --short HEAD) || return 1
@@ -119,7 +117,6 @@ branch() {
     echo "Opening existing worktree for branch '$branch_name' at '$existing'."
     builtin cd -- "$existing" || return 1
     _branch__setup_worktree "$repo_dir" "$existing" || printf 'Worktree setup did not complete for %s\n' "$existing" >&2
-    _branch__herdr_open "$repo_dir" "$existing"
     _branch__maybe_set_tmux_name "$branch_name" "$prev_branch" || true
     return 0
   fi
@@ -130,11 +127,8 @@ branch() {
   fi
 
   local wt_root wt_path
-  if [ -z "$xdg" ]; then
-    xdg="${XDG_DATA_HOME:-$HOME/.local/share}"
-  fi
-  wt_root="$xdg/git_worktrees/${repo_base}_${repo_hash}"
-  wt_path="$wt_root/$branch_name"
+  wt_root=$(_branch__worktree_root "$repo_dir")
+  wt_path="$wt_root/$branch_name/$(basename -- "$repo_dir")"
 
   # ensure worktree root exists
   if [ ! -d "$wt_root" ]; then
@@ -209,7 +203,6 @@ branch() {
     if ! _branch__setup_worktree "$1" "$2"; then
       printf 'Worktree setup did not complete for %s\n' "$2" >&2
     fi
-    _branch__herdr_open "$1" "$2"
   }
 
   if [ "$local_exists" -eq 1 ]; then
@@ -229,6 +222,6 @@ branch() {
   fi
 
   echo "Failed to add worktree for branch '$branch_name'." >&2
-  rmdir "$wt_path" 2>/dev/null || true
+  _branch__prune_empty_dirs "$wt_root" "$wt_path"
   return 1
 }

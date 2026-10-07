@@ -1,9 +1,24 @@
-{ lib, pkgs, ... }:
 {
-  # home manager doesn't give us an option to add tmux extra config at the top so we do it ourselves here.
-  xdg.configFile."tmux/tmux.conf".text = lib.mkBefore (builtins.readFile ./tmux-reset.conf);
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+{
+  options.ringofstorms.tmux.aiNames = lib.mkOption {
+    type = lib.types.bool;
+    default = true;
+    description = ''
+      Initial state of AI session labels and window naming (tmux-ai-names,
+      installed by the tmux NixOS module). Toggle at runtime with `prefix A` or
+      `tmux set -g @ai_names on|off`.
+    '';
+  };
 
-  programs.tmux = {
+  # home manager doesn't give us an option to add tmux extra config at the top so we do it ourselves here.
+  config.xdg.configFile."tmux/tmux.conf".text = lib.mkBefore (builtins.readFile ./tmux-reset.conf);
+
+  config.programs.tmux = {
     enable = true;
 
     # Revisit this later, permission denied to make anything in `/run` as my user...
@@ -19,6 +34,30 @@
     terminal = "tmux-256color";
     aggressiveResize = true;
     sensibleOnTop = false;
+
+    # AI window/pane names (tmux-ai-names, from the tmux NixOS module). Placed
+    # after plugins (mkAfter) so it overrides catppuccin's pane border format.
+    extraConfig = ''
+      # Window: AI name while automatic-rename is on; `prefix ,` locks a manual
+      # name, `prefix <` returns the window to AI naming.
+      set -g automatic-rename-format '#{?@window_ai_name,#{@window_ai_name},#{?pane_in_mode,[tmux],#{pane_current_command}}#{?pane_dead,[dead],}}'
+      bind < set -wu automatic-rename
+
+      # Panes: name in the top border, shown only when a window is split.
+      set -g pane-border-format ' #{?@pane_name,#{@pane_name},#{pane_current_command}} '
+      set-hook -g 'window-layout-changed[90]' 'set -wF pane-border-status "#{?#{e|>:#{window_panes},1},top,off}"'
+      set-hook -g 'after-new-window[90]' 'set -wF pane-border-status "#{?#{e|>:#{window_panes},1},top,off}"'
+      # `prefix .` sets a manual pane name; an empty name clears it.
+      bind . command-prompt -p "pane name (empty = clear):" { set -p @pane_name_input "%1" ; if -F "#{==:#{@pane_name_input},}" { set -pu @pane_name ; set -pu @pane_name_manual } { set -pF @pane_name "#{@pane_name_input}" ; set -p @pane_name_manual 1 } ; set -pu @pane_name_input }
+
+      # Global on/off: `prefix A` or `tmux set -g @ai_names on|off`. Off (or
+      # h001 down) leaves plain tmux names; nothing ever waits on the model.
+      set -g @ai_names ${if config.ringofstorms.tmux.aiNames then "on" else "off"}
+      bind A if -F '#{==:#{@ai_names},off}' { set -g @ai_names on ; display 'AI names: on' } { set -g @ai_names off ; display 'AI names: off' }
+      # One detached namer per server (it exits with the server); -b + setsid
+      # keep tmux startup from ever waiting on it.
+      run-shell -b 'command -v tmux-ai-names >/dev/null && { setsid tmux-ai-names </dev/null >/dev/null 2>&1 & }; true'
+    '';
 
     plugins = with pkgs.tmuxPlugins; [
       {
