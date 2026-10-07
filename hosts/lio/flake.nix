@@ -142,9 +142,10 @@
           (import ./containers.nix { inherit inputs; })
           ./vms.nix
           ./nono.nix
+          ./blender.nix
           ({ pkgs, ... }: {
             environment.systemPackages = with pkgs; [ vlang pavucontrol nfs-utils jellyfin-media-player element-desktop vesktop discord ];
-            services.flatpak.packages = [ "org.signal.Signal" "com.spotify.Client" "com.bitwarden.desktop" "org.openscad.OpenSCAD" "org.blender.Blender" ];
+            services.flatpak.packages = [ "org.signal.Signal" "com.spotify.Client" "com.bitwarden.desktop" "org.openscad.OpenSCAD" ];
           })
         ];
       };
