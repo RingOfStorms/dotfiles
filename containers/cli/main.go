@@ -294,14 +294,14 @@ func remote(host string, root bool, script string) error {
 		fmt.Printf("[%s%s] %s\n", host, map[bool]string{true: " (root)"}[root], script)
 		return nil
 	}
-	c := exec.Command("ssh", sshArgs(host, true, script, root)...)
+	c := hostCmd(context.Background(), host, true, root, script)
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return c.Run()
 }
 
 // remoteOut runs a script non-interactively and returns stdout.
 func remoteOut(ctx context.Context, host string, root bool, script string) (string, error) {
-	c := exec.CommandContext(ctx, "ssh", sshArgs(host, false, script, root)...)
+	c := hostCmd(ctx, host, false, root, script)
 	var out, errb bytes.Buffer
 	c.Stdout, c.Stderr = &out, &errb
 	err := c.Run()
@@ -836,8 +836,10 @@ func deploy(s Service, h, ref string, local bool) error {
 		if u := userFor(h); u != "" {
 			target = u + "@" + h
 		}
-		info("copying %s to %s", out, h)
-		if !dryRun {
+		if isLocal(h) {
+			info("built on %s itself, nothing to copy", h)
+		} else if !dryRun {
+			info("copying %s to %s", out, h)
 			c := exec.Command("nix", "copy", "--to", "ssh-ng://"+target, out)
 			c.Stdout, c.Stderr = os.Stdout, os.Stderr
 			if err := c.Run(); err != nil {
@@ -915,7 +917,7 @@ func streamFrom(h, script string, w *os.File) error {
 		fmt.Printf("[%s (root, stream out)] %s\n", h, script)
 		return nil
 	}
-	c := exec.Command("ssh", sshArgs(h, false, script, true)...)
+	c := hostCmd(context.Background(), h, false, true, script)
 	c.Stdout, c.Stderr = w, os.Stderr
 	return c.Run()
 }
@@ -943,7 +945,7 @@ func cmdBackup(args []string) error {
 	if dryRun {
 		fmt.Printf("[%s (root, stream out)] %s\n", h, packScript(inv.DataRoot, s.Name))
 	} else {
-		tarErr = backupTo(exec.Command("ssh", sshArgs(h, false, packScript(inv.DataRoot, s.Name), true)...), out)
+		tarErr = backupTo(hostCmd(context.Background(), h, false, true, packScript(inv.DataRoot, s.Name)), out)
 	}
 	if !f.bools["live"] {
 		remote(h, true, fmt.Sprintf("if [ -e /var/lib/fleet-containers/%[2]s.was-running ]; then rm -f /var/lib/fleet-containers/%[2]s.was-running; systemctl start %[1]s; fi", unitOf(s), s.Name))
@@ -988,7 +990,7 @@ fi
 	if strings.HasSuffix(file, ".gz") || strings.HasSuffix(file, ".tgz") {
 		decomp = "gzip -dc"
 	}
-	c := exec.Command("ssh", sshArgs(h, false, unpackScript(decomp, inv.DataRoot), true)...)
+	c := hostCmd(context.Background(), h, false, true, unpackScript(decomp, inv.DataRoot))
 	c.Stdin, c.Stdout, c.Stderr = in, os.Stdout, os.Stderr
 	if err := c.Run(); err != nil {
 		return err
@@ -1040,8 +1042,8 @@ install -d -m755 %[5]s`, unitOf(s), s.Name, to, q(dst), q(inv.DataRoot))); err !
 
 	info("3/5 copying %s:%s -> %s (numeric owners kept)", from, dst, to)
 	if !dryRun {
-		src := exec.Command("ssh", sshArgs(from, false, packScript(inv.DataRoot, s.Name), true)...)
-		sink := exec.Command("ssh", sshArgs(to, false, unpackScript("zstd -d -q -c", inv.DataRoot), true)...)
+		src := hostCmd(context.Background(), from, false, true, packScript(inv.DataRoot, s.Name))
+		sink := hostCmd(context.Background(), to, false, true, unpackScript("zstd -d -q -c", inv.DataRoot))
 		sum := manifestScript(inv.DataRoot, s.Name)
 		err := copyVerified(src, sink,
 			func() (string, error) { return remoteOut(context.Background(), from, true, sum) },
@@ -1183,4 +1185,30 @@ if ! systemctl reload nginx; then
 fi
 rm -f "$f.prev"
 `, dir, name, q(conf))
+}
+
+// localHost is the short hostname of this machine; commands aimed at it run
+// directly instead of over ssh (no self-ssh keys needed). CONTAINERS_LOCAL_HOST
+// overrides it (set it to "-" to always use ssh).
+var localHost = func() string {
+	if h := os.Getenv("CONTAINERS_LOCAL_HOST"); h != "" {
+		return h
+	}
+	h, _ := os.Hostname()
+	return strings.SplitN(h, ".", 2)[0]
+}()
+
+func isLocal(host string) bool { return host != "" && host == localHost }
+
+// hostCmd runs script on host as root (if root) or the ssh user: locally via
+// bash (sudo when not already root, which may prompt) when host is this
+// machine, otherwise over ssh.
+func hostCmd(ctx context.Context, host string, tty, root bool, script string) *exec.Cmd {
+	if !isLocal(host) {
+		return exec.CommandContext(ctx, "ssh", sshArgs(host, tty, script, root)...)
+	}
+	if root && os.Geteuid() != 0 {
+		return exec.CommandContext(ctx, "sudo", "bash", "-c", script)
+	}
+	return exec.CommandContext(ctx, "bash", "-c", script)
 }

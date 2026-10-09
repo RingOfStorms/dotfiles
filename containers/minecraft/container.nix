@@ -466,7 +466,7 @@ in
         jvmOpts = "-Xms512M -Xmx1024M";
 
         symlinks."velocity.toml".value = {
-          config-version = "2.7";
+          config-version = "2.9"; # must match the Velocity build, or it tries to rewrite the read-only file and exits
           bind = "0.0.0.0:${toString proxyPort}";
           motd = "<green>Computer Boyz";
           show-max-players = 10;

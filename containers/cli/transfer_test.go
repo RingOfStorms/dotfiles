@@ -462,3 +462,18 @@ func TestStatusColumnsAlign(t *testing.T) {
 		}
 	}
 }
+
+func TestHostCmdLocal(t *testing.T) {
+	old := localHost
+	t.Cleanup(func() { localHost = old })
+	localHost = "h003"
+	if c := hostCmd(context.Background(), "h003", false, false, "echo hi"); filepath.Base(c.Path) != "bash" || c.Args[len(c.Args)-1] != "echo hi" {
+		t.Errorf("local host should run bash directly, got %v", c.Args)
+	}
+	if c := hostCmd(context.Background(), "h003", false, true, "id"); os.Geteuid() != 0 && filepath.Base(c.Path) != "sudo" {
+		t.Errorf("local root as non-root should use sudo, got %v", c.Args)
+	}
+	if c := hostCmd(context.Background(), "lio", false, false, "x"); filepath.Base(c.Path) != "ssh" {
+		t.Errorf("other host should use ssh, got %v", c.Args)
+	}
+}
