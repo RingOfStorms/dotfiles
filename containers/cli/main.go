@@ -71,7 +71,8 @@ commands:
   deploy <svc> [--host h] [--local] [--rev REV]
                                deploy or update to the latest pushed definition
   start|stop|restart <svc> [--host h]
-                               stop blocks until the container is fully down
+                               stop blocks until fully down and keeps it stopped
+                               across reboots; start/restart/deploy re-enable it
   attach <svc> [--host h]      open the service console (if it defines one)
   shell <svc> [--host h]       root shell inside the container
   backup <svc> [--host h] [-o file] [--live]
@@ -872,15 +873,16 @@ func cmdUnit(verb string, args []string) error {
 	f := parse(args)
 	s := f.svc()
 	h := hostFor(s, f)
+	u := unitOf(s)
 	switch verb {
 	case "stop":
-		info("stopping %s on %s (waits until fully down)", s.Name, h)
-		return remote(h, true, "systemctl stop "+unitOf(s)+" && echo stopped: $(systemctl is-active "+unitOf(s)+")")
+		info("stopping %s on %s (waits until fully down; stays stopped across reboots)", s.Name, h)
+		return remote(h, true, disableScript(s)+"systemctl stop "+u+" && echo stopped: $(systemctl is-active "+u+")")
 	case "restart":
 		// systemctl restart on container@ is unreliable (nixpkgs#43652).
-		return remote(h, true, "systemctl stop "+unitOf(s)+" && systemctl start "+unitOf(s)+" && systemctl is-active "+unitOf(s))
+		return remote(h, true, enableScript(s)+"systemctl stop "+u+" && systemctl start "+u+" && systemctl is-active "+u)
 	default:
-		return remote(h, true, "systemctl start "+unitOf(s)+" && systemctl is-active "+unitOf(s))
+		return remote(h, true, enableScript(s)+"systemctl start "+u+" && systemctl is-active "+u)
 	}
 }
 
@@ -1036,7 +1038,7 @@ install -d -m755 %[5]s`, unitOf(s), s.Name, to, q(dst), q(inv.DataRoot))); err !
 	}
 
 	info("2/5 stopping %s on %s (blocking)", s.Name, from)
-	if err := remote(from, true, hookScript(s)+"systemctl stop "+unitOf(s)); err != nil {
+	if err := remote(from, true, hookScript(s)+disableScript(s)+"systemctl stop "+unitOf(s)); err != nil {
 		return err
 	}
 
@@ -1055,7 +1057,7 @@ install -d -m755 %[5]s`, unitOf(s), s.Name, to, q(dst), q(inv.DataRoot))); err !
 
 	info("4/5 deploying on %s", to)
 	if err := deploy(s, to, flakeRef(s.Dir), false); err != nil {
-		return fmt.Errorf("%w\n%s is stopped on %s with data intact; start it again with: containers start %s --host %s", err, s.Name, from, s.Name, from)
+		return fmt.Errorf("%w\n%s is stopped on %s with data intact; start it again ONLY after checking %s is not running there (the deploy may have started it before failing): containers ls (and, if it is up there, containers stop %s --host %s), then containers start %s --host %s", err, s.Name, from, to, s.Name, to, s.Name, from)
 	}
 
 	info("5/5 removing %s from %s (data kept as %s.moved-<date>)", s.Name, from, dst)
@@ -1211,4 +1213,30 @@ func hostCmd(ctx context.Context, host string, tty, root bool, script string) *e
 		return exec.CommandContext(ctx, "sudo", "bash", "-c", script)
 	}
 	return exec.CommandContext(ctx, "bash", "-c", script)
+}
+
+// Boot-time start is a symlink in the mutable unit dir's .wants directory
+// (extra-container: machines.target, podman: multi-user.target). `stop`
+// removes it so a stopped service stays stopped after a reboot; `start`,
+// `restart` and `deploy` put it back. A service that crashed is still
+// wanted, so it starts again on boot (and Restart=on-failure covers crashes
+// in between).
+var mutableUnits = "/etc/systemd-mutable/system" // var for tests
+
+func wantsLink(s Service) string {
+	target := "machines.target"
+	if s.Kind == "podman" {
+		target = "multi-user.target"
+	}
+	return mutableUnits + "/" + target + ".wants/" + unitOf(s)
+}
+
+func disableScript(s Service) string {
+	return "rm -f " + q(wantsLink(s)) + "\n"
+}
+
+func enableScript(s Service) string {
+	l := wantsLink(s)
+	return fmt.Sprintf("if [ -e %[1]s ]; then mkdir -p \"$(dirname %[2]s)\" && ln -sfn ../%[3]s %[2]s; fi\n",
+		q(mutableUnits+"/"+unitOf(s)), q(l), unitOf(s))
 }

@@ -477,3 +477,35 @@ func TestHostCmdLocal(t *testing.T) {
 		t.Errorf("other host should use ssh, got %v", c.Args)
 	}
 }
+
+// stop must drop the boot-time wants link (stays stopped after reboot);
+// start must restore it, but only for an installed unit.
+func TestStopStaysStoppedAcrossReboot(t *testing.T) {
+	old := mutableUnits
+	t.Cleanup(func() { mutableUnits = old })
+	mutableUnits = t.TempDir()
+	bash := realPath(t, "bash")
+	sh := func(script string) {
+		out, err := exec.Command(bash, "-c", "set -euo pipefail\n"+script).CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+	}
+	for _, s := range []Service{{Name: "mc", Kind: "nixos"}, {Name: "web", Kind: "podman"}} {
+		link := wantsLink(s)
+		sh(enableScript(s)) // not installed: must not create a dangling link
+		if _, err := os.Lstat(link); err == nil {
+			t.Fatalf("%s: enable created a link for an uninstalled unit", s.Name)
+		}
+		must(t, os.WriteFile(filepath.Join(mutableUnits, unitOf(s)), nil, 0o644))
+		sh(enableScript(s))
+		if dst, err := os.Readlink(link); err != nil || dst != "../"+unitOf(s) {
+			t.Fatalf("%s: start did not enable boot start: %q %v", s.Name, dst, err)
+		}
+		sh(disableScript(s))
+		if _, err := os.Lstat(link); err == nil {
+			t.Fatalf("%s: stop left boot start enabled", s.Name)
+		}
+		sh(disableScript(s)) // idempotent
+	}
+}

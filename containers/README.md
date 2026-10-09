@@ -259,8 +259,19 @@ Downtime is the stop + copy + first boot.
    port-forwards on the router).
 5. When happy, delete `/srv/containers/<svc>.moved-*` on the old host.
 
-If step 2 fails during the copy or the deploy, the service is stopped on the source with
-its data untouched: `containers start <svc> --host <source>`.
+If step 2 fails during the copy, the service is stopped on the source with its
+data untouched: `containers start <svc> --host <source>`. If it fails during
+the **deploy**, the target may already have started before the error (e.g.
+ssh dropped): check `containers ls` first and, if it is up on the target,
+`containers stop <svc> --host <target>` before starting the source, or you
+will have two writable copies.
+
+## Start, stop and reboots
+
+`stop` blocks until the service is down and removes its boot-time link, so
+it stays stopped across reboots until you `start`, `restart` or `deploy` it.
+A service you did not stop (running, or crashed) is still enabled and starts
+again on boot; crashes in between restart via `Restart=on-failure`.
 
 ## Troubleshooting
 
