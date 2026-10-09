@@ -738,7 +738,9 @@ in
       "minecraft-server-survival.service"
       "minecraft-server-creative.service"
     ];
-    requires = [
+    # wants, not requires: one crashed server must not take the whole
+    # console away (its window just shows "no server running").
+    wants = [
       "minecraft-server-velocity.service"
       "minecraft-server-survival.service"
       "minecraft-server-creative.service"
