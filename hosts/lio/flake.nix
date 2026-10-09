@@ -61,6 +61,7 @@
           ({ ringofstorms-nvim.includeAllRuntimeDependencies = true; })
           inputs.flatpaks.nixosModules.default
           inputs.containers.nixosModules.default
+          ({ ringofstorms.containers.nginx.enable = true; })
           inputs.common.nixosModules.essentials
           (import ../../flakes/common/nix_modules/git/default.nix)
           inputs.common.nixosModules.tmux
