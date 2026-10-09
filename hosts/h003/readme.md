@@ -10,4 +10,4 @@ WAN Local networking computer
 | CPU | AMD Ryzen 7 5825U (8C/16T, up to 4.55 GHz) |
 | GPU | AMD Barcelo (integrated) |
 | RAM | 32 GB |
-| Storage | 1 TB NVMe |
+| Storage | Not yet inventoried |

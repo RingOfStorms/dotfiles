@@ -10,5 +10,5 @@ TV media laptop (GPD Pocket 3)
 | CPU | Intel Core i7-1195G7 (4C/8T, up to 5.0 GHz) |
 | GPU | Intel Iris Xe (integrated) |
 | RAM | 16 GB |
-| Storage | ~1 TB NVMe |
+| Storage | Not yet inventoried |
 | Display | LG TV 72" 4K 60 Hz (external) |

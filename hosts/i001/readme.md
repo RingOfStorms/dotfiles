@@ -9,4 +9,4 @@ Mini PC (Intel N95)
 | CPU | Intel N95 (4C/4T, up to 3.4 GHz) |
 | GPU | Intel UHD Graphics (integrated) |
 | RAM | 16 GB |
-| Storage | ~512 GB SSD |
+| Storage | Not yet inventoried |
