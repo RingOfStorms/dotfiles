@@ -45,7 +45,10 @@ type Host struct {
 type Inventory struct {
 	Services map[string]Service `json:"services"`
 	Hosts    map[string]Host    `json:"hosts"`
-	DataRoot string             `json:"dataRoot"`
+	// Hosts with the containers host module; all are probed before the CLI
+	// trusts the declared host.
+	ContainerHosts []string `json:"containerHosts"`
+	DataRoot       string   `json:"dataRoot"`
 }
 
 var (
@@ -354,10 +357,11 @@ func (f flags) svc() Service {
 	return service(f.pos[0])
 }
 
-// hostFor picks --host if given. Otherwise it uses the declared host from
-// service.nix, but first checks where the service is really installed; if
-// that disagrees (e.g. after `containers move` before service.nix was
-// updated) it refuses loudly instead of acting on the wrong host.
+// hostFor picks --host if given (the explicit escape hatch). Otherwise it
+// uses the declared host from service.nix, but only after a complete
+// discovery shows the service is installed nowhere else: every container
+// host must answer. If one is unreachable, or the service is on another
+// host or several hosts, it refuses loudly instead of acting on a guess.
 func hostFor(s Service, f flags) string {
 	if h := f.vals["host"]; h != "" {
 		return h
@@ -368,78 +372,93 @@ func hostFor(s Service, f flags) string {
 	if dryRun {
 		return s.Host
 	}
-	if err := checkPlacement(s, locate); err != nil {
+	if err := checkPlacement(s, locate(s, probe)); err != nil {
 		die("%v", err)
 	}
 	return s.Host
 }
 
-// locate returns the hosts where s is installed (any state) and the hosts
-// that could not be reached. It asks the declared host first and only
-// probes the rest of the fleet when the service is not there.
-func locate(s Service) (found, unreachable []string) {
-	ask := func(hosts []string) {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		var mu sync.Mutex
-		var wg sync.WaitGroup
-		for _, h := range hosts {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				rows, err := probe(ctx, h)
-				mu.Lock()
-				defer mu.Unlock()
-				if err != nil {
-					unreachable = append(unreachable, h)
-					return
-				}
-				for _, r := range rows {
-					if r.svc == s.Name {
-						found = append(found, h)
-						return
-					}
-				}
-			}()
-		}
-		wg.Wait()
-	}
-	ask([]string{s.Host})
-	if slices.Contains(found, s.Host) {
-		return found, unreachable
-	}
-	var others []string
-	for h := range inv.Hosts {
-		if h != s.Host {
-			others = append(others, h)
-		}
-	}
-	ask(others)
-	sort.Strings(found)
-	sort.Strings(unreachable)
-	return found, unreachable
+// placement is the result of probing every container host for a service.
+type placement struct {
+	found       []string // hosts where it is installed (any state)
+	unreachable []string // hosts that could not be probed
 }
 
-// checkPlacement returns an error when s is installed somewhere other than
-// its declared host. Not being installed anywhere is fine (first deploy).
-func checkPlacement(s Service, locate func(Service) ([]string, []string)) error {
-	found, _ := locate(s)
-	if len(found) == 0 || slices.Equal(found, []string{s.Host}) {
-		return nil
+// containerHosts are the hosts that may run services: inventory
+// containerHosts plus every declared host. All of them are probed.
+func containerHosts() []string {
+	set := map[string]bool{}
+	for _, h := range inv.ContainerHosts {
+		set[h] = true
 	}
-	var elsewhere []string
-	for _, h := range found {
-		if h != s.Host {
-			elsewhere = append(elsewhere, h)
+	for _, s := range inv.Services {
+		if s.Host != "" {
+			set[s.Host] = true
 		}
 	}
-	return fmt.Errorf(`
+	hosts := make([]string, 0, len(set))
+	for h := range set {
+		hosts = append(hosts, h)
+	}
+	sort.Strings(hosts)
+	return hosts
+}
+
+// locate probes every container host (never stopping early, so duplicates
+// are seen) and reports where s is installed and which hosts did not answer.
+func locate(s Service, probe func(context.Context, string) ([]row, error)) placement {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	var p placement
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, h := range containerHosts() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			rows, err := probe(ctx, h)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				p.unreachable = append(p.unreachable, h)
+				return
+			}
+			for _, r := range rows {
+				if r.svc == s.Name {
+					p.found = append(p.found, h)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	sort.Strings(p.found)
+	sort.Strings(p.unreachable)
+	return p
+}
+
+// checkPlacement allows implicit use of the declared host only when discovery
+// was complete and the service is either nowhere (first deploy) or only there.
+func checkPlacement(s Service, p placement) error {
+	elsewhere := slices.DeleteFunc(slices.Clone(p.found), func(h string) bool { return h == s.Host })
+	switch {
+	case len(elsewhere) > 0:
+		return fmt.Errorf(`
 !!! %[1]s is declared on %[2]s but installed on %[3]s.
 !!! service.nix is out of date (was it moved without updating the repo?).
 !!! Refusing to guess. Either:
 !!!   - set   host = %[4]q;   in containers/%[5]s/service.nix and push, or
 !!!   - pass  --host <host>   to act on a specific host this once.`,
-		s.Name, s.Host, strings.Join(found, ", "), elsewhere[0], s.Dir)
+			s.Name, s.Host, strings.Join(p.found, ", "), elsewhere[0], s.Dir)
+	case len(p.unreachable) > 0:
+		return fmt.Errorf(`
+!!! cannot confirm where %[1]s is installed: %[2]s did not answer.
+!!! It may be running there (e.g. after a move), so acting on the declared
+!!! host %[3]s could start a second copy. Refusing. Either bring
+!!! %[2]s back, or pass  --host <host>  to act on a specific host.`,
+			s.Name, strings.Join(p.unreachable, ", "), s.Host)
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------- status
@@ -990,18 +1009,16 @@ func cmdMove(args []string) error {
 	}
 	from := f.vals["from"]
 	if from == "" && !dryRun {
-		found, unreachable := locate(s)
-		switch {
-		case len(found) == 1:
-			from = found[0]
-		case len(found) > 1:
-			return fmt.Errorf("%s is installed on several hosts (%s); pass --from", s.Name, strings.Join(found, ", "))
-		default:
-			return fmt.Errorf("%s is not installed on any reachable host (unreachable: %v); pass --from", s.Name, unreachable)
+		var err error
+		if from, err = moveSource(s, locate(s, probe)); err != nil {
+			return err
 		}
 	}
 	if from == "" {
 		from = s.Host
+	}
+	if !slices.Contains(containerHosts(), to) {
+		return fmt.Errorf("%s is not a container host; add it to containerHosts in containers/flake.nix (and import the host module there) so discovery can see it", to)
 	}
 	if from == to {
 		return fmt.Errorf("%s is already on %s", s.Name, to)
@@ -1120,4 +1137,18 @@ func moveWarning(s Service, to string) string {
 !!! (e.g. the o002 nginx proxy, router port-forwards).
 %[1]s
 `, bar, s.Name, to, s.Dir, s.Host)
+}
+
+// moveSource picks the host to move from when --from is not given. It needs
+// complete discovery: an unreachable host might hold another copy.
+func moveSource(s Service, p placement) (string, error) {
+	switch {
+	case len(p.unreachable) > 0:
+		return "", fmt.Errorf("cannot confirm where %s is installed: %s did not answer; pass --from", s.Name, strings.Join(p.unreachable, ", "))
+	case len(p.found) > 1:
+		return "", fmt.Errorf("%s is installed on several hosts (%s); pass --from", s.Name, strings.Join(p.found, ", "))
+	case len(p.found) == 0:
+		return "", fmt.Errorf("%s is not installed on any host; nothing to move", s.Name)
+	}
+	return p.found[0], nil
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -63,9 +64,10 @@ PATH="${extra:+$extra:}` + r.bin + `:$PATH" eval "$script"
 	sshUser = "root"
 	dryRun = false
 	inv = &Inventory{
-		DataRoot: r.root,
-		Services: map[string]Service{"svc": {Name: "svc", Dir: "svc", Kind: "podman", Host: "src"}},
-		Hosts:    map[string]Host{"src": {User: "root"}, "dst": {User: "root"}},
+		DataRoot:       r.root,
+		Services:       map[string]Service{"svc": {Name: "svc", Dir: "svc", Kind: "podman", Host: "src"}},
+		Hosts:          map[string]Host{"src": {User: "root"}, "dst": {User: "root"}},
+		ContainerHosts: []string{"src", "dst"},
 	}
 	return r
 }
@@ -314,29 +316,6 @@ func TestSSHUserFallback(t *testing.T) {
 	}
 }
 
-func TestCheckPlacement(t *testing.T) {
-	s := Service{Name: "mc", Dir: "mc", Host: "h003"}
-	at := func(hosts ...string) func(Service) ([]string, []string) {
-		return func(Service) ([]string, []string) { return hosts, nil }
-	}
-	if err := checkPlacement(s, at()); err != nil {
-		t.Errorf("not installed anywhere should be allowed (first deploy): %v", err)
-	}
-	if err := checkPlacement(s, at("h003")); err != nil {
-		t.Errorf("on declared host should be allowed: %v", err)
-	}
-	err := checkPlacement(s, at("h001"))
-	if err == nil || !strings.Contains(err.Error(), `host = "h001"`) {
-		t.Errorf("moved service must be refused with the fix: %v", err)
-	}
-	if err := checkPlacement(s, at("h001", "h003")); err == nil {
-		t.Error("installed on several hosts must be refused")
-	}
-	if w := moveWarning(s, "h001"); !strings.Contains(w, `host = "h001"`) || !strings.Contains(w, "containers/mc/service.nix") {
-		t.Errorf("warning lacks the edit to make:\n%s", w)
-	}
-}
-
 // Discovery must find services that are installed but stopped, disabled and
 // no longer loaded in systemd (so absent from `list-units --all`).
 func TestProbeFindsInstalledButUnloaded(t *testing.T) {
@@ -360,5 +339,75 @@ func TestProbeFindsInstalledButUnloaded(t *testing.T) {
 	want := map[string]string{"mc": "nixos/inactive", "web": "podman/inactive"}
 	if !maps.Equal(got, want) {
 		t.Fatalf("probe = %v, want %v", got, want)
+	}
+}
+
+// fakeFleet is a probe over an in-memory fleet: host -> installed services.
+// Hosts listed in down return an error, as an ssh failure would.
+func fakeFleet(installed map[string][]string, down ...string) func(context.Context, string) ([]row, error) {
+	return func(_ context.Context, h string) ([]row, error) {
+		if slices.Contains(down, h) {
+			return nil, errors.New("ssh: connect to host " + h + ": No route to host")
+		}
+		var rows []row
+		for _, n := range installed[h] {
+			rows = append(rows, row{host: h, svc: n, state: "inactive"})
+		}
+		return rows, nil
+	}
+}
+
+func TestPlacementThroughLocate(t *testing.T) {
+	s := Service{Name: "mc", Dir: "mc", Host: "h003"}
+	inv = &Inventory{
+		Services:       map[string]Service{"mc": s},
+		ContainerHosts: []string{"h001", "h003"},
+	}
+	cases := []struct {
+		name      string
+		installed map[string][]string
+		down      []string
+		refuse    string // substring of the error, "" = allowed
+	}{
+		{"first deploy, all hosts answer", nil, nil, ""},
+		{"only on declared host", map[string][]string{"h003": {"mc"}}, nil, ""},
+		{"moved, service.nix stale", map[string][]string{"h001": {"mc"}}, nil, `host = "h001"`},
+		// The duplicate must be seen even though the declared host has it.
+		{"declared host has it and so does another", map[string][]string{"h003": {"mc"}, "h001": {"mc"}}, nil, "h001, h003"},
+		// Moved to h001, which is now down: must not reinstall on h003.
+		{"moved target unreachable", nil, []string{"h001"}, "h001 did not answer"},
+		{"declared has it, other host unreachable", map[string][]string{"h003": {"mc"}}, []string{"h001"}, "h001 did not answer"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := checkPlacement(s, locate(s, fakeFleet(c.installed, c.down...)))
+			switch {
+			case c.refuse == "" && err != nil:
+				t.Fatalf("refused: %v", err)
+			case c.refuse != "" && (err == nil || !strings.Contains(err.Error(), c.refuse)):
+				t.Fatalf("want refusal containing %q, got %v", c.refuse, err)
+			}
+		})
+	}
+}
+
+func TestMoveSourceThroughLocate(t *testing.T) {
+	s := Service{Name: "mc", Dir: "mc", Host: "h003"}
+	inv = &Inventory{Services: map[string]Service{"mc": s}, ContainerHosts: []string{"h001", "h003", "lio"}}
+	if from, err := moveSource(s, locate(s, fakeFleet(map[string][]string{"h001": {"mc"}}))); err != nil || from != "h001" {
+		t.Errorf("source should be where it is installed: %q %v", from, err)
+	}
+	if _, err := moveSource(s, locate(s, fakeFleet(map[string][]string{"h003": {"mc"}}, "lio"))); err == nil {
+		t.Error("must refuse when a host is unreachable")
+	}
+	if _, err := moveSource(s, locate(s, fakeFleet(map[string][]string{"h003": {"mc"}, "lio": {"mc"}}))); err == nil {
+		t.Error("must refuse when installed on several hosts")
+	}
+}
+
+func TestMoveWarning(t *testing.T) {
+	s := Service{Name: "mc", Dir: "mc", Host: "h003"}
+	if w := moveWarning(s, "h001"); !strings.Contains(w, `host = "h001"`) || !strings.Contains(w, "containers/mc/service.nix") {
+		t.Errorf("warning lacks the edit to make:\n%s", w)
 	}
 }

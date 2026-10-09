@@ -104,10 +104,14 @@ unloaded service is still found.
 
 - `containers ls` marks a service installed somewhere other than its declared
   host (`!! declared h003: set host = "h001" in service.nix`).
-- Commands without `--host` probe the declared host first, then the rest of
-  the fleet if it is not there. If the service is installed elsewhere (or on
-  several hosts) they **refuse** and print the `service.nix` edit to make.
-  `--host h` overrides for one command.
+- Commands without `--host` probe **every** container host (`containerHosts`
+  in `flake.nix`, plus all declared hosts). They act on the declared host only
+  if every host answered and the service is on no other host. If a host is
+  unreachable, or the service is elsewhere or on several hosts, they
+  **refuse** and say why (with the `service.nix` edit when it was moved).
+  `--host h` is the escape hatch for one command.
+- New container host: import the module there *and* add it to
+  `containerHosts`, or `move --to` it is refused.
 - `move` finds the real source itself and ends with a banner telling you to
   set `host` in `service.nix` and push.
 

@@ -61,6 +61,10 @@
       inventory = {
         inherit services;
         hosts = (import ../hosts/fleet.nix).hosts;
+        # Hosts that import the host module. Every one of them must answer
+        # before the CLI acts on a declared host without --host. Add new
+        # container hosts here.
+        containerHosts = [ "h003" "lio" ];
         dataRoot = containersLib.dataRoot;
       };
 
