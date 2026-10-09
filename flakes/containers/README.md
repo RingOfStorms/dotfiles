@@ -91,7 +91,9 @@ must be able to fetch that ref, so pair it with `deploy --local`).
 | `boxes destroy <svc>` | uninstall (data kept; `--purge` deletes it) |
 | `boxes check-idmap <host>` | the idmap test above |
 
-`--ssh-user root` skips sudo; `--dry-run` prints the remote scripts.
+ssh logs in as each host's `user` from `hosts/fleet.nix` (override for all hosts
+with `--ssh-user` / `BOXES_SSH_USER`; `root` skips sudo). `--dry-run` prints
+the remote scripts.
 
 Updating: commit + push, then `boxes deploy <svc>`. nspawn containers whose
 only change is the system closure switch in place

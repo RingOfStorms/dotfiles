@@ -83,7 +83,8 @@ commands:
 global flags (or env):
   --repo URL    flake repo (BOXES_REPO, default `+defaultRepo+`)
                 use git+file:///path/to/checkout for local, unpushed work
-  --ssh-user U  ssh as this user and skip sudo, e.g. root (BOXES_SSH_USER)
+  --ssh-user U  ssh as this user for every host (BOXES_SSH_USER); default is
+                the host's user in hosts/fleet.nix. sudo is skipped for root
   --dry-run     print remote commands instead of running them
 `)
 }
@@ -245,6 +246,18 @@ func unitOf(s Service) string {
 
 func dataDir(s Service) string { return inv.DataRoot + "/" + s.Name }
 
+// userFor is the ssh login for host: --ssh-user / BOXES_SSH_USER if set,
+// else the host's `user` in hosts/fleet.nix, else ssh's own default.
+func userFor(host string) string {
+	if sshUser != "" {
+		return sshUser
+	}
+	if inv != nil {
+		return inv.Hosts[host].User
+	}
+	return ""
+}
+
 // sshArgs builds the ssh command for host; root wraps the script in sudo.
 func sshArgs(host string, tty bool, script string, root bool) []string {
 	a := []string{"-o", "ConnectTimeout=8"}
@@ -253,12 +266,13 @@ func sshArgs(host string, tty bool, script string, root bool) []string {
 	} else {
 		a = append(a, "-o", "BatchMode=yes")
 	}
+	user := userFor(host)
 	target := host
-	if sshUser != "" {
-		target = sshUser + "@" + host
+	if user != "" {
+		target = user + "@" + host
 	}
 	a = append(a, target)
-	if root && sshUser != "root" {
+	if root && user != "root" {
 		flag := "-n"
 		if tty {
 			flag = ""
@@ -712,8 +726,8 @@ func deploy(s Service, h, ref string, local bool) error {
 		}
 		out = strings.TrimSpace(string(o))
 		target := h
-		if sshUser != "" {
-			target = sshUser + "@" + h
+		if u := userFor(h); u != "" {
+			target = u + "@" + h
 		}
 		info("copying %s to %s", out, h)
 		if !dryRun {

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -292,3 +293,21 @@ func TestMoveIgnoresDirectorySizeHistory(t *testing.T) {
 }
 
 func itoa(i int) string { return fmt.Sprint(i) }
+
+func TestSSHUserFallback(t *testing.T) {
+	defer func(u string, i *Inventory) { sshUser, inv = u, i }(sshUser, inv)
+	inv = &Inventory{Hosts: map[string]Host{"h003": {User: "luser"}}}
+	sshUser = ""
+	a := sshArgs("h003", false, "true", true)
+	if !slices.Contains(a, "luser@h003") || !strings.HasPrefix(a[len(a)-1], "sudo -n ") {
+		t.Fatalf("fleet user not used: %v", a)
+	}
+	if a := sshArgs("other", false, "true", false); !slices.Contains(a, "other") {
+		t.Fatalf("unknown host should use ssh default user: %v", a)
+	}
+	sshUser = "root"
+	a = sshArgs("h003", false, "true", true)
+	if !slices.Contains(a, "root@h003") || strings.HasPrefix(a[len(a)-1], "sudo") {
+		t.Fatalf("--ssh-user must override fleet user: %v", a)
+	}
+}
