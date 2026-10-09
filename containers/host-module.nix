@@ -2,11 +2,11 @@
 #   inputs.containers.nixosModules.default
 #
 # After one rebuild with this module, the host can run any app in
-# flakes/containers/<app>/ without another rebuild:
+# containers/<app>/ without another rebuild:
 #   - extra-container installs nspawn units into /etc/systemd-mutable/system
 #   - podman services install the same way (see lib.nix mkPodmanService)
-#   - nginx includes /var/lib/boxes/nginx/*.conf (written by `boxes`)
-#   - ports listed in /var/lib/boxes/ports/<name> are opened in the firewall
+#   - nginx includes /var/lib/fleet-containers/nginx/*.conf (written by `containers`)
+#   - ports listed in /var/lib/fleet-containers/ports/<name> are opened in the firewall
 #     (added to the nixos-fw `temp-ports` set and re-applied whenever the
 #     firewall is reloaded)
 {
@@ -16,9 +16,9 @@
   ...
 }:
 let
-  cfg = config.boxes;
-  stateDir = "/var/lib/boxes";
-  applyPorts = pkgs.writeShellScript "boxes-apply-ports" ''
+  cfg = config.ringofstorms.containers;
+  stateDir = "/var/lib/fleet-containers";
+  applyPorts = pkgs.writeShellScript "fleet-containers-apply-ports" ''
     set -u
     nft=${pkgs.nftables}/bin/nft
     shopt -s nullglob
@@ -27,17 +27,17 @@ let
         case "$proto" in tcp|udp) ;; *) continue ;; esac
         case "$port" in ""|*[!0-9]*) continue ;; esac
         $nft add element inet nixos-fw temp-ports "{ $proto . $port }" \
-          || echo "boxes: could not open $proto/$port (from $f)" >&2
+          || echo "containers: could not open $proto/$port (from $f)" >&2
       done < "$f"
     done
   '';
 in
 {
-  options.boxes = {
+  options.ringofstorms.containers = {
     enable = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Host support for floating containers managed by the `boxes` CLI.";
+      description = "Host support for floating containers managed by the `containers` CLI.";
     };
     nginx.enable = lib.mkOption {
       type = lib.types.bool;
@@ -46,7 +46,7 @@ in
     };
     package = lib.mkOption {
       type = lib.types.package;
-      description = "The `boxes` CLI, installed system-wide.";
+      description = "The `containers` CLI, installed system-wide.";
     };
     privateNetwork = {
       enable = lib.mkOption {
@@ -77,12 +77,12 @@ in
           "d ${stateDir} 0755 root root -"
           "d ${stateDir}/nginx 0755 root root -"
           "d ${stateDir}/ports 0755 root root -"
-          "d /nix/var/nix/gcroots/boxes 0755 root root -"
+          "d /nix/var/nix/gcroots/fleet-containers 0755 root root -"
         ];
 
         # Re-adds runtime ports after every firewall start or reload
         # (flushRuleset wipes them).
-        systemd.services.boxes-ports = {
+        systemd.services.fleet-containers-ports = {
           description = "Open firewall ports for floating containers";
           wantedBy = [ "multi-user.target" ];
           after = [ "nftables.service" ];
@@ -109,8 +109,12 @@ in
           pkgs.rsync
           cfg.package
         ];
+        environment.shellAliases.cnt = "containers";
       }
 
+      # Runtime vhosts: `containers deploy` writes <svc>.conf into the include
+      # dir, runs `nginx -t` (renaming the file to .broken on failure) and then
+      # `systemctl reload nginx`. No rebuild is needed for new sites.
       (lib.mkIf cfg.nginx.enable {
         services.nginx = {
           enable = true;
@@ -125,6 +129,8 @@ in
           };
         };
         systemd.services.nginx.serviceConfig.ReadOnlyPaths = [ "${stateDir}/nginx" ];
+        # `containers deploy` validates new sites with `nginx -t` before reloading.
+        environment.systemPackages = [ config.services.nginx.package ];
       })
 
       (lib.mkIf cfg.privateNetwork.enable {

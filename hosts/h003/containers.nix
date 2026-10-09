@@ -1,13 +1,13 @@
 # Host-level support for floating containers on h003.
 # The containers host module (inputs.containers.nixosModules.default) provides
 # nginx with the runtime include dir, runtime firewall ports, extra-container
-# and podman. Services themselves (minecraft, ...) are deployed with `boxes`,
-# not by rebuilding this host. See flakes/containers/README.md.
+# and podman. Services themselves (minecraft, ...) are deployed with `containers`,
+# not by rebuilding this host. See containers/README.md.
 { ... }:
 {
-  boxes.nginx.enable = true;
+  ringofstorms.containers.nginx.enable = true;
 
-  # Per-service nginx sites (written by `boxes deploy`) listen on the
+  # Per-service nginx sites (written by `containers deploy`) listen on the
   # tailscale overlay IP. Wait for tailscale to have its address;
   # IPFreeBind lets nginx bind even if it races.
   systemd.services.nginx = {

@@ -1,7 +1,7 @@
-# Shared helpers for "floating" services in flakes/containers/<app>/.
+# Shared helpers for "floating" services in containers/<app>/.
 #
 # Every app directory has:
-#   service.nix  plain metadata (read by the parent flake and the `boxes` CLI)
+#   service.nix  plain metadata (read by the parent flake and the `containers` CLI)
 #   flake.nix    builds the deployable artifact as packages.<system>.default
 #
 # Two kinds of service:
@@ -50,7 +50,7 @@ in
   #                          Every bind (including /nix) is idmapped, so the
   #                          filesystem behind /srv/containers must support
   #                          idmapped mounts (ext4, btrfs, xfs, tmpfs,
-  #                          bcachefs on recent kernels; run `boxes check-idmap`).
+  #                          bcachefs on recent kernels; run `containers check-idmap`).
   mkNixosContainer =
     {
       service,
@@ -75,7 +75,7 @@ in
             imports = [ config ];
             # With the host network the guest has no CAP_NET_ADMIN on the host
             # namespace (privateUsers), so its firewall can't load. The host
-            # firewall is the one that counts; ports are opened by `boxes`.
+            # firewall is the one that counts; ports are opened by `containers`.
             networking.firewall.enable = lib.mkIf (!privateNetwork) (lib.mkForce false);
           };
       }
@@ -83,9 +83,9 @@ in
     };
 
   # A deployable podman service. Produces a store path with:
-  #   etc/systemd/system/boxes-<name>.service
-  #   bin/boxes-install    links the unit into /etc/systemd-mutable/system and (re)starts it
-  #   bin/boxes-uninstall  stops the unit and removes the link (data is kept)
+  #   etc/systemd/system/fleet-<name>.service
+  #   bin/fleet-install    links the unit into /etc/systemd-mutable/system and (re)starts it
+  #   bin/fleet-uninstall  stops the unit and removes the link (data is kept)
   #
   # `podman` attrs:
   #   image       required, e.g. "docker.io/traefik/whoami:v1.10"
@@ -102,7 +102,7 @@ in
     let
       svc = normalize service;
       p = svc.podman;
-      unitName = "boxes-${svc.name}.service";
+      unitName = "fleet-${svc.name}.service";
       lib = pkgs.lib;
       publish = map (
         port:
@@ -129,7 +129,7 @@ in
       ++ (p.cmd or [ ]);
       unit = pkgs.writeText unitName ''
         [Unit]
-        Description=boxes podman service ${svc.name}
+        Description=containers podman service ${svc.name}
         Wants=network-online.target
         After=network-online.target
         ${lib.concatMapStrings (b: "RequiresMountsFor=${b.host}\n") (persistList svc)}
@@ -147,11 +147,11 @@ in
         WantedBy=multi-user.target
       '';
       mutable = "/etc/systemd-mutable/system";
-      install = pkgs.writeShellScript "boxes-install" ''
+      install = pkgs.writeShellScript "fleet-install" ''
         set -euo pipefail
         self=$(dirname "$(dirname "$(readlink -f "$0")")")
-        mkdir -p ${mutable}/multi-user.target.wants /nix/var/nix/gcroots/boxes
-        ln -sfn "$self" /nix/var/nix/gcroots/boxes/${svc.name}
+        mkdir -p ${mutable}/multi-user.target.wants /nix/var/nix/gcroots/fleet-containers
+        ln -sfn "$self" /nix/var/nix/gcroots/fleet-containers/${svc.name}
         old=$(readlink -f ${mutable}/${unitName} 2>/dev/null || true)
         ln -sfn "$self/etc/systemd/system/${unitName}" ${mutable}/${unitName}
         ln -sfn ../${unitName} ${mutable}/multi-user.target.wants/${unitName}
@@ -160,16 +160,16 @@ in
           systemctl restart ${unitName}
         fi
       '';
-      uninstall = pkgs.writeShellScript "boxes-uninstall" ''
+      uninstall = pkgs.writeShellScript "fleet-uninstall" ''
         set -euo pipefail
         systemctl stop ${unitName} || true
-        rm -f ${mutable}/${unitName} ${mutable}/multi-user.target.wants/${unitName} /nix/var/nix/gcroots/boxes/${svc.name}
+        rm -f ${mutable}/${unitName} ${mutable}/multi-user.target.wants/${unitName} /nix/var/nix/gcroots/fleet-containers/${svc.name}
         systemctl daemon-reload
       '';
     in
-    pkgs.runCommand "boxes-${svc.name}" { } ''
+    pkgs.runCommand "fleet-${svc.name}" { } ''
       install -D -m644 ${unit} $out/etc/systemd/system/${unitName}
-      install -D -m755 ${install} $out/bin/boxes-install
-      install -D -m755 ${uninstall} $out/bin/boxes-uninstall
+      install -D -m755 ${install} $out/bin/fleet-install
+      install -D -m755 ${uninstall} $out/bin/fleet-uninstall
     '';
 }

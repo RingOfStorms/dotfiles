@@ -11,7 +11,7 @@
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     stt_ime.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/stt_ime";
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
-    containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers";
+    containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=containers";
     omp-flake.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/omp";
     tmux-agents.url = "path:../../flakes/tmux-agents";
     nono.url = "github:always-further/nono/6118b79aeda1365da213d85457b4d3cf1201d575";

@@ -31,13 +31,13 @@ File owners in these dirs are container UIDs (idmapped). Don't chown them.
 ## Everyday
 
 ```sh
-boxes ls                         # where it runs, state
-boxes logs minecraft             # follow the container journal
-boxes attach minecraft           # tmux session `mc`: velocity / survival / creative
+containers ls                         # where it runs, state
+containers logs minecraft             # follow the container journal
+containers attach minecraft           # tmux session `mc`: velocity / survival / creative
                                  # (Ctrl-b d to detach; on h003 also: mc-attach)
-boxes deploy minecraft           # update to the latest pushed config
-boxes stop minecraft             # blocking stop (saves worlds, stops postgres)
-boxes restart minecraft
+containers deploy minecraft           # update to the latest pushed config
+containers stop minecraft             # blocking stop (saves worlds, stops postgres)
+containers restart minecraft
 ```
 
 Servers restart daily at 04:00 (timer inside the container).
@@ -45,19 +45,19 @@ Servers restart daily at 04:00 (timer inside the container).
 ## Backup / restore
 
 ```sh
-boxes backup minecraft           # pg_dumpall, stop, tar to ./minecraft-h003-<date>.tar.zst, start
-boxes restore minecraft <file> --host h003 --force
-boxes deploy minecraft
+containers backup minecraft           # pg_dumpall, stop, tar to ./minecraft-h003-<date>.tar.zst, start
+containers restore minecraft <file> --host h003 --force
+containers deploy minecraft
 ```
 
-To restore only the database from the dump: `boxes shell minecraft`, then
+To restore only the database from the dump: `containers shell minecraft`, then
 `runuser -u postgres -- psql -f /var/lib/postgresql/dumpall.sql`.
 
 ## Move hosts
 
 ```sh
-boxes check-idmap h001
-boxes move minecraft --to h001
+containers check-idmap h001
+containers move minecraft --to h001
 ```
 
 Then:
@@ -83,7 +83,7 @@ containers` in `hosts/h003`, rebuild):
 
 ```sh
 # 0. Check idmap works here
-boxes check-idmap h003           # from any machine; or the script in ../README.md
+containers check-idmap h003           # from any machine; or the script in ../README.md
 
 # 1. Make sure it's stopped (blocking) and take a full backup of the old root
 sudo systemctl stop container@minecraft
@@ -104,13 +104,13 @@ sudo ls -ln $new/srv $new/postgresql/17 | head   # owners: minecraft uid, postgr
 sudo extra-container destroy minecraft
 
 # 4. Deploy the new one (from any machine)
-boxes deploy minecraft
-boxes logs minecraft             # wait for "Done" from survival/creative
+containers deploy minecraft
+containers logs minecraft             # wait for "Done" from survival/creative
 ```
 
 Verify: connect a client to the public address on 25565; open
 `https://computerboyz.joshuabell.xyz/map/survival/`; `/lp info` in game works
 (LuckPerms ↔ postgres).
 
-If it fails: `boxes stop minecraft`, read `boxes logs minecraft --unit`. The
+If it fails: `containers stop minecraft`, read `containers logs minecraft --unit`. The
 old state is in `~/mc-pre-migration-*.tar.gz`.

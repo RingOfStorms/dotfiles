@@ -1,7 +1,7 @@
 {
   description = "Minecraft floating container: Velocity proxy + 2 Paper servers via nix-minecraft";
 
-  # Managed with the `boxes` CLI (see ../README.md and ./README.md).
+  # Managed with the `containers` CLI (see ../README.md and ./README.md).
   # By hand on the host:
   #   nix run .  -- create --start          deploy or update
   #   sudo systemctl stop container@minecraft   blocking stop
@@ -24,12 +24,12 @@
       ...
     }:
     let
-      boxes = import ../lib.nix;
+      containersLib = import ../lib.nix;
     in
     extra-container.lib.eachSupportedSystem (system: {
       packages.default = extra-container.lib.buildContainers {
         inherit system nixpkgs;
-        config = boxes.mkNixosContainer {
+        config = containersLib.mkNixosContainer {
           service = import ./service.nix;
           specialArgs = { inherit nix-minecraft; };
           config = import ./container.nix;

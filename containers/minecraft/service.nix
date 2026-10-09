@@ -1,11 +1,11 @@
 # Metadata for the minecraft service. Plain data: read by ../flake.nix
-# (inventory for the `boxes` CLI) and by ./flake.nix (container build).
+# (inventory for the `containers` CLI) and by ./flake.nix (container build).
 {
   name = "minecraft";
   kind = "nixos";
   description = "Velocity proxy + Paper survival/creative, LuckPerms on PostgreSQL, squaremap";
 
-  # Where it should run. `boxes move` moves the data; then update this line
+  # Where it should run. `containers move` moves the data; then update this line
   # and push.
   host = "h003";
 
@@ -21,7 +21,7 @@
   # Opened in the host firewall at deploy time (container shares host network).
   tcpPorts = [ 25565 ];
 
-  # Written to /var/lib/boxes/nginx/minecraft.conf on the host.
+  # Written to /var/lib/fleet-containers/nginx/minecraft.conf on the host.
   # @OVERLAY_IP@ is replaced with the host's tailscale IP from hosts/fleet.nix.
   # o002 terminates TLS for computerboyz.joshuabell.xyz and proxies here.
   nginx = ''
@@ -46,6 +46,6 @@
   # persisted dir so it travels with the data.
   backupHook = "runuser -u postgres -- pg_dumpall > /var/lib/postgresql/dumpall.sql";
 
-  # `boxes attach minecraft`
+  # `containers attach minecraft`
   attach = "tmux attach -t mc";
 }

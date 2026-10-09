@@ -1,5 +1,5 @@
 {
-  description = "Floating self-hosted services (nspawn + podman) and the `boxes` CLI";
+  description = "Floating self-hosted services (nspawn + podman) and the `containers` CLI";
 
   inputs = {
     extra-container.url = "github:erikarvstedt/extra-container";
@@ -14,7 +14,7 @@
       ...
     }:
     let
-      boxesLib = import ./lib.nix;
+      containersLib = import ./lib.nix;
       systems = [
         "x86_64-linux"
         "aarch64-linux"
@@ -31,12 +31,12 @@
           name = dir;
           value =
             let
-              s = boxesLib.normalize (import (./. + "/${dir}/service.nix"));
+              s = containersLib.normalize (import (./. + "/${dir}/service.nix"));
             in
             s
             // {
               inherit dir;
-              persistPaths = boxesLib.persistList s;
+              persistPaths = containersLib.persistList s;
             };
         }) serviceDirs
       );
@@ -51,30 +51,30 @@
             ./host-module.nix
           ];
           # the CLI, built with the host's pkgs (no extra nixpkgs eval)
-          boxes.package = nixpkgs.lib.mkDefault (pkgs.callPackage ./boxes { });
+          ringofstorms.containers.package = nixpkgs.lib.mkDefault (pkgs.callPackage ./cli { });
         };
 
-      lib = boxesLib;
+      lib = containersLib;
 
-      # Inventory read by the `boxes` CLI:
+      # Inventory read by the `containers` CLI:
       #   nix eval --json <ref>#inventory
       inventory = {
         inherit services;
-        hosts = (import ../../hosts/fleet.nix).hosts;
-        dataRoot = boxesLib.dataRoot;
+        hosts = (import ../hosts/fleet.nix).hosts;
+        dataRoot = containersLib.dataRoot;
       };
 
       packages = forAll (pkgs: rec {
-        boxes = pkgs.callPackage ./boxes { };
-        default = boxes;
+        containers = pkgs.callPackage ./cli { };
+        default = containers;
       });
 
       apps = forAll (pkgs: rec {
-        boxes = {
+        containers = {
           type = "app";
-          program = "${self.packages.${pkgs.system}.boxes}/bin/boxes";
+          program = "${self.packages.${pkgs.system}.containers}/bin/containers";
         };
-        default = boxes;
+        default = containers;
       });
     };
 }

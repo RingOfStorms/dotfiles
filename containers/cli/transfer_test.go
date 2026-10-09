@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -47,7 +49,7 @@ for a in "$@"; do case "$a" in -o|-t) ;; *@*) target="${a#*@}";; esac; done
 echo "ssh $target: $last" >> ` + r.log + `
 host="$target"
 script="$last"
-script="${script//\/etc\/systemd-mutable\/system/\/}"
+script="${script//test -d \/etc\/systemd-mutable\/system/test -d \/}"
 if [ "$host" = dst ]; then s='` + r.root + `'; d='` + r.dst + `'; script="${script//"$s"/"$d"}"; fi
 brk="BREAK_$host"; extra="${!brk:-}"
 PATH="${extra:+$extra:}` + r.bin + `:$PATH" eval "$script"
@@ -309,5 +311,54 @@ func TestSSHUserFallback(t *testing.T) {
 	a = sshArgs("h003", false, "true", true)
 	if !slices.Contains(a, "root@h003") || strings.HasPrefix(a[len(a)-1], "sudo") {
 		t.Fatalf("--ssh-user must override fleet user: %v", a)
+	}
+}
+
+func TestCheckPlacement(t *testing.T) {
+	s := Service{Name: "mc", Dir: "mc", Host: "h003"}
+	at := func(hosts ...string) func(Service) ([]string, []string) {
+		return func(Service) ([]string, []string) { return hosts, nil }
+	}
+	if err := checkPlacement(s, at()); err != nil {
+		t.Errorf("not installed anywhere should be allowed (first deploy): %v", err)
+	}
+	if err := checkPlacement(s, at("h003")); err != nil {
+		t.Errorf("on declared host should be allowed: %v", err)
+	}
+	err := checkPlacement(s, at("h001"))
+	if err == nil || !strings.Contains(err.Error(), `host = "h001"`) {
+		t.Errorf("moved service must be refused with the fix: %v", err)
+	}
+	if err := checkPlacement(s, at("h001", "h003")); err == nil {
+		t.Error("installed on several hosts must be refused")
+	}
+	if w := moveWarning(s, "h001"); !strings.Contains(w, `host = "h001"`) || !strings.Contains(w, "containers/mc/service.nix") {
+		t.Errorf("warning lacks the edit to make:\n%s", w)
+	}
+}
+
+// Discovery must find services that are installed but stopped, disabled and
+// no longer loaded in systemd (so absent from `list-units --all`).
+func TestProbeFindsInstalledButUnloaded(t *testing.T) {
+	r := newRig(t)
+	root := t.TempDir()
+	must(t, os.MkdirAll(root+"/etc/systemd-mutable/system", 0o755))
+	must(t, os.MkdirAll(root+"/nix/var/nix/gcroots/fleet-containers", 0o755))
+	must(t, os.WriteFile(root+"/etc/systemd-mutable/system/container@mc.service", nil, 0o644))
+	must(t, os.WriteFile(root+"/etc/systemd-mutable/system/container@.service", nil, 0o644))
+	must(t, os.Symlink(root, root+"/nix/var/nix/gcroots/fleet-containers/web"))
+	// systemctl knows nothing: list-units prints only an unrelated helper,
+	// show prints nothing (as for an unloaded unit).
+	writeExe(t, filepath.Join(r.bin, "systemctl"), "#!/bin/sh\ncase \"$1\" in list-units) echo 'fleet-containers-ports.service loaded active exited x';; esac\nexit 0\n")
+	t.Setenv("CONTAINERS_PROBE_ROOT", root)
+	rows, err := probe(context.Background(), "src")
+	must(t, err)
+	got := map[string]string{}
+	for _, x := range rows {
+		got[x.svc] = x.kind + "/" + x.state
+	}
+	want := map[string]string{"mc": "nixos/inactive", "web": "podman/inactive"}
+	if !maps.Equal(got, want) {
+		t.Fatalf("probe = %v, want %v", got, want)
 	}
 }

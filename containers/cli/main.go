@@ -1,4 +1,4 @@
-// boxes: deploy, inspect and move floating services from flakes/containers.
+// containers: deploy, inspect and move floating services from containers.
 //
 // Everything runs over ssh against the fleet hosts; nothing has to be
 // installed on the hosts besides the containers host module.
@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -55,9 +56,9 @@ var (
 )
 
 func usage() {
-	fmt.Fprint(os.Stderr, `boxes - floating services from flakes/containers
+	fmt.Fprint(os.Stderr, `containers - floating services from containers
 
-usage: boxes [global flags] <command> [args]
+usage: containers [global flags] <command> [args]
 
 commands:
   ls | status [--all]          where each service runs, declared host vs actual
@@ -81,17 +82,17 @@ commands:
   inventory                    print the inventory JSON
 
 global flags (or env):
-  --repo URL    flake repo (BOXES_REPO, default `+defaultRepo+`)
+  --repo URL    flake repo (CONTAINERS_REPO, default `+defaultRepo+`)
                 use git+file:///path/to/checkout for local, unpushed work
-  --ssh-user U  ssh as this user for every host (BOXES_SSH_USER); default is
+  --ssh-user U  ssh as this user for every host (CONTAINERS_SSH_USER); default is
                 the host's user in hosts/fleet.nix. sudo is skipped for root
   --dry-run     print remote commands instead of running them
 `)
 }
 
 func main() {
-	repo = envOr("BOXES_REPO", defaultRepo)
-	sshUser = os.Getenv("BOXES_SSH_USER")
+	repo = envOr("CONTAINERS_REPO", defaultRepo)
+	sshUser = os.Getenv("CONTAINERS_SSH_USER")
 	args := os.Args[1:]
 	for len(args) > 0 && strings.HasPrefix(args[0], "--") {
 		switch args[0] {
@@ -171,7 +172,7 @@ func need(args []string) string {
 }
 
 func die(f string, a ...any) {
-	fmt.Fprintf(os.Stderr, "boxes: "+f+"\n", a...)
+	fmt.Fprintf(os.Stderr, "containers: "+f+"\n", a...)
 	os.Exit(1)
 }
 
@@ -186,7 +187,7 @@ func flakeRef(dir string) string {
 	if strings.Contains(repo, "?") {
 		sep = "&"
 	}
-	return repo + sep + "dir=flakes/containers" + func() string {
+	return repo + sep + "dir=containers" + func() string {
 		if dir == "" {
 			return ""
 		}
@@ -239,14 +240,14 @@ func service(name string) Service {
 
 func unitOf(s Service) string {
 	if s.Kind == "podman" {
-		return "boxes-" + s.Name + ".service"
+		return "fleet-" + s.Name + ".service"
 	}
 	return "container@" + s.Name + ".service"
 }
 
 func dataDir(s Service) string { return inv.DataRoot + "/" + s.Name }
 
-// userFor is the ssh login for host: --ssh-user / BOXES_SSH_USER if set,
+// userFor is the ssh login for host: --ssh-user / CONTAINERS_SSH_USER if set,
 // else the host's `user` in hosts/fleet.nix, else ssh's own default.
 func userFor(host string) string {
 	if sshUser != "" {
@@ -353,7 +354,10 @@ func (f flags) svc() Service {
 	return service(f.pos[0])
 }
 
-// hostFor picks --host, else the host where it's running, else the declared host.
+// hostFor picks --host if given. Otherwise it uses the declared host from
+// service.nix, but first checks where the service is really installed; if
+// that disagrees (e.g. after `containers move` before service.nix was
+// updated) it refuses loudly instead of acting on the wrong host.
 func hostFor(s Service, f flags) string {
 	if h := f.vals["host"]; h != "" {
 		return h
@@ -361,7 +365,81 @@ func hostFor(s Service, f flags) string {
 	if s.Host == "" {
 		die("%s has no host in service.nix; pass --host", s.Name)
 	}
+	if dryRun {
+		return s.Host
+	}
+	if err := checkPlacement(s, locate); err != nil {
+		die("%v", err)
+	}
 	return s.Host
+}
+
+// locate returns the hosts where s is installed (any state) and the hosts
+// that could not be reached. It asks the declared host first and only
+// probes the rest of the fleet when the service is not there.
+func locate(s Service) (found, unreachable []string) {
+	ask := func(hosts []string) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		var mu sync.Mutex
+		var wg sync.WaitGroup
+		for _, h := range hosts {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				rows, err := probe(ctx, h)
+				mu.Lock()
+				defer mu.Unlock()
+				if err != nil {
+					unreachable = append(unreachable, h)
+					return
+				}
+				for _, r := range rows {
+					if r.svc == s.Name {
+						found = append(found, h)
+						return
+					}
+				}
+			}()
+		}
+		wg.Wait()
+	}
+	ask([]string{s.Host})
+	if slices.Contains(found, s.Host) {
+		return found, unreachable
+	}
+	var others []string
+	for h := range inv.Hosts {
+		if h != s.Host {
+			others = append(others, h)
+		}
+	}
+	ask(others)
+	sort.Strings(found)
+	sort.Strings(unreachable)
+	return found, unreachable
+}
+
+// checkPlacement returns an error when s is installed somewhere other than
+// its declared host. Not being installed anywhere is fine (first deploy).
+func checkPlacement(s Service, locate func(Service) ([]string, []string)) error {
+	found, _ := locate(s)
+	if len(found) == 0 || slices.Equal(found, []string{s.Host}) {
+		return nil
+	}
+	var elsewhere []string
+	for _, h := range found {
+		if h != s.Host {
+			elsewhere = append(elsewhere, h)
+		}
+	}
+	return fmt.Errorf(`
+!!! %[1]s is declared on %[2]s but installed on %[3]s.
+!!! service.nix is out of date (was it moved without updating the repo?).
+!!! Refusing to guess. Either:
+!!!   - set   host = %[4]q;   in containers/%[5]s/service.nix and push, or
+!!!   - pass  --host <host>   to act on a specific host this once.`,
+		s.Name, s.Host, strings.Join(found, ", "), elsewhere[0], s.Dir)
 }
 
 // ---------------------------------------------------------------- status
@@ -370,18 +448,29 @@ type row struct {
 	host, svc, kind, state, since, mem string
 }
 
+// probeScript lists every service installed on a host, running or not.
+// `systemctl list-units --all` only shows units loaded in memory, so a
+// stopped/disabled unit can vanish from it after unloading or a reboot.
+// Installed units are therefore found on disk too: extra-container writes
+// container@<name>.service into the mutable unit dir, and podman services
+// keep a gcroot. $R is only set by tests.
 const probeScript = `
-for u in $(systemctl list-units --all --plain --no-legend 'container@*.service' 'boxes-*.service' | awk '{print $1}'); do
+R=${CONTAINERS_PROBE_ROOT:-}
+{
+  systemctl list-units --all --plain --no-legend 'container@*.service' 'fleet-*.service' | awk '{print $1}'
+  for f in "$R"/etc/systemd-mutable/system/container@?*.service; do [ -e "$f" ] && basename "$f"; done
+  for f in "$R"/nix/var/nix/gcroots/fleet-containers/*; do [ -e "$f" ] && echo "fleet-$(basename "$f").service"; done
+} | sort -u | while read -r u; do
   case "$u" in
-    container@.service) continue;;
-    # podman services are only those installed by boxes (they have a gcroot);
-    # this skips the host module's own units such as boxes-ports.service
-    boxes-*.service) n=${u#boxes-}; n=${n%.service}; [ -e "/nix/var/nix/gcroots/boxes/$n" ] || continue;;
+    container@.service|"") continue;;
+    # podman services are only those installed by the CLI (they have a gcroot);
+    # this skips the host module's own units such as fleet-containers-ports.service
+    fleet-*.service) n=${u#fleet-}; n=${n%.service}; [ -e "$R/nix/var/nix/gcroots/fleet-containers/$n" ] || continue;;
   esac
   st=$(systemctl show -p ActiveState --value "$u")
   ts=$(systemctl show -p ActiveEnterTimestamp --value "$u")
   mem=$(systemctl show -p MemoryCurrent --value "$u")
-  echo "$u|$st|$ts|$mem"
+  echo "$u|${st:-inactive}|$ts|$mem"
 done
 `
 
@@ -400,7 +489,7 @@ func probe(ctx context.Context, host string) ([]row, error) {
 		if n, ok := strings.CutPrefix(name, "container@"); ok {
 			name = strings.TrimSuffix(n, ".service")
 		} else {
-			name = strings.TrimSuffix(strings.TrimPrefix(name, "boxes-"), ".service")
+			name = strings.TrimSuffix(strings.TrimPrefix(name, "fleet-"), ".service")
 			kind = "podman"
 		}
 		rows = append(rows, row{host: host, svc: name, kind: kind, state: p[1], since: ago(p[2]), mem: humanMem(p[3])})
@@ -517,7 +606,7 @@ func statusTable(all bool) string {
 			case !known:
 				note = "not in repo"
 			case s.Host != "" && r.host != s.Host:
-				note = "not on declared host"
+				note = "!! declared " + s.Host + ": set host = \"" + r.host + "\" in service.nix"
 			case len(rows) > 1:
 				note = "installed on several hosts"
 			}
@@ -589,7 +678,7 @@ func cmdStatus(args []string, watch bool) error {
 	for {
 		t := statusTable(all)
 		fmt.Print("\033[H\033[2J")
-		fmt.Printf("boxes watch  (every %s, q to quit)  %s\r\n\r\n", every, time.Now().Format("15:04:05"))
+		fmt.Printf("containers watch  (every %s, q to quit)  %s\r\n\r\n", every, time.Now().Format("15:04:05"))
 		fmt.Print(strings.ReplaceAll(t, "\n", "\r\n") + "\r\n")
 		select {
 		case <-quit:
@@ -649,8 +738,8 @@ func cmdLogs(args []string) error {
 func prepareScript(s Service, host string) string {
 	var b strings.Builder
 	b.WriteString("set -euo pipefail\n")
-	b.WriteString("test -d /etc/systemd-mutable/system -o -d /var/lib/boxes || { echo 'host is missing the containers host module (inputs.containers.nixosModules.default)'; exit 1; }\n")
-	b.WriteString("install -d -m755 /var/lib/boxes/nginx /var/lib/boxes/ports\n")
+	b.WriteString("test -d /etc/systemd-mutable/system -o -d /var/lib/fleet-containers || { echo 'host is missing the containers host module (inputs.containers.nixosModules.default)'; exit 1; }\n")
+	b.WriteString("install -d -m755 /var/lib/fleet-containers/nginx /var/lib/fleet-containers/ports\n")
 	b.WriteString(fmt.Sprintf("install -d -m755 %s\n", q(dataDir(s))))
 	keys := make([]string, 0, len(s.Persist))
 	for k := range s.Persist {
@@ -669,8 +758,8 @@ func prepareScript(s Service, host string) string {
 	for _, p := range s.UDPPorts {
 		fmt.Fprintf(&ports, "udp %d\n", p)
 	}
-	b.WriteString(fmt.Sprintf("printf %%s %s > /var/lib/boxes/ports/%s\n", q(ports.String()), s.Name))
-	b.WriteString("systemctl reload-or-restart boxes-ports.service || true\n")
+	b.WriteString(fmt.Sprintf("printf %%s %s > /var/lib/fleet-containers/ports/%s\n", q(ports.String()), s.Name))
+	b.WriteString("systemctl reload-or-restart fleet-containers-ports.service || true\n")
 	// nginx
 	if s.Nginx != nil && strings.TrimSpace(*s.Nginx) != "" {
 		conf := *s.Nginx
@@ -682,23 +771,23 @@ func prepareScript(s Service, host string) string {
 				conf = strings.ReplaceAll(conf, "@LAN_IP@", *hh.LanIP)
 			}
 		}
-		conf = "# managed by boxes, service " + s.Name + "\n" + conf
-		dst := "/var/lib/boxes/nginx/" + s.Name + ".conf"
+		conf = "# managed by containers, service " + s.Name + "\n" + conf
+		dst := "/var/lib/fleet-containers/nginx/" + s.Name + ".conf"
 		b.WriteString(fmt.Sprintf("printf %%s %s > %s.new\n", q(conf), dst))
 		b.WriteString(fmt.Sprintf("mv %[1]s.new %[1]s\n", dst))
-		b.WriteString(fmt.Sprintf(`if ! nginx -t -c /etc/nginx/nginx.conf 2>/tmp/boxes-nginx.err; then cat /tmp/boxes-nginx.err; mv %[1]s %[1]s.broken; echo "nginx config rejected, kept as %[1]s.broken"; exit 1; fi
+		b.WriteString(fmt.Sprintf(`if ! nginx -t -c /etc/nginx/nginx.conf 2>/tmp/containers-nginx.err; then cat /tmp/containers-nginx.err; mv %[1]s %[1]s.broken; echo "nginx config rejected, kept as %[1]s.broken"; exit 1; fi
 systemctl reload nginx
 `, dst))
 	} else {
-		b.WriteString(fmt.Sprintf("if [ -e /var/lib/boxes/nginx/%[1]s.conf ]; then rm -f /var/lib/boxes/nginx/%[1]s.conf; systemctl reload nginx; fi\n", s.Name))
+		b.WriteString(fmt.Sprintf("if [ -e /var/lib/fleet-containers/nginx/%[1]s.conf ]; then rm -f /var/lib/fleet-containers/nginx/%[1]s.conf; systemctl reload nginx; fi\n", s.Name))
 	}
 	return b.String()
 }
 
 func cleanupScript(s Service) string {
-	return fmt.Sprintf(`rm -f /var/lib/boxes/ports/%[1]s
-systemctl restart boxes-ports.service nftables.service 2>/dev/null || true
-if [ -e /var/lib/boxes/nginx/%[1]s.conf ]; then rm -f /var/lib/boxes/nginx/%[1]s.conf; systemctl reload nginx || true; fi
+	return fmt.Sprintf(`rm -f /var/lib/fleet-containers/ports/%[1]s
+systemctl restart fleet-containers-ports.service nftables.service 2>/dev/null || true
+if [ -e /var/lib/fleet-containers/nginx/%[1]s.conf ]; then rm -f /var/lib/fleet-containers/nginx/%[1]s.conf; systemctl reload nginx || true; fi
 `, s.Name)
 }
 
@@ -745,7 +834,7 @@ func deploy(s Service, h, ref string, local bool) error {
 		script = "set -e\nout=$(nix build --no-link --print-out-paths --refresh " + q(ref) + ")\n"
 	}
 	if s.Kind == "podman" {
-		script += `"$out/bin/boxes-install"` + "\n"
+		script += `"$out/bin/fleet-install"` + "\n"
 	} else {
 		script += `"$out/bin/container" create --start` + "\n"
 	}
@@ -822,7 +911,7 @@ func cmdBackup(args []string) error {
 		out = fmt.Sprintf("%s-%s-%s.tar.zst", s.Name, h, time.Now().Format("2006-01-02T1504"))
 	}
 	if !f.bools["live"] {
-		pre := hookScript(s) + fmt.Sprintf(`if systemctl is-active -q %[1]s; then touch /var/lib/boxes/%[2]s.was-running; systemctl stop %[1]s; fi
+		pre := hookScript(s) + fmt.Sprintf(`if systemctl is-active -q %[1]s; then touch /var/lib/fleet-containers/%[2]s.was-running; systemctl stop %[1]s; fi
 `, unitOf(s), s.Name)
 		info("stopping %s on %s for a consistent copy", s.Name, h)
 		if err := remote(h, true, pre); err != nil {
@@ -839,7 +928,7 @@ func cmdBackup(args []string) error {
 		tarErr = backupTo(exec.Command("ssh", sshArgs(h, false, packScript(inv.DataRoot, s.Name), true)...), out)
 	}
 	if !f.bools["live"] {
-		remote(h, true, fmt.Sprintf("if [ -e /var/lib/boxes/%[2]s.was-running ]; then rm -f /var/lib/boxes/%[2]s.was-running; systemctl start %[1]s; fi", unitOf(s), s.Name))
+		remote(h, true, fmt.Sprintf("if [ -e /var/lib/fleet-containers/%[2]s.was-running ]; then rm -f /var/lib/fleet-containers/%[2]s.was-running; systemctl start %[1]s; fi", unitOf(s), s.Name))
 	}
 	if tarErr != nil {
 		return fmt.Errorf("backup failed, nothing written to %s: %w", out, tarErr)
@@ -854,7 +943,7 @@ func cmdBackup(args []string) error {
 func cmdRestore(args []string) error {
 	f := parse(args, "force")
 	if len(f.pos) < 2 {
-		return errors.New("usage: boxes restore <svc> <file> --host h [--force]")
+		return errors.New("usage: containers restore <svc> <file> --host h [--force]")
 	}
 	s := service(f.pos[0])
 	h := hostFor(s, f)
@@ -886,7 +975,7 @@ fi
 	if err := c.Run(); err != nil {
 		return err
 	}
-	info("restored. deploy with: boxes deploy %s --host %s", s.Name, h)
+	info("restored. deploy with: containers deploy %s --host %s", s.Name, h)
 	return nil
 }
 
@@ -897,9 +986,20 @@ func cmdMove(args []string) error {
 	s := f.svc()
 	to := f.vals["to"]
 	if to == "" {
-		return errors.New("usage: boxes move <svc> --to <host> [--from <host>]")
+		return errors.New("usage: containers move <svc> --to <host> [--from <host>]")
 	}
 	from := f.vals["from"]
+	if from == "" && !dryRun {
+		found, unreachable := locate(s)
+		switch {
+		case len(found) == 1:
+			from = found[0]
+		case len(found) > 1:
+			return fmt.Errorf("%s is installed on several hosts (%s); pass --from", s.Name, strings.Join(found, ", "))
+		default:
+			return fmt.Errorf("%s is not installed on any reachable host (unreachable: %v); pass --from", s.Name, unreachable)
+		}
+	}
 	if from == "" {
 		from = s.Host
 	}
@@ -931,13 +1031,13 @@ install -d -m755 %[5]s`, unitOf(s), s.Name, to, q(dst), q(inv.DataRoot))); err !
 			func() (string, error) { return remoteOut(context.Background(), from, true, sum) },
 			func() (string, error) { return remoteOut(context.Background(), to, true, sum) })
 		if err != nil {
-			return fmt.Errorf("%w\n%s is stopped on %s with its data intact (boxes start %s --host %s); partial data may be on %s", err, s.Name, from, s.Name, from, to)
+			return fmt.Errorf("%w\n%s is stopped on %s with its data intact (containers start %s --host %s); partial data may be on %s", err, s.Name, from, s.Name, from, to)
 		}
 	}
 
 	info("4/5 deploying on %s", to)
 	if err := deploy(s, to, flakeRef(s.Dir), false); err != nil {
-		return fmt.Errorf("%w\n%s is stopped on %s with data intact; start it again with: boxes start %s --host %s", err, s.Name, from, s.Name, from)
+		return fmt.Errorf("%w\n%s is stopped on %s with data intact; start it again with: containers start %s --host %s", err, s.Name, from, s.Name, from)
 	}
 
 	info("5/5 removing %s from %s (data kept as %s.moved-<date>)", s.Name, from, dst)
@@ -945,14 +1045,13 @@ install -d -m755 %[5]s`, unitOf(s), s.Name, to, q(dst), q(inv.DataRoot))); err !
 	if err := remote(from, true, rm); err != nil {
 		return fmt.Errorf("cleanup on %s: %w", from, err)
 	}
-	fmt.Printf("\nDone. Now set host = %q; in flakes/containers/%s/service.nix and push.\n", to, s.Dir)
-	fmt.Printf("If the move involves a public route (e.g. the o002 nginx), update it too.\n")
+	fmt.Print(moveWarning(s, to))
 	return nil
 }
 
 func uninstallScript(s Service) string {
 	if s.Kind == "podman" {
-		return fmt.Sprintf("if [ -x /nix/var/nix/gcroots/boxes/%[1]s/bin/boxes-uninstall ]; then /nix/var/nix/gcroots/boxes/%[1]s/bin/boxes-uninstall; fi\n", s.Name)
+		return fmt.Sprintf("if [ -x /nix/var/nix/gcroots/fleet-containers/%[1]s/bin/fleet-uninstall ]; then /nix/var/nix/gcroots/fleet-containers/%[1]s/bin/fleet-uninstall; fi\n", s.Name)
 	}
 	return fmt.Sprintf("systemctl stop %s || true\nextra-container destroy %s\n", unitOf(s), s.Name)
 }
@@ -975,7 +1074,7 @@ const idmapScript = `
 set -u
 check() {
   base=$1
-  d=$(mktemp -d "$base/.boxes-idmap.XXXXXX") || { echo "$base: cannot create temp dir"; return 1; }
+  d=$(mktemp -d "$base/.containers-idmap.XXXXXX") || { echo "$base: cannot create temp dir"; return 1; }
   mkdir "$d/src" "$d/dst"
   touch "$d/src/f" && chown 1000:100 "$d/src/f"
   if mount --bind -o X-mount.idmap=b:0:1000000:65536 "$d/src" "$d/dst" 2>"$d/err"; then
@@ -999,7 +1098,26 @@ echo "kernel $(uname -r)"
 
 func cmdCheckIdmap(args []string) error {
 	if len(args) < 1 {
-		return errors.New("usage: boxes check-idmap <host>")
+		return errors.New("usage: containers check-idmap <host>")
 	}
 	return remote(args[0], true, idmapScript)
+}
+
+// moveWarning is printed after a successful move. Until service.nix is
+// updated, commands without --host refuse to run (see checkPlacement).
+func moveWarning(s Service, to string) string {
+	bar := strings.Repeat("!", 72)
+	return fmt.Sprintf(`
+%[1]s
+!!! %[2]s now runs on %[3]s, but containers/%[4]s/service.nix still says
+!!! host = %[5]q.
+!!!
+!!! Until you change it to   host = %[3]q;   and push, commands for
+!!! %[2]s without --host will refuse to run, and a plain
+!!! 'containers deploy %[2]s' would need --host %[3]s.
+!!!
+!!! Also update any route that pointed at %[5]s
+!!! (e.g. the o002 nginx proxy, router port-forwards).
+%[1]s
+`, bar, s.Name, to, s.Dir, s.Host)
 }

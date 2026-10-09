@@ -1,4 +1,4 @@
-# Example podman service. Copy this directory to flakes/containers/<name>/
+# Example podman service. Copy this directory to containers/<name>/
 # and set `host` to use it.
 {
   name = "whoami";
@@ -9,7 +9,7 @@
   podman = {
     image = "docker.io/traefik/whoami:v1.10";
     ports = [ "18080:80" ]; # 127.0.0.1:18080 on the host
-    environment = { WHOAMI_NAME = "boxes"; };
+    environment = { WHOAMI_NAME = "containers"; };
   };
   nginx = ''
     server {
