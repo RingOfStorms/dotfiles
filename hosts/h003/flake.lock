@@ -55,20 +55,21 @@
     },
     "containers": {
       "inputs": {
-        "extra-container": "extra-container"
+        "extra-container": "extra-container",
+        "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "dir": "flakes/containers",
-        "lastModified": 1787282448,
-        "narHash": "sha256-f78tbPiJdMviRsih4/hhZuzGiy2W9gScM763+V89ZZs=",
+        "dir": "containers",
+        "lastModified": 1791571620,
+        "narHash": "sha256-8uFBl/LT296AyS3eSwijuWjwW1gRXfIVrAcgrr2utiM=",
         "ref": "refs/heads/master",
-        "rev": "da973a36adc7970f8a955edeffc264a27a551a78",
-        "revCount": 1981,
+        "rev": "7fc27414b017cc530fc803263a7325ed0742cd46",
+        "revCount": 2150,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
       "original": {
-        "dir": "flakes/containers",
+        "dir": "containers",
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       }
@@ -130,7 +131,7 @@
     },
     "home-manager": {
       "inputs": {
-        "nixpkgs": "nixpkgs_2"
+        "nixpkgs": "nixpkgs_3"
       },
       "locked": {
         "lastModified": 1787146702,
@@ -165,6 +166,22 @@
     },
     "nixpkgs_2": {
       "locked": {
+        "lastModified": 1782847189,
+        "narHash": "sha256-twXPFqFsrrY5r28Zh7Homgcp2gUMBgQ6WDS98Q/3xFI=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "b6018f87da91d19d0ab4cf979885689b469cdd41",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-25.11",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_3": {
+      "locked": {
         "lastModified": 1786711500,
         "narHash": "sha256-QvnceIGTBeDvDd9oCn+GvdsnkquliuwbVgpiRH68qaQ=",
         "owner": "NixOS",
@@ -179,7 +196,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_3": {
+    "nixpkgs_4": {
       "locked": {
         "lastModified": 1787101114,
         "narHash": "sha256-gwrPcFf/rDjHPaVflbDZ040ZDmBTRj/7+s8ZmE2SaIM=",
@@ -195,7 +212,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_4": {
+    "nixpkgs_5": {
       "locked": {
         "lastModified": 1777578337,
         "narHash": "sha256-Ad49moKWeXtKBJNy2ebiTQUEgdLyvGmTeykAQ9xM+Z4=",
@@ -211,7 +228,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_5": {
+    "nixpkgs_6": {
       "locked": {
         "lastModified": 1785828668,
         "narHash": "sha256-8fsyqeO+mJqvIzeO4xIpgJe/f7MTbbVTEC6RT6WSXNs=",
@@ -809,14 +826,14 @@
         "common": "common",
         "containers": "containers",
         "home-manager": "home-manager",
-        "nixpkgs": "nixpkgs_3",
+        "nixpkgs": "nixpkgs_4",
         "ros_neovim": "ros_neovim",
         "secrets_manager": "secrets_manager"
       }
     },
     "ros_neovim": {
       "inputs": {
-        "nixpkgs": "nixpkgs_4",
+        "nixpkgs": "nixpkgs_5",
         "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring": "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring",
         "nvim_plugin-MunifTanjim/nui.nvim": "nvim_plugin-MunifTanjim/nui.nvim",
         "nvim_plugin-Saecki/crates.nvim": "nvim_plugin-Saecki/crates.nvim",
@@ -893,7 +910,7 @@
     "secrets_manager": {
       "inputs": {
         "flake-utils": "flake-utils_2",
-        "nixpkgs": "nixpkgs_5"
+        "nixpkgs": "nixpkgs_6"
       },
       "locked": {
         "lastModified": 1786750117,
