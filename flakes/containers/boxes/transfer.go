@@ -28,10 +28,13 @@ func unpackScript(decomp, root string) string {
 	return strict + fmt.Sprintf("%s | tar --numeric-owner --xattrs --acls -xpf - -C %s\n", decomp, q(root))
 }
 
-// manifestScript prints a stable digest of file paths, types, sizes, owners
-// and modes under root/name, plus the file count. Used to verify a copy.
+// manifestScript prints a stable digest of paths, types, owners and modes
+// under root/name (plus sizes for regular files and targets for symlinks),
+// then the entry count. Used to verify a copy. Directory sizes are left out:
+// they depend on the filesystem and on history (a dir that once held many
+// files stays large), and tar does not preserve them.
 func manifestScript(root, name string) string {
-	return strict + fmt.Sprintf("cd %s\nfind . -printf '%%P %%y %%s %%U %%G %%m %%l\\n' | LC_ALL=C sort | sha256sum | cut -d' ' -f1\nfind . | wc -l\n",
+	return strict + fmt.Sprintf("cd %s\n{ find . -type f -printf '%%P f %%s %%U %%G %%m\\n'; find . ! -type f -printf '%%P %%y - %%U %%G %%m %%l\\n'; } | LC_ALL=C sort | sha256sum | cut -d' ' -f1\nfind . | wc -l\n",
 		q(root+"/"+name))
 }
 

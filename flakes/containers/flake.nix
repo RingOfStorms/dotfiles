@@ -43,12 +43,16 @@
     in
     {
       # Hosts import this once: inputs.containers.nixosModules.default
-      nixosModules.default = {
-        imports = [
-          extra-container.nixosModules.default
-          ./host-module.nix
-        ];
-      };
+      nixosModules.default =
+        { pkgs, ... }:
+        {
+          imports = [
+            extra-container.nixosModules.default
+            ./host-module.nix
+          ];
+          # the CLI, built with the host's pkgs (no extra nixpkgs eval)
+          boxes.package = nixpkgs.lib.mkDefault (pkgs.callPackage ./boxes { });
+        };
 
       lib = boxesLib;
 

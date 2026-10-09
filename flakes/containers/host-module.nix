@@ -44,6 +44,10 @@ in
       default = false;
       description = "Enable nginx and include ${stateDir}/nginx/*.conf in the http block.";
     };
+    package = lib.mkOption {
+      type = lib.types.package;
+      description = "The `boxes` CLI, installed system-wide.";
+    };
     privateNetwork = {
       enable = lib.mkOption {
         type = lib.types.bool;
@@ -101,7 +105,10 @@ in
         };
         users.groups.containers = { };
 
-        environment.systemPackages = [ pkgs.rsync ];
+        environment.systemPackages = [
+          pkgs.rsync
+          cfg.package
+        ];
       }
 
       (lib.mkIf cfg.nginx.enable {

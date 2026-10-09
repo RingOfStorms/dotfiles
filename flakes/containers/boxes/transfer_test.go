@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -260,3 +261,34 @@ func TestMoveProceedsAfterGoodCopy(t *testing.T) {
 		t.Fatalf("copy incomplete: %d bytes", len(got))
 	}
 }
+
+// Regression: a source dir enlarged by files that were later deleted keeps a
+// larger st_size than its freshly extracted copy. That must not fail the move.
+func TestMoveIgnoresDirectorySizeHistory(t *testing.T) {
+	r := newRig(t)
+	big := filepath.Join(r.root, "svc/data/sub")
+	for i := range 2000 {
+		must(t, os.WriteFile(filepath.Join(big, "tmp-"+strings.Repeat("x", 40)+string(rune('a'+i%26))+itoa(i)), nil, 0o644))
+	}
+	for i := range 2000 {
+		must(t, os.Remove(filepath.Join(big, "tmp-"+strings.Repeat("x", 40)+string(rune('a'+i%26))+itoa(i))))
+	}
+	st, err := os.Stat(big)
+	must(t, err)
+	fresh := t.TempDir()
+	fst, err := os.Stat(fresh)
+	must(t, err)
+	if st.Size() == fst.Size() {
+		t.Skipf("filesystem does not keep grown directory sizes (%d); regression not exercised", st.Size())
+	}
+	err = runMove(t)
+	if err != nil && strings.Contains(err.Error(), "mismatch") {
+		t.Fatalf("copy verification failed on directory size: %v", err)
+	}
+	marker := firstLine(prepareScript(inv.Services["svc"], "dst"))
+	if !strings.Contains(r.calls(), marker) {
+		t.Fatalf("move did not reach deploy after a complete copy: %v\n%s", err, r.calls())
+	}
+}
+
+func itoa(i int) string { return fmt.Sprint(i) }

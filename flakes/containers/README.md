@@ -50,6 +50,7 @@ flakes/containers/
 
 2. In the host flake: `inputs.containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers";`
    and add `inputs.containers.nixosModules.default` to the modules. Rebuild once.
+   This also installs the `boxes` CLI on the host (`boxes.package`).
 
    Options (all optional):
 
@@ -207,7 +208,8 @@ Downtime is the stop + copy + first boot.
    - runs the backupHook, then a blocking stop on the source
    - streams `/srv/containers/minecraft` source → target over ssh (through
      this machine; numeric owners kept)
-   - verifies the copy: a digest of every path, type, size, owner and mode
+   - verifies the copy: a digest of every path, type, owner and mode (plus
+     regular-file sizes and symlink targets)
      must match on both hosts. A failure on either side (read, compress,
      decompress, extract) or a mismatch stops here, before deploy and
      before anything on the source is touched
