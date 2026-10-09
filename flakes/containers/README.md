@@ -1,249 +1,234 @@
-# Extra Containers
+# flakes/containers — floating services
 
-Lightweight, independently deployable NixOS containers managed via
-[extra-container](https://github.com/erikarvstedt/extra-container). Each
-service lives in its own sub-directory with a standalone flake that can be
-built, started, updated, and destroyed without a full `nixos-rebuild` on the
-host.
+One place for self-hosted apps that run on any fleet host **without a host
+`nixos-rebuild`**. Each app (or suite) gets its own directory. Two kinds:
 
-## Architecture
+| kind     | runtime                         | use when                                   |
+|----------|---------------------------------|--------------------------------------------|
+| `nixos`  | extra-container → systemd-nspawn | the app has a NixOS module                 |
+| `podman` | a podman systemd unit            | there is only an OCI image                 |
+
+Both use the same model:
+
+- **Ephemeral root.** Everything in the container is thrown away on each
+  start. Only the dirs listed in `persist` survive.
+- **Data at `/srv/containers/<name>/<key>`** on the host, the same path on
+  every host.
+- **Private UIDs + idmapped binds.** nspawn (`privateUsers = "pick"`) or podman
+  (`--userns=auto`) gives the container its own UID range. Data dirs are
+  bind-mounted with `idmap`, so files on the host have the *same numeric
+  owners the container sees* (postgres = 71, etc.). There is no host UID
+  ledger, and data moves between hosts with a plain `tar --numeric-owner`.
+- **nginx stays on the host.** Each service can ship an nginx `server {}`
+  block. `boxes deploy` writes it to `/var/lib/boxes/nginx/<name>.conf` and
+  reloads nginx. Raw ports (`tcpPorts`/`udpPorts`) are opened at runtime in
+  the nftables `temp-ports` set and re-applied after each firewall reload.
 
 ```
 flakes/containers/
-  flake.nix              # Parent flake: owns the extra-container input,
-                         #   exports NixOS module + shared lib
-  minecraft/             # One container per service
-    flake.nix            # Uses parent's lib to define the container
-    container.nix        # NixOS config that runs inside the container
-    README.md            # Service-specific docs
-  some-future-service/
-    ...
+  flake.nix          host module, lib, inventory, `boxes` package
+  host-module.nix    what each host needs (one rebuild)
+  lib.nix            mkNixosContainer, mkPodmanService
+  boxes/             Go CLI
+  minecraft/         a nixos-kind service
+  examples/whoami/   a podman-kind template (not deployed: no service.nix at top level)
 ```
 
-### How it works
+## One-time host setup
 
-1. **Parent flake** (`flake.nix`) pins `extra-container` once. It exports:
-   - `nixosModules.default` -- import this on any host to install the
-     `extra-container` binary and enable `programs.extra-container`.
-   - `lib` -- the `extra-container` library (notably `buildContainers` and
-     `eachSupportedSystem`), passed through so child flakes use the same
-     version as the host binary.
+1. Check idmapped mounts on the host (bcachefs is a DKMS module, so check
+   every host):
 
-2. **Child flakes** (e.g. `minecraft/flake.nix`) reference the parent via
-   `containers.url = "path:..";` and call `containers.lib.buildContainers`
-   to define their container. This guarantees the host binary and the
-   container build lib are always from the same `extra-container` version.
-
-3. **Containers are systemd-nspawn** under the hood. They use the standard
-   NixOS container infrastructure (`nixos-container` CLI, systemd units).
-   `extra-container` just decouples them from the host's NixOS closure so
-   they can be managed independently.
-
-4. **State persists** at `/var/lib/nixos-containers/<name>/` on the host.
-   No bind mounts needed -- the container's filesystem is a regular
-   directory tree on disk.
-
-## Host Setup
-
-Any host that wants to run extra-containers needs one thing: import the
-parent NixOS module.
-
-```nix
-# In hosts/<hostname>/flake.nix inputs:
-containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers";
-
-# In nixosModules list:
-inputs.containers.nixosModules.default
-```
-
-Then `nixos-rebuild switch` once to install the `extra-container` binary.
-After that, containers are managed imperatively -- no further host rebuilds
-needed for container changes.
-
-## Common Operations
-
-All commands are run from a container's directory (e.g.
-`flakes/containers/minecraft/`).
-
-### Create / Start
-
-```bash
-nix run . -- create --start
-```
-
-Builds the container config and starts it. If the container already exists
-and is running, this updates it in-place via `switch-to-configuration`
-inside the container (like a mini `nixos-rebuild switch`).
-
-### Update After Config Changes
-
-```bash
-# Same command -- it detects changes and applies them
-nix run . -- create --start
-```
-
-For changes that require a full container restart rather than a switch:
-
-```bash
-nix run . -- create --restart-changed
-```
-
-### Stop
-
-```bash
-sudo nixos-container stop <name>
-```
-
-### Start (existing container)
-
-```bash
-sudo nixos-container start <name>
-```
-
-### Destroy
-
-```bash
-# Stops and removes the container (systemd units + /etc links)
-nix run . -- destroy
-```
-
-This does **not** delete persistent data in
-`/var/lib/nixos-containers/<name>/`. To fully clean up:
-
-```bash
-nix run . -- destroy
-sudo rm -rf /var/lib/nixos-containers/<name>
-```
-
-### Shell (ephemeral)
-
-```bash
-# Start an interactive shell in a temporary container
-nix run . -- shell
-
-# Run a single command and exit
-nix run . -- --run c hostname
-```
-
-### Root Login
-
-```bash
-sudo nixos-container root-login <name>
-```
-
-### List Extra Containers
-
-```bash
-extra-container list
-```
-
-### Status
-
-```bash
-sudo nixos-container status <name>
-```
-
-## Migrating a Service Between Hosts
-
-Moving a container from one host to another requires no config changes to
-the container flake itself. The same flake runs identically on any host.
-
-### Steps
-
-1. **Backup state on the source host:**
-
-   ```bash
-   sudo tar -czf <name>-$(date +%F).tar.gz \
-     /var/lib/nixos-containers/<name>/
+   ```sh
+   nix run git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers -- check-idmap h003
    ```
 
-2. **Copy to target host:**
+   Both `/srv/containers` and `/nix/var/nix` must print `OK`. If either
+   fails, nspawn services with `privateUsers = "pick"` will not start on that
+   host. Use another host, or set `privateUsers = "no"` for that service and
+   pin its UIDs.
 
-   ```bash
-   scp <name>-*.tar.gz target-host:/tmp/
-   ```
+2. In the host flake: `inputs.containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers";`
+   and add `inputs.containers.nixosModules.default` to the modules. Rebuild once.
 
-3. **On target host -- ensure prerequisites:**
-   - Host has `extra-container` installed (import `containers.nixosModules.default`)
-   - Any required firewall ports are open
-   - `nixos-rebuild switch` has been run at least once with the module
-
-4. **Restore state on target host:**
-
-   ```bash
-   sudo tar -xzf /tmp/<name>-*.tar.gz -C /
-   ```
-
-5. **Start the container on the target:**
-
-   ```bash
-   # From the container's flake directory (cloned repo)
-   nix run . -- create --start
-   ```
-
-6. **Destroy on the source host:**
-
-   ```bash
-   nix run . -- destroy
-   ```
-
-The container picks up exactly where it left off with all its data intact.
-
-## Backup Strategy
-
-Each container's state is self-contained under
-`/var/lib/nixos-containers/<name>/`. A simple tar/rsync of that directory
-captures everything.
-
-For services with databases, run a dump **inside the container** before
-backing up the directory:
-
-```bash
-sudo nixos-container run <name> -- pg_dumpall -U postgres \
-  | zstd > /var/lib/nixos-containers/<name>/backup-$(date +%F).sql.zst
-```
-
-For automated backups, a host-level restic job can include
-`/var/lib/nixos-containers/` in its paths.
-
-## Adding a New Container
-
-1. Create a new directory under `flakes/containers/<service-name>/`
-2. Add a `flake.nix` that references the parent:
+   Options (all optional):
 
    ```nix
-   {
-     inputs = {
-       containers.url = "path:..";
-       nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-       # ... any service-specific inputs
-     };
-
-     outputs = { containers, nixpkgs, ... }:
-       containers.lib.eachSupportedSystem (system: {
-         packages.default = containers.lib.buildContainers {
-           inherit system nixpkgs;
-           config.containers.<service-name> = {
-             config = import ./container.nix;
-           };
-         };
-       });
-   }
+   boxes.nginx.enable = true;              # nginx + include dir (off by default)
+   boxes.privateNetwork.enable = false;    # NAT/forward for ve-* (privateNetwork containers)
+   boxes.privateNetwork.externalInterface = "enp1s0";
    ```
 
-3. Add a `container.nix` with the NixOS configuration for inside the container
-4. `nix flake lock` to generate the lock file
-5. Open any needed firewall ports on the host
-6. `nix run . -- create --start`
+   For a host that is itself a router with `filterForward` (h003), keep
+   services on the host network (the default) or enable `privateNetwork`,
+   which puts accept rules for `ve-*` at the top of the forward chain.
 
-## Updating extra-container
+## The `boxes` CLI
 
-Run `nix flake update` in `flakes/containers/` to update the shared
-`extra-container` pin. Then:
+```sh
+nix run git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers -- <cmd>
+# or install: inputs.containers.packages.${system}.boxes
+```
 
-1. Rebuild each host that imports the module (`nixos-rebuild switch`) to
-   update the binary
-2. Re-run `nix run . -- create --start` in each container directory to
-   rebuild with the new lib
+It reads the inventory (`services/*/service.nix` + `hosts/fleet.nix`) from the
+**pushed** repo and runs everything over ssh with `sudo`. To try unpushed
+changes, use `--repo git+file:///home/josh/.config/nixos-config` (the hosts
+must be able to fetch that ref, so pair it with `deploy --local`).
 
-Since both sides use the same `flake.lock`, they stay in sync.
+| command | what it does |
+|---|---|
+| `boxes ls` / `boxes ls --all` | each service: kind, declared host, host where it runs, state, uptime, memory. Flags services on the wrong host or on several hosts |
+| `boxes watch` | same, refreshed every 5s (`-n secs`, `q` quits) |
+| `boxes logs <svc>` | follow the journal inside the container (`--unit` for the nspawn unit, `-n`, `--no-follow`) |
+| `boxes deploy <svc>` | create or update from the latest pushed definition on its host (`--host`, `--rev`, `--local` builds here and `nix copy`s) |
+| `boxes stop <svc>` | **blocking** `systemctl stop`; returns when the container is down |
+| `boxes start` / `restart <svc>` | start, or stop+start |
+| `boxes attach <svc>` | the service console (`attach` in service.nix); `shell` for root shell |
+| `boxes backup <svc>` | run hook, stop, tar `/srv/containers/<svc>` to this machine, start again (`-o file`, `--live`) |
+| `boxes restore <svc> <file> --host h` | unpack a backup on a host (`--force` renames existing data) |
+| `boxes move <svc> --to h` | stop, stream data, deploy on target, remove from source |
+| `boxes destroy <svc>` | uninstall (data kept; `--purge` deletes it) |
+| `boxes check-idmap <host>` | the idmap test above |
+
+`--ssh-user root` skips sudo; `--dry-run` prints the remote scripts.
+
+Updating: commit + push, then `boxes deploy <svc>`. nspawn containers whose
+only change is the system closure switch in place
+(`switch-to-configuration test`); changes to the container settings (binds,
+ports) restart them.
+
+## Adding a service
+
+Create `flakes/containers/<name>/` with `service.nix`, `flake.nix` and (for
+nixos) the guest config.
+
+`service.nix` is plain data:
+
+```nix
+{
+  name = "atuin";
+  kind = "nixos";               # or "podman"
+  host = "h001";                # where it should run
+  persist = {                   # key = path inside the container
+    postgresql = "/var/lib/postgresql";
+    nixos = "/var/lib/nixos";   # keep for nixos-kind: stable UID/GID map
+  };
+  tcpPorts = [ ];               # opened in the host firewall (raw ports only)
+  udpPorts = [ ];
+  nginx = ''                    # optional; @OVERLAY_IP@ / @LAN_IP@ substituted
+    server {
+      listen @OVERLAY_IP@:80;
+      server_name atuin.joshuabell.xyz;
+      location / { proxy_pass http://127.0.0.1:8888; }
+    }
+  '';
+  backupHook = "runuser -u postgres -- pg_dumpall > /var/lib/postgresql/dumpall.sql";
+  attach = null;                # command for `boxes attach`
+}
+```
+
+**nixos kind** `flake.nix` (keep nixpkgs on nixos-25.11; extra-container issue #40):
+
+```nix
+outputs = { extra-container, nixpkgs, ... }:
+  let boxes = import ../lib.nix; in
+  extra-container.lib.eachSupportedSystem (system: {
+    packages.default = extra-container.lib.buildContainers {
+      inherit system nixpkgs;
+      config = boxes.mkNixosContainer {
+        service = import ./service.nix;
+        config = import ./container.nix;
+        # specialArgs = { ... };  privateNetwork = false;  privateUsers = "pick";
+      };
+    };
+  });
+```
+
+The container shares the host network by default. Services should bind
+`127.0.0.1` and be fronted by the host nginx; only bind `0.0.0.0` for raw
+ports listed in `tcpPorts`. The guest firewall is disabled (the host firewall
+is what counts). Guest-side timers and services work normally. Host-side
+units cannot be defined from here; that is what `boxes` and the host module do.
+
+**podman kind**: see `examples/whoami/`. `podman.image`, `ports`
+(`"hostPort:containerPort"` binds 127.0.0.1; prefix an address for others),
+`environment`, `extraArgs`, `cmd`.
+
+Notes:
+
+- Every persist key is created empty (root-owned, 0755) on first deploy. The
+  guest's own tmpfiles/StateDirectory fixes ownership inside the namespace.
+  Never `chown` them on the host to a host user.
+- Secrets: put them in a persist dir (generated on first boot, as minecraft
+  does) or copy them in once with `nixos-container run`.
+
+## Backup
+
+```sh
+boxes backup minecraft                      # minecraft-h003-<date>.tar.zst in cwd
+```
+
+The archive is `/srv/containers/<svc>` with numeric owners, xattrs and ACLs,
+taken while the service is stopped (after the backupHook, e.g. a SQL dump).
+It restores on any host.
+
+The archive is written to a hidden temp file next to the output and only
+renamed into place after the remote `tar | zstd` pipeline (run with
+`pipefail`) exits 0 and `zstd -t` passes. A failed backup leaves no file and
+returns an error; the service is still restarted if it was running.
+
+By hand on the host:
+
+```sh
+sudo systemctl stop container@minecraft     # blocks until down
+sudo tar --numeric-owner --xattrs --acls -C /srv/containers -czf ~/minecraft-$(date +%F).tar.gz minecraft
+sudo systemctl start container@minecraft
+```
+
+## Restore
+
+```sh
+boxes stop minecraft                         # if running there
+boxes restore minecraft minecraft-h003-2026-10-08T0400.tar.zst --host h003 --force
+boxes deploy minecraft
+```
+
+`--force` renames the existing data to `<dir>.pre-restore-<epoch>` rather
+than deleting it. By hand: stop, move `/srv/containers/<svc>` aside,
+`sudo tar --numeric-owner -xpf backup.tar.gz -C /srv/containers`, start.
+
+## Moving a service to another host
+
+Downtime is the stop + copy + first boot.
+
+1. The target has the host module and passes `boxes check-idmap <target>`.
+2. `boxes move minecraft --to h001`
+   - checks the target is free (no running unit, no existing data dir)
+   - runs the backupHook, then a blocking stop on the source
+   - streams `/srv/containers/minecraft` source → target over ssh (through
+     this machine; numeric owners kept)
+   - verifies the copy: a digest of every path, type, size, owner and mode
+     must match on both hosts. A failure on either side (read, compress,
+     decompress, extract) or a mismatch stops here, before deploy and
+     before anything on the source is touched
+   - deploys on the target (writes nginx site, opens ports, starts)
+   - uninstalls on the source and renames its data to `minecraft.moved-<date>`
+3. Set `host = "h001";` in `service.nix`, commit, push.
+4. Point any outside routing at the new host (e.g. the `computerboyz` vhost
+   in `hosts/oracle/o002/nginx.nix` proxies to h003's overlay IP; WAN
+   port-forwards on the router).
+5. When happy, delete `/srv/containers/<svc>.moved-*` on the old host.
+
+If step 2 fails during the copy or the deploy, the service is stopped on the source with
+its data untouched: `boxes start <svc> --host <source>`.
+
+## Troubleshooting
+
+- `boxes logs <svc> --unit` shows nspawn errors (bad bind path, idmap
+  unsupported: `Failed to set up id mapped mount`).
+- `journalctl -u container@<svc>` on the host. `machinectl` lists running
+  containers.
+- nginx refused a site: the file is left as
+  `/var/lib/boxes/nginx/<svc>.conf.broken`, and the previous config keeps serving.
+- Ports opened by boxes: `sudo nft list set inet nixos-fw temp-ports`.
+  Source files: `/var/lib/boxes/ports/`.

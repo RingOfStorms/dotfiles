@@ -1,116 +1,116 @@
-# Minecraft Container
+# Minecraft
 
-Managed via `extra-container`. Runs a Velocity proxy + 2 Paper servers inside
-a single NixOS container (systemd-nspawn).
-
-## Architecture
+Velocity proxy and two Paper servers, run as a `nixos`-kind floating container
+(see `../README.md`). Declared host: **h003** (`service.nix`).
 
 ```
 Players :25565 -> Velocity (proxy, auth, routing)
-                    ├── survival :25566  (primary, unmodified Paper)
-                    └── creative :25567  (secondary, for plugin experiments)
+                    ├── survival :25566  (127.0.0.1, primary, Paper)
+                    └── creative :25567  (127.0.0.1, plugin experiments)
+squaremap :8080  -> host nginx (computerboyz.joshuabell.xyz/map/survival/, overlay IP)
+                 <- o002 terminates TLS and proxies over tailscale
+PostgreSQL 17 (127.0.0.1:5432, trust): LuckPerms, shared by all three
 ```
 
-All three run inside the `minecraft` container. State persists at
-`/var/lib/nixos-containers/minecraft/` on the host filesystem.
+The container shares the host network. The host opens only 25565, at runtime
+(`tcpPorts`). 8080 is reached through the host nginx site in `service.nix`.
 
-## Prerequisites
+## Data
 
-The host must have `extra-container` installed. Import the containers NixOS
-module in your host flake:
+Ephemeral root. These survive, on the host under `/srv/containers/minecraft/`:
 
-```nix
-inputs.containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers";
-# ...
-nixosModules = [ inputs.containers.nixosModules.default ];
+| host dir      | in container                 | contents |
+|---------------|------------------------------|----------|
+| `srv/`        | `/srv/minecraft`             | worlds, plugin data, velocity/survival/creative dirs |
+| `secrets/`    | `/var/lib/minecraft-secrets` | velocity forwarding secret (generated on first boot) |
+| `postgresql/` | `/var/lib/postgresql`        | `17/` cluster + `dumpall.sql` from the backup hook |
+| `nixos/`      | `/var/lib/nixos`             | UID/GID map, keeps file owners stable |
+
+File owners in these dirs are container UIDs (idmapped). Don't chown them.
+
+## Everyday
+
+```sh
+boxes ls                         # where it runs, state
+boxes logs minecraft             # follow the container journal
+boxes attach minecraft           # tmux session `mc`: velocity / survival / creative
+                                 # (Ctrl-b d to detach; on h003 also: mc-attach)
+boxes deploy minecraft           # update to the latest pushed config
+boxes stop minecraft             # blocking stop (saves worlds, stops postgres)
+boxes restart minecraft
 ```
 
-## Deploy / Update
+Servers restart daily at 04:00 (timer inside the container).
 
-```bash
-# From this directory on the host:
-nix run . -- create --start
+## Backup / restore
 
-# Or from anywhere:
-nix run path:/path/to/flakes/containers/minecraft -- create --start
+```sh
+boxes backup minecraft           # pg_dumpall, stop, tar to ./minecraft-h003-<date>.tar.zst, start
+boxes restore minecraft <file> --host h003 --force
+boxes deploy minecraft
 ```
 
-Running `create --start` again after config changes will update the running
-container in-place (via `switch-to-configuration` inside the container).
+To restore only the database from the dump: `boxes shell minecraft`, then
+`runuser -u postgres -- psql -f /var/lib/postgresql/dumpall.sql`.
 
-## Destroy
+## Move hosts
 
-```bash
-nix run . -- destroy
+```sh
+boxes check-idmap h001
+boxes move minecraft --to h001
 ```
 
-## Console Access
+Then:
 
-```bash
-# Root shell inside the container
-sudo nixos-container root-login minecraft
+- set `host = "h001";` in `service.nix` and push;
+- point `computerboyz` in `hosts/oracle/o002/nginx.nix` at the new host's
+  overlay IP and rebuild o002;
+- move the WAN port-forward for 25565 to the new host. Today h003 is the
+  router and the public IP, so for any other host add
+  `nat.forwardPorts` on h003.
 
-# Attach to a specific server's tmux console
-# (inside the container):
-tmux -S /run/minecraft/survival.sock attach
-tmux -S /run/minecraft/creative.sock attach
-tmux -S /run/minecraft/velocity.sock attach
-# Detach: Ctrl+b then d
+See `../README.md` for details.
+
+## One-time migration from the old (stateful) container
+
+The old container kept everything in `/var/lib/nixos-containers/minecraft`
+and shared host UIDs (`privateUsers = "no"`). Those UIDs are the guest's own
+numbers, so copied with numeric owners they are already right for the idmap.
+`var/lib/nixos` comes along so the guest keeps the same UID map.
+
+On **h003**, after the host has the new module (push, `nix flake update
+containers` in `hosts/h003`, rebuild):
+
+```sh
+# 0. Check idmap works here
+boxes check-idmap h003           # from any machine; or the script in ../README.md
+
+# 1. Make sure it's stopped (blocking) and take a full backup of the old root
+sudo systemctl stop container@minecraft
+sudo tar --numeric-owner --xattrs --acls -czf ~/mc-pre-migration-$(date +%F).tar.gz \
+  -C /var/lib/nixos-containers minecraft
+
+# 2. Copy the data into the new layout
+old=/var/lib/nixos-containers/minecraft
+new=/srv/containers/minecraft
+sudo mkdir -p $new/{srv,secrets,postgresql,nixos}
+sudo rsync -aHAX --numeric-ids $old/srv/minecraft/            $new/srv/
+sudo rsync -aHAX --numeric-ids $old/var/lib/minecraft-secrets/ $new/secrets/
+sudo rsync -aHAX --numeric-ids $old/var/lib/postgresql/        $new/postgresql/
+sudo rsync -aHAX --numeric-ids $old/var/lib/nixos/             $new/nixos/
+sudo ls -ln $new/srv $new/postgresql/17 | head   # owners: minecraft uid, postgres 71
+
+# 3. Remove the old container (its data is in the backup and the copy)
+sudo extra-container destroy minecraft
+
+# 4. Deploy the new one (from any machine)
+boxes deploy minecraft
+boxes logs minecraft             # wait for "Done" from survival/creative
 ```
 
-## Backup
+Verify: connect a client to the public address on 25565; open
+`https://computerboyz.joshuabell.xyz/map/survival/`; `/lp info` in game works
+(LuckPerms ↔ postgres).
 
-All container state lives at `/var/lib/nixos-containers/minecraft/` on the host.
-
-```bash
-# Full backup
-sudo tar -czf minecraft-backup-$(date +%F).tar.gz \
-  /var/lib/nixos-containers/minecraft/srv/minecraft/
-
-# Per-server backup (just survival world)
-sudo tar -czf survival-$(date +%F).tar.gz \
-  /var/lib/nixos-containers/minecraft/srv/minecraft/survival/
-```
-
-## Restore
-
-```bash
-# Stop container
-nix run . -- destroy
-
-# Restore from backup
-sudo tar -xzf minecraft-backup-2026-04-16.tar.gz -C /
-
-# Recreate container
-nix run . -- create --start
-```
-
-## Data Locations (inside container)
-
-| Path | Description |
-|------|-------------|
-| `/srv/minecraft/survival/` | Survival world data, server.properties, etc |
-| `/srv/minecraft/creative/` | Creative world data, server.properties, etc |
-| `/srv/minecraft/velocity/` | Velocity config, forwarding.secret |
-| `/srv/minecraft/.mc-*/` | nix-minecraft managed symlinks |
-
-## Ports
-
-| Service | Port | Bind |
-|---------|------|------|
-| Velocity | 25565 | 0.0.0.0 (player-facing) |
-| Survival | 25566 | 127.0.0.1 (backend only) |
-| Creative | 25567 | 127.0.0.1 (backend only) |
-
-## Moving to Another Host
-
-1. Backup on current host (see above)
-2. Ensure new host has `extra-container` installed (import containers module)
-3. Open port 25565 in firewall on new host
-4. Restore backup on new host
-5. `nix run path:./flakes/containers/minecraft -- create --start` on new host
-6. Destroy on old host
-
-## Daily Restart
-
-Servers auto-restart at 4 AM via systemd timer (configured in container.nix).
+If it fails: `boxes stop minecraft`, read `boxes logs minecraft --unit`. The
+old state is in `~/mc-pre-migration-*.tar.gz`.

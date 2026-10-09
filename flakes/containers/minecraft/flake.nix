@@ -1,27 +1,18 @@
 {
-  description = "Minecraft extra-container: Velocity proxy + 2 Paper servers via nix-minecraft";
+  description = "Minecraft floating container: Velocity proxy + 2 Paper servers via nix-minecraft";
 
-  # ── Usage ─────────────────────────────────────────────────────────────────
-  # Start:   nix run . -- create --start
-  # Stop:    sudo nixos-container stop minecraft
-  # Start:   sudo nixos-container start minecraft
-  # Destroy: nix run . -- destroy
-  # Console: sudo nixos-container root-login minecraft
-  #
-  # ── Data ──────────────────────────────────────────────────────────────────
-  # All state: /var/lib/nixos-containers/minecraft/
-  # Worlds:    /var/lib/nixos-containers/minecraft/srv/minecraft/{survival,creative}/
-  # Velocity:  /var/lib/nixos-containers/minecraft/srv/minecraft/velocity/
-  # Secret:    /var/lib/nixos-containers/minecraft/var/lib/minecraft-secrets/
+  # Managed with the `boxes` CLI (see ../README.md and ./README.md).
+  # By hand on the host:
+  #   nix run .  -- create --start          deploy or update
+  #   sudo systemctl stop container@minecraft   blocking stop
+  #   nix run .  -- destroy                  remove (data in /srv/containers/minecraft stays)
 
   inputs = {
     extra-container.url = "github:erikarvstedt/extra-container";
     nix-minecraft.url = "github:Infinidoge/nix-minecraft";
-    # Use 25.11 to match extra-container's nixpkgs pin.
-    # extra-container's eval-config.nix has a minimal module set with dummy
-    # options that are incompatible with nixpkgs-unstable (see issue #40).
-    # nix-minecraft server packages (Paper, Velocity, etc.) are fetched via
-    # its overlay and are independent of the nixpkgs version here.
+    # Must stay on 25.11: extra-container's minimal eval-config breaks on
+    # nixpkgs-unstable (extra-container issue #40). nix-minecraft server
+    # packages come from its overlay, independent of this nixpkgs.
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
   };
 
@@ -32,13 +23,14 @@
       nixpkgs,
       ...
     }:
+    let
+      boxes = import ../lib.nix;
+    in
     extra-container.lib.eachSupportedSystem (system: {
       packages.default = extra-container.lib.buildContainers {
         inherit system nixpkgs;
-
-        config.containers.minecraft = {
-          # No privateNetwork -- services bind directly on host interfaces.
-          # Not ephemeral -- state persists at /var/lib/nixos-containers/minecraft/
+        config = boxes.mkNixosContainer {
+          service = import ./service.nix;
           specialArgs = { inherit nix-minecraft; };
           config = import ./container.nix;
         };

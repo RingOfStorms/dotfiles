@@ -1,56 +1,28 @@
-# These are host level options required for containers we are running on this host.
-# We're purposfully mixing imperative containers in on this host for ease of deploying
-# those individual containers.
-{ constants, lib, ... }:
+# Host-level support for floating containers on h003.
+# The containers host module (inputs.containers.nixosModules.default) provides
+# nginx with the runtime include dir, runtime firewall ports, extra-container
+# and podman. Services themselves (minecraft, ...) are deployed with `boxes`,
+# not by rebuilding this host. See flakes/containers/README.md.
+{ ... }:
 {
-  config = lib.mkMerge [
-    # ── Minecraft (Velocity + 2x Paper) ─────────────────────────────────
-    # Start: nix run ./flakes/containers/minecraft -- create --start
-    # Stop:  nix run ./flakes/containers/minecraft -- destroy
-    {
-      networking.firewall.allowedTCPPorts = [
-        constants.services.minecraft.port # Velocity proxy (player-facing)
-      ];
+  boxes.nginx.enable = true;
 
-      # nginx below binds on the Tailscale overlay IP -- wait for tailscale to
-      # actually be up. tailscaled-autoconnect.service (Type=notify) only
-      # finishes once `tailscale up` returns and tailscale0 has its address;
-      # tailscaled.service alone races. IPFreeBind=true also lets nginx bind
-      # to addresses not yet on any interface as belt-and-suspenders.
-      systemd.services.nginx = {
-        wants = [ "network-online.target" "tailscaled-autoconnect.service" ];
-        after = [ "network-online.target" "tailscaled-autoconnect.service" ];
-        serviceConfig.IPFreeBind = true;
-      };
+  # Per-service nginx sites (written by `boxes deploy`) listen on the
+  # tailscale overlay IP. Wait for tailscale to have its address;
+  # IPFreeBind lets nginx bind even if it races.
+  systemd.services.nginx = {
+    wants = [
+      "network-online.target"
+      "tailscaled-autoconnect.service"
+    ];
+    after = [
+      "network-online.target"
+      "tailscaled-autoconnect.service"
+    ];
+    serviceConfig.IPFreeBind = true;
+  };
 
-      # Reverse proxy for squaremap -- l001 terminates HTTPS and proxies
-      # to h003 over tailscale. This nginx listens on the overlay IP only.
-      services.nginx = {
-        enable = true;
-
-        # Drop everything by default
-        virtualHosts."_" = {
-          default = true;
-          locations."/" = {
-            return = "444";
-          };
-        };
-
-        virtualHosts."computerboyz.joshuabell.xyz" = {
-          listen = [{ addr = "${constants.host.overlayIp}"; port = 80; }];
-          locations."/" = {
-            return = "444";
-          };
-          locations."/map/survival/" = {
-            proxyPass = "http://127.0.0.1:${toString constants.services.minecraft.mapPort}/";
-            proxyWebsockets = true;
-          };
-        };
-      };
-      # Shell aliases for container management
-      environment.shellAliases = {
-        mc-attach = "sudo nixos-container run minecraft -- tmux attach -t mc";
-      };
-    }
-  ];
+  environment.shellAliases = {
+    mc-attach = "sudo nixos-container run minecraft -- tmux attach -t mc";
+  };
 }
