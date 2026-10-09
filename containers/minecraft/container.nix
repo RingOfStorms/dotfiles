@@ -555,7 +555,7 @@ in
       # beyond LuckPerms for network-wide permissions.
       survival = {
         enable = true;
-        package = pkgs.paperServers.paper;
+        package = pkgs.paperServers.paper-26_3; # pin the release: the bare `paper` alias can point at a release candidate, which rejects release clients
         jvmOpts = "-Xms4096M -Xmx12288M"; # Matches original joe config
         serverProperties = paperServerProperties { port = 25566; motd = "Survival"; };
         whitelist = whitelist;
@@ -658,7 +658,7 @@ in
       # Creative mode with normal world gen.
       creative = {
         enable = true;
-        package = pkgs.paperServers.paper;
+        package = pkgs.paperServers.paper-26_3; # pin the release: the bare `paper` alias can point at a release candidate, which rejects release clients
         jvmOpts = "-Xms2048M -Xmx8192M";
         serverProperties = paperServerProperties { port = 25567; motd = "Creative"; } // {
           gamemode = "creative";
