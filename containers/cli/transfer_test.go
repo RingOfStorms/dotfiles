@@ -509,3 +509,94 @@ func TestStopStaysStoppedAcrossReboot(t *testing.T) {
 		sh(disableScript(s)) // idempotent
 	}
 }
+
+// stop -> deploy of the same build must re-enable boot start. The fake
+// extra-container mimics the pinned one: it links the unit and wants only
+// when the build changed, but always starts.
+func TestRedeployUnchangedReenablesBootStart(t *testing.T) {
+	old := mutableUnits
+	t.Cleanup(func() { mutableUnits = old })
+	mutableUnits = t.TempDir()
+	bash := realPath(t, "bash")
+	bin, out := t.TempDir(), t.TempDir()
+	s := Service{Name: "hello-nixos", Kind: "nixos"}
+	u := unitOf(s)
+	must(t, os.MkdirAll(filepath.Join(out, "bin"), 0o755))
+	writeExe(t, filepath.Join(out, "bin", "container"), "#!"+bash+`
+m=`+mutableUnits+`
+if [ "$(cat $m/.built 2>/dev/null)" != v1 ]; then
+  mkdir -p $m/machines.target.wants
+  : > $m/real.unit; ln -sfn $m/real.unit $m/`+u+`
+  ln -sfn ../`+u+` $m/machines.target.wants/`+u+`
+  echo v1 > $m/.built
+fi
+`)
+	writeExe(t, filepath.Join(bin, "systemctl"), "#!/bin/sh\nexit 0\n")
+	sh := func(script string) {
+		c := exec.Command(bash, "-c", "set -euo pipefail\nout="+q(out)+"\n"+script)
+		c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+		if o, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, o)
+		}
+	}
+	sh(installScript(s)) // first deploy
+	sh(disableScript(s)) // cnt stop
+	sh(installScript(s)) // redeploy, same build: extra-container relinks nothing
+	if _, err := os.Lstat(wantsLink(s)); err != nil {
+		t.Fatalf("redeploy of an unchanged build left boot start disabled: %v", err)
+	}
+}
+
+func TestBackupDestDefaultsToHomeBackups(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	got, err := backupDest("", "svc.tar.zst", true)
+	if err != nil || got != filepath.Join(home, "backups", "svc.tar.zst") {
+		t.Fatalf("default: %q %v", got, err)
+	}
+	if st, err := os.Stat(filepath.Join(home, "backups")); err != nil || !st.IsDir() {
+		t.Fatalf("~/backups not created: %v", err)
+	}
+	got, _ = backupDest("~/x/", "svc.tar.zst", true)
+	if got != filepath.Join(home, "x", "svc.tar.zst") {
+		t.Fatalf("-o dir: %q", got)
+	}
+	got, _ = backupDest(filepath.Join(home, "y", "f.tar.zst"), "svc.tar.zst", true)
+	if got != filepath.Join(home, "y", "f.tar.zst") {
+		t.Fatalf("-o file: %q", got)
+	}
+}
+
+// status <svc>: run the real detail script against a fake host tree.
+func TestStatusDetail(t *testing.T) {
+	bash := realPath(t, "bash")
+	d := t.TempDir()
+	oldM, oldN, oldInv := mutableUnits, nginxDir, inv
+	t.Cleanup(func() { mutableUnits, nginxDir, inv = oldM, oldN, oldInv })
+	mutableUnits, nginxDir = d+"/units", d+"/nginx"
+	inv = &Inventory{DataRoot: d + "/srv"}
+	s := Service{Name: "hello-podman", Kind: "podman", Description: "test", Host: "lio",
+		Persist: map[string]string{"data": "/data", "gone": "/x"}, TCPPorts: []int{8082}}
+	for _, p := range []string{mutableUnits + "/multi-user.target.wants", nginxDir, d + "/srv/hello-podman/data"} {
+		must(t, os.MkdirAll(p, 0o755))
+	}
+	must(t, os.WriteFile(mutableUnits+"/"+unitOf(s), nil, 0o644))
+	must(t, os.WriteFile(nginxDir+"/hello-podman.conf", []byte("server { listen 1.2.3.4:80; }\n"), 0o644))
+	must(t, os.WriteFile(d+"/srv/hello-podman/data/f", []byte("hello"), 0o644))
+	bin := t.TempDir()
+	writeExe(t, filepath.Join(bin, "systemctl"), "#!/bin/sh\ncase \"$3\" in ActiveState) echo active;; SubState) echo running;; MemoryCurrent) echo 1048576;; NRestarts) echo 0;; esac\n")
+	script := strings.ReplaceAll(detailScript(s), "/var/lib/fleet-containers/ports", d)
+	must(t, os.WriteFile(d+"/hello-podman", []byte("tcp 8082\n"), 0o644))
+	c := exec.Command(bash, "-c", script)
+	c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+	out, err := c.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	r := renderDetail(s, "lio", string(out))
+	for _, want := range []string{"state       active (running)", "on boot     no", "8082/tcp", "listen 1.2.3.4:80", "data        /data", "missing"} {
+		if !strings.Contains(strings.Join(strings.Fields(r), " "), strings.Join(strings.Fields(want), " ")) {
+			t.Errorf("missing %q in:\n%s", want, r)
+		}
+	}
+}

@@ -31,6 +31,8 @@ containers/
   lib.nix            mkNixosContainer, mkPodmanService
   cli/               Go CLI (`containers`, alias `cnt`)
   minecraft/         a nixos-kind service
+  hello-nixos/       test service, nixos kind: nginx splash page on :8081
+  hello-podman/      test service, podman kind: nginx splash page on :8082
   examples/whoami/   a podman-kind template (not deployed: no service.nix at top level)
 ```
 
@@ -78,14 +80,15 @@ must be able to fetch that ref, so pair it with `deploy --local`).
 
 | command | what it does |
 |---|---|
+| `containers status <svc>` | one service in detail: state, on-boot, memory, restarts, firewall ports, the nginx site on the host, and its data dirs with sizes and owners (what backup/move copy) |
 | `containers ls` / `containers ls --all` | each service: kind, declared host, host where it runs, state, uptime, memory. Flags services on the wrong host or on several hosts |
 | `containers watch` | same, refreshed every 5s (`-n secs`, `q` quits) |
 | `containers logs <svc>` | follow the journal inside the container (`--unit` for the nspawn unit, `-n`, `--no-follow`) |
 | `containers deploy <svc>` | create or update from the latest pushed definition on its host (`--host`, `--rev`, `--local` builds here and `nix copy`s) |
-| `containers stop <svc>` | **blocking** `systemctl stop`; returns when the container is down |
+| `containers stop <svc>` | **blocking** `systemctl stop`; returns when the container is down, and stays stopped across reboots |
 | `containers start` / `restart <svc>` | start, or stop+start |
 | `containers attach <svc>` | the service console (`attach` in service.nix); `shell` for root shell |
-| `containers backup <svc>` | run hook, stop, tar `/srv/containers/<svc>` to this machine, start again (`-o file`, `--live`) |
+| `containers backup <svc>` | asks where to save (default `~/backups`) and, if running, whether to stop it; then hook, stop, tar `/srv/containers/<svc>` to this machine, start again (`-o file\|dir`, `--live`, `-y`) |
 | `containers restore <svc> <file> --host h` | unpack a backup on a host (`--force` renames existing data) |
 | `containers move <svc> --to h` | stop, stream data, deploy on target, remove from source |
 | `containers destroy <svc>` | uninstall (data kept; `--purge` deletes it) |
@@ -203,12 +206,20 @@ Notes:
 ## Backup
 
 ```sh
-containers backup minecraft                      # minecraft-h003-<date>.tar.zst in cwd
+containers backup minecraft            # asks: directory [~/backups], stop it? [y/N]
+containers backup minecraft -y -o /mnt/nas/   # no questions (scripts, cron)
 ```
 
 The archive is `/srv/containers/<svc>` with numeric owners, xattrs and ACLs,
 taken while the service is stopped (after the backupHook, e.g. a SQL dump).
 It restores on any host.
+
+If the service is running, `backup` asks before stopping it (it is started
+again afterwards); answering no cancels, `--live` copies without stopping.
+If it is already stopped it is backed up as is, without asking, and its
+backupHook is skipped (it needs the service running). Without a terminal
+(cron, pipes) nothing is asked: the directory is `~/backups` and a running
+service is only stopped with `--yes`. The directory is created if missing.
 
 The archive is written to a hidden temp file next to the output and only
 renamed into place after the remote `tar | zstd` pipeline (run with
@@ -284,3 +295,21 @@ again on boot; crashes in between restart via `Restart=on-failure`.
   `/var/lib/fleet-containers/nginx/<svc>.conf.broken`.
 - Ports opened by containers: `sudo nft list set inet nixos-fw temp-ports`.
   Source files: `/var/lib/fleet-containers/ports/`.
+
+## Practice services: hello-nixos and hello-podman
+
+Two throwaway twins for trying the workflow; both serve the stock "Welcome
+to nginx!" page and declare `host = "lio"`. hello-nixos runs nginx inside an
+nspawn container on port 8081; hello-podman runs `nginx:alpine` on 8082.
+Each persists `/data` (empty) so you can drop a marker file in
+`/srv/containers/<svc>/data` and watch it follow a move.
+
+```sh
+cnt deploy hello-nixos && cnt deploy hello-podman
+curl http://lio:8081/ http://lio:8082/
+cnt status hello-podman
+cnt stop hello-nixos            # stays down after a reboot
+cnt backup hello-podman
+cnt move hello-nixos --to h003  # then set host = "h003" in its service.nix
+cnt destroy hello-podman --purge
+```

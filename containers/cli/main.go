@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -64,7 +66,9 @@ func usage() {
 usage: containers [global flags] <command> [args]
 
 commands:
-  ls | status [--all]          where each service runs, declared host vs actual
+  ls [--all]                   where each service runs, declared host vs actual
+  status <svc> [--host h]      details: state, ports, nginx site, data dirs (what a backup holds)
+| status [--all]          where each service runs, declared host vs actual
   watch [--all] [-n secs]      refreshing status view (q / ctrl-c to quit)
   logs <svc> [-n N] [--no-follow] [--host h] [--unit]
                                stream logs (inside the container; --unit = nspawn unit)
@@ -75,8 +79,10 @@ commands:
                                across reboots; start/restart/deploy re-enable it
   attach <svc> [--host h]      open the service console (if it defines one)
   shell <svc> [--host h]       root shell inside the container
-  backup <svc> [--host h] [-o file] [--live]
-                               hook, stop, tar data to this machine, start again
+  backup <svc> [--host h] [-o file|dir] [--live] [-y]
+                               asks where to save (default ~/backups) and, if the
+                               service is running, whether to stop it; then hook,
+                               stop, tar data to this machine, start again
   restore <svc> <file> --host h [--force]
                                unpack a backup into /srv/containers/<svc> on a host
   move <svc> --to h [--from h] move data and deployment to another host
@@ -120,8 +126,10 @@ func main() {
 	cmd, rest := args[0], args[1:]
 	var err error
 	switch cmd {
-	case "ls", "status", "list":
+	case "ls", "list":
 		err = cmdStatus(rest, false)
+	case "status", "info", "show":
+		err = cmdDetail(rest)
 	case "watch", "tui":
 		err = cmdStatus(rest, true)
 	case "logs", "log":
@@ -854,12 +862,7 @@ func deploy(s Service, h, ref string, local bool) error {
 	} else {
 		script = "set -e\nout=$(nix build --no-link --print-out-paths --refresh " + q(ref) + ")\n"
 	}
-	if s.Kind == "podman" {
-		script += `"$out/bin/fleet-install"` + "\n"
-	} else {
-		script += `"$out/bin/container" create --start` + "\n"
-	}
-	script += fmt.Sprintf("systemctl is-active %s\n", unitOf(s))
+	script += installScript(s)
 	if err := remote(h, true, script); err != nil {
 		return fmt.Errorf("deploy: %w", err)
 	}
@@ -925,14 +928,31 @@ func streamFrom(h, script string, w *os.File) error {
 }
 
 func cmdBackup(args []string) error {
-	f := parse(args, "live")
+	f := parse(args, "live", "yes", "y")
 	s := f.svc()
 	h := hostFor(s, f)
-	out := f.vals["o"]
-	if out == "" {
-		out = fmt.Sprintf("%s-%s-%s.tar.zst", s.Name, h, time.Now().Format("2006-01-02T1504"))
+	yes := f.bools["yes"] || f.bools["y"]
+	name := fmt.Sprintf("%s-%s-%s.tar.zst", s.Name, h, time.Now().Format("2006-01-02T1504"))
+	out, err := backupDest(f.vals["o"], name, yes)
+	if err != nil {
+		return err
 	}
+	running := false
 	if !f.bools["live"] {
+		st, _ := remoteOut(context.Background(), h, false, "systemctl is-active "+unitOf(s)+" || true")
+		running = strings.TrimSpace(st) == "active"
+	}
+	if running && !yes {
+		if !confirm(fmt.Sprintf("%s is running on %s. Stop it for a consistent backup (it is started again afterwards)?", s.Name, h)) {
+			return errors.New("backup cancelled; use --live to copy without stopping")
+		}
+	}
+	if !f.bools["live"] && !running {
+		info("%s is not running on %s; backing up as is", s.Name, h)
+		if hs := hookScript(s); hs != "" {
+			info("note: %s has a backup hook, which needs the service running; skipped", s.Name)
+		}
+	} else if !f.bools["live"] {
 		pre := hookScript(s) + fmt.Sprintf(`if systemctl is-active -q %[1]s; then touch /var/lib/fleet-containers/%[2]s.was-running; systemctl stop %[1]s; fi
 `, unitOf(s), s.Name)
 		info("stopping %s on %s for a consistent copy", s.Name, h)
@@ -1239,4 +1259,233 @@ func enableScript(s Service) string {
 	l := wantsLink(s)
 	return fmt.Sprintf("if [ -e %[1]s ]; then mkdir -p \"$(dirname %[2]s)\" && ln -sfn ../%[3]s %[2]s; fi\n",
 		q(mutableUnits+"/"+unitOf(s)), q(l), unitOf(s))
+}
+
+// installScript installs/starts $out (already built) and makes sure it also
+// starts on boot. extra-container skips recreating the machines.target.wants
+// link when the build is unchanged, so `stop` then a same-build `deploy`
+// would run now but not after a reboot; enableScript restores it.
+func installScript(s Service) string {
+	var b string
+	if s.Kind == "podman" {
+		b = `"$out/bin/fleet-install"` + "\n"
+	} else {
+		b = `"$out/bin/container" create --start` + "\n"
+	}
+	return b + enableScript(s) + fmt.Sprintf("systemctl is-active %s\n", unitOf(s))
+}
+
+// ------------------------------------------------------------------ prompts
+
+var stdin = bufio.NewReader(os.Stdin)
+
+// interactive reports whether stdin is a terminal we can ask questions on.
+func interactive() bool {
+	st, err := os.Stdin.Stat()
+	if err != nil || st.Mode()&os.ModeCharDevice == 0 {
+		return false
+	}
+	// /dev/null is a character device too
+	if dn, err := os.Stat(os.DevNull); err == nil && os.SameFile(st, dn) {
+		return false
+	}
+	return true
+}
+
+func prompt(q, def string) string {
+	if def != "" {
+		fmt.Fprintf(os.Stderr, "%s [%s]: ", q, def)
+	} else {
+		fmt.Fprintf(os.Stderr, "%s: ", q)
+	}
+	l, _ := stdin.ReadString('\n')
+	if l = strings.TrimSpace(l); l == "" {
+		return def
+	}
+	return l
+}
+
+// confirm asks a yes/no question (default no). Without a terminal it
+// answers no, so scripts must pass --yes.
+func confirm(q string) bool {
+	if !interactive() {
+		fmt.Fprintf(os.Stderr, "%s [y/N]: no terminal, assuming no (pass --yes)\n", q)
+		return false
+	}
+	a := strings.ToLower(prompt(q+" [y/N]", ""))
+	return a == "y" || a == "yes"
+}
+
+func expandHome(p string) string {
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		if h, err := os.UserHomeDir(); err == nil {
+			return h + p[1:]
+		}
+	}
+	return p
+}
+
+// backupDest picks the backup file. -o wins (a directory or a file);
+// otherwise ask for a directory, defaulting to ~/backups. The directory is
+// created if missing.
+func backupDest(o, name string, yes bool) (string, error) {
+	dir := ""
+	if o != "" {
+		o = expandHome(o)
+		if st, err := os.Stat(o); (err == nil && st.IsDir()) || strings.HasSuffix(o, "/") {
+			dir = o
+		} else {
+			if err := os.MkdirAll(filepath.Dir(o), 0o755); err != nil {
+				return "", err
+			}
+			return o, nil
+		}
+	} else {
+		dir = "~/backups"
+		if !yes && interactive() {
+			dir = prompt("Save backup in directory", dir)
+		}
+		dir = expandHome(dir)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, name), nil
+}
+
+// ------------------------------------------------------------------ status
+
+// detailScript prints KEY<TAB>value lines about one service on a host.
+func detailScript(s Service) string {
+	u := unitOf(s)
+	var b strings.Builder
+	fmt.Fprintf(&b, "u=%s; m=%s; wl=%s\n", q(u), q(mutableUnits+"/"+u), q(wantsLink(s)))
+	b.WriteString(`for p in ActiveState SubState ActiveEnterTimestamp MemoryCurrent NRestarts Restart; do printf '%s\t%s\n' "$p" "$(systemctl show -p $p --value "$u" 2>/dev/null)"; done
+printf 'Installed\t%s\n' "$( [ -e "$m" ] && echo yes || echo no)"
+printf 'BootStart\t%s\n' "$( [ -e "$wl" ] && echo yes || echo no)"
+`)
+	fmt.Fprintf(&b, "ports=/var/lib/fleet-containers/ports/%s\n", s.Name)
+	b.WriteString(`[ -r "$ports" ] && while read -r pr po; do [ -n "$po" ] && printf 'Port\t%s/%s\n' "$po" "$pr"; done < "$ports"
+`)
+	fmt.Fprintf(&b, "n=%s/%s.conf\n", q(nginxDir), s.Name)
+	b.WriteString(`if [ -r "$n" ]; then while IFS= read -r l; do printf 'Nginx\t%s\n' "$l"; done < "$n"; fi
+[ -e "$n.broken" ] && printf 'NginxBroken\t%s\n' "$n.broken"
+`)
+	keys := make([]string, 0, len(s.Persist))
+	for k := range s.Persist {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		d := dataDir(s) + "/" + k
+		fmt.Fprintf(&b, "d=%s; if [ -d \"$d\" ]; then printf 'Data\\t%%s\\t%%s\\t%%s\\t%%s\\n' %s %s \"$(du -sb \"$d\" 2>/dev/null | cut -f1)\" \"$(stat -c '%%u:%%g' \"$d\")\"; else printf 'Data\\t%%s\\t%%s\\t-\\tmissing\\n' %s %s; fi\n",
+			q(d), q(k), q(s.Persist[k]), q(k), q(s.Persist[k]))
+	}
+	return b.String()
+}
+
+func cmdDetail(args []string) error {
+	f := parse(args)
+	if len(f.pos) == 0 {
+		return errors.New("usage: containers status <svc> [--host h]   (containers ls for all services)")
+	}
+	s := f.svc()
+	h := hostFor(s, f)
+	out, err := remoteOut(context.Background(), h, true, detailScript(s))
+	if err != nil {
+		return err
+	}
+	fmt.Print(renderDetail(s, h, out))
+	return nil
+}
+
+func renderDetail(s Service, h, out string) string {
+	kv := map[string]string{}
+	var ports, nginx, data []string
+	broken := ""
+	for _, l := range strings.Split(out, "\n") {
+		k, v, ok := strings.Cut(l, "\t")
+		if !ok {
+			continue
+		}
+		switch k {
+		case "Port":
+			ports = append(ports, v)
+		case "Nginx":
+			nginx = append(nginx, v)
+		case "NginxBroken":
+			broken = v
+		case "Data":
+			data = append(data, v)
+		default:
+			kv[k] = v
+		}
+	}
+	var b strings.Builder
+	declared := s.Host
+	if declared == "" {
+		declared = "(none)"
+	}
+	fmt.Fprintf(&b, "%s  (%s)  %s\n", s.Name, s.Kind, s.Description)
+	fmt.Fprintf(&b, "  host        %s  (declared: %s)\n", h, declared)
+	fmt.Fprintf(&b, "  unit        %s\n", unitOf(s))
+	if kv["Installed"] != "yes" {
+		b.WriteString("  state       not installed on this host\n")
+	} else {
+		st := kv["ActiveState"]
+		if sub := kv["SubState"]; sub != "" && sub != st {
+			st += " (" + sub + ")"
+		}
+		if kv["ActiveState"] == "active" && kv["ActiveEnterTimestamp"] != "" {
+			st += "  since " + kv["ActiveEnterTimestamp"]
+		}
+		fmt.Fprintf(&b, "  state       %s\n", st)
+		if m := humanMem(kv["MemoryCurrent"]); m != "" && kv["ActiveState"] == "active" {
+			fmt.Fprintf(&b, "  memory      %s\n", m)
+		}
+		boot := "yes"
+		if kv["BootStart"] != "yes" {
+			boot = "no (stopped with `containers stop`; start/deploy re-enable)"
+		}
+		fmt.Fprintf(&b, "  on boot     %s\n", boot)
+		if r := kv["NRestarts"]; r != "" && r != "0" {
+			fmt.Fprintf(&b, "  restarts    %s (Restart=%s)\n", r, kv["Restart"])
+		}
+	}
+	b.WriteString("\nports opened in the host firewall\n")
+	if len(ports) == 0 {
+		b.WriteString("  (none)\n")
+	}
+	for _, p := range ports {
+		fmt.Fprintf(&b, "  %s\n", p)
+	}
+	fmt.Fprintf(&b, "\nnginx site on the host (%s/%s.conf)\n", nginxDir, s.Name)
+	if len(nginx) == 0 {
+		b.WriteString("  (none)\n")
+	}
+	for _, l := range nginx {
+		fmt.Fprintf(&b, "  %s\n", l)
+	}
+	if broken != "" {
+		fmt.Fprintf(&b, "  ! last rejected update kept at %s\n", broken)
+	}
+	fmt.Fprintf(&b, "\ndata (bind mounts; this is what backup/move copy): %s\n", dataDir(s))
+	if len(data) == 0 {
+		b.WriteString("  (no persisted dirs; nothing to back up)\n")
+	}
+	tw := tabwriter.NewWriter(&b, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(tw, "  KEY\tIN CONTAINER\tSIZE\tOWNER")
+	for _, d := range data {
+		p := strings.Split(d, "\t")
+		for len(p) < 4 {
+			p = append(p, "")
+		}
+		size := p[2]
+		if size != "-" {
+			size = humanMem(size)
+		}
+		fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\n", p[0], p[1], size, p[3])
+	}
+	tw.Flush()
+	return b.String()
 }
