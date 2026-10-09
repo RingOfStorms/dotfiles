@@ -459,7 +459,10 @@ in
       # Routes to backend Paper servers on localhost.
       velocity = {
         enable = true;
-        package = pkgs.velocityServers.velocity;
+        # Current Velocity builds are compiled for Java 25 (class file 69);
+        # nix-minecraft defaults to Java 21, which dies at startup with
+        # UnsupportedClassVersionError and leaves 25565 unbound.
+        package = pkgs.velocityServers.velocity.override { jre_headless = pkgs.jdk25_headless; };
         jvmOpts = "-Xms512M -Xmx1024M";
 
         symlinks."velocity.toml".value = {
