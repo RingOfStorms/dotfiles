@@ -121,9 +121,9 @@ With `ringofstorms.containers.nginx.enable`, host nginx has
 `include /var/lib/fleet-containers/nginx/*.conf;` in its http block (plus a
 default `_` vhost returning 444). On deploy the CLI writes the service's
 `nginx` block from `service.nix` (with `@OVERLAY_IP@` / `@LAN_IP@` filled in from
-`hosts/fleet.nix`) to `<svc>.conf`, runs `nginx -t`, and reloads nginx. A
-rejected file is renamed to `<svc>.conf.broken` and the old config keeps
-serving. Removing the block from `service.nix` (or `destroy`/`move`) deletes
+`hosts/fleet.nix`) to `<svc>.conf`, runs `nginx -t`, and reloads nginx. If the check or
+reload fails, the previous `<svc>.conf` is put back and the rejected one is
+kept as `<svc>.conf.broken`. Removing the block from `service.nix` (or `destroy`/`move`) deletes
 the file and reloads. No host rebuild is involved.
 
 ssh logs in as each host's `user` from `hosts/fleet.nix` (override for all hosts
@@ -268,7 +268,8 @@ its data untouched: `containers start <svc> --host <source>`.
   unsupported: `Failed to set up id mapped mount`).
 - `journalctl -u container@<svc>` on the host. `machinectl` lists running
   containers.
-- nginx refused a site: the file is left as
-  `/var/lib/fleet-containers/nginx/<svc>.conf.broken`, and the previous config keeps serving.
+- nginx refused a site: the previous file is restored (so the old route keeps
+  working across later reloads) and the rejected one is left as
+  `/var/lib/fleet-containers/nginx/<svc>.conf.broken`.
 - Ports opened by containers: `sudo nft list set inet nixos-fw temp-ports`.
   Source files: `/var/lib/fleet-containers/ports/`.

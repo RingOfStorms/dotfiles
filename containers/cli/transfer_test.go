@@ -411,3 +411,54 @@ func TestMoveWarning(t *testing.T) {
 		t.Errorf("warning lacks the edit to make:\n%s", w)
 	}
 }
+
+// A rejected update must not lose the last good site: after valid deploy ->
+// invalid update -> an unrelated deploy that reloads nginx, the first
+// service's route must still be the valid one.
+func TestNginxRejectedUpdateKeepsLastGoodSite(t *testing.T) {
+	bash := realPath(t, "bash")
+	dir, bin := t.TempDir(), t.TempDir()
+	log := filepath.Join(bin, "reloads")
+	// nginx -t fails if any loaded site contains BAD; reload records which
+	// sites nginx would serve now.
+	writeExe(t, filepath.Join(bin, "nginx"), "#!"+bash+"\n! grep -l BAD "+dir+"/*.conf\n")
+	writeExe(t, filepath.Join(bin, "systemctl"), "#!"+bash+"\ncat "+dir+"/*.conf >> "+log+"; echo --- >> "+log+"\n")
+	run := func(name, conf string) error {
+		c := exec.Command(bash, "-c", "set -euo pipefail\n"+nginxSiteScript(dir, name, conf))
+		c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+		out, err := c.CombinedOutput()
+		t.Logf("%s: %s", name, out)
+		return err
+	}
+	must(t, run("mc", "server { good; }"))
+	if err := run("mc", "server { BAD; }"); err == nil {
+		t.Fatal("invalid site was accepted")
+	}
+	must(t, run("other", "server { other; }"))
+
+	got, err := os.ReadFile(filepath.Join(dir, "mc.conf"))
+	must(t, err)
+	if !strings.Contains(string(got), "good") {
+		t.Fatalf("mc.conf after rejected update = %q, want the last good site", got)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "mc.conf.broken")); !strings.Contains(string(b), "BAD") {
+		t.Errorf("rejected site not kept as .broken: %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "mc.conf.prev")); err == nil {
+		t.Error("mc.conf.prev left behind")
+	}
+	reloads, _ := os.ReadFile(log)
+	last := strings.Split(strings.TrimSuffix(string(reloads), "---\n"), "---\n")
+	if final := last[len(last)-1]; !strings.Contains(final, "good") || !strings.Contains(final, "other") {
+		t.Errorf("last reload served %q, want both the good mc site and other", final)
+	}
+}
+
+func TestStatusColumnsAlign(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	for _, s := range []string{"STATE", "active", "inactive", "failed", "not installed"} {
+		if n := len(colorState(s)) - len(s); n != 9 {
+			t.Errorf("colorState(%q) adds %d bytes, want 9 for every cell", s, n)
+		}
+	}
+}

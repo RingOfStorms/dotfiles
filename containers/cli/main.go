@@ -595,7 +595,7 @@ func statusTable(all bool) string {
 
 	var b strings.Builder
 	tw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "SERVICE\tKIND\tDECLARED\tHOST\tSTATE\tUP\tMEM\tNOTE")
+	fmt.Fprintf(tw, "SERVICE\tKIND\tDECLARED\tHOST\t%s\tUP\tMEM\tNOTE\n", colorState("STATE"))
 	names := map[string]bool{}
 	for n := range inv.Services {
 		names[n] = true
@@ -616,7 +616,7 @@ func statusTable(all bool) string {
 			if _, bad := hostErr[s.Host]; bad {
 				note = "host unreachable"
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", n, s.Kind, dash(s.Host), "-", "not installed", "-", "-", note)
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", n, s.Kind, dash(s.Host), "-", colorState("not installed"), "-", "-", note)
 			continue
 		}
 		for _, r := range rows {
@@ -651,19 +651,23 @@ func dash(s string) string {
 	return s
 }
 
+// colorState colours the STATE cell. Every cell, coloured or not, carries
+// the same number of invisible escape bytes (5 + 4), so tabwriter (which
+// counts bytes) still aligns the columns after it.
 func colorState(s string) string {
 	if os.Getenv("NO_COLOR") != "" {
 		return s
 	}
+	code := "39" // default colour; same length as the others
 	switch s {
 	case "active":
-		return "\033[32m" + s + "\033[0m"
+		code = "32"
 	case "failed":
-		return "\033[31m" + s + "\033[0m"
+		code = "31"
 	case "activating", "deactivating", "reloading":
-		return "\033[33m" + s + "\033[0m"
+		code = "33"
 	}
-	return s
+	return "\033[" + code + "m" + s + "\033[0m"
 }
 
 func cmdStatus(args []string, watch bool) error {
@@ -791,14 +795,9 @@ func prepareScript(s Service, host string) string {
 			}
 		}
 		conf = "# managed by containers, service " + s.Name + "\n" + conf
-		dst := "/var/lib/fleet-containers/nginx/" + s.Name + ".conf"
-		b.WriteString(fmt.Sprintf("printf %%s %s > %s.new\n", q(conf), dst))
-		b.WriteString(fmt.Sprintf("mv %[1]s.new %[1]s\n", dst))
-		b.WriteString(fmt.Sprintf(`if ! nginx -t -c /etc/nginx/nginx.conf 2>/tmp/containers-nginx.err; then cat /tmp/containers-nginx.err; mv %[1]s %[1]s.broken; echo "nginx config rejected, kept as %[1]s.broken"; exit 1; fi
-systemctl reload nginx
-`, dst))
+		b.WriteString(nginxSiteScript(nginxDir, s.Name, conf))
 	} else {
-		b.WriteString(fmt.Sprintf("if [ -e /var/lib/fleet-containers/nginx/%[1]s.conf ]; then rm -f /var/lib/fleet-containers/nginx/%[1]s.conf; systemctl reload nginx; fi\n", s.Name))
+		b.WriteString(fmt.Sprintf("if [ -e /var/lib/fleet-containers/nginx/%[1]s.conf ]; then rm -f /var/lib/fleet-containers/nginx/%[1]s.conf /var/lib/fleet-containers/nginx/%[1]s.conf.prev; systemctl reload nginx; fi\n", s.Name))
 	}
 	return b.String()
 }
@@ -1151,4 +1150,37 @@ func moveSource(s Service, p placement) (string, error) {
 		return "", fmt.Errorf("%s is not installed on any host; nothing to move", s.Name)
 	}
 	return p.found[0], nil
+}
+
+// nginxDir is the host nginx include dir (see host-module.nix). A var so
+// tests can point it at a temp dir.
+var nginxDir = "/var/lib/fleet-containers/nginx"
+
+// nginxSiteScript installs <name>.conf in dir and reloads nginx. The last
+// good file is kept as .prev until the new one has passed `nginx -t` and the
+// reload; on any failure it is put back, so the next reload (from any other
+// deploy, or an nginx restart) still serves the working route. The rejected
+// file is kept as .broken for inspection.
+func nginxSiteScript(dir, name, conf string) string {
+	return fmt.Sprintf(`f=%[1]s/%[2]s.conf
+rm -f "$f.new" "$f.broken"
+if [ -e "$f" ]; then cp -p "$f" "$f.prev"; else rm -f "$f.prev"; fi
+restore_site() {
+  cp "$f" "$f.broken" 2>/dev/null || true
+  if [ -e "$f.prev" ]; then mv -f "$f.prev" "$f"; else rm -f "$f"; fi
+  echo "nginx: new site for %[2]s rejected; kept it as $f.broken and restored the previous one" >&2
+}
+printf %%s %[3]s > "$f.new"
+mv -f "$f.new" "$f"
+if ! err=$(nginx -t -c /etc/nginx/nginx.conf 2>&1); then
+  echo "$err" >&2
+  restore_site
+  exit 1
+fi
+if ! systemctl reload nginx; then
+  restore_site
+  exit 1
+fi
+rm -f "$f.prev"
+`, dir, name, q(conf))
 }

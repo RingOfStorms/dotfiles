@@ -113,7 +113,8 @@ in
       }
 
       # Runtime vhosts: `containers deploy` writes <svc>.conf into the include
-      # dir, runs `nginx -t` (renaming the file to .broken on failure) and then
+      # dir, runs `nginx -t` (restoring the previous file and keeping the rejected one
+      # as .broken on failure) and then
       # `systemctl reload nginx`. No rebuild is needed for new sites.
       (lib.mkIf cfg.nginx.enable {
         services.nginx = {
