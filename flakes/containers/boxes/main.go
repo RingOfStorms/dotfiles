@@ -358,7 +358,12 @@ type row struct {
 
 const probeScript = `
 for u in $(systemctl list-units --all --plain --no-legend 'container@*.service' 'boxes-*.service' | awk '{print $1}'); do
-  case "$u" in container@.service) continue;; esac
+  case "$u" in
+    container@.service) continue;;
+    # podman services are only those installed by boxes (they have a gcroot);
+    # this skips the host module's own units such as boxes-ports.service
+    boxes-*.service) n=${u#boxes-}; n=${n%.service}; [ -e "/nix/var/nix/gcroots/boxes/$n" ] || continue;;
+  esac
   st=$(systemctl show -p ActiveState --value "$u")
   ts=$(systemctl show -p ActiveEnterTimestamp --value "$u")
   mem=$(systemctl show -p MemoryCurrent --value "$u")
