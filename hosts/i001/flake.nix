@@ -139,9 +139,9 @@
                 apps = "/run/current-system/sw/share/applications";
                 favs = [
                   { id = "org.jellyfin.JellyfinDesktop"; name = "Jellyfin"; icon = "org.jellyfin.JellyfinDesktop"; exec = "jellyfin-desktop"; cats = "AudioVideo,Video,Player,TV"; }
+                  { id = "jellyseerr"; name = "Jellyseerr"; icon = "folder-download"; exec = "google-chrome-stable --app=https://media.joshuabell.xyz"; cats = "AudioVideo,Video"; }
                   { id = "google-chrome"; name = "Google Chrome"; icon = "google-chrome"; exec = "google-chrome-stable %U"; cats = "Network,WebBrowser"; }
                   { id = "firefox"; name = "Firefox"; icon = "firefox"; exec = "firefox --name firefox %U"; cats = "Network,WebBrowser"; }
-                  { id = "jellyseerr"; name = "Jellyseerr"; icon = "folder-download"; exec = "google-chrome-stable --app=https://media.joshuabell.xyz"; cats = "AudioVideo,Video"; }
                 ];
                 favsFile = pkgs.writeText "bigscreen-favs" (lib.concatImapStrings (i: f: ''
                   [Favs][${toString (i - 1)}]
