@@ -37,7 +37,7 @@ in
     ];
     files = shared.system.files ++ [ ];
     users."${user}" = {
-      directories = shared.user.directories ++ [ ];
+      directories = shared.user.directories ++ [ ".config/spotify" ]; # Spotify login
       files = shared.user.files ++ [ ];
     };
   };

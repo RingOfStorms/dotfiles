@@ -104,6 +104,7 @@
             services.displayManager.defaultSession = "plasma-bigscreen-wayland";
             environment.systemPackages = [
               pkgs.kdePackages.plasma-bigscreen
+              pkgs.spotify
               # Jellyseerr has no native client: open it as a Chrome app window.
               (pkgs.makeDesktopItem {
                 name = "jellyseerr";
@@ -140,6 +141,7 @@
                 favs = [
                   { id = "org.jellyfin.JellyfinDesktop"; name = "Jellyfin"; icon = "org.jellyfin.JellyfinDesktop"; exec = "jellyfin-desktop"; cats = "AudioVideo,Video,Player,TV"; }
                   { id = "jellyseerr"; name = "Jellyseerr"; icon = "folder-download"; exec = "google-chrome-stable --app=https://media.joshuabell.xyz"; cats = "AudioVideo,Video"; }
+                  { id = "spotify"; name = "Spotify"; icon = "spotify-client"; exec = "spotify %U"; cats = "Audio,Music,Player,AudioVideo"; }
                   { id = "google-chrome"; name = "Google Chrome"; icon = "google-chrome"; exec = "google-chrome-stable %U"; cats = "Network,WebBrowser"; }
                   { id = "firefox"; name = "Firefox"; icon = "firefox"; exec = "firefox --name firefox %U"; cats = "Network,WebBrowser"; }
                 ];
