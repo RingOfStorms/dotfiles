@@ -98,10 +98,18 @@ that takes the list of units to protect):
 - Every protected unit gets `bindsTo` + `after` = `h002-media-guard.service`.
   When the guard stops, they stop immediately, and they can't start while
   it's down (after a reboot or `nixos-rebuild switch` too).
-- `Upholds=` on the guard lists **only long-running daemons**: jellyfin,
-  seerr, sonarr, radarr, prowlarr, bazarr, sabnzbd, transmission,
-  shelfmark, audiobookshelf. That's what restarts them when the guard is
-  healthy again.
+- Restart on recovery **must respect desired state**. Plain `Upholds=`
+  restarts any inactive listed unit whenever the guard is active, so it
+  would undo a deliberate `systemctl stop`, a `cnt stop` (which only
+  removes the boot link, then stops), and the stop inside `cnt backup` /
+  `cnt move`. So instead of `Upholds=`, the guard itself starts dependents
+  after each passing probe, but only those that are (a) enabled / have
+  their boot link and (b) not held: a hold marker
+  (`/run/fleet-containers/hold/<svc>`) that `cnt stop`, `backup` and `move`
+  write before stopping and remove after. Manual stops of host-module units
+  use `systemctl disable --now` or the same marker. Only long-running
+  daemons are started this way: jellyfin, seerr, sonarr, radarr, prowlarr,
+  bazarr, sabnzbd, transmission, shelfmark, audiobookshelf.
 - **Scheduled jobs are bound but never upheld.** `media-integrity-scan` is
   `Type=oneshot` with a weekly timer; upholding it would re-run a finished
   scan immediately. Bind the `.service` so a running scan stops with the
@@ -125,7 +133,8 @@ systemd.services."container@arr" = {
   bindsTo = [ "h002-media-guard.service" ];
   after = [ "h002-media-guard.service" ];
 };
-systemd.services.h002-media-guard.unitConfig.Upholds = [ "container@arr.service" ];
+# No Upholds: the guard starts container@arr after a passing probe only if
+# it is enabled and not held (see above), so cnt stop/backup/move stick.
 containers.arr.bindMounts."/media" = { hostPath = "/nfs/h002/nixarr/media"; isReadOnly = false; };
 ```
 
@@ -197,9 +206,10 @@ only on hosts with that disk. Recommended: (b), keep them on h001.
 
 | Service | Decision | Ideal host | Kind | Notes |
 |---|---|---|---|---|
-| Kokoro **TTS** (text-to-speech) | Keep | joe | podman | `kokoro-fastapi-gpu` with `--device=nvidia.com/gpu=all` (CDI). On a non-NVIDIA host the container *fails to start*. A CPU image variant exists if portability ever matters. |
-| Forge (Stable Diffusion) | Decide | joe | podman | NVIDIA, VRAM-hungry, many GB of models in `/var/lib/forge`. |
-| llama-cpp | Already disabled | — | — | Reference only; pinned CUDA build to avoid a crashing multi-hour rebuild. |
+| Kokoro **TTS** (text-to-speech) | Keep | joe | podman | Prepared: `containers/kokoro-tts` (same image/port/data). NVIDIA CDI; fails to start on non-NVIDIA hosts. |
+| image-gen (LocalAI) | Keep, replaces Forge | joe | podman | Prepared: `containers/image-gen`. OpenAI-compatible `/v1/images/generations` for Open WebUI and agents; FLUX.2 klein / Z-Image / Flux 1 GGUF fit 10 GB. Keep list from Forge in its README. |
+| Forge (Stable Diffusion) | **Deprecate** | — | — | Replaced by image-gen. Keep only the trained LoRA (+ optional encoders) from `/var/lib/forge`. |
+| llama-cpp | **Removed** | — | — | Module, pinned nixpkgs input and persistence deleted. 84 GB of GGUFs remain in `joe:/persist/var/cache/llama-cpp`; delete by hand. |
 
 Prefer **podman-kind** for GPU work (CDI device passthrough is clean;
 nspawn needs `/dev/nvidia*` + matching driver libs bound in). AMD would
