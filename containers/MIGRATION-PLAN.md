@@ -59,6 +59,95 @@ little: the VPN netns, NFS automount, uid mirroring with h002 and QSV all
 tie it to h001. If ever done: one nixos-kind container, host requirements
 `nfs-h002`, `intel-qsv`, VPN netns inside the container.
 
+#### NAS guard: the whole media stack goes down when h002 does (required)
+
+Goal: while h002 is unreachable (outages, the planned NAS upgrade) nothing
+in the media stack runs. No downloads, no imports, no writes to a local
+folder that only *looks* like the share. When h002 is back and verified,
+everything starts again by itself.
+
+**Guard unit on the h001 host** (`hosts/h001/mods/h002-guard.nix`, a module
+that takes the list of units to protect):
+
+- `h002-media-guard.service`: `Type=notify`, `Restart=always`,
+  `RestartSec=60`. Runs the probe once and calls `systemd-notify --ready`
+  only after it passes, then re-probes every 30 s and exits non-zero on the
+  first failure.
+- **Probe**: (a) the media path is really an NFS mount
+  (`stat -f -c %T` reports `nfs`), and (b) a sentinel file that exists only
+  on h002's `/data` is present: `/data/.h002-online`, created once with
+  `sudo touch` on h002. Because the export is `fsid=0`, it shows up on h001
+  as `/nfs/h002/.h002-online`. (b) catches an empty local folder on h001
+  *and* h002's root disk being exported because `/data` didn't mount.
+- **Probe must be hard-bounded.** On a hard NFS mount, `timeout 10 stat`
+  only sends SIGTERM, and a process stuck in an NFS wait can ignore it, so
+  the guard itself would hang "healthy" while dependents keep running. Run
+  each probe as a separate child with `timeout -k 2 10` (SIGKILL after
+  SIGTERM). The guard treats "probe didn't finish in time" as a failure,
+  not as a wait. As a backstop, set `WatchdogSec=` with `systemd-notify
+  WATCHDOG=1` sent only after a successful probe, so systemd kills the
+  guard if the loop ever wedges.
+- **Test before relying on it**: blackhole h002 from h001
+  (`nft add rule inet filter output ip daddr 10.12.14.183 drop`, temporarily)
+  and confirm that the guard fails within about 40 s and all dependents
+  stop. Then remove the rule and confirm they come back. Also test with
+  h002 up but `/data` unmounted (sentinel missing).
+
+**Wiring:**
+
+- Every protected unit gets `bindsTo` + `after` = `h002-media-guard.service`.
+  When the guard stops, they stop immediately, and they can't start while
+  it's down (after a reboot or `nixos-rebuild switch` too).
+- `Upholds=` on the guard lists **only long-running daemons**: jellyfin,
+  seerr, sonarr, radarr, prowlarr, bazarr, sabnzbd, transmission,
+  shelfmark, audiobookshelf. That's what restarts them when the guard is
+  healthy again.
+- **Scheduled jobs are bound but never upheld.** `media-integrity-scan` is
+  `Type=oneshot` with a weekly timer; upholding it would re-run a finished
+  scan immediately. Bind the `.service` so a running scan stops with the
+  guard; the timer can stay. Check `recyclarr`'s unit type the same way: if
+  it is a oneshot + timer, treat it like the scan.
+- Take unit names from the nixarr module / `systemctl list-units` on h001,
+  not from memory (nixarr may name some differently, and the VPN netns
+  has its own units).
+- Mount mode: keep NFS `hard` (a frozen in-flight process resumes without
+  loss when h002 returns); the guard stops everything else.
+- autofs (`hosts/h001/autofs.nix`, currently `/nfs file:...` with no
+  timeout): add `--timeout=0`, or switch to a systemd mount with
+  `x-systemd.automount`, so an idle unmount can't leave consumers on a
+  dead path.
+
+**When the stack becomes a nixos container (`arr`):** the guard stays on
+the **host**, and protects one unit instead of a list:
+
+```nix
+systemd.services."container@arr" = {
+  bindsTo = [ "h002-media-guard.service" ];
+  after = [ "h002-media-guard.service" ];
+};
+systemd.services.h002-media-guard.unitConfig.Upholds = [ "container@arr.service" ];
+containers.arr.bindMounts."/media" = { hostPath = "/nfs/h002/nixarr/media"; isReadOnly = false; };
+```
+
+- NFS is mounted on the host only, never inside the container. Inside it
+  needs extra privileges and gets around the guard.
+- The guard's probe touches the share, which makes autofs mount it before
+  the container starts, so the bind mount doesn't capture the empty folder
+  underneath. Optionally repeat the sentinel check inside the container as
+  an `ExecStartPre` for each app.
+- Settings and databases (nixarr `stateDir`, `/var/lib/nixarr/state`) stay
+  on h001's local disk, bound into the container. Only media lives on h002,
+  so stopping the container loses nothing.
+- If `media-integrity-scan` stays on the host, it stays bound, not upheld.
+- Under the floating-container CLI, the same idea generalises to a
+  `requires = [ "nfs-h002" ]` host capability whose guard unit the host
+  module provides (see §4.1).
+
+**Before the guard exists** (e.g. NAS upgrade day): stop the stack by
+hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
+`shelfmark.service`, `audiobookshelf.service` and every nixarr unit from
+`systemctl list-units`.
+
 ### Identity, secrets, core — host-bound or move last
 
 | Service | Decision | Ideal host | Notes |
@@ -169,6 +258,7 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 3. vaultwarden, trilium + oauth2-proxy, etebase (TCP first), life, puzzles.
 4. Build §4.3 routing so moves stop needing o002/dnsmasq edits.
 5. forgejo, matrix.
+5a. Build the h002 NAS guard for the *arr stack (§3, "NAS guard") before the NAS upgrade.
 6. §4.1 requirements, then immich/paperless/dawarich as containers on h001.
 7. GPU services on joe as podman-kind with `requires = [ "nvidia" ]`.
 8. Never: *arr stack (stays host modules on h001), zitadel/sec (until there
