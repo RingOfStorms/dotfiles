@@ -39,11 +39,6 @@ in
     directories = shared.system.directories ++ [
       "/var/lib/secrets_manager_hydrated"
 
-      # llama.cpp server state + model cache (downloaded GGUFs from
-      # Hugging Face — typically the largest dir on this host).
-      "/var/lib/llama-cpp"
-      "/var/cache/llama-cpp"
-
       # Kokoro TTS model cache and any custom voice packs.
       "/var/lib/kokoro-tts"
 

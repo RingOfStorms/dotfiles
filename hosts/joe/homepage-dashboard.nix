@@ -29,13 +29,6 @@ in
       {
         "${section1}" = [
           {
-            "llama.cpp" = {
-              description = "LLM Inference (port ${toString s.llama-cpp.port})";
-              href = "http://localhost:${toString s.llama-cpp.port}";
-              icon = "mdi-robot";
-            };
-          }
-          {
             "Forge" = {
               description = "Stable Diffusion WebUI";
               href = "http://localhost:${toString s.forge.port}";

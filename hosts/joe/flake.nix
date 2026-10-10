@@ -3,17 +3,6 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     home-manager.url = "github:rycee/home-manager/master";
 
-    # Pinned nixpkgs for llama-cpp specifically. CUDA-enabled llama-cpp has to
-    # build from source (not in the cuda-maintainers cache for arbitrary
-    # nixpkgs revs), and the build is multi-hour and currently crashes the
-    # machine. Pinned to the commit baked into the system label of the last
-    # successfully-built generation (see `cat /etc/os-release | grep BUILD_ID`
-    # on joe -> 26.05.20260427.1c3fe55), so the existing
-    # /nix/store/...-llama-cpp-* path is reused and no rebuild is needed.
-    # Bump this manually only when you are ready to sit through a from-source
-    # CUDA llama-cpp build.
-    llama-cpp-nixpkgs.url = "github:nixos/nixpkgs/1c3fe55ad329cbcb28471bb30f05c9827f724c76";
-
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
@@ -27,6 +16,9 @@
     impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
+
+    # containers.url = "path:../../containers";
+    containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=containers";
   };
 
   outputs =
@@ -138,6 +130,8 @@
           ./configuration.nix
           ./hardware-configuration.nix
           ./nixld.nix
+          inputs.containers.nixosModules.default
+          ./containers.nix
           ./kokoro-tts.nix
           ./forge.nix
           ./homepage-dashboard.nix
