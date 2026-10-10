@@ -117,6 +117,17 @@
             ];
             programs.firefox.enable = true;
 
+            # Bluetooth (controllers, headphones). Pairings persist via the shared
+            # `bluetooth` impermanence set (/var/lib/bluetooth).
+            hardware.bluetooth = {
+              enable = true;
+              powerOnBoot = true;
+              settings.General = {
+                FastConnectable = true;
+                Experimental = true; # battery level reporting
+              };
+            };
+
             # Steam: Remote Play client for joe; local games are not a goal.
             programs.steam = {
               enable = true;
