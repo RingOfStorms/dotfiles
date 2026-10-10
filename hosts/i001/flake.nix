@@ -175,11 +175,11 @@
                 blacklistFile = pkgs.writeText "applications-blacklistrc" ''
                   [Applications]
                   blacklist=${lib.concatStringsSep "," hidden}
-
-                  [General]
-                  BrowserApplication=google-chrome
                 '';
               in {
+                # Default browser (Bigscreen ships aura-browser in its kdeglobals defaults;
+                # ~/.config/kdeglobals outranks it).
+                programs.plasma.configFile.kdeglobals.General.BrowserApplication = "google-chrome.desktop";
                 home.activation.bigscreenSeed = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
                   install -Dm644 ${favsFile} "$HOME/.config/bigscreen-favs"
                   install -Dm644 ${blacklistFile} "$HOME/.config/applications-blacklistrc"
