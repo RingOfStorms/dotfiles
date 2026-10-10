@@ -180,7 +180,7 @@ in
         access = [ { type = "role"; value = "device_high_trust"; } ];
       };
 
-      # ── low-trust (gp3, joe, i001) ────────────────────────────────
+      # ── low-trust (joe, i001) ────────────────────────────────
       "machines/low-trust/headscale_auth_lowtrust_2026-03-15" = {
         fields = [ "value" ];
         description = "Headscale auth key for low-trust hosts.";
