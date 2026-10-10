@@ -21,6 +21,7 @@ let
       zoxide
       nvim_ros
       chrome
+      firefox
       de_plasma
       steam
       jellyfin_media_player

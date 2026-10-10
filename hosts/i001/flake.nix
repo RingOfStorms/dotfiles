@@ -102,7 +102,19 @@
           ({ pkgs, ... }: {
             services.displayManager.sessionPackages = [ pkgs.kdePackages.plasma-bigscreen ];
             services.displayManager.defaultSession = "plasma-bigscreen-wayland";
-            environment.systemPackages = [ pkgs.kdePackages.plasma-bigscreen ];
+            environment.systemPackages = [
+              pkgs.kdePackages.plasma-bigscreen
+              # Jellyseerr has no native client: open it as a Chrome app window.
+              (pkgs.makeDesktopItem {
+                name = "jellyseerr";
+                desktopName = "Jellyseerr";
+                comment = "Request new movies and shows";
+                exec = "google-chrome-stable --app=https://media.joshuabell.xyz";
+                icon = "folder-download";
+                categories = [ "AudioVideo" "Video" ];
+              })
+            ];
+            programs.firefox.enable = true;
 
             # Steam: Remote Play client for joe; local games are not a goal.
             programs.steam = {
@@ -115,6 +127,64 @@
               KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0660", GROUP="input"
             '';
             users.users.${primaryUser}.extraGroups = [ "input" ];
+
+            # Homescreen favorites + app list cleanup. Home is wiped every boot
+            # (impermanence), so seed writable copies on each HM activation;
+            # in-session tweaks last until reboot. Favorites format is from
+            # plasma-bigscreen favslistmodel.cpp ([Favs][<index>] groups,
+            # launched by storageId). ~/.config outranks Bigscreen's own
+            # ~/.config/plasma-bigscreen defaults (XDG_CONFIG_DIRS).
+            home-manager.users.${primaryUser} = { lib, ... }:
+              let
+                apps = "/run/current-system/sw/share/applications";
+                favs = [
+                  { id = "org.jellyfin.JellyfinDesktop"; name = "Jellyfin"; icon = "org.jellyfin.JellyfinDesktop"; exec = "jellyfin-desktop"; cats = "AudioVideo,Video,Player,TV"; }
+                  { id = "google-chrome"; name = "Google Chrome"; icon = "google-chrome"; exec = "google-chrome-stable %U"; cats = "Network,WebBrowser"; }
+                  { id = "firefox"; name = "Firefox"; icon = "firefox"; exec = "firefox --name firefox %U"; cats = "Network,WebBrowser"; }
+                  { id = "jellyseerr"; name = "Jellyseerr"; icon = "folder-download"; exec = "google-chrome-stable --app=https://media.joshuabell.xyz"; cats = "AudioVideo,Video"; }
+                ];
+                favsFile = pkgs.writeText "bigscreen-favs" (lib.concatImapStrings (i: f: ''
+                  [Favs][${toString (i - 1)}]
+                  categories=${f.cats}
+                  comment=
+                  desktopPath=${apps}/${f.id}.desktop
+                  entryPath=${f.exec}
+                  icon=${f.icon}
+                  name=${f.name}
+                  startupNotify=true
+                  storageId=${f.id}.desktop
+
+                '') favs);
+                # Desktop-only clutter hidden from the TV launcher (desktop entry names).
+                hidden = [
+                  "org.kde.konsole" "kitty" "gvim" "org.gnome.Meld" "qdirstat"
+                  "org.kde.kate" "org.kde.kwrite" "org.kde.akonadiconsole"
+                  "org.kde.akonadiimportwizard" "org.kde.kmail2" "org.kde.kontact"
+                  "org.kde.ktnef" "org.kde.merkuro.calendar" "org.kde.merkuro.contact"
+                  "org.kde.merkuro.mail" "org.kde.kmenuedit" "org.kde.kwalletmanager"
+                  "org.kde.plasma-systemmonitor" "org.kde.khelpcenter" "org.kde.kinfocenter"
+                  "org.kde.ark" "org.kde.okular" "org.kde.spectacle" "org.kde.qrca"
+                  "org.kde.plasma.emojier" "org.kde.discover" "org.kde.dolphin"
+                  "kbd-layout-viewer5" "fcitx5-configtool" "org.fcitx.fcitx5-migrator"
+                  "nixos-manual" "kdesystemsettings" "org.kde.kdeconnect.nonplasma"
+                  "org.kde.plasma.bigscreen.uvcviewer" "com.google.Chrome"
+                  # Bigscreen's own defaults (this file replaces its list):
+                  "org.kde.drkonqi.coredump.gui" "org.kde.kdeconnect.app"
+                  "org.kde.kdeconnect.sms" "plasma-bigscreen-swap-session"
+                ];
+                blacklistFile = pkgs.writeText "applications-blacklistrc" ''
+                  [Applications]
+                  blacklist=${lib.concatStringsSep "," hidden}
+
+                  [General]
+                  BrowserApplication=google-chrome
+                '';
+              in {
+                home.activation.bigscreenSeed = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+                  install -Dm644 ${favsFile} "$HOME/.config/bigscreen-favs"
+                  install -Dm644 ${blacklistFile} "$HOME/.config/applications-blacklistrc"
+                '';
+              };
           })
         ];
       };
