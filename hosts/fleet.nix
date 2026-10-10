@@ -90,10 +90,10 @@ rec {
       trust = "high";
     };
     gp3 = {
-      user = "luser";
+      user = "josh";
       overlayIp = "100.64.0.15";
       lanIp = "10.12.14.144";
-      trust = "low";
+      trust = "high";
     };
     o002 = {
       user = "root";

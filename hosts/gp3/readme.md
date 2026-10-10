@@ -1,6 +1,6 @@
 # gp3
 
-TV media laptop (GPD Pocket 3)
+Trusted mobile work laptop (GPD Pocket 3). Re-imaged from the old low-trust TV box; see utilities/nixos-install-disko/readme.md.
 
 ## Hardware
 
@@ -11,4 +11,4 @@ TV media laptop (GPD Pocket 3)
 | GPU | Intel Iris Xe (integrated) |
 | RAM | 16 GB |
 | Storage | Not yet inventoried |
-| Display | LG TV 72" 4K 60 Hz (external) |
+| Display | 8" 1920x1200 touchscreen (rotated panel) |

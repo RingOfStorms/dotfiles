@@ -15,7 +15,7 @@
     # sec-agent replaces secrets-bao on this host.
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
 
-    opencode.url = "github:anomalyco/opencode/c6262f9d4002d86a1f1795c306aa329d45361d12";
+    omp-flake.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/omp";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
@@ -30,11 +30,10 @@
     {
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
-        secretsRole = "machines-lowtrust";
         authMethod = "hashedPassword";
-        authValue = "$y$j9T$XLpiC8tE5WjaeAQ.qIvoe0$2UXH2k8FtLvP7mIVdVuab103EA6LEOXB8XEWdPeX0y3";
+        authValue = "$y$j9T$b66ZAxtTo75paZx.mnXyK.$ej0eKS3Wx4488qDfjUJSP0nsUe5TBzw31VbXR19XrQ4"; # same as juni
         mutableUsers = false;
-        extraGroups = [ "wheel" "networkmanager" "video" "input" "gamemode" ];
+        extraGroups = [ "wheel" "networkmanager" "video" "input" ];
 
         hmModules = [
           inputs.common.homeManagerModules.kitty
@@ -48,14 +47,14 @@
           ({
             ringofstorms.impermanence = {
               enable = true;
+              # TODO(re-image): replace with the new UUIDs from `lsblk -o NAME,UUID`
+              # (install readme step 5). These are the OLD pre-wipe disks.
               disk = {
                 boot = "/dev/disk/by-uuid/D1C3-B6B2";
                 primary = "/dev/disk/by-uuid/0d6e4079-e367-03eb-d37c-00722f5891d2";
                 swap = "/dev/disk/by-uuid/4b56d370-63e8-4613-bf46-c3fc4ad2aa70";
               };
               encrypted = true;
-              usbKey = true;
-              usbKeyPassword = "brought-upside-twentieth";
             };
           })
 
@@ -64,8 +63,7 @@
             ringofstorms.dePlasma = {
               enable = true;
               gpu.intel.enable = true;
-              noScreenOff = true;
-              sddm.autologinUser = primaryUser; # Media box, auto-login
+              sddm.autologinUser = primaryUser; # disk is encrypted; passphrase gates boot
               wallpapers = [
                 ../../hosts/_shared_assets/wallpapers/pixel_rain.png
               ];
@@ -79,25 +77,37 @@
           inputs.common.nixosModules.git
           inputs.common.nixosModules.tmux
           inputs.common.nixosModules.boot_systemd
+          inputs.common.nixosModules.plymouth
           inputs.common.nixosModules.hardening
           inputs.common.nixosModules.jetbrains_font
           inputs.common.nixosModules.nix_options
-          inputs.common.nixosModules.timezone_chi
+          inputs.common.nixosModules.timezone_auto
           inputs.common.nixosModules.tty_caps_esc
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.more_filesystems
           inputs.common.nixosModules.tailnet
+          inputs.common.nixosModules.rage
+          inputs.omp-flake.nixosModules.default
+          inputs.common.nixosModules.remote_lio_builds
+
+          inputs.common.nixosModules.atuin
+          ({
+            ringofstorms.atuin = {
+              enable = true;
+              autologin = {
+                enable = true;
+                user = primaryUser;
+                secretFile = "/var/lib/secrets_manager_hydrated/atuin-key-josh_2026-03-15";
+                afterUnits = [ "sec-secrets-ready.service" ];
+              };
+            };
+          })
 
           (import ./sec-agent.nix { inherit inputs constants; })
 
           ({ pkgs, ... }: {
-            environment.systemPackages = [
-              inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default
-            ];
-            environment.shellAliases = {
-              "oc" = "all_proxy='' http_proxy='' https_proxy='' opencode";
-              "occ" = "oc -c";
-            };
+            # Root deploys from lio via the nix2nix key.
+            users.users.root.openssh.authorizedKeys.keys = [ fleet.global.sshPubKey ];
           })
 
           ./hardware-configuration.nix
@@ -116,7 +126,6 @@
               vlc
               google-chrome
               jellyfin-media-player
-              ffmpeg-full
               spotify
               bitwarden-desktop
               firefox

@@ -1,9 +1,9 @@
-# Service constants for gp3 (GPD Pocket 3 - Media/Gaming TV Box)
-# Plugged into TV, impermanence-enabled, streams games from joe.
+# Service constants for gp3 (GPD Pocket 3 - trusted mobile work device)
+# Desktop with impermanence. Minimal services.
 {
   host = {
     name = "gp3";
-    primaryUser = "luser";
+    primaryUser = "josh";
     stateVersion = "26.05";
   };
 

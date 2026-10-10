@@ -1,5 +1,5 @@
-# Impermanence persistence declarations for GPD Pocket 3 (media /
-# gaming TV box). Most state comes from the shared persistence sets
+# Impermanence persistence declarations for GPD Pocket 3 (trusted
+# mobile work laptop). Most state comes from the shared persistence sets
 # in `flakes/impermanence/shared_persistence/`. Only host-specific
 # entries live inline below.
 { primaryUser, impermanence_mod }:
@@ -26,8 +26,8 @@ let
       nvim_ros
       de_plasma
       chrome
+      firefox
       bitwarden
-      steam
       jellyfin_media_player
     ]
   );
