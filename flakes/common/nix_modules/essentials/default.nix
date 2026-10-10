@@ -119,12 +119,16 @@ with lib;
     speedtest_internet = "speedtest-cli";
   };
 
+  # command_propose redefines `.` with zsh syntax. /etc/profile (shellInit) is
+  # also read by sh/bash login wrappers such as SDDM's wayland-session, where it
+  # is a fatal syntax error, so only load it in interactive zsh.
+  programs.zsh.interactiveShellInit = builtins.readFile ./command_propose.func.sh;
+
   environment.shellInit = lib.concatStringsSep "\n\n" [
     (builtins.readFile ./unix_utils.func.sh)
     (builtins.readFile ./nixpkg.func.sh)
     (builtins.readFile ./envrc-import.func.sh)
     (builtins.readFile ./flake.func.sh)
     (builtins.readFile ./boot.func.sh)
-    (builtins.readFile ./command_propose.func.sh)
   ];
 }
