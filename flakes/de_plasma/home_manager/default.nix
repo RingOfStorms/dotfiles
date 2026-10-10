@@ -1,4 +1,5 @@
 {
+  config,
   osConfig,
   lib,
   pkgs,
@@ -324,6 +325,23 @@ in
         };
       };
     };
+
+    # plasma-manager's login script pushes our desktop panels/widgets into
+    # whatever shell is running. Plasma Bigscreen (DESKTOP_SESSION
+    # plasma-bigscreen-wayland) has its own homescreen and no panels, so skip
+    # the script there; regular Plasma sessions behave as before.
+    xdg.configFile."autostart/plasma-manager-autostart.desktop".text = lib.mkForce ''
+      [Desktop Entry]
+      Type=Application
+      Name=Plasma Manager theme application
+      Exec=${pkgs.writeShellScript "plasma-manager-autostart" ''
+        case "''${DESKTOP_SESSION:-}" in
+          plasma-bigscreen*) exit 0 ;;
+        esac
+        exec ${config.xdg.dataHome}/plasma-manager/run_all.sh
+      ''}
+      X-KDE-autostart-condition=ksmserver
+    '';
 
     # NOTE: Previously had a `home.activation.reloadPlasma` hook here that
     # poked plasmashell/kwin/kglobalaccel via D-Bus after activation to make
