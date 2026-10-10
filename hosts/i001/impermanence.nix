@@ -22,6 +22,8 @@ let
       nvim_ros
       chrome
       de_plasma
+      steam
+      jellyfin_media_player
     ]
   );
 in

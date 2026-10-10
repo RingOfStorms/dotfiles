@@ -1,7 +1,7 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
-    home-manager.url = "github:rycee/home-manager/release-26.05";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    home-manager.url = "github:rycee/home-manager";
 
     # common.url = "path:../../../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
@@ -91,7 +91,30 @@
             users.users.root.openssh.authorizedKeys.keys = [ fleet.global.sshPubKey ];
             environment.systemPackages = with pkgs; [
               qdirstat google-chrome
+              jellyfin-media-player
+              libva-utils # vainfo: verify Intel hardware decode
             ];
+          })
+
+          # ── TV media box (replaces gp3) ─────────────────────────────
+          # Plasma Bigscreen (Plasma >= 6.7, hence nixos-unstable) is the
+          # autologin session; regular Plasma stays selectable in SDDM.
+          ({ pkgs, ... }: {
+            services.displayManager.sessionPackages = [ pkgs.kdePackages.plasma-bigscreen ];
+            services.displayManager.defaultSession = "plasma-bigscreen-wayland";
+            environment.systemPackages = [ pkgs.kdePackages.plasma-bigscreen ];
+
+            # Steam: Remote Play client for joe; local games are not a goal.
+            programs.steam = {
+              enable = true;
+              remotePlay.openFirewall = true;
+            };
+            hardware.steam-hardware.enable = true; # controller udev rules
+            # Steam forwards client input through /dev/uinput.
+            services.udev.extraRules = ''
+              KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0660", GROUP="input"
+            '';
+            users.users.${primaryUser}.extraGroups = [ "input" ];
           })
         ];
       };
