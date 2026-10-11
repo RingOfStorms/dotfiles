@@ -10,8 +10,8 @@
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     # beszel.url = "path:../../flakes/beszel";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
-    # containers.url = "path:../../flakes/containers";
-    containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/containers";
+    # containers.url = "path:../../containers";
+    containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=containers";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };

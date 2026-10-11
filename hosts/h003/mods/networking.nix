@@ -178,8 +178,8 @@ in
         # WAN interface - allow nothing inbound by default
         ${net.wanInterface} = {
           # Block all WAN except port-forwarded services.
-          # Note: Minecraft (25565) is opened globally via hosts/h003/containers.nix
-          # using constants.services.minecraft.port -- no entry needed here.
+          # Note: Minecraft (25565) is opened at runtime by `containers deploy`
+          # (tcpPorts in containers/minecraft/service.nix) -- no entry needed here.
           allowedTCPPorts = [ ];
           allowedUDPPorts = [ ];
         };

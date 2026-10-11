@@ -162,10 +162,11 @@
       ];
     };
 
-    # Imperative extra-container services (not part of host nixos-rebuild)
+    # Reference only: deployed by the `containers` CLI, not this host config.
+    # The source of truth is containers/minecraft/{service,container}.nix.
     minecraft = {
-      port = 25565; # Velocity proxy (vanilla MC default port) -- must match flakes/containers/minecraft/container.nix
-      mapPort = 8080; # squaremap web UI -- proxied via nginx on port 80
+      port = 25565; # Velocity proxy, opened at deploy time (service.nix tcpPorts)
+      mapPort = 8080; # squaremap on 127.0.0.1, fronted by the runtime nginx site
     };
 
     ups = {

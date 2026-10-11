@@ -27,7 +27,6 @@ standalone flakes that any host can import.
 │   ├── containers/        #   Independently deployable NixOS containers (extra-container)
 │   ├── beszel/            #   Beszel monitoring agent/hub
 │   ├── de_plasma/         #   KDE Plasma desktop (plasma-manager)
-│   ├── hyprland/          #   Hyprland desktop
 │   ├── flatpaks/          #   nix-flatpak integration
 │   ├── stt_ime/           #   Local speech-to-text input method for Fcitx5
 │   └── ports/             #   SSH port-forwarding TUI (Go)

@@ -21,7 +21,10 @@ let
       zoxide
       nvim_ros
       chrome
+      firefox
       de_plasma
+      steam
+      jellyfin_media_player
     ]
   );
 in
@@ -34,7 +37,7 @@ in
     ];
     files = shared.system.files ++ [ ];
     users."${user}" = {
-      directories = shared.user.directories ++ [ ];
+      directories = shared.user.directories ++ [ ".config/spotify" ]; # Spotify login
       files = shared.user.files ++ [ ];
     };
   };

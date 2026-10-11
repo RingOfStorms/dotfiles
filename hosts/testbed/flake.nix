@@ -11,9 +11,6 @@
     disko.inputs.nixpkgs.follows = "nixpkgs";
     # impermanence.url = "github:nix-community/impermanence";
 
-    # hyprland.url = "path:../../flakes/hyprland";
-    hyprland.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/hyprland";
-
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
 
@@ -25,7 +22,6 @@
       common,
       ros_neovim,
       disko,
-      hyprland,
       # impermanence,
       ...
     }:
@@ -47,7 +43,6 @@
 
               disko.nixosModules.disko
               ros_neovim.nixosModules.default
-              hyprland.nixosModules.default
               # impermanence.nixosModules.impermanence
 
               common.nixosModules.essentials

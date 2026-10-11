@@ -29,5 +29,4 @@ services.tailscale.extraUpFlags = ++ (lib.optionals cfg.enableExitNode [ "--adve
   - obs
 - opensnitch
   - homemanager `services.opensnitch-ui.enable = true;`
-- hyprland config
 - i3 isntead of sway?

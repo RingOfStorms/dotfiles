@@ -106,7 +106,6 @@
             impermanence_mod = inputs.impermanence_mod;
           })
           ./configuration.nix
-          ./battery-manager.nix
 
           # Host-specific config
           ({ pkgs, ... }: {

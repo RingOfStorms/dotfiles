@@ -190,13 +190,6 @@ in
         ];
       };
 
-      # ── per-host: gp3 ─────────────────────────────────────────────
-      "machines/by-host/gp3/hass_token" = {
-        fields = [ "value" ];
-        description = "Home Assistant long-lived token (gp3 battery manager).";
-        access = [ { type = "sub"; value = "364267179626987523"; } ];
-      };
-
       # ── per-host: h003 ────────────────────────────────────────────
       "machines/by-host/h003/hass_isp_speedtest_token" = {
         fields = [ "value" ];
