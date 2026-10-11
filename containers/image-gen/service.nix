@@ -9,7 +9,7 @@
 #
 # Models that fit 10 GB (install from the UI gallery or `local-ai models install`):
 #   flux.1-dev-ggml (12B, quantized, clip on CPU), flux.1-schnell,
-#   flux.2-klein-4b (fast, also edits), z-image-turbo-diffusers.
+#   flux.2-klein-4b (fast, also edits). Not z-image-turbo: bf16 6B, ~12 GB, OOMs.
 # See README.md for what was kept from Forge.
 {
   name = "image-gen";

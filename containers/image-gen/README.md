@@ -25,7 +25,6 @@ WebUI and coding agents talk to it like the OpenAI images API.
 | Model | Why |
 |---|---|
 | `flux.2-klein-4b` | Fast (4 steps), good quality, also image editing. Start here. |
-| `z-image-turbo-diffusers` | Strong photoreal + text in images; tight on 10 GB. |
 | `flux.1-dev-ggml` | Flux 1 dev, quantized; reuses the Forge encoders below. Non-commercial license. |
 
 `LOCALAI_SINGLE_ACTIVE_BACKEND` + 15 min idle unload keep VRAM free for
@@ -56,3 +55,27 @@ sudo cp -r /var/lib/forge/stable-diffusion-webui-forge/log/images ~/forge-output
 
 Then remove `hosts/joe/forge.nix` and `/var/lib/forge` from joe's
 persistence, rebuild, and delete `/persist/var/lib/forge`.
+
+Not on the list: `z-image-turbo-diffusers`. The gallery entry loads the 6B
+model in bf16 (~12 GB of weights before the text encoder) straight onto the
+GPU, so it runs out of memory on 10 GB unless someone builds and tests a
+quantized/offloaded config.
+
+## Text-to-speech (can replace the kokoro-tts service)
+
+LocalAI also serves `POST /v1/audio/speech`. Its gallery `kokoro` entry
+runs the **same Kokoro-82M model** (default voice `af_heart`), so quality
+is identical to kokoro-tts; it is not a better model, just the same one in
+one server. Install with `local-ai models install kokoro`, then:
+
+```sh
+curl http://joe:8080/v1/audio/speech -H 'Content-Type: application/json' \
+  -d '{"model":"kokoro","input":"hello","voice":"af_heart"}' -o t.wav
+```
+
+Trade-offs vs. Kokoro-FastAPI: one API/port for everything, but
+`SINGLE_ACTIVE_BACKEND` means TTS and image gen swap each other out of VRAM
+(a few seconds' reload); Kokoro-FastAPI has extras (voice mixing,
+streaming, word timestamps) LocalAI may not expose. Bigger options in the
+gallery if you want to try (untested here): `qwen3-tts-*`, `vibevoice`,
+`chatterbox`, `fish-speech-s2-pro`.
