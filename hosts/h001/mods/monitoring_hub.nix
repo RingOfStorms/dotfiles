@@ -33,8 +33,14 @@ in
     # address that isn't (yet) on any interface, so even a transient flap during
     # start can't fail the bind. See ip(7).
     systemd.services.beszel-hub = {
-      wants = [ "network-online.target" "tailscaled-autoconnect.service" ];
-      after = [ "network-online.target" "tailscaled-autoconnect.service" ];
+      wants = [
+        "network-online.target"
+        "tailscaled-autoconnect.service"
+      ];
+      after = [
+        "network-online.target"
+        "tailscaled-autoconnect.service"
+      ];
       serviceConfig.IPFreeBind = true;
     };
 

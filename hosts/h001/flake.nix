@@ -11,7 +11,6 @@
     zitadel-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     beszel-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     forgejo-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    n8n-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     dawarich-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     immich-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     paperless-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";

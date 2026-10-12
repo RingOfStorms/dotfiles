@@ -29,8 +29,14 @@ in
   # the daemon being started and races nginx's bind. IPFreeBind=true also lets
   # nginx bind to addresses not yet on any interface as belt-and-suspenders.
   systemd.services.nginx = {
-    wants = [ "network-online.target" "tailscaled-autoconnect.service" ];
-    after = [ "network-online.target" "tailscaled-autoconnect.service" ];
+    wants = [
+      "network-online.target"
+      "tailscaled-autoconnect.service"
+    ];
+    after = [
+      "network-online.target"
+      "tailscaled-autoconnect.service"
+    ];
     serviceConfig.IPFreeBind = true;
   };
 
@@ -154,7 +160,6 @@ in
             proxyPass = "http://${upstream}";
           };
         };
-        "n8n.${domain}" = proxyToUpstream;
         "notes.${domain}" = proxyToUpstream;
 
         # ── secrets manager (secrets.) — public bootstrap edge ──────────

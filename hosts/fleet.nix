@@ -115,7 +115,10 @@ rec {
 
   # ─── DEPLOY TARGETS ───────────────────────────────────────────────
   # Hosts that can be deployed to from the root flake devShell.
-  deployableHosts = builtins.removeAttrs hosts [ "t" "l002" ];
+  deployableHosts = builtins.removeAttrs hosts [
+    "t"
+    "l002"
+  ];
 
   # ─── SSH MATCH BLOCK HOSTS ────────────────────────────────────────
   # Used by sec-agent to wire nix2nix identity.
@@ -124,11 +127,18 @@ rec {
   sshMatchBlockHosts =
     let
       hostNames = builtins.attrNames hosts;
-      withUnderscore = name:
-        let h = hosts.${name}; in
-        if (h ? lanIp || h ? publicIp)
-        then [ name "${name}_" ]
-        else [ name ];
+      withUnderscore =
+        name:
+        let
+          h = hosts.${name};
+        in
+        if (h ? lanIp || h ? publicIp) then
+          [
+            name
+            "${name}_"
+          ]
+        else
+          [ name ];
     in
     builtins.concatLists (map withUnderscore hostNames);
 
@@ -144,7 +154,8 @@ rec {
   #     They're aliases — `juni` and `juni_` both resolve to the lanIp.
   mkSshMatchBlocks =
     let
-      mkBlock = name: h:
+      mkBlock =
+        name: h:
         let
           # home-manager 26.05 `programs.ssh.settings` uses upstream OpenSSH
           # directive names (User, HostName, SetEnv) instead of the old
@@ -156,35 +167,57 @@ rec {
 
           # Direct IP — lanIp preferred, else publicIp.
           directIp =
-            if hasLan then h.lanIp
-            else if hasPublic then h.publicIp
-            else null;
+            if hasLan then
+              h.lanIp
+            else if hasPublic then
+              h.publicIp
+            else
+              null;
 
           # For hosts not on tailnet, put the direct IP on the main block.
-          mainHostname =
-            if !hasOverlay && directIp != null then { HostName = directIp; }
-            else {};
+          mainHostname = if !hasOverlay && directIp != null then { HostName = directIp; } else { };
 
-          baseBlock = { User = user; } // mainHostname;
+          baseBlock = {
+            User = user;
+          }
+          // mainHostname;
 
           # The `_` variant exists whenever a direct IP is available.
           underscoreBlock =
-            if directIp != null then {
-              "${name}_" = { User = user; HostName = directIp; };
-            } else {};
+            if directIp != null then
+              {
+                "${name}_" = {
+                  User = user;
+                  HostName = directIp;
+                };
+              }
+            else
+              { };
         in
         { "${name}" = baseBlock; } // underscoreBlock;
     in
-    builtins.foldl' (acc: name: acc // mkBlock name hosts.${name})
-      {} (builtins.attrNames hosts);
+    builtins.foldl' (acc: name: acc // mkBlock name hosts.${name}) { } (builtins.attrNames hosts);
 
   # ─── SERVICE DNS RECORDS ──────────────────────────────────────────
   # Subdomains served by h001. Consumed by h003's tailnet dnsmasq
   # (hosts/h003/mods/networking.nix), which resolves them to h001's overlay IP.
   h001Subdomains = [
-    "jellyfin" "media" "books" "notes" "chat" "sso-proxy" "n8n"
-    "sso" "gist" "git" "etebase" "photos"
-    "location" "matrix" "element" "docs" "life"
+    "jellyfin"
+    "media"
+    "books"
+    "notes"
+    "chat"
+    "sso-proxy"
+    "sso"
+    "gist"
+    "git"
+    "etebase"
+    "photos"
+    "location"
+    "matrix"
+    "element"
+    "docs"
+    "life"
     # `secrets` is the secrets manager server (hosts/h001/mods/sec.nix).
     "secrets"
   ];
@@ -205,14 +238,14 @@ rec {
   mkHost =
     {
       # Required
-      inputs,         # The host's flake inputs attrset
-      constants,      # The host's _constants.nix
+      inputs, # The host's flake inputs attrset
+      constants, # The host's _constants.nix
 
       # Module selection
-      nixosModules ? [],              # Extra NixOS modules (host-specific services, hardware, etc.)
-      hmModules ? [],                 # Extra HM shared modules beyond base set
-      includeBaseHmModules ? true,    # Include the base set of HM modules (tmux, atuin, etc.)
-      includeBaseNixModules ? true,   # Include the base set of NixOS modules (currently empty, for future use)
+      nixosModules ? [ ], # Extra NixOS modules (host-specific services, hardware, etc.)
+      hmModules ? [ ], # Extra HM shared modules beyond base set
+      includeBaseHmModules ? true, # Include the base set of HM modules (tmux, atuin, etc.)
+      includeBaseNixModules ? true, # Include the base set of NixOS modules (currently empty, for future use)
 
       # User auth — how the primary user authenticates
       # "initialPassword"       → users.users.*.initialPassword = authValue
@@ -230,10 +263,15 @@ rec {
       # Immutable users by default — declarative passwords, no drift. Override
       # to true only where you genuinely need runtime user/password mutation.
       mutableUsers ? false,
-      extraGroups ? [ "wheel" "networkmanager" "video" "input" ],
+      extraGroups ? [
+        "wheel"
+        "networkmanager"
+        "video"
+        "input"
+      ],
 
       # Secrets
-      secretsRole ? null,  # "machines-hightrust" | "machines-lowtrust" | null (determines tailnet DNS policy)
+      secretsRole ? null, # "machines-hightrust" | "machines-lowtrust" | null (determines tailnet DNS policy)
 
       # Unstable overlay — pass the nixpkgs-unstable input to get pkgs.unstable
       nixpkgsUnstable ? null,
@@ -254,75 +292,105 @@ rec {
       # disable password login and rely on SSH keys).
       _authGuard =
         if (!isCloudUser) && authValue == null then
-          throw ("fleet.mkHost: host '${hostName}' uses authMethod=\"${authMethod}\" "
+          throw (
+            "fleet.mkHost: host '${hostName}' uses authMethod=\"${authMethod}\" "
             + "but did not set an explicit `authValue`. There is no default "
             + "password. Set a `mkpasswd`-generated hash, or authValue = \"!\" "
-            + "to disable password login (keys-only). See pentest C2.")
-        else null;
+            + "to disable password login (keys-only). See pentest C2."
+          )
+        else
+          null;
 
-      fleetData = { inherit global hosts h001Subdomains lioSubdomains mkSshMatchBlocks; };
+      fleetData = {
+        inherit
+          global
+          hosts
+          h001Subdomains
+          lioSubdomains
+          mkSshMatchBlocks
+          ;
+      };
 
       # ── Unstable overlay ──
       unstableOverlay =
-        if nixpkgsUnstable != null then [
-          ({
-            nixpkgs.overlays = [
-              (final: prev: {
-                unstable = import nixpkgsUnstable {
-                  inherit (final) system config;
-                };
-              })
-            ];
-          })
-        ] else [];
+        if nixpkgsUnstable != null then
+          [
+            ({
+              nixpkgs.overlays = [
+                (final: prev: {
+                  unstable = import nixpkgsUnstable {
+                    inherit (final) system config;
+                  };
+                })
+              ];
+            })
+          ]
+        else
+          [ ];
 
       # ── Home Manager base modules ──
       # These 9 modules are shared by every single host (unless includeBaseHmModules = false).
       baseHmModules =
-        if includeBaseHmModules then [
-          inputs.common.homeManagerModules.tmux
-          inputs.common.homeManagerModules.atuin
-          inputs.common.homeManagerModules.direnv
-          inputs.common.homeManagerModules.git
-          inputs.common.homeManagerModules.postgres_cli_options
-          inputs.common.homeManagerModules.ssh
-          inputs.common.homeManagerModules.starship
-          inputs.common.homeManagerModules.zoxide
-          inputs.common.homeManagerModules.zsh
-        ] else [];
+        if includeBaseHmModules then
+          [
+            inputs.common.homeManagerModules.tmux
+            inputs.common.homeManagerModules.atuin
+            inputs.common.homeManagerModules.direnv
+            inputs.common.homeManagerModules.git
+            inputs.common.homeManagerModules.postgres_cli_options
+            inputs.common.homeManagerModules.ssh
+            inputs.common.homeManagerModules.starship
+            inputs.common.homeManagerModules.zoxide
+            inputs.common.homeManagerModules.zsh
+          ]
+        else
+          [ ];
 
       # ── NixOS base modules ──
       # Common NixOS modules included on all hosts (unless includeBaseNixModules = false).
       # Currently empty — add modules here as patterns emerge across hosts.
       baseNixModules =
-        if includeBaseNixModules then [
-        ] else [];
+        if includeBaseNixModules then
+          [
+          ]
+        else
+          [ ];
 
       # ── Low-trust Tailnet DNS policy ──
       # Headscale advertises one DNS configuration to the whole tailnet; ACL
       # tags cannot select a different nameserver.split policy. Low-trust
       # clients therefore keep using their LAN/public resolvers instead of
       # accepting the tailnet-wide split DNS configuration.
-      lowTrustTailnetDnsModule =
-        lib.optional (secretsRole == "machines-lowtrust") {
-          services.tailscale.extraUpFlags = [ "--accept-dns=false" ];
-          services.tailscale.extraSetFlags = [ "--accept-dns=false" ];
-        };
+      lowTrustTailnetDnsModule = lib.optional (secretsRole == "machines-lowtrust") {
+        services.tailscale.extraUpFlags = [ "--accept-dns=false" ];
+        services.tailscale.extraSetFlags = [ "--accept-dns=false" ];
+      };
 
       # ── User auth config ──
       # `builtins.seq _authGuard` forces the guard to evaluate (throwing for a
       # password host with no authValue) before any auth attrs are produced.
       userAuthAttrs = builtins.seq _authGuard (
-        if authMethod == "initialPassword" then { initialPassword = authValue; }
-        else if authMethod == "hashedPassword" then { hashedPassword = authValue; }
-        else if authMethod == "initialHashedPassword" then { initialHashedPassword = authValue; }
-        else {} # cloudUser — no password attrs
+        if authMethod == "initialPassword" then
+          { initialPassword = authValue; }
+        else if authMethod == "hashedPassword" then
+          { hashedPassword = authValue; }
+        else if authMethod == "initialHashedPassword" then
+          { initialHashedPassword = authValue; }
+        else
+          { } # cloudUser — no password attrs
       );
 
       # ── HM user set (explicit to avoid infinite recursion with config.users.users) ──
       hmUsers =
-        let base = { "${primaryUser}" = { home.stateVersion = stateVersion; programs.home-manager.enable = true; }; };
-        in base;
+        let
+          base = {
+            "${primaryUser}" = {
+              home.stateVersion = stateVersion;
+              programs.home-manager.enable = true;
+            };
+          };
+        in
+        base;
 
       # ── Core system module (the boilerplate that used to be copy-pasted) ──
       coreModule =
@@ -336,14 +404,20 @@ rec {
           users.mutableUsers = mutableUsers;
 
           users.users."${primaryUser}" =
-            (if isCloudUser then {
-              shell = pkgs.zsh;
-              openssh.authorizedKeys.keys = [ global.sshPubKey ];
-            } else {
-              isNormalUser = true;
-              inherit extraGroups;
-              openssh.authorizedKeys.keys = [ global.sshPubKey ];
-            }) // userAuthAttrs;
+            (
+              if isCloudUser then
+                {
+                  shell = pkgs.zsh;
+                  openssh.authorizedKeys.keys = [ global.sshPubKey ];
+                }
+              else
+                {
+                  isNormalUser = true;
+                  inherit extraGroups;
+                  openssh.authorizedKeys.keys = [ global.sshPubKey ];
+                }
+            )
+            // userAuthAttrs;
 
           # Home Manager
           home-manager = {

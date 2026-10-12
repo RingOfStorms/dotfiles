@@ -14,7 +14,6 @@
     ./searx.nix
     ./trilium.nix
     ./oauth2-proxy.nix
-    ./n8n.nix
     ./postgresql.nix
     ./sec.nix
     ./homepage-dashboard.nix

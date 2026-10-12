@@ -3,6 +3,8 @@
 {
   ringofstorms.containers = {
     enable = true;
+    # Runtime vhosts from service.nix `nginx` blocks (e.g. opengist).
+    nginx.enable = true;
     # Checked by `containers deploy/move` against service.nix `requires`.
     capabilities = [
       "nfs-h002" # /nfs/h002 autofs mount of the NAS

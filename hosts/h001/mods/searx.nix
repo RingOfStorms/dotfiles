@@ -20,7 +20,10 @@ in
         secret_key = "$SEARX_SECRET_KEY";
       };
       search = {
-        formats = [ "html" "json" ];
+        formats = [
+          "html"
+          "json"
+        ];
         safe_search = 1;
       };
       outgoing = {

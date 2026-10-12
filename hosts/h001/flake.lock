@@ -268,22 +268,6 @@
         "type": "github"
       }
     },
-    "n8n-nixpkgs": {
-      "locked": {
-        "lastModified": 1780243769,
-        "narHash": "sha256-x5UQuRsH3MqI0U9afaXSNqzTPSeZlRLvFAav2Ux1pNw=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "331800de5053fcebacf6813adb5db9c9dca22a0c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1765838191,
@@ -1085,7 +1069,6 @@
         "life": "life",
         "litellm-nixpkgs": "litellm-nixpkgs",
         "matrix-nixpkgs": "matrix-nixpkgs",
-        "n8n-nixpkgs": "n8n-nixpkgs",
         "nixpkgs": "nixpkgs_5",
         "oauth2-proxy-nixpkgs": "oauth2-proxy-nixpkgs",
         "open-webui-nixpkgs": "open-webui-nixpkgs",

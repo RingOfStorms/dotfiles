@@ -77,13 +77,6 @@ in
             };
           }
           {
-            "n8n" = {
-              description = "Workflow Automation";
-              href = "https://${s.n8n.domain}";
-              icon = "n8n";
-            };
-          }
-          {
             "Puzzles" = {
               description = "Puzzles";
               href = "https://${s.puzzles.domain}";

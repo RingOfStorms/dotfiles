@@ -13,10 +13,13 @@ let
     config.allowUnfree = true;
   };
   c = constants.services.litellm;
-  copilotModel = mode: m: {
-    model_name = "copilot-${m}";
-    litellm_params.model = "github_copilot/${m}";
-  } // (if mode == null then {} else { model_info.mode = mode; });
+  copilotModel =
+    mode: m:
+    {
+      model_name = "copilot-${m}";
+      litellm_params.model = "github_copilot/${m}";
+    }
+    // (if mode == null then { } else { model_info.mode = mode; });
 in
 {
   disabledModules = [ declaration ];

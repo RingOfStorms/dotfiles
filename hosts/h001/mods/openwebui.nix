@@ -33,7 +33,6 @@ let
   c = constants.services.openWebui;
   litellm = constants.services.litellm;
   searx = constants.services.searx;
-  penpot = constants.services.penpot;
   zitadel = constants.services.zitadel;
   openaiBaseUrl = "http://127.0.0.1:${toString litellm.port}/v1";
 in
@@ -59,8 +58,14 @@ in
     };
 
     systemd.services.open-webui = {
-      after = [ "litellm.service" "searx.service" ];
-      wants = [ "litellm.service" "searx.service" ];
+      after = [
+        "litellm.service"
+        "searx.service"
+      ];
+      wants = [
+        "litellm.service"
+        "searx.service"
+      ];
     };
 
     services.open-webui = {
@@ -129,29 +134,6 @@ in
         IMAGES_OPENAI_API_BASE_URL = openaiBaseUrl;
         IMAGES_OPENAI_API_KEY = "na";
         IMAGE_SIZE = "1024x1024";
-
-        # Seed Penpot's private Streamable HTTP MCP server. In multi-user mode,
-        # tool calls require a matching Penpot browser plugin session.
-        TOOL_SERVER_CONNECTIONS = builtins.toJSON [
-          {
-            type = "mcp";
-            url = "http://${constants.host.overlayIp}:${toString penpot.mcpServerPort}/mcp";
-            path = "";
-            auth_type = "none";
-            key = "";
-            config = {
-              enable = true;
-              function_name_filter_list = "";
-              access_grants = [ ];
-            };
-            info = {
-              id = "penpot";
-              name = "Penpot";
-              description = "Penpot design tools";
-            };
-          }
-        ];
-        MCP_INITIALIZE_TIMEOUT = "30";
 
         CHAT_STREAM_RESPONSE_CHUNK_MAX_BUFFER_SIZE = "20971520";
         REPLACE_IMAGE_URLS_IN_CHAT_RESPONSE = "True";

@@ -1,11 +1,17 @@
-{ inputs, pkgs, constants, fleet, lib, ... }:
+{
+  inputs,
+  pkgs,
+  constants,
+  fleet,
+  lib,
+  ...
+}:
 let
   c = constants.services.puzzles;
 in
 {
   nixpkgs.config = {
-    allowUnfreePredicate = pkg:
-      builtins.elem (lib.getName pkg) [ "puzzles" ];
+    allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [ "puzzles" ];
     permittedInsecurePackages = [ "pnpm-9.15.9" ];
   };
 
