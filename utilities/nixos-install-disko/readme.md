@@ -28,7 +28,8 @@ The ISO will be at `result/iso/nixos-*.iso`.
 
 ```sh
 DEVICE=/dev/sdX  # double-check with lsblk!
-sudo dd if=result/iso/nixos-*.iso of="$DEVICE" bs=4M status=progress oflag=sync
+ISO=$(realpath result/iso/nixos-*.iso)  # dd will not expand a glob inside if=
+sudo dd if="$ISO" of="$DEVICE" bs=4M status=progress oflag=sync
 ```
 
 The ISO includes bcachefs kernel + userspace tools, flakes enabled, SSH with
@@ -307,9 +308,15 @@ HOST=oren
 HOST_IP=10.12.14.124
 cd hosts/$HOST
 nixos-rebuild build --flake ".#$HOST"
-NIX_SSHOPTS="-i /var/lib/openbao-secrets/nix2nix_2026-03-15" \
-  nix-copy-closure --to root@$HOST_IP --use-substitutes --gzip result
+# Copy into the TARGET disk's store (/mnt), NOT the live ISO's store.
+# The ISO's /nix/store is a small tmpfs: `nix-copy-closure --to root@IP`
+# lands there and fails with "No space left on device".
+# --substitute-on-destination lets the target pull from cache.nixos.org
+# itself, so only locally-built paths cross the SSH link.
 CLOSURE=$(readlink -f result) && echo $CLOSURE
+NIX_SSHOPTS="-i /var/lib/secrets_manager_hydrated/nix2nix_2026-03-15" \
+  nix copy --substitute-on-destination \
+  --to "ssh-ng://root@$HOST_IP?remote-store=/mnt" "$CLOSURE"
 
 # On the target:
 nixos-install --no-root-password --system "$CLOSURE"
