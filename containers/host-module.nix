@@ -28,6 +28,7 @@ let
         lib.makeBinPath [
           pkgs.coreutils
           pkgs.systemd
+          pkgs.util-linux
         ]
       }
       # Each check runs in its own child, SIGKILLed after 12 s: on a hard NFS
@@ -45,12 +46,18 @@ let
       start_wanted() {
         ${lib.concatStrings (
           lib.mapAttrsToList (svc: unit: ''
-            if [ -e ${mutable}/${unit} ] && ! [ -e ${holdDir}/${svc} ] \
-              && ls ${mutable}/*.wants/${unit} >/dev/null 2>&1 \
-              && ! systemctl is-active -q ${unit}; then
-              echo "guard ${name}: starting ${unit}"
-              systemctl start --no-block ${unit}
-            fi
+            # Check + enqueue under the lock `containers` takes to write the
+            # hold, so a stop/backup can't slip in between (its stop job,
+            # queued later, supersedes this start).
+            (
+              flock 9
+              if [ -e ${mutable}/${unit} ] && ! [ -e ${holdDir}/${svc} ] \
+                && ls ${mutable}/*.wants/${unit} >/dev/null 2>&1 \
+                && ! systemctl is-active -q ${unit}; then
+                echo "guard ${name}: starting ${unit}"
+                systemctl start --no-block ${unit}
+              fi
+            ) 9>${holdDir}/${svc}.lock
           '') g.units
         )}
       }

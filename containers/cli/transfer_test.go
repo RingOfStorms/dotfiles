@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The tests run the real backup/move code paths. `ssh` is replaced by a
@@ -34,6 +35,9 @@ func newRig(t *testing.T) *rig {
 			t.Skipf("%s not available", tool)
 		}
 	}
+	oldHold := holdDir
+	t.Cleanup(func() { holdDir = oldHold })
+	holdDir = filepath.Join(t.TempDir(), "hold")
 	d := t.TempDir()
 	r := &rig{t: t, root: filepath.Join(d, "src"), dst: filepath.Join(d, "dst"), log: filepath.Join(d, "calls.log"), bin: filepath.Join(d, "bin"), breaks: map[string]string{}}
 	for _, p := range []string{r.root + "/svc/data/sub", r.dst, r.bin} {
@@ -669,5 +673,104 @@ func TestRequiresScript(t *testing.T) {
 	must(t, os.WriteFile(filepath.Join(capDir, "intel-qsv"), nil, 0o644))
 	if out, err := run(s); err != nil {
 		t.Fatalf("all present must pass: %v %s", err, out)
+	}
+}
+
+// The guard (host-module.nix) checks the hold and enqueues a start under
+// <hold>/<svc>.lock. Simulated here with the same lock/checks.
+func guardStart(s Service) string {
+	return fmt.Sprintf(`( flock 9
+  if [ -e %[1]s ] && ! [ -e %[2]s ] && ls %[3]s/*.wants/%[4]s >/dev/null 2>&1 && ! systemctl is-active -q %[4]s; then systemctl start %[4]s; fi
+) 9>%[2]s.lock
+`, q(mutableUnits+"/"+unitOf(s)), q(holdDir+"/"+s.Name), q(mutableUnits), unitOf(s))
+}
+
+// Backup of a service that was inactive at the CLI's status read, but that a
+// recovering storage guard starts before the hold lands: the backup must
+// still stop it before copying and restart it afterwards.
+func TestBackupStopsServiceStartedByGuardAfterStatusRead(t *testing.T) {
+	oldU, oldH := mutableUnits, holdDir
+	t.Cleanup(func() { mutableUnits, holdDir = oldU, oldH })
+	mutableUnits, holdDir = t.TempDir(), filepath.Join(t.TempDir(), "hold")
+	must(t, os.MkdirAll(holdDir, 0o755)) // tmpfiles on a real host
+	bash := realPath(t, "bash")
+	bin, state := t.TempDir(), t.TempDir()
+	writeExe(t, filepath.Join(bin, "systemctl"), "#!"+bash+`
+s=`+state+`
+case "$1" in
+  is-active) [ "$2" = -q ] && u=$3 || u=$2; [ -e $s/$u ] ;;
+  start) touch $s/$2 ;;
+  stop) rm -f $s/$2 ;;
+esac
+`)
+	fcl := t.TempDir() // stands in for /var/lib/fleet-containers
+	sh := func(script string) {
+		script = strings.ReplaceAll(script, "/var/lib/fleet-containers/", fcl+"/")
+		c := exec.Command(bash, "-c", "set -euo pipefail\n"+script)
+		c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+		if o, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, o)
+		}
+	}
+	s := Service{Name: "arr", Kind: "nixos"}
+	u := unitOf(s)
+	must(t, os.WriteFile(filepath.Join(mutableUnits, u), nil, 0o644))
+	sh(enableScript(s))
+	running := func() bool { _, err := os.Stat(filepath.Join(state, u)); return err == nil }
+
+	// CLI read "inactive"; now the guard recovers and starts it.
+	sh(guardStart(s))
+	if !running() {
+		t.Fatal("setup: guard did not start the unit")
+	}
+	sh(backupStopScript(s)) // what cmdBackup runs before copying (both branches)
+	if running() {
+		t.Fatal("backup would copy a live service")
+	}
+	sh(guardStart(s)) // guard tick during the copy
+	if running() {
+		t.Fatal("guard restarted a held service during backup")
+	}
+	sh(unholdScript(s) + fmt.Sprintf("if [ -e /var/lib/fleet-containers/%[2]s.was-running ]; then rm -f /var/lib/fleet-containers/%[2]s.was-running; systemctl start %[1]s; fi\n", u, s.Name))
+	if !running() {
+		t.Fatal("backup did not restart the service it stopped")
+	}
+}
+
+// While a hold is being written under the lock, the guard must wait and then
+// see it (it never enqueues a start after the hold).
+func TestGuardWaitsForHoldLock(t *testing.T) {
+	oldU, oldH := mutableUnits, holdDir
+	t.Cleanup(func() { mutableUnits, holdDir = oldU, oldH })
+	mutableUnits, holdDir = t.TempDir(), filepath.Join(t.TempDir(), "hold")
+	bash := realPath(t, "bash")
+	bin, state := t.TempDir(), t.TempDir()
+	writeExe(t, filepath.Join(bin, "systemctl"), "#!"+bash+"\ncase \"$1\" in is-active) exit 1;; start) touch "+state+"/started;; esac\n")
+	s := Service{Name: "arr", Kind: "nixos"}
+	must(t, os.WriteFile(filepath.Join(mutableUnits, unitOf(s)), nil, 0o644))
+	run := func(script string) *exec.Cmd {
+		c := exec.Command(bash, "-c", "set -euo pipefail\n"+script)
+		c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+		return c
+	}
+	must(t, run(enableScript(s)).Run())
+	// Hold the lock (as holdScript does) and only create the marker once the
+	// guard is already blocked on it.
+	ready := filepath.Join(t.TempDir(), "locked")
+	holder := run(fmt.Sprintf("mkdir -p %[1]s; (flock 9; touch %[4]s; sleep 0.5; touch %[2]s) 9>%[3]s",
+		q(holdDir), q(holdDir+"/"+s.Name), q(holdDir+"/"+s.Name+".lock"), q(ready)))
+	must(t, holder.Start())
+	for range 200 {
+		if _, err := os.Stat(ready); err == nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if o, err := run(guardStart(s)).CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, o)
+	}
+	must(t, holder.Wait())
+	if _, err := os.Stat(filepath.Join(state, "started")); err == nil {
+		t.Fatal("guard started the unit although the hold was written while it waited")
 	}
 }

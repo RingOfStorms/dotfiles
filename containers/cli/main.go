@@ -1013,14 +1013,17 @@ func cmdBackup(args []string) error {
 		}
 	}
 	if !f.bools["live"] && !running {
-		remote(h, true, holdScript(s)) // keep a storage guard from starting it mid-copy
+		// A storage guard may have started it since the status read: hold, then
+		// stop whatever is running now (it is started again afterwards).
+		if err := remote(h, true, backupStopScript(s)); err != nil {
+			return err
+		}
 		info("%s is not running on %s; backing up as is", s.Name, h)
 		if hs := hookScript(s); hs != "" {
 			info("note: %s has a backup hook, which needs the service running; skipped", s.Name)
 		}
 	} else if !f.bools["live"] {
-		pre := hookScript(s) + holdScript(s) + fmt.Sprintf(`if systemctl is-active -q %[1]s; then touch /var/lib/fleet-containers/%[2]s.was-running; systemctl stop %[1]s; fi
-`, unitOf(s), s.Name)
+		pre := hookScript(s) + backupStopScript(s)
 		info("stopping %s on %s for a consistent copy", s.Name, h)
 		if err := remote(h, true, pre); err != nil {
 			return err
@@ -1316,8 +1319,12 @@ var mutableUnits = "/etc/systemd-mutable/system" // var for tests
 // in /run, so a reboot clears it (the boot link then decides).
 var holdDir = "/run/fleet-containers/hold" // var for tests
 
+// The marker is written under the per-service lock the guard holds while it
+// checks and enqueues a start, so a guard start is either queued before the
+// hold (and the stop that follows supersedes it) or sees the hold.
 func holdScript(s Service) string {
-	return fmt.Sprintf("mkdir -p %s && touch %s\n", q(holdDir), q(holdDir+"/"+s.Name))
+	return fmt.Sprintf("mkdir -p %[1]s && (flock 9 && touch %[2]s) 9>%[3]s\n",
+		q(holdDir), q(holdDir+"/"+s.Name), q(holdDir+"/"+s.Name+".lock"))
 }
 
 func unholdScript(s Service) string {
@@ -1587,4 +1594,11 @@ func requiresScript(s Service, host string) string {
 	}
 	fmt.Fprintf(&b, "if [ -n \"$missing\" ]; then echo \"%s requires:$missing, which %s does not offer (ringofstorms.containers.capabilities)\" >&2; exit 1; fi\n", s.Name, host)
 	return b.String()
+}
+
+// backupStopScript holds the service, then stops it if it is running at that
+// point, remembering to start it again. Re-checking after the hold covers a
+// guard start between the CLI's status read and the hold.
+func backupStopScript(s Service) string {
+	return holdScript(s) + fmt.Sprintf("if systemctl is-active -q %[1]s; then touch /var/lib/fleet-containers/%[2]s.was-running; systemctl stop %[1]s; fi\n", unitOf(s), s.Name)
 }
