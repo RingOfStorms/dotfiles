@@ -92,7 +92,7 @@ rec {
     gp3 = {
       user = "josh";
       overlayIp = "100.64.0.15";
-      lanIp = "10.12.14.144";
+      lanIp = "10.12.14.101";
       trust = "high";
     };
     o002 = {
