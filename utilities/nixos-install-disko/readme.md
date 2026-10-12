@@ -326,9 +326,12 @@ CLOSURE=$(nix build "./hosts/$HOST#nixosConfigurations.$HOST.config.system.build
 
 # Copy it into the store under /mnt on the target. --substitute-on-destination
 # lets the target fetch cache.nixos.org paths itself, so only locally-built
-# paths cross the SSH link.
+# paths cross the SSH link. --no-check-sigs is required: unlike
+# nix-copy-closure, `nix copy` checks signatures even as root, and the fresh
+# ISO does not trust the workstation's unsigned locally-built paths ("lacks a
+# signature by a trusted key").
 NIX_SSHOPTS="-i /var/lib/secrets_manager_hydrated/nix2nix_2026-03-15" \
-  nix copy --substitute-on-destination \
+  nix copy --substitute-on-destination --no-check-sigs \
   --to "ssh-ng://root@$HOST_IP?remote-store=/mnt" "$CLOSURE"
 
 # Print the install command to run on the target.
