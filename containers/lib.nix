@@ -136,19 +136,20 @@ in
       ++ (p.extraArgs or [ ])
       ++ [ p.image ]
       ++ (p.cmd or [ ]);
-      # Two layers. (1) The network has no default route (no_default_route),
-      # so nothing leaves the bridge even if the nft table is gone (firewall
-      # reload before a rebuild). (2) The host's fleet-noinet nft table also
-      # drops connections to the host itself. Start fails if either is missing.
+      # The host's fleet-noinet nft table (host-module.nix, part of the
+      # declarative ruleset, so firewall reloads re-create it) drops every new
+      # connection from this network. Start fails if the table is missing.
+      # Not no_default_route: it also breaks replies to clients on other
+      # subnets (e.g. a port published on the tailnet IP).
       noInetSetup = pkgs.writeShellScript "fleet-noinet-setup" ''
         set -eu
         P=/run/current-system/sw/bin/podman
         /run/current-system/sw/bin/nft list table inet fleet-noinet >/dev/null
-        if ! $P network inspect --format '{{.Options}}' fleet-noinet 2>/dev/null | grep -q 'no_default_route:true'; then
-          $P network rm -f fleet-noinet >/dev/null 2>&1 || true
-          $P network create --interface-name=fleet-noinet --subnet=10.89.250.0/24 \
-            -o no_default_route=true fleet-noinet
+        if $P network inspect --format '{{.Options}}' fleet-noinet 2>/dev/null | grep -q 'no_default_route'; then
+          $P network rm -f fleet-noinet
         fi
+        $P network exists fleet-noinet \
+          || $P network create --interface-name=fleet-noinet --subnet=10.89.250.0/24 fleet-noinet
       '';
       noInetPre = ''
         ExecStartPre=${noInetSetup}

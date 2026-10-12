@@ -30,6 +30,12 @@ let
           || echo "containers: could not open $proto/$port (from $f)" >&2
       done < "$f"
     done
+    # A firewall (re)start flushes the whole ruleset, including podman's
+    # netavark table, which kills published ports. Re-create it.
+    if [ -x /run/current-system/sw/bin/podman ]; then
+      /run/current-system/sw/bin/podman network reload --all >/dev/null \
+        || echo "containers: podman network reload failed" >&2
+    fi
   '';
 in
 {
