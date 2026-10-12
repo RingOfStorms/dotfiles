@@ -34,11 +34,14 @@ let
       # Each check runs in its own child, SIGKILLed after 12 s: on a hard NFS
       # mount a stuck stat ignores SIGTERM, and a guard that hangs would
       # report healthy forever.
+      # The sentinel goes first: opening a path below an autofs mount point
+      # triggers the mount, while statfs on the mount point itself does not
+      # (before the mount it reports the parent fs, e.g. ext4).
       probe() {
         ${lib.concatMapStrings (m: ''
+          timeout -k 2 10 test -e ${lib.escapeShellArg m.sentinel} || { echo "guard ${name}: sentinel ${m.sentinel} missing"; return 1; }
           t=$(timeout -k 2 10 stat -f -c %T ${lib.escapeShellArg m.path}) || { echo "guard ${name}: ${m.path} not reachable"; return 1; }
           [ "$t" = ${lib.escapeShellArg m.fsType} ] || { echo "guard ${name}: ${m.path} is $t, not ${m.fsType}"; return 1; }
-          timeout -k 2 10 test -e ${lib.escapeShellArg m.sentinel} || { echo "guard ${name}: sentinel ${m.sentinel} missing"; return 1; }
         '') g.mounts}
       }
       # Start what should run: installed, boot link present (`containers
