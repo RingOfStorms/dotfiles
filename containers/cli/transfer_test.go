@@ -774,3 +774,53 @@ func TestGuardWaitsForHoldLock(t *testing.T) {
 		t.Fatal("guard started the unit although the hold was written while it waited")
 	}
 }
+
+// The guard enqueues with --no-block: its start job can still be pending
+// (unit reads "inactive") when the backup takes the hold. The backup must
+// cancel that job before copying and start the service again afterwards.
+func TestBackupCancelsQueuedGuardStart(t *testing.T) {
+	oldU, oldH := mutableUnits, holdDir
+	t.Cleanup(func() { mutableUnits, holdDir = oldU, oldH })
+	mutableUnits, holdDir = t.TempDir(), filepath.Join(t.TempDir(), "hold")
+	must(t, os.MkdirAll(holdDir, 0o755))
+	bash := realPath(t, "bash")
+	bin, state, jobs := t.TempDir(), t.TempDir(), t.TempDir()
+	// Minimal systemd: start --no-block queues a job; runjobs executes them;
+	// stop cancels a queued start and stops the unit (like a stop job does).
+	writeExe(t, filepath.Join(bin, "systemctl"), "#!"+bash+`
+s=`+state+` j=`+jobs+`
+case "$1" in
+  is-active) [ "$2" = -q ] && u=$3 || u=$2; if [ -e $s/$u ]; then echo active; else echo inactive; exit 3; fi ;;
+  list-jobs) [ -e $j/$3 ] && echo "1 $3 start waiting"; true ;;
+  start) if [ "$2" = --no-block ]; then touch $j/$3; else touch $s/$2; fi ;;
+  stop) rm -f $j/$2 $s/$2 ;;
+  runjobs) for f in $j/*; do [ -e "$f" ] || continue; touch $s/$(basename $f); rm $f; done ;;
+esac
+`)
+	fcl := t.TempDir()
+	sh := func(script string) {
+		script = strings.ReplaceAll(script, "/var/lib/fleet-containers/", fcl+"/")
+		c := exec.Command(bash, "-c", "set -euo pipefail\n"+script)
+		c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+		if o, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, o)
+		}
+	}
+	s := Service{Name: "arr", Kind: "nixos"}
+	u := unitOf(s)
+	must(t, os.WriteFile(filepath.Join(mutableUnits, u), nil, 0o644))
+	sh(enableScript(s))
+	running := func() bool { _, err := os.Stat(filepath.Join(state, u)); return err == nil }
+
+	// The real guard's enqueue (no-block), not yet executed by systemd.
+	sh(strings.Replace(guardStart(s), "systemctl start "+u, "systemctl start --no-block "+u, 1))
+	sh(backupStopScript(s))
+	sh("systemctl runjobs") // systemd gets to its queue during the copy
+	if running() {
+		t.Fatal("queued guard start ran during the backup")
+	}
+	sh(unholdScript(s) + fmt.Sprintf("if [ -e /var/lib/fleet-containers/%[2]s.was-running ]; then rm -f /var/lib/fleet-containers/%[2]s.was-running; systemctl start %[1]s; fi\n", u, s.Name))
+	if !running() {
+		t.Fatal("backup did not start the service the guard wanted up")
+	}
+}

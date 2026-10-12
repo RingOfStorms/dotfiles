@@ -1596,9 +1596,15 @@ func requiresScript(s Service, host string) string {
 	return b.String()
 }
 
-// backupStopScript holds the service, then stops it if it is running at that
-// point, remembering to start it again. Re-checking after the hold covers a
-// guard start between the CLI's status read and the hold.
+// backupStopScript holds the service, then stops it with a blocking stop no
+// matter what is-active says: a guard start may be queued (--no-block) or the
+// unit still activating, and a stop job replaces a pending start. It remembers
+// to start it again if it was active, activating or had a start queued.
 func backupStopScript(s Service) string {
-	return holdScript(s) + fmt.Sprintf("if systemctl is-active -q %[1]s; then touch /var/lib/fleet-containers/%[2]s.was-running; systemctl stop %[1]s; fi\n", unitOf(s), s.Name)
+	return holdScript(s) + fmt.Sprintf(`st=$(systemctl is-active %[1]s || true)
+if [ "$st" != inactive ] && [ "$st" != failed ] || [ -n "$(systemctl list-jobs --no-legend %[1]s 2>/dev/null || true)" ]; then
+  touch /var/lib/fleet-containers/%[2]s.was-running
+fi
+systemctl stop %[1]s
+`, unitOf(s), s.Name)
 }
