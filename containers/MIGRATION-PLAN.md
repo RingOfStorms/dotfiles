@@ -60,9 +60,9 @@ above), so `cnt stop arr` / `cnt start arr` take the whole stack down/up and
 the NAS guard protects a single unit. Host network, `privateUsers = "no"`
 (NFS + host-uid state), `requires = [ "nfs-h002" "intel-qsv" ]`, guest on
 nixpkgs 26.05, VPN netns built by the guest in the host namespace. The
-guest imports the existing `hosts/h001/mods` files; the host keeps the
-vhosts (`mods/arr-nginx.nix`). Cutover is one flag,
-`constants.services.nixarr.inContainer`; runbook in `containers/arr/README.md`.
+nixarr, kavita and media-integrity modules live in `containers/arr`; the
+host keeps the vhosts (`mods/arr-nginx.nix`). Cut over 2026-10-12; see
+`containers/arr/README.md`.
 
 #### NAS guard: the whole media stack goes down when h002 does (required)
 
@@ -103,7 +103,9 @@ it does; with the stack in `arr` it protects one unit, `container@arr`:
 **Wiring:**
 
 - Every protected unit gets `bindsTo` + `after` = `fleet-guard-h002.service`.
-  When the guard stops, they stop immediately, and they can't start while
+  When the guard stops, systemd starts stopping them at once (fully down
+  takes ~16 s with NFS up, ~100 s with h002 unreachable, because services
+  hang on the dead mount until SIGKILL), and they can't start while
   it's down (after a reboot or `nixos-rebuild switch` too).
 - Restart on recovery **must respect desired state**. Plain `Upholds=`
   restarts any inactive listed unit whenever the guard is active, so it

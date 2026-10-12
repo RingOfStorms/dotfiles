@@ -1,4 +1,5 @@
-# Guest config. Reuses the h001 modules (single source of truth) and pins
+# Guest config. The media stack lives here (nixarr.nix, kavita.nix,
+# media-integrity.nix); h001 only keeps the nginx vhosts. It pins
 # every uid/gid that appears in migrated state, since the guest's dynamic
 # allocation would otherwise differ from the host's.
 {
@@ -12,9 +13,9 @@
 {
   imports = [
     nixarr.nixosModules.default
-    ../../hosts/h001/mods/nixarr.nix
-    ../../hosts/h001/mods/kavita.nix
-    ../../hosts/h001/mods/media-integrity.nix
+    ./nixarr.nix
+    ./kavita.nix
+    ./media-integrity.nix
     ../../hosts/h001/mods/hardware-transcoding.nix
   ];
 

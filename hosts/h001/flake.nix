@@ -45,8 +45,6 @@
     # Life server: NixOS module + packages. See hosts/h001/containers/life.nix.
     life.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/life.git";
 
-    nixarr.url = "github:rasmus-kirk/nixarr";
-
     # Floating containers host module (containers/). Path ref for local testing:
     # containers.url = "path:../../containers";
     containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=containers";
@@ -95,7 +93,6 @@
           })
 
           inputs.puzzles.nixosModules.default
-          inputs.nixarr.nixosModules.default
           inputs.containers.nixosModules.default
           ./floating-containers.nix
           ./hardware-configuration.nix

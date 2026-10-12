@@ -12,9 +12,12 @@ cnt status arr
 
 ## Layout
 
-- Guest config: `container.nix` imports the **same** `hosts/h001/mods`
-  files the host used (nixarr.nix, kavita.nix, media-integrity.nix,
-  hardware-transcoding.nix). Edit those; redeploy with `cnt deploy arr`.
+- Guest config: `container.nix` + `nixarr.nix`, `kavita.nix`,
+  `media-integrity.nix` in this directory (they moved here from
+  `hosts/h001/mods`; h001 no longer has nixarr at all). It also imports
+  `hosts/h001/mods/hardware-transcoding.nix`, shared with the host.
+  Edit, push, then `cnt deploy arr` (it builds this directory from the repo;
+  no h001 rebuild needed).
 - Guest nixpkgs 26.05 (`guestpkgs`); extra-container's host-side eval stays
   on 25.11 (issue #40).
 - Host network: every port is unchanged (jellyfin 8096, seerr 5055, kavita
@@ -31,55 +34,28 @@ cnt status arr
   `nixarr` (`/var/lib/nixarr`, ~8 GB), `kavita`, `media-integrity`,
   `sabnzbd-secrets`, `recyclarr`, `nixos`.
 - NAS guard: `fleet-guard-h002` on the host (`hosts/h001/floating-containers.nix`).
-  h002 unreachable or its sentinel missing -> `container@arr` stops within
-  ~40 s. When h002 is back, the guard starts `arr` again unless it was
-  `cnt stop`ped (hold marker / boot link).
+  When h002 is unreachable or its sentinel is missing, the guard starts
+  stopping `container@arr`, and it starts `arr` again when h002 is back
+  unless it was `cnt stop`ped (hold marker / boot link). Measured on
+  h001 (2026-10):
+  - sentinel missing (NFS still up): stop starts in ~2 s, fully down ~16 s later;
+  - h002 blackholed: stop starts in ~14 s, but services hang on the dead
+    NFS mount, so systemd SIGKILLs after its stop timeout: fully down ~100 s;
+  - recovery: `arr` running again 60-90 s after h002 is back.
 
-## Cutover runbook (h001, once)
+  Detection is not shutdown. For NAS maintenance, `cnt stop arr` first (it
+  blocks until fully down), do the h002 work, and `cnt start arr` once it is
+  back.
 
-0. On h002, once: `touch /data/.h002-online` (shows up as
-   `/nfs/h002/.h002-online`). Without it the guard keeps `arr` down.
-1. Rebuild h001 with the guard but still the host modules
-   (`inContainer = false`). Check: `systemctl status fleet-guard-h002` is
-   active, "storage ok".
-2. Stop the host stack and keep it from restarting:
-   ```
-   systemctl stop media-integrity-scan.timer recyclarr.timer
-   systemctl stop jellyfin seerr sonarr radarr prowlarr bazarr sabnzbd \
-     transmission shelfmark audiobookshelf kavita media-integrity-scan wg
-   ```
-   (`systemctl list-units | grep -E 'arr|jelly|seerr|sabnzbd|transmission|shelf|audiobook|kavita|wg'`
-   must show nothing active.)
-3. Copy state, keeping numeric owners and modes:
-   ```
-   for k in nixarr kavita media-integrity sabnzbd-secrets recyclarr; do
-     install -d -m755 /srv/containers/arr/$k
-     cp -a /var/lib/$k/. /srv/containers/arr/$k/   # -a keeps numeric owners, modes, times
-   done
-   install -d -m755 /srv/containers/arr/nixos
-   ```
-   Leave the originals in place until the container is verified (rollback).
-4. Set `inContainer = true` in `hosts/h001/_constants.nix`, rebuild h001
-   (host modules gone, vhosts from arr-nginx.nix, `wg` netns left by the
-   old `wg.service` is removed on stop; check `ip netns` shows no `wg`).
-5. `cnt deploy arr`, then check: `machinectl shell arr`, `systemctl
-   --failed` inside; `ip netns exec wg curl -s ifconfig.me` on the host
-   shows the VPN exit; jellyfin/seerr/books vhosts load; `vainfo` inside.
-   If the VPN netns can't be built from inside (caps), fall back to
-   `privateNetwork = true` with a 10.0.0.x address and repoint nginx.
-6. Guard test: on h001
-   ```
-   nft add table inet t; nft add chain inet t o '{type filter hook output priority 0;}'
-   nft add rule inet t o ip daddr 10.12.14.183 drop
-   ```
-   `journalctl -fu fleet-guard-h002`: fails within ~40 s, `container@arr`
-   stops. `nft delete table inet t`: guard back within ~60 s + probe, arr
-   starts. Repeat with the sentinel renamed on h002.
-7. Stop test: `cnt stop arr`, blackhole + unblock as above: arr must stay
-   down. `cnt start arr` brings it back.
-8. After a week of good runs: remove `/var/lib/{nixarr,kavita,media-integrity,sabnzbd-secrets,recyclarr}`
-   on the host and the sec-agent `configChanges.nixarr.vpn.wgConf` line
-   in `hosts/h001/sec-agent.nix` (the file itself must stay; it's bound in).
+## Guard test (h001)
 
-Rollback: `cnt stop arr`, set `inContainer = false`, rebuild (the old
-`/var/lib` state is untouched).
+```
+nft add table inet t; nft add chain inet t o '{type filter hook output priority 0;}'
+nft add rule inet t o ip daddr 10.12.14.183 drop   # arr goes down (up to ~100 s)
+nft delete table inet t                            # arr back within ~90 s
+```
+Also with the sentinel renamed on h002 (`mv /data/.h002-online{,.x}`), and
+after `cnt stop arr` (arr must stay down through the cycle).
+
+The cutover from bare-metal h001 was done 2026-10-12 (git history has the
+runbook).

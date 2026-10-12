@@ -74,13 +74,48 @@
       synapseUid = 198;
       synapseGid = 198;
       bridges = {
-        gmessages = { port = 29336; uid = 992; gid = 992; enabled = true; };
-        signal = { port = 29328; uid = 991; gid = 991; enabled = true; };
-        discord = { port = 29334; uid = 987; gid = 987; enabled = true; };
-        instagram = { port = 29320; uid = 990; gid = 985; enabled = false; };
-        facebook = { port = 29321; uid = 989; gid = 985; enabled = false; };
-        whatsapp = { port = 29318; uid = 988; gid = 988; enabled = true; };
-        telegram = { port = 29317; uid = 986; gid = 986; enabled = false; };
+        gmessages = {
+          port = 29336;
+          uid = 992;
+          gid = 992;
+          enabled = true;
+        };
+        signal = {
+          port = 29328;
+          uid = 991;
+          gid = 991;
+          enabled = true;
+        };
+        discord = {
+          port = 29334;
+          uid = 987;
+          gid = 987;
+          enabled = true;
+        };
+        instagram = {
+          port = 29320;
+          uid = 990;
+          gid = 985;
+          enabled = false;
+        };
+        facebook = {
+          port = 29321;
+          uid = 989;
+          gid = 985;
+          enabled = false;
+        };
+        whatsapp = {
+          port = 29318;
+          uid = 988;
+          gid = 988;
+          enabled = true;
+        };
+        telegram = {
+          port = 29317;
+          uid = 986;
+          gid = 986;
+          enabled = false;
+        };
       };
     };
 
@@ -255,9 +290,6 @@
     };
 
     nixarr = {
-      # true once the stack runs in the floating `arr` container
-      # (containers/arr); the host then only keeps nginx vhosts + the guard.
-      inContainer = true;
       containerName = "arr";
       jellyfinPort = 8096;
       jellyseerrPort = 5055;
