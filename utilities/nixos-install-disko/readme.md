@@ -1,7 +1,37 @@
 # NixOS Install with Disko + bcachefs Impermanence
 
 Minimal steps to get a new machine from zero to a working NixOS host with
-encrypted bcachefs, impermanence, and secrets-bao.
+encrypted bcachefs, impermanence, and sec-agent secrets.
+
+> **Hosts on sec-agent** (`hosts/sec-agent.nix`, i.e. every current host):
+> The legacy Step 7 documents the retired secrets-bao/OpenBao flow. Use
+> [Step 7 (sec-agent)](#step-7-sec-agent-first-boot) instead.
+
+## Gotchas (learned the hard way)
+
+- **Use Ethernet on the target.** Wi-Fi makes the closure copy (several GB)
+  painfully slow.
+- **Quote flake refs in zsh.** `nixos-rebuild build --flake .#gp3` fails with
+  `zsh: no matches found` because `#` is a glob char. Write `'.#gp3'`.
+- **Never `nix-copy-closure` to the live ISO.** Its `/nix/store` is an ~8G
+  tmpfs, so it fills up with `No space left on device`. Copy into `/mnt`
+  (Step 6).
+- **`nix copy` needs `--no-check-sigs`.** Locally built paths are unsigned,
+  and the ISO rejects them with `lacks a signature by a trusted key`.
+- **Rebooting the installer loses everything** except what's on the disk.
+  Re-unlock and re-mount (Step 3) before copying again.
+- **`bcachefs unlock` over SSH, then `mount` returns `ENOKEY`.** The key goes
+  into root's *user* keyring, which a different SSH/console session can't see.
+  Run `keyctl link @u @s` in the session that mounts, or unlock and mount in
+  the same session.
+- **Disko reuses the bcachefs UUID.** The boot (vfat) and swap UUIDs change on
+  re-format, but the primary bcachefs UUID can come back identical, because
+  disko derives it from the filesystem name. Re-read all three with `lsblk -f`
+  and don't assume the format failed.
+- **Tailscale may not join on first boot.** `tailscaled-autoconnect` can run
+  before sec-agent has fetched the headscale key, and it isn't retried. See
+  Step 7 (sec-agent).
+- **Headscale runs on o002**, not h001.
 
 ## Prerequisites
 
@@ -192,11 +222,12 @@ PART="${DISK}p3"
 # EFI partition
 BOOT="${DISK}p1"
 
-# Unlock if encrypted and not already unlocked
+# Unlock if encrypted and not already unlocked. If you unlocked in a different
+# session (console vs SSH), first run: keyctl link @u @s   (else mount = ENOKEY)
 # bcachefs unlock "$PART"
 
 # Root subvolume
-mount -t bcachefs -o subvol=@root "$PART" /mnt
+mount -t bcachefs -o X-mount.subdir=@root "$PART" /mnt
 
 # Boot
 mkdir -p /mnt/boot
@@ -204,15 +235,15 @@ mount "$BOOT" /mnt/boot
 
 # Nix store
 mkdir -p /mnt/nix
-mount -t bcachefs -o subvol=@nix "$PART" /mnt/nix
+mount -t bcachefs -o X-mount.subdir=@nix "$PART" /mnt/nix
 
 # Persist
 mkdir -p /mnt/persist
-mount -t bcachefs -o subvol=@persist "$PART" /mnt/persist
+mount -t bcachefs -o X-mount.subdir=@persist "$PART" /mnt/persist
 
 # Snapshots
 mkdir -p /mnt/.snapshots
-mount -t bcachefs -o subvol=@snapshots "$PART" /mnt/.snapshots
+mount -t bcachefs -o X-mount.subdir=@snapshots "$PART" /mnt/.snapshots
 ```
 
 For non-impermanence drives (e.g. a data array), mount them where they belong:
@@ -348,7 +379,41 @@ Use the exact store path that was copied. `$CLOSURE` only exists in the
 workstation shell. `nixos-install` finds the path already present in the
 `/mnt` store, so it doesn't download it again.
 
-## Step 7: Reboot & First Boot Setup
+## Step 7 (sec-agent): first boot
+
+For hosts that import `hosts/sec-agent.nix`. The agent authenticates to
+`https://secrets.joshuabell.xyz` with a Zitadel machine key and reaches it
+publicly via o002, so this works before the host is on the tailnet.
+
+1. **Zitadel** (`https://sso.joshuabell.xyz`): create a machine user named
+   after the host, or reuse the existing one when re-imaging. In the secrets
+   project (`344379162166820867`), grant `device_high_trust` or
+   `device_low_trust` to match the host's `sec-agent.nix` role. Under
+   **Keys → + New → JSON**, download a key, and delete any old keys.
+2. **Seed the key before rebooting**, from the installer with `/mnt/persist`
+   mounted. Impermanence bind-mounts it to `/machine-key.json`:
+   ```sh
+   scp key.json root@$IP:/mnt/persist/machine-key.json
+   ssh root@$IP 'chmod 400 /mnt/persist/machine-key.json'
+   ```
+3. **Reboot** and enter the disk passphrase. Then check, as root:
+   ```sh
+   journalctl -u sec-agent -b          # expect "logged in with roles [...]"
+   ls /var/lib/secrets_manager_hydrated/
+   ```
+   An early `lookup sso.joshuabell.xyz ... server misbehaving` error is
+   harmless: DNS wasn't up yet, and the agent retries.
+4. **Tailscale.** If `tailscale status` says `Logged out`, autoconnect ran
+   before the headscale key existed. The key is there now, so run:
+   ```sh
+   systemctl restart tailscaled-autoconnect && tailscale status
+   ```
+   Verify with `ssh o002 'sudo headscale nodes list'`: high-trust hosts show
+   user `josh` with no tags, and low-trust hosts show `tag:lowtrust`. If you're
+   reusing a hostname, delete any stale node there first.
+5. **Deploy from lio** from now on, as `--target-host root@<host>`.
+
+## Step 7 (legacy secrets-bao): Reboot & First Boot Setup
 
 ```sh
 reboot
