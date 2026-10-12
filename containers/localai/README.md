@@ -3,8 +3,8 @@
 LocalAI on joe's RTX 3080 (10 GB): image generation and text-to-speech
 behind one OpenAI-compatible API. Replaced Forge and kokoro-tts.
 
-- Web UI: http://joe:8080 (chat, images, TTS, model gallery)
-- API base: `http://100.64.0.12:8080/v1` (no API key; open on LAN + tailnet)
+- Web UI: http://100.64.0.12:8080 (chat, images, TTS, model gallery)
+- API base: `http://100.64.0.12:8080/v1` (no API key; tailnet only, not on the LAN)
 
 ## Deploy / models
 
