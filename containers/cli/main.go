@@ -611,10 +611,10 @@ func statusTable(all bool) string {
 
 func renderStatus(all bool, probe func(context.Context, string) ([]row, error)) string {
 	hostSet := map[string]bool{}
-	for _, s := range inv.Services {
-		if s.Host != "" {
-			hostSet[s.Host] = true
-		}
+	// Registered container hosts too, so a service moved to a host with no
+	// declarations still shows where it runs.
+	for _, h := range containerHosts() {
+		hostSet[h] = true
 	}
 	if all {
 		for h := range inv.Hosts {

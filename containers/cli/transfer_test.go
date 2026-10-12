@@ -862,3 +862,15 @@ func TestRenderDetailDataUnavailable(t *testing.T) {
 		t.Errorf("status lost:\n%s", r)
 	}
 }
+
+func TestStatusProbesRegisteredHosts(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	inv = &Inventory{
+		Services:       map[string]Service{"mc": {Name: "mc", Host: "h003", Kind: "nixos"}},
+		ContainerHosts: []string{"h002", "h003"},
+	}
+	out := renderStatus(false, fakeFleet(map[string][]string{"h002": {"mc+"}}))
+	if !strings.Contains(out, "h002") || strings.Contains(out, "not installed") {
+		t.Fatalf("mc on undeclared h002 not shown:\n%s", out)
+	}
+}
