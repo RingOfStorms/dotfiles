@@ -1,5 +1,8 @@
 { pkgs, lib, constants, ... }:
 {
+  # 1 GB /boot and ~210 MB NVIDIA initrds: keep at most 3 generations.
+  boot.loader.systemd-boot.configurationLimit = lib.mkForce 3;
+
   hardware.enableAllFirmware = true;
 
   # TODO: Switch to pkgs.linuxPackages_zen when nixpkgs-unstable syncs zen with NVIDIA
