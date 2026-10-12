@@ -207,8 +207,8 @@ only on hosts with that disk. Recommended: (b), keep them on h001.
 | Service | Decision | Ideal host | Kind | Notes |
 |---|---|---|---|---|
 | Kokoro **TTS** (text-to-speech) | Keep | joe | podman | Prepared: `containers/kokoro-tts` (same image/port/data). NVIDIA CDI; fails to start on non-NVIDIA hosts. |
-| image-gen (LocalAI) | Keep, replaces Forge | joe | podman | Prepared: `containers/image-gen`. OpenAI-compatible `/v1/images/generations` for Open WebUI and agents; FLUX.2 klein first, Flux 1 GGUF; Z-Image gallery default (bf16, ~12 GB) does not fit. Can also serve Kokoro TTS (gallery `kokoro`). Keep list from Forge in its README. |
-| Forge (Stable Diffusion) | **Deprecate** | — | — | Replaced by image-gen. Keep only the trained LoRA (+ optional encoders) from `/var/lib/forge`. |
+| localai (LocalAI) | Keep, replaces Forge | joe | podman | Prepared: `containers/localai`. OpenAI-compatible `/v1/images/generations` for Open WebUI and agents; FLUX.2 klein first, Flux 1 GGUF; Z-Image gallery default (bf16, ~12 GB) does not fit. Can also serve Kokoro TTS (gallery `kokoro`). Keep list from Forge in its README. |
+| Forge (Stable Diffusion) | **Deprecate** | — | — | Replaced by localai. Keep only the trained LoRA (+ optional encoders) from `/var/lib/forge`. |
 | llama-cpp | **Removed** | — | — | Module, pinned nixpkgs input and persistence deleted. 84 GB of GGUFs remain in `joe:/persist/var/cache/llama-cpp`; delete by hand. |
 
 Prefer **podman-kind** for GPU work (CDI device passthrough is clean;
