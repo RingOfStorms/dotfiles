@@ -12,6 +12,7 @@
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # de_plasma.url = "path:../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
+    stt_ime.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/stt_ime";
     # sec-agent replaces secrets-bao on this host.
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
 
@@ -67,6 +68,12 @@
               ];
             };
           })
+          # Speech-to-text IME. CPU-only (Iris Xe has no backend in the flake).
+          # Benchmarked on gp3 (i7-1195G7, 8 threads, 11s clip): small.en 3.7s,
+          # medium.en 13.8s, large-v3-turbo 23.8s. Only small.en is faster than
+          # real time, so it is the largest model that stays responsive.
+          inputs.stt_ime.nixosModules.default
+          ({ ringofstorms.sttIme = { enable = true; model = "small.en"; }; })
 
           inputs.ros_neovim.nixosModules.default
           ({ ringofstorms-nvim.includeAllRuntimeDependencies = true; })
