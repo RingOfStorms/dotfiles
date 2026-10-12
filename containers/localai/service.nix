@@ -32,7 +32,8 @@
   tcpPorts = [ 8080 ];
   podman = {
     image = "docker.io/localai/localai:v4.11.0-gpu-nvidia-cuda-12";
-    ports = [ "0.0.0.0:8080:8080" ];
+    # Tailnet only (joe overlay IP); not reachable from the LAN.
+    ports = [ "100.64.0.12:8080:8080" ];
     environment = {
       MODELS_PATH = "/models";
       LOCALAI_BACKENDS_PATH = "/backends";

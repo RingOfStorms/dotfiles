@@ -136,10 +136,22 @@ in
       ++ (p.extraArgs or [ ])
       ++ [ p.image ]
       ++ (p.cmd or [ ]);
-      # Fail closed: refuse to start unless the host blocks the network.
+      # Two layers. (1) The network has no default route (no_default_route),
+      # so nothing leaves the bridge even if the nft table is gone (firewall
+      # reload before a rebuild). (2) The host's fleet-noinet nft table also
+      # drops connections to the host itself. Start fails if either is missing.
+      noInetSetup = pkgs.writeShellScript "fleet-noinet-setup" ''
+        set -eu
+        P=/run/current-system/sw/bin/podman
+        /run/current-system/sw/bin/nft list table inet fleet-noinet >/dev/null
+        if ! $P network inspect --format '{{.Options}}' fleet-noinet 2>/dev/null | grep -q 'no_default_route:true'; then
+          $P network rm -f fleet-noinet >/dev/null 2>&1 || true
+          $P network create --interface-name=fleet-noinet --subnet=10.89.250.0/24 \
+            -o no_default_route=true fleet-noinet
+        fi
+      '';
       noInetPre = ''
-        ExecStartPre=/run/current-system/sw/bin/nft list table inet fleet-noinet
-        ExecStartPre=/bin/sh -c "/run/current-system/sw/bin/podman network exists fleet-noinet || /run/current-system/sw/bin/podman network create --interface-name=fleet-noinet --subnet=10.89.250.0/24 fleet-noinet"
+        ExecStartPre=${noInetSetup}
       '';
       unit = pkgs.writeText unitName ''
         [Unit]
