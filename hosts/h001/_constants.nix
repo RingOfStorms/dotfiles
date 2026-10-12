@@ -257,7 +257,7 @@
     nixarr = {
       # true once the stack runs in the floating `arr` container
       # (containers/arr); the host then only keeps nginx vhosts + the guard.
-      inContainer = false;
+      inContainer = true;
       containerName = "arr";
       jellyfinPort = 8096;
       jellyseerrPort = 5055;
