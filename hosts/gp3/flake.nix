@@ -47,12 +47,10 @@
           ({
             ringofstorms.impermanence = {
               enable = true;
-              # TODO(re-image): replace with the new UUIDs from `lsblk -o NAME,UUID`
-              # (install readme step 5). These are the OLD pre-wipe disks.
               disk = {
-                boot = "/dev/disk/by-uuid/D1C3-B6B2";
+                boot = "/dev/disk/by-uuid/0FC3-1534";
                 primary = "/dev/disk/by-uuid/0d6e4079-e367-03eb-d37c-00722f5891d2";
-                swap = "/dev/disk/by-uuid/4b56d370-63e8-4613-bf46-c3fc4ad2aa70";
+                swap = "/dev/disk/by-uuid/603c0f8d-be85-4823-aaf3-46fb45b3650a";
               };
               encrypted = true;
             };

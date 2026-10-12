@@ -79,7 +79,7 @@ Identify the target disk and swap size:
 ```sh
 lsblk
 DISK=/dev/nvme0n1  # or /dev/sda, etc.
-SWAP=16G           # swap partition size
+SWAP=16G           # swap partition size. NOT GB use G only
 ```
 
 #### Encrypted (recommended)
@@ -171,7 +171,7 @@ umount /mnt
 
 Skip the subvolumes if impermanence is not being used (e.g. a data-only array).
 
-## Step 3: Mount Everything Under /mnt
+### Step 3: Mount Everything Under /mnt
 
 Whether you used disko or manual partitioning, verify the mounts are correct
 before proceeding. If disko already mounted everything, check with:
@@ -184,9 +184,12 @@ If the subvolumes are not mounted (or you used manual partitioning), mount them
 now. Set the partition variables to match your layout:
 
 ```sh
-DISK=/dev/nvme0n1    # set this if not already set from Step 2
-PART="${DISK}p3"     # bcachefs partition (may be ${DISK}3 for /dev/sda)
-BOOT="${DISK}p1"     # EFI partition
+# set this if not already set from Step 2
+DISK=/dev/nvme0n1
+# bcachefs partition (may be ${DISK}3 for /dev/sda)
+PART="${DISK}p3"
+# EFI partition
+BOOT="${DISK}p1"
 
 # Unlock if encrypted and not already unlocked
 # bcachefs unlock "$PART"
