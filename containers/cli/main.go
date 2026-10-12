@@ -1443,8 +1443,14 @@ func backupDest(o, name string, yes bool) (string, error) {
 
 // ------------------------------------------------------------------ status
 
-// detailScript prints KEY<TAB>value lines about one service on a host.
-func detailScript(s Service) string {
+// detailScript prints KEY<TAB>value lines about one service on a host:
+// statusScript (needs no privileges) followed by dataScript (du/stat on the
+// data dirs, which may need root).
+func detailScript(s Service) string { return statusScript(s) + dataScript(s) }
+
+// statusScript reads unit state, ports and the nginx site. All of it is
+// world-readable, so it runs as the login user without sudo.
+func statusScript(s Service) string {
 	u := unitOf(s)
 	var b strings.Builder
 	fmt.Fprintf(&b, "u=%s; m=%s; wl=%s\n", q(u), q(mutableUnits+"/"+u), q(wantsLink(s)))
@@ -1458,7 +1464,15 @@ printf 'BootStart\t%s\n' "$( [ -e "$wl" ] && echo yes || echo no)"
 	fmt.Fprintf(&b, "n=%s/%s.conf\n", q(nginxDir), s.Name)
 	b.WriteString(`if [ -r "$n" ]; then while IFS= read -r l; do printf 'Nginx\t%s\n' "$l"; done < "$n"; fi
 [ -e "$n.broken" ] && printf 'NginxBroken\t%s\n' "$n.broken"
+true
 `)
+	return b.String()
+}
+
+// dataScript sizes the persisted data dirs. These are often owned by the
+// container's uid, so cmdDetail tries it under sudo -n first.
+func dataScript(s Service) string {
+	var b strings.Builder
 	keys := make([]string, 0, len(s.Persist))
 	for k := range s.Persist {
 		keys = append(keys, k)
@@ -1479,11 +1493,27 @@ func cmdDetail(args []string) error {
 	}
 	s := f.svc()
 	h := hostForRead(s, f)
-	out, err := remoteOut(context.Background(), h, true, detailScript(s))
+	ctx := context.Background()
+	// Status needs no privileges, so it never depends on passwordless sudo.
+	out, err := remoteOut(ctx, h, false, statusScript(s))
 	if err != nil {
 		return err
 	}
+	// Data dirs are often owned by the container uid: try sudo -n, and if
+	// that is refused fall back to an unprivileged du (sizes may be partial).
+	partial := false
+	if ds := dataScript(s); ds != "" {
+		data, derr := remoteOut(ctx, h, true, ds)
+		if derr != nil {
+			partial = true
+			data, _ = remoteOut(ctx, h, false, ds)
+		}
+		out += data
+	}
 	fmt.Print(renderDetail(s, h, out))
+	if partial {
+		fmt.Println("  (sizes read without root: sudo -n was refused, so unreadable dirs are undercounted)")
+	}
 	return nil
 }
 
