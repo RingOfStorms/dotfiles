@@ -498,8 +498,8 @@ If you're reusing the host name, **remove the stale node from
 headscale first** so the new register doesn't collide:
 
 ```sh
-ssh h001 'sudo headscale nodes list' | grep "$HOST"
-ssh h001 'sudo headscale nodes delete --identifier <id>'
+ssh o002 'sudo headscale nodes list' | grep "$HOST"
+ssh o002 'sudo headscale nodes delete --identifier <id>'
 ```
 
 ### 7f. Trigger anything else that depended on secrets

@@ -41,7 +41,7 @@ instead:
    Expected secrets: `headscale_auth_2026-03-15`, `nix2nix_*`, `nix2github_*`,
    `nix2gitforgejo_*`, `github_read_token_*` and `atuin-key-josh_*`.
 4. **Tailnet.** Delete the old low-trust node first
-   (`ssh h001 'sudo headscale nodes list' | grep gp3`, then
+   (`ssh o002 'sudo headscale nodes list' | grep gp3`, then
    `sudo headscale nodes delete --identifier <id>`). Then on gp3:
    `sudo systemctl restart tailscaled-autoconnect`.
 5. **Deploy from lio** from now on (root key installed):
