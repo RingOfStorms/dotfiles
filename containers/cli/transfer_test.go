@@ -304,6 +304,8 @@ func itoa(i int) string { return fmt.Sprint(i) }
 
 func TestSSHUserFallback(t *testing.T) {
 	defer func(u string, i *Inventory) { sshUser, inv = u, i }(sshUser, inv)
+	defer func(f func(string) bool) { rootLogin = f }(rootLogin)
+	rootLogin = func(string) bool { return false }
 	inv = &Inventory{Hosts: map[string]Host{"h003": {User: "luser"}}}
 	sshUser = ""
 	a := sshArgs("h003", false, "true", true)
@@ -317,6 +319,15 @@ func TestSSHUserFallback(t *testing.T) {
 	a = sshArgs("h003", false, "true", true)
 	if !slices.Contains(a, "root@h003") || strings.HasPrefix(a[len(a)-1], "sudo") {
 		t.Fatalf("--ssh-user must override fleet user: %v", a)
+	}
+	// Root keys work: root work skips sudo; unprivileged work keeps the user.
+	sshUser = ""
+	rootLogin = func(string) bool { return true }
+	if a := sshArgs("h003", false, "true", true); !slices.Contains(a, "root@h003") || strings.HasPrefix(a[len(a)-1], "sudo") {
+		t.Fatalf("root login should replace sudo: %v", a)
+	}
+	if a := sshArgs("h003", false, "true", false); !slices.Contains(a, "luser@h003") {
+		t.Fatalf("unprivileged work should keep the fleet user: %v", a)
 	}
 }
 

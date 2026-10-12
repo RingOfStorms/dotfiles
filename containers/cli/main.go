@@ -104,7 +104,8 @@ global flags (or env):
   --repo URL    flake repo (CONTAINERS_REPO, default `+defaultRepo+`)
                 use git+file:///path/to/checkout for local, unpushed work
   --ssh-user U  ssh as this user for every host (CONTAINERS_SSH_USER); default is
-                the host's user in hosts/fleet.nix. sudo is skipped for root
+                the host's user in hosts/fleet.nix. Root work uses root@host
+                when its keys work, else that user with sudo
   --dry-run     print remote commands instead of running them
 `)
 }
@@ -282,7 +283,28 @@ func userFor(host string) string {
 	return ""
 }
 
-// sshArgs builds the ssh command for host; root wraps the script in sudo.
+// rootLogin reports whether `ssh root@host` works with keys alone. Cached per
+// host; a var so tests can stub it.
+var rootLogin = func(host string) bool {
+	rootMu.Lock()
+	defer rootMu.Unlock()
+	if ok, seen := rootSeen[host]; seen {
+		return ok
+	}
+	err := exec.Command("ssh", "-o", "ConnectTimeout=8", "-o", "BatchMode=yes", "root@"+host, "true").Run()
+	rootSeen[host] = err == nil
+	return err == nil
+}
+
+var (
+	rootMu   sync.Mutex
+	rootSeen = map[string]bool{}
+)
+
+// sshArgs builds the ssh command for host. Root work logs in as root when
+// the keys allow it (no sudo, so it also works without a tty and for users
+// whose sudo needs a password); otherwise it wraps the script in sudo.
+// --ssh-user always wins.
 func sshArgs(host string, tty bool, script string, root bool) []string {
 	a := []string{"-o", "ConnectTimeout=8"}
 	if tty {
@@ -291,6 +313,9 @@ func sshArgs(host string, tty bool, script string, root bool) []string {
 		a = append(a, "-o", "BatchMode=yes")
 	}
 	user := userFor(host)
+	if root && sshUser == "" && user != "root" && rootLogin(host) {
+		user = "root"
+	}
 	target := host
 	if user != "" {
 		target = user + "@" + host

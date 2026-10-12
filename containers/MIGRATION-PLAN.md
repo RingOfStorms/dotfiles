@@ -21,10 +21,9 @@ host module, never floats).
   service running on its declared host.
 - Hosts with the host module: h003, lio (lio has `nginx.enable` since `3a615a9`),
   joe, h001 (h001: storage guard `h002` + capabilities `nfs-h002`, `intel-qsv`).
-- Open CLI issue: remote commands (`status <svc>`, and `deploy` from a
-  workstation) use `sudo -n` over ssh; users whose sudo needs a password (luser) get an error, not a prompt.
-  Fix: collect unprivileged details without sudo, sizes via a prompt-capable
-  path. Verify as luser, not root.
+- Remote root work logs in as `root@host` when its keys work (h001, h003,
+  joe), else falls back to the fleet user + `sudo` (lio today: no root key,
+  so `sudo -n` without a tty still fails there).
 
 ## 2. Hosts and roles
 
@@ -192,7 +191,7 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 
 | Service | Decision | Ideal host | Kind | Notes |
 |---|---|---|---|---|
-| vaultwarden | Keep | h003 | nixos | SQLite; keep uid/gid 114; env secret from sec-agent. Critical: back up before and after the move. |
+| vaultwarden | Keep | h003 | nixos | SQLite; keep uid/gid 114; env secret from sec-agent. Critical: back up before and after the move. Pre-move backup is of h001:/var/lib/vaultwarden with the service stopped (or `sqlite3 .backup`); `cnt backup` only covers `/srv/containers/vaultwarden`, so use it after the import. |
 | atuin | Keep | h003 | nixos | Own postgres already. Easy. |
 | forgejo | Keep | h001 or h003 | nixos | Own postgres. SSH on **3032**: o002 stream-forwards it, so update o002 on move. Repos can be large. |
 | opengist | Decide | h003 | podman | Single bind dir. Trivial; best first real migration if kept. |
@@ -261,7 +260,7 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
      generate from `service.nix` hosts (or have the CLI update it).
    - beszel `HUB_URL` → DNS name.
 4. **Multi-container podman** (pods) — only if penpot is kept.
-5. **Remote `status` without passwordless sudo** (see §1).
+5. ~~Remote work without passwordless sudo~~ done via root ssh (see §1).
 6. **Architecture**: flakes already build for `x86_64-linux` and
    `aarch64-linux`. ARM eligibility (o002) is per service: check the nixpkgs
    package / container image has an arm64 build. o002's 12 GB / impermanent
