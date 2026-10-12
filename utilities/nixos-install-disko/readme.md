@@ -15,7 +15,7 @@ encrypted bcachefs, impermanence, and secrets-bao.
 From your workstation, build the installer ISO from this directory's flake:
 
 ```sh
-# Stable channel (nixos-25.11):
+# Stable channel (nixos-26.05):
 nix build "./utilities/nixos-install-disko#iso-stable"
 
 # Unstable channel:
@@ -48,7 +48,7 @@ From your workstation, SSH in:
 
 ```sh
 IP=10.12.14.125
-ssh root@$IP -i /run/agenix/nix2nix
+ssh root@$IP -i /var/lib/secrets_manager_hydrated/nix2nix_2026-03-15
 ```
 
 Flakes and bcachefs are already enabled on the ISO -- no setup needed.
@@ -299,28 +299,51 @@ nixos-install --no-root-password \
   --option tarball-ttl 0
 ```
 
-Or if building remotely and copying the closure (much faster on a beefy
-workstation, especially for hosts with slow CPUs / small RAM):
+Or build on your workstation and copy the closure straight onto the target's
+disk (much faster on a beefy workstation, and required for hosts with slow
+CPUs / small RAM).
+
+**Copy into the target disk's store (`/mnt`), not the live ISO's store.** The
+ISO's `/nix/store` is a small RAM-backed tmpfs: a plain
+`nix-copy-closure --to root@$IP` lands there and dies with
+`No space left on device` after a long, slow upload.
+
+On the target, confirm the disk is still mounted (Step 3) before copying:
 
 ```sh
-# On your workstation:
+findmnt -R /mnt
+```
+
+On your workstation, from the repo root:
+
+```sh
 HOST=oren
 HOST_IP=10.12.14.124
-cd hosts/$HOST
-nixos-rebuild build --flake ".#$HOST"
-# Copy into the TARGET disk's store (/mnt), NOT the live ISO's store.
-# The ISO's /nix/store is a small tmpfs: `nix-copy-closure --to root@IP`
-# lands there and fails with "No space left on device".
-# --substitute-on-destination lets the target pull from cache.nixos.org
-# itself, so only locally-built paths cross the SSH link.
-CLOSURE=$(readlink -f result) && echo $CLOSURE
+
+# Build the system closure locally (nothing is built on the target).
+CLOSURE=$(nix build "./hosts/$HOST#nixosConfigurations.$HOST.config.system.build.toplevel" \
+  --no-link --print-out-paths) && echo "$CLOSURE"
+
+# Copy it into the store under /mnt on the target. --substitute-on-destination
+# lets the target fetch cache.nixos.org paths itself, so only locally-built
+# paths cross the SSH link.
 NIX_SSHOPTS="-i /var/lib/secrets_manager_hydrated/nix2nix_2026-03-15" \
   nix copy --substitute-on-destination \
   --to "ssh-ng://root@$HOST_IP?remote-store=/mnt" "$CLOSURE"
 
-# On the target:
-nixos-install --no-root-password --system "$CLOSURE"
+# Print the install command to run on the target.
+echo "nixos-install --no-root-password --system $CLOSURE"
 ```
+
+On the target, run the printed command:
+
+```sh
+nixos-install --no-root-password --system /nix/store/<...>-nixos-system-<host>-<version>
+```
+
+Use the exact store path that was copied. `$CLOSURE` only exists in the
+workstation shell. `nixos-install` finds the path already present in the
+`/mnt` store, so it doesn't download it again.
 
 ## Step 7: Reboot & First Boot Setup
 
