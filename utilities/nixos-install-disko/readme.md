@@ -318,7 +318,7 @@ On your workstation, from the repo root:
 
 ```sh
 HOST=oren
-HOST_IP=10.12.14.124
+HOST_IP=10.12.14.
 
 # Build the system closure locally (nothing is built on the target).
 CLOSURE=$(nix build "./hosts/$HOST#nixosConfigurations.$HOST.config.system.build.toplevel" \
