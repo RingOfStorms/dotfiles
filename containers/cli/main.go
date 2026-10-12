@@ -1529,7 +1529,11 @@ func cmdDetail(args []string) error {
 		data, derr := remoteOut(ctx, h, true, ds)
 		if derr != nil {
 			partial = true
-			data, _ = remoteOut(ctx, h, false, ds)
+			var ferr error
+			if data, ferr = remoteOut(ctx, h, false, ds); ferr != nil {
+				partial = false
+				data = "DataUnavailable\t" + oneLine(ferr.Error()) + "\n"
+			}
 		}
 		out += data
 	}
@@ -1544,6 +1548,7 @@ func renderDetail(s Service, h, out string) string {
 	kv := map[string]string{}
 	var ports, nginx, data []string
 	broken := ""
+	dataErr := ""
 	for _, l := range strings.Split(out, "\n") {
 		k, v, ok := strings.Cut(l, "\t")
 		if !ok {
@@ -1556,6 +1561,8 @@ func renderDetail(s Service, h, out string) string {
 			nginx = append(nginx, v)
 		case "NginxBroken":
 			broken = v
+		case "DataUnavailable":
+			dataErr = v
 		case "Data":
 			data = append(data, v)
 		default:
@@ -1611,6 +1618,10 @@ func renderDetail(s Service, h, out string) string {
 		fmt.Fprintf(&b, "  ! last rejected update kept at %s\n", broken)
 	}
 	fmt.Fprintf(&b, "\ndata (bind mounts; this is what backup/move copy): %s\n", dataDir(s))
+	if dataErr != "" {
+		fmt.Fprintf(&b, "  (unavailable: %s)\n", dataErr)
+		return b.String()
+	}
 	if len(data) == 0 {
 		b.WriteString("  (no persisted dirs; nothing to back up)\n")
 	}
@@ -1661,3 +1672,6 @@ fi
 systemctl stop %[1]s
 `, unitOf(s), s.Name)
 }
+
+// oneLine collapses an error message so it fits one KEY<TAB>value line.
+func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }

@@ -841,3 +841,14 @@ func TestStatusUnknownLast(t *testing.T) {
 		t.Fatalf("order %v, want %v\n%s", order, want, out)
 	}
 }
+
+func TestRenderDetailDataUnavailable(t *testing.T) {
+	s := Service{Name: "x", Kind: "podman", Persist: map[string]string{"data": "/data"}}
+	r := renderDetail(s, "h", "ActiveState\tactive\nDataUnavailable\tssh: connect refused\n")
+	if !strings.Contains(r, "unavailable: ssh: connect refused") || strings.Contains(r, "nothing to back up") {
+		t.Errorf("unexpected render:\n%s", r)
+	}
+	if !strings.Contains(r, "active") {
+		t.Errorf("status lost:\n%s", r)
+	}
+}
