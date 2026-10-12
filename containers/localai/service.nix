@@ -7,12 +7,12 @@
 # use the same endpoint. Backends (stable-diffusion.cpp, diffusers) are
 # downloaded on first use into the `backends` dir; models go in `models`.
 #
-# Models that fit 10 GB (install from the UI gallery or `podman exec image-gen /local-ai models install`):
+# Models that fit 10 GB (install from the UI gallery or `podman exec localai /local-ai models install`):
 #   flux.1-dev-ggml (12B, quantized, clip on CPU), flux.1-schnell,
 #   flux.2-klein-4b (fast, also edits). Not z-image-turbo: bf16 6B, ~12 GB, OOMs.
 # See README.md for what was kept from Forge.
 {
-  name = "image-gen";
+  name = "localai";
   kind = "podman";
   description = "LocalAI image generation API (GPU)";
   host = "joe";

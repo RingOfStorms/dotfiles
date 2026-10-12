@@ -1,5 +1,5 @@
 {
-  description = "image-gen: GPU podman service on joe";
+  description = "localai: LocalAI GPU podman service on joe";
   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
   outputs =
     { nixpkgs, ... }:

@@ -1,4 +1,4 @@
-# image-gen (LocalAI on joe) — replaces Forge
+# localai (joe) — replaces Forge
 
 Goal: a pre-made image generation server with an API, no UI to babysit.
 LocalAI gives an OpenAI-compatible `POST /v1/images/generations`, so Open
@@ -9,9 +9,9 @@ WebUI and coding agents talk to it like the OpenAI images API.
 1. Rebuild joe once with `hosts/joe/containers.nix` (host module, NVIDIA CDI,
    persisted `/srv/containers` etc.). Push first: joe pulls the containers
    flake from git.
-2. Copy kept Forge files (below), then `cnt deploy image-gen`.
+2. Copy kept Forge files (below), then `cnt deploy localai`.
 3. Install a model: web UI at http://joe:8080 → Models, or
-   `sudo podman exec image-gen /local-ai models install flux.2-klein-4b`.
+   `sudo podman exec localai /local-ai models install flux.2-klein-4b`.
 4. Test:
    ```sh
    curl http://joe:8080/v1/images/generations -H 'Content-Type: application/json' \
@@ -46,7 +46,7 @@ games and Kokoro when idle.
 Copy on joe before deploy:
 
 ```sh
-s=/var/lib/forge/storage/stable_diffusion/models; d=/srv/containers/image-gen/models
+s=/var/lib/forge/storage/stable_diffusion/models; d=/srv/containers/localai/models
 sudo install -d $d
 sudo cp $s/lora/loraflux.TA_trained.safetensors $s/vae/ae.safetensors \
   $s/clip/clip_l.safetensors $s/clip/t5xxl_fp16.safetensors $d/
@@ -66,7 +66,7 @@ quantized/offloaded config.
 LocalAI also serves `POST /v1/audio/speech`. Its gallery `kokoro` entry
 runs the **same Kokoro-82M model** (default voice `af_heart`), so quality
 is identical to kokoro-tts; it is not a better model, just the same one in
-one server. Install with `sudo podman exec image-gen /local-ai models install kokoro`, then:
+one server. Install with `sudo podman exec localai /local-ai models install kokoro`, then:
 
 ```sh
 curl http://joe:8080/v1/audio/speech -H 'Content-Type: application/json' \
