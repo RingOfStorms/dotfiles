@@ -11,7 +11,7 @@ WebUI and coding agents talk to it like the OpenAI images API.
    flake from git.
 2. Copy kept Forge files (below), then `cnt deploy image-gen`.
 3. Install a model: web UI at http://joe:8080 → Models, or
-   `sudo podman exec image-gen local-ai models install flux.2-klein-4b`.
+   `sudo podman exec image-gen /local-ai models install flux.2-klein-4b`.
 4. Test:
    ```sh
    curl http://joe:8080/v1/images/generations -H 'Content-Type: application/json' \
@@ -66,7 +66,7 @@ quantized/offloaded config.
 LocalAI also serves `POST /v1/audio/speech`. Its gallery `kokoro` entry
 runs the **same Kokoro-82M model** (default voice `af_heart`), so quality
 is identical to kokoro-tts; it is not a better model, just the same one in
-one server. Install with `local-ai models install kokoro`, then:
+one server. Install with `sudo podman exec image-gen /local-ai models install kokoro`, then:
 
 ```sh
 curl http://joe:8080/v1/audio/speech -H 'Content-Type: application/json' \
