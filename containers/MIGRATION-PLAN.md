@@ -11,13 +11,18 @@ host module, never floats).
 
 ## 1. Where things stand
 
-- Floating today: `minecraft` (h003), test twins `hello-nixos` / `hello-podman`.
+- Floating today: `arr` (h001, **live since 2026-10-12**: whole media stack,
+  NAS-guarded), `localai` (joe), `minecraft` (h003), test twins
+  `hello-nixos` / `hello-podman` (lio).
 - CLI: `deploy`, `stop` (persists across reboot), `start`, `move`, `backup`
   (asks dir + before stopping), `restore`, `status <svc>`, `ls`, local mode.
+  Registered container hosts: h001, h002, h003, lio (+ any host a
+  `service.nix` declares, e.g. joe). Unreachable hosts don't block work on a
+  service running on its declared host.
 - Hosts with the host module: h003, lio (lio has `nginx.enable` since `3a615a9`),
   joe, h001 (h001: storage guard `h002` + capabilities `nfs-h002`, `intel-qsv`).
-- Open CLI issue: `status <svc>` against a *remote* host uses `sudo -n` over
-  ssh; users whose sudo needs a password (luser) get an error, not a prompt.
+- Open CLI issue: remote commands (`status <svc>`, and `deploy` from a
+  workstation) use `sudo -n` over ssh; users whose sudo needs a password (luser) get an error, not a prompt.
   Fix: collect unprivileged details without sudo, sizes via a prompt-capable
   path. Verify as luser, not root.
 
@@ -42,7 +47,12 @@ so it is a viable fallback, not a primary.
 
 "Ideal host" assumes the end state (h004 = router, h003 = second service host).
 
-### Media / *arr — one nixos container `arr` on h001
+### Media / *arr — one nixos container `arr` on h001 — **DONE (2026-10-12)**
+
+Live in `containers/arr`; h001 no longer has nixarr. Verified: all services
+up, VPN exit, QSV, host vhosts + 9091 proxy, reboot, guard (blackhole and
+sentinel) and `cnt stop` persistence. Old `/var/lib` state deleted. The
+notes below are kept as the design record.
 
 | Service | Decision | Ideal host | Notes |
 |---|---|---|---|
@@ -277,8 +287,7 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 3. vaultwarden, trilium + oauth2-proxy, etebase (TCP first), life, puzzles.
 4. Build §4.3 routing so moves stop needing o002/dnsmasq edits.
 5. forgejo, matrix.
-5a. Cut the *arr stack over to `arr` (guard included; §3, "NAS guard",
-    `containers/arr/README.md`) before the NAS upgrade.
+5a. ~~Cut the *arr stack over to `arr`~~ **Done 2026-10-12.**
 6. §4.1 requirements, then immich/paperless/dawarich as containers on h001.
 7. GPU services on joe as podman-kind with `requires = [ "nvidia" ]`.
 8. Never: zitadel/sec (until there
