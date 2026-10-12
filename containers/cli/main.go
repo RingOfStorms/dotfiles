@@ -425,6 +425,7 @@ func installedHere(s Service) bool {
 // placement is the result of probing every container host for a service.
 type placement struct {
 	found       []string // hosts where it is installed (any state)
+	running     []string // subset of found where the unit is active
 	unreachable []string // hosts that could not be probed
 }
 
@@ -470,6 +471,9 @@ func locate(s Service, probe func(context.Context, string) ([]row, error)) place
 			for _, r := range rows {
 				if r.svc == s.Name {
 					p.found = append(p.found, h)
+					if r.state == "active" {
+						p.running = append(p.running, h)
+					}
 					return
 				}
 			}
@@ -494,11 +498,12 @@ func checkPlacement(s Service, p placement) error {
 !!!   - set   host = %[4]q;   in containers/%[5]s/service.nix and push, or
 !!!   - pass  --host <host>   to act on a specific host this once.`,
 			s.Name, s.Host, strings.Join(p.found, ", "), elsewhere[0], s.Dir)
-	case len(p.unreachable) > 0 && slices.Contains(p.found, s.Host):
-		// Installed on the declared host and on no host that answered: an
-		// offline host cannot hold a newer copy without service.nix saying so
-		// (a move rewrites it), so a down box must not block normal work.
-		fmt.Fprintf(os.Stderr, "note: %s did not answer; using %s, where %s is installed\n", strings.Join(p.unreachable, ", "), s.Host, s.Name)
+	case len(p.unreachable) > 0 && slices.Contains(p.running, s.Host):
+		// Running on the declared host and installed on no host that answered:
+		// a down box must not block work on it. A stopped copy is not enough:
+		// a move that failed after deploying on the target leaves the source
+		// installed but stopped, and the target may be the host that is down.
+		fmt.Fprintf(os.Stderr, "note: %s did not answer; using %s, where %s is running\n", strings.Join(p.unreachable, ", "), s.Host, s.Name)
 	case len(p.unreachable) > 0:
 		return fmt.Errorf(`
 !!! cannot confirm where %[1]s is installed: %[2]s did not answer.

@@ -355,7 +355,12 @@ func fakeFleet(installed map[string][]string, down ...string) func(context.Conte
 		}
 		var rows []row
 		for _, n := range installed[h] {
-			rows = append(rows, row{host: h, svc: n, state: "inactive"})
+			// "name+" = installed and active
+			st := "inactive"
+			if m, ok := strings.CutSuffix(n, "+"); ok {
+				n, st = m, "active"
+			}
+			rows = append(rows, row{host: h, svc: n, state: st})
 		}
 		return rows, nil
 	}
@@ -380,7 +385,12 @@ func TestPlacementThroughLocate(t *testing.T) {
 		{"declared host has it and so does another", map[string][]string{"h003": {"mc"}, "h001": {"mc"}}, nil, "h001, h003"},
 		// Moved to h001, which is now down: must not reinstall on h003.
 		{"moved target unreachable", nil, []string{"h001"}, "h001 did not answer"},
-		{"declared has it, other host unreachable", map[string][]string{"h003": {"mc"}}, []string{"h001"}, ""},
+		// Running where declared: an offline box must not block work on it.
+		{"running on declared host, other host unreachable", map[string][]string{"h003": {"mc+"}}, []string{"h001"}, ""},
+		// A move to h001 deployed there, then failed to clean up h003 (stopped,
+		// still installed); h001 is now down. Deploying on h003 would start a
+		// second copy.
+		{"failed move cleanup, target unreachable", map[string][]string{"h003": {"mc"}}, []string{"h001"}, "h001 did not answer"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

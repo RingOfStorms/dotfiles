@@ -97,13 +97,12 @@ in
           };
           indexers = [
             {
-              name = "AnimeTosho";
-              sort_name = "animetosho";
+              # Replaces AnimeTosho (feed.animetosho.org is gone from DNS).
+              name = "Nyaa.si";
+              sort_name = "nyaa si";
               priority = 25;
-              fields = {
-                baseUrl = "https://feed.animetosho.org";
-                apiPath = "/api";
-              };
+              # Renames releases into the S01E01 form Sonarr parses.
+              fields.sonarr_compatibility = true;
             }
             {
               name = "LimeTorrents";
