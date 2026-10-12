@@ -12,7 +12,7 @@ host module, never floats).
 ## 1. Where things stand
 
 - Floating today: `arr` (h001, **live since 2026-10-12**: whole media stack,
-  NAS-guarded), `localai` (joe), `minecraft` (h003), test twins
+  NAS-guarded), `opengist` (h001, 2026-10-12), `localai` (joe), `minecraft` (h003), test twins
   `hello-nixos` / `hello-podman` (lio).
 - CLI: `deploy`, `stop` (persists across reboot), `start`, `move`, `backup`
   (asks dir + before stopping), `restore`, `status <svc>`, `ls`, local mode.
@@ -194,18 +194,18 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 | vaultwarden | Keep | h003 | nixos | SQLite; keep uid/gid 114; env secret from sec-agent. Critical: back up before and after the move. Pre-move backup is of h001:/var/lib/vaultwarden with the service stopped (or `sqlite3 .backup`); `cnt backup` only covers `/srv/containers/vaultwarden`, so use it after the import. |
 | atuin | Keep | h003 | nixos | Own postgres already. Easy. |
 | forgejo | Keep | h001 or h003 | nixos | Own postgres. SSH on **3032**: o002 stream-forwards it, so update o002 on move. Repos can be large. |
-| opengist | Decide | h003 | podman | Single bind dir. Trivial; best first real migration if kept. |
+| opengist | **Live** | h001 | podman | `containers/opengist` since 2026-10-12 (all 123 gists, full-tree checksum verified). Old `/var/lib/opengist` kept until confirmed. |
 | trilium + oauth2-proxy | Keep | h003 (together) | nixos | `noAuthentication=true` behind the proxy; also an overlay-only unauthenticated vhost on 9112. Never split across hosts without restricting trilium's port. |
 | open-webui | Decide | h003 | nixos | Needs litellm + searx. |
 | litellm | Decide | with open-webui | nixos | Stateless; env secret. |
 | searx | Decide | with open-webui | nixos | Keep its generated secret key in persist. |
-| n8n | **Deprecate** | — | — | Only used for a retired email flow. Export workflows to the repo or a backup, then remove. |
+| n8n | **Removed** | — | — | — | Dropped 2026-10-12, no export. |
 | etebase + EteSync web | Decide | h003 | nixos | nginx uses a **unix socket** today; switch to TCP. Self-generated Django key → persist. |
 | puzzles | Decide | h003 | nixos | Private flake; small. |
 | life | Keep | h003 or h001 | nixos | Own postgres 18 + pgBackRest WAL archiving: take a fresh full backup right after any move. |
 | matrix (synapse, element, mautrix bridges) | Decide | h001 or h003 | nixos | Big, pinned nixpkgs rev (mautrix-signal segfault). Move as one unit; bridge sessions live in the DB. |
-| penpot | Decide | h003 | — | 7 podman containers on a private network; CLI podman-kind is 1 container. Needs multi-container (pod) support first. Deprecate unless actively used. |
-| wasabi / ntest demo containers (h001) | **Deprecate** | — | — | Leftover experiments. |
+| penpot | **Removed** | — | — | — | Dropped 2026-10-12, no data kept. |
+| wasabi / ntest demo containers (h001) | **Removed** | — | — | — | Dropped 2026-10-12. |
 
 ### Large local data — decide the storage model first
 
@@ -259,7 +259,7 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
    - dnsmasq-tailnet's `h001Subdomains`/`lioSubdomains` in `fleet.nix` →
      generate from `service.nix` hosts (or have the CLI update it).
    - beszel `HUB_URL` → DNS name.
-4. **Multi-container podman** (pods) — only if penpot is kept.
+4. ~~Multi-container podman (pods)~~ not needed (penpot removed).
 5. ~~Remote work without passwordless sudo~~ done via root ssh (see §1).
 6. **Architecture**: flakes already build for `x86_64-linux` and
    `aarch64-linux`. ARM eligibility (o002) is per service: check the nixpkgs
@@ -280,9 +280,9 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 
 ## 6. Suggested order
 
-1. Deprecate: n8n, wasabi/ntest; decide opengist/penpot/puzzles/dawarich/
+1. ~~Deprecate n8n, wasabi/ntest, penpot; migrate opengist~~ done 2026-10-12. Decide puzzles/dawarich/
    matrix/forge/kavita/books usage.
-2. Easy floats to h003: atuin, opengist, searx + litellm + open-webui.
+2. Easy floats to h003: atuin, searx + litellm + open-webui.
 3. vaultwarden, trilium + oauth2-proxy, etebase (TCP first), life, puzzles.
 4. Build §4.3 routing so moves stop needing o002/dnsmasq edits.
 5. forgejo, matrix.
