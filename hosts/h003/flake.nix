@@ -46,7 +46,6 @@
           inputs.common.nixosModules.timezone_chi
           inputs.common.nixosModules.tty_caps_esc
           inputs.common.nixosModules.zsh
-          inputs.common.nixosModules.rage
 
           (import ./sec-agent.nix { inherit inputs constants; })
 

@@ -84,7 +84,6 @@
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.more_filesystems
           inputs.common.nixosModules.tailnet
-          inputs.common.nixosModules.rage
           inputs.omp-flake.nixosModules.default
           inputs.common.nixosModules.remote_lio_builds
 

@@ -84,7 +84,6 @@
           inputs.common.nixosModules.timezone_chi
           inputs.common.nixosModules.tty_caps_esc
           inputs.common.nixosModules.zsh
-          inputs.common.nixosModules.rage
 
           inputs.beszel.nixosModules.agent
           ({
