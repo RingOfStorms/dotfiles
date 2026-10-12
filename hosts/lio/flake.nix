@@ -76,7 +76,6 @@
           inputs.common.nixosModules.timezone_chi
           (import ./sec-agent.nix { inherit inputs constants; })
           inputs.common.nixosModules.zsh
-          inputs.common.nixosModules.rage
           inputs.common.nixosModules.more_filesystems
           inputs.omp-flake.nixosModules.default
           ({ pkgs, ... }:
