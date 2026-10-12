@@ -64,7 +64,7 @@
         # Hosts that import the host module. Every one of them must answer
         # before the CLI acts on a declared host without --host. Add new
         # container hosts here.
-        containerHosts = [ "h003" "lio" "joe" ];
+        containerHosts = [ "h003" "lio" "joe" "h001" ];
         dataRoot = containersLib.dataRoot;
       };
 

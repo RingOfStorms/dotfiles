@@ -14,7 +14,8 @@ host module, never floats).
 - Floating today: `minecraft` (h003), test twins `hello-nixos` / `hello-podman`.
 - CLI: `deploy`, `stop` (persists across reboot), `start`, `move`, `backup`
   (asks dir + before stopping), `restore`, `status <svc>`, `ls`, local mode.
-- Hosts with the host module: h003, lio (lio has `nginx.enable` since `3a615a9`).
+- Hosts with the host module: h003, lio (lio has `nginx.enable` since `3a615a9`),
+  joe, h001 (h001: storage guard `h002` + capabilities `nfs-h002`, `intel-qsv`).
 - Open CLI issue: `status <svc>` against a *remote* host uses `sudo -n` over
   ssh; users whose sudo needs a password (luser) get an error, not a prompt.
   Fix: collect unprivileged details without sudo, sizes via a prompt-capable
@@ -41,7 +42,7 @@ so it is a viable fallback, not a primary.
 
 "Ideal host" assumes the end state (h004 = router, h003 = second service host).
 
-### Media / *arr — stays on h001 as one unit
+### Media / *arr — one nixos container `arr` on h001
 
 | Service | Decision | Ideal host | Notes |
 |---|---|---|---|
@@ -54,10 +55,14 @@ so it is a viable fallback, not a primary.
 | recyclarr | Keep | h001 | Stateless config sync for sonarr/radarr. |
 | media-integrity | Keep | h001 | Weekly ffmpeg scan of NFS movies; goes wherever media is mounted. |
 
-Migration stance: **leave as host modules for now.** Containerising buys
-little: the VPN netns, NFS automount, uid mirroring with h002 and QSV all
-tie it to h001. If ever done: one nixos-kind container, host requirements
-`nfs-h002`, `intel-qsv`, VPN netns inside the container.
+Migration stance: **one nixos-kind container, `containers/arr`** (all rows
+above), so `cnt stop arr` / `cnt start arr` take the whole stack down/up and
+the NAS guard protects a single unit. Host network, `privateUsers = "no"`
+(NFS + host-uid state), `requires = [ "nfs-h002" "intel-qsv" ]`, guest on
+nixpkgs 26.05, VPN netns built by the guest in the host namespace. The
+guest imports the existing `hosts/h001/mods` files; the host keeps the
+vhosts (`mods/arr-nginx.nix`). Cutover is one flag,
+`constants.services.nixarr.inContainer`; runbook in `containers/arr/README.md`.
 
 #### NAS guard: the whole media stack goes down when h002 does (required)
 
@@ -66,10 +71,12 @@ in the media stack runs. No downloads, no imports, no writes to a local
 folder that only *looks* like the share. When h002 is back and verified,
 everything starts again by itself.
 
-**Guard unit on the h001 host** (`hosts/h001/mods/h002-guard.nix`, a module
-that takes the list of units to protect):
+**Guard unit on the h001 host**, implemented generically as the host-module
+option `ringofstorms.containers.guards.<name>` (`fleet-guard-<name>.service`;
+h001 config: `hosts/h001/floating-containers.nix`). The design below is what
+it does; with the stack in `arr` it protects one unit, `container@arr`:
 
-- `h002-media-guard.service`: `Type=notify`, `Restart=always`,
+- `fleet-guard-h002.service`: `Type=notify`, `Restart=always`,
   `RestartSec=60`. Runs the probe once and calls `systemd-notify --ready`
   only after it passes, then re-probes every 30 s and exits non-zero on the
   first failure.
@@ -95,7 +102,7 @@ that takes the list of units to protect):
 
 **Wiring:**
 
-- Every protected unit gets `bindsTo` + `after` = `h002-media-guard.service`.
+- Every protected unit gets `bindsTo` + `after` = `fleet-guard-h002.service`.
   When the guard stops, they stop immediately, and they can't start while
   it's down (after a reboot or `nixos-rebuild switch` too).
 - Restart on recovery **must respect desired state**. Plain `Upholds=`
@@ -130,8 +137,8 @@ the **host**, and protects one unit instead of a list:
 
 ```nix
 systemd.services."container@arr" = {
-  bindsTo = [ "h002-media-guard.service" ];
-  after = [ "h002-media-guard.service" ];
+  bindsTo = [ "fleet-guard-h002.service" ];
+  after = [ "fleet-guard-h002.service" ];
 };
 # No Upholds: the guard starts container@arr after a passing probe only if
 # it is enabled and not held (see above), so cnt stop/backup/move stick.
@@ -268,8 +275,9 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 3. vaultwarden, trilium + oauth2-proxy, etebase (TCP first), life, puzzles.
 4. Build §4.3 routing so moves stop needing o002/dnsmasq edits.
 5. forgejo, matrix.
-5a. Build the h002 NAS guard for the *arr stack (§3, "NAS guard") before the NAS upgrade.
+5a. Cut the *arr stack over to `arr` (guard included; §3, "NAS guard",
+    `containers/arr/README.md`) before the NAS upgrade.
 6. §4.1 requirements, then immich/paperless/dawarich as containers on h001.
 7. GPU services on joe as podman-kind with `requires = [ "nvidia" ]`.
-8. Never: *arr stack (stays host modules on h001), zitadel/sec (until there
+8. Never: zitadel/sec (until there
    is a reason), router/NAS/edge.
