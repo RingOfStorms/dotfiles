@@ -40,6 +40,10 @@ let
     "headscale_auth_${if isHighTrust then "2026-03-15" else "lowtrust_2026-03-15"}" = {
       remotePath = "machines/${trustPath}/headscale_auth_${if isHighTrust then "2026-03-15" else "lowtrust_2026-03-15"}";
       softDepend = [ "tailscaled" ];
+      # First boot: tailscaled-autoconnect runs (and fails) before this key is
+      # fetched, and nothing retries it. Start it once the key lands. Only
+      # fires when the file changes, so steady state is unaffected.
+      hardDepend = [ "tailscaled-autoconnect" ];
       configChanges.services.tailscale.authKeyFile = "$SECRET_PATH";
     };
   }

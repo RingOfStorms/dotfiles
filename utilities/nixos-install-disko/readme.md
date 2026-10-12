@@ -28,9 +28,9 @@ encrypted bcachefs, impermanence, and sec-agent secrets.
   re-format, but the primary bcachefs UUID can come back identical, because
   disko derives it from the filesystem name. Re-read all three with `lsblk -f`
   and don't assume the format failed.
-- **Tailscale may not join on first boot.** `tailscaled-autoconnect` can run
-  before sec-agent has fetched the headscale key, and it isn't retried. See
-  Step 7 (sec-agent).
+- **Tailscale on first boot.** `tailscaled-autoconnect` runs before sec-agent
+  has the headscale key. sec-agent now starts it again once the key lands. See
+  Step 7 (sec-agent) if it still shows `Logged out`.
 - **Headscale runs on o002**, not h001.
 
 ## Prerequisites
@@ -148,7 +148,7 @@ DISK=/dev/nvme0n1  # or /dev/sda, etc.
 # Create GPT table
 parted -s "$DISK" mklabel gpt
 
-# EFI System Partition (3GB)
+# EFI System Partition (~5GB)
 parted -s "$DISK" mkpart ESP fat32 1MiB 5GiB
 parted -s "$DISK" set 1 esp on
 mkfs.fat -F32 "${DISK}p1"
@@ -159,7 +159,7 @@ mkswap "${DISK}p2"
 swapon "${DISK}p2"
 
 # Root partition (rest of disk)
-parted -s "$DISK" mkpart primary 17GiB 100%
+parted -s "$DISK" mkpart primary 21GiB 100%
 ```
 
 #### 2. Format bcachefs
@@ -403,8 +403,9 @@ publicly via o002, so this works before the host is on the tailnet.
    ```
    An early `lookup sso.joshuabell.xyz ... server misbehaving` error is
    harmless: DNS wasn't up yet, and the agent retries.
-4. **Tailscale.** If `tailscale status` says `Logged out`, autoconnect ran
-   before the headscale key existed. The key is there now, so run:
+4. **Tailscale.** sec-agent starts `tailscaled-autoconnect` when the headscale
+   key lands (`hardDepend` in `hosts/sec-agent.nix`). If `tailscale status`
+   still says `Logged out` (e.g. the host was built before that fix), run:
    ```sh
    systemctl restart tailscaled-autoconnect && tailscale status
    ```
