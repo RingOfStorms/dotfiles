@@ -117,9 +117,11 @@ in
         ];
         environment.shellAliases.cnt = "containers";
 
-        # Network for podman services with `internet = false`. New
-        # connections *from* it are dropped (internet, LAN, tailnet, host,
-        # DNS); replies to inbound connections on published ports pass.
+        # Network for podman services with `internet = false`. Traffic
+        # *from* it is dropped (internet, LAN, tailnet, host, DNS), including
+        # already established connections, so revoking @online also cuts a
+        # running download. Replies to inbound connections on published
+        # ports are `ct direction reply` and pass.
         # Units check this table exists before starting (fail closed).
         # `containers online <svc>` puts the container IP in @online with a
         # timeout; a firewall reload empties the set (fail closed again).
@@ -133,12 +135,12 @@ in
             chain forward {
               type filter hook forward priority filter - 10; policy accept;
               iifname "fleet-noinet" ip saddr @online accept
-              iifname "fleet-noinet" ct state new drop
+              iifname "fleet-noinet" ct direction original drop
             }
             chain input {
               type filter hook input priority filter - 10; policy accept;
               iifname "fleet-noinet" ip saddr @online accept
-              iifname "fleet-noinet" ct state new drop
+              iifname "fleet-noinet" ct direction original drop
             }
           '';
         };
