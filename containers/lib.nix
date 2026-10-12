@@ -140,8 +140,10 @@ in
         TimeoutStartSec=900
         TimeoutStopSec=120
         Environment=PATH=/run/wrappers/bin:/run/current-system/sw/bin
-        ExecStart=${pkgs.podman}/bin/podman run ${lib.escapeShellArgs runArgs}
-        ExecStop=${pkgs.podman}/bin/podman stop --ignore --time=60 ${svc.name}
+        # Host podman, not pkgs.podman: the runtime must match the host kernel,
+        # CDI specs and nvidia hook (nixos-25.11 crun 1.24 fails NVIDIA CDI mounts).
+        ExecStart=/run/current-system/sw/bin/podman run ${lib.escapeShellArgs runArgs}
+        ExecStop=/run/current-system/sw/bin/podman stop --ignore --time=60 ${svc.name}
 
         [Install]
         WantedBy=multi-user.target
