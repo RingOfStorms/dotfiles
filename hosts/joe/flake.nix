@@ -132,8 +132,6 @@
           ./nixld.nix
           inputs.containers.nixosModules.default
           ./containers.nix
-          # ./kokoro-tts.nix
-          # ./forge.nix
           ./homepage-dashboard.nix
           ./nginx.nix
           (import ./impermanence.nix {

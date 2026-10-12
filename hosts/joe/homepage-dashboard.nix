@@ -1,7 +1,7 @@
 { constants, ... }:
 let
   section1 = "a. AI / Creative";
-  s = constants.services;
+
 in
 {
   services.homepage-dashboard = {
@@ -29,17 +29,10 @@ in
       {
         "${section1}" = [
           {
-            "Forge" = {
-              description = "Stable Diffusion WebUI";
-              href = "http://localhost:${toString s.forge.port}";
-              icon = "si-stablediffusion";
-            };
-          }
-          {
-            "Kokoro TTS" = {
-              description = "Text-to-Speech API";
-              href = "http://localhost:${toString s.kokoro-tts.port}";
-              icon = "mdi-microphone";
+            "LocalAI" = {
+              description = "Image generation + TTS API";
+              href = "http://localhost:8080";
+              icon = "si-openai";
             };
           }
         ];

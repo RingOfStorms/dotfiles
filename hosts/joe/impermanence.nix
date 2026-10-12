@@ -38,12 +38,6 @@ in
     hideMounts = true;
     directories = shared.system.directories ++ [
       "/var/lib/secrets_manager_hydrated"
-
-      # Kokoro TTS model cache and any custom voice packs.
-      "/var/lib/kokoro-tts"
-
-      # Stable Diffusion Forge workspace, models, generated images.
-      "/var/lib/forge"
     ];
     files = shared.system.files ++ [ ];
     users."${primaryUser}" = {

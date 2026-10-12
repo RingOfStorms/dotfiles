@@ -1,4 +1,4 @@
-# Image generation API on joe's RTX 3080 (10 GB), replacing Forge.
+# LocalAI on joe's RTX 3080 (10 GB): image generation + Kokoro TTS.
 #
 # LocalAI: a prebuilt server with an OpenAI-compatible API
 #   POST /v1/images/generations  {"model": "...", "prompt": "...", "size": "1024x1024"}
@@ -8,9 +8,8 @@
 # downloaded on first use into the `backends` dir; models go in `models`.
 #
 # Models that fit 10 GB (install from the UI gallery or `podman exec localai /local-ai models install`):
-#   flux.1-dev-ggml (12B, quantized, clip on CPU), flux.1-schnell,
-#   flux.2-klein-4b (fast, also edits). Not z-image-turbo: bf16 6B, ~12 GB, OOMs.
-# See README.md for what was kept from Forge.
+#   flux.2-klein-4b (tested), flux.1-dev-ggml. Not z-image-turbo or
+#   flux.1-schnell (full diffusers weights, OOM). See README.md.
 {
   name = "localai";
   kind = "podman";

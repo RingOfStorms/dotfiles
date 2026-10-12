@@ -7,14 +7,6 @@
   };
 
   services = {
-    kokoro-tts = {
-      port = 8880;
-      dataDir = "/var/lib/kokoro-tts";
-    };
-    forge = {
-      port = 7860;
-      dataDir = "/var/lib/forge";
-    };
     homepage = {
       port = 8082;
     };
