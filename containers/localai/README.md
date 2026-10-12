@@ -77,3 +77,20 @@ model `kokoro`, voice `/models/kokoro-voices/af_mix.pt` (or a name).
 
 Other TTS models in the gallery (untested): `qwen3-tts-*`, `vibevoice`,
 `chatterbox`, `fish-speech-s2-pro`.
+
+## 3D (image → GLB)
+
+`trellis2-4b` (TRELLIS.2 via `trellis2cpp`). On 10 GB LocalAI auto-installs the
+**geometry-only** variant (~7 GB, no textures). Tested: 512 quality, 1024²
+input → 158 MB GLB in ~90 s. Image only, no text prompt: make the image with
+`flux.2-klein-4b` first (single object, plain background).
+
+```sh
+cnt online localai && ssh root@joe podman exec localai /local-ai models install trellis2-4b
+ssh root@joe systemctl restart fleet-localai   # else "backend not found: trellis2cpp"
+printf '{"model":"trellis2-4b","image":"%s","quality":"512","response_format":"b64_json"}' \
+  "$(base64 -w0 in.png)" | curl -s http://100.64.0.12:8080/3d/generations \
+  -H 'Content-Type: application/json' -d @- | jq -r '.data[0].b64_json' | base64 -d > out.glb
+```
+
+Web UI: Studio → 3D tab (preview, remesh slider, GLB download).
