@@ -34,6 +34,7 @@ let
       host = null;
       persist = { };
       tcpPorts = [ ];
+      requires = [ ];
       udpPorts = [ ];
       nginx = null;
       # false: podman services join the fleet-noinet network (host-module.nix).
@@ -55,6 +56,18 @@ in
   #                          filesystem behind /srv/containers must support
   #                          idmapped mounts (ext4, btrfs, xfs, tmpfs,
   #                          bcachefs on recent kernels; run `containers check-idmap`).
+  #   privateUsers = "no"    no user namespace: container uids are host uids.
+  #                          Needed when the container writes to NFS (idmapped
+  #                          mounts don't work there and the NAS checks raw
+  #                          uids). Container root is host root; pin uids.
+  #   guestNixpkgs           evaluate the guest with another nixpkgs (e.g.
+  #                          26.05) while extra-container's host-side eval
+  #                          stays on the flake's nixpkgs (25.11, issue #40).
+  #   binds                  extra host paths, not part of persist/backups:
+  #                          [ { host; container ? host; readOnly ? false; } ]
+  #   devices                device nodes to pass through, e.g. [ "/dev/dri" ]
+  #                          (bound and allowed rw in the container's cgroup)
+  #   capabilities           extra nspawn capabilities, e.g. [ "CAP_NET_ADMIN" ]
   mkNixosContainer =
     {
       service,
@@ -62,6 +75,10 @@ in
       specialArgs ? { },
       privateUsers ? "pick",
       privateNetwork ? false,
+      guestNixpkgs ? null,
+      binds ? [ ],
+      devices ? [ ],
+      capabilities ? [ ],
       extraContainerConfig ? { },
     }:
     let
@@ -69,14 +86,28 @@ in
         let
           s = normalize service;
         in
-        if s.internet then s else throw "${s.name}: internet = false is only implemented for kind = \"podman\"";
+        if s.internet then
+          s
+        else
+          throw "${s.name}: internet = false is only implemented for kind = \"podman\"";
+      idmap = if privateUsers == "no" then "" else ":idmap";
+      bindFlag =
+        b: "--bind${if b.readOnly or false then "-ro" else ""}=${b.host}:${b.container or b.host}${idmap}";
     in
     {
       containers.${svc.name} = {
         ephemeral = true;
         autoStart = true;
         inherit privateUsers privateNetwork specialArgs;
-        extraFlags = map (b: "--bind=${b.host}:${b.container}:idmap") (persistList svc);
+        extraFlags =
+          map (b: "--bind=${b.host}:${b.container}${idmap}") (persistList svc)
+          ++ map bindFlag binds
+          ++ map (d: "--bind=${d}") devices
+          ++ map (c: "--capability=${c}") capabilities;
+        allowedDevices = map (d: {
+          node = if d == "/dev/dri" then "char-drm" else d;
+          modifier = "rw";
+        }) devices;
         config =
           { lib, ... }:
           {
@@ -87,6 +118,7 @@ in
             networking.firewall.enable = lib.mkIf (!privateNetwork) (lib.mkForce false);
           };
       }
+      // (if guestNixpkgs == null then { } else { nixpkgs = guestNixpkgs; })
       // extraContainerConfig;
     };
 
@@ -155,25 +187,27 @@ in
         ExecStartPre=${noInetSetup}
       '';
       unit = pkgs.writeText unitName ''
-        [Unit]
-        Description=containers podman service ${svc.name}
-        Wants=network-online.target
-        After=network-online.target
-        ${lib.concatMapStrings (b: "RequiresMountsFor=${b.host}\n") (persistList svc)}
-        [Service]
-        Type=notify
-        NotifyAccess=all
-        Restart=on-failure
-        TimeoutStartSec=900
-        TimeoutStopSec=120
-        Environment=PATH=/run/wrappers/bin:/run/current-system/sw/bin
-${lib.optionalString (!svc.internet) noInetPre}        # Host podman, not pkgs.podman: the runtime must match the host kernel,
-        # CDI specs and nvidia hook (nixos-25.11 crun 1.24 fails NVIDIA CDI mounts).
-        ExecStart=/run/current-system/sw/bin/podman run ${lib.escapeShellArgs runArgs}
-        ExecStop=/run/current-system/sw/bin/podman stop --ignore --time=60 ${svc.name}
+                [Unit]
+                Description=containers podman service ${svc.name}
+                Wants=network-online.target
+                After=network-online.target
+                ${lib.concatMapStrings (b: "RequiresMountsFor=${b.host}\n") (persistList svc)}
+                [Service]
+                Type=notify
+                NotifyAccess=all
+                Restart=on-failure
+                TimeoutStartSec=900
+                TimeoutStopSec=120
+                Environment=PATH=/run/wrappers/bin:/run/current-system/sw/bin
+        ${
+          lib.optionalString (!svc.internet) noInetPre
+        }        # Host podman, not pkgs.podman: the runtime must match the host kernel,
+                # CDI specs and nvidia hook (nixos-25.11 crun 1.24 fails NVIDIA CDI mounts).
+                ExecStart=/run/current-system/sw/bin/podman run ${lib.escapeShellArgs runArgs}
+                ExecStop=/run/current-system/sw/bin/podman stop --ignore --time=60 ${svc.name}
 
-        [Install]
-        WantedBy=multi-user.target
+                [Install]
+                WantedBy=multi-user.target
       '';
       mutable = "/etc/systemd-mutable/system";
       install = pkgs.writeShellScript "fleet-install" ''

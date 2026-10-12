@@ -18,6 +18,51 @@
 let
   cfg = config.ringofstorms.containers;
   stateDir = "/var/lib/fleet-containers";
+  holdDir = "/run/fleet-containers/hold";
+  mutable = "/etc/systemd-mutable/system";
+  guardScript =
+    name: g:
+    pkgs.writeShellScript "fleet-guard-${name}" ''
+      set -u
+      PATH=${
+        lib.makeBinPath [
+          pkgs.coreutils
+          pkgs.systemd
+        ]
+      }
+      # Each check runs in its own child, SIGKILLed after 12 s: on a hard NFS
+      # mount a stuck stat ignores SIGTERM, and a guard that hangs would
+      # report healthy forever.
+      probe() {
+        ${lib.concatMapStrings (m: ''
+          t=$(timeout -k 2 10 stat -f -c %T ${lib.escapeShellArg m.path}) || { echo "guard ${name}: ${m.path} not reachable"; return 1; }
+          [ "$t" = ${lib.escapeShellArg m.fsType} ] || { echo "guard ${name}: ${m.path} is $t, not ${m.fsType}"; return 1; }
+          timeout -k 2 10 test -e ${lib.escapeShellArg m.sentinel} || { echo "guard ${name}: sentinel ${m.sentinel} missing"; return 1; }
+        '') g.mounts}
+      }
+      # Start what should run: installed, boot link present (`containers
+      # stop` removes it), not held (`containers stop/backup/move`).
+      start_wanted() {
+        ${lib.concatStrings (
+          lib.mapAttrsToList (svc: unit: ''
+            if [ -e ${mutable}/${unit} ] && ! [ -e ${holdDir}/${svc} ] \
+              && ls ${mutable}/*.wants/${unit} >/dev/null 2>&1 \
+              && ! systemctl is-active -q ${unit}; then
+              echo "guard ${name}: starting ${unit}"
+              systemctl start --no-block ${unit}
+            fi
+          '') g.units
+        )}
+      }
+      probe || exit 1
+      systemd-notify --ready --status="storage ok"
+      while :; do
+        systemd-notify WATCHDOG=1
+        start_wanted
+        sleep ${toString g.interval}
+        probe || exit 1
+      done
+    '';
   applyPorts = pkgs.writeShellScript "fleet-containers-apply-ports" ''
     set -u
     nft=${pkgs.nftables}/bin/nft
@@ -37,6 +82,43 @@ let
         || echo "containers: podman network reload failed" >&2
     fi
   '';
+  guardUnits = lib.mkMerge (
+    lib.mapAttrsToList (name: g: {
+      services."fleet-guard-${name}" = {
+        description = "Storage guard ${name}: runs ${lib.concatStringsSep ", " (lib.attrNames g.units)} only while its mounts are live";
+        wantedBy = [ "multi-user.target" ];
+        wants = [ "network-online.target" ];
+        after = [
+          "network-online.target"
+          "remote-fs.target"
+        ];
+        startLimitIntervalSec = 0;
+        serviceConfig = {
+          Type = "notify";
+          NotifyAccess = "all";
+          ExecStart = guardScript name g;
+          Restart = "always";
+          RestartSec = 60;
+          # A probe round is bounded (12 s per check); the loop must ping
+          # within this or systemd kills the guard, which stops the units.
+          WatchdogSec = g.interval * 2 + 36 * builtins.length g.mounts + 30;
+          TimeoutStartSec = 36 * builtins.length g.mounts + 30;
+        };
+      };
+      # Drop-ins (container@<name> itself is installed at runtime).
+      units = lib.mapAttrs' (
+        _: unit:
+        lib.nameValuePair unit {
+          overrideStrategy = "asDropin";
+          text = ''
+            [Unit]
+            BindsTo=fleet-guard-${name}.service
+            After=fleet-guard-${name}.service
+          '';
+        }
+      ) g.units;
+    }) cfg.guards
+  );
 in
 {
   options.ringofstorms.containers = {
@@ -69,6 +151,68 @@ in
         description = "Interface to NAT container traffic out of.";
       };
     };
+    capabilities = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      example = [
+        "nfs-h002"
+        "intel-qsv"
+      ];
+      description = ''
+        What this host offers to services. A service with `requires = [ ... ]`
+        in service.nix is only deployed or moved to hosts that list them all
+        (the CLI checks /etc/fleet-containers/capabilities/<name>).
+      '';
+    };
+    guards = lib.mkOption {
+      default = { };
+      description = ''
+        Storage guards. Each guard is a service `fleet-guard-<name>` that
+        probes network mounts (fs type + a sentinel file, every probe hard-
+        bounded with `timeout -k`) and exits on the first failure. The listed
+        units get BindsTo/After on it, so they stop with it and can't start
+        while it is down. After every passing probe it starts the listed units
+        that are wanted at boot (the link `containers stop` removes) and not
+        held (/run/fleet-containers/hold/<service>, written by `containers
+        stop/backup/move`). No Upholds=, so deliberate stops stick.
+      '';
+      type = lib.types.attrsOf (
+        lib.types.submodule {
+          options = {
+            mounts = lib.mkOption {
+              description = "Paths that must be live network mounts.";
+              type = lib.types.listOf (
+                lib.types.submodule {
+                  options = {
+                    path = lib.mkOption { type = lib.types.str; };
+                    fsType = lib.mkOption {
+                      type = lib.types.str;
+                      default = "nfs";
+                      description = "`stat -f -c %T` result (nfs4 shows as nfs).";
+                    };
+                    sentinel = lib.mkOption {
+                      type = lib.types.str;
+                      description = "File that exists only on the real share.";
+                    };
+                  };
+                }
+              );
+            };
+            units = lib.mkOption {
+              type = lib.types.attrsOf lib.types.str;
+              example = {
+                arr = "container@arr.service";
+              };
+              description = "Service name (for hold markers) to systemd unit.";
+            };
+            interval = lib.mkOption {
+              type = lib.types.int;
+              default = 30;
+            };
+          };
+        }
+      );
+    };
   };
 
   config = lib.mkIf cfg.enable (
@@ -84,7 +228,12 @@ in
           "d ${stateDir}/nginx 0755 root root -"
           "d ${stateDir}/ports 0755 root root -"
           "d /nix/var/nix/gcroots/fleet-containers 0755 root root -"
+          "d ${holdDir} 0755 root root -"
         ];
+
+        environment.etc = lib.listToAttrs (
+          map (c: lib.nameValuePair "fleet-containers/capabilities/${c}" { text = ""; }) cfg.capabilities
+        );
 
         # Re-adds runtime ports after every firewall start or reload
         # (flushRuleset wipes them).
@@ -106,8 +255,18 @@ in
         users.users.containers = {
           isSystemUser = true;
           group = "containers";
-          subUidRanges = [ { startUid = 2147483647; count = 2147483648; } ];
-          subGidRanges = [ { startGid = 2147483647; count = 2147483648; } ];
+          subUidRanges = [
+            {
+              startUid = 2147483647;
+              count = 2147483648;
+            }
+          ];
+          subGidRanges = [
+            {
+              startGid = 2147483647;
+              count = 2147483648;
+            }
+          ];
         };
         users.groups.containers = { };
 
@@ -172,6 +331,8 @@ in
         # `containers deploy` validates new sites with `nginx -t` before reloading.
         environment.systemPackages = [ config.services.nginx.package ];
       })
+
+      (lib.mkIf (cfg.guards != { }) { systemd = guardUnits; })
 
       (lib.mkIf cfg.privateNetwork.enable {
         networking.nat = {

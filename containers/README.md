@@ -165,8 +165,13 @@ nixos) the guest config.
   '';
   backupHook = "runuser -u postgres -- pg_dumpall > /var/lib/postgresql/dumpall.sql";
   attach = null;                # command for `containers attach`
+  requires = [ ];               # host capabilities, e.g. [ "nfs-h002" "intel-qsv" ]
 }
 ```
+
+`requires` names must appear in the target host's
+`ringofstorms.containers.capabilities`. `deploy` and `move` refuse (before
+anything is stopped) on a host that lacks one.
 
 **nixos kind** `flake.nix` (keep nixpkgs on nixos-25.11; extra-container issue #40):
 
@@ -180,6 +185,9 @@ outputs = { extra-container, nixpkgs, ... }:
         service = import ./service.nix;
         config = import ./container.nix;
         # specialArgs = { ... };  privateNetwork = false;  privateUsers = "pick";
+        # guestNixpkgs = <26.05 nixpkgs>;  guest only; host-side eval stays 25.11
+        # binds = [ { host = "/nfs/x"; container = "/media"; } ];  not backed up
+        # devices = [ "/dev/dri" ];  capabilities = [ "CAP_NET_ADMIN" ];
       };
     };
   });
@@ -283,6 +291,19 @@ will have two writable copies.
 it stays stopped across reboots until you `start`, `restart` or `deploy` it.
 A service you did not stop (running, or crashed) is still enabled and starts
 again on boot; crashes in between restart via `Restart=on-failure`.
+
+### Storage guards
+
+A host can tie services to network storage with
+`ringofstorms.containers.guards.<name>` (see host-module.nix):
+`fleet-guard-<name>.service` probes each mount (fs type and a sentinel file,
+every check SIGKILLed after 12 s so a hung NFS mount can't wedge it) every
+30 s and exits on the first failure. The listed units are `BindsTo=` the
+guard, so they stop with it and can't start while it is down. When the guard
+is back, it starts each listed unit that still has its boot link and has no
+hold marker in `/run/fleet-containers/hold/`. `stop`, `move` and `backup`
+write that marker; `start`, `restart` and `deploy` clear it. A stopped
+service therefore stays stopped when storage comes back.
 
 ## Troubleshooting
 

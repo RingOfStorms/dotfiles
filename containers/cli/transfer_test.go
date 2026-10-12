@@ -623,3 +623,51 @@ func TestHostForReadLocal(t *testing.T) {
 		t.Fatalf("--host must win, got %q", h)
 	}
 }
+
+// stop/move write the hold marker a storage guard honours; start clears it.
+func TestHoldMarker(t *testing.T) {
+	oldU, oldH := mutableUnits, holdDir
+	t.Cleanup(func() { mutableUnits, holdDir = oldU, oldH })
+	mutableUnits, holdDir = t.TempDir(), filepath.Join(t.TempDir(), "hold")
+	bash := realPath(t, "bash")
+	sh := func(script string) {
+		if out, err := exec.Command(bash, "-c", "set -euo pipefail\n"+script).CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+	}
+	s := Service{Name: "arr", Kind: "nixos"}
+	marker := filepath.Join(holdDir, "arr")
+	sh(disableScript(s))
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("stop did not hold: %v", err)
+	}
+	sh(enableScript(s))
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("start left the hold marker")
+	}
+	sh(unholdScript(s)) // idempotent
+}
+
+func TestRequiresScript(t *testing.T) {
+	old := capDir
+	t.Cleanup(func() { capDir = old })
+	capDir = t.TempDir()
+	bash := realPath(t, "bash")
+	run := func(s Service) (string, error) {
+		out, err := exec.Command(bash, "-c", "set -euo pipefail\n"+requiresScript(s, "h9")+"echo ok").CombinedOutput()
+		return string(out), err
+	}
+	if out, err := run(Service{Name: "plain"}); err != nil || !strings.Contains(out, "ok") {
+		t.Fatalf("no requires must pass: %v %s", err, out)
+	}
+	s := Service{Name: "arr", Requires: []string{"nfs-h002", "intel-qsv"}}
+	must(t, os.WriteFile(filepath.Join(capDir, "nfs-h002"), nil, 0o644))
+	out, err := run(s)
+	if err == nil || !strings.Contains(out, "intel-qsv") || strings.Contains(out, "nfs-h002,") || strings.Contains(out, "ok") {
+		t.Fatalf("missing capability must fail and name it: %v %s", err, out)
+	}
+	must(t, os.WriteFile(filepath.Join(capDir, "intel-qsv"), nil, 0o644))
+	if out, err := run(s); err != nil {
+		t.Fatalf("all present must pass: %v %s", err, out)
+	}
+}

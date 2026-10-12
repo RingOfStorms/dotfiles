@@ -37,6 +37,7 @@ type Service struct {
 	BackupHook  string            `json:"backupHook"`
 	Attach      string            `json:"attach"`
 	Internet    *bool             `json:"internet"`
+	Requires    []string          `json:"requires"`
 }
 
 type Host struct {
@@ -805,6 +806,7 @@ func prepareScript(s Service, host string) string {
 	var b strings.Builder
 	b.WriteString("set -euo pipefail\n")
 	b.WriteString("test -d /etc/systemd-mutable/system -o -d /var/lib/fleet-containers || { echo 'host is missing the containers host module (inputs.containers.nixosModules.default)'; exit 1; }\n")
+	b.WriteString(requiresScript(s, host))
 	b.WriteString("install -d -m755 /var/lib/fleet-containers/nginx /var/lib/fleet-containers/ports\n")
 	b.WriteString(fmt.Sprintf("install -d -m755 %s\n", q(dataDir(s))))
 	keys := make([]string, 0, len(s.Persist))
@@ -1011,12 +1013,13 @@ func cmdBackup(args []string) error {
 		}
 	}
 	if !f.bools["live"] && !running {
+		remote(h, true, holdScript(s)) // keep a storage guard from starting it mid-copy
 		info("%s is not running on %s; backing up as is", s.Name, h)
 		if hs := hookScript(s); hs != "" {
 			info("note: %s has a backup hook, which needs the service running; skipped", s.Name)
 		}
 	} else if !f.bools["live"] {
-		pre := hookScript(s) + fmt.Sprintf(`if systemctl is-active -q %[1]s; then touch /var/lib/fleet-containers/%[2]s.was-running; systemctl stop %[1]s; fi
+		pre := hookScript(s) + holdScript(s) + fmt.Sprintf(`if systemctl is-active -q %[1]s; then touch /var/lib/fleet-containers/%[2]s.was-running; systemctl stop %[1]s; fi
 `, unitOf(s), s.Name)
 		info("stopping %s on %s for a consistent copy", s.Name, h)
 		if err := remote(h, true, pre); err != nil {
@@ -1033,7 +1036,7 @@ func cmdBackup(args []string) error {
 		tarErr = backupTo(hostCmd(context.Background(), h, false, true, packScript(inv.DataRoot, s.Name)), out)
 	}
 	if !f.bools["live"] {
-		remote(h, true, fmt.Sprintf("if [ -e /var/lib/fleet-containers/%[2]s.was-running ]; then rm -f /var/lib/fleet-containers/%[2]s.was-running; systemctl start %[1]s; fi", unitOf(s), s.Name))
+		remote(h, true, unholdScript(s)+fmt.Sprintf("if [ -e /var/lib/fleet-containers/%[2]s.was-running ]; then rm -f /var/lib/fleet-containers/%[2]s.was-running; systemctl start %[1]s; fi", unitOf(s), s.Name))
 	}
 	if tarErr != nil {
 		return fmt.Errorf("backup failed, nothing written to %s: %w", out, tarErr)
@@ -1116,7 +1119,8 @@ func cmdMove(args []string) error {
 test -d /etc/systemd-mutable/system || { echo "%[3]s lacks the containers host module"; exit 1; }
 if systemctl is-active -q %[1]s; then echo "%[2]s already running on %[3]s"; exit 1; fi
 if [ -e %[4]s ] && [ -n "$(ls -A %[4]s)" ]; then echo "%[4]s already exists on %[3]s; move it away first"; exit 1; fi
-install -d -m755 %[5]s`, unitOf(s), s.Name, to, q(dst), q(inv.DataRoot))); err != nil {
+install -d -m755 %[5]s
+`, unitOf(s), s.Name, to, q(dst), q(inv.DataRoot))+requiresScript(s, to)); err != nil {
 		return err
 	}
 
@@ -1306,6 +1310,20 @@ func hostCmd(ctx context.Context, host string, tty, root bool, script string) *e
 // in between).
 var mutableUnits = "/etc/systemd-mutable/system" // var for tests
 
+// holdDir holds markers that keep a storage guard (host-module.nix
+// ringofstorms.containers.guards) from starting a service again. stop, move
+// and backup write one before stopping; start/restart/deploy clear it. It is
+// in /run, so a reboot clears it (the boot link then decides).
+var holdDir = "/run/fleet-containers/hold" // var for tests
+
+func holdScript(s Service) string {
+	return fmt.Sprintf("mkdir -p %s && touch %s\n", q(holdDir), q(holdDir+"/"+s.Name))
+}
+
+func unholdScript(s Service) string {
+	return "rm -f " + q(holdDir+"/"+s.Name) + "\n"
+}
+
 func wantsLink(s Service) string {
 	target := "machines.target"
 	if s.Kind == "podman" {
@@ -1315,12 +1333,12 @@ func wantsLink(s Service) string {
 }
 
 func disableScript(s Service) string {
-	return "rm -f " + q(wantsLink(s)) + "\n"
+	return holdScript(s) + "rm -f " + q(wantsLink(s)) + "\n"
 }
 
 func enableScript(s Service) string {
 	l := wantsLink(s)
-	return fmt.Sprintf("if [ -e %[1]s ]; then mkdir -p \"$(dirname %[2]s)\" && ln -sfn ../%[3]s %[2]s; fi\n",
+	return unholdScript(s) + fmt.Sprintf("if [ -e %[1]s ]; then mkdir -p \"$(dirname %[2]s)\" && ln -sfn ../%[3]s %[2]s; fi\n",
 		q(mutableUnits+"/"+unitOf(s)), q(l), unitOf(s))
 }
 
@@ -1550,5 +1568,23 @@ func renderDetail(s Service, h, out string) string {
 		fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\n", p[0], p[1], size, p[3])
 	}
 	tw.Flush()
+	return b.String()
+}
+
+// capDir lists what a host offers (host-module.nix capabilities).
+var capDir = "/etc/fleet-containers/capabilities" // var for tests
+
+// requiresScript fails unless the host offers everything the service
+// requires. Runs before anything is stopped or installed.
+func requiresScript(s Service, host string) string {
+	if len(s.Requires) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("missing=\n")
+	for _, r := range s.Requires {
+		fmt.Fprintf(&b, "[ -e %s ] || missing=\"$missing %s\"\n", q(capDir+"/"+r), r)
+	}
+	fmt.Fprintf(&b, "if [ -n \"$missing\" ]; then echo \"%s requires:$missing, which %s does not offer (ringofstorms.containers.capabilities)\" >&2; exit 1; fi\n", s.Name, host)
 	return b.String()
 }
