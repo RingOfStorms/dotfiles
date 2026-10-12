@@ -8,12 +8,16 @@ behind one OpenAI-compatible API. Replaced Forge and kokoro-tts.
 
 ## Deploy / models
 
+No internet by default (`internet = false`). Open it for downloads:
+
 ```sh
+cnt online localai            # 30 min; --for 2h, or --off to close early
 cnt deploy localai
 ssh root@joe podman exec localai /local-ai models install <name>
 ssh root@joe systemctl restart fleet-localai   # CLI installs need a restart to show up
 ```
 
+Access also ends if the container restarts or the firewall reloads (fail closed).
 Installs from the web UI's Models page show up without a restart.
 
 | Model | Status |

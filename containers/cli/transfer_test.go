@@ -600,3 +600,26 @@ func TestStatusDetail(t *testing.T) {
 		}
 	}
 }
+
+func TestHostForReadLocal(t *testing.T) {
+	dir := t.TempDir()
+	oldM, oldG, oldL := mutableUnits, gcroots, localHost
+	mutableUnits, gcroots, localHost = dir, dir, "joe"
+	defer func() { mutableUnits, gcroots, localHost = oldM, oldG, oldL }()
+	pod := Service{Name: "localai", Kind: "podman", Host: "joe"}
+	nix := Service{Name: "mc", Kind: "nixos", Host: "h003"}
+	if installedHere(pod) || installedHere(nix) {
+		t.Fatal("nothing installed yet")
+	}
+	os.WriteFile(dir+"/localai", nil, 0o644)
+	os.WriteFile(dir+"/container@mc.service", nil, 0o644)
+	if !installedHere(pod) || !installedHere(nix) {
+		t.Fatal("installed services not detected")
+	}
+	if h := hostForRead(pod, flags{vals: map[string]string{}}); h != "joe" {
+		t.Fatalf("got %q, want local joe", h)
+	}
+	if h := hostForRead(pod, flags{vals: map[string]string{"host": "lio"}}); h != "lio" {
+		t.Fatalf("--host must win, got %q", h)
+	}
+}

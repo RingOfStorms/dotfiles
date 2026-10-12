@@ -36,6 +36,7 @@ type Service struct {
 	Nginx       *string           `json:"nginx"`
 	BackupHook  string            `json:"backupHook"`
 	Attach      string            `json:"attach"`
+	Internet    *bool             `json:"internet"`
 }
 
 type Host struct {
@@ -77,6 +78,9 @@ commands:
   start|stop|restart <svc> [--host h]
                                stop blocks until fully down and keeps it stopped
                                across reboots; start/restart/deploy re-enable it
+  online <svc> [--for 30m] [--off] [--host h]
+                               let an internet = false service reach the network
+                               for a while (ends on timeout, restart or fw reload)
   attach <svc> [--host h]      open the service console (if it defines one)
   shell <svc> [--host h]       root shell inside the container
   backup <svc> [--host h] [-o file|dir] [--live] [-y]
@@ -90,6 +94,10 @@ commands:
                                remove from a host (data kept unless --purge)
   check-idmap <host>           test idmapped mounts on /srv/containers and /nix
   inventory                    print the inventory JSON
+
+status, logs, attach, shell, online, start, stop and restart use this machine
+when the service is installed here (no fleet probe; works on hosts that
+cannot ssh to the others). Pass --host to act elsewhere.
 
 global flags (or env):
   --repo URL    flake repo (CONTAINERS_REPO, default `+defaultRepo+`)
@@ -138,6 +146,8 @@ func main() {
 		err = cmdDeploy(rest)
 	case "start", "stop", "restart":
 		err = cmdUnit(cmd, rest)
+	case "online":
+		err = cmdOnline(rest)
 	case "attach":
 		err = cmdAttach(rest, false)
 	case "shell":
@@ -385,6 +395,30 @@ func hostFor(s Service, f flags) string {
 		die("%v", err)
 	}
 	return s.Host
+}
+
+// hostForRead is hostFor for commands that only look or connect (status,
+// logs, attach, shell, online): if the service is installed on this machine
+// and no --host was given, use it without probing the fleet. These cannot
+// start a second copy elsewhere, so a full discovery is not needed, and it
+// makes the CLI usable on hosts that cannot ssh to the rest (joe).
+func hostForRead(s Service, f flags) string {
+	if f.vals["host"] == "" && !dryRun && installedHere(s) {
+		return localHost
+	}
+	return hostFor(s, f)
+}
+
+// gcroots holds the CLI-installed podman services (var for tests).
+var gcroots = "/nix/var/nix/gcroots/fleet-containers"
+
+func installedHere(s Service) bool {
+	if s.Kind == "podman" {
+		_, err := os.Lstat(gcroots + "/" + s.Name)
+		return err == nil
+	}
+	_, err := os.Lstat(mutableUnits + "/" + unitOf(s))
+	return err == nil
 }
 
 // placement is the result of probing every container host for a service.
@@ -746,7 +780,7 @@ func rawTerminal() func() {
 func cmdLogs(args []string) error {
 	f := parse(args, "no-follow", "unit")
 	s := f.svc()
-	h := hostFor(s, f)
+	h := hostForRead(s, f)
 	n := f.vals["n"]
 	if n == "" {
 		n = "200"
@@ -875,7 +909,7 @@ func deploy(s Service, h, ref string, local bool) error {
 func cmdUnit(verb string, args []string) error {
 	f := parse(args)
 	s := f.svc()
-	h := hostFor(s, f)
+	h := hostForRead(s, f)
 	u := unitOf(s)
 	switch verb {
 	case "stop":
@@ -889,10 +923,39 @@ func cmdUnit(verb string, args []string) error {
 	}
 }
 
+// cmdOnline temporarily gives an `internet = false` podman service network
+// access: its container IP goes into the host's fleet-noinet @online nft set
+// with a timeout, so access ends by itself. A firewall reload or container
+// restart (new IP) also ends it. `--off` removes it now.
+func cmdOnline(args []string) error {
+	f := parse(args, "off")
+	s := f.svc()
+	if s.Kind != "podman" || s.Internet == nil || *s.Internet {
+		return fmt.Errorf("%s is not a podman service with internet = false; nothing to toggle", s.Name)
+	}
+	h := hostForRead(s, f)
+	d := f.vals["for"]
+	if d == "" {
+		d = "30m"
+	}
+	dur, err := time.ParseDuration(d)
+	if err != nil || dur < time.Second {
+		return fmt.Errorf("--for %q: want a duration like 30m or 2h", d)
+	}
+	secs := fmt.Sprintf("%ds", int(dur.Seconds()))
+	ip := fmt.Sprintf(`ip=$(podman inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' %s) && [ -n "$ip" ] || { echo "%s is not running" >&2; exit 1; }
+`, q(s.Name), s.Name)
+	if f.bools["off"] {
+		return remote(h, true, ip+`nft delete element inet fleet-noinet online "{ $ip }" 2>/dev/null; echo "`+s.Name+` offline"`)
+	}
+	info("%s on %s: internet allowed for %s (containers online %s --off to end early)", s.Name, h, d, s.Name)
+	return remote(h, true, ip+`nft add element inet fleet-noinet online "{ $ip timeout `+secs+` }" && nft list set inet fleet-noinet online | grep -o "$ip[^,}]*"`)
+}
+
 func cmdAttach(args []string, shell bool) error {
 	f := parse(args)
 	s := f.svc()
-	h := hostFor(s, f)
+	h := hostForRead(s, f)
 	if s.Kind == "podman" {
 		cmd := "sh"
 		if !shell && s.Attach != "" {
@@ -1390,7 +1453,7 @@ func cmdDetail(args []string) error {
 		return errors.New("usage: containers status <svc> [--host h]   (containers ls for all services)")
 	}
 	s := f.svc()
-	h := hostFor(s, f)
+	h := hostForRead(s, f)
 	out, err := remoteOut(context.Background(), h, true, detailScript(s))
 	if err != nil {
 		return err

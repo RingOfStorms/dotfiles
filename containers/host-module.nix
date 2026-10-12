@@ -121,19 +121,32 @@ in
         # connections *from* it are dropped (internet, LAN, tailnet, host,
         # DNS); replies to inbound connections on published ports pass.
         # Units check this table exists before starting (fail closed).
+        # `containers online <svc>` puts the container IP in @online with a
+        # timeout; a firewall reload empties the set (fail closed again).
         networking.nftables.tables.fleet-noinet = {
           family = "inet";
           content = ''
+            set online {
+              type ipv4_addr
+              flags timeout
+            }
             chain forward {
               type filter hook forward priority filter - 10; policy accept;
+              iifname "fleet-noinet" ip saddr @online accept
               iifname "fleet-noinet" ct state new drop
             }
             chain input {
               type filter hook input priority filter - 10; policy accept;
+              iifname "fleet-noinet" ip saddr @online accept
               iifname "fleet-noinet" ct state new drop
             }
           '';
         };
+        # DNS (aardvark-dns on the bridge) for containers that are online.
+        # Only reachable here once the chain above let the packet through.
+        networking.firewall.extraInputRules = ''
+          iifname "fleet-noinet" meta l4proto { tcp, udp } th dport 53 accept
+        '';
       }
 
       # Runtime vhosts: `containers deploy` writes <svc>.conf into the include
