@@ -31,6 +31,12 @@
   # inside nspawn.
   boot.kernel.sysctl = lib.mkForce { };
 
+  # transmission runs with RootDirectory=/run/transmission and BindPaths=/run.
+  # Under nspawn systemd also stages os-release into /run/host inside that
+  # root, which is read-only there (226/NAMESPACE). An empty tmpfs on
+  # /run/host gives it a writable place.
+  systemd.services.transmission.serviceConfig.TemporaryFileSystem = [ "/run/host" ];
+
   # Pinned to the values on h001 before the move (state and secrets are
   # owned by these numbers).
   users.users.kavita.uid = 982;
