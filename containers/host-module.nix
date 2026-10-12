@@ -110,6 +110,24 @@ in
           cfg.package
         ];
         environment.shellAliases.cnt = "containers";
+
+        # Network for podman services with `internet = false`. New
+        # connections *from* it are dropped (internet, LAN, tailnet, host,
+        # DNS); replies to inbound connections on published ports pass.
+        # Units check this table exists before starting (fail closed).
+        networking.nftables.tables.fleet-noinet = {
+          family = "inet";
+          content = ''
+            chain forward {
+              type filter hook forward priority filter - 10; policy accept;
+              iifname "fleet-noinet" ct state new drop
+            }
+            chain input {
+              type filter hook input priority filter - 10; policy accept;
+              iifname "fleet-noinet" ct state new drop
+            }
+          '';
+        };
       }
 
       # Runtime vhosts: `containers deploy` writes <svc>.conf into the include

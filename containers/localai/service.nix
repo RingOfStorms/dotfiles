@@ -24,6 +24,10 @@
     images = "/tmp/generated";
   };
 
+  # Set false once models/backends are installed: no outbound network at
+  # all (gallery installs and backend downloads then fail). Ports still work.
+  internet = false;
+
   # http://joe:8080/v1/images/generations
   tcpPorts = [ 8080 ];
   podman = {

@@ -36,6 +36,10 @@ let
       tcpPorts = [ ];
       udpPorts = [ ];
       nginx = null;
+      # false: podman services join the fleet-noinet network (host-module.nix).
+      # Published ports still work; the container cannot open any connection
+      # (no internet, LAN, host or DNS). Not implemented for kind = "nixos".
+      internet = true;
       description = "";
     }
     // service;
@@ -61,7 +65,11 @@ in
       extraContainerConfig ? { },
     }:
     let
-      svc = normalize service;
+      svc =
+        let
+          s = normalize service;
+        in
+        if s.internet then s else throw "${s.name}: internet = false is only implemented for kind = \"podman\"";
     in
     {
       containers.${svc.name} = {
@@ -121,12 +129,18 @@ in
         "--sdnotify=conmon"
         "--log-driver=journald"
       ]
+      ++ lib.optional (!svc.internet) "--network=fleet-noinet"
       ++ publish
       ++ volumes
       ++ envs
       ++ (p.extraArgs or [ ])
       ++ [ p.image ]
       ++ (p.cmd or [ ]);
+      # Fail closed: refuse to start unless the host blocks the network.
+      noInetPre = ''
+        ExecStartPre=/run/current-system/sw/bin/nft list table inet fleet-noinet
+        ExecStartPre=/bin/sh -c "/run/current-system/sw/bin/podman network exists fleet-noinet || /run/current-system/sw/bin/podman network create --interface-name=fleet-noinet --subnet=10.89.250.0/24 fleet-noinet"
+      '';
       unit = pkgs.writeText unitName ''
         [Unit]
         Description=containers podman service ${svc.name}
@@ -140,7 +154,7 @@ in
         TimeoutStartSec=900
         TimeoutStopSec=120
         Environment=PATH=/run/wrappers/bin:/run/current-system/sw/bin
-        # Host podman, not pkgs.podman: the runtime must match the host kernel,
+${lib.optionalString (!svc.internet) noInetPre}        # Host podman, not pkgs.podman: the runtime must match the host kernel,
         # CDI specs and nvidia hook (nixos-25.11 crun 1.24 fails NVIDIA CDI mounts).
         ExecStart=/run/current-system/sw/bin/podman run ${lib.escapeShellArgs runArgs}
         ExecStop=/run/current-system/sw/bin/podman stop --ignore --time=60 ${svc.name}
