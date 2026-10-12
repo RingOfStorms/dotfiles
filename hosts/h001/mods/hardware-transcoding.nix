@@ -34,8 +34,10 @@
   };
 
   # Optional but can help when services (like jellyfin) run in their own units
-  systemd.services.jellyfin.environment.LIBVA_DRIVER_NAME =
-    lib.mkIf config.services.jellyfin.enable "iHD";
+  # (mkIf around the whole attr, so hosts without jellyfin get no stub unit)
+  systemd.services = lib.mkIf config.services.jellyfin.enable {
+    jellyfin.environment.LIBVA_DRIVER_NAME = "iHD";
+  };
 
   ########################
   # Firmware for the iGPU

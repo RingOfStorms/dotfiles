@@ -10,7 +10,7 @@ let
   pinchflat = true;
   pinchflatId = constants.services.pinchflat.uid;
 
-  # Matches up to my h001/mods/nixarr|pinchflat.nix files
+  # Matches containers/arr/nixarr.nix (the arr container on h001)
   audiobookshelf = true;
   jellyfin = true;
   komga = false;
