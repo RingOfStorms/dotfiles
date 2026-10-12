@@ -61,10 +61,16 @@
       inventory = {
         inherit services;
         hosts = (import ../hosts/fleet.nix).hosts;
-        # Hosts that import the host module. Every one of them must answer
-        # before the CLI acts on a declared host without --host. Add new
-        # container hosts here.
-        containerHosts = [ "h003" "lio" "joe" "h001" ];
+        # Hosts that run (or may run) floating containers; the CLI probes them
+        # to find where a service is installed. Hosts declared in a
+        # service.nix are added automatically. Laptops are not listed, so
+        # their being offline never matters.
+        containerHosts = [
+          "h001"
+          "h002"
+          "h003"
+          "lio"
+        ];
         dataRoot = containersLib.dataRoot;
       };
 

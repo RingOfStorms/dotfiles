@@ -380,7 +380,7 @@ func TestPlacementThroughLocate(t *testing.T) {
 		{"declared host has it and so does another", map[string][]string{"h003": {"mc"}, "h001": {"mc"}}, nil, "h001, h003"},
 		// Moved to h001, which is now down: must not reinstall on h003.
 		{"moved target unreachable", nil, []string{"h001"}, "h001 did not answer"},
-		{"declared has it, other host unreachable", map[string][]string{"h003": {"mc"}}, []string{"h001"}, "h001 did not answer"},
+		{"declared has it, other host unreachable", map[string][]string{"h003": {"mc"}}, []string{"h001"}, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -822,5 +822,22 @@ esac
 	sh(unholdScript(s) + fmt.Sprintf("if [ -e /var/lib/fleet-containers/%[2]s.was-running ]; then rm -f /var/lib/fleet-containers/%[2]s.was-running; systemctl start %[1]s; fi\n", u, s.Name))
 	if !running() {
 		t.Fatal("backup did not start the service the guard wanted up")
+	}
+}
+
+func TestStatusUnknownLast(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	inv = &Inventory{Services: map[string]Service{
+		"zz": {Name: "zz", Host: "h001", Kind: "nixos"},
+		"mc": {Name: "mc", Host: "h003", Kind: "nixos"},
+	}}
+	out := renderStatus(false, fakeFleet(map[string][]string{"h001": {"zz", "atuin"}, "h003": {"mc"}}))
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	var order []string
+	for _, l := range lines[1:] {
+		order = append(order, strings.Fields(l)[0])
+	}
+	if want := []string{"mc", "zz", "---", "atuin"}; !slices.Equal(order, want) {
+		t.Fatalf("order %v, want %v\n%s", order, want, out)
 	}
 }

@@ -494,6 +494,11 @@ func checkPlacement(s Service, p placement) error {
 !!!   - set   host = %[4]q;   in containers/%[5]s/service.nix and push, or
 !!!   - pass  --host <host>   to act on a specific host this once.`,
 			s.Name, s.Host, strings.Join(p.found, ", "), elsewhere[0], s.Dir)
+	case len(p.unreachable) > 0 && slices.Contains(p.found, s.Host):
+		// Installed on the declared host and on no host that answered: an
+		// offline host cannot hold a newer copy without service.nix saying so
+		// (a move rewrites it), so a down box must not block normal work.
+		fmt.Fprintf(os.Stderr, "note: %s did not answer; using %s, where %s is installed\n", strings.Join(p.unreachable, ", "), s.Host, s.Name)
 	case len(p.unreachable) > 0:
 		return fmt.Errorf(`
 !!! cannot confirm where %[1]s is installed: %[2]s did not answer.
@@ -596,6 +601,10 @@ func humanMem(s string) string {
 
 func statusTable(all bool) string {
 	loadInventory()
+	return renderStatus(all, probe)
+}
+
+func renderStatus(all bool, probe func(context.Context, string) ([]row, error)) string {
 	hostSet := map[string]bool{}
 	for _, s := range inv.Services {
 		if s.Host != "" {
@@ -651,9 +660,23 @@ func statusTable(all bool) string {
 	for n := range names {
 		sorted = append(sorted, n)
 	}
-	sort.Strings(sorted)
+	// Repo services first, then installed units the repo does not know,
+	// under a separator line.
+	sort.Slice(sorted, func(i, j int) bool {
+		_, ki := inv.Services[sorted[i]]
+		_, kj := inv.Services[sorted[j]]
+		if ki != kj {
+			return ki
+		}
+		return sorted[i] < sorted[j]
+	})
+	sep := false
 	for _, n := range sorted {
 		s, known := inv.Services[n]
+		if !known && !sep {
+			sep = true
+			fmt.Fprintf(tw, "---\t\t\t\t%s\t\t\t\n", colorState(""))
+		}
 		rows := running[n]
 		if len(rows) == 0 {
 			note := ""
