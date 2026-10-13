@@ -49,19 +49,13 @@ rec {
       lanIp = "10.12.14.10";
       trust = "high";
     };
-    h002 = {
-      user = "luser";
-      overlayIp = "100.64.0.3";
-      lanIp = "10.12.14.183";
-      trust = "high";
-    };
     h003 = {
       user = "luser";
       overlayIp = "100.64.0.14";
       lanIp = "10.12.14.1";
       trust = "high";
     };
-    # NAS that replaces h002 (new board). LAN address is a static DHCP
+    # NAS (successor of the retired h002). LAN address is a static DHCP
     # reservation on h003 (hosts/h003/_constants.nix).
     h004 = {
       user = "luser";

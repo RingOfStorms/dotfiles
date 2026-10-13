@@ -50,7 +50,7 @@ directories, and domains.
 | Host | Role | Hardware (mem, cpu, gfx)|
 |------|------|----------|
 | **h001** | Primary home server — media, matrix, immich, paperless, vaultwarden, git, LLM gateways, SSO, secrets | OptiPlex 7090 (64GB, i5-11500, Intel UHD Grpahics 750) |
-| **h002** | NAS (multi-disk bcachefs array) | My first PC's 14+ year old mobo in a case with many drives (18GB, i7-3770K, AMD Radeon HD 7950/8950 OEM / R9 280)|
+| **h004** | NAS (bcachefs pool, replicas=2); successor of the retired h002 | Gigabyte B860 DS3H in a Fractal case (32GB, Intel Core Ultra 5 250K+, Intel iGPU)|
 | **h003** | WAN / local networking box | GMKtec M5 PLUS (32GB, AMD Ryzen 7 5825U, AMD Barcelo)|
 | **i001** | Intel NUC testbed | Amazon mini pc (16GB, Intel N95, UHD Graphics)|
 | **lio** | Main workstation | System76 Thelio (64GB, AMD Ryzen 9 9950X, AMD Radeon RX 7900 GRE)|
