@@ -135,16 +135,6 @@
       domain = "gist.joshuabell.xyz";
     };
 
-    # atuin shell-history sync — migrated off o001. Own internal postgres
-    # in a NixOS container; o002 nginx proxies over the tailnet to h001.
-    atuin = {
-      port = 8888;
-      dataDir = "/var/lib/atuin";
-      containerIp = "10.0.0.8";
-      containerIp6 = "fc00::8";
-      domain = "atuin.joshuabell.xyz";
-    };
-
     # vaultwarden — migrated off o001. SQLite, uid/gid 114 (matches o001 so
     # the Phase 0 backup restores 1:1). o002 nginx proxies over the tailnet.
     vaultwarden = {

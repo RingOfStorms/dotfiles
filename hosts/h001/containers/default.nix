@@ -4,7 +4,6 @@
 }:
 {
   imports = [
-    ./atuin.nix
     ./dawarich.nix
     ./forgejo.nix
     ./immich.nix
