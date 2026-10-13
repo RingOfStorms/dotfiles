@@ -23,7 +23,7 @@ IronWolf serials (label the cables): `ZRT2KQXT`, `ZRT2LRT8`, `ZRT2FJ7X`, `ZRT2GA
 
 | File | Role |
 |---|---|
-| `flake.nix` | Host modules. Root on the NVMe via `ringofstorms.impermanence` (bcachefs, **unencrypted**: headless and must reboot unattended; the data pool is unencrypted anyway) |
+| `flake.nix` | Host modules. Root on the NVMe via `ringofstorms.impermanence` (bcachefs, **encrypted**, `usbKey = true`: a bcachefs USB stick with a `/key` file stays plugged in so it unlocks unattended; without the stick it waits for the passphrase on the console). The data pool itself is not encrypted |
 | `impermanence.nix` | What survives a reboot (shared sets + secrets, `/var/lib/nfs`, smartd state). SSH host keys are persisted by the module itself (`/persist/etc/ssh`) |
 | `data-pool.nix` | `/data` mount + smartd. `/data` is only declared when `dataPool.enable = true` in `_constants.nix` |
 | `nfs-data.nix`, `nfs-data-users-nixarr.nix` | Copied from h002; only imported when `dataPool.enable = true` |
@@ -48,12 +48,15 @@ Only the NVMe (and optionally the new WD) connected. No IronWolfs.
    C-states; VT-x on; disable RGB/Wi-Fi/Bluetooth if wired. Confirm the NVMe's M.2 slot doesn't
    disable a SATA port (manual).
 2. Boot the installer ISO (`utilities/nixos-install-disko/readme.md`), SSH in.
-3. Disko single-drive, **unencrypted**, target the NVMe by id:
-   `/dev/disk/by-id/nvme-…` (check `ls -l /dev/disk/by-id/ | grep nvme`).
+3. Disko single-drive, **encrypted** (choose a strong passphrase and store it in the password
+   manager), target the NVMe by id: `/dev/disk/by-id/nvme-…` (check `ls -l /dev/disk/by-id/ | grep nvme`).
+   Make the USB unlock stick now with the same passphrase (`utilities/nixos-install-disko/usb_key.md`),
+   label it "h004 key", and leave it in a rear USB port for good.
 4. `nixos-generate-config --no-filesystems --root /mnt`; copy the generated
    `hardware-configuration.nix` over the placeholder here.
 5. `lsblk -o name,uuid` → fill `boot`/`primary`/`swap` in `flake.nix` (replace the `TODO-*`).
-6. Commit, then `nixos-install --flake <repo>/hosts/h004#h004`.
+6. Commit, then `nixos-install --flake <repo>/hosts/h004#h004`. First boot: confirm it unlocks
+   from the stick with no prompt; then pull the stick once and confirm the passphrase prompt works.
 7. **Do not** copy h002's identity yet. h004 enrolls as its own node:
    create its machine identity in Zitadel / sec-agent like any new host (install readme, step 7),
    join the tailnet, then set `host.overlayIp` in `_constants.nix` and the `h004` entry in
@@ -76,12 +79,13 @@ Only the NVMe (and optionally the new WD) connected. No IronWolfs.
    then `sudo poweroff`.
 4. Move the IronWolfs to h004's **onboard** SATA ports (not the Vantec card), using only the
    RM1000x's own SATA power cables.
-5. Boot h004 (still `dataPool.enable = false`, so nothing mounts). Check the pool with **read-only,
-   no upgrade**:
+5. Boot h004 (still `dataPool.enable = false`, so nothing mounts). Check the pool with **no writes at
+   all**: `ro` alone still allows journal replay, `nochanges` blocks every write, and
+   `version_upgrade=none` blocks format upgrades:
    ```sh
    lsblk -o NAME,SIZE,MODEL,SERIAL
    sudo mkdir -p /mnt/pooltest
-   sudo mount -t bcachefs -o ro,version_upgrade=none UUID=53a26b95-941b-4f41-b049-c166905ed8c2 /mnt/pooltest
+   sudo mount -t bcachefs -o ro,nochanges,version_upgrade=none UUID=53a26b95-941b-4f41-b049-c166905ed8c2 /mnt/pooltest
    ls /mnt/pooltest; bcachefs fs usage -h /mnt/pooltest   # 4 devices, undegraded 2x
    sudo dmesg | grep -i bcachefs | tail -30
    sudo umount /mnt/pooltest

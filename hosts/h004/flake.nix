@@ -47,9 +47,12 @@
                 primary = "/dev/disk/by-uuid/TODO-BCACHEFS";
                 swap = "/dev/disk/by-uuid/TODO-SWAP";
               };
-              # Headless NAS that must come back after a power cut: unencrypted
-              # root (the data pool is unencrypted anyway).
-              encrypted = false;
+              # Encrypted root, unlocked at boot by the bcachefs USB key stick
+              # (utilities/nixos-install-disko/usb_key.md), which stays plugged
+              # in so the NAS comes back unattended after a power cut. Without
+              # the stick it falls back to a console passphrase prompt.
+              encrypted = true;
+              usbKey = true;
             };
           })
           (import ./impermanence.nix {
