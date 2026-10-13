@@ -50,9 +50,7 @@
       domain = "notes.joshuabell.xyz";
     };
 
-    beszelHub = {
-      port = 8090;
-    };
+    beszelHub.port = 8090; # floating container (containers/beszel), tailnet IP only
 
     # `sec` — the secrets manager server. Runs on h001 (port 8300,
     # secrets.joshuabell.xyz). Replaced the old OpenBao server that used to

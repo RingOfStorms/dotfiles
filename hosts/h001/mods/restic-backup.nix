@@ -76,8 +76,9 @@ in
       # backup API from the host side (works for any container kind, needs no
       # sqlite3 inside). restic would otherwise copy live db/-wal pairs that
       # can disagree. Restore from staging/sqlite, not the live file.
-      rm -rf ${staging}/sqlite ${staging}/sec
+      rm -rf ${staging}/sqlite ${staging}/sec ${staging}/sqlite-excludes
       install -d -m700 ${staging}/sqlite ${staging}/sec
+      : > ${staging}/sqlite-excludes
       ${pkgs.findutils}/bin/find ${dataRoot} -xdev -type f \
         \( -name '*.db' -o -name '*.sqlite' -o -name '*.sqlite3' \) \
         -not -path '*/postgres/*' -not -path '*/postgresql/*' -print0 |
@@ -86,6 +87,7 @@ in
         out="${staging}/sqlite''${db#${dataRoot}}"
         install -d -m700 "$(dirname "$out")"
         ${pkgs.sqlite}/bin/sqlite3 "$db" ".timeout 30000" ".backup '$out'"
+        printf '%s\n' "$db" "$db-wal" "$db-shm" "$db-journal" >> ${staging}/sqlite-excludes
         # an idle WAL db gets fresh -wal/-shm files from this open; keep them
         # owned like the db, or the (non-root) app can no longer write
         for f in "$db-wal" "$db-shm"; do [ ! -e "$f" ] || chown --reference="$db" "$f"; done
@@ -117,17 +119,6 @@ in
       "${dataRoot}/*/postgres"
       "${dataRoot}/atuin/postgresql/[0-9]*"
       "${dataRoot}/minecraft/postgresql/[0-9]*"
-      # live SQLite db/-wal/-shm: inconsistent hot; staging/sqlite holds the
-      # online-backup copies
-      "${dataRoot}/**/*.db"
-      "${dataRoot}/**/*.db-wal"
-      "${dataRoot}/**/*.db-shm"
-      "${dataRoot}/**/*.sqlite"
-      "${dataRoot}/**/*.sqlite-wal"
-      "${dataRoot}/**/*.sqlite-shm"
-      "${dataRoot}/**/*.sqlite3"
-      "${dataRoot}/**/*.sqlite3-wal"
-      "${dataRoot}/**/*.sqlite3-shm"
       # regenerable
       "${dataRoot}/immich/mlcache"
       "${dataRoot}/open-webui/data/hf_home"
@@ -142,6 +133,8 @@ in
 
     extraBackupArgs = [
       "--exclude-caches"
+      # live SQLite files the prepare step copied (staging/sqlite holds them)
+      "--exclude-file=${staging}/sqlite-excludes"
       # Pick the parent snapshot by host+tag, not host+paths: the default
       # (host,paths) finds no parent whenever the path list changes (services
       # moving to /srv/containers), forcing a full multi-hour re-read.
