@@ -226,12 +226,6 @@
       domain = "puzzles.joshuabell.xyz";
     };
 
-    etebase = {
-      dataDir = "/var/lib/etebase-server";
-      domain = "etebase.joshuabell.xyz";
-      webDomain = "pim.joshuabell.xyz";
-    };
-
     nixarr = {
       containerName = "arr";
       jellyfinPort = 8096;

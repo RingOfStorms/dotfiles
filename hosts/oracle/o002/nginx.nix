@@ -220,18 +220,6 @@ in
             proxyPass = "http://${upstream}";
           };
         };
-        "etebase.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://${upstream}";
-            extraConfig = ''
-              client_max_body_size 75M;
-            '';
-          };
-        };
-        "pim.${domain}" = proxyToUpstream;
         # ── life — Life server (h001 container) ─────────────────────────
         # Spelled out rather than proxyToUpstream: blob uploads are up to
         # 100 MiB and streamed (no request buffering), and downloads plus the

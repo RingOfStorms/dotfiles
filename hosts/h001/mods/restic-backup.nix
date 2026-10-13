@@ -1,4 +1,4 @@
-# restic backup of h001's critical data: immich, paperless, dawarich, etebase,
+# restic backup of h001's critical data: immich, paperless, dawarich,
 # plus manual archives in ~luser/backups (`cnt backup` tarballs etc.).
 #
 # The repository, password and backend credentials all come from the
@@ -39,8 +39,6 @@ in
       for ct in immich paperless dawarich; do
         ${pkgs.nixos-container}/bin/nixos-container run "$ct" -- systemctl start postgresqlBackup.service
       done
-      # Consistent copy of etebase's live SQLite database.
-      ${lib.getExe pkgs.sqlite} ${s.etebase.dataDir}/db.sqlite3 ".backup '${staging}/etebase.sqlite3'"
     '';
 
     paths = [
@@ -54,8 +52,6 @@ in
       "${s.paperless.varLibDir}/backups/postgres"
       # dawarich: uploads, secret key base, pg_dumpall (under backups/)
       s.dawarich.dataDir
-      # etebase: secret.txt + media (live db excluded, staged above)
-      s.etebase.dataDir
       # hand-made archives (cnt backup tarballs, pre-migration snapshots)
       "/home/luser/backups"
     ];
@@ -64,13 +60,11 @@ in
       # live database clusters / caches (dumps are backed up instead)
       "${s.dawarich.dataDir}/postgres"
       "${s.dawarich.dataDir}/redis"
-      "${s.etebase.dataDir}/db.sqlite3*"
       # regenerable
       "${s.immich.dataDir}/media/thumbs"
       "${s.immich.dataDir}/media/encoded-video"
       "${s.paperless.dataDir}/media/documents/thumbnails"
       "${s.paperless.varLibDir}/data/index"
-      "${s.etebase.dataDir}/static"
     ];
 
     extraBackupArgs = [

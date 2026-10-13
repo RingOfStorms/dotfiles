@@ -239,20 +239,6 @@ in
               icon = "mdi-lock";
             };
           }
-          {
-            "Etebase" = {
-              description = "Encrypted Sync";
-              href = "https://${s.etebase.domain}";
-              icon = "mdi-sync";
-            };
-          }
-          {
-            "PIM" = {
-              description = "Etebase Web";
-              href = "https://${s.etebase.webDomain}";
-              icon = "mdi-contacts";
-            };
-          }
         ];
       }
       {

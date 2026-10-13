@@ -211,7 +211,6 @@ rec {
     "sso"
     "gist"
     "git"
-    "etebase"
     "photos"
     "location"
     "matrix"
