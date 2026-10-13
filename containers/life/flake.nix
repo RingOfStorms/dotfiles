@@ -10,7 +10,7 @@
     # ... the guest runs the nixpkgs rev h001 runs today (postgresql_18 as before).
     guestpkgs.url = "github:nixos/nixpkgs/6fcc160353f63555b560f25588925133c8f61f2a";
     # Locked to the rev h001 runs today (4ef30d9); bump with `nix flake update life`.
-    life.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/life.git?rev=4ef30d9189aa25b1d710f2f8fb65a5274aa6bf52";
+    life.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/life.git";
   };
 
   outputs =
