@@ -74,6 +74,11 @@ in
 
     extraBackupArgs = [
       "--exclude-caches"
+      # Pick the parent snapshot by host+tag, not host+paths: the default
+      # (host,paths) finds no parent whenever the path list changes (services
+      # moving to /srv/containers), forcing a full multi-hour re-read.
+      "--group-by"
+      "host,tags"
       "--tag"
       "h001"
     ];
