@@ -185,7 +185,7 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 | zitadel (SSO) | Keep | h001 (don't float) | sec-agent and oauth2-proxy authenticate against it. Postgres is bind-mounted from the host; master key outside sec-agent. Move only deliberately, never with sec down. |
 | sec (secrets_manager server) | Keep | h001 (don't float) | Every host's sec-agent depends on it; it depends on zitadel. |
 | oauth2-proxy | **Live** (in trilium) | same host as trilium | Gate for trilium. |
-| beszel hub | Keep | h001, or h003 | Every agent hard-codes `HUB_URL=http://100.64.0.13:8090`; switch agents to a DNS name before ever moving it. |
+| beszel hub | **Live** h001 2026-10-13 (789b4a53) | h001 (pinned) | `containers/beszel`, binds 100.64.0.13:8090 (host network). Agents still hard-code that IP: give them a DNS name that follows the hub before ever `cnt move`-ing it. Old `/var/lib/private/beszel-hub` awaiting delete. |
 | host postgresql 17 | Retire | — | Shared DB for host modules. Disappears as services move into containers with their own postgres (`pg_dump` per service, never file copies of the shared cluster). |
 | restic-backup | **Reworked** 2026-10-13 (b8588f6c) | — | Runs every `service.nix` `backupHook` whose unit is active on h001 (skips others; a failing hook fails the run), then backs up all of `/srv/containers` (live PG clusters + caches excluded) plus wd10 media and `~luser/backups`. `--group-by host,tags` for backup and prune. |
 | homepage-dashboard (h001, joe) | Decide | anywhere | Hard-coded links; trivial either way. |
@@ -264,7 +264,7 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
    - o002 vhosts hard-code upstream tailnet IPs → proxy to a name instead.
    - dnsmasq-tailnet's `h001Subdomains`/`lioSubdomains` in `fleet.nix` →
      generate from `service.nix` hosts (or have the CLI update it).
-   - beszel `HUB_URL` → DNS name.
+   - beszel `HUB_URL` → DNS name (hub floated but pinned to h001 until then).
    - TLS on the target: floating vhosts read
      `/var/lib/acme/joshuabell.xyz/{fullchain,key}.pem`, which only h001 has
      (h003 has no `/var/lib/acme`), so `nginx -t` would fail there. Provision
