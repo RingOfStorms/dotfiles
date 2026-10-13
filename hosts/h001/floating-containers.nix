@@ -13,6 +13,7 @@
     capabilities = [
       "nfs-h002" # /nfs/h002 autofs mount of the NAS
       "intel-qsv" # /dev/dri, 11th gen iGPU (hardware-transcoding.nix)
+      "wd10" # /drives/wd10 local 10T ext4 (immich, paperless media)
     ];
     # The media stack only runs while the NAS is reachable: take h002 down
     # and `arr` stops within ~a minute; bring it back and the guard starts

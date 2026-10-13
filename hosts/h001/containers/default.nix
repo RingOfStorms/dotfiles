@@ -4,8 +4,6 @@
 }:
 {
   imports = [
-    ./immich.nix
-    ./paperless.nix
     ./zitadel.nix
   ];
 

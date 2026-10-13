@@ -164,22 +164,6 @@
         "type": "github"
       }
     },
-    "immich-nixpkgs": {
-      "locked": {
-        "lastModified": 1780243769,
-        "narHash": "sha256-x5UQuRsH3MqI0U9afaXSNqzTPSeZlRLvFAav2Ux1pNw=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "331800de5053fcebacf6813adb5db9c9dca22a0c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1765838191,
@@ -852,22 +836,6 @@
         "type": "github"
       }
     },
-    "paperless-nixpkgs": {
-      "locked": {
-        "lastModified": 1780243769,
-        "narHash": "sha256-x5UQuRsH3MqI0U9afaXSNqzTPSeZlRLvFAav2Ux1pNw=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "331800de5053fcebacf6813adb5db9c9dca22a0c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
     "root": {
       "inputs": {
         "beszel": "beszel",
@@ -875,9 +843,7 @@
         "common": "common",
         "containers": "containers",
         "home-manager": "home-manager",
-        "immich-nixpkgs": "immich-nixpkgs",
         "nixpkgs": "nixpkgs_4",
-        "paperless-nixpkgs": "paperless-nixpkgs",
         "ros_neovim": "ros_neovim",
         "secrets_manager": "secrets_manager",
         "zitadel-nixpkgs": "zitadel-nixpkgs"

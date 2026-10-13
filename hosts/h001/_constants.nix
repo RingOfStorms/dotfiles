@@ -29,29 +29,11 @@
       domain = "sso.joshuabell.xyz";
     };
 
-    immich = {
-      port = 2283;
-      uid = 916;
-      gid = 916;
-      dataDir = "/drives/wd10/immich";
-      varLibDir = "/var/lib/immich";
-      containerIp = "10.0.0.4";
-      containerIp6 = "fc00::4";
-      domain = "photos.joshuabell.xyz";
-    };
+    immich.domain = "photos.joshuabell.xyz"; # floating container (containers/immich)
 
     dawarich.domain = "location.joshuabell.xyz"; # floating container (containers/dawarich)
 
-    paperless = {
-      port = 28981;
-      uid = 915;
-      gid = 915;
-      dataDir = "/drives/wd10/paperless";
-      varLibDir = "/var/lib/paperless";
-      containerIp = "10.0.0.7";
-      containerIp6 = "fc00::7";
-      domain = "docs.joshuabell.xyz";
-    };
+    paperless.domain = "docs.joshuabell.xyz"; # floating container (containers/paperless)
 
     # Floating container: containers/opengist (port, vhost live there).
     opengist = {

@@ -1,5 +1,6 @@
-# restic backup of h001's critical data: immich, paperless, dawarich,
-# plus manual archives in ~luser/backups (`cnt backup` tarballs etc.).
+# restic backup of h001's critical data: every floating container's persist
+# dir (/srv/containers), the wd10 media of immich/paperless, plus manual
+# archives in ~luser/backups (`cnt backup` tarballs etc.).
 #
 # The repository, password and backend credentials all come from the
 # `restic_h001_env_2026-10-01` EnvironmentFile (sec-agent.nix), so the
@@ -9,16 +10,47 @@
 # new repository must be created by hand first: `sudo restic-h001 init`.
 # Manual run: `sudo systemctl start restic-backups-h001`.
 #
-# Databases are backed up as dumps, never as live cluster directories.
+# Databases are backed up as dumps, never as live cluster directories: before
+# the snapshot, each floating service that is running HERE gets its
+# service.nix `backupHook` (pg_dumpall etc. into a persisted dir), the same
+# hook `cnt backup` runs. A failing hook fails the backup. Services not
+# running on h001 (stopped, or moved with `cnt move`) are skipped; their
+# data on this host is then whatever was left behind.
 {
   pkgs,
   lib,
-  constants,
   ...
 }:
 let
-  s = constants.services;
   staging = "/var/lib/restic-staging";
+  containersDir = ../../../containers;
+  dataRoot = "/srv/containers";
+  entries = builtins.readDir containersDir;
+  services = map (n: import (containersDir + "/${n}/service.nix")) (
+    builtins.filter (
+      n: entries.${n} == "directory" && builtins.pathExists (containersDir + "/${n}/service.nix")
+    ) (builtins.attrNames entries)
+  );
+  withHook = builtins.filter (s: (s.backupHook or null) != null) services;
+  hookCmd =
+    s:
+    let
+      kind = s.kind or "nixos";
+      unit = if kind == "podman" then "fleet-${s.name}.service" else "container@${s.name}.service";
+      run =
+        if kind == "podman" then
+          "${pkgs.podman}/bin/podman exec ${s.name} sh -c ${lib.escapeShellArg s.backupHook}"
+        else
+          "${pkgs.nixos-container}/bin/nixos-container run ${s.name} -- bash -lc ${lib.escapeShellArg s.backupHook}";
+    in
+    ''
+      if [ "$(${pkgs.systemd}/bin/systemctl is-active ${unit} || true)" = active ]; then
+        echo "backup hook: ${s.name}" >&2
+        ${run}
+      else
+        echo "backup hook: ${s.name} not running on this host, skipped" >&2
+      fi
+    '';
 in
 {
   systemd.tmpfiles.rules = [ "d ${staging} 0700 root root - -" ];
@@ -34,42 +66,37 @@ in
 
     backupPrepareCommand = ''
       set -eu
-      # Fresh pg_dumpall in each container (postgresqlBackup is a oneshot,
-      # so this blocks until the dump is written).
-      for ct in immich paperless; do
-        ${pkgs.nixos-container}/bin/nixos-container run "$ct" -- systemctl start postgresqlBackup.service
-      done
-      # dawarich is a floating container (cnt): skip only if it is not running
-      # here (stopped or moved); if it runs, a failed dump fails the backup.
-      if [ "$(${pkgs.systemd}/bin/systemctl is-active container@dawarich.service || true)" = active ]; then
-        ${pkgs.nixos-container}/bin/nixos-container run dawarich -- systemctl start postgresqlBackup.service
-      else
-        echo "dawarich not running on this host; pg dump skipped" >&2
-      fi
+      ${lib.concatMapStrings hookCmd withHook}
     '';
 
     paths = [
       staging
-      # immich: originals + immich's own DB dumps (media/backups), pg_dumpall
-      "${s.immich.dataDir}/media"
-      "${s.immich.varLibDir}/backups/postgres"
-      # paperless: documents + consume dir, app data, pg_dumpall
-      s.paperless.dataDir
-      "${s.paperless.varLibDir}/data"
-      "${s.paperless.varLibDir}/backups/postgres"
-      # dawarich (floating container): uploads + secret key base, pg_dumpall
-      "/srv/containers/dawarich/data"
-      "/srv/containers/dawarich/pgdumps"
+      # every floating container's persist dirs (dumps from the hooks above)
+      dataRoot
+      # immich originals + immich's own DB dumps (media/backups)
+      "/drives/wd10/immich/media"
+      # paperless documents + consume dir
+      "/drives/wd10/paperless"
       # hand-made archives (cnt backup tarballs, pre-migration snapshots)
       "/home/luser/backups"
     ];
 
     exclude = [
+      # live database clusters: inconsistent when copied hot; the hooks'
+      # dumps are what gets restored
+      "${dataRoot}/*/postgres"
+      "${dataRoot}/atuin/postgresql/[0-9]*"
+      "${dataRoot}/minecraft/postgresql/[0-9]*"
       # regenerable
-      "${s.immich.dataDir}/media/thumbs"
-      "${s.immich.dataDir}/media/encoded-video"
-      "${s.paperless.dataDir}/media/documents/thumbnails"
-      "${s.paperless.varLibDir}/data/index"
+      "${dataRoot}/immich/mlcache"
+      "${dataRoot}/open-webui/data/hf_home"
+      "${dataRoot}/open-webui/data/transformers_home"
+      "${dataRoot}/open-webui/data/xet"
+      "${dataRoot}/open-webui/data/models--*"
+      "${dataRoot}/paperless/data/index"
+      "/drives/wd10/immich/media/thumbs"
+      "/drives/wd10/immich/media/encoded-video"
+      "/drives/wd10/paperless/media/documents/thumbnails"
     ];
 
     extraBackupArgs = [
@@ -92,5 +119,8 @@ in
     ];
   };
 
-  systemd.services.restic-backups-h001.unitConfig.RequiresMountsFor = [ "/drives/wd10" ];
+  systemd.services.restic-backups-h001.unitConfig.RequiresMountsFor = [
+    "/drives/wd10"
+    dataRoot
+  ];
 }

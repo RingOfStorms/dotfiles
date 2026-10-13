@@ -120,6 +120,10 @@ in
       }
       // (if guestNixpkgs == null then { } else { nixpkgs = guestNixpkgs; })
       // extraContainerConfig;
+      # Don't start (and stop) when a persist/bind source's mount is missing,
+      # e.g. an unmounted /drives/wd10 would otherwise be bound as an empty dir.
+      systemd.services."container@${svc.name}".unitConfig.RequiresMountsFor =
+        map (b: b.host) (persistList svc) ++ map (b: b.host) binds;
     };
 
   # A deployable podman service. Produces a store path with:
