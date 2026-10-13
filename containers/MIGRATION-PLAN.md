@@ -187,7 +187,7 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 | oauth2-proxy | **Live** (in trilium) | same host as trilium | Gate for trilium. |
 | beszel hub | Keep | h001, or h003 | Every agent hard-codes `HUB_URL=http://100.64.0.13:8090`; switch agents to a DNS name before ever moving it. |
 | host postgresql 17 | Retire | — | Shared DB for host modules. Disappears as services move into containers with their own postgres (`pg_dump` per service, never file copies of the shared cluster). |
-| restic-backup | Rework | — | Reaches into immich/paperless (containers) and /srv/containers/dawarich (floating; dump step skipped if it moved). Replace with per-service `backupHook` + `cnt backup`, or a central job that asks `cnt` where each service runs. |
+| restic-backup | **Reworked** 2026-10-13 (b8588f6c) | — | Runs every `service.nix` `backupHook` whose unit is active on h001 (skips others; a failing hook fails the run), then backs up all of `/srv/containers` (live PG clusters + caches excluded) plus wd10 media and `~luser/backups`. `--group-by host,tags` for backup and prune. |
 | homepage-dashboard (h001, joe) | Decide | anywhere | Hard-coded links; trivial either way. |
 
 ### Apps — good floating candidates
@@ -214,8 +214,8 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 
 | Service | Decision | Ideal host | Notes |
 |---|---|---|---|
-| immich | Keep | h001 | postgres 16 + media on `/drives/wd10` + ML cache (CPU). |
-| paperless | Keep | h001 | postgres 16 + docs/consume on `/drives/wd10`. |
+| immich | **Live** h001 2026-10-13 (b8588f6c) | h001 | `containers/immich`: PG16 + vchord, ML cache, `requires = [ "wd10" ]`; media bound from `/drives/wd10/immich/media`. 58410 assets match. Old `/var/lib/immich` awaiting delete. |
+| paperless | **Live** h001 2026-10-13 (b8588f6c) | h001 | `containers/paperless`: PG16, tika, gotenberg on 3002; media/consume bound from `/drives/wd10/paperless`. 225 docs match. Old `/var/lib/paperless` awaiting delete. |
 | dawarich | **Live** h001 2026-10-13 | h001 | `containers/dawarich` (PG 17 + postgis, redis, data; 657582 points match). Moved off `/drives/wd10` to `/srv/containers` (1.6 GB, so no wd10 requirement). restic backs up `data` + `pgdumps`. |
 
 `move` copies `/srv/containers/<svc>` only. Options: (a) put media under it
@@ -254,8 +254,7 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 1. **Host requirements** — **done**: `requires = [ ... ]` in `service.nix`;
    the host module advertises `capabilities`; `deploy`/`move` refuse early
    (before stopping anything) when the target lacks one. In use: `arr`
-   (`nfs-h002`, `intel-qsv`). Still to add: `wd10` on h001 (for
-   immich/paperless). `nvidia` on joe, required by localai (48ab0a6a).
+   (`nfs-h002`, `intel-qsv`). `wd10` on h001 (immich, paperless; b8588f6c). `nvidia` on joe, required by localai (48ab0a6a).
 2. **Secrets into containers** — **partly done**: services bind
    `/var/lib/secrets_manager_hydrated/<name>` read-only (h001's
    `sec-agent.nix` grants them; `cnt restart <svc>` after rotation). Not yet
@@ -299,9 +298,8 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
    done 2026-10-13; etebase removed 2026-10-13.
 4. ~~forgejo~~ done 2026-10-13; matrix removed.
 4a. ~~Cut the *arr stack over to `arr`~~ **Done 2026-10-12.**
-5. ~~§4.1 requirements~~ (add `wd10`), then immich/paperless (dawarich done 2026-10-13) as
-   containers on h001. Then rework restic-backup and retire h001's shared
-   postgres.
+5. ~~§4.1 `wd10`, immich/paperless, restic rework~~ done 2026-10-13 (b8588f6c).
+   Next: retire h001's shared postgres.
 6. GPU services on joe: ~~localai as podman-kind~~ live; ~~nvidia capability + localai `requires`~~ done.
 7. **Last** (no off-host moves planned): §4.3 routing + target TLS certs,
    then `cnt move` services to their ideal hosts. Until then every migration
