@@ -106,7 +106,7 @@ in
         appearance = {
           alwaysShowClock = true;
           showMediaControls = true;
-          wallpaper = ../../../hosts/_shared_assets/wallpapers/pixel_night.png;
+          wallpaper = "${../../../hosts/_shared_assets/wallpapers/pixel_night.png}"; # interpolate: keep store context (see workspace.wallpaper)
           # wallpaperPlainColor = "0,64,174,256";
         };
         autoLock = false;
@@ -222,7 +222,9 @@ in
           hiding = "dodgewindows";
           widgets = [
             "org.kde.plasma.kickoff"
-            "org.kde.plasma.icontasks"
+            (if cfg.defaultBrowser == null then "org.kde.plasma.icontasks" else {
+              iconTasks.launchers = [ "applications:${cfg.defaultBrowser}" ];
+            })
           ];
         }
       ];
@@ -301,9 +303,13 @@ in
         theme = "breeze-dark";
         cursor.theme = "breeze_cursors";
       } // optionalAttrs ((builtins.length cfg.wallpapers) > 0) {
-        wallpaper = cfg.wallpapers;
+        # Interpolate (not toString) so each image is copied into the store
+        # WITH context and lands in the system closure. plasma-manager uses
+        # `toString`, which drops context: the path exists on the build host
+        # but is missing on deployed targets, and Plasma falls back to the
+        # stock wallpaper ("unknown wallpaper provider type").
+        wallpaper = map (p: "${p}") cfg.wallpapers;
       };
-
       configFile = {
         kwalletrc.Wallet.Enabled = false;
         plasmanotifyrc.Notifications.PopupPosition = "TopRight";
@@ -323,6 +329,8 @@ in
             "exclude folders" = "$HOME";
           };
         };
+      } // optionalAttrs (cfg.defaultBrowser != null) {
+        kdeglobals.General.BrowserApplication = cfg.defaultBrowser;
       };
     };
 

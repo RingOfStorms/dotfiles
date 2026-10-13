@@ -63,6 +63,7 @@
               enable = true;
               gpu.intel.enable = true;
               sddm.autologinUser = primaryUser; # disk is encrypted; passphrase gates boot
+              defaultBrowser = "firefox.desktop";
               wallpapers = [
                 ../../hosts/_shared_assets/wallpapers/pixel_rain.png
               ];

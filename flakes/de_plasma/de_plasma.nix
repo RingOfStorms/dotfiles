@@ -59,6 +59,18 @@ in
       '';
     };
 
+    defaultBrowser = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      example = "firefox.desktop";
+      description = ''
+        Desktop file of the default browser. When set, it becomes KDE's
+        BrowserApplication and the only pinned launcher in the bottom task
+        manager (instead of KDE's stock pins, which include any installed
+        Chrome). When null, KDE defaults are left untouched.
+      '';
+    };
+
     sddm.autologinUser = mkOption {
       type = types.nullOr types.str;
       default = null;
