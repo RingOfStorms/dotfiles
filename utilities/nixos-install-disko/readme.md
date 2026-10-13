@@ -379,6 +379,30 @@ Use the exact store path that was copied. `$CLOSURE` only exists in the
 workstation shell. `nixos-install` finds the path already present in the
 `/mnt` store, so it doesn't download it again.
 
+### Step 6b: Seed the nixos-config checkout
+
+`~/.config/nixos-config` is persisted (impermanence essentials). At first boot
+impermanence creates `/persist/home/<user>/.config/nixos-config` **empty** and
+bind-mounts it, so a checkout made after boot has to be copied in by hand. Seed
+it before rebooting instead, from the workstation, `.git` included (uncommitted
+work comes along too):
+
+```sh
+HOST_USER=luser   # the host's primaryUser (uid 1000, group users)
+DEST=/mnt/persist/home/$HOST_USER/.config/nixos-config
+# rsync won't create the missing parent dirs on a fresh install
+ssh -i ~/.ssh/<installer-key> root@$IP "install -d $DEST"
+rsync -a --exclude='/result*' -e "ssh -i ~/.ssh/<installer-key>" \
+  ~/.config/nixos-config/ root@$IP:$DEST/
+ssh -i ~/.ssh/<installer-key> root@$IP \
+  "chown -R 1000:100 /mnt/persist/home/$HOST_USER && chmod 700 /mnt/persist/home/$HOST_USER"
+```
+
+Use numeric IDs: the installer has no `luser` account. Every parent directory
+under `/persist/home/<user>` must be owned by the user, or home-manager and the
+bind mount fail with permission errors. Check the uid with
+`nix eval ./hosts/<host>#nixosConfigurations.<host>.config.users.users.<user>.uid`.
+
 ## Step 7 (sec-agent): first boot
 
 For hosts that import `hosts/sec-agent.nix`. The agent authenticates to
