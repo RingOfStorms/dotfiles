@@ -4,8 +4,6 @@
 }:
 {
   imports = [
-    ./dawarich.nix
-    ./forgejo.nix
     ./immich.nix
     ./paperless.nix
     ./zitadel.nix

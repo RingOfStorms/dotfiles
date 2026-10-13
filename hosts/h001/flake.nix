@@ -6,8 +6,6 @@
     # nixpkgs-unstable.url = "github:wrvsrx/nixpkgs/fix-open-webui";
     zitadel-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     beszel-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    forgejo-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    dawarich-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     immich-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     paperless-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     # Use relative to get current version for testing

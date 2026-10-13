@@ -36,9 +36,12 @@ in
       set -eu
       # Fresh pg_dumpall in each container (postgresqlBackup is a oneshot,
       # so this blocks until the dump is written).
-      for ct in immich paperless dawarich; do
+      for ct in immich paperless; do
         ${pkgs.nixos-container}/bin/nixos-container run "$ct" -- systemctl start postgresqlBackup.service
       done
+      # dawarich is a floating container (cnt); skip it if stopped/moved.
+      ${pkgs.nixos-container}/bin/nixos-container run dawarich -- systemctl start postgresqlBackup.service \
+        || echo "dawarich pg dump skipped (container not running here)" >&2
     '';
 
     paths = [
@@ -50,16 +53,14 @@ in
       s.paperless.dataDir
       "${s.paperless.varLibDir}/data"
       "${s.paperless.varLibDir}/backups/postgres"
-      # dawarich: uploads, secret key base, pg_dumpall (under backups/)
-      s.dawarich.dataDir
+      # dawarich (floating container): uploads + secret key base, pg_dumpall
+      "/srv/containers/dawarich/data"
+      "/srv/containers/dawarich/pgdumps"
       # hand-made archives (cnt backup tarballs, pre-migration snapshots)
       "/home/luser/backups"
     ];
 
     exclude = [
-      # live database clusters / caches (dumps are backed up instead)
-      "${s.dawarich.dataDir}/postgres"
-      "${s.dawarich.dataDir}/redis"
       # regenerable
       "${s.immich.dataDir}/media/thumbs"
       "${s.immich.dataDir}/media/encoded-video"

@@ -19,16 +19,7 @@
   };
 
   services = {
-    forgejo = {
-      port = 3000;
-      sshPort = 3032;
-      uid = 115;
-      gid = 115;
-      dataDir = "/var/lib/forgejo";
-      containerIp = "10.0.0.2";
-      containerIp6 = "fc00::2";
-      domain = "git.joshuabell.xyz";
-    };
+    forgejo.domain = "git.joshuabell.xyz"; # floating container (containers/forgejo)
 
     zitadel = {
       port = 8080;
@@ -49,17 +40,7 @@
       domain = "photos.joshuabell.xyz";
     };
 
-    dawarich = {
-      port = 3001;
-      uid = 977;
-      gid = 977;
-      redisUid = 976;
-      redisGid = 976;
-      dataDir = "/drives/wd10/dawarich";
-      containerIp = "10.0.0.5";
-      containerIp6 = "fc00::5";
-      domain = "location.joshuabell.xyz";
-    };
+    dawarich.domain = "location.joshuabell.xyz"; # floating container (containers/dawarich)
 
     paperless = {
       port = 28981;

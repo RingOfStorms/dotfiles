@@ -90,22 +90,6 @@
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       }
     },
-    "dawarich-nixpkgs": {
-      "locked": {
-        "lastModified": 1780243769,
-        "narHash": "sha256-x5UQuRsH3MqI0U9afaXSNqzTPSeZlRLvFAav2Ux1pNw=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "331800de5053fcebacf6813adb5db9c9dca22a0c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
     "extra-container": {
       "inputs": {
         "flake-utils": "flake-utils",
@@ -158,22 +142,6 @@
       "original": {
         "owner": "numtide",
         "repo": "flake-utils",
-        "type": "github"
-      }
-    },
-    "forgejo-nixpkgs": {
-      "locked": {
-        "lastModified": 1780243769,
-        "narHash": "sha256-x5UQuRsH3MqI0U9afaXSNqzTPSeZlRLvFAav2Ux1pNw=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "331800de5053fcebacf6813adb5db9c9dca22a0c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
         "type": "github"
       }
     },
@@ -906,8 +874,6 @@
         "beszel-nixpkgs": "beszel-nixpkgs_2",
         "common": "common",
         "containers": "containers",
-        "dawarich-nixpkgs": "dawarich-nixpkgs",
-        "forgejo-nixpkgs": "forgejo-nixpkgs",
         "home-manager": "home-manager",
         "immich-nixpkgs": "immich-nixpkgs",
         "nixpkgs": "nixpkgs_4",
