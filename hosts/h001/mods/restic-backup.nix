@@ -39,9 +39,13 @@ in
       for ct in immich paperless; do
         ${pkgs.nixos-container}/bin/nixos-container run "$ct" -- systemctl start postgresqlBackup.service
       done
-      # dawarich is a floating container (cnt); skip it if stopped/moved.
-      ${pkgs.nixos-container}/bin/nixos-container run dawarich -- systemctl start postgresqlBackup.service \
-        || echo "dawarich pg dump skipped (container not running here)" >&2
+      # dawarich is a floating container (cnt): skip only if it is not running
+      # here (stopped or moved); if it runs, a failed dump fails the backup.
+      if [ "$(${pkgs.systemd}/bin/systemctl is-active container@dawarich.service || true)" = active ]; then
+        ${pkgs.nixos-container}/bin/nixos-container run dawarich -- systemctl start postgresqlBackup.service
+      else
+        echo "dawarich not running on this host; pg dump skipped" >&2
+      fi
     '';
 
     paths = [
