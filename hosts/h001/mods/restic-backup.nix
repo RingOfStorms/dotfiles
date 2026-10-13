@@ -83,6 +83,8 @@ in
       "h001"
     ];
     pruneOpts = [
+      # Same grouping as backup: one retention series across path-list changes.
+      "--group-by host,tags"
       "--keep-daily 7"
       "--keep-weekly 5"
       "--keep-monthly 12"
