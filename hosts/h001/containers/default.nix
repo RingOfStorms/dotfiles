@@ -10,7 +10,6 @@
     ./life.nix
     ./matrix.nix
     ./paperless.nix
-    ./vaultwarden.nix
     ./zitadel.nix
   ];
 

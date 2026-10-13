@@ -135,18 +135,6 @@
       domain = "gist.joshuabell.xyz";
     };
 
-    # vaultwarden — migrated off o001. SQLite, uid/gid 114 (matches o001 so
-    # the Phase 0 backup restores 1:1). o002 nginx proxies over the tailnet.
-    vaultwarden = {
-      port = 8222;
-      uid = 114;
-      gid = 114;
-      dataDir = "/var/lib/vaultwarden";
-      containerIp = "10.0.0.9";
-      containerIp6 = "fc00::9";
-      domain = "vault.joshuabell.xyz";
-    };
-
     # Life — personal life server (Rust server serving its own web client) with
     # its own PostgreSQL 18 inside one NixOS container. The application and its
     # NixOS module come from the life repo's flake; this host supplies the
