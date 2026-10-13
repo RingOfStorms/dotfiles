@@ -12,8 +12,11 @@ host module, never floats).
 ## 1. Where things stand
 
 - Floating today: `arr` (h001, **live since 2026-10-12**: whole media stack,
-  NAS-guarded), `opengist` (h001, 2026-10-12), `atuin` (h001, 2026-10-12), `vaultwarden` (h001, 2026-10-12), `localai` (joe), `minecraft` (h003), test twins
-  `hello-nixos` / `hello-podman` (lio).
+  NAS-guarded), `opengist`, `atuin`, `vaultwarden` (h001, 2026-10-12),
+  `trilium` (+ oauth2-proxy), `searx`, `litellm`, `open-webui`, `puzzles`,
+  `life` (h001, 2026-10-13), `localai` (joe), `minecraft` (h003), test twins
+  `hello-nixos` / `hello-podman` (lio). Old host modules and `/var/lib` data
+  of every migrated service are deleted (backups in `h001:/home/luser/backups`).
 - CLI: `deploy`, `stop` (persists across reboot), `start`, `move`, `backup`
   (asks dir + before stopping), `restore`, `status <svc>`, `ls`, local mode.
   Registered container hosts: h001, h002, h003, lio (+ any host a
@@ -194,7 +197,7 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 | vaultwarden | **Live** | h001 | nixos | `containers/vaultwarden` since 2026-10-12 (data + backups copied 1:1, full-tree checksum verified; uid 114 kept; env secret bound read-only, `cnt restart` after rotation). |
 | atuin | **Live** | h001 | nixos | `containers/atuin` since 2026-10-12 (PG 17 copied 1:1, full-tree checksum verified; host net, idmapped). |
 | forgejo | Keep | h001 or h003 | nixos | Own postgres. SSH on **3032**: o002 stream-forwards it, so update o002 on move. Repos can be large. |
-| opengist | **Live** | h001 | podman | `containers/opengist` since 2026-10-12 (all 123 gists, full-tree checksum verified). Old `/var/lib/opengist` kept until confirmed. |
+| opengist | **Live** | h001 | podman | `containers/opengist` since 2026-10-12 (all 123 gists, full-tree checksum verified). Old `/var/lib/opengist` deleted. |
 | trilium + oauth2-proxy | **Live** h001 2026-10-13 | h003 (together) | nixos | `noAuthentication=true` behind the proxy; also an overlay-only unauthenticated vhost on 9112. Never split across hosts without restricting trilium's port. |
 | open-webui | **Live** h001 2026-10-13 | h003 | nixos | Needs litellm + searx. |
 | litellm | **Live** h001 2026-10-13 | with open-webui | nixos | Stateless; env secret. |
@@ -248,12 +251,16 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 
 ## 4. Capabilities the CLI/module needs before the harder migrations
 
-1. **Host requirements**: `requires = [ "nvidia" "intel-qsv" "wd10" "nfs-h002" ]`
-   in `service.nix`; host module advertises capabilities; `deploy`/`move`
-   refuse early (before stopping anything) when the target lacks one.
-2. **Secrets into containers**: declare needed sec-agent secrets in
-   `service.nix`; bind `/var/lib/secrets_manager_hydrated/<name>` read-only
-   into the container. Target host must hold the same grants.
+1. **Host requirements** — **done**: `requires = [ ... ]` in `service.nix`;
+   the host module advertises `capabilities`; `deploy`/`move` refuse early
+   (before stopping anything) when the target lacks one. In use: `arr`
+   (`nfs-h002`, `intel-qsv`). Still to add: `wd10` on h001 (for
+   immich/paperless/dawarich) and `nvidia` on joe (localai doesn't declare it yet).
+2. **Secrets into containers** — **partly done**: services bind
+   `/var/lib/secrets_manager_hydrated/<name>` read-only (h001's
+   `sec-agent.nix` grants them; `cnt restart <svc>` after rotation). Not yet
+   declared in `service.nix`, so `move` can't check the target holds the
+   same grants.
 3. **Routing that follows a move** (biggest manual step today):
    - o002 vhosts hard-code upstream tailnet IPs → proxy to a name instead.
    - dnsmasq-tailnet's `h001Subdomains`/`lioSubdomains` in `fleet.nix` →
@@ -285,14 +292,18 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 
 ## 6. Suggested order
 
-1. ~~Deprecate n8n, wasabi/ntest, penpot; migrate opengist~~ done 2026-10-12. Decide puzzles/dawarich/
-   matrix/forge/kavita/books usage.
-2. ~~atuin~~ done 2026-10-12. searx + litellm + open-webui (in place on h001).
-3. ~~vaultwarden~~ done 2026-10-12. trilium + oauth2-proxy, etebase (TCP first), life, puzzles.
+1. ~~Deprecate n8n, wasabi/ntest, penpot; migrate opengist~~ done 2026-10-12.
+   Still to decide: dawarich/matrix/kavita/books usage.
+2. ~~atuin~~ done 2026-10-12. ~~searx + litellm + open-webui~~ done 2026-10-13 (in place on h001).
+3. ~~vaultwarden~~ done 2026-10-12. ~~trilium + oauth2-proxy, life, puzzles~~
+   done 2026-10-13; etebase removed 2026-10-13.
 4. forgejo, matrix (in place on h001).
 4a. ~~Cut the *arr stack over to `arr`~~ **Done 2026-10-12.**
-5. §4.1 requirements, then immich/paperless/dawarich as containers on h001.
-6. GPU services on joe as podman-kind with `requires = [ "nvidia" ]`.
+5. ~~§4.1 requirements~~ (add `wd10`), then immich/paperless/dawarich as
+   containers on h001. Then rework restic-backup and retire h001's shared
+   postgres.
+6. GPU services on joe: ~~localai as podman-kind~~ live. Open: add
+   `requires = [ "nvidia" ]` to localai and the `nvidia` capability on joe.
 7. **Last** (no off-host moves planned): §4.3 routing + target TLS certs,
    then `cnt move` services to their ideal hosts. Until then every migration
    is in place on its current host.
