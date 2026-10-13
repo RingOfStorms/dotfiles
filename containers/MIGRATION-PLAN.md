@@ -12,7 +12,7 @@ host module, never floats).
 ## 1. Where things stand
 
 - Floating today: `arr` (h001, **live since 2026-10-12**: whole media stack,
-  NAS-guarded), `opengist` (h001, 2026-10-12), `atuin` (h001, 2026-10-12), `localai` (joe), `minecraft` (h003), test twins
+  NAS-guarded), `opengist` (h001, 2026-10-12), `atuin` (h001, 2026-10-12), `vaultwarden` (h001, 2026-10-12), `localai` (joe), `minecraft` (h003), test twins
   `hello-nixos` / `hello-podman` (lio).
 - CLI: `deploy`, `stop` (persists across reboot), `start`, `move`, `backup`
   (asks dir + before stopping), `restore`, `status <svc>`, `ls`, local mode.
@@ -191,7 +191,7 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 
 | Service | Decision | Ideal host | Kind | Notes |
 |---|---|---|---|---|
-| vaultwarden | Keep | h003 | nixos | SQLite; keep uid/gid 114; env secret from sec-agent. Critical: back up before and after the move. Pre-move backup is of h001:/var/lib/vaultwarden with the service stopped (or `sqlite3 .backup`); `cnt backup` only covers `/srv/containers/vaultwarden`, so use it after the import. |
+| vaultwarden | **Live** | h001 | nixos | `containers/vaultwarden` since 2026-10-12 (data + backups copied 1:1, full-tree checksum verified; uid 114 kept; env secret bound read-only, `cnt restart` after rotation). |
 | atuin | **Live** | h001 | nixos | `containers/atuin` since 2026-10-12 (PG 17 copied 1:1, full-tree checksum verified; host net, idmapped). |
 | forgejo | Keep | h001 or h003 | nixos | Own postgres. SSH on **3032**: o002 stream-forwards it, so update o002 on move. Repos can be large. |
 | opengist | **Live** | h001 | podman | `containers/opengist` since 2026-10-12 (all 123 gists, full-tree checksum verified). Old `/var/lib/opengist` kept until confirmed. |
@@ -283,7 +283,7 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 1. ~~Deprecate n8n, wasabi/ntest, penpot; migrate opengist~~ done 2026-10-12. Decide puzzles/dawarich/
    matrix/forge/kavita/books usage.
 2. ~~atuin~~ done 2026-10-12. Easy floats to h003: searx + litellm + open-webui.
-3. vaultwarden, trilium + oauth2-proxy, etebase (TCP first), life, puzzles.
+3. ~~vaultwarden~~ done 2026-10-12. trilium + oauth2-proxy, etebase (TCP first), life, puzzles.
 4. Build §4.3 routing so moves stop needing o002/dnsmasq edits.
 5. forgejo, matrix.
 5a. ~~Cut the *arr stack over to `arr`~~ **Done 2026-10-12.**
