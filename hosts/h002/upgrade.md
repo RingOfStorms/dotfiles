@@ -70,11 +70,11 @@ dmesg | grep -i bcachefs | tail -50            # any errors?
 for d in /dev/disk/by-id/ata-ST*; do case $d in *-part*) ;; *) smartctl -H -A "$d";; esac; done
 ```
 Record:
-- [ ] by-id path + serial of the 750 GB ST750LX003
-- [ ] Whether it is actually a pool member
-- [ ] Data/metadata replica settings
-- [ ] Free space on the four 12 TB drives is enough to absorb its data
-- [ ] All drives healthy (no reallocated/pending sectors growing)
+- [x] by-id path + serial of the 750 GB ST750LX003 (`ata-ST750LX003-1AC154_W2006302`)
+- [x] Whether it is actually a pool member (yes)
+- [x] Data/metadata replica settings (data=2, metadata=2; on-disk format 1.38)
+- [x] Free space on the four 12 TB drives is enough to absorb its data
+- [ ] All drives healthy (no reallocated/pending sectors growing). Not run yet: h002 has no smartctl; use `nix shell nixpkgs#smartmontools`
 
 ### 3. Remove the 750 GB drive from the pool (only if it is a member)
 ```sh
@@ -84,79 +84,22 @@ bcachefs fs usage -h /data        # confirm its usage is 0 and evacuate complete
 bcachefs device remove "$SSHD"
 bcachefs fs usage -h /data        # confirm it is no longer listed
 ```
-- [ ] Evacuate finished successfully
-- [ ] Remove succeeded and the device is gone from `fs usage`
-- [ ] Only now is it safe to physically disconnect it
+- [x] Evacuate finished successfully
+- [x] Remove succeeded and the device is gone from `fs usage`
+- [x] Only now is it safe to physically disconnect it
 
 ### 4. Record the rest
 ```sh
 bcachefs show-super /dev/disk/by-id/<ironwolf-id> | grep -i uuid   # expect external UUID 53a26b95-...
 ```
-- [ ] PSU model/wattage/80+ rating (reuse decision)
 - [ ] Copy of current NFS export config and clients (h001 nixarr etc.) to re-test later
 
-## Phase 2: prepare NixOS config
+## Phase 2 onward: superseded by h004
 
-Plan: **fresh UEFI install on the new NVMe**; the old boot is legacy GRUB pinned to the Kingston
-(`boot.loader.grub.device = ".../ata-KINGSTON_SV300S37A120G_..."` in `flake.nix`).
-
-- [ ] Partition NVMe GPT: 1 GB EFI (vfat) + root (ext4). `hosts/testbed/disko-config.nix` as a template.
-- [ ] `nixos-generate-config` → replace `hardware-configuration.nix`; carry over the `/data` block
-      (`UUID=53a26b95-941b-4f41-b049-c166905ed8c2`, `bcachefs`, `nofail`, `x-systemd.device-timeout=600s`)
-      and `boot.supportedFilesystems = [ "bcachefs" ];`.
-- [ ] In `flake.nix`: drop the `boot_grub` module and the `grub.device` override; add
-      `boot.loader.systemd-boot.enable = true;` and `boot.loader.efi.canTouchEfiVariables = true;`.
-- [ ] Ensure `nvme` is in `boot.initrd.availableKernelModules` (generated config should add it).
-- [ ] Restore SSH host keys / sec-agent identity so secrets keep working, or re-enroll the host.
-- [ ] Remove the swap UUID from the old disk; add new swap (file or partition) if wanted.
-- [ ] Update `readme.md` hardware table after the swap.
-
-## Phase 3: hardware swap
-
-1. Shut down, unplug, hold power button to drain. Label each IronWolf SATA cable with its serial.
-2. Remove: HD 7950, old board/CPU/RAM, ST750LX003 (only after Phase 1 step 3), Kingston SSD (keep aside as fallback).
-   - **If replacing the PSU: remove ALL old PSU cables, including every SATA power harness.** Use only the cables that came with the new PSU. Modular cables are not standardized between brands or even models; a connector that fits can have a different pinout and kill every drive on that harness at once.
-3. Out of case: install CPU, cooler (LGA 1851 bracket), RAM (slots per manual, usually A2/B2), NVMe in the CPU-attached M.2 slot.
-4. Install I/O shield, check standoffs for ATX layout, mount board.
-5. Connect 24-pin, 8-pin EPS, front panel, USB headers, case fans.
-6. Connect HDDs: the 4 IronWolfs to onboard SATA ports not shared with populated M.2 slots; the new WD Red Plus to the Vantec UGT-ST655 card. Do **not** add the WD to the pool yet.
-7. Monitor to the **motherboard** video output.
-
-## Phase 4: BIOS settings
-
-- [ ] Update BIOS to latest (Q-Flash).
-- [ ] UEFI boot, CSM disabled.
-- [ ] XMP on (optional for NAS; off = slightly lower power).
-- [ ] AC power loss restore → **Power On**.
-- [ ] ASPM enabled, C-states Auto/enabled (deepest available).
-- [ ] Disable unused: RGB, Wi-Fi/Bluetooth (if wired), unused controllers.
-- [ ] Quiet fan curves; keep drives < ~45 °C.
-
-## Phase 5: install & verify
-
-1. Boot NixOS installer (USB), install with the config from Phase 2.
-2. Verify:
-```sh
-lsblk -o NAME,SIZE,MODEL,SERIAL,ROTA,TRAN      # 4x IronWolf + WD Red Plus (unused) + NVMe
-findmnt /data
-bcachefs fs usage -h /data                     # 4 members, expected replicas, no errors
-dmesg | grep -i bcachefs
-for d in /dev/disk/by-id/ata-ST12000NT001* /dev/disk/by-id/ata-WDC_WD120EFGX*; do case $d in *-part*) ;; *) smartctl -H "$d";; esac; done
-```
-   Check the WD's by-id name with `ls /dev/disk/by-id/ | grep -i wd`; adjust the glob if the model string differs.
-3. Only after the 4-disk pool mounts cleanly and shows no errors, add the 5th drive:
-```sh
-smartctl -t long /dev/disk/by-id/<wd-id>        # optional burn-in first; wait for it to finish
-bcachefs device add /data /dev/disk/by-id/<wd-id>
-bcachefs fs usage -h /data                     # now 5 members, no errors
-```
-4. Check NFS exports from clients (h001 nixarr / media mounts).
-5. Power tuning:
-```sh
-nix-shell -p powertop --run "sudo powertop"    # aim for package C8+ at idle
-```
-   Consider `powerManagement.powertop.enable = true;` (test for USB/NIC side effects).
-6. Measure wall power (Kill-A-Watt / smart plug) idle and under scrub; compare to before.
+Instead of reinstalling h002 in place, the new parts are installed and onboarded as a **new host,
+h004**, on the bench while h002 keeps serving. Then the IronWolfs move over. The full runbook
+(bench install with bcachefs + impermanence root, read-only pool check, cutover, rollback) is in
+`hosts/h004/readme.md`. h002's config stays as-is as the rollback until h004 has run stably.
 
 ## Expected result
 
@@ -166,6 +109,6 @@ nix-shell -p powertop --run "sudo powertop"    # aim for package C8+ at idle
 - Headroom (6P+12E cores, 32 GB, Quick Sync) to move media services here later if desired.
 
 ## Retire after success
-- [ ] ST750LX003 SSHD
+- [x] ST750LX003 SSHD (removed from pool)
 - [ ] Kingston SV300 SSD (after a few weeks of stable boots)
 - [ ] HD 7950, i7-3770K, old board, DDR3 (sell or recycle)
