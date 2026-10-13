@@ -259,6 +259,11 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
    - dnsmasq-tailnet's `h001Subdomains`/`lioSubdomains` in `fleet.nix` →
      generate from `service.nix` hosts (or have the CLI update it).
    - beszel `HUB_URL` → DNS name.
+   - TLS on the target: floating vhosts read
+     `/var/lib/acme/joshuabell.xyz/{fullchain,key}.pem`, which only h001 has
+     (h003 has no `/var/lib/acme`), so `nginx -t` would fail there. Provision
+     the wildcard cert on any target host, and have `deploy`/`move` refuse
+     early when the files are missing.
 4. ~~Multi-container podman (pods)~~ not needed (penpot removed).
 5. ~~Remote work without passwordless sudo~~ done via root ssh (see §1).
 6. **Architecture**: flakes already build for `x86_64-linux` and
@@ -282,12 +287,14 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 
 1. ~~Deprecate n8n, wasabi/ntest, penpot; migrate opengist~~ done 2026-10-12. Decide puzzles/dawarich/
    matrix/forge/kavita/books usage.
-2. ~~atuin~~ done 2026-10-12. Easy floats to h003: searx + litellm + open-webui.
+2. ~~atuin~~ done 2026-10-12. searx + litellm + open-webui (in place on h001).
 3. ~~vaultwarden~~ done 2026-10-12. trilium + oauth2-proxy, etebase (TCP first), life, puzzles.
-4. Build §4.3 routing so moves stop needing o002/dnsmasq edits.
-5. forgejo, matrix.
-5a. ~~Cut the *arr stack over to `arr`~~ **Done 2026-10-12.**
-6. §4.1 requirements, then immich/paperless/dawarich as containers on h001.
-7. GPU services on joe as podman-kind with `requires = [ "nvidia" ]`.
+4. forgejo, matrix (in place on h001).
+4a. ~~Cut the *arr stack over to `arr`~~ **Done 2026-10-12.**
+5. §4.1 requirements, then immich/paperless/dawarich as containers on h001.
+6. GPU services on joe as podman-kind with `requires = [ "nvidia" ]`.
+7. **Last** (no off-host moves planned): §4.3 routing + target TLS certs,
+   then `cnt move` services to their ideal hosts. Until then every migration
+   is in place on its current host.
 8. Never: zitadel/sec (until there
    is a reason), router/NAS/edge.
