@@ -20,6 +20,12 @@ in
   imports = [ "${litellmpkgs}/nixos/modules/${declaration}" ];
   system.stateVersion = "24.11";
 
+  # The upstream module's tmpfiles `d ${dataDir}/ui` rules would otherwise create
+  # dataDir as a real directory on the (tmpfs) container root at boot, and
+  # DynamicUser then refuses to start (STATE_DIRECTORY: File exists) because it
+  # needs dataDir to be its own symlink into /var/lib/private.
+  systemd.tmpfiles.rules = [ "L ${dataDir} - - - - private/litellm" ];
+
   # copilot models need to reach github; air models reach t on the LAN.
   systemd.services.litellm = {
     wants = [ "network-online.target" ];
