@@ -23,6 +23,19 @@ lib.mkMerge [
       autodetect = true;
       defaults.autodetected = "-a -o on -S on -s (S/../../7/03|L/../01/./04)";
     };
+
+    # Old 750 GB Seagate hybrid (ST750LX003, ~84k power-on hours) on the Vantec
+    # card: standalone unencrypted bcachefs for throwaway data only. Not part of
+    # the pool; reformatted from an old pool member so it no longer carries the
+    # pool UUID. nofail so a dead drive doesn't block boot.
+    fileSystems."/scratch" = {
+      device = "UUID=4cf7d03f-7c1f-44a4-8c34-fe87f7a3d9c3";
+      fsType = "bcachefs";
+      options = [
+        "nofail"
+        "x-systemd.device-timeout=30s"
+      ];
+    };
   }
   (lib.mkIf pool.enable {
     fileSystems."/data" = {

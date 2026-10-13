@@ -19,7 +19,7 @@
   # "Cutover"). Flip to true only after the read-only compatibility mount
   # succeeds.
   dataPool = {
-    enable = false;
+    enable = true;
     uuid = "53a26b95-941b-4f41-b049-c166905ed8c2";
   };
 
