@@ -48,8 +48,13 @@
             swap = {
               priority = 2;
               size = swapSize;
+              # randomEncryption: disko skips mkswap/swapon, so nothing is paged
+              # to this partition in plaintext during the install. The host's
+              # impermanence module encrypts it with a fresh key every boot
+              # (set disk.swap to its by-partuuid path).
               content = {
                 type = "swap";
+                randomEncryption = true;
                 discardPolicy = "both";
               };
             };

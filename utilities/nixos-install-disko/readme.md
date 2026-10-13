@@ -24,10 +24,11 @@ encrypted bcachefs, impermanence, and sec-agent secrets.
   into root's *user* keyring, which a different SSH/console session can't see.
   Run `keyctl link @u @s` in the session that mounts, or unlock and mount in
   the same session.
-- **Disko reuses the bcachefs UUID.** The boot (vfat) and swap UUIDs change on
+- **Disko reuses the bcachefs UUID.** The boot (vfat) UUID changes on
   re-format, but the primary bcachefs UUID can come back identical, because
-  disko derives it from the filesystem name. Re-read all three with `lsblk -f`
-  and don't assume the format failed.
+  disko derives it from the filesystem name. Re-read both with `lsblk -f`
+  and don't assume the format failed. The swap partition has no filesystem
+  UUID at all (it is never `mkswap`ed in plaintext); use its PARTUUID.
 - **Tailscale on first boot.** `tailscaled-autoconnect` runs before sec-agent
   has the headscale key. sec-agent now starts it again once the key lands. See
   Step 7 (sec-agent) if it still shows `Logged out`.
@@ -294,16 +295,18 @@ scp root@<IP>:/mnt/etc/nixos/hardware-configuration.nix \
 Review the file, prune the filesystem entries as described above, then commit
 and push to git so the target can fetch it.
 
-## Step 5: Record Disk UUIDs
-
-Get the UUIDs for the impermanence module config:
+## Step 5: Record Disk IDs
 
 ```sh
 # On the target:
-lsblk -o NAME,UUID,FSTYPE,SIZE
+lsblk -o NAME,SIZE,FSTYPE,UUID,PARTUUID,PARTLABEL
 ```
 
-Update your host's `flake.nix` with the actual UUIDs:
+- **boot / primary:** filesystem `UUID` (`/dev/disk/by-uuid/...`).
+- **swap:** the swap partition's `PARTUUID` (`/dev/disk/by-partuuid/...`).
+  Disko names it `disk-main-swap`, so `/dev/disk/by-partlabel/disk-main-swap`
+  also works. Swap is encrypted with a new random key every boot, which leaves
+  it without a filesystem UUID; `by-uuid`/`by-label` paths fail the build.
 
 ```nix
 ringofstorms.impermanence = {
@@ -311,7 +314,7 @@ ringofstorms.impermanence = {
   disk = {
     boot = "/dev/disk/by-uuid/<BOOT-UUID>";
     primary = "/dev/disk/by-uuid/<PRIMARY-UUID>";
-    swap = "/dev/disk/by-partuuid/<SWAP-PARTUUID>";  # or null; lsblk -no PARTUUID <swap part>. Always random-key encrypted, so by-uuid is rejected
+    swap = "/dev/disk/by-partuuid/<SWAP-PARTUUID>";  # or null for no swap
   };
   encrypted = true;
 };
@@ -611,3 +614,46 @@ holding a `/key` file auto-unlocks the disk at boot. The stick's password goes i
 `usbKeyPassword`.
 
 See [usb_key.md](usb_key.md) for full instructions on formatting and setup.
+
+### Encrypted swap on existing hosts
+
+Swap is always encrypted with a random key per boot (`disk.swap`, by-partuuid).
+On a host that used to have plaintext swap, that only protects **new** writes:
+each boot runs `cryptsetup plainOpen` and `mkswap` on the mapper, which does not
+overwrite the old pages. Anything paged out before the switch can still be on the
+partition. To clear it, wipe it once, as root, **after** deploying the encrypted
+swap config (so the partition is no longer used in plaintext):
+
+```sh
+# Run as root in bash. Any failed step aborts before the wipe.
+set -euo pipefail
+P=/dev/disk/by-partuuid/<SWAP-PARTUUID>
+D=$(readlink -e "$P")
+N=$(systemd-escape -p "$P" | tr -d '\\')   # NixOS: systemd-escape of $P with backslashes dropped
+U="mkswap-$N.service"
+systemctl cat "$U" >/dev/null               # abort if this isn't the unit for $P
+M=""; [ -e "/dev/mapper/$N" ] && M=$(readlink -e "/dev/mapper/$N")
+swapon --show                               # USED must fit in free RAM
+[ -n "$M" ] && swapon --show=NAME --noheadings | grep -qx "$M" && swapoff "$M"
+swapon --show=NAME --noheadings | grep -qxF -e "$D" ${M:+-e "$M"} && { echo "still active, abort"; exit 1; }
+[ -e "/dev/mapper/$N" ] && dmsetup remove "$N"
+[ -z "$(ls -A /sys/class/block/${D##*/}/holders)" ] || { echo "partition still held, abort"; exit 1; }
+if ! blkdiscard -s "$D" 2>/dev/null && ! blkdiscard "$D"; then
+  dd if=/dev/zero of="$D" bs=4M oflag=direct status=progress
+fi
+echo "nonzero bytes in first MiB: $(head -c 1M "$D" | tr -d '\0' | wc -c)"
+systemctl restart "$U"
+swapon -a && swapon --show                  # NAME should be /dev/dm-*
+```
+
+It only touches the device, mapper and `mkswap-*` unit derived from `$P`. It stops
+before writing if `$P` has no NixOS swap unit (wrong path), if swap on it is still
+active, or if anything still holds the partition. Tested on h004, including a wrong
+PARTUUID and the root partition passed as `$P` (both aborted). `cryptsetup` isn't on
+the host's PATH, hence `dmsetup`.
+
+How much this erases depends on the drive. Whether discarded SSD blocks read back
+as zero, or are physically erased, is up to the drive's firmware; `dd` zeroes the
+logical blocks, but an SSD can keep stale copies in spare area. Treat the wipe as
+best effort. For a real guarantee, secure-erase the whole drive (`nvme format
+-s1` / `nvme sanitize`) at the next re-install.
