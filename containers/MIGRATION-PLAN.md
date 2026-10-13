@@ -33,9 +33,10 @@ host module, never floats).
 | Host | Hardware | Role, now → target |
 |---|---|---|
 | h001 | Dell OptiPlex 7090, i5-11500, 64 GB, **Intel UHD 750 iGPU (QSV)**, /drives/wd10, NFS client of h002 | Main service host → stays home of media/*arr + big-data services |
-| h002 | NAS, bcachefs `/data` | NFS server, host-bound |
-| h003 | Ryzen 7 5825U, 28 GB, AMD Barcelo iGPU (VAAPI), 1 TB NVMe | Router + minecraft → **general service host** once h004 takes the router role |
-| h004 | not built (plan in `hosts/h004/readme.md`) | Future router (dnsmasq, AdGuard, DDNS, NUT, speedtest) |
+| h002 | NAS, bcachefs `/data` | NFS server, host-bound. Being rebuilt as **h004** (new board, same pool; `hosts/h004/readme.md`) |
+| h003 | Ryzen 7 5825U, 28 GB, AMD Barcelo iGPU (VAAPI), 1 TB NVMe | Router + minecraft → **general service host** once h005 takes the router role |
+| h004 | Core Ultra 5 250K+, 32 GB, iGPU (QSV), NVMe root; on the bench | Replaces h002 as the NAS (same bcachefs pool, NFS server, host-bound) |
+| h005 | not built (plan in `hosts/h005/readme.md`) | Future router (dnsmasq, AdGuard, DDNS, NUT, speedtest) |
 | o002 | Oracle Ampere A1, **aarch64**, 2 OCPU/12 GB, impermanent root | Public TLS edge + headscale, host-bound |
 | joe | Desktop, NVIDIA RTX 3080 10 GB | GPU AI services (podman) |
 | lio | Desktop, AMD RX 7900 GRE | nix-serve cache, builder; floating-capable (test target) |
@@ -47,7 +48,7 @@ so it is a viable fallback, not a primary.
 
 ## 3. Service decisions
 
-"Ideal host" assumes the end state (h004 = router, h003 = second service host).
+"Ideal host" assumes the end state (h005 = router, h004 = NAS, h003 = second service host).
 
 ### Media / *arr — one nixos container `arr` on h001 — **DONE (2026-10-12)**
 
@@ -185,7 +186,7 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 | zitadel (SSO) | Keep | h001 (don't float) | sec-agent and oauth2-proxy authenticate against it. Postgres is bind-mounted from the host; master key outside sec-agent. Move only deliberately, never with sec down. |
 | sec (secrets_manager server) | Keep | h001 (don't float) | Every host's sec-agent depends on it; it depends on zitadel. |
 | oauth2-proxy | **Live** (in trilium) | same host as trilium | Gate for trilium. |
-| beszel hub | **Live** h001 2026-10-13 (789b4a53) | h001 (pinned) | `containers/beszel`, binds 100.64.0.13:8090 (host network). Agents still hard-code that IP: give them a DNS name that follows the hub before ever `cnt move`-ing it. Old `/var/lib/private/beszel-hub` awaiting delete. |
+| beszel hub | **Live** h001 2026-10-13 (789b4a53) | h001 (pinned) | `containers/beszel`, binds 100.64.0.13:8090 (host network). Agents still hard-code that IP: give them a DNS name that follows the hub before ever `cnt move`-ing it. |
 | host postgresql 17 | Retire | — | Shared DB for host modules. Disappears as services move into containers with their own postgres (`pg_dump` per service, never file copies of the shared cluster). |
 | restic-backup | **Reworked** 2026-10-13 (b8588f6c) | — | Runs every `service.nix` `backupHook` whose unit is active on h001 (skips others; a failing hook fails the run), then backs up all of `/srv/containers` (live PG clusters + caches excluded) plus wd10 media and `~luser/backups`. `--group-by host,tags` for backup and prune. |
 | homepage-dashboard (h001, joe) | Decide | anywhere | Hard-coded links; trivial either way. |
@@ -214,8 +215,8 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 
 | Service | Decision | Ideal host | Notes |
 |---|---|---|---|
-| immich | **Live** h001 2026-10-13 (b8588f6c) | h001 | `containers/immich`: PG16 + vchord, ML cache, `requires = [ "wd10" ]`; media bound from `/drives/wd10/immich/media`. 58410 assets match. Old `/var/lib/immich` awaiting delete. |
-| paperless | **Live** h001 2026-10-13 (b8588f6c) | h001 | `containers/paperless`: PG16, tika, gotenberg on 3002; media/consume bound from `/drives/wd10/paperless`. 225 docs match. Old `/var/lib/paperless` awaiting delete. |
+| immich | **Live** h001 2026-10-13 (b8588f6c) | h001 | `containers/immich`: PG16 + vchord, ML cache, `requires = [ "wd10" ]`; media bound from `/drives/wd10/immich/media`. 58410 assets match. |
+| paperless | **Live** h001 2026-10-13 (b8588f6c) | h001 | `containers/paperless`: PG16, tika, gotenberg on 3002; media/consume bound from `/drives/wd10/paperless`. 225 docs match. |
 | dawarich | **Live** h001 2026-10-13 | h001 | `containers/dawarich` (PG 17 + postgis, redis, data; 657582 points match). Moved off `/drives/wd10` to `/srv/containers` (1.6 GB, so no wd10 requirement). restic backs up `data` + `pgdumps`. |
 
 `move` copies `/srv/containers/<svc>` only. Options: (a) put media under it
@@ -241,7 +242,7 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 | Service | Host | Why |
 |---|---|---|
 | NFS server | h002 | Owns the disks. |
-| dnsmasq (LAN DHCP/DNS), dnsmasq-tailnet, AdGuard Home, DDNS, NUT/UPS, ISP speedtest | h003 → h004 | Router functions: physical VLANs, port 53/DHCP, USB UPS. Planned move to h004 is a host rebuild, not `cnt move`. |
+| dnsmasq (LAN DHCP/DNS), dnsmasq-tailnet, AdGuard Home, DDNS, NUT/UPS, ISP speedtest | h003 → h005 | Router functions: physical VLANs, port 53/DHCP, USB UPS. Planned move to h005 is a host rebuild, not `cnt move`. |
 | nginx public edge + ACME, headscale | o002 | The edge and the tailnet control plane. |
 | per-host nginx (floating sites) | each host | Written at runtime by `cnt deploy`. |
 | nix-serve, libvirtd | lio | Tied to lio's store / hypervisor. |

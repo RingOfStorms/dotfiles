@@ -23,8 +23,13 @@ in
     DynamicUser = lib.mkForce false;
     User = "beszel-hub";
     Group = "beszel-hub";
-    # The tailnet IP may not be up yet when the container starts (host
-    # network, no tailscaled unit in here); bind anyway, see ip(7).
-    IPFreeBind = true;
+    # The tailnet IP may not exist yet when the container starts (host
+    # network; tailscaled runs on the host). systemd has no IPFreeBind for
+    # services, so just retry until the bind succeeds.
+    Restart = lib.mkForce "always";
+    RestartSec = lib.mkForce 5;
+  };
+  systemd.services.beszel-hub.unitConfig = {
+    StartLimitIntervalSec = 0;
   };
 }
