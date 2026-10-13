@@ -1,4 +1,5 @@
-# restic backup of h001's critical data: immich, paperless, dawarich, etebase.
+# restic backup of h001's critical data: immich, paperless, dawarich, etebase,
+# plus manual archives in ~luser/backups (`cnt backup` tarballs etc.).
 #
 # The repository, password and backend credentials all come from the
 # `restic_h001_env_2026-10-01` EnvironmentFile (sec-agent.nix), so the
@@ -55,6 +56,8 @@ in
       s.dawarich.dataDir
       # etebase: secret.txt + media (live db excluded, staged above)
       s.etebase.dataDir
+      # hand-made archives (cnt backup tarballs, pre-migration snapshots)
+      "/home/luser/backups"
     ];
 
     exclude = [
