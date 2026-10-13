@@ -108,7 +108,7 @@ it does; with the stack in `arr` it protects one unit, `container@arr`:
   WATCHDOG=1` sent only after a successful probe, so systemd kills the
   guard if the loop ever wedges.
 - **Test before relying on it**: blackhole h002 from h001
-  (`nft add rule inet filter output ip daddr 10.12.14.183 drop`, temporarily)
+  (`nft add rule inet filter output ip daddr 10.12.14.184 drop`, h004 now serves the NAS, temporarily)
   and confirm that the guard fails within about 40 s and all dependents
   stop. Then remove the rule and confirm they come back. Also test with
   h002 up but `/data` unmounted (sentinel missing).

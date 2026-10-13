@@ -161,7 +161,7 @@
               disk = {
                 boot = "/dev/disk/by-uuid/F5C0-5585";
                 primary = "/dev/disk/by-uuid/3bfd6e57-5e0f-4742-99e3-e69891ae2431";
-                swap = "/dev/disk/by-uuid/ad0311e2-7eb1-47af-bc4b-6311968cbccf";
+                swap = "/dev/disk/by-partuuid/e1c2e304-dceb-49dc-8bd4-0f56fc3e34b2";
               };
               encrypted = true;
             };

@@ -67,7 +67,6 @@
         # their being offline never matters.
         containerHosts = [
           "h001"
-          "h002"
           "h003"
           "lio"
         ];

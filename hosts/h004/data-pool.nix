@@ -44,6 +44,9 @@ lib.mkMerge [
       options = [
         "defaults"
         "x-systemd.device-timeout=600s"
+        # A first mount after a bcachefs version bump runs an upgrade/check
+        # (about 3 min for this pool on 1.38 -> 1.39); allow up to 30.
+        "x-systemd.mount-timeout=30min"
         "nofail"
       ];
     };

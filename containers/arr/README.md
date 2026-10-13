@@ -51,10 +51,10 @@ cnt status arr
 
 ```
 nft add table inet t; nft add chain inet t o '{type filter hook output priority 0;}'
-nft add rule inet t o ip daddr 10.12.14.183 drop   # arr goes down (up to ~100 s)
+nft add rule inet t o ip daddr 10.12.14.184 drop   # arr goes down (up to ~100 s)
 nft delete table inet t                            # arr back within ~90 s
 ```
-Also with the sentinel renamed on h002 (`mv /data/.h002-online{,.x}`), and
+Also with the sentinel renamed on the NAS, now h004 (`mv /data/.h002-online{,.x}`), and
 after `cnt stop arr` (arr must stay down through the cycle).
 
 The cutover from bare-metal h001 was done 2026-10-12 (git history has the

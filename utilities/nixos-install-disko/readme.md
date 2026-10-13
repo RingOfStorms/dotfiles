@@ -155,8 +155,8 @@ mkfs.fat -F32 "${DISK}p1"
 
 # Swap (adjust size as needed) (16GB)
 parted -s "$DISK" mkpart swap linux-swap 5GiB 21GiB
-mkswap "${DISK}p2"
-swapon "${DISK}p2"
+# No mkswap/swapon: the host encrypts swap with a random key at every boot.
+# Plaintext swap here could page installer secrets (the passphrase) to disk.
 
 # Root partition (rest of disk)
 parted -s "$DISK" mkpart primary 21GiB 100%

@@ -1,4 +1,4 @@
-# Reusable host backup via rsync push to the h002 NAS.
+# Reusable host backup via rsync push to the h004 NAS.
 #
 # Each opted-in host pushes its declared `paths` to
 #   <user>@<targetHost>:<targetDir>/<hostName>/<timestamp>/
@@ -49,7 +49,7 @@ let
 in
 {
   options.ringofstorms.backup = {
-    enable = mkEnableOption "rsync-push backups to the h002 NAS";
+    enable = mkEnableOption "rsync-push backups to the h004 NAS";
 
     paths = mkOption {
       type = types.listOf types.str;
@@ -71,8 +71,8 @@ in
 
     targetHost = mkOption {
       type = types.str;
-      default = "100.64.0.3";
-      description = "h002 NAS address (tailnet overlay IP by default).";
+      default = "100.64.0.17";
+      description = "h004 NAS address (tailnet overlay IP by default).";
     };
 
     targetUser = mkOption {
@@ -121,7 +121,7 @@ in
     ];
 
     systemd.services.ros-backup = {
-      description = "rsync-push backup to h002 NAS";
+      description = "rsync-push backup to h004 NAS";
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
 
@@ -199,7 +199,7 @@ in
     };
 
     systemd.timers.ros-backup = {
-      description = "Timer for rsync-push backup to h002 NAS";
+      description = "Timer for rsync-push backup to h004 NAS";
       wantedBy = [ "timers.target" ];
       timerConfig = {
         OnCalendar = cfg.startAt;

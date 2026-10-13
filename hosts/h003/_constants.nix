@@ -205,7 +205,6 @@
       # Remote hosts to shut down on critical battery
       remoteShutdownHosts = [
         { name = "h001"; host = "10.12.14.10"; user = "luser"; keyFile = "/var/lib/secrets_manager_hydrated/nix2nix_2026-03-15"; }
-        { name = "h002"; host = "10.12.14.183"; user = "luser"; keyFile = "/var/lib/secrets_manager_hydrated/nix2nix_2026-03-15"; }
         { name = "h004"; host = "10.12.14.184"; user = "luser"; keyFile = "/var/lib/secrets_manager_hydrated/nix2nix_2026-03-15"; }
       ];
     };
