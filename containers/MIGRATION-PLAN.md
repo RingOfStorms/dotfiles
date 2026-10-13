@@ -14,7 +14,7 @@ host module, never floats).
 - Floating today: `arr` (h001, **live since 2026-10-12**: whole media stack,
   NAS-guarded), `opengist`, `atuin`, `vaultwarden` (h001, 2026-10-12),
   `trilium` (+ oauth2-proxy), `searx`, `litellm`, `open-webui`, `puzzles`,
-  `life` (h001, 2026-10-13), `localai` (joe), `minecraft` (h003), test twins
+  `life`, `forgejo`, `dawarich` (h001, 2026-10-13), `localai` (joe), `minecraft` (h003), test twins
   `hello-nixos` / `hello-podman` (lio). Old host modules and `/var/lib` data
   of every migrated service are deleted (backups in `h001:/home/luser/backups`).
 - CLI: `deploy`, `stop` (persists across reboot), `start`, `move`, `backup`
@@ -62,8 +62,8 @@ notes below are kept as the design record.
 | seerr (jellyseerr) | Keep | h001 | Request UI for jellyfin. |
 | sonarr, radarr, prowlarr, bazarr | Keep | h001 | Need NFS media + shared uids mirrored on h002. |
 | sabnzbd, transmission | Keep | h001 | Inside the WireGuard VPN netns (wg conf from sec-agent). |
-| shelfmark, audiobookshelf | Decide | h001 | Book pipeline; keep if still reading/listening. |
-| kavita | Decide | h001 | Reads the NFS book library. |
+| shelfmark, audiobookshelf | Keep (in `arr`) | h001 | Book pipeline; keep if still reading/listening. |
+| kavita | Keep (in `arr`) | h001 | Reads the NFS book library. |
 | recyclarr | Keep | h001 | Stateless config sync for sonarr/radarr. |
 | media-integrity | Keep | h001 | Weekly ffmpeg scan of NFS movies; goes wherever media is mounted. |
 
@@ -187,7 +187,7 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 | oauth2-proxy | **Live** (in trilium) | same host as trilium | Gate for trilium. |
 | beszel hub | Keep | h001, or h003 | Every agent hard-codes `HUB_URL=http://100.64.0.13:8090`; switch agents to a DNS name before ever moving it. |
 | host postgresql 17 | Retire | — | Shared DB for host modules. Disappears as services move into containers with their own postgres (`pg_dump` per service, never file copies of the shared cluster). |
-| restic-backup | Rework | — | Reaches into immich/paperless/dawarich. Replace with per-service `backupHook` + `cnt backup`, or a central job that asks `cnt` where each service runs. |
+| restic-backup | Rework | — | Reaches into immich/paperless (containers) and /srv/containers/dawarich (floating; dump step skipped if it moved). Replace with per-service `backupHook` + `cnt backup`, or a central job that asks `cnt` where each service runs. |
 | homepage-dashboard (h001, joe) | Decide | anywhere | Hard-coded links; trivial either way. |
 
 ### Apps — good floating candidates
@@ -196,17 +196,17 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 |---|---|---|---|---|
 | vaultwarden | **Live** | h001 | nixos | `containers/vaultwarden` since 2026-10-12 (data + backups copied 1:1, full-tree checksum verified; uid 114 kept; env secret bound read-only, `cnt restart` after rotation). |
 | atuin | **Live** | h001 | nixos | `containers/atuin` since 2026-10-12 (PG 17 copied 1:1, full-tree checksum verified; host net, idmapped). |
-| forgejo | Keep | h001 or h003 | nixos | Own postgres. SSH on **3032**: o002 stream-forwards it, so update o002 on move. Repos can be large. |
+| forgejo | **Live** h001 2026-10-13 | h001 or h003 | nixos | `containers/forgejo` (PG 17 + data copied 1:1, empty rsync diff; 146 repos / 4 users / 3658 actions match; uid 115). Builtin SSH listens on host :3032 itself (`tcpPorts`); o002 streams public :3032 to it, so update o002 on move. The CLI default repo is forgejo, so while forgejo is down use `CONTAINERS_REPO=git+file://...`. |
 | opengist | **Live** | h001 | podman | `containers/opengist` since 2026-10-12 (all 123 gists, full-tree checksum verified). Old `/var/lib/opengist` deleted. |
 | trilium + oauth2-proxy | **Live** h001 2026-10-13 | h003 (together) | nixos | `noAuthentication=true` behind the proxy; also an overlay-only unauthenticated vhost on 9112. Never split across hosts without restricting trilium's port. |
 | open-webui | **Live** h001 2026-10-13 | h003 | nixos | Needs litellm + searx. |
-| litellm | **Live** h001 2026-10-13 | with open-webui | nixos | Stateless; env secret. |
+| litellm | **Live** h001 2026-10-13 | with open-webui | nixos | **Stateful**: persist `data` = `/var/lib/private/litellm` holds the GitHub Copilot OAuth token (`github_copilot/`), `.config`, UI and tiktoken caches. Losing it means re-doing the Copilot device login. Plus env secret. |
 | searx | **Live** h001 2026-10-13 | with open-webui | nixos | Keep its generated secret key in persist. |
 | n8n | **Removed** | — | — | — | Dropped 2026-10-12, no export. |
 | etebase + EteSync web | **Removed** 2026-10-13 | — | — | Replaced by life (calendar + contacts). Final archive: h001:/home/luser/backups/etebase-final-2026-10-13.tar.gz (2 users, 11 collections, 4626 items). |
 | puzzles | **Live** h001 2026-10-13 | h003 | nixos | Private flake; small. |
 | life | **Live** h001 2026-10-13 | h003 or h001 | nixos | Own postgres 18 + pgBackRest WAL archiving: take a fresh full backup right after any move. |
-| matrix (synapse, element, mautrix bridges) | Decide | h001 or h003 | nixos | Big, pinned nixpkgs rev (mautrix-signal segfault). Move as one unit; bridge sessions live in the DB. |
+| matrix (synapse, element, mautrix bridges) | **Removed** 2026-10-13 | — | — | Final archive: h001:/home/luser/backups/matrix-final-2026-10-13.tar.gz (pg_dumpall + configs/keys, no media; 2 users, 806 rooms). |
 | penpot | **Removed** | — | — | — | Dropped 2026-10-12, no data kept. |
 | wasabi / ntest demo containers (h001) | **Removed** | — | — | — | Dropped 2026-10-12. |
 
@@ -216,7 +216,7 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 |---|---|---|---|
 | immich | Keep | h001 | postgres 16 + media on `/drives/wd10` + ML cache (CPU). |
 | paperless | Keep | h001 | postgres 16 + docs/consume on `/drives/wd10`. |
-| dawarich | Decide | h001 | postgres + redis + `/drives/wd10`; secret via LoadCredential. |
+| dawarich | **Live** h001 2026-10-13 | h001 | `containers/dawarich` (PG 17 + postgis, redis, data; 657582 points match). Moved off `/drives/wd10` to `/srv/containers` (1.6 GB, so no wd10 requirement). restic backs up `data` + `pgdumps`. |
 
 `move` copies `/srv/containers/<svc>` only. Options: (a) put media under it
 and accept long moves, (b) add "external mount + host requirement" to
@@ -255,7 +255,7 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
    the host module advertises `capabilities`; `deploy`/`move` refuse early
    (before stopping anything) when the target lacks one. In use: `arr`
    (`nfs-h002`, `intel-qsv`). Still to add: `wd10` on h001 (for
-   immich/paperless/dawarich) and `nvidia` on joe (localai doesn't declare it yet).
+   immich/paperless). `nvidia` on joe, required by localai (48ab0a6a).
 2. **Secrets into containers** — **partly done**: services bind
    `/var/lib/secrets_manager_hydrated/<name>` read-only (h001's
    `sec-agent.nix` grants them; `cnt restart <svc>` after rotation). Not yet
@@ -293,17 +293,16 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 ## 6. Suggested order
 
 1. ~~Deprecate n8n, wasabi/ntest, penpot; migrate opengist~~ done 2026-10-12.
-   Still to decide: dawarich/matrix/kavita/books usage.
+   Decided 2026-10-13: matrix removed; dawarich, kavita, books kept.
 2. ~~atuin~~ done 2026-10-12. ~~searx + litellm + open-webui~~ done 2026-10-13 (in place on h001).
 3. ~~vaultwarden~~ done 2026-10-12. ~~trilium + oauth2-proxy, life, puzzles~~
    done 2026-10-13; etebase removed 2026-10-13.
-4. forgejo, matrix (in place on h001).
+4. ~~forgejo~~ done 2026-10-13; matrix removed.
 4a. ~~Cut the *arr stack over to `arr`~~ **Done 2026-10-12.**
-5. ~~§4.1 requirements~~ (add `wd10`), then immich/paperless/dawarich as
+5. ~~§4.1 requirements~~ (add `wd10`), then immich/paperless (dawarich done 2026-10-13) as
    containers on h001. Then rework restic-backup and retire h001's shared
    postgres.
-6. GPU services on joe: ~~localai as podman-kind~~ live. Open: add
-   `requires = [ "nvidia" ]` to localai and the `nvidia` capability on joe.
+6. GPU services on joe: ~~localai as podman-kind~~ live; ~~nvidia capability + localai `requires`~~ done.
 7. **Last** (no off-host moves planned): §4.3 routing + target TLS certs,
    then `cnt move` services to their ideal hosts. Until then every migration
    is in place on its current host.
