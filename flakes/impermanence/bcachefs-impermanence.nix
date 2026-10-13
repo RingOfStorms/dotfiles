@@ -96,7 +96,15 @@ in
       swap = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Device path for the swap partition, or null to disable swap.";
+        example = "/dev/disk/by-partuuid/cd3735f2-eee9-4d03-9ae3-464a6f84941f";
+        description = ''
+          Swap partition, or null for no swap. It is always encrypted with a fresh
+          random key every boot (no hibernation), so memory from the encrypted root
+          never lands on disk in plaintext. That re-encryption overwrites the
+          partition's filesystem UUID and label, so this must be a path that lives
+          outside the partition: /dev/disk/by-partuuid/, by-partlabel/ or by-id/.
+          by-uuid/ and by-label/ paths are rejected.
+        '';
       };
     };
 
@@ -202,18 +210,29 @@ in
       };
     }
 
-    # ── Swap ───────────────────────────────────────────────────────────────
+    # ── Swap (random key per boot) ─────────────────────────────────────────
     (mkIf (cfg.disk.swap != null) {
-      swapDevices = [ { device = cfg.disk.swap; } ];
+      assertions = [
+        {
+          assertion =
+            !(lib.hasPrefix "/dev/disk/by-uuid/" cfg.disk.swap)
+            && !(lib.hasPrefix "/dev/disk/by-label/" cfg.disk.swap);
+          message = "ringofstorms.impermanence.disk.swap = ${cfg.disk.swap}: swap is re-encrypted with a random key every boot, which erases its filesystem UUID/label, so this path would vanish after the first boot. Use /dev/disk/by-partuuid/ (lsblk -no PARTUUID <dev>), by-partlabel/ or by-id/.";
+        }
+      ];
+      swapDevices = [
+        {
+          device = cfg.disk.swap;
+          randomEncryption.enable = true;
+        }
+      ];
     })
 
     # ── Guidance warnings ──────────────────────────────────────────────────
     {
       warnings =
         lib.optional (cfg.usbKey && cfg.usbKeyPassword == null)
-          "ringofstorms.impermanence: usbKey is on but usbKeyPassword is unset, so only an unencrypted stick works and a lost stick exposes the disk passphrase. Use an encrypted stick (utilities/nixos-install-disko/usb_key.md)."
-        ++ lib.optional (cfg.encrypted && cfg.disk.swap != null)
-          "ringofstorms.impermanence: disk.swap is plaintext swap on an encrypted host; memory from the encrypted root can land on disk unencrypted. Set disk.swap = null and declare swapDevices with randomEncryption.enable = true (by-partuuid path).";
+          "ringofstorms.impermanence: usbKey is on but usbKeyPassword is unset, so only an unencrypted stick works and a lost stick exposes the disk passphrase. Use an encrypted stick (utilities/nixos-install-disko/usb_key.md).";
     }
 
     # ── Disable bcachefs per-mount unlock prompts ──────────────────────────

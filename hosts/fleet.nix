@@ -61,12 +61,12 @@ rec {
       lanIp = "10.12.14.1";
       trust = "high";
     };
-    # h002 NAS rebuild (new board). No addresses until it is enrolled; with
-    # neither overlayIp nor lanIp, `ssh h004` relies on MagicDNS. Add both at
-    # cutover (hosts/h004/readme.md).
+    # NAS that replaces h002 (new board). LAN address is a static DHCP
+    # reservation on h003 (hosts/h003/_constants.nix).
     h004 = {
       user = "luser";
       overlayIp = "100.64.0.17";
+      lanIp = "10.12.14.184";
       trust = "high";
     };
     i001 = {

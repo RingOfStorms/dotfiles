@@ -70,7 +70,7 @@
               disk = {
                 boot = "/dev/disk/by-uuid/989B-F1AB";
                 primary = "/dev/disk/by-uuid/0d6e4079-e367-03eb-d37c-00722f5891d2";
-                swap = "/dev/disk/by-uuid/ee0ae363-e28c-47ec-8224-6aae026f586f";
+                swap = "/dev/disk/by-partuuid/f2d8ae84-8c5f-4196-9727-bd750eeed463";
               };
               encrypted = true;
               usbKey = true;

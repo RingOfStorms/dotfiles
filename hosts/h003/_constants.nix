@@ -63,6 +63,7 @@
       { mac = "94:83:C4:3C:AD:A0"; name = "AXT1800"; ip = "10.12.14.3"; }
       { mac = "00:be:43:b9:f4:e0"; name = "H001"; ip = "10.12.14.10"; }
       { mac = "54:04:a6:32:d1:71"; name = "H002"; ip = "10.12.14.183"; }
+      { mac = "30:56:0f:4f:52:5f"; name = "H004"; ip = "10.12.14.184"; }
       { mac = "c8:c9:a3:2b:7b:19"; name = "PRUSA-MK4"; ip = "10.12.14.21"; }
       { mac = "24:e8:53:73:a3:c6"; name = "LGWEBOSTV"; ip = "10.12.14.30"; }
       { mac = "2c:cf:67:6a:45:47"; name = "HOMEASSISTANT"; ip = "10.12.14.22"; }
@@ -205,6 +206,7 @@
       remoteShutdownHosts = [
         { name = "h001"; host = "10.12.14.10"; user = "luser"; keyFile = "/var/lib/secrets_manager_hydrated/nix2nix_2026-03-15"; }
         { name = "h002"; host = "10.12.14.183"; user = "luser"; keyFile = "/var/lib/secrets_manager_hydrated/nix2nix_2026-03-15"; }
+        { name = "h004"; host = "10.12.14.184"; user = "luser"; keyFile = "/var/lib/secrets_manager_hydrated/nix2nix_2026-03-15"; }
       ];
     };
   };

@@ -311,7 +311,7 @@ ringofstorms.impermanence = {
   disk = {
     boot = "/dev/disk/by-uuid/<BOOT-UUID>";
     primary = "/dev/disk/by-uuid/<PRIMARY-UUID>";
-    swap = "/dev/disk/by-uuid/<SWAP-UUID>";  # or null
+    swap = "/dev/disk/by-partuuid/<SWAP-PARTUUID>";  # or null; lsblk -no PARTUUID <swap part>. Always random-key encrypted, so by-uuid is rejected
   };
   encrypted = true;
 };
