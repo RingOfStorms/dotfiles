@@ -13,7 +13,7 @@
 # Databases are backed up as dumps, never as live cluster directories: before
 # the snapshot, each floating service that is running HERE gets its
 # service.nix `backupHook` (pg_dumpall etc. into a persisted dir), the same
-# hook `cnt backup` runs. A failing hook fails the backup. Services not
+# hook `cnt backup` runs. SQLite files, sec and zitadel are dumped too (below). A failing hook fails the backup. Services not
 # running on h001 (stopped, or moved with `cnt move`) are skipped; their
 # data on this host is then whatever was left behind.
 {
@@ -67,6 +67,33 @@ in
     backupPrepareCommand = ''
       set -eu
       ${lib.concatMapStrings hookCmd withHook}
+
+      # zitadel (static container, stays on h001): fresh pg_dumpall into
+      # /var/lib/zitadel/backups/postgres; the masterkey is backed up beside it.
+      ${pkgs.nixos-container}/bin/nixos-container run zitadel -- systemctl start postgresqlBackup.service
+
+      # Consistent copies of every SQLite database, taken with SQLite's online
+      # backup API from the host side (works for any container kind, needs no
+      # sqlite3 inside). restic would otherwise copy live db/-wal pairs that
+      # can disagree. Restore from staging/sqlite, not the live file.
+      rm -rf ${staging}/sqlite ${staging}/sec
+      install -d -m700 ${staging}/sqlite ${staging}/sec
+      ${pkgs.findutils}/bin/find ${dataRoot} -xdev -type f \
+        \( -name '*.db' -o -name '*.sqlite' -o -name '*.sqlite3' \) \
+        -not -path '*/postgres/*' -not -path '*/postgresql/*' -print0 |
+      while IFS= read -r -d "" db; do
+        [ "$(${pkgs.coreutils}/bin/head -c 15 "$db")" = "SQLite format 3" ] || continue
+        out="${staging}/sqlite''${db#${dataRoot}}"
+        install -d -m700 "$(dirname "$out")"
+        ${pkgs.sqlite}/bin/sqlite3 "$db" ".timeout 30000" ".backup '$out'"
+        # an idle WAL db gets fresh -wal/-shm files from this open; keep them
+        # owned like the db, or the (non-root) app can no longer write
+        for f in "$db-wal" "$db-shm"; do [ ! -e "$f" ] || chown --reference="$db" "$f"; done
+      done
+
+      # sec (secrets_manager): DB copy + its irreplaceable encryption key.
+      ${pkgs.sqlite}/bin/sqlite3 /var/lib/secrets_manager/sec.db ".timeout 30000" ".backup '${staging}/sec/sec.db'"
+      cp -p /var/lib/secrets_manager/db.key ${staging}/sec/db.key
     '';
 
     paths = [
@@ -79,6 +106,9 @@ in
       "/drives/wd10/paperless"
       # hand-made archives (cnt backup tarballs, pre-migration snapshots)
       "/home/luser/backups"
+      # zitadel: pg_dumpall (refreshed above) + masterkey
+      "/var/lib/zitadel/backups"
+      "/var/lib/zitadel/masterkey"
     ];
 
     exclude = [
@@ -87,6 +117,17 @@ in
       "${dataRoot}/*/postgres"
       "${dataRoot}/atuin/postgresql/[0-9]*"
       "${dataRoot}/minecraft/postgresql/[0-9]*"
+      # live SQLite db/-wal/-shm: inconsistent hot; staging/sqlite holds the
+      # online-backup copies
+      "${dataRoot}/**/*.db"
+      "${dataRoot}/**/*.db-wal"
+      "${dataRoot}/**/*.db-shm"
+      "${dataRoot}/**/*.sqlite"
+      "${dataRoot}/**/*.sqlite-wal"
+      "${dataRoot}/**/*.sqlite-shm"
+      "${dataRoot}/**/*.sqlite3"
+      "${dataRoot}/**/*.sqlite3-wal"
+      "${dataRoot}/**/*.sqlite3-shm"
       # regenerable
       "${dataRoot}/immich/mlcache"
       "${dataRoot}/open-webui/data/hf_home"
