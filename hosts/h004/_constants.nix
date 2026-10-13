@@ -5,7 +5,7 @@
     name = "h004";
     # Filled in after the bench box joins the tailnet (`tailscale ip -4`).
     # Beszel stays off until this is set.
-    overlayIp = null;
+    overlayIp = "100.64.0.17";
     # Bench DHCP address until cutover; then h003 needs a static lease for the
     # new board's MAC (see readme.md).
     lanIp = null;

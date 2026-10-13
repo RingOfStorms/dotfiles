@@ -582,8 +582,8 @@ atuin sync -f
 
 ### USB Key for Auto-Unlock (Optional)
 
-If `usbKey = true` in the impermanence config, a USB stick with a bcachefs
-filesystem containing a `/key` file can auto-unlock the disk at boot. The USB
-drive can optionally be encrypted with `usbKeyPassword`.
+If `usbKey = true` in the impermanence config, an encrypted bcachefs USB stick
+holding a `/key` file auto-unlocks the disk at boot. The stick's password goes in
+`usbKeyPassword`.
 
 See [usb_key.md](usb_key.md) for full instructions on formatting and setup.

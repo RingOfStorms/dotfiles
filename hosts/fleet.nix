@@ -66,6 +66,7 @@ rec {
     # cutover (hosts/h004/readme.md).
     h004 = {
       user = "luser";
+      overlayIp = "100.64.0.17";
       trust = "high";
     };
     i001 = {

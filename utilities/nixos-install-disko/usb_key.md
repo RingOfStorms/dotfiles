@@ -1,86 +1,71 @@
 # USB Key for bcachefs Auto-Unlock
 
-A USB stick formatted as bcachefs containing a `/key` file can automatically
-unlock an encrypted bcachefs root partition at boot. The USB drive itself can
-optionally be encrypted to prevent trivial exposure if physically lost.
+A USB stick formatted as **encrypted** bcachefs, holding a `/key` file, unlocks an
+encrypted bcachefs root at boot. The stick is always encrypted. Its password is set
+in the host config as `usbKeyPassword` and baked into the initrd, so the box
+unlocks unattended with the stick plugged in.
+
+What this protects: **a stick lost on its own.** Whoever finds it can't read the disk
+passphrase without the stick password. What it doesn't protect: the password is in
+the repo, the Nix store and the unencrypted `/boot` of the host, so someone with
+the repo or the machine can open the stick. If a stick is lost, change the disk
+passphrase anyway.
 
 ## Prerequisites
 
-- `bcachefs-tools` installed (available in the NixOS ISO and on any impermanence host)
-- A USB stick (any size)
-- The disk encryption passphrase used when partitioning the host
+- `bcachefs-tools` (in the NixOS install ISO and on every impermanence host)
+- A USB stick (any size), not the installer stick
+- The disk encryption passphrase used when formatting the host
+- A stick password: generate one (`xkcdpass -n 3 -d -`) and set it as
+  `ringofstorms.impermanence.usbKeyPassword` in `hosts/<name>/flake.nix`. Use a new
+  password per host
 
-## Identify the USB Device
+## Version match
 
-```sh
-lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT
-```
+Format the stick at the **host's** bcachefs version, not the installer's, and mount it
+with `version_upgrade=none`. Otherwise a newer installer kernel upgrades it on first
+mount and the host's initrd can't read it. Check the host's version with
+`nix eval --raw ./hosts/<name>#nixosConfigurations.<name>.config.boot.kernelPackages.bcachefs.version`
+(e.g. `6.18.44-1.38.8` → `--version=1.38`).
 
-Look for the USB device (typically `/dev/sdX`). Formatting the whole device is
-simpler than targeting a partition.
-
-**Double-check you have the right device.** The next step destroys all data on it.
-
-```sh
-DEVICE=/dev/sdX
-```
-
-## Option A: Encrypted USB Key
-
-The drive is encrypted with a password matching `usbKeyPassword` in the NixOS
-config. Not strong security -- the password is in the config -- but it prevents
-casual reads if the stick is lost.
-
-`bcachefs format --encrypted` prompts for the passphrase interactively.
-`bcachefs unlock` also prompts interactively.
+## Make the stick
 
 ```sh
-sudo bcachefs format --encrypted "$DEVICE"
-sudo bcachefs unlock "$DEVICE"
+bash   # the install ISO's root shell is zsh; `read -p` there can write an empty file
+lsblk -o NAME,SIZE,TRAN,MODEL,FSTYPE   # the stick shows TRAN=usb
+K=/dev/sdX                             # double-check: this destroys it
+V=1.38                                 # host's bcachefs version
 
-sudo mkdir -p /tmp/usb_key && sudo mount -t bcachefs "$DEVICE" /tmp/usb_key
-sudo $EDITOR /tmp/usb_key/key
+# Stick password must equal usbKeyPassword; stop on empty input
+read -rs -p 'stick password: ' X && [ -n "$X" ] || { echo 'empty, stop'; exit 1; }; echo
+printf %s "$X" > /tmp/usb.pw
+read -rs -p 'disk passphrase: ' X && [ -n "$X" ] || { echo 'empty, stop'; exit 1; }; echo
+printf %s "$X" > /tmp/disk.key; unset X
 
-sudo umount /tmp/usb_key
-```
-
-## Option B: Unencrypted USB Key
-
-Anyone with physical access to the USB stick can read the key.
-
-```sh
-sudo bcachefs format "$DEVICE"
-
-mkdir -p /tmp/usb_key
-sudo mount -t bcachefs "$DEVICE" /tmp/usb_key
-
-sudo $EDITOR /tmp/usb_key/key
-
-sudo umount /tmp/usb_key
+bcachefs format --version=$V --encrypted --passphrase_file=/tmp/usb.pw "$K"
+bcachefs unlock -f /tmp/usb.pw "$K" && keyctl link @u @s
+mkdir -p /tmp/k && mount -t bcachefs -o version_upgrade=none "$K" /tmp/k
+install -m 0400 /tmp/disk.key /tmp/k/key
+umount /tmp/k
+shred -u /tmp/usb.pw /tmp/disk.key
+bcachefs show-super "$K" | grep -E '^Version|Oldest'   # must match $V
 ```
 
 ## Verify
 
 ```sh
-# Unencrypted:
-mkdir -p /tmp/verify
-mount -t bcachefs -o ro "$DEVICE" /tmp/verify
-cat /tmp/verify/key
-umount /tmp/verify
-
-# Encrypted:
-bcachefs unlock "$DEVICE"
-mkdir -p /tmp/verify
-mount -t bcachefs -o ro "$DEVICE" /tmp/verify
-cat /tmp/verify/key
+bcachefs unlock "$K"          # stick password
+mkdir -p /tmp/verify && mount -t bcachefs -o ro,nochanges,version_upgrade=none "$K" /tmp/verify
+cmp /tmp/verify/key <(printf %s 'disk passphrase')   # silent = match
 umount /tmp/verify
 ```
 
-The output should match the disk encryption passphrase exactly.
+The real test is a reboot of the host: it should unlock with no prompt, and with the
+stick pulled it should ask for the disk passphrase.
 
 ## Replacing a Key
 
-1. Mount the USB drive (unlock first if encrypted)
+1. Unlock with the stick password, then mount with `-o version_upgrade=none`
 2. Overwrite the key file: `echo -n 'new-passphrase' > /mountpoint/key`
 3. Unmount
 
@@ -90,9 +75,12 @@ No reformat needed.
 
 The unlock service runs in the initrd before root is mounted:
 
-1. Waits up to 4 seconds for USB devices to appear
-2. Scans all `/dev/sd*` block devices (skips the primary disk)
-3. Tries unencrypted mount first, then encrypted unlock if `usbKeyPassword` is set
+1. Waits up to 6 seconds for USB devices to appear
+2. Scans `/dev/sd*` devices **attached over USB only** (SATA/SAS disks such as a data
+   pool are skipped, as is the primary disk). Probe mounts use
+   `ro,nochanges,version_upgrade=none`, so they never write to a device
+3. Unlocks encrypted sticks with `usbKeyPassword` (an unencrypted stick still works, but
+   don't make new ones)
 4. Reads `/key` and uses it to unlock the primary partition
 5. Falls back to interactive passphrase prompt if no key is found
 

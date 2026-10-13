@@ -207,6 +207,15 @@ in
       swapDevices = [ { device = cfg.disk.swap; } ];
     })
 
+    # ── Guidance warnings ──────────────────────────────────────────────────
+    {
+      warnings =
+        lib.optional (cfg.usbKey && cfg.usbKeyPassword == null)
+          "ringofstorms.impermanence: usbKey is on but usbKeyPassword is unset, so only an unencrypted stick works and a lost stick exposes the disk passphrase. Use an encrypted stick (utilities/nixos-install-disko/usb_key.md)."
+        ++ lib.optional (cfg.encrypted && cfg.disk.swap != null)
+          "ringofstorms.impermanence: disk.swap is plaintext swap on an encrypted host; memory from the encrypted root can land on disk unencrypted. Set disk.swap = null and declare swapDevices with randomEncryption.enable = true (by-partuuid path).";
+    }
+
     # ── Disable bcachefs per-mount unlock prompts ──────────────────────────
     (
       let

@@ -32,9 +32,11 @@ IronWolf serials (label the cables): `ZRT2KQXT`, `ZRT2LRT8`, `ZRT2FJ7X`, `ZRT2GA
 and it keeps the first boot with the IronWolfs attached from mounting the pool read-write
 automatically (which could upgrade its on-disk format before you have checked it).
 
-**bcachefs version:** h002 runs kernel 6.18.44 with the bcachefs module 1.38.8; h004's
-config builds the same kernel and module (`6.18.44-1.38.8`), and the pool is at on-disk
-format 1.38. Recheck before cutover if either flake.lock moves:
+**bcachefs version:** h002 runs kernel 6.18.44 with bcachefs 1.38.8, and the pool is at on-disk
+format 1.38. h004's lock now builds `6.18.56-1.39.6`, which is newer. The read-only test mount
+(`nochanges,version_upgrade=none`) is safe, but the first **read-write** mount on h004 may upgrade
+the pool to 1.39, and after that h002 can no longer mount it (see Rollback). Recheck if either
+flake.lock moves:
 ```sh
 nix eval --raw ./hosts/h004#nixosConfigurations.h004.config.boot.kernelPackages.bcachefs.version
 ssh h002 'modinfo bcachefs | grep ^version'
@@ -108,9 +110,9 @@ Only the NVMe (and optionally the new WD) connected. No IronWolfs.
 ## Rollback
 
 Until step 6, the pool is untouched: power down h004, move the IronWolfs back, boot h002,
-`containers start arr --host h001`. After h004 has mounted the pool read-write, the format may
-have been upgraded; same kernel + module (1.38.8) means it shouldn't be, but check `show-super`
-before relying on h002 again.
+`containers start arr --host h001`. Once h004 has mounted the pool read-write it may be at format
+1.39, which h002's 1.38.8 module can't mount; rolling back then means bumping h002's flake.lock
+to the same bcachefs first. Check `bcachefs show-super` before relying on h002 again.
 
 ## After a few stable weeks
 

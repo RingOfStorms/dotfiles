@@ -41,11 +41,11 @@
             ringofstorms.impermanence = {
               enable = true;
               disk = {
-                # TODO: fill in from `lsblk -o name,uuid` after disko on the
-                # Inland TN320 NVMe (utilities/nixos-install-disko/readme.md).
-                boot = "/dev/disk/by-uuid/TODO-ESP";
-                primary = "/dev/disk/by-uuid/TODO-BCACHEFS";
-                swap = "/dev/disk/by-uuid/TODO-SWAP";
+                boot = "/dev/disk/by-uuid/3CB6-E638";
+                primary = "/dev/disk/by-uuid/de5f5f6f-4f15-482e-9ef1-98b0c52845f6";
+                # Swap is declared below with a random key per boot; the
+                # module's swap entry would be plaintext.
+                swap = null;
               };
               # Encrypted root, unlocked at boot by the bcachefs USB key stick
               # (utilities/nixos-install-disko/usb_key.md), which stays plugged
@@ -53,7 +53,22 @@
               # the stick it falls back to a console passphrase prompt.
               encrypted = true;
               usbKey = true;
+              # Password of the encrypted USB key stick. It's in the repo and the
+              # store; it only protects a stick that is lost on its own.
+              usbKeyPassword = "Emphatic3-Dart-Chemicals";
             };
+          })
+          # 8G swap partition (nvme0n1p2), re-encrypted with a fresh random key
+          # every boot so nothing from the encrypted root lands on disk in
+          # plaintext. No hibernation on this host. by-partuuid stays stable
+          # because random encryption rewrites the partition's contents.
+          ({
+            swapDevices = [
+              {
+                device = "/dev/disk/by-partuuid/cd3735f2-eee9-4d03-9ae3-464a6f84941f";
+                randomEncryption.enable = true;
+              }
+            ];
           })
           (import ./impermanence.nix {
             inherit primaryUser;
@@ -73,7 +88,6 @@
           inputs.common.nixosModules.timezone_chi
           inputs.common.nixosModules.tty_caps_esc
           inputs.common.nixosModules.zsh
-          inputs.common.nixosModules.rage
           inputs.common.nixosModules.tailnet
 
           (import ./sec-agent.nix { inherit inputs constants; })
