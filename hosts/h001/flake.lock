@@ -212,22 +212,6 @@
         "type": "github"
       }
     },
-    "matrix-nixpkgs": {
-      "locked": {
-        "lastModified": 1772198003,
-        "narHash": "sha256-I45esRSssFtJ8p/gLHUZ1OUaaTaVLluNkABkk6arQwE=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "dd9b079222d43e1943b6ebd802f04fd959dc8e61",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "dd9b079222d43e1943b6ebd802f04fd959dc8e61",
-        "type": "github"
-      }
-    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1765838191,
@@ -926,7 +910,6 @@
         "forgejo-nixpkgs": "forgejo-nixpkgs",
         "home-manager": "home-manager",
         "immich-nixpkgs": "immich-nixpkgs",
-        "matrix-nixpkgs": "matrix-nixpkgs",
         "nixpkgs": "nixpkgs_4",
         "paperless-nixpkgs": "paperless-nixpkgs",
         "ros_neovim": "ros_neovim",

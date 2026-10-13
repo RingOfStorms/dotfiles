@@ -260,31 +260,6 @@ in
             '';
           };
         };
-        # Matrix homeserver — proxy to h001's host nginx which handles
-        # container forwarding. Needs .well-known endpoints for client
-        # discovery and large body size for media uploads.
-        "matrix.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyPass = "http://${upstream}";
-            proxyWebsockets = true;
-            extraConfig = ''
-              proxy_read_timeout 600s;
-              client_max_body_size 50M;
-            '';
-          };
-        };
-
-        # Element Web client for Matrix
-        "element.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyPass = "http://${upstream}";
-            proxyWebsockets = true;
-          };
-        };
 
         # ── Minecraft survival map (squaremap) ─────────────────────────────
         # Proxied to h003's nginx over tailscale, which proxies to squaremap

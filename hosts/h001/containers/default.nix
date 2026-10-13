@@ -7,7 +7,6 @@
     ./dawarich.nix
     ./forgejo.nix
     ./immich.nix
-    ./matrix.nix
     ./paperless.nix
     ./zitadel.nix
   ];

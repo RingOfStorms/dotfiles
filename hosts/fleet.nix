@@ -213,8 +213,6 @@ rec {
     "git"
     "photos"
     "location"
-    "matrix"
-    "element"
     "docs"
     "life"
     # `secrets` is the secrets manager server (hosts/h001/mods/sec.nix).

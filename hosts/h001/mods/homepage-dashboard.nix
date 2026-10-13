@@ -3,7 +3,6 @@ let
   section1 = "a. Public Apps";
   section2 = "b. Media*rrs";
   section3 = "c. Photos & Docs";
-  section4 = "d. Comms";
   section5 = "e. Identity & Security";
   section6 = "f. Network";
   s = constants.services;
@@ -37,10 +36,6 @@ in
         "${section3}" = {
           style = "row";
           columns = 4;
-        };
-        "${section4}" = {
-          style = "row";
-          columns = 2;
         };
         "${section5}" = {
           style = "row";
@@ -201,24 +196,6 @@ in
               description = "Dawarich";
               href = "https://${s.dawarich.domain}";
               icon = "mdi-map-marker";
-            };
-          }
-        ];
-      }
-      {
-        "${section4}" = [
-          {
-            "Matrix" = {
-              description = "Synapse Homeserver";
-              href = "https://${s.matrix.serverName}";
-              icon = "matrix";
-            };
-          }
-          {
-            "Element" = {
-              description = "Matrix Client";
-              href = "https://${s.matrix.elementDomain}";
-              icon = "element";
             };
           }
         ];
