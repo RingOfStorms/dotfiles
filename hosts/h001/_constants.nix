@@ -135,45 +135,14 @@
       domain = "gist.joshuabell.xyz";
     };
 
-    # Life — personal life server (Rust server serving its own web client) with
-    # its own PostgreSQL 18 inside one NixOS container. The application and its
-    # NixOS module come from the life repo's flake; this host supplies the
-    # container, the bind mounts and the vhost.
-    life = {
-      port = 8080;
-      uid = 917;
-      gid = 917;
-      dataDir = "/var/lib/life";
-      containerIp = "10.0.0.12";
-      containerIp6 = "fc00::12";
-      domain = "life.joshuabell.xyz";
-    };
-
-    litellm = {
-      port = 8094;
-      dataDir = "/var/lib/litellm";
-      domain = null; # No public domain, accessed via Tailscale
-    };
-
+    # Floating containers: containers/{life,litellm,open-webui,searx,trilium,puzzles}
+    # (ports, vhosts live there). Domains kept for the homepage tiles.
     openWebui = {
-      port = 8084;
       domain = "chat.joshuabell.xyz";
     };
 
-    searx = {
-      port = 8889;
-    };
-
     trilium = {
-      port = 9111;
-      overlayPort = 9112;
-      dataDir = "/var/lib/trilium";
       domain = "notes.joshuabell.xyz";
-    };
-
-    oauth2Proxy = {
-      port = 4180;
-      domain = "sso-proxy.joshuabell.xyz";
     };
 
     beszelHub = {
@@ -222,7 +191,6 @@
     };
 
     puzzles = {
-      port = 8093;
       domain = "puzzles.joshuabell.xyz";
     };
 

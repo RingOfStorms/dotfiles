@@ -181,7 +181,7 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 |---|---|---|---|
 | zitadel (SSO) | Keep | h001 (don't float) | sec-agent and oauth2-proxy authenticate against it. Postgres is bind-mounted from the host; master key outside sec-agent. Move only deliberately, never with sec down. |
 | sec (secrets_manager server) | Keep | h001 (don't float) | Every host's sec-agent depends on it; it depends on zitadel. |
-| oauth2-proxy | Keep | same host as trilium | Gate for trilium. |
+| oauth2-proxy | **Live** (in trilium) | same host as trilium | Gate for trilium. |
 | beszel hub | Keep | h001, or h003 | Every agent hard-codes `HUB_URL=http://100.64.0.13:8090`; switch agents to a DNS name before ever moving it. |
 | host postgresql 17 | Retire | — | Shared DB for host modules. Disappears as services move into containers with their own postgres (`pg_dump` per service, never file copies of the shared cluster). |
 | restic-backup | Rework | — | Reaches into immich/paperless/dawarich. Replace with per-service `backupHook` + `cnt backup`, or a central job that asks `cnt` where each service runs. |
@@ -195,14 +195,14 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 | atuin | **Live** | h001 | nixos | `containers/atuin` since 2026-10-12 (PG 17 copied 1:1, full-tree checksum verified; host net, idmapped). |
 | forgejo | Keep | h001 or h003 | nixos | Own postgres. SSH on **3032**: o002 stream-forwards it, so update o002 on move. Repos can be large. |
 | opengist | **Live** | h001 | podman | `containers/opengist` since 2026-10-12 (all 123 gists, full-tree checksum verified). Old `/var/lib/opengist` kept until confirmed. |
-| trilium + oauth2-proxy | Staged (h001) | h003 (together) | nixos | `noAuthentication=true` behind the proxy; also an overlay-only unauthenticated vhost on 9112. Never split across hosts without restricting trilium's port. |
-| open-webui | Staged (h001) | h003 | nixos | Needs litellm + searx. |
-| litellm | Staged (h001) | with open-webui | nixos | Stateless; env secret. |
-| searx | Staged (h001) | with open-webui | nixos | Keep its generated secret key in persist. |
+| trilium + oauth2-proxy | **Live** h001 2026-10-13 | h003 (together) | nixos | `noAuthentication=true` behind the proxy; also an overlay-only unauthenticated vhost on 9112. Never split across hosts without restricting trilium's port. |
+| open-webui | **Live** h001 2026-10-13 | h003 | nixos | Needs litellm + searx. |
+| litellm | **Live** h001 2026-10-13 | with open-webui | nixos | Stateless; env secret. |
+| searx | **Live** h001 2026-10-13 | with open-webui | nixos | Keep its generated secret key in persist. |
 | n8n | **Removed** | — | — | — | Dropped 2026-10-12, no export. |
 | etebase + EteSync web | **Removed** 2026-10-13 | — | — | Replaced by life (calendar + contacts). Final archive: h001:/home/luser/backups/etebase-final-2026-10-13.tar.gz (2 users, 11 collections, 4626 items). |
-| puzzles | Staged (h001) | h003 | nixos | Private flake; small. |
-| life | Staged (h001) | h003 or h001 | nixos | Own postgres 18 + pgBackRest WAL archiving: take a fresh full backup right after any move. |
+| puzzles | **Live** h001 2026-10-13 | h003 | nixos | Private flake; small. |
+| life | **Live** h001 2026-10-13 | h003 or h001 | nixos | Own postgres 18 + pgBackRest WAL archiving: take a fresh full backup right after any move. |
 | matrix (synapse, element, mautrix bridges) | Decide | h001 or h003 | nixos | Big, pinned nixpkgs rev (mautrix-signal segfault). Move as one unit; bridge sessions live in the DB. |
 | penpot | **Removed** | — | — | — | Dropped 2026-10-12, no data kept. |
 | wasabi / ntest demo containers (h001) | **Removed** | — | — | — | Dropped 2026-10-12. |

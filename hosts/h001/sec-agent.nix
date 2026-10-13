@@ -23,12 +23,13 @@ import ../sec-agent.nix {
 
     oauth2_proxy_key_file_2026-03-15 = {
       remotePath = "machines/high-trust/oauth2_proxy_key_file_2026-03-15";
-      configChanges.services.oauth2-proxy.keyFile = "$SECRET_PATH";
+      # Bound read-only into the trilium floating container.
+      softDepend = [ "container@trilium" ];
     };
 
     openwebui_env_2026-03-15 = {
       remotePath = "machines/high-trust/openwebui_env_2026-03-15";
-      softDepend = [ "open-webui" ];
+      softDepend = [ "container@open-webui" ];
     };
 
     # This is the preformatted EnvironmentFile consumed by LiteLLM. It is a
@@ -37,7 +38,7 @@ import ../sec-agent.nix {
     # byte-for-byte.
     litellm-env = {
       remotePath = "machines/high-trust/litellm-env";
-      softDepend = [ "litellm" ];
+      softDepend = [ "container@litellm" ];
     };
 
     # pgBackRest conf fragment for the Life container ([global]

@@ -4,10 +4,6 @@
     home-manager.url = "github:rycee/home-manager/release-26.05";
 
     # nixpkgs-unstable.url = "github:wrvsrx/nixpkgs/fix-open-webui";
-    open-webui-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    litellm-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    trilium-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    oauth2-proxy-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     zitadel-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     beszel-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     forgejo-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -38,11 +34,6 @@
     secrets_manager.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/secrets_manager.git";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
-
-    puzzles.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/puzzles.git";
-
-    # Life server: NixOS module + packages. See hosts/h001/containers/life.nix.
-    life.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/life.git";
 
     # Floating containers host module (containers/). Path ref for local testing:
     # containers.url = "path:../../containers";
@@ -90,7 +81,6 @@
             };
           })
 
-          inputs.puzzles.nixosModules.default
           inputs.containers.nixosModules.default
           ./floating-containers.nix
           ./hardware-configuration.nix

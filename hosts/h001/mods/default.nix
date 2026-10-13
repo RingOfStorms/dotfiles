@@ -7,18 +7,12 @@
   imports = [
     # The media stack runs in the `arr` floating container (containers/arr).
     ./arr-nginx.nix
-    ./litellm.nix
     ./hardware-transcoding.nix
     ./monitoring_hub.nix
-    ./openwebui.nix
-    ./searx.nix
-    ./trilium.nix
-    ./oauth2-proxy.nix
     ./postgresql.nix
     ./sec.nix
     ./homepage-dashboard.nix
     # ./vault.nix
-    ./puzzles.nix
     ./restic-backup.nix
   ];
 }
