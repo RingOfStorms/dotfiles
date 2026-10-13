@@ -102,7 +102,7 @@
     # Tailnet-only, unauthenticated: for the Trilium desktop app, which
     # can't do the OAuth flow. Bound to h001's overlay IP only.
     server {
-      listen 100.64.0.13:9112;
+      listen @OVERLAY_IP@:9112;
       server_name h001.net.joshuabell.xyz;
       client_max_body_size 0;
       location / {
