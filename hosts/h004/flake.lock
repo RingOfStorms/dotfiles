@@ -156,20 +156,14 @@
         "impermanence": "impermanence"
       },
       "locked": {
-        "dir": "flakes/impermanence",
-        "lastModified": 1791911518,
-        "narHash": "sha256-Xg7owOqCiZ/yVNzn87wMsk6QeGwdHDLzoJygCS2v/mg=",
-        "ref": "refs/heads/master",
-        "rev": "ea10e55c1ff94fcace582dc35c61d0d3869aa882",
-        "revCount": 2276,
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+        "path": "../../flakes/impermanence",
+        "type": "path"
       },
       "original": {
-        "dir": "flakes/impermanence",
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      }
+        "path": "../../flakes/impermanence",
+        "type": "path"
+      },
+      "parent": []
     },
     "nixarr": {
       "inputs": {

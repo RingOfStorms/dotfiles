@@ -407,7 +407,9 @@ in
               # Device is either unencrypted or was just unlocked -- mount it
               log "  Mounting $dev..."
               local mount_err
-              if mount_err=$(mount -t bcachefs -o ro "$dev" "$mount_point" </dev/null 2>&1); then
+              # ro alone still allows journal replay (a write). nochanges blocks
+              # every write and version_upgrade=none blocks format upgrades.
+              if mount_err=$(mount -t bcachefs -o ro,nochanges,version_upgrade=none "$dev" "$mount_point" </dev/null 2>&1); then
                 log "  Mounted $dev"
                 if [ -f "$mount_point/key" ]; then
                   log "  Found key file on $dev"
@@ -458,6 +460,19 @@ in
                     log "Skipping $dev (is primary device)"
                     continue
                   fi
+
+                  # Only consider USB-attached disks. SATA/SAS data drives also
+                  # show up as /dev/sd*, and probing them would touch (and could
+                  # replay the journal of) unrelated pools, e.g. a NAS data array.
+                  local sys_path
+                  sys_path="$(readlink -f "/sys/class/block/''${dev#/dev/}" 2>/dev/null || true)"
+                  case "$sys_path" in
+                    */usb[0-9]*/*) ;;
+                    *)
+                      log "Skipping $dev (not a USB device)"
+                      continue
+                      ;;
+                  esac
 
                   # Skip whole-disk devices if they have partitions
                   # (e.g. skip /dev/sda if /dev/sda1 exists)

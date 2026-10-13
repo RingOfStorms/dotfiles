@@ -44,7 +44,8 @@ ssh h002 'modinfo bcachefs | grep ^version'
 
 Only the NVMe (and optionally the new WD) connected. No IronWolfs.
 
-1. BIOS: latest firmware; UEFI only, CSM off; restore on AC loss → Power On; ASPM + deepest
+1. BIOS: latest firmware; UEFI only, CSM off; **Secure Boot off** (NixOS ISOs and systemd-boot aren't
+   signed); restore on AC loss → Power On; ASPM + deepest
    C-states; VT-x on; disable RGB/Wi-Fi/Bluetooth if wired. Confirm the NVMe's M.2 slot doesn't
    disable a SATA port (manual).
 2. Boot the installer ISO (`utilities/nixos-install-disko/readme.md`), SSH in.
