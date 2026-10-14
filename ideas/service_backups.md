@@ -15,10 +15,10 @@ This document outlines the backup strategy for the NixOS fleet, covering critica
 │                    BACKUP TOPOLOGY                          │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│   H001,H003,O001,L001 ──────► H002:/data/backups (primary) │
+│   H001,H003,O001,L001 ──────► H004:/data/backups (primary) │
 │                        └────► B2/S3 (offsite)              │
 │                                                             │
-│   H002 (NAS) ───────────────► B2/S3 (offsite only)         │
+│   H004 (NAS) ───────────────► B2/S3 (offsite only)         │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -70,7 +70,7 @@ This document outlines the backup strategy for the NixOS fleet, covering critica
 
 **WARNING:** The LUKS keyfile must be stored separately in a secure location (e.g., Vaultwarden).
 
-### H002 (NAS)
+### H004 (NAS)
 
 | Path | Description | Size | Priority |
 |------|-------------|------|----------|
@@ -126,7 +126,7 @@ in {
           "**/tmp/**"
         ];
         
-        # Primary: NFS to H002
+        # Primary: NFS to H004
         repository = "/nfs/h002/backups/${config.networking.hostName}";
         
         passwordFile = config.age.secrets.restic-password.path;
@@ -327,7 +327,7 @@ systemd.services."notify-failure@" = {
 ### Immediate (This Week)
 - [ ] Set up restic backups for L001 (Headscale) - most critical
 - [ ] Back up H003's LUKS keyfile to Vaultwarden
-- [ ] Create `/data/backups/` directory on H002
+- [ ] Create `/data/backups/` directory on H004
 
 ### Short-Term (This Month)
 - [ ] Implement shared backup module

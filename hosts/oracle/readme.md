@@ -212,5 +212,5 @@ into the initrd if a boot hangs before pivot.
 - **Impermanence:** boot-time `@root` snapshot+wipe; `/persist` holds ssh host
   keys, machine-id, openbao-secrets, tailscale state, `/machine-key.json`.
 - **Modules:** essentials, git, hardening, nix_options, tailnet, zsh, backup
-  (rsync push to h002), secrets-bao (machines-hightrust), cloudUser auth.
+  (rsync push to h004), secrets-bao (machines-hightrust), cloudUser auth.
 - **nixpkgs:** nixos-26.05, stateVersion 26.05.

@@ -31,7 +31,7 @@ This document covers strategies for eliminating single points of failure and imp
         └─────────┬─────────┘          └─────────────┘
                   │ NFS
         ┌─────────▼─────────┐
-        │       H002        │
+        │       H004        │
         │   (NAS - bcachefs)│
         │  Media, Data      │
         └───────────────────┘
@@ -45,7 +45,7 @@ This document covers strategies for eliminating single points of failure and imp
 | **O001** | nginx/Vaultwarden | All public access, password manager | MEDIUM |
 | **H003** | DNS/DHCP/NAT | Entire LAN offline | MEDIUM |
 | **H001** | All services | Services down but recoverable | MEDIUM |
-| **H002** | NFS | Media unavailable | LOW - bcachefs has replication |
+| **H004** | NFS | Media unavailable | LOW - bcachefs has replication |
 
 ---
 
@@ -232,7 +232,7 @@ H003 is the network gateway:
 
 #### Option 1: Secondary DNS/DHCP
 
-Run backup DNS on another host (H001 or H002):
+Run backup DNS on another host (H001 or H004):
 - Secondary AdGuard Home instance
 - Clients configured with both DNS servers
 - DHCP failover is trickier (consider ISC DHCP with failover)
@@ -262,15 +262,15 @@ services.keepalived = {
 
 ### Recommendation
 
-Run secondary AdGuard Home on H001/H002 as minimum redundancy. Full router HA is complex for homelab.
+Run secondary AdGuard Home on H001/H004 as minimum redundancy. Full router HA is complex for homelab.
 
 ---
 
-## NFS HA (H002)
+## NFS HA (H004)
 
 ### Current State
 
-H002 uses bcachefs with 2x replication across 5 disks. Single host failure still causes data unavailability.
+H004 uses bcachefs with 2x replication across 5 disks. Single host failure still causes data unavailability.
 
 ### Options
 
@@ -296,7 +296,7 @@ fileSystems."/nfs/h002" = {
 For true HA, run two NAS nodes with GlusterFS replication:
 
 ```
-H002 (bcachefs) ◄──── GlusterFS ────► H00X (bcachefs)
+H004 (bcachefs) ◄──── GlusterFS ────► H00X (bcachefs)
 ```
 
 **Overkill for homelab**, but an option for critical data.

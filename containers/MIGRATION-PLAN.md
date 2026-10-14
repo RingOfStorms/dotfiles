@@ -19,11 +19,11 @@ host module, never floats).
   of every migrated service are deleted (backups in `h001:/home/luser/backups`).
 - CLI: `deploy`, `stop` (persists across reboot), `start`, `move`, `backup`
   (asks dir + before stopping), `restore`, `status <svc>`, `ls`, local mode.
-  Registered container hosts: h001, h002, h003, lio (+ any host a
+  Registered container hosts: h001, h003, lio (+ any host a
   `service.nix` declares, e.g. joe). Unreachable hosts don't block work on a
   service running on its declared host.
 - Hosts with the host module: h003, lio (lio has `nginx.enable` since `3a615a9`),
-  joe, h001 (h001: storage guard `h002` + capabilities `nfs-h002`, `intel-qsv`, `wd10`).
+  joe, h001 (h001: storage guard `h004` + capabilities `nfs-h004`, `intel-qsv`, `wd10`).
 - Remote root work logs in as `root@host` when its keys work (h001, h003,
   joe), else falls back to the fleet user + `sudo` (lio today: no root key,
   so `sudo -n` without a tty still fails there).
@@ -32,10 +32,8 @@ host module, never floats).
 
 | Host | Hardware | Role, now → target |
 |---|---|---|
-| h001 | Dell OptiPlex 7090, i5-11500, 64 GB, **Intel UHD 750 iGPU (QSV)**, /drives/wd10, NFS client of h002 | Main service host → stays home of media/*arr + big-data services |
-| h002 | NAS, bcachefs `/data` | NFS server, host-bound. Being rebuilt as **h004** (new board, same pool; `hosts/h004/readme.md`) |
-| h003 | Ryzen 7 5825U, 28 GB, AMD Barcelo iGPU (VAAPI), 1 TB NVMe | Router + minecraft → **general service host** once h005 takes the router role |
-| h004 | Core Ultra 5 250K+, 32 GB, iGPU (QSV), NVMe root; on the bench | Replaces h002 as the NAS (same bcachefs pool, NFS server, host-bound) |
+| h001 | Dell OptiPlex 7090, i5-11500, 64 GB, **Intel UHD 750 iGPU (QSV)**, /drives/wd10, NFS client of h004 | Main service host → stays home of media/*arr + big-data services |
+| h004 | NAS: Core Ultra 5 250K+, 32 GB, iGPU (QSV), NVMe root, bcachefs `/data` | NFS server, host-bound (successor of the retired h002, same pool; `hosts/h004/readme.md`) |
 | h005 | not built (plan in `hosts/h005/readme.md`) | Future router (dnsmasq, AdGuard, DDNS, NUT, speedtest) |
 | o002 | Oracle Ampere A1, **aarch64**, 2 OCPU/12 GB, impermanent root | Public TLS edge + headscale, host-bound |
 | joe | Desktop, NVIDIA RTX 3080 10 GB | GPU AI services (podman) |
@@ -61,7 +59,7 @@ notes below are kept as the design record.
 |---|---|---|---|
 | jellyfin | Keep | h001 | Intel QSV (`hardware-transcoding.nix`), NFS media. Kept outside the VPN netns on purpose (metadata lookups). |
 | seerr (jellyseerr) | Keep | h001 | Request UI for jellyfin. |
-| sonarr, radarr, prowlarr, bazarr | Keep | h001 | Need NFS media + shared uids mirrored on h002. |
+| sonarr, radarr, prowlarr, bazarr | Keep | h001 | Need NFS media + shared uids mirrored on h004. |
 | sabnzbd, transmission | Keep | h001 | Inside the WireGuard VPN netns (wg conf from sec-agent). |
 | shelfmark, audiobookshelf | Keep (in `arr`) | h001 | Book pipeline; keep if still reading/listening. |
 | kavita | Keep (in `arr`) | h001 | Reads the NFS book library. |
@@ -71,17 +69,17 @@ notes below are kept as the design record.
 Migration stance: **one nixos-kind container, `containers/arr`** (all rows
 above), so `cnt stop arr` / `cnt start arr` take the whole stack down/up and
 the NAS guard protects a single unit. Host network, `privateUsers = "no"`
-(NFS + host-uid state), `requires = [ "nfs-h002" "intel-qsv" ]`, guest on
+(NFS + host-uid state), `requires = [ "nfs-h004" "intel-qsv" ]`, guest on
 nixpkgs 26.05, VPN netns built by the guest in the host namespace. The
 nixarr, kavita and media-integrity modules live in `containers/arr`; the
 host keeps the vhosts (`mods/arr-nginx.nix`). Cut over 2026-10-12; see
 `containers/arr/README.md`.
 
-#### NAS guard: the whole media stack goes down when h002 does (required)
+#### NAS guard: the whole media stack goes down when h004 does (required)
 
-Goal: while h002 is unreachable (outages, the planned NAS upgrade) nothing
+Goal: while h004 is unreachable (outages, the planned NAS upgrade) nothing
 in the media stack runs. No downloads, no imports, no writes to a local
-folder that only *looks* like the share. When h002 is back and verified,
+folder that only *looks* like the share. When h004 is back and verified,
 everything starts again by itself.
 
 **Guard unit on the h001 host**, implemented generically as the host-module
@@ -89,16 +87,16 @@ option `ringofstorms.containers.guards.<name>` (`fleet-guard-<name>.service`;
 h001 config: `hosts/h001/floating-containers.nix`). The design below is what
 it does; with the stack in `arr` it protects one unit, `container@arr`:
 
-- `fleet-guard-h002.service`: `Type=notify`, `Restart=always`,
+- `fleet-guard-h004.service`: `Type=notify`, `Restart=always`,
   `RestartSec=60`. Runs the probe once and calls `systemd-notify --ready`
   only after it passes, then re-probes every 30 s and exits non-zero on the
   first failure.
 - **Probe**: (a) the media path is really an NFS mount
   (`stat -f -c %T` reports `nfs`), and (b) a sentinel file that exists only
-  on h002's `/data` is present: `/data/.h002-online`, created once with
-  `sudo touch` on h002. Because the export is `fsid=0`, it shows up on h001
-  as `/nfs/h002/.h002-online`. (b) catches an empty local folder on h001
-  *and* h002's root disk being exported because `/data` didn't mount.
+  on h004's `/data` is present: `/data/.h004-online`, created once with
+  `sudo touch` on h004. Because the export is `fsid=0`, it shows up on h001
+  as `/nfs/h002/.h004-online`. (b) catches an empty local folder on h001
+  *and* h004's root disk being exported because `/data` didn't mount.
 - **Probe must be hard-bounded.** On a hard NFS mount, `timeout 10 stat`
   only sends SIGTERM, and a process stuck in an NFS wait can ignore it, so
   the guard itself would hang "healthy" while dependents keep running. Run
@@ -107,17 +105,17 @@ it does; with the stack in `arr` it protects one unit, `container@arr`:
   not as a wait. As a backstop, set `WatchdogSec=` with `systemd-notify
   WATCHDOG=1` sent only after a successful probe, so systemd kills the
   guard if the loop ever wedges.
-- **Test before relying on it**: blackhole h002 from h001
+- **Test before relying on it**: blackhole h004 from h001
   (`nft add rule inet filter output ip daddr 10.12.14.184 drop`, h004 now serves the NAS, temporarily)
   and confirm that the guard fails within about 40 s and all dependents
   stop. Then remove the rule and confirm they come back. Also test with
-  h002 up but `/data` unmounted (sentinel missing).
+  h004 up but `/data` unmounted (sentinel missing).
 
 **Wiring:**
 
-- Every protected unit gets `bindsTo` + `after` = `fleet-guard-h002.service`.
+- Every protected unit gets `bindsTo` + `after` = `fleet-guard-h004.service`.
   When the guard stops, systemd starts stopping them at once (fully down
-  takes ~16 s with NFS up, ~100 s with h002 unreachable, because services
+  takes ~16 s with NFS up, ~100 s with h004 unreachable, because services
   hang on the dead mount until SIGKILL), and they can't start while
   it's down (after a reboot or `nixos-rebuild switch` too).
 - Restart on recovery **must respect desired state**. Plain `Upholds=`
@@ -141,7 +139,7 @@ it does; with the stack in `arr` it protects one unit, `container@arr`:
   not from memory (nixarr may name some differently, and the VPN netns
   has its own units).
 - Mount mode: keep NFS `hard` (a frozen in-flight process resumes without
-  loss when h002 returns); the guard stops everything else.
+  loss when h004 returns); the guard stops everything else.
 - autofs (`hosts/h001/autofs.nix`, currently `/nfs file:...` with no
   timeout): add `--timeout=0`, or switch to a systemd mount with
   `x-systemd.automount`, so an idle unmount can't leave consumers on a
@@ -152,8 +150,8 @@ the **host**, and protects one unit instead of a list:
 
 ```nix
 systemd.services."container@arr" = {
-  bindsTo = [ "fleet-guard-h002.service" ];
-  after = [ "fleet-guard-h002.service" ];
+  bindsTo = [ "fleet-guard-h004.service" ];
+  after = [ "fleet-guard-h004.service" ];
 };
 # No Upholds: the guard starts container@arr after a passing probe only if
 # it is enabled and not held (see above), so cnt stop/backup/move stick.
@@ -167,11 +165,11 @@ containers.arr.bindMounts."/media" = { hostPath = "/nfs/h002/nixarr/media"; isRe
   underneath. Optionally repeat the sentinel check inside the container as
   an `ExecStartPre` for each app.
 - Settings and databases (nixarr `stateDir`, `/var/lib/nixarr/state`) stay
-  on h001's local disk, bound into the container. Only media lives on h002,
+  on h001's local disk, bound into the container. Only media lives on h004,
   so stopping the container loses nothing.
 - If `media-integrity-scan` stays on the host, it stays bound, not upheld.
 - Under the floating-container CLI, the same idea generalises to a
-  `requires = [ "nfs-h002" ]` host capability whose guard unit the host
+  `requires = [ "nfs-h004" ]` host capability whose guard unit the host
   module provides (see §4.1).
 
 **Before the guard exists** (e.g. NAS upgrade day): stop the stack by
@@ -241,7 +239,7 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 
 | Service | Host | Why |
 |---|---|---|
-| NFS server | h002 | Owns the disks. |
+| NFS server | h004 | Owns the disks. |
 | dnsmasq (LAN DHCP/DNS), dnsmasq-tailnet, AdGuard Home, DDNS, NUT/UPS, ISP speedtest | h003 → h005 | Router functions: physical VLANs, port 53/DHCP, USB UPS. Planned move to h005 is a host rebuild, not `cnt move`. |
 | nginx public edge + ACME, headscale | o002 | The edge and the tailnet control plane. |
 | per-host nginx (floating sites) | each host | Written at runtime by `cnt deploy`. |
@@ -255,7 +253,7 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 1. **Host requirements** — **done**: `requires = [ ... ]` in `service.nix`;
    the host module advertises `capabilities`; `deploy`/`move` refuse early
    (before stopping anything) when the target lacks one. In use: `arr`
-   (`nfs-h002`, `intel-qsv`). `wd10` on h001 (immich, paperless; b8588f6c). `nvidia` on joe, required by localai (48ab0a6a).
+   (`nfs-h004`, `intel-qsv`). `wd10` on h001 (immich, paperless; b8588f6c). `nvidia` on joe, required by localai (48ab0a6a).
 2. **Secrets into containers** — **partly done**: services bind
    `/var/lib/secrets_manager_hydrated/<name>` read-only (h001's
    `sec-agent.nix` grants them; `cnt restart <svc>` after rotation). Not yet

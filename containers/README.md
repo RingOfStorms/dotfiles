@@ -165,7 +165,7 @@ nixos) the guest config.
   '';
   backupHook = "runuser -u postgres -- pg_dumpall > /var/lib/postgresql/dumpall.sql";
   attach = null;                # command for `containers attach`
-  requires = [ ];               # host capabilities, e.g. [ "nfs-h002" "intel-qsv" ]
+  requires = [ ];               # host capabilities, e.g. [ "nfs-h004" "intel-qsv" ]
 }
 ```
 

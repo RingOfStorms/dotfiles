@@ -21,7 +21,7 @@ This document covers rolling out impermanence (ephemeral root filesystem) to all
 |------|--------------|-------|
 | Juni | ✅ Implemented | bcachefs with @root/@persist subvolumes |
 | H001 | ❌ Traditional | Most complex - many services |
-| H002 | ❌ Traditional | NAS - may not need impermanence |
+| H004 | ❌ Traditional | NAS - may not need impermanence |
 | H003 | ❌ Traditional | Router - good candidate |
 | O001 | ❌ Traditional | Gateway - good candidate |
 | L001 | ❌ Traditional | Headscale - good candidate |
@@ -272,9 +272,9 @@ H001 is most complex due to:
 3. Gradual rollout with extensive persistence list
 4. May need to persist more than expected initially
 
-### Phase 4: NAS (H002) - Maybe Skip
+### Phase 4: NAS (H004) - Maybe Skip
 
-H002 may not benefit from impermanence:
+H004 may not benefit from impermanence:
 - Primary purpose is persistent data storage
 - bcachefs replication already provides redundancy
 - Impermanence adds complexity without clear benefit

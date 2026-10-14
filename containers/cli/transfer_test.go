@@ -685,10 +685,10 @@ func TestRequiresScript(t *testing.T) {
 	if out, err := run(Service{Name: "plain"}); err != nil || !strings.Contains(out, "ok") {
 		t.Fatalf("no requires must pass: %v %s", err, out)
 	}
-	s := Service{Name: "arr", Requires: []string{"nfs-h002", "intel-qsv"}}
-	must(t, os.WriteFile(filepath.Join(capDir, "nfs-h002"), nil, 0o644))
+	s := Service{Name: "arr", Requires: []string{"nfs-h004", "intel-qsv"}}
+	must(t, os.WriteFile(filepath.Join(capDir, "nfs-h004"), nil, 0o644))
 	out, err := run(s)
-	if err == nil || !strings.Contains(out, "intel-qsv") || strings.Contains(out, "nfs-h002,") || strings.Contains(out, "ok") {
+	if err == nil || !strings.Contains(out, "intel-qsv") || strings.Contains(out, "nfs-h004,") || strings.Contains(out, "ok") {
 		t.Fatalf("missing capability must fail and name it: %v %s", err, out)
 	}
 	must(t, os.WriteFile(filepath.Join(capDir, "intel-qsv"), nil, 0o644))
@@ -878,10 +878,10 @@ func TestStatusProbesRegisteredHosts(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	inv = &Inventory{
 		Services:       map[string]Service{"mc": {Name: "mc", Host: "h003", Kind: "nixos"}},
-		ContainerHosts: []string{"h002", "h003"},
+		ContainerHosts: []string{"h004", "h003"},
 	}
-	out := renderStatus(false, fakeFleet(map[string][]string{"h002": {"mc+"}}))
-	if !strings.Contains(out, "h002") || strings.Contains(out, "not installed") {
-		t.Fatalf("mc on undeclared h002 not shown:\n%s", out)
+	out := renderStatus(false, fakeFleet(map[string][]string{"h004": {"mc+"}}))
+	if !strings.Contains(out, "h004") || strings.Contains(out, "not installed") {
+		t.Fatalf("mc on undeclared h004 not shown:\n%s", out)
 	}
 }

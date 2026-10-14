@@ -8,7 +8,6 @@
     # The media stack runs in the `arr` floating container (containers/arr).
     ./arr-nginx.nix
     ./hardware-transcoding.nix
-    ./postgresql.nix
     ./sec.nix
     ./homepage-dashboard.nix
     # ./vault.nix

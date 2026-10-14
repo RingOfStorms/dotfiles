@@ -37,7 +37,7 @@
           # Host network, so every port and stored inter-app URL
           # (localhost:8989 etc.) stays as it was on bare metal.
           privateNetwork = false;
-          # NFS can't be idmapped and h002 checks raw uids; existing state is
+          # NFS can't be idmapped and h004 checks raw uids; existing state is
           # owned by host uids. Container root is host root.
           privateUsers = "no";
           # VPN-Confinement builds the `wg` netns, bridge, wireguard link and

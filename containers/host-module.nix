@@ -165,7 +165,7 @@ in
       type = lib.types.listOf lib.types.str;
       default = [ ];
       example = [
-        "nfs-h002"
+        "nfs-h004"
         "intel-qsv"
       ];
       description = ''

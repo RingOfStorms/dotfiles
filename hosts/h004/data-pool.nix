@@ -1,4 +1,4 @@
-# The h002 bcachefs data pool (4× 12 TB IronWolf, replicas=2), mounted at /data.
+# The NAS bcachefs data pool (moved over from h002) (4× 12 TB IronWolf, replicas=2), mounted at /data.
 # Gated by constants.dataPool.enable so the bench box and the first post-move
 # boot never mount (or upgrade) the pool automatically.
 {

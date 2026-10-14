@@ -138,7 +138,7 @@ and proceed to Step 3 to verify/fix the mounts.
 ### Step 2b: Manual partitioning (multi-drive / custom layouts)
 
 For machines with multi-disk arrays, mixed filesystems, or other layouts that
-don't fit the single-drive disko template (e.g. h002's 5-disk bcachefs array
+don't fit the single-drive disko template (e.g. h004's multi-disk bcachefs array
 with replication).
 
 #### 1. Partition the boot drive
@@ -282,7 +282,7 @@ Keep only:
 - `nixpkgs.hostPlatform`
 - `networking.useDHCP`
 - `fileSystems` for **non-boot drives** that the impermanence module does not
-  manage (e.g. a separate data array like h002's `/data` mount)
+  manage (e.g. a separate data array like h004's `/data` mount)
 
 Copy this file back to your workstation and place it in your host config:
 

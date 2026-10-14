@@ -1,4 +1,4 @@
-# h002 bcachefs erasure-coding migration (research + plan)
+# h004 bcachefs erasure-coding migration (research + plan)
 
 Captured 2026-05-01 after the r/bcachefs v1.37.0 announcement
 (<https://www.reddit.com/r/bcachefs/comments/1rukym4/v1370_erasure_coding/>).
@@ -62,7 +62,7 @@ fine; there's no urgency.
 
 ## Why we're doing this at all
 
-Current `/data` array on h002:
+Current `/data` array on h004:
 
 ```
 sda  10.9 TB HDD   ┐
@@ -132,11 +132,11 @@ No file changes. Just periodically run the blocker checklist above.
 ## Phase 2: NixOS prep (when blockers clear)
 
 The only NixOS-level change needed is pinning a kernel new enough to
-contain bcachefs filesystem v1.38. Currently `hosts/h002/` does not set
+contain bcachefs filesystem v1.38. Currently `hosts/h004/` does not set
 `boot.kernelPackages`, so it inherits nixpkgs default (6.12 LTS as of
 this writing — too old).
 
-Edit `hosts/h002/hardware-configuration.nix`. Add `pkgs` to the function
+Edit `hosts/h004/hardware-configuration.nix`. Add `pkgs` to the function
 args and pin the kernel:
 
 ```nix
@@ -159,18 +159,18 @@ Then:
 
 ```sh
 # from a workstation with the repo checked out
-nixos-rebuild switch --flake ./hosts/h002#h002 --target-host h002
+nixos-rebuild switch --flake ./hosts/h004#h004 --target-host h004
 # verify
-ssh h002 'uname -r && bcachefs version'
+ssh h004 'uname -r && bcachefs version'
 ```
 
 The mount config (`fileSystems."/data"`) does **not** change yet. EC
 settings live in the bcachefs superblock, not in fstab — they're
 toggled by `bcachefs set-fs-option`.
 
-## Phase 3: The actual migration (online, on h002)
+## Phase 3: The actual migration (online, on h004)
 
-All commands run as root on h002. **Read each one before pasting.**
+All commands run as root on h004. **Read each one before pasting.**
 
 ### 3a. Pre-flight health check
 
@@ -225,7 +225,7 @@ filesystem stays mounted and usable throughout. NFS / nixarr stay up.
 ### 3d. Monitor progress
 
 ```sh
-# Run on a long-lived ssh session (tmux on h002 — already enabled via
+# Run on a long-lived ssh session (tmux on h004 — already enabled via
 # common.nixosModules.tmux):
 watch -n 30 'bcachefs fs usage -h /data'
 ```
@@ -251,7 +251,7 @@ bcachefs data scrub /data
 
 ### 3f. Commit the post-migration state to git
 
-Update the comment block in `hosts/h002/hardware-configuration.nix` so
+Update the comment block in `hosts/h004/hardware-configuration.nix` so
 future-me knows the layout:
 
 ```nix
@@ -278,7 +278,7 @@ No mount-option change required.
 | Risk | Mitigation |
 |---|---|
 | EC implementation bug corrupts data during `data rereplicate` | The whole reason we're waiting for v1.38 + a month of community shakedown. |
-| Power loss mid-migration | bcachefs handles this safely per Kent (assumes drives honor FUA). h002 is on the workshop UPS. |
+| Power loss mid-migration | bcachefs handles this safely per Kent (assumes drives honor FUA). h004 is on the workshop UPS. |
 | `metadata_replicas=1` reduces FS resilience | Not doing this. Staying at 2. |
 | Rebuild after a real drive failure with EC is "painfully slow" | This is the whole reason we're waiting for v1.38's allocator work. |
 | sdc (smallest drive) interacts weirdly with EC stripe allocation | Allocator handles narrowing stripe width automatically; mixed widths are supported. If observed in practice during community shakedown phase, reconsider excluding sdc. |
@@ -299,7 +299,7 @@ No mount-option change required.
 
 ## Files this plan will touch when executed
 
-- `hosts/h002/hardware-configuration.nix` — add `pkgs` arg, add
+- `hosts/h004/hardware-configuration.nix` — add `pkgs` arg, add
   `boot.kernelPackages = pkgs.linuxPackages_latest;`, update `/data`
   comment block post-migration.
 

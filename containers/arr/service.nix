@@ -8,10 +8,10 @@
   kind = "nixos";
   host = "h001";
   description = "nixarr media stack + kavita + media-integrity";
-  # Media lives on the h002 NAS (bound in, not backed up here); jellyfin
+  # Media lives on the h004 NAS (bound in, not backed up here); jellyfin
   # transcodes on the Intel iGPU.
   requires = [
-    "nfs-h002"
+    "nfs-h004"
     "intel-qsv"
   ];
   persist = {

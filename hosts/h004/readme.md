@@ -11,9 +11,11 @@ h004 was spawned out of **h002**, whose last config is at
 Restore it locally with `git show c1b72f9e:hosts/h002/<file>` or
 `git restore --source=c1b72f9e hosts/h002`.
 
-The names `/nfs/h002`, the `nfs-h002` capability, the `fleet-guard-h002` guard and the
-`/data/.h002-online` sentinel on h001 were kept on purpose: they now point at h004
-(`hosts/h001/autofs.nix` → `10.12.14.184`).
+On h001 the capability is `nfs-h004`, the guard `fleet-guard-h004` and the sentinel
+`/data/.h004-online`. Only the mount path `/nfs/h002` (`hosts/h001/autofs.nix` →
+`10.12.14.184`) keeps the old name: sonarr/radarr/bazarr/jellyfin/sabnzbd/transmission store
+absolute paths under it in their databases and configs. `/data/.h002-online` can be deleted
+once h001 runs the `fleet-guard-h004` config.
 
 ## Hardware
 
@@ -128,5 +130,5 @@ module's default target is h004 (`100.64.0.17`).
 
 Still to do by hand:
 - Delete h002's node in headscale (`headscale nodes list`, then `headscale nodes delete -i <id>`).
-- Rename the `nfs-h002` capability/guard on h001 if you want the names to match.
+- After h001 is deployed with `fleet-guard-h004`: `rm /data/.h002-online` on h004.
 - Retire the Kingston SSD and the old board/CPU/RAM/GPU.

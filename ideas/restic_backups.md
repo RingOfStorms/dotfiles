@@ -27,7 +27,7 @@ When the first run finishes, on h001:
 2. **Transport:** run `services.restic.server` on h001 in **append-only** mode with **private repos**, bound to the tailnet IP `100.64.0.13` (`hosts/h001/_constants.nix:9`) and protected by an htpasswd file. lio can only add data. Forget/prune runs on h001 locally against the filesystem path.
 3. **Offsite:** a nightly `restic copy` from h001 into a second restic repo on a **Hetzner Storage Box** (sftp). The offsite repo gets its own password. Backblaze B2 is the fallback if you want an S3 backend with Object Lock.
 4. **Secrets:** add them to `hosts/h001/mods/sec.nix` (server declarations) and to `hosts/<host>/sec-agent.nix` `extraSecrets` (hydration). This follows exactly the existing `life_backup_env_2026-09-30` pattern.
-5. **Existing tooling:** the rsync-to-h002 module `flakes/common/nix_modules/backup.nix` should be **retired for h001/lio, not reused**. `ideas/service_backups.md` is superseded by this doc where they overlap. See section 9.
+5. **Existing tooling:** the rsync-to-h004 module `flakes/common/nix_modules/backup.nix` should be **retired for h001/lio, not reused**. `ideas/service_backups.md` is superseded by this doc where they overlap. See section 9.
 6. **Monitoring:** the fleet has no notifier today. Add a tiny `OnFailure=` ntfy hook (see the open questions) and a weekly restore-drill unit. Beszel can only alert on disk usage.
 
 ## 1. Data drive layout proposal (h001 `/drives/wd10`)
@@ -52,7 +52,7 @@ Today: `immich/` (`_constants.nix:45`), `dawarich/` (`:58`), `paperless/` (`:91`
 ```
 
 Rules:
-- Every scattered copy (old drives, h002 dumps, `/var/lib/forgejo.tar.gz` noted at `ideas/service_backups.md:62`) gets moved into `archive/<source>/`, deduplicated (`rmlint`/`jdupes`), and then **backed up once** as part of the h001 repo.
+- Every scattered copy (old drives, h004 dumps, `/var/lib/forgejo.tar.gz` noted at `ideas/service_backups.md:62`) gets moved into `archive/<source>/`, deduplicated (`rmlint`/`jdupes`), and then **backed up once** as part of the h001 repo.
 - Photos go into immich (external library or upload) rather than `archive/`, so there is one canonical photo store.
 - `backups/` is never itself a backup source, so restic does not back up its own repo.
 
@@ -113,7 +113,7 @@ Policy: back up **dumps, not live database directories**, plus all non-DB state.
 | trilium | staged `.backup` of `/var/lib/trilium/document.db` + rest of dir | SQLite (`_constants.nix:158`) | live db |
 | etebase | staged `.backup` of `db.sqlite3`, plus `secret.txt` (`_constants.nix:252`) | SQLite | live db |
 | n8n, open-webui, litellm | `/var/lib/private/{n8n,open-webui}` (**DynamicUser**: `/var/lib/<x>` is a symlink, restic would store only the link) | SQLite -> staged `.backup` | litellm: skip (reproducible) |
-| nixarr | `/var/lib/nixarr/state` | per-app SQLite; file copy OK (medium value) | `/nfs/h002/**` (media lives on h002), `**/Cache`, `**/transcodes`, `**/MediaCover` |
+| nixarr | `/var/lib/nixarr/state` | per-app SQLite; file copy OK (medium value) | `/nfs/h002/**` (media lives on h004), `**/Cache`, `**/transcodes`, `**/MediaCover` |
 | kavita | `/var/lib/kavita` | SQLite (optional) | covers cache |
 | beszel hub | `/var/lib/beszel-hub` | low value | - |
 | acme | `/var/lib/acme` | certs (rate-limit insurance) | - |
@@ -454,10 +454,10 @@ Automated: `restic-restore-drill.service` (monthly timer) on h001 restores a ran
 
 ## 9. Existing tooling: replace or reuse?
 
-- `flakes/common/nix_modules/backup.nix` (`ringofstorms.backup`): rsync + `--link-dest` push to `h002:/data/backups` over nix2nix ssh, **unencrypted by design** (`:13-15`). Today it is only imported by `hosts/oracle/o002` and `hosts/oracle/bootstrap` (`flake.nix:91` / `:99`), not by h001 or lio.
-  - **Do not reuse it for this.** h002 is not a backup target (may be reformatted), the module has no encryption, no dedup, and no append-only protection (the nix2nix key can `rm -rf` the remote, `:193`). Wrapping restic inside it would mean a second convention next to upstream `services.restic`.
+- `flakes/common/nix_modules/backup.nix` (`ringofstorms.backup`): rsync + `--link-dest` push to `h004:/data/backups` over nix2nix ssh, **unencrypted by design** (`:13-15`). Today it is only imported by `hosts/oracle/o002` and `hosts/oracle/bootstrap` (`flake.nix:91` / `:99`), not by h001 or lio.
+  - **Do not reuse it for this.** h004 is not a backup target (may be reformatted), the module has no encryption, no dedup, and no append-only protection (the nix2nix key can `rm -rf` the remote, `:193`). Wrapping restic inside it would mean a second convention next to upstream `services.restic`.
   - Leave it in place for o002 for now. Follow-up decision (Q9): migrate o002 to `services.restic.backups` against h001's rest-server (it's on the tailnet) and delete `backup.nix`. That is the clean cutover; one backup convention fleet-wide.
-- `ideas/service_backups.md`: older plan (topology into h002, mentions OpenBao `/bao-keys`, which is gone now that `sec` replaced it, `mods/sec.nix:1`). Its path inventory is useful but stale. **Supersede it** with this doc. Add a one-line pointer at its top, or delete it once this is implemented.
+- `ideas/service_backups.md`: older plan (topology into h004, mentions OpenBao `/bao-keys`, which is gone now that `sec` replaced it, `mods/sec.nix:1`). Its path inventory is useful but stale. **Supersede it** with this doc. Add a one-line pointer at its top, or delete it once this is implemented.
 - `life` container has its own restic + pgBackRest pipeline (`containers/life.nix:214-223`, secret `life_backup_env_2026-09-30`). Reuse it by pointing its `RESTIC_REPOSITORY` at the h001 rest-server (`/life/` user) so it inherits prune/offsite, rather than duplicating (Q6).
 
 ## 10. Rollout order
