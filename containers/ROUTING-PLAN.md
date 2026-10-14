@@ -190,7 +190,7 @@ at the pinned version before relying on it):
 - Runtime: the host module already has a runtime port set filled by
   `cnt deploy`. Extend the per-service file from "port" to
   "port, proto, interface, sources".
-- Roll out carefully: sshd, beszel agents (45876?), sec-agent, nix-serve
+- Roll out carefully: sshd, the beszel hub (agents connect out to it; h001 runs no agent listener), sec-agent, nix-serve
   (lio), DNS on h003 and headscale DERP all rely on the trust today. Inventory
   each host with `ss -ltnup` first, then add the needed rules to the host
   config **before** removing the trust.
