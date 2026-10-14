@@ -185,9 +185,9 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 | sec (secrets_manager server) | Keep | h001 (don't float) | Every host's sec-agent depends on it; it depends on zitadel. |
 | oauth2-proxy | **Live** (in trilium) | same host as trilium | Gate for trilium. |
 | beszel hub | **Live** h001 2026-10-13 (789b4a53) | h001 (pinned) | `containers/beszel`, binds 100.64.0.13:8090 (host network). Agents still hard-code that IP: give them a DNS name that follows the hub before ever `cnt move`-ing it. |
-| host postgresql 17 | Retire (next) | — | **Unused** as of 2026-10-13: only an empty `scratch` db (0 tables) is left; every migrated service has its own postgres and zitadel runs its own inside its container. Remove `mods/postgresql.nix` (+ its `postgresqlBackup`), archive `/var/lib/postgresql` (47 MB) and `/var/backup/postgresql`, then delete. |
-| restic-backup | **Reworked** 2026-10-13 (b8588f6c) | — | Runs every `service.nix` `backupHook` whose unit is active on h001 (skips others; a failing hook fails the run), then backs up all of `/srv/containers` (live PG clusters + caches excluded) plus wd10 media and `~luser/backups`. SQLite: host-side `.backup` copies of every SQLite db into `/var/lib/restic-staging/sqlite`; only the copied live files are excluded (generated exclude-file, 789b4a53). Also sec db + key and the zitadel dump + masterkey (ea10e55c). `--group-by host,tags` for backup and prune. Restore-verified (snapshots a07bdec4, f6542ab6). |
-| homepage-dashboard (h001, joe) | Decide | anywhere | Hard-coded links; trivial either way. |
+| host postgresql 17 | **Removed** 2026-10-14 | — | Was unused (only an empty `scratch` db). `mods/postgresql.nix` deleted; data + final pg_dumpall archived in h001:/home/luser/backups/host-postgresql-final-2026-10-14.tar.gz, `/var/lib/postgresql` deleted. The `postgres` user (uid 71) stays: zitadel.nix declares it for its bind-mounted cluster, and life's pgBackRest secret is group 71. |
+| restic-backup | **Reworked** 2026-10-13 (b8588f6c) | — | Runs every `service.nix` `backupHook` whose unit is active on h001 (skips others; a failing hook fails the run), then backs up all of `/srv/containers` (live PG clusters + caches excluded) plus wd10 media and `~luser/backups`. SQLite: host-side `.backup` copies of every SQLite db into `/var/lib/restic-staging/sqlite`; only the copied live files are excluded (generated exclude-file, 789b4a53). Also sec db + key and the zitadel dump + masterkey (ea10e55c). `--group-by host,tags` for backup and prune. Restore-verified: a07bdec4 and f6542ab6 restored, all SQLite copies pass integrity_check. |
+| homepage-dashboard (h001, joe) | Keep as is (for now) | — | Likely replaced by a unified, location-aware services view built with the §4.3 routing work. |
 
 ### Apps — good floating candidates
 
@@ -298,7 +298,7 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 4. ~~forgejo~~ done 2026-10-13; matrix removed.
 4a. ~~Cut the *arr stack over to `arr`~~ **Done 2026-10-12.**
 5. ~~§4.1 `wd10`, immich/paperless, restic rework~~ done 2026-10-13 (b8588f6c).
-   Beszel hub floated 2026-10-13 (789b4a53, pinned to h001). Next: retire h001's shared postgres (unused, see §3).
+   Beszel hub floated 2026-10-13 (789b4a53, pinned to h001). Host postgres removed 2026-10-14.
 6. GPU services on joe: ~~localai as podman-kind~~ live; ~~nvidia capability + localai `requires`~~ done.
 7. **Last** (no off-host moves planned): §4.3 routing + target TLS certs,
    then `cnt move` services to their ideal hosts. Until then every migration
