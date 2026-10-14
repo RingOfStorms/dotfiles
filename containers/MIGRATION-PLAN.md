@@ -259,7 +259,9 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
    `sec-agent.nix` grants them; `cnt restart <svc>` after rotation). Not yet
    declared in `service.nix`, so `move` can't check the target holds the
    same grants.
-3. **Routing that follows a move** (biggest manual step today):
+3. **Routing that follows a move** (biggest manual step today). Full design:
+   [ROUTING-PLAN.md](ROUTING-PLAN.md) (exposure levels, generated DNS/edge,
+   auth, runtime overrides, dashboard):
    - o002 vhosts hard-code upstream tailnet IPs → proxy to a name instead.
    - dnsmasq-tailnet's `h001Subdomains`/`lioSubdomains` in `fleet.nix` →
      generate from `service.nix` hosts (or have the CLI update it).
