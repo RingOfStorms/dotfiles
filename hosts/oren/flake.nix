@@ -96,6 +96,10 @@
           (
             { pkgs, ... }:
             {
+              # Root SSH via the fleet nix2nix key (matches juni/i001/gp3), for
+              # root deploys and admin tasks from other fleet hosts.
+              users.users.root.openssh.authorizedKeys.keys = [ fleet.global.sshPubKey ];
+
               environment.systemPackages = [
                 inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default
                 # inputs.mva.packages.${pkgs.stdenv.hostPlatform.system}.default

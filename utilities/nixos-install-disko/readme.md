@@ -639,7 +639,7 @@ swapon --show=NAME --noheadings | grep -qxF -e "$D" ${M:+-e "$M"} && { echo "sti
 [ -e "/dev/mapper/$N" ] && dmsetup remove "$N"
 [ -z "$(ls -A /sys/class/block/${D##*/}/holders)" ] || { echo "partition still held, abort"; exit 1; }
 if ! blkdiscard -s "$D" 2>/dev/null && ! blkdiscard "$D"; then
-  dd if=/dev/zero of="$D" bs=4M oflag=direct status=progress
+  dd if=/dev/zero of="$D" bs=4M iflag=count_bytes count="$(blockdev --getsize64 "$D")" oflag=direct status=progress
 fi
 echo "nonzero bytes in first MiB: $(head -c 1M "$D" | tr -d '\0' | wc -c)"
 systemctl restart "$U"
@@ -649,7 +649,8 @@ swapon -a && swapon --show                  # NAME should be /dev/dm-*
 It only touches the device, mapper and `mkswap-*` unit derived from `$P`. It stops
 before writing if `$P` has no NixOS swap unit (wrong path), if swap on it is still
 active, or if anything still holds the partition. Tested on h004, including a wrong
-PARTUUID and the root partition passed as `$P` (both aborted). `cryptsetup` isn't on
+PARTUUID and the root partition passed as `$P` (both aborted), and both the discard
+and the forced `dd` path (stops exactly at the partition end). `cryptsetup` isn't on
 the host's PATH, hence `dmsetup`.
 
 How much this erases depends on the drive. Whether discarded SSD blocks read back
