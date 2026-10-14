@@ -15,6 +15,7 @@
     pgdumps = "/var/backup/postgresql"; # nightly postgresqlBackup + backupHook
     mlcache = "/var/cache/immich"; # ML models (re-downloadable)
     nixos = "/var/lib/nixos";
+    dbro = "/var/lib/immich-dbro"; # immich_ro password (tailnet read-only DB access)
   };
 
   backupHook = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
