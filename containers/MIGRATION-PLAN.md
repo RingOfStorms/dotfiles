@@ -14,7 +14,7 @@ host module, never floats).
 - Floating today: `arr` (h001, **live since 2026-10-12**: whole media stack,
   NAS-guarded), `opengist`, `atuin`, `vaultwarden` (h001, 2026-10-12),
   `trilium` (+ oauth2-proxy), `searx`, `litellm`, `open-webui`, `puzzles`,
-  `life`, `forgejo`, `dawarich` (h001, 2026-10-13), `localai` (joe), `minecraft` (h003), test twins
+  `life`, `forgejo`, `dawarich`, `immich`, `paperless`, `beszel` (h001, 2026-10-13), `localai` (joe), `minecraft` (h003), test twins
   `hello-nixos` / `hello-podman` (lio). Old host modules and `/var/lib` data
   of every migrated service are deleted (backups in `h001:/home/luser/backups`).
 - CLI: `deploy`, `stop` (persists across reboot), `start`, `move`, `backup`
@@ -23,7 +23,7 @@ host module, never floats).
   `service.nix` declares, e.g. joe). Unreachable hosts don't block work on a
   service running on its declared host.
 - Hosts with the host module: h003, lio (lio has `nginx.enable` since `3a615a9`),
-  joe, h001 (h001: storage guard `h002` + capabilities `nfs-h002`, `intel-qsv`).
+  joe, h001 (h001: storage guard `h002` + capabilities `nfs-h002`, `intel-qsv`, `wd10`).
 - Remote root work logs in as `root@host` when its keys work (h001, h003,
   joe), else falls back to the fleet user + `sudo` (lio today: no root key,
   so `sudo -n` without a tty still fails there).
@@ -187,8 +187,8 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 | sec (secrets_manager server) | Keep | h001 (don't float) | Every host's sec-agent depends on it; it depends on zitadel. |
 | oauth2-proxy | **Live** (in trilium) | same host as trilium | Gate for trilium. |
 | beszel hub | **Live** h001 2026-10-13 (789b4a53) | h001 (pinned) | `containers/beszel`, binds 100.64.0.13:8090 (host network). Agents still hard-code that IP: give them a DNS name that follows the hub before ever `cnt move`-ing it. |
-| host postgresql 17 | Retire | — | Shared DB for host modules. Disappears as services move into containers with their own postgres (`pg_dump` per service, never file copies of the shared cluster). |
-| restic-backup | **Reworked** 2026-10-13 (b8588f6c) | — | Runs every `service.nix` `backupHook` whose unit is active on h001 (skips others; a failing hook fails the run), then backs up all of `/srv/containers` (live PG clusters + caches excluded) plus wd10 media and `~luser/backups`. `--group-by host,tags` for backup and prune. |
+| host postgresql 17 | Retire (next) | — | **Unused** as of 2026-10-13: only an empty `scratch` db (0 tables) is left; every migrated service has its own postgres and zitadel runs its own inside its container. Remove `mods/postgresql.nix` (+ its `postgresqlBackup`), archive `/var/lib/postgresql` (47 MB) and `/var/backup/postgresql`, then delete. |
+| restic-backup | **Reworked** 2026-10-13 (b8588f6c) | — | Runs every `service.nix` `backupHook` whose unit is active on h001 (skips others; a failing hook fails the run), then backs up all of `/srv/containers` (live PG clusters + caches excluded) plus wd10 media and `~luser/backups`. SQLite: host-side `.backup` copies of every SQLite db into `/var/lib/restic-staging/sqlite`; only the copied live files are excluded (generated exclude-file, 789b4a53). Also sec db + key and the zitadel dump + masterkey (ea10e55c). `--group-by host,tags` for backup and prune. Restore-verified (snapshots a07bdec4, f6542ab6). |
 | homepage-dashboard (h001, joe) | Decide | anywhere | Hard-coded links; trivial either way. |
 
 ### Apps — good floating candidates
@@ -300,7 +300,7 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 4. ~~forgejo~~ done 2026-10-13; matrix removed.
 4a. ~~Cut the *arr stack over to `arr`~~ **Done 2026-10-12.**
 5. ~~§4.1 `wd10`, immich/paperless, restic rework~~ done 2026-10-13 (b8588f6c).
-   Next: retire h001's shared postgres.
+   Beszel hub floated 2026-10-13 (789b4a53, pinned to h001). Next: retire h001's shared postgres (unused, see §3).
 6. GPU services on joe: ~~localai as podman-kind~~ live; ~~nvidia capability + localai `requires`~~ done.
 7. **Last** (no off-host moves planned): §4.3 routing + target TLS certs,
    then `cnt move` services to their ideal hosts. Until then every migration
