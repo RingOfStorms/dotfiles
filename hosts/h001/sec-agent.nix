@@ -9,6 +9,17 @@ import ../sec-agent.nix {
   inherit inputs constants;
   role = "machines-hightrust";
   extraSecrets = {
+    # Credentials of the shared `josh` atuin account, readable by the local
+    # primary user's atuin-autologin.
+    "atuin-key-josh_2026-03-15" = {
+      remotePath = "machines/high-trust/atuin-key-josh_2026-03-15";
+      field = "value";
+      owner = constants.host.primaryUser;
+      group = "users";
+      mode = "0400";
+      hardDepend = [ "atuin-autologin" ];
+    };
+
     bunny_rw_dns_2026-03-15 = {
       remotePath = "machines/high-trust/bunny_rw_dns_2026-03-15";
       configChanges.security.acme.certs."joshuabell.xyz".credentialFiles.BUNNY_API_KEY_FILE =

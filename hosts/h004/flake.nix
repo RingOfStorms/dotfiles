@@ -76,6 +76,22 @@
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.tailnet
 
+          # Atuin history sync. Logs the local user (luser) into the shared
+          # `josh` atuin account: the account comes from the secret's
+          # contents, not from the local username.
+          inputs.common.nixosModules.atuin
+          ({
+            ringofstorms.atuin = {
+              enable = true;
+              autologin = {
+                enable = true;
+                user = primaryUser;
+                secretFile = "/var/lib/secrets_manager_hydrated/atuin-key-josh_2026-03-15";
+                afterUnits = [ "sec-secrets-ready.service" ];
+              };
+            };
+          })
+
           (import ./sec-agent.nix { inherit inputs constants; })
 
           ./hardware-configuration.nix

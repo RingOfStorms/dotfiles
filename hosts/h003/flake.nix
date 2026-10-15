@@ -47,6 +47,21 @@
           inputs.common.nixosModules.tty_caps_esc
           inputs.common.nixosModules.zsh
 
+          # Atuin history sync: the local primary user logs into the shared `josh`
+          # atuin account (the account comes from the secret, not the local user).
+          inputs.common.nixosModules.atuin
+          ({
+            ringofstorms.atuin = {
+              enable = true;
+              autologin = {
+                enable = true;
+                user = constants.host.primaryUser;
+                secretFile = "/var/lib/secrets_manager_hydrated/atuin-key-josh_2026-03-15";
+                afterUnits = [ "sec-secrets-ready.service" ];
+              };
+            };
+          })
+
           (import ./sec-agent.nix { inherit inputs constants; })
 
           inputs.containers.nixosModules.default
