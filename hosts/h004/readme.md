@@ -27,7 +27,7 @@ once h001 runs the `fleet-guard-h004` config.
 | Boot | Inland TN320 256 GB NVMe |
 | SATA card | Vantec UGT-ST655 5-port PCIe x4 |
 | PSU | Corsair RM1000x |
-| Data | 4× Seagate IronWolf Pro ST12000NT001 12 TB (bcachefs pool from h002), + WD Red Plus 12 TB (to add after burn-in) |
+| Data | 4× Seagate IronWolf Pro ST12000NT001 12 TB (bcachefs pool from h002) + WD Red Plus 12 TB `WD-B01XWD2D` (burned in, added 2026-10-15; on the Vantec card), replicas=2, 50.2T raw |
 | Scratch | Seagate ST750LX003 750 GB hybrid (very old, ~84k hours): standalone unencrypted bcachefs at `/scratch`, throwaway data only |
 
 IronWolf serials (label the cables): `ZRT2KQXT`, `ZRT2LRT8`, `ZRT2FJ7X`, `ZRT2GA17`.
