@@ -506,9 +506,9 @@ func TestHostCmdLocal(t *testing.T) {
 // stop must drop the boot-time wants link (stays stopped after reboot);
 // start must restore it, but only for an installed unit.
 func TestStopStaysStoppedAcrossReboot(t *testing.T) {
-	old := mutableUnits
-	t.Cleanup(func() { mutableUnits = old })
-	mutableUnits = t.TempDir()
+	oldU, oldH := mutableUnits, holdDir
+	t.Cleanup(func() { mutableUnits, holdDir = oldU, oldH })
+	mutableUnits, holdDir = t.TempDir(), filepath.Join(t.TempDir(), "hold")
 	bash := realPath(t, "bash")
 	sh := func(script string) {
 		out, err := exec.Command(bash, "-c", "set -euo pipefail\n"+script).CombinedOutput()
@@ -539,9 +539,9 @@ func TestStopStaysStoppedAcrossReboot(t *testing.T) {
 // extra-container mimics the pinned one: it links the unit and wants only
 // when the build changed, but always starts.
 func TestRedeployUnchangedReenablesBootStart(t *testing.T) {
-	old := mutableUnits
-	t.Cleanup(func() { mutableUnits = old })
-	mutableUnits = t.TempDir()
+	oldU, oldH := mutableUnits, holdDir
+	t.Cleanup(func() { mutableUnits, holdDir = oldU, oldH })
+	mutableUnits, holdDir = t.TempDir(), filepath.Join(t.TempDir(), "hold")
 	bash := realPath(t, "bash")
 	bin, out := t.TempDir(), t.TempDir()
 	s := Service{Name: "hello-nixos", Kind: "nixos"}
