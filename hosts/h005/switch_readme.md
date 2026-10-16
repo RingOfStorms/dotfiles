@@ -1,6 +1,6 @@
 # Switch Configuration & Recovery Guide
 
-This document describes the network switches behind **h003** (the router), how to
+This document describes the network switches behind **h005** (the router; h003 until 2026-10-15), how to
 connect to each, how they are currently configured, and how to re-apply that
 configuration from scratch if a switch is factory-reset or replaced.
 
@@ -44,7 +44,7 @@ h003 is router-on-a-stick: `enp2s0` carries VLAN 10 and 20 **tagged**. dnsmasq
 serves DHCP/DNS on the tagged `vlan10`/`vlan20` sub-interfaces only. There is **no
 DHCP on untagged/native VLAN 1** — a device that ends up on VLAN 1 gets no lease.
 
-Static reservations live in `hosts/h003/_constants.nix` → `network.staticLeases`.
+Static reservations live in `hosts/h005/_constants.nix` → `network.staticLeases`.
 
 ---
 

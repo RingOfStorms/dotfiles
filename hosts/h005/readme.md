@@ -137,7 +137,7 @@ Power h005 off before moving WAN, trunk and UPS cables back to h003; power-cycle
 1. Finish non-critical references (h001 dashboard, old o002 nginx service proxies, descriptions). Fleet gateway metadata and Headscale split DNS must already have moved at cutover.
 2. Convert h003 to a worker: remove the router mods, plain DHCP client on one port (or a static IP on the future agent VLAN). Minecraft and squaremap stay off.
 3. Update `hosts/h003/readme.md` description ("WAN Local networking computer" → worker).
-4. Update `hosts/h003/switch_readme.md` diagrams to name h005 as the router.
+4. Update the diagrams in `hosts/h005/switch_readme.md` (moved from h003) to name h005 as the router.
 
 ### Phase 6: re-image h003 onto encrypted bcachefs + USB key
 

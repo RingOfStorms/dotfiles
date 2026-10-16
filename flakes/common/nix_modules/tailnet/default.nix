@@ -67,7 +67,7 @@ in
 
   # NOTE: h001 service names (*.joshuabell.xyz) are resolved on the tailnet via a
   # headscale split-DNS nameserver pointing at h003's tailnet dnsmasq listener
-  # (see hosts/oracle/o002/headscale.nix + hosts/h003/mods/networking.nix).
+  # (see hosts/oracle/o002/headscale.nix + hosts/h005/mods/networking.nix).
   # The old `h001DnsHosts` /etc/hosts fallback option was removed: it was
   # dangerous as a default (static pins break off-tailnet) and unused by any host.
 

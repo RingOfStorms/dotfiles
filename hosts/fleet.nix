@@ -49,15 +49,15 @@ rec {
       lanIp = "10.12.14.10";
       trust = "high";
     };
-    # Retired router, kept powered off for rollback (h005/readme.md). Its LAN
-    # address 10.12.14.1 moved to h005 at cutover (2026-10-15).
+    # Containers host (router until 2026-10-15, re-imaged; hosts/h003/readme.md).
+    # LAN by plain DHCP; services are reached over the tailnet.
     h003 = {
       user = "luser";
-      overlayIp = "100.64.0.14";
+      overlayIp = "100.64.0.4";
       trust = "high";
     };
     # NAS (successor of the retired h002). LAN address is a static DHCP
-    # reservation on h003 (hosts/h003/_constants.nix).
+    # reservation on h005 (hosts/h005/_constants.nix).
     h004 = {
       user = "luser";
       overlayIp = "100.64.0.17";
@@ -209,8 +209,8 @@ rec {
     builtins.foldl' (acc: name: acc // mkBlock name hosts.${name}) { } (builtins.attrNames hosts);
 
   # ─── SERVICE DNS RECORDS ──────────────────────────────────────────
-  # Subdomains served by h001. Consumed by h003's tailnet dnsmasq
-  # (hosts/h003/mods/networking.nix), which resolves them to h001's overlay IP.
+  # Subdomains served by h001. Consumed by h005's tailnet dnsmasq
+  # (hosts/h005/mods/networking.nix), which resolves them to h001's overlay IP.
   h001Subdomains = [
     "jellyfin"
     "media"
