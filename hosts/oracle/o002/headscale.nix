@@ -10,14 +10,15 @@
 #     MagicDNS (which headscale serves) — otherwise a headscale restart would
 #     take out o002's DNS and break ACME / everything.
 #   - systemd ordering so headscale starts before tailscaled-autoconnect.
-{ pkgs, constants, ... }:
+{ pkgs, constants, fleet, ... }:
 let
   hs = constants.services.headscale;
-  # h003's tailnet dnsmasq listener — authoritative for *.joshuabell.xyz on the
-  # tailnet (answers h001 service names with h001's OVERLAY ip). See
-  # hosts/h003/mods/networking.nix (dnsmasq-tailnet instance).
-  h003OverlayIp = "100.64.0.14";
-  h001OverlayIp = "100.64.0.13";
+  # The router's tailnet dnsmasq listener (h005 since the 2026-10-15 cutover
+  # from h003) — authoritative for *.joshuabell.xyz on the tailnet (answers h001
+  # service names with h001's OVERLAY ip). See hosts/h005/mods/networking.nix
+  # (dnsmasq-tailnet instance).
+  routerOverlayIp = fleet.hosts.h005.overlayIp;
+  h001OverlayIp = fleet.hosts.h001.overlayIp;
   splitDomain = "joshuabell.xyz";
 
   # Headscale ACL policy (ported verbatim from l001).
@@ -93,10 +94,10 @@ in
         override_local_dns = false;
 
         # Split-DNS (restricted) nameserver: route ONLY joshuabell.xyz queries
-        # to h003's tailnet dnsmasq listener over the overlay. Everything else
+        # to the router's tailnet dnsmasq listener over the overlay. Everything else
         # stays on the client's normal DNS path. This is what makes
         # secrets/git/notes/... resolve to h001's OVERLAY ip (100.64.0.13) when a
-        # machine is on the tailnet — h003's dnsmasq answers h001 service names
+        # machine is on the tailnet — the router's dnsmasq answers h001 service names
         # with the overlay IP so they're reachable from ANY tailnet client.
         #
         # Replaces the old `extra_records` map, which was non-functional: those
@@ -105,13 +106,13 @@ in
         # net.joshuabell.xyz and clients never sent joshuabell.xyz queries to
         # MagicDNS at all.
         nameservers.split = {
-          "${splitDomain}" = [ h003OverlayIp ];
+          "${splitDomain}" = [ routerOverlayIp ];
 
           # MagicDNS owns the more-specific `net.joshuabell.xyz` suffix, so it
           # would otherwise win over the broad joshuabell.xyz split route for
           # sec.h001.net.joshuabell.xyz. Route this backup hostname explicitly
-          # to h003's authoritative Tailnet dnsmasq instead.
-          "h001.net.${splitDomain}" = [ h003OverlayIp ];
+          # to the router's authoritative Tailnet dnsmasq instead.
+          "h001.net.${splitDomain}" = [ routerOverlayIp ];
         };
       };
     };
