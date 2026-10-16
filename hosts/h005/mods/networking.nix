@@ -328,6 +328,31 @@ in
     };
   };
 
+  # bcachefs-impermanence boots with systemd in the initrd. systemd-sysctl runs
+  # there with the initrd's sysctl.d and stays "active" across switch-root, so
+  # the system's boot.kernel.sysctl (including forwarding) is never applied.
+  # Observed 2026-10-15: first router boot came up with forwarding = 0.
+  systemd.services.sysctl-reapply-after-initrd = {
+    description = "Re-apply system sysctl.d after switch-root";
+    wantedBy = [ "sysinit.target" ];
+    after = [
+      "systemd-sysctl.service"
+      "systemd-modules-load.service"
+    ];
+    before = [
+      "sysinit.target"
+      "network-pre.target"
+      "shutdown.target"
+    ];
+    conflicts = [ "shutdown.target" ];
+    unitConfig.DefaultDependencies = false;
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${config.systemd.package}/lib/systemd/systemd-sysctl";
+    };
+  };
+
   boot.kernel.sysctl = {
     # Enable IPv4 forwarding
     "net.ipv4.conf.all.forwarding" = true;

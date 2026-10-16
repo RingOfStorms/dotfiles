@@ -49,10 +49,11 @@ rec {
       lanIp = "10.12.14.10";
       trust = "high";
     };
+    # Retired router, kept powered off for rollback (h005/readme.md). Its LAN
+    # address 10.12.14.1 moved to h005 at cutover (2026-10-15).
     h003 = {
       user = "luser";
       overlayIp = "100.64.0.14";
-      lanIp = "10.12.14.1";
       trust = "high";
     };
     # NAS (successor of the retired h002). LAN address is a static DHCP
@@ -63,12 +64,11 @@ rec {
       lanIp = "10.12.14.184";
       trust = "high";
     };
-    # Router replacing h003 (h005/readme.md). On the bench: lanIp is its current
-    # DHCP lease from h003. At cutover it takes the router address 10.12.14.1.
+    # Router (replaced h003 on 2026-10-15, h005/readme.md).
     h005 = {
       user = "luser";
       overlayIp = "100.64.0.3";
-      lanIp = "10.12.14.183";
+      lanIp = "10.12.14.1";
       trust = "high";
     };
     i001 = {
