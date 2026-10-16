@@ -86,12 +86,30 @@ routes = {
 
 ### 2.1 Exposure levels (one enum, ordered, nothing implicit)
 
+Two client tiers exist on the tailnet: **high trust** (untagged `josh@`
+nodes, full mesh) and **`tag:lowtrust`** (can't reach other nodes). Low-trust
+nodes count as **internet clients** everywhere in this plan; "tailnet" below
+always means high trust.
+
 | Level | Who can reach it | What gets generated |
 |---|---|---|
 | `local` | The service itself | Nothing. No vhost, no DNS, no firewall. With private networking (§3) not even the host's other containers can reach it. |
-| `tailnet` | Tailnet devices (optionally only those in `allow`) | Host vhost on the **internal listener** (§2.3), restricted to tailnet peers with **o002 excluded**. DNS in tailnet split-DNS only. Raw TCP/UDP: a firewall rule on `tailscale0` for that port (and `allow` sources). |
-| `lan` | Tailnet + home LAN | As `tailnet`, plus the LAN subnets and a LAN DNS record (h005). |
-| `public` | Internet | As `lan`, plus one or more **public paths** (§2.4). Refused unless `auth != "none"` or `publicWithoutAuth = true` is set explicitly. |
+| `tailnet` | High-trust tailnet nodes (optionally only those in `allow`) | Vhost on the host's **internal listener** (§2.3), allowed only from high-trust overlay IPs, **o002 excluded**. Record in tailnet DNS only. Raw TCP/UDP: firewall rule on `tailscale0` for that port and those sources. |
+| `lan` | Tailnet + home LAN (`10.12.14.0/24`, so guests on wifi too) | As `tailnet`, plus the LAN subnet and a record in the LAN DNS. |
+| `public` | Internet (incl. low-trust nodes) | As `lan`, plus one or more **public paths** (§2.4). Refused unless `auth != "none"` or `publicWithoutAuth = true` is set explicitly. |
+
+**Three-tier DNS for one name.** `jellyfin.joshuabell.xyz` with
+`exposure = "public"` resolves differently depending on who asks:
+
+| Resolver | Who uses it | Answer |
+|---|---|---|
+| Public (bunny) | Internet, low-trust nodes off-LAN | o002 (or the WAN IP for `via = "router"`) |
+| LAN DNS on h005 | Anything on `10.12.14.0/24` (wifi guests, low-trust phones at home) | Service host's **LAN IP**, so traffic skips the edge |
+| Tailnet DNS on h005 (headscale split DNS) | High-trust nodes anywhere | Service host's **overlay IP** |
+
+All three are generated from the same route by `fleet-edge` (§5.2), so they
+can't drift. A `lan` route has only the last two answers; a `tailnet` route
+only the last one.
 
 Rules that make this trustworthy:
 
@@ -132,16 +150,23 @@ keep a downgraded or expired route public. The decision therefore **never**
 uses `X-Forwarded-For` or `Host`. It's made on the transport peer and the
 listener:
 
-- Each service host runs **two nginx listeners**:
-  - **internal** (`:80`/`:443`) carries every non-public route. The firewall
-    admits it on `tailscale0` and the LAN and **drops o002's overlay IP**
-    (any edge peer) before any allow. Each vhost also checks
-    `$realip_remote_addr` (the real TCP peer, unaffected by `real_ip`)
-    against its allow set, with an explicit `deny 100.64.0.2` first.
+- Each service host runs **two nginx listeners** (three with router HTTP):
+  - **internal** (`:80`/`:443` on the LAN and overlay IPs) carries **every
+    non-`local` route, public ones included**. LAN and high-trust clients
+    reach public routes directly through it, so promoting a route to
+    `public` doesn't change their URL or path. The firewall admits it on
+    `tailscale0` and the LAN and **drops o002's overlay IP** (any edge peer)
+    before any allow. Each vhost also checks `$realip_remote_addr` (the real
+    TCP peer, unaffected by `real_ip`) against its allow set, with an
+    explicit `deny 100.64.0.2` first. Public routes allow LAN + high-trust
+    here too; internet traffic never uses this listener.
   - **edge** (`<overlayIp>:8443`) carries **only routes that are currently
     `public` via edge**. The firewall admits it only from o002. A downgrade
     or an expired override removes the route here, so even a stale o002
     vhost gets 444 from the host.
+  - For an HTTP route with `via = "router"`, h005 DNATs to a third
+    listener (`:8444`) with the same rules as edge: only currently public
+    routes, admitted only for forwarded WAN traffic.
 - `real_ip` (`set_real_ip_from 100.64.0.2`) is enabled **only on the edge
   listener**: correct client IPs for logs and rate limits there, and no
   spoofing on the internal one.
@@ -231,10 +256,19 @@ Per route, `auth` is one of:
 mobile apps/CLIs with their own tokens. Those paths must authenticate
 natively, so the plan lists them per service.
 
-**One shared oauth2-proxy per host** (not one per app as trilium has now),
-using `auth_request` with per-route `allowed_groups` and a cookie on
-`.joshuabell.xyz`, so one login covers every gated app. Trilium's private
-instance folds into it.
+**One oauth2-proxy for the whole fleet**, not one per host or per app.
+oauth2-proxy keeps sessions in an encrypted cookie on `.joshuabell.xyz`, so
+one instance can gate any number of apps on any host: every host's nginx
+does `auth_request` to it, and per-route `allowed_groups` come along as a
+query parameter. Per-host instances would only save a LAN round trip
+(about 1 ms per request) and would mean several cookies and client
+registrations. Trilium's private instance folds into it.
+
+Placement: **h005** (always on). Logging in still needs zitadel on h001,
+but existing sessions keep working on h003/lio if h001 is down. If h005 is
+down, the LAN is down anyway. Gated routes fail closed (nginx returns 500 if
+`auth_request` can't reach the proxy). It runs as a container like any other
+service, so it can move if h005 turns out too small.
 
 Current and proposed (✓ = verified in this repo, ? = check the app's docs
 at the pinned version before relying on it):
@@ -282,9 +316,15 @@ at the pinned version before relying on it):
   (lio), DNS on h005 and headscale DERP all rely on the trust today. Inventory
   each host with `ss -ltnup` first, then add the needed rules to the host
   config **before** removing the trust.
-- Headscale ACL: give servers a `tag:server` and restrict which device groups
-  can reach which ports, so "tailnet" can mean "my laptops/phones",
-  not "every node, including future ones".
+- Headscale ACL: high trust = untagged `josh@` nodes (full mesh, as now),
+  `tag:lowtrust` = treated as internet. Give servers a `tag:server` only if
+  a need comes up; per-route `allow` covers device-level limits.
+- **Low-trust split DNS**: headscale pushes the `joshuabell.xyz` split route
+  to every node, but low-trust nodes can't reach h005's overlay IP, so their
+  lookups for those names may fail rather than fall back. Check this on a
+  low-trust phone, and if it fails either let `tag:lowtrust` reach h005
+  `:53` only (dnsmasq answers public IPs to non-high-trust sources) or stop
+  pushing the split route to them.
 
 ### 5.2 Generated pieces and who writes them
 
@@ -413,12 +453,12 @@ Taken 2026-10-16:
 5. **Public paths are `edge` (o002) or `router` (h005 DNAT + DDNS)**, both
    runtime-managed (§2.4).
 6. **h005 runs `fleet-edge`** and is the only holder of the bunny key (§5.2).
+7. **One fleet-wide oauth2-proxy on h005** (§4).
+8. **Trust tiers**: untagged = high trust (tailnet), `tag:lowtrust` = public
+   client. One name resolves three ways: public → edge, LAN → host LAN IP,
+   high-trust tailnet → overlay IP (§2.1).
 
-Still open:
-
-- One shared oauth2-proxy per host with one SSO cookie, or one per app?
-  Proposal: shared.
-- Headscale tags and device groups (what "tailnet" means per route).
+Still open: low-trust split-DNS behaviour (verify, §5.1).
 
 ## 8. Suggested order
 
