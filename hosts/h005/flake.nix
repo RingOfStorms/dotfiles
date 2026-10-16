@@ -88,6 +88,7 @@
 
           ./hardware-configuration.nix
         ]
+        ++ lib.optionals constants.network.routerEnable [ ./mods ]
         ++ lib.optionals (overlayIp != null) [
           inputs.beszel.nixosModules.agent
           ({
@@ -102,10 +103,9 @@
           (
             { pkgs, ... }:
             {
-              # Bench stage: plain DHCP client on every port (the WAN port is on
-              # the LAN for now). No router services: no second DHCP server.
-              # Replaced by the router networking from h003 at cutover.
-              networking.useDHCP = true;
+              # Bench ports are DHCP clients; router mode enables DHCP only on
+              # the WAN and configures the two tagged gateway interfaces.
+              networking.useDHCP = !constants.network.routerEnable;
               security.sudo.wheelNeedsPassword = false;
               users.users.root.openssh.authorizedKeys.keys = [ fleet.global.sshPubKey ];
               environment.systemPackages = with pkgs; [

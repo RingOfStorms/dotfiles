@@ -1,7 +1,24 @@
 # Minecraft
 
+> **Inactive since 2026-10-15.** Not deployed anywhere (`host = null` in
+> `service.nix`). It last ran on h003 and was stopped cleanly on 2026-10-09;
+> h003 is being re-imaged (`hosts/h005/readme.md`). The full data dir is backed
+> up on h001 at `/home/luser/backups/minecraft-h003-2026-10-15T2001.tar.zst`
+> (4.0G, taken stopped, so no `dumpall.sql`; the PostgreSQL 17 cluster files
+> are consistent). To bring it back:
+>
+> ```sh
+> containers check-idmap <host>
+> containers restore minecraft minecraft-h003-2026-10-15T2001.tar.zst --host <host>
+> containers deploy minecraft --host <host>
+> ```
+>
+> then set `host` in `service.nix`, point `computerboyz` in
+> `hosts/oracle/o002/nginx.nix` at the new host's overlay IP, and add a WAN
+> port-forward for 25565 on the router (h005).
+
 Velocity proxy and two Paper servers, run as a `nixos`-kind floating container
-(see `../README.md`). Declared host: **h003** (`service.nix`).
+(see `../README.md`).
 
 ```
 Players :25565 -> Velocity (proxy, auth, routing)

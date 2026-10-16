@@ -14,7 +14,7 @@ host module, never floats).
 - Floating today: `arr` (h001, **live since 2026-10-12**: whole media stack,
   NAS-guarded), `opengist`, `atuin`, `vaultwarden` (h001, 2026-10-12),
   `trilium` (+ oauth2-proxy), `searx`, `litellm`, `open-webui`, `puzzles`,
-  `life`, `forgejo`, `dawarich`, `immich`, `paperless`, `beszel` (h001, 2026-10-13), `localai` (joe), `minecraft` (h003), test twins
+  `life`, `forgejo`, `dawarich`, `immich`, `paperless`, `beszel` (h001, 2026-10-13), `localai` (joe), `minecraft` (inactive since 2026-10-15, backup on h001), test twins
   `hello-nixos` / `hello-podman` (lio). Old host modules and `/var/lib` data
   of every migrated service are deleted (backups in `h001:/home/luser/backups`).
 - CLI: `deploy`, `stop` (persists across reboot), `start`, `move`, `backup`

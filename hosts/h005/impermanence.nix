@@ -2,7 +2,7 @@
 # sets in `flakes/impermanence/shared_persistence/`. SSH host keys are already
 # persisted by the impermanence module (/persist/etc/ssh).
 { primaryUser, impermanence_mod }:
-{ ... }:
+{ constants, lib, ... }:
 let
   shared = impermanence_mod.lib.mergeSharedPersistence (
     with impermanence_mod.sharedPersistence;
@@ -20,13 +20,41 @@ let
   );
 in
 {
+  systemd.tmpfiles.rules = lib.optionals constants.network.routerEnable [
+    "d /var/lib/private 0700 root root -"
+  ];
+
   environment.persistence."/persist" = {
     enable = true;
     hideMounts = true;
     directories = shared.system.directories ++ [
       "/var/lib/secrets_manager_hydrated"
-      # Router state (dnsmasq leases, AdGuard, NUT) gets added here when the
-      # router mods move over from h003.
+      # Preserve DHCP client identity/leases in both bench and router modes.
+      {
+        directory = "/var/lib/dhcpcd";
+        user = "dhcpcd";
+        group = "dhcpcd";
+        mode = "0750";
+      }
+    ] ++ lib.optionals constants.network.routerEnable [
+      {
+        directory = "/var/lib/dnsmasq";
+        user = "dnsmasq";
+        group = "dnsmasq";
+        mode = "0755";
+      }
+      # DynamicUser owns the private directory; systemd creates the public
+      # /var/lib/AdGuardHome symlink and adjusts ownership at service startup.
+      "/var/lib/private/AdGuardHome"
+      {
+        directory = "/var/lib/h005-isp-speedtest";
+        mode = "0700";
+      }
+      # NUT recreates its password and runtime files; retain only SSH trust.
+      {
+        directory = "/root/.ssh";
+        mode = "0700";
+      }
     ];
     files = shared.system.files ++ [ ];
     users."${primaryUser}" = {

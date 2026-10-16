@@ -14,7 +14,16 @@ import ../sec-agent.nix {
       mode = "0400";
       hardDepend = [ "atuin-autologin" ];
     };
-    # Router secrets (bunny DNS for DDNS, HA speedtest token) are added with
-    # the router mods.
+  } // inputs.nixpkgs.lib.optionalAttrs constants.network.routerEnable {
+    hass_isp_speedtest_token = {
+      remotePath = "machines/by-host/h005/hass_isp_speedtest_token";
+      softDepend = [ "h005-isp-speedtest" ];
+    };
+
+    # Shared with h001's ACME DNS-01 credential.
+    bunny_rw_dns_2026-03-15 = {
+      remotePath = "machines/high-trust/bunny_rw_dns_2026-03-15";
+      softDepend = [ "ddns-update" ];
+    };
   };
 }

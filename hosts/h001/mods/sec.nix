@@ -297,6 +297,18 @@ in
           }
         ];
       };
+
+      # ── per-host: h005 ────────────────────────────────────────────
+      "machines/by-host/h005/hass_isp_speedtest_token" = {
+        fields = [ "value" ];
+        description = "Home Assistant long-lived token (h005 ISP speedtest).";
+        access = [
+          {
+            type = "sub";
+            value = "395294573078773763";
+          }
+        ];
+      };
     };
   };
 }

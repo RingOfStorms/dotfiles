@@ -6,8 +6,9 @@
   description = "Velocity proxy + Paper survival/creative, LuckPerms on PostgreSQL, squaremap";
 
   # Where it should run. `containers move` moves the data; then update this line
-  # and push.
-  host = "h003";
+  # and push. null: INACTIVE since 2026-10-15 (see README.md); the CLI refuses
+  # to act on it without an explicit --host.
+  host = null;
 
   # Kept across restarts, on the host at /srv/containers/minecraft/<key>.
   # Everything else in the container is wiped on every start.
