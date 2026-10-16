@@ -32,6 +32,7 @@ mount and the host's initrd can't read it. Check the host's version with
 
 ```sh
 bash   # the install ISO's root shell is zsh; `read -p` there can write an empty file
+umask 077   # the password files below must not be readable by the ISO's `nixos` login
 lsblk -o NAME,SIZE,TRAN,MODEL,FSTYPE   # the stick shows TRAN=usb
 K=/dev/sdX                             # double-check: this destroys it
 V=1.38                                 # host's bcachefs version

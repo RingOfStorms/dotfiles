@@ -110,20 +110,23 @@ Identify the target disk and swap size:
 
 ```sh
 lsblk
-DISK=/dev/nvme0n1  # or /dev/sda, etc.
+DISK=/dev/nvme0n1  # or /dev/sda, /dev/mmcblk0 (eMMC), or a /dev/disk/by-id/ path
 SWAP=16G           # swap partition size. NOT GB use G only
 ```
 
 #### Encrypted (recommended)
 
 ```sh
-# Write your disk encryption passphrase to a temp file
-sudo $EDITOR /tmp/bcachefs.key
+# Write your disk encryption passphrase to a temp file. umask 077: the ISO has a
+# `nixos` login with a known password, and a 644 file would be readable by it.
+umask 077
+$EDITOR /tmp/bcachefs.key
 
 disko_format "$DISK" "$SWAP" --encrypted
 
-# Clean up the key file
-rm /tmp/bcachefs.key
+# Keep the key file if you still have to make the USB key stick (usb_key.md
+# copies it onto the stick); shred it before rebooting.
+shred -u /tmp/bcachefs.key
 ```
 
 #### Unencrypted

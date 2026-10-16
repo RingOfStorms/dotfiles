@@ -14,8 +14,9 @@ the fleet's encrypted bcachefs + impermanence layout (Phase 6).
 | CPU | Intel N150 (4C/4T, up to 3.6 GHz) |
 | GPU | Intel Graphics (integrated) |
 | RAM | 8 GB (soldered, not upgradeable) |
-| Storage | 256 GB M.2 2280 NVMe SSD (replaceable) |
-| Network | 2× 2.5GbE Intel i226-V |
+| Storage | 233 GB eMMC `mmc-Y1Y256_0xc15902ff` (`mmcblk0`; shipped with Windows, wiped) |
+| Network | 2× 2.5GbE Intel i226-V (`igc`): `enp1s0` = **WAN** (`00:ce:39:d8:0c:17`), `enp2s0` = **TRUNK** (`00:ce:39:d8:0c:18`), labelled on the case |
+| Disk layout | ESP 3G (`DA82-16A8`), swap 4G (random key per boot), encrypted bcachefs (`0d6e4079-…`, format 1.39) with impermanence; unlocked by the encrypted USB key stick |
 
 ## Migration plan: h003 → h005
 
@@ -56,12 +57,12 @@ Goal: move all router duties off h003 so h003 can become an agent worker. Keep h
 
 ### Phase 2: bench setup (h005 not yet in the network path)
 
-1. Boot the NixOS installer and check the BIOS: Auto Power On after AC loss **on**, latest BIOS.
-2. Record the real NIC names and MACs: `ip -br link`. Decide which i226 port is WAN and which is the trunk, label them physically, and set them in `_constants.nix`.
-3. Install with the fleet's bcachefs + impermanence layout (`utilities/nixos-install-disko/readme.md`, disko single-drive, `encrypted = true; usbKey = true;`). The router must boot unattended after a power cut, so the USB key stick stays plugged in permanently (`utilities/nixos-install-disko/usb_key.md`). Generate `hardware-configuration.nix`, record the disk UUIDs in `ringofstorms.impermanence.disk`, write `impermanence.nix` (shared sets plus router state: `/var/lib/AdGuardHome`, dnsmasq leases, `/var/lib/nut` if used, tailscale), and commit.
-4. Build on lio and deploy to h005 (8 GB RAM; avoid big builds on the box itself).
-5. Join the tailnet. Get h005's overlay IP and update `fleet.nix`.
-6. Hydrate secrets and confirm the sec-agent paths exist.
+1. ~~Boot the NixOS installer~~ (done). BIOS: Auto Power On after AC loss **on**, latest BIOS (ADN62D4 V16.1 at install).
+2. ~~Record the NIC names and MACs~~ (done, see Hardware; set in `_constants.nix`).
+3. ~~Install~~ (done 2026-10-15): disko on the eMMC (`disko_format /dev/disk/by-id/mmc-Y1Y256_0xc15902ff 4G --encrypted`), encrypted USB key stick at format 1.39 (`usb_key.md`), `encrypted = true; usbKey = true; usbKeyPassword` set. First boot unlocked from the stick with no prompt. The stick stays plugged in permanently. Router state (`/var/lib/AdGuardHome`, dnsmasq leases, `/var/lib/nut` if used) still has to be added to `impermanence.nix` with the router mods.
+4. ~~Build on lio and deploy~~ (done): `NIX_SSHOPTS="-i /var/lib/secrets_manager_hydrated/nix2nix_2026-03-15" nixos-rebuild switch --flake ./hosts/h005#h005 --target-host root@h005`.
+5. ~~Join the tailnet~~ (done): overlay IP `100.64.0.3`, in `fleet.nix` and `_constants.nix`. Beszel agent connected.
+6. ~~Hydrate secrets~~ (done): sec-agent logged in as `device_high_trust`; atuin, headscale, nix2nix, git keys present.
 7. Optional: on a spare switch port, give the trunk port a temporary IP to test tagged VLANs without serving DHCP. Keep dnsmasq **stopped** on the bench so there are never two DHCP servers.
 
 ### Phase 3: cutover (maintenance window, ~30 min)
