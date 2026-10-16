@@ -1355,11 +1355,11 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1791731633,
-        "narHash": "sha256-l40ad2JMU11n/NMN1iFqJGkkyq8krRqeAoWW1Q4mMqU=",
+        "lastModified": 1792107580,
+        "narHash": "sha256-ttAzmk4s9rG8IsosHU4UJQHdkPoVuLLxojVu9+OOWdI=",
         "ref": "refs/heads/master",
-        "rev": "fc9923d15870a2c57b7d7ae8abc3e1dd2e63c74a",
-        "revCount": 354,
+        "rev": "7bbfa50478a34c326f716e319be1fd0fbf3da205",
+        "revCount": 355,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/nvim"
       },
