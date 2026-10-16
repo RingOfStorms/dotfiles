@@ -10,7 +10,7 @@
   };
 
   network = {
-    routerEnable = false;
+    routerEnable = true;
 
     # Physically labelled on the case.
     wanInterface = "enp1s0"; # 00:ce:39:d8:0c:17 -> modem

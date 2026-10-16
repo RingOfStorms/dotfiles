@@ -200,7 +200,7 @@ in
             53 # DNS
             67 # DHCP server
             68
-          ];
+          ] ++ lib.optionals config.networking.enableIPv6 [ 547 ]; # DHCPv6 server
         };
 
         # LAN interface (VLAN 20) - FULL SERVICE
@@ -215,7 +215,7 @@ in
             53 # DNS queries
             67 # DHCP server (dnsmasq)
             68 # DHCP client responses
-          ];
+          ] ++ lib.optionals config.networking.enableIPv6 [ 547 ]; # DHCPv6 server
         };
       };
     };
@@ -270,6 +270,11 @@ in
         "tag:lan,option:router,${lan.ipv4}"
         "tag:mng,option:dns-server,${mng.ipv4}"
         "tag:lan,option:dns-server,${lan.ipv4}"
+      ] ++ lib.optionals config.networking.enableIPv6 [
+        # Explicit DHCPv6 option 23 and RA RDNSS: clients must use AdGuard's
+        # VLAN addresses on port 53, not dnsmasq's DNS listener on 9053.
+        "tag:mng,option6:dns-server,[${mng.ipv6}]"
+        "tag:lan,option6:dns-server,[${lan.ipv6}]"
       ];
 
       # Static DHCP reservations

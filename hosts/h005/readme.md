@@ -37,6 +37,14 @@ ICMPv6 bypass. DNS used the existing `ellawork` client policy because the isolat
 network cannot reach AdGuard's external safe-browsing service. No live deploy,
 modem/physical VLAN test, USB UPS test, DDNS update or HA publication was performed.
 
+The follow-up IPv6 smoke used real dhcpcd clients with empty lease state and no
+manually assigned IPv6 addresses on either VLAN. Before the fix they received RAs
+but no DHCPv6 leases or RDNSS DNS. After opening UDP 547 and setting explicit
+DHCPv6/RDNSS DNS addresses with matching AdGuard listeners, both acquired addresses,
+RA default routes and their VLAN's DNS address; an IPv6 DNS query exercised an
+existing AdGuard block rule successfully. Both system closures were rebuilt.
+External upstream/filter-service access remains outside this isolated check.
+
 Before the next h005 reboot, seed `/persist/var/lib/dhcpcd` with its existing
 `/var/lib/dhcpcd` state (preserve ownership) so adding persistence does not replace
 the bench DHCP identity with a newly generated one. Do not seed it from h003.
@@ -50,7 +58,7 @@ the bench DHCP identity with a newly generated one. Do not seed it from h003.
 | AdGuard Home | `mods/adguardhome.nix` | Same declarative config/login as h003; optional history lives under `/var/lib/private/AdGuardHome/data` |
 | DDNS (bunny) | `mods/ddns.nix` | Secret `machines/high-trust/bunny_rw_dns_2026-03-15` |
 | NUT, 2× APC Back-UPS XS 1500M over USB | `mods/ups.nix` | The Quieter DL has 3 USB-A ports; both UPS cables move over |
-| ISP speedtest → Home Assistant | `mods/speedtest.nix` | h005 secret declared in `hosts/h001/mods/sec.nix`: `machines/by-host/h005/hass_isp_speedtest_token` (access: h005's Zitadel machine user `395294573078773763`); set its value after deploying h001 |
+| ISP speedtest → Home Assistant | `mods/speedtest.nix` | h005 secret `machines/by-host/h005/hass_isp_speedtest_token` (Zitadel machine user `395294573078773763`); value updated by the user 2026-10-15, hydrated in router mode |
 | `omada` serial alias, picocom | h003 `flake.nix` | Optional, not ported; needs USB to the switch console (all 3 USB-A ports are used by the key stick and UPSes) |
 | nginx squaremap proxy on the overlay IP | `containers.nix` | **Not moving.** Minecraft is inactive since 2026-10-15 (backup on h001, `containers/minecraft/README.md`), so no squaremap proxy. |
 | Minecraft port forward (TCP 25565) | `containers.nix` → firewall | **Not moving** (Minecraft inactive). Add a DNAT on h005 if it is ever brought back. |
@@ -68,7 +76,7 @@ the bench DHCP identity with a newly generated one. Do not seed it from h003.
 1. ~~Create `hosts/h005/` and port the router modules~~ (done 2026-10-15). No Minecraft, squaremap or podman import. `network.routerEnable = false` gates the complete router stack.
 2. ~~Keep the gateway addresses identical~~: `10.12.16.1`, `10.12.14.1`, `fd12:14:1::1`, `fd12:14:0::1`.
 3. ~~Record real interfaces~~: WAN `enp1s0`, trunk `enp2s0` (Hardware above).
-4. ~~Declare router secrets~~: shared bunny token and h005's HA token, both hydrated only in router mode. **Still required:** deploy the h001 secret declaration and set `machines/by-host/h005/hass_isp_speedtest_token` before cutover.
+4. ~~Declare router secrets~~: shared bunny token and h005's HA token, both hydrated only in router mode. h005's HA token value was updated by the user 2026-10-15; live publication is checked after cutover.
 5. ~~Register h005 in `hosts/fleet.nix`~~. Keep h003 intact for rollback.
 6. ~~Restrict forwarding~~: only VLAN 10/20 may initiate forwarded traffic to WAN. A separate `inet router-isolation` chain runs before the NixOS forward chain, blocking cross-VLAN traffic and other new forwarding, including ICMPv6 (NixOS accepts ICMPv6 before `extraForwardRules`). Established/related WAN replies still pass. No blanket management-interface accept; no tailnet subnet routing or exit-node forwarding enabled.
 
@@ -84,8 +92,8 @@ the bench DHCP identity with a newly generated one. Do not seed it from h003.
 
 ### Phase 3: cutover (maintenance window, ~30 min)
 
-1. Before starting: deploy/set the h005 HA token; note the ISP modem/ONT's lease behaviour. If it binds to the WAN MAC, power-cycle it after the swap or deliberately clone h003's WAN MAC. Do not copy h003's SSH/machine/Tailscale identity to h005.
-2. Set `network.routerEnable = true` in `_constants.nix`. Build and install for the **next boot only**, while h005 still has bench connectivity: `nixos-rebuild boot --flake ./hosts/h005#h005 --target-host root@h005`. Do **not** use `switch`, and do not reboot until h003 is disconnected. Keep console access available.
+1. HA token value is set. Before starting, preserve h005's existing DHCP-client state as described above and note the ISP modem/ONT's lease behaviour. If it binds to the WAN MAC, power-cycle it after the swap or deliberately clone h003's WAN MAC. Do not copy h003's SSH/machine/Tailscale identity to h005.
+2. Set `network.routerEnable = true` in `_constants.nix`. Build and install for the **next boot only**, while h005 still has bench connectivity. On h005, from the repo root: `nh os boot ./hosts/h005 -H h005`. From lio's repo root instead: `nh os boot ./hosts/h005 -H h005 --target-host root@h005`. Do **not** use `switch`, and do not reboot until h003 is disconnected. Keep console access available.
 3. Stop h003's dnsmasq and AdGuard before taking the final state copy. Put the fresh leases in h005 `/persist/var/lib/dnsmasq/`; optionally copy AdGuard's `data/` into `/persist/var/lib/private/AdGuardHome/`. Settings are regenerated from Nix. Then power h003 off so its DDNS/speedtest/NUT and gateway addresses cannot overlap h005's.
 4. Move modem → h005 WAN, SG3210X `Tw1/0/8` trunk → h005 trunk, and both UPS USB cables. Leave the encrypted key stick attached. Power-cycle the modem if needed, then reboot h005 into the prepared router generation.
 5. **During cutover, not a week later:** change Headscale split DNS from `100.64.0.14` to `100.64.0.3` in `hosts/oracle/o002/headscale.nix` and deploy o002; update the fleet LAN address. Review o002 nginx's h003 targets individually—do not blindly redirect old worker/service proxies to the router. No subnet routes are advertised by this port.
@@ -102,7 +110,7 @@ systemctl start h005-isp-speedtest.service
 journalctl -u h005-isp-speedtest -n 20
 ```
 
-- From a VLAN 20 client: DHCP lease, DNS (including `*.joshuabell.xyz` local records), internet, IPv6 if enabled.
+- From fresh clients on **both VLANs**: DHCPv4/DHCPv6 address, RA default route, and DNS. IPv6 DNS from DHCPv6 option 23 and RA RDNSS must be `fd12:14::1` on VLAN 20 and `fd12:14:1::1` on VLAN 10; both are AdGuard listeners on port 53. Verify internet and local `*.joshuabell.xyz` records. Static IPv6 assignments alone do not check acquisition or DNS advertisements.
 - From a VLAN 10 host: reach the switch at `10.12.16.2`.
 - VLAN 20 → VLAN 10 is blocked; VLAN 10 → VLAN 20 is blocked (IPv4 **and** IPv6).
 - Tailscale: from a remote device, `dig @100.64.0.3 media.joshuabell.xyz` returns `100.64.0.13`; verify Headscale split DNS uses h005. No tailnet-to-LAN forwarding is provided.
