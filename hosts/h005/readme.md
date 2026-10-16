@@ -57,7 +57,7 @@ the bench DHCP identity with a newly generated one. Do not seed it from h003.
 | dnsmasq (LAN DHCP/DNS) + `dnsmasq-tailnet` | `mods/networking.nix` | Static leases in `_constants.nix` |
 | AdGuard Home | `mods/adguardhome.nix` | Same declarative config/login as h003; optional history lives under `/var/lib/private/AdGuardHome/data` |
 | DDNS (bunny) | `mods/ddns.nix` | Secret `machines/high-trust/bunny_rw_dns_2026-03-15` |
-| NUT, 2× APC Back-UPS XS 1500M over USB | `mods/ups.nix` | The Quieter DL has 3 USB-A ports; both UPS cables move over |
+| NUT, 2× APC Back-UPS XS 1500M over USB | `mods/ups.nix` | Both connected to h005 and reporting mains power (`OL`), verified 2026-10-15; description escaping and `pollinterval` fixes deployed |
 | ISP speedtest → Home Assistant | `mods/speedtest.nix` | h005 secret `machines/by-host/h005/hass_isp_speedtest_token` (Zitadel machine user `395294573078773763`); value updated by the user 2026-10-15, hydrated in router mode |
 | `omada` serial alias, picocom | h003 `flake.nix` | Optional, not ported; needs USB to the switch console (all 3 USB-A ports are used by the key stick and UPSes) |
 | nginx squaremap proxy on the overlay IP | `containers.nix` | **Not moving.** Minecraft is inactive since 2026-10-15 (backup on h001, `containers/minecraft/README.md`), so no squaremap proxy. |
@@ -109,6 +109,15 @@ journalctl -u ddns-update -n 20              # DDNS updated with the WAN IP
 systemctl start h005-isp-speedtest.service
 journalctl -u h005-isp-speedtest -n 20
 ```
+
+UPS monitoring repaired and deployed 2026-10-15: NixOS quoted descriptions without
+escaping NUT's `#` syntax, and the inherited `pollinterv` directive was invalid.
+`mods/ups.nix` now escapes backslashes, quotes and `#` in descriptions and uses
+`pollinterval = 15`. Both drivers started, matched their configured USB serials,
+and `upsmon` logged communications established. `apc1` reported 100% charge / 5%
+load; `apc2` reported 100% / 9%; both `OL`. Driver parsing was checked in an
+isolated namespace before the final deploy. No battery self-test, power-loss,
+shutdown or reboot test was performed; those are separate maintenance actions.
 
 - From fresh clients on **both VLANs**: DHCPv4/DHCPv6 address, RA default route, and DNS. IPv6 DNS from DHCPv6 option 23 and RA RDNSS must be `fd12:14::1` on VLAN 20 and `fd12:14:1::1` on VLAN 10; both are AdGuard listeners on port 53. Verify internet and local `*.joshuabell.xyz` records. Static IPv6 assignments alone do not check acquisition or DNS advertisements.
 - From a VLAN 10 host: reach the switch at `10.12.16.2`.

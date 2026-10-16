@@ -82,12 +82,13 @@ in
     ups = lib.mapAttrs (_name: dev: {
       driver = dev.driver;
       port = "auto";
-      description = dev.description;
+      # NixOS adds quotes but does not escape NUT's comment/string syntax.
+      description = lib.escape [ "\\" "\"" "#" ] dev.description;
       directives = [
         "vendorid = ${dev.vendorId}"
         "productid = ${dev.productId}"
         "serial = ${dev.serial}"
-        "pollinterv = 15"
+        "pollinterval = 15"
       ];
     }) devices;
 
