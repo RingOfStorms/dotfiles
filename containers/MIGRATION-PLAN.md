@@ -229,7 +229,7 @@ only on hosts with that disk. Recommended: (b), keep them on h001.
 | Kokoro TTS | **Deprecated** | — | — | Served by localai (gallery `kokoro`); kokoro-tts module and data removed. |
 | localai (LocalAI) | **Live** | joe | podman | `containers/localai`, deployed; flux.2-klein-4b + kokoro tested. OpenAI-compatible `/v1/images/generations` for Open WebUI and agents; FLUX.2 klein (tested), flux.1-dev-ggml; Z-Image and flux.1-schnell gallery default (bf16, ~12 GB) are full-size diffusers weights, will not fit. Can also serve Kokoro TTS (gallery `kokoro`). Keep list from Forge in its README. |
 | Forge (Stable Diffusion) | **Removed** | — | — | Replaced by localai; module and `/var/lib/forge` deleted. |
-| llama-cpp | **Removed** | — | — | Module, pinned nixpkgs input and persistence deleted. 84 GB of GGUFs remain in `joe:/persist/var/cache/llama-cpp`; delete by hand. |
+| llama-cpp | **Removed** | — | — | Module, pinned nixpkgs input and persistence deleted. `joe:/persist/var/cache/llama-cpp` is empty (0 bytes); the folder can go. |
 
 Prefer **podman-kind** for GPU work (CDI device passthrough is clean;
 nspawn needs `/dev/nvidia*` + matching driver libs bound in). AMD would
