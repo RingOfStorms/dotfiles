@@ -938,7 +938,9 @@ func deploy(s Service, h, ref string, local bool) error {
 			info("built on %s itself, nothing to copy", h)
 		} else if !dryRun {
 			info("copying %s to %s", out, h)
-			c := exec.Command("nix", "copy", "--to", "ssh-ng://"+target, out)
+			// Locally built paths are unsigned; the target trusts us as root/@wheel
+			// over ssh, but the daemon still demands sigs unless told otherwise.
+			c := exec.Command("nix", "copy", "--no-check-sigs", "--substitute-on-destination", "--to", "ssh-ng://"+target, out)
 			c.Stdout, c.Stderr = os.Stdout, os.Stderr
 			if err := c.Run(); err != nil {
 				return fmt.Errorf("nix copy: %w", err)

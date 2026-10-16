@@ -261,6 +261,38 @@ in
           };
         };
 
+        # Impermanent hosts bind-mount ${mutable} from /persist after PID 1
+        # has loaded units, so the boot links `containers` writes
+        # (machines.target.wants for nspawn, multi-user.target.wants for
+        # podman) are never seen at boot. Once the bind is up, reload and start
+        # every linked unit. `containers stop` removes the link, so stopped
+        # services stay stopped. Skipped where the dir is part of the root fs
+        # (systemd already read it at boot).
+        systemd.services.fleet-containers-boot-start = {
+          description = "Start floating containers linked for boot (persisted unit dir)";
+          wantedBy = [ "multi-user.target" ];
+          after = [
+            "local-fs.target"
+            "network-online.target"
+          ];
+          wants = [ "network-online.target" ];
+          unitConfig = {
+            RequiresMountsFor = [ "/etc/systemd-mutable" ];
+            ConditionPathIsMountPoint = "/etc/systemd-mutable";
+          };
+          path = [ pkgs.systemd pkgs.coreutils ];
+          serviceConfig.Type = "oneshot";
+          script = ''
+            systemctl daemon-reload
+            for l in ${mutable}/machines.target.wants/*.service ${mutable}/multi-user.target.wants/*.service; do
+              [ -e "$l" ] || continue
+              u=$(basename "$l")
+              echo "starting $u"
+              systemctl start --no-block "$u"
+            done
+          '';
+        };
+
         # podman --userns=auto takes ranges from the "containers" subuid entry.
         users.users.containers = {
           isSystemUser = true;

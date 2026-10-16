@@ -33,28 +33,4 @@
     # extra-container <name>.conf links, read via EnvironmentFile by container@ units.
     "/etc/nixos-containers"
   ];
-
-  # /etc/systemd-mutable is bind-mounted from /persist after PID 1 has loaded
-  # units, so the container@<svc> links in machines.target.wants are missed at
-  # boot. Reload once the bind is up and start every wanted container
-  # (`containers stop` removes the link, so stopped services stay stopped).
-  systemd.services.fleet-containers-boot-start = {
-    description = "Start persisted floating containers after /persist binds";
-    wantedBy = [ "multi-user.target" ];
-    after = [
-      "local-fs.target"
-      "network-online.target"
-    ];
-    wants = [ "network-online.target" ];
-    unitConfig.RequiresMountsFor = [ "/etc/systemd-mutable" ];
-    serviceConfig.Type = "oneshot";
-    script = ''
-      systemctl daemon-reload
-      for l in /etc/systemd-mutable/system/machines.target.wants/*.service; do
-        [ -e "$l" ] || continue
-        echo "starting $(basename "$l")"
-        systemctl start --no-block "$(basename "$l")"
-      done
-    '';
-  };
 }
