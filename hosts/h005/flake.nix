@@ -4,7 +4,8 @@
     home-manager.url = "github:rycee/home-manager/release-26.05";
 
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    impermanence_mod.url = "path:../../flakes/impermanence";
+    # impermanence_mod.url = "path:../../flakes/impermanence";
+    impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
 

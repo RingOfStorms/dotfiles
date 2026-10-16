@@ -3,8 +3,8 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     home-manager.url = "github:rycee/home-manager/release-26.05";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
-    # common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    common.url = "path:../../flakes/common";
+    common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    # common.url = "path:../../flakes/common";
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
@@ -13,7 +13,8 @@
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
     containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=containers";
     omp-flake.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/omp";
-    tmux-agents.url = "path:../../flakes/tmux-agents";
+    # tmux-agents.url = "path:../../flakes/tmux-agents";
+    tmux-agents.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/tmux-agents";
     nono.url = "github:always-further/nono/6118b79aeda1365da213d85457b4d3cf1201d575";
     nono.flake = false;
     rust-overlay.url = "github:oxalica/rust-overlay/26a71e661c47bd21a05d06fec749f3f7c75e9d12";

@@ -88,14 +88,20 @@
     },
     "common": {
       "locked": {
-        "path": "../../flakes/common",
-        "type": "path"
+        "dir": "flakes/common",
+        "lastModified": 1792191482,
+        "narHash": "sha256-hQMx1M6bJGjWMb8khI9zCcbCRzPk5yF0YYQYqwvlSvw=",
+        "ref": "refs/heads/master",
+        "rev": "eda991fe360f94bd88201d9dfe4d69c455540a8c",
+        "revCount": 2323,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
       "original": {
-        "path": "../../flakes/common",
-        "type": "path"
-      },
-      "parent": []
+        "dir": "flakes/common",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+      }
     },
     "containers": {
       "inputs": {
@@ -1565,14 +1571,20 @@
     },
     "tmux-agents": {
       "locked": {
-        "path": "../../flakes/tmux-agents",
-        "type": "path"
+        "dir": "flakes/tmux-agents",
+        "lastModified": 1792191482,
+        "narHash": "sha256-hQMx1M6bJGjWMb8khI9zCcbCRzPk5yF0YYQYqwvlSvw=",
+        "ref": "refs/heads/master",
+        "rev": "eda991fe360f94bd88201d9dfe4d69c455540a8c",
+        "revCount": 2323,
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
       "original": {
-        "path": "../../flakes/tmux-agents",
-        "type": "path"
-      },
-      "parent": []
+        "dir": "flakes/tmux-agents",
+        "type": "git",
+        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+      }
     },
     "treefmt-nix": {
       "inputs": {
