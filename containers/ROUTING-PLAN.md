@@ -5,8 +5,8 @@ who can reach it, how, and through what auth. The tooling makes the network
 match that statement, lets it change at runtime (move, temporarily public),
 and shows it on one tailnet-only page.
 
-Status: **proposal**, nothing implemented. §7 records the decisions taken on
-2026-10-16 and what's still open.
+Status: **proposal**, nothing implemented. Decisions are in §7; §6 lists
+requirements every step must meet.
 
 Roles assumed: **h005 = router** (WAN, port forwards, DDNS, LAN + tailnet
 DNS, always on), **h004 = NAS**, **o002 = public TLS edge**, h001/h003/lio/joe
@@ -103,7 +103,7 @@ always means high trust.
 
 | Resolver | Who uses it | Answer |
 |---|---|---|
-| Public (bunny) | Internet, low-trust nodes off-LAN | o002 (or the WAN IP for `via = "router"`) |
+| Public (bunny) | Internet, low-trust nodes off-LAN | CNAME → `o002.joshuabell.xyz` (or `home.joshuabell.xyz` for `via = "router"`) |
 | LAN DNS on h005 | Anything on `10.12.14.0/24` (wifi guests, low-trust phones at home) | Service host's **LAN IP**, so traffic skips the edge |
 | Tailnet DNS on h005 (headscale split DNS) | High-trust nodes anywhere | Service host's **overlay IP** |
 
@@ -124,8 +124,17 @@ Rules that make this trustworthy:
 ### 2.2 Names
 
 - One name per route, `<name>.joshuabell.xyz`, the same everywhere
-  (split-horizon): tailnet DNS answers with the host's overlay IP, public DNS
-  (if public) with o002. Clients never need `:port`.
+  (split-horizon, §2.1). Clients never need `:port`.
+- **Public DNS convention** (hard-coded for now, zone `joshuabell.xyz`
+  only; other domains are not managed):
+  - Two anchor A/AAAA records: `o002.joshuabell.xyz` (edge, static) and
+    `home.joshuabell.xyz` (router, kept current by DDNS).
+  - Every public route name is a **CNAME** to one of them: `via = "edge"`
+    → `o002`, `via = "router"` → `home`. A home IP change or an o002
+    rebuild touches one record.
+  - A route with both paths gets the `edge` CNAME; the router path then
+    needs its own name (e.g. `mc.` vs `mc-web.`), since one name can't be
+    two CNAMEs.
 - **Namespace chosen per route** (`zone = "main"` default, or `"private"`):
   - `main`: `<name>.joshuabell.xyz`, covered by the existing wildcard.
   - `private`: `<name>.ts.joshuabell.xyz`, with its own wildcard (DNS-01)
@@ -189,12 +198,12 @@ routes.game = { port = 25565; proto = "tcp"; exposure = "public";
 
 | `via` | Path | Good for | Generated |
 |---|---|---|---|
-| `edge` | client → o002 (TLS, rate limits) → tailnet → host edge listener | HTTP(S); hides the home IP | o002 vhost or `stream`, host edge-listener entry |
-| `router` | client → home WAN IP (DDNS name) → h005 DNAT → host LAN IP:port | Games, UDP, WireGuard, large transfers that shouldn't hairpin via Oracle | h005 forward + DNAT entry, host WAN-source rule for that port, DDNS record |
+| `edge` | client → o002 (TLS, rate limits) → tailnet → host edge listener | HTTP(S); hides the home IP | CNAME → `o002`, o002 vhost or `stream`, host edge-listener entry |
+| `router` | client → `home` (DDNS) → h005 DNAT → host LAN IP:port | Games, UDP, WireGuard, large transfers that shouldn't hairpin via Oracle | CNAME → `home`, h005 forward + DNAT entry, host WAN-source rule for that port |
 
 - **The router path is runtime-managed on h005** by `fleet-edge` (§5.2). It
-  owns an nft map of forwards (`proto . port → host:port`) and the DDNS
-  names. `cnt deploy/move/expose` ask it to add or remove entries. The rest
+  owns an nft map of forwards (`proto . port → host:port`) and the
+  `home` record. `cnt deploy/move/expose` ask it to add or remove entries. The rest
   of h005's ruleset stays declarative, and expired forwards are dropped by
   h005 itself (fail closed).
 - The router path **exposes the home IP** for that name. `cnt routes` and
@@ -264,6 +273,23 @@ query parameter. Per-host instances would only save a LAN round trip
 (about 1 ms per request) and would mean several cookies and client
 registrations. Trilium's private instance folds into it.
 
+**Cookie trust boundary.** A cookie on `.joshuabell.xyz` is sent to *every*
+HTTPS subdomain. Encryption and `HttpOnly` don't stop the receiving server
+from replaying it, so:
+
+- **Every name under `joshuabell.xyz` must point at a server we control**
+  (o002, home, fleet hosts). `fleet-edge` refuses CNAMEs/A records to
+  external targets inside the zone; anything external lives on another
+  domain. If that ever has to change, switch oauth2-proxy to host-scoped
+  cookies (one login per app) first.
+- **nginx strips the SSO cookie before proxying to any backend**
+  (`proxy_set_header Cookie` with the `_oauth2_proxy*` cookies removed,
+  generated for every route, gated or not). A compromised app never sees a
+  fleet session. It gets identity via `X-Auth-Request-*` headers only,
+  which nginx overwrites on every request so the client can't inject them.
+- Cookie flags: `Secure`, `HttpOnly`, `SameSite=Lax`, short expiry with
+  refresh.
+
 Placement: **h005** (always on). Logging in still needs zitadel on h001,
 but existing sessions keep working on h003/lio if h001 is down. If h005 is
 down, the LAN is down anyway. Gated routes fail closed (nginx returns 500 if
@@ -310,21 +336,29 @@ at the pinned version before relying on it):
   nft rule that only goes away with `ports_reset` or a reboot. Replace it
   with `cnt port open 8000 [--on tailnet|lan] [--from lio] [--for 1h]`. That
   uses the same runtime set, has a mandatory expiry, and shows up in
-  `cnt routes --host` and the dashboard. `ports_expose` stays as a thin
+  `cnt routes --host` and the dashboard. `ports_expose` becomes a thin
   wrapper around it.
-- Roll out carefully: sshd, the beszel hub (agents connect out to it; h001 runs no agent listener), sec-agent, nix-serve
-  (lio), DNS on h005 and headscale DERP all rely on the trust today. Inventory
+- Roll out carefully: sshd, the beszel hub (agents connect out to it),
+  sec-agent, nix-serve (lio), DNS on h005 and headscale DERP all rely on
+  the trust today. Inventory
   each host with `ss -ltnup` first, then add the needed rules to the host
   config **before** removing the trust.
 - Headscale ACL: high trust = untagged `josh@` nodes (full mesh, as now),
   `tag:lowtrust` = treated as internet. Give servers a `tag:server` only if
   a need comes up; per-route `allow` covers device-level limits.
-- **Low-trust split DNS**: headscale pushes the `joshuabell.xyz` split route
-  to every node, but low-trust nodes can't reach h005's overlay IP, so their
-  lookups for those names may fail rather than fall back. Check this on a
-  low-trust phone, and if it fails either let `tag:lowtrust` reach h005
-  `:53` only (dnsmasq answers public IPs to non-high-trust sources) or stop
-  pushing the split route to them.
+- **Low-trust devices don't use tailnet DNS** (decided): they run with
+  `--accept-dns=false` (the "Use Tailscale DNS" toggle off in the app).
+  At home they ask the LAN DNS on h005 and get the LAN IP; away they ask
+  public DNS and go through o002. That's the right answer in both places.
+  - Rejected alternative: an ACL letting `tag:lowtrust` reach h005 `:53`.
+    Headscale ACLs can be that narrow (`dst = [ "h005:53" ]`), but h005 would
+    then answer over the overlay with public IPs, and low-trust phones at
+    home would go out through o002 instead of staying on the LAN.
+  - This is a per-device client setting, so it can be forgotten.
+    `cnt audit` can't see it; the onboarding note for low-trust devices
+    has to say so. If one is missed, its `joshuabell.xyz` lookups most
+    likely time out (h005 is unreachable for it): noticeable and safe, but
+    untested.
 
 ### 5.2 Generated pieces and who writes them
 
@@ -332,8 +366,9 @@ at the pinned version before relying on it):
 |---|---|---|---|
 | Host vhost | `nginx` string | `cnt deploy` from `routes` | `/var/lib/fleet-containers/nginx/<svc>.conf` (exists) |
 | Firewall | `tcpPorts` + host files | `cnt deploy` | runtime port set (exists, extended) |
-| Tailnet + LAN DNS | `fleet.nix` lists, AdGuard | `fleet-edge` on h005 | dnsmasq `hostsdir` (re-read via inotify, no restart) |
-| Router forwards + DDNS | none (h005 has no forwards) | `fleet-edge` on h005 | nft map + bunny records |
+| Tailnet + LAN DNS | `fleet.nix` `h001Subdomains`, h005 `_constants.nix` host records | `fleet-edge` on h005 | dnsmasq `hostsdir` (re-read via inotify, no restart) |
+| Router forwards | none (h005 has no forwards) | `fleet-edge` on h005 | nft map |
+| Public DNS | hand edits in bunny, h005 `ddns.nix` (`home`) | `fleet-edge` on h005 | bunny, CNAMEs per §2.2; DDNS folds in |
 | Public edge (o002) | `o002/nginx.nix` | `cnt deploy`/`move`/`expose` | o002 runtime include dir (o002 gets the host module with `nginx.enable`) |
 | Certificates | h001 DNS-01, o002 per-name http-01 | `fleet-edge` on h005 | wildcards issued on h005, distributed via sec to the hosts that terminate TLS |
 
@@ -345,12 +380,34 @@ everything that touches the bunny key or the WAN:
   away.
 - It manages tailnet/LAN DNS records, router forwards and DDNS names for
   `via = "router"` routes.
+- It also manages **standalone DNS records** in `joshuabell.xyz` that
+  aren't tied to a service (CNAMEs to `o002`/`home`, TXT, MX). External
+  targets are refused (§4, cookie boundary).
+  They're declared in one file (`flakes/fleet-edge/records.nix` or the h005
+  config), and `cnt dns ls|diff|apply` shows and syncs them. Runtime
+  `cnt dns set <name> CNAME x --for 1d` works like `expose`: an override with
+  an expiry.
+- **Record ownership**: it only ever touches records it created (tracked in
+  its state, keyed by bunny record id). Unknown records in the zone are
+  reported by `cnt dns diff` and can be adopted explicitly, never deleted
+  silently. The first run is an import: diff only.
+- **Validation is against the declared route plus effective exposure**, not
+  the baseline. A request is accepted if the route exists in the deployed
+  service definition with that target host:port, and its effective
+  exposure (baseline, or an authorized override that hasn't expired)
+  allows it. So `cnt expose puzzles.web public --for 2h` works for a route
+  declared `tailnet`, but nobody can forward a port that no service
+  declares.
+- **h005 is the authority for overrides.** It stores them (by, at, until,
+  reason) and expires them itself, then tells the host to reload. Hosts keep
+  a copy so their own listeners also close at expiry if h005 can't reach
+  them. Both sides fail closed.
 - Its API is narrow and authenticated, on h005's overlay IP, from admin
-  devices only: "set routes for service X on host H". State is a JSON file.
-  It validates every request (forwards only to declared `public` routes,
-  names only in the zone), so a stolen CLI credential can't repoint the
-  zone. Every change is logged.
-- It's a stdlib Go binary in the same module as the CLI.
+  devices only. Every change is logged.
+- **Packaging**: a separate top-level flake, `flakes/fleet-edge` (stdlib
+  Go, like `flakes/ports`), with a NixOS module. h005 imports it as an
+  input. The CLI talks to it over HTTP and shares no code beyond a small
+  JSON schema.
 
 Ordering, so a half-done change fails closed: on add, backend → host vhost →
 DNS → edge; on remove or downgrade, the reverse. Each step is validated
@@ -365,12 +422,12 @@ cnt expose puzzles.web tailnet           # back down now
 cnt expose --reset puzzles               # drop overrides, back to service.nix
 ```
 
-- service.nix is the baseline. Overrides live in
-  `/var/lib/fleet-containers/overrides/<svc>.json` on the service's host,
-  carry `by`, `at`, `until` and a reason, and are shown everywhere (CLI,
-  dashboard) as **overridden**.
-- Expiry is enforced on the host (systemd timer re-applies the baseline),
-  not by the CLI remembering.
+- service.nix is the baseline. Overrides carry `by`, `at`, `until` and a
+  reason and are shown everywhere as **overridden**. h005 (`fleet-edge`)
+  holds the authoritative copy and the service's host keeps a mirror in
+  `/var/lib/fleet-containers/overrides/<svc>.json`.
+- Expiry is enforced by both h005 and the host (a timer re-applies the
+  baseline), never by the CLI remembering.
 - `cnt move` carries the overrides and re-points DNS, o002 and router
   forwards to the new host.
   The edge proxies to the new overlay IP only after the backend passes its
@@ -381,32 +438,40 @@ cnt expose --reset puzzles               # drop overrides, back to service.nix
 - Upgrades to `public` print the auth mode and ask for confirmation. `none` +
   `public` needs `--no-auth-i-am-sure`.
 
-### 5.4 Dashboard: `cnt serve` (read-only first, decided)
+### 5.4 Dashboard (read-only first, decided)
 
-A small stdlib-Go web server in the existing CLI (`net/http`,
-`html/template`, embedded assets; no JS framework needed):
+Served by **`fleet-edge` on h005** (`net/http`, `html/template`, embedded
+assets; no JS framework):
 
-- **Read-only first**: for every service it shows host, state, each route
-  (name, exposure, auth, overridden?), health (HTTP check through the same
-  path a client uses), backup age (restic + `cnt backup`), and requirements.
-  Data comes from a per-host `state.json` the host module/CLI already has
-  the material for, fetched over ssh, or (better) served by a tiny read-only
-  endpoint on each host.
-- Runs as a floating container on h001, route `exposure = "tailnet"`,
-  `auth = "oauth2-proxy"` groups=admin.
+- **Read-only first**: every container on every host: host, state,
+  declared vs actual host, each route (name, exposure, auth, overridden and
+  until when), health (HTTP check through the same path a client uses),
+  backup age, requirements. Also DNS records, router forwards and cert
+  expiry.
+- **Data source**: each host runs a tiny read-only status endpoint (from
+  the host module) that h005 polls over the tailnet. h005 does **not** get
+  ssh keys to the fleet, so the box facing the WAN can't run commands on
+  other hosts.
+- Route `exposure = "tailnet"`, `auth = "oauth2-proxy"` groups=admin, nginx
+  on h005 in front.
 - **Actions later** (start/stop/expose/move), behind a separate admin group.
-  Every action is written to an audit log. The process that can make things
-  public must not hold more power than it needs: start with "generate the
-  command" buttons, and only later decide whether it holds deploy keys.
+  Every action is written to an audit log. Exposure and DNS actions can be
+  done by fleet-edge itself. Lifecycle actions start as "copy this `cnt`
+  command" buttons; h005 would only get deploy rights after a deliberate
+  decision.
 - Replaces homepage-dashboard's link list (the links are generated from
   `routes`, so they can't go stale).
 
-## 6. Footguns and extras
+## 6. Requirements
+
+Every item here is in scope. Each is built in the step (§8) that introduces
+the piece it protects.
 
 1. **Audit command**: `cnt audit [host]` compares the declared routes against
    actual listeners (`ss -ltnup`), the nft ruleset, DNS answers and o002
    vhosts, and flags anything reachable that isn't declared. Run it in CI or
-   nightly. Today it would flag the 0.0.0.0 list in §1.
+   nightly. Today it would flag the 0.0.0.0 list in §1. It also flags
+   bunny records `fleet-edge` doesn't own and stale o002 sites.
 2. **Mobile/CLI clients vs oauth2-proxy**: gating breaks Bitwarden, immich,
    Jellyfin, atuin, git-over-https. Those stay `native` or need `bypass`
    paths that authenticate natively.
@@ -440,6 +505,47 @@ A small stdlib-Go web server in the existing CLI (`net/http`,
     files. Those files are readable on the host and shown by `cnt status`.
 11. **IPv6**: every rule needs a v6 twin (nginx `listen [::]`, nft ip6). The
     audit covers both.
+12. **h005 is now a single point of failure** for DNS, routing, auth
+    (oauth2-proxy) and the dashboard. That's acceptable because it already is
+    one for the LAN. Its config stays small, it gets its own restic job for
+    `fleet-edge` state, and that state can be rebuilt from git (routes +
+    records) and bunny. Its UPS (NUT) is already there.
+13. **The WAN-facing box holds the most powerful key.** Keep it tight:
+    `fleet-edge` runs as its own user with systemd sandboxing, listens only
+    on the overlay IP (never WAN), and isn't reachable from `tag:lowtrust`.
+    The bunny key goes through sec, scoped if bunny ever supports per-zone
+    keys.
+14. **Who can call fleet-edge**: authenticate the CLI with per-device
+    tokens (or tailnet identity via headscale's whois, if exposed) rather
+    than one shared secret, so one lost laptop can be revoked.
+15. **Certificate distribution**: a renewal on h005 has to reach every TLS
+    host before the old cert expires. Hosts pull from sec on a timer and
+    reload nginx. The dashboard and `audit` show each host's cert expiry,
+    and an alert fires at < 14 days.
+16. **DNS TTLs**: use short TTLs (60–300 s) for records that `move`/`expose`
+    change, or a move is slow to take effect for public clients. Negative
+    caching (a lookup before the record existed) lasts as long as the SOA
+    minimum.
+17. **Dynamic home IP**: router names are CNAMEs to `home` (§2.2), so DDNS
+    updates one record. IPv6 router forwards are firewall opens, not DNAT;
+    both are generated.
+18. **Hairpin**: LAN clients that only have the public name of a
+    router-path route (e.g. a friend's console on your wifi) get the LAN
+    answer from h005's DNS, so no NAT reflection is needed. Clients with
+    hard-coded DNS (8.8.8.8) need reflection or won't connect; decide per
+    route.
+19. **Bootstrap / ordering**: fleet-edge needs DNS, sec and the tailnet up.
+    The router's own LAN/WAN must never depend on it, so it only adds to
+    the declarative base and a broken fleet-edge leaves h005 routing
+    normally (with forwards closed).
+20. **Rate limits**: Let's Encrypt (wildcards, so few certs) and the bunny
+    API. Batch DNS changes per deploy and back off on 429s.
+21. **Undeploy**: removing a service (or a route) must remove its DNS,
+    forwards, o002 site and overrides. `cnt destroy <svc>` (exists today)
+    does this, and `audit` finds orphans.
+22. **SSO cookie scope** (§4): no external targets in the zone, the SSO
+    cookie stripped before every backend, `X-Auth-Request-*` always set by
+    nginx.
 
 ## 7. Decisions
 
@@ -449,7 +555,7 @@ Taken 2026-10-16:
 2. **Namespace chosen per route** (`zone = "main" | "private"`, §2.2).
 3. **No host trusts `tailscale0`**. Each gets an explicit per-service
    firewall, and ad-hoc ports use `cnt port open --for` (§5.1).
-4. **Dashboard starts read-only** (§5.4).
+4. **Dashboard starts read-only**, served by `fleet-edge` on h005 (§5.4).
 5. **Public paths are `edge` (o002) or `router` (h005 DNAT + DDNS)**, both
    runtime-managed (§2.4).
 6. **h005 runs `fleet-edge`** and is the only holder of the bunny key (§5.2).
@@ -458,7 +564,9 @@ Taken 2026-10-16:
    client. One name resolves three ways: public → edge, LAN → host LAN IP,
    high-trust tailnet → overlay IP (§2.1).
 
-Still open: low-trust split-DNS behaviour (verify, §5.1).
+9. **Low-trust devices use `--accept-dns=false`** (§5.1).
+10. **Public DNS**: zone `joshuabell.xyz` only, every public name a CNAME to
+    `o002` (edge) or `home` (router) (§2.2).
 
 ## 8. Suggested order
 
@@ -470,11 +578,14 @@ Still open: low-trust split-DNS behaviour (verify, §5.1).
    the `tailscale0` trust host by host (h001 first). Add `cnt port open`.
 3. Internal/edge listener split (§2.3), o002 generated vhosts and a
    wildcard. This retires the hand-kept o002 list.
-4. `fleet-edge` on h005: DNS records (retires `h001Subdomains`), then cert
+4. `flakes/fleet-edge` on h005: tailnet/LAN DNS records (retires
+   `h001Subdomains` and the hand host records), bunny import (diff only,
+   adopt existing CNAMEs) + `cnt dns`, DDNS folded in, then cert
    issuance (retires h001's bunny key), then router forwards + DDNS
    (minecraft back online).
 5. Private container networking, service by service, arr last.
-6. Shared oauth2-proxy + per-route `auth`.
+6. Fleet oauth2-proxy on h005 + per-route `auth`, with cookie stripping
+   from the first gated route.
 7. `cnt expose` overrides with expiry.
-8. `cnt serve` read-only dashboard; homepage-dashboard retired.
+8. Read-only dashboard in fleet-edge; homepage-dashboard retired.
 9. Then `cnt move` for real.
