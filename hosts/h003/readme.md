@@ -20,6 +20,10 @@ Unlocks unattended from an encrypted USB key stick (password `usbKeyPassword` in
 `flake.nix`); without it, it prompts for the disk passphrase on the console.
 Container state lives under `/persist` (`containers.nix`).
 
+## Bare-metal services
+
+None besides host plumbing: nginx (for floating sites), sec-agent,
+beszel-agent, fail2ban, tailscaled. Floating containers: `cnt ls`.
 ## Re-image procedure
 
 Follow `utilities/nixos-install-disko/readme.md`.

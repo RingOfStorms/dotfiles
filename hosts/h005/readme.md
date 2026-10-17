@@ -18,6 +18,21 @@ the fleet's encrypted bcachefs + impermanence layout (Phase 6).
 | Network | 2× 2.5GbE Intel i226-V (`igc`): `enp1s0` = **WAN** (`00:ce:39:d8:0c:17`), `enp2s0` = **TRUNK** (`00:ce:39:d8:0c:18`), labelled on the case |
 | Disk layout | ESP 3G (`DA82-16A8`), swap 4G (random key per boot), encrypted bcachefs (`0d6e4079-…`, format 1.39) with impermanence; unlocked by the encrypted USB key stick |
 
+## Bare-metal services
+
+The one host meant to run services on bare metal (networking only).
+
+| Service | Notes |
+|---|---|
+| dnsmasq (LAN DHCP/DNS), dnsmasq-tailnet | `mods/networking.nix` |
+| AdGuard Home | `mods/adguardhome.nix` |
+| DDNS (`ddns-update` timer) | `mods/ddns.nix`; `home.joshuabell.xyz` |
+| NUT (upsd, upsmon) | `mods/ups.nix` |
+| ISP speedtest (timer) | `mods/speedtest.nix` |
+| Per-host agents | sec-agent, beszel-agent, fail2ban, tailscaled |
+
+Planned (`containers/ROUTING-PLAN.md`): `fleet-edge` (DNS records, ACME,
+router forwards, dashboard) and the fleet oauth2-proxy.
 ## Migration plan: h003 → h005
 
 Goal: move all router duties off h003 so h003 can become an agent worker. Keep h003 intact as a rollback until h005 has run cleanly for about a week.

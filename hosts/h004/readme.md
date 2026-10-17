@@ -31,6 +31,12 @@ absolute paths under it in their databases and configs.
 
 IronWolf serials (label the cables): `ZRT2KQXT`, `ZRT2LRT8`, `ZRT2FJ7X`, `ZRT2GA17`.
 
+## Bare-metal services
+
+| Service | Notes |
+|---|---|
+| NFS server | Exports `/data`; consumed by h001 (`nfs-h004`). |
+| Per-host agents | sec-agent, beszel-agent, fail2ban, tailscaled. |
 ## Config layout
 
 | File | Role |

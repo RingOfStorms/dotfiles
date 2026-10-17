@@ -14,9 +14,13 @@ host module, never floats).
 - Floating today: `arr` (h001, **live since 2026-10-12**: whole media stack,
   NAS-guarded), `opengist`, `atuin`, `vaultwarden` (h001, 2026-10-12),
   `trilium` (+ oauth2-proxy), `searx`, `litellm`, `open-webui`, `puzzles`,
-  `life`, `forgejo`, `dawarich`, `immich`, `paperless`, `beszel` (h001, 2026-10-13), `localai` (joe), `minecraft` (inactive since 2026-10-15, backup on h001), test twins
+  `life`, `forgejo`, `dawarich`, `immich`, `paperless`, `beszel` (h001, 2026-10-13), `localai` (joe), test twins
   `hello-nixos` / `hello-podman` (lio). Old host modules and `/var/lib` data
   of every migrated service are deleted (backups in `h001:/home/luser/backups`).
+- Not running: `minecraft` (inactive since 2026-10-15, backup on h001; its
+  public path needs the router forward from ROUTING-PLAN).
+- Still outside `cnt`: sec and zitadel on h001 (to float, §3), plus
+  host plumbing. Each host's readme lists its bare-metal services.
 - CLI: `deploy`, `stop` (persists across reboot), `start`, `move`, `backup`
   (asks dir + before stopping), `restore`, `status <svc>`, `ls`, local mode.
   Registered container hosts: h001, h003, lio (+ any host a
@@ -34,7 +38,7 @@ host module, never floats).
 |---|---|---|
 | h001 | Dell OptiPlex 7090, i5-11500, 64 GB, **Intel UHD 750 iGPU (QSV)**, /drives/wd10, NFS client of h004 | Main service host → stays home of media/*arr + big-data services |
 | h004 | NAS: Core Ultra 5 250K+, 32 GB, iGPU (QSV), NVMe root, bcachefs `/data` | NFS server, host-bound (successor of the retired h002, same pool; `hosts/h004/readme.md`) |
-| h005 | not built (plan in `hosts/h005/readme.md`) | Future router (dnsmasq, AdGuard, DDNS, NUT, speedtest) |
+| h005 | MeLE Quieter DL, N150, 8 GB | Router since 2026-10-15 (dnsmasq, AdGuard, DDNS, NUT, speedtest); the only host meant to run bare-metal services. Planned: `fleet-edge`, oauth2-proxy |
 | o002 | Oracle Ampere A1, **aarch64**, 2 OCPU/12 GB, impermanent root | Public TLS edge + headscale, host-bound |
 | joe | Desktop, NVIDIA RTX 3080 10 GB | GPU AI services (podman) |
 | lio | Desktop, AMD RX 7900 GRE | nix-serve cache, builder; floating-capable (test target) |
@@ -181,13 +185,13 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 
 | Service | Decision | Ideal host | Notes |
 |---|---|---|---|
-| zitadel (SSO) | Keep | h001 (don't float) | sec-agent and oauth2-proxy authenticate against it. Postgres is bind-mounted from the host; master key outside sec-agent. Move only deliberately, never with sec down. |
-| sec (secrets_manager server) | Keep | h001 (don't float) | Every host's sec-agent depends on it; it depends on zitadel. |
+| zitadel (SSO) | **Float** (decided 2026-10-16) | h001 first, movable | Today an nspawn container in h001's config with host-bound Postgres. sec-agent, sec and oauth2-proxy authenticate against it. Master key stays outside sec (persist dir + break-glass copy, §4.8). |
+| sec (secrets_manager server) | **Float** (decided 2026-10-16) | h001 first, movable | Every host's sec-agent depends on it; it depends on zitadel. Encryption key in persist + break-glass copy. |
 | oauth2-proxy | **Live** (in trilium) | same host as trilium | Gate for trilium. |
 | beszel hub | **Live** h001 2026-10-13 (789b4a53) | h001 (pinned) | `containers/beszel`, binds 100.64.0.13:8090 (host network). Agents still hard-code that IP: give them a DNS name that follows the hub before ever `cnt move`-ing it. |
 | host postgresql 17 | **Removed** 2026-10-14 | — | Was unused (only an empty `scratch` db). `mods/postgresql.nix` deleted; data + final pg_dumpall archived in h001:/home/luser/backups/host-postgresql-final-2026-10-14.tar.gz, `/var/lib/postgresql` deleted. The `postgres` user (uid 71) stays: zitadel.nix declares it for its bind-mounted cluster, and life's pgBackRest secret is group 71. |
 | restic-backup | **Reworked** 2026-10-13 (b8588f6c) | — | Runs every `service.nix` `backupHook` whose unit is active on h001 (skips others; a failing hook fails the run), then backs up all of `/srv/containers` (live PG clusters + caches excluded) plus wd10 media and `~luser/backups`. SQLite: host-side `.backup` copies of every SQLite db into `/var/lib/restic-staging/sqlite`; only the copied live files are excluded (generated exclude-file, 789b4a53). Also sec db + key and the zitadel dump + masterkey (ea10e55c). `--group-by host,tags` for backup and prune. Restore-verified: a07bdec4 and f6542ab6 restored, all SQLite copies pass integrity_check. |
-| homepage-dashboard (h001, joe) | Keep as is (for now) | — | Likely replaced by a unified, location-aware services view built with the §4.3 routing work. |
+| homepage-dashboard (h001, joe) | Replace | — | By the read-only dashboard in `fleet-edge` on h005 (ROUTING-PLAN §5.4), then removed from both hosts. |
 
 ### Apps — good floating candidates
 
@@ -240,8 +244,8 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 | Service | Host | Why |
 |---|---|---|
 | NFS server | h004 | Owns the disks. |
-| dnsmasq (LAN DHCP/DNS), dnsmasq-tailnet, AdGuard Home, DDNS, NUT/UPS, ISP speedtest | h003 → h005 | Router functions: physical VLANs, port 53/DHCP, USB UPS. Planned move to h005 is a host rebuild, not `cnt move`. |
-| nginx public edge + ACME, headscale | o002 | The edge and the tailnet control plane. |
+| dnsmasq (LAN DHCP/DNS), dnsmasq-tailnet, AdGuard Home, DDNS, NUT/UPS, ISP speedtest | h005 | Router functions: physical VLANs, port 53/DHCP, USB UPS. |
+| nginx public edge, headscale | o002 | The edge and the tailnet control plane. |
 | per-host nginx (floating sites) | each host | Written at runtime by `cnt deploy`. |
 | nix-serve, libvirtd | lio | Tied to lio's store / hypervisor. |
 | stt_ime (speech-to-**text**) | lio, juni | Input-method addon, not a server. |
@@ -277,6 +281,26 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
    `aarch64-linux`. ARM eligibility (o002) is per service: check the nixpkgs
    package / container image has an arm64 build. o002's 12 GB / impermanent
    root make it a poor general host regardless.
+7. **Backup continuity across moves** (required before any off-host `move`).
+   `restic-backup.nix` only runs on h001, only covers services running
+   there, and snapshots h001's `/srv/containers`. After a move it would keep
+   backing up the stale source copy. Needed:
+   - a restic job on **every** container host, generated by the host
+     module from the services deployed there (hooks + their persist dirs),
+     with per-host repos/tags;
+   - `move` removes the source copy (or marks it stale and excluded) once
+     the target is verified;
+   - the first backup on the target runs as part of `move`, and a restore
+     check (`restic restore` to a scratch dir, PG/SQLite integrity) runs
+     before the source copy goes;
+   - backup age per service on the dashboard, alert when stale.
+8. **Break-glass for the identity core** (required before floating
+   sec/zitadel). The restic repo password and backend credentials come from
+   sec (`restic_h001_env`), and sec's key is only in sec's data dir and
+   restic. Lose sec and the backups that would restore it are locked. Keep an
+   offline copy (outside the fleet: printed or a separate password manager)
+   of: sec's encryption key, zitadel's master key, the restic env, and one
+   root ssh key. Test a cold restore of sec + zitadel from it on a spare host.
 
 ## 5. Migration recipe (per service)
 
@@ -302,8 +326,11 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 5. ~~§4.1 `wd10`, immich/paperless, restic rework~~ done 2026-10-13 (b8588f6c).
    Beszel hub floated 2026-10-13 (789b4a53, pinned to h001). Host postgres removed 2026-10-14.
 6. GPU services on joe: ~~localai as podman-kind~~ live; ~~nvidia capability + localai `requires`~~ done.
-7. **Last** (no off-host moves planned): §4.3 routing + target TLS certs,
-   then `cnt move` services to their ideal hosts. Until then every migration
+7. **Last** (no off-host moves planned): §4.3 routing + target TLS certs
+   and §4.7 backup continuity, then `cnt move` services to their ideal
+   hosts. Until then every migration
    is in place on its current host.
-8. Never: zitadel/sec (until there
-   is a reason), router/NAS/edge.
+8. sec + zitadel to floating containers on h001 (after §4.8 break-glass and
+   the routing steps they rely on: DNS on h005, certs). Same in-place recipe;
+   moving them off h001 follows §4.7 like any service.
+9. Never: router/NAS/edge (h005, h004, o002).

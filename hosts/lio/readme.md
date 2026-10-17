@@ -12,3 +12,12 @@ Primary desktop workstation
 | RAM | 64 GB |
 | Storage | Not yet inventoried |
 | Displays | Samsung C34J79x 34" 3440x1440 100 Hz; ASUS PG43U 43" 4K 60 Hz |
+
+## Bare-metal services
+
+| Service | Notes |
+|---|---|
+| nix-serve | Binary cache for the fleet |
+| libvirtd | Local VMs |
+| nginx | Floating sites |
+| Per-host agents | sec-agent, beszel-agent, fail2ban, tailscaled |
