@@ -24,6 +24,14 @@ Oracle "Always Free" Ampere A1 gives a total of **4 OCPU / 24 GB RAM** and
 
 So a second instance can be **2 OCPU / 12 GB** with up to ~130 GB boot volume.
 
+### o002 bare-metal services
+
+| Service | Notes |
+|---|---|
+| nginx public edge | `o002/nginx.nix`: public vhosts to fleet hosts, forgejo SSH stream on 3032, per-name ACME (planned: generated sites + wildcard, `containers/ROUTING-PLAN.md`) |
+| headscale | `o002/headscale.nix`: tailnet control plane and ACL |
+| Per-host agents | sec-agent, fail2ban, tailscaled |
+
 ---
 
 ## Onboarding a new Oracle instance

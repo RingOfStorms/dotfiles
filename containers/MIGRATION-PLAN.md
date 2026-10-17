@@ -297,10 +297,22 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
 8. **Break-glass for the identity core** (required before floating
    sec/zitadel). The restic repo password and backend credentials come from
    sec (`restic_h001_env`), and sec's key is only in sec's data dir and
-   restic. Lose sec and the backups that would restore it are locked. Keep an
-   offline copy (outside the fleet: printed or a separate password manager)
-   of: sec's encryption key, zitadel's master key, the restic env, and one
-   root ssh key. Test a cold restore of sec + zitadel from it on a spare host.
+   restic. Restic snapshots include both keys, so with the restic env from
+   the password manager an intact snapshot restores everything; the copies
+   below are a second path if the repo is damaged. Kept outside the fleet
+   (password manager):
+   - restic env (repo, password, backend credentials): **have it**;
+   - sec's encryption key (`/var/lib/secrets_manager/db.key`): **have it**;
+   - zitadel master key (`/var/lib/zitadel/masterkey`, 32 raw bytes, store
+     base64): **have it**;
+   - an emergency ssh key pair (`root_fleet_backup`): **have it**. The
+     public key is authorized for root on every host via common
+     `hardening.nix`; the private key is only in the password manager.
+     Covers hosts without a console (o002) and a fleet whose sec-agent
+     can't fetch the usual keys.
+
+   Still to do: a cold restore of sec + zitadel on a spare host, once from a
+   restic snapshot and once from the password-manager copies alone.
 
 ## 5. Migration recipe (per service)
 

@@ -64,6 +64,12 @@
     };
   };
 
+  # Break-glass key: the private half lives only offline (password manager),
+  # for when sec / the nix2nix key are unavailable or a host has no console.
+  users.users.root.openssh.authorizedKeys.keys = [
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFaLu1WwHYNJ61NcwhP3F+YoSLKixIxaScl/2/lqGm7r root_fleet_backup"
+  ];
+
   # Ensure SSH key pair generation for non-root users
   systemd.services = lib.mapAttrs' (name: _: {
     name = "generate_ssh_key_${name}";
