@@ -68,16 +68,13 @@ in
       set -eu
       ${lib.concatMapStrings hookCmd withHook}
 
-      # zitadel (static container, stays on h001): fresh pg_dumpall into
-      # /var/lib/zitadel/backups/postgres; the masterkey is backed up beside it.
-      ${pkgs.nixos-container}/bin/nixos-container run zitadel -- systemctl start postgresqlBackup.service
 
       # Consistent copies of every SQLite database, taken with SQLite's online
       # backup API from the host side (works for any container kind, needs no
       # sqlite3 inside). restic would otherwise copy live db/-wal pairs that
       # can disagree. Restore from staging/sqlite, not the live file.
       rm -rf ${staging}/sqlite ${staging}/sec ${staging}/sqlite-excludes
-      install -d -m700 ${staging}/sqlite ${staging}/sec
+      install -d -m700 ${staging}/sqlite
       : > ${staging}/sqlite-excludes
       ${pkgs.findutils}/bin/find ${dataRoot} -xdev -type f \
         \( -name '*.db' -o -name '*.sqlite' -o -name '*.sqlite3' \) \
@@ -93,9 +90,8 @@ in
         for f in "$db-wal" "$db-shm"; do [ ! -e "$f" ] || chown --reference="$db" "$f"; done
       done
 
-      # sec (secrets_manager): DB copy + its irreplaceable encryption key.
-      ${pkgs.sqlite}/bin/sqlite3 /var/lib/secrets_manager/sec.db ".timeout 30000" ".backup '${staging}/sec/sec.db'"
-      cp -p /var/lib/secrets_manager/db.key ${staging}/sec/db.key
+      # sec (containers/sec): sec.db is caught by the scan above; db.key and
+      # zitadel's masterkey are plain files under ${dataRoot} (persist).
     '';
 
     paths = [
@@ -108,9 +104,6 @@ in
       "/drives/wd10/paperless"
       # hand-made archives (cnt backup tarballs, pre-migration snapshots)
       "/home/luser/backups"
-      # zitadel: pg_dumpall (refreshed above) + masterkey
-      "/var/lib/zitadel/backups"
-      "/var/lib/zitadel/masterkey"
     ];
 
     exclude = [
@@ -119,6 +112,7 @@ in
       "${dataRoot}/*/postgres"
       "${dataRoot}/atuin/postgresql/[0-9]*"
       "${dataRoot}/minecraft/postgresql/[0-9]*"
+      "${dataRoot}/zitadel/postgresql/[0-9]*"
       # regenerable
       "${dataRoot}/immich/mlcache"
       "${dataRoot}/open-webui/data/hf_home"

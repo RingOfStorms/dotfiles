@@ -8,7 +8,7 @@
     # The media stack runs in the `arr` floating container (containers/arr).
     ./arr-nginx.nix
     ./hardware-transcoding.nix
-    ./sec.nix
+    # sec + zitadel run in floating containers (containers/{sec,zitadel}).
     ./homepage-dashboard.nix
     # ./vault.nix
     ./restic-backup.nix

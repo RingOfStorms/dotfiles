@@ -4,7 +4,6 @@
     home-manager.url = "github:rycee/home-manager/release-26.05";
 
     # nixpkgs-unstable.url = "github:wrvsrx/nixpkgs/fix-open-webui";
-    zitadel-nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
@@ -29,7 +28,7 @@
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
         # h001 reads its rendered values from sec-agent and runs the
-        # secrets_manager server (hosts/h001/mods/sec.nix).
+        # secrets_manager server (containers/sec; floating container).
 
         # `mkpasswd -m yescrypt.
         authMethod = "hashedPassword";
@@ -81,7 +80,6 @@
 
           (import ./sec-agent.nix { inherit inputs constants; })
           ./nginx.nix
-          ./containers
           ./autofs.nix
 
           # Host-specific config

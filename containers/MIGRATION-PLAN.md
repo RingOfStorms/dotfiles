@@ -19,7 +19,9 @@ host module, never floats).
   of every migrated service are deleted (backups in `h001:/home/luser/backups`).
 - Not running: `minecraft` (inactive since 2026-10-15, backup on h001; its
   public path needs the router forward from ROUTING-PLAN).
-- Still outside `cnt`: sec and zitadel on h001 (to float, §3), plus
+- Still outside `cnt`: sec and zitadel on h001 until cutover; their
+  containers (`containers/{sec,zitadel}`) are written and build, the host
+  side is prepared (runbook: `containers/sec/README.md`). Plus
   host plumbing. Each host's readme lists its bare-metal services.
 - CLI: `deploy`, `stop` (persists across reboot), `start`, `move`, `backup`
   (asks dir + before stopping), `restore`, `status <svc>`, `ls`, local mode.
@@ -185,8 +187,8 @@ hand, including `media-integrity-scan.timer`, `media-integrity-scan.service`,
 
 | Service | Decision | Ideal host | Notes |
 |---|---|---|---|
-| zitadel (SSO) | **Float** (decided 2026-10-16) | h001 first, movable | Today an nspawn container in h001's config with host-bound Postgres. sec-agent, sec and oauth2-proxy authenticate against it. Master key stays outside sec (persist dir + break-glass copy, §4.8). |
-| sec (secrets_manager server) | **Float** (decided 2026-10-16) | h001 first, movable | Every host's sec-agent depends on it; it depends on zitadel. Encryption key in persist + break-glass copy. |
+| zitadel (SSO) | **Float** (decided 2026-10-16) | h001 first, movable | Container written (`containers/zitadel`, :8085, PG17 socket-only, masterkey in persist `keys`); cutover pending. sec-agent, sec and oauth2-proxy authenticate against it. Master key stays outside sec (persist dir + break-glass copy, §4.8). |
+| sec (secrets_manager server) | **Float** (decided 2026-10-16) | h001 first, movable | Container written (`containers/sec`, 127.0.0.1:8300, registry in `registry.nix`); cutover pending. Every host's sec-agent depends on it; it depends on zitadel. Encryption key in persist + break-glass copy. |
 | oauth2-proxy | **Live** (in trilium) | same host as trilium | Gate for trilium. |
 | beszel hub | **Live** h001 2026-10-13 (789b4a53) | h001 (pinned) | `containers/beszel`, binds 100.64.0.13:8090 (host network). Agents still hard-code that IP: give them a DNS name that follows the hub before ever `cnt move`-ing it. |
 | host postgresql 17 | **Removed** 2026-10-14 | — | Was unused (only an empty `scratch` db). `mods/postgresql.nix` deleted; data + final pg_dumpall archived in h001:/home/luser/backups/host-postgresql-final-2026-10-14.tar.gz, `/var/lib/postgresql` deleted. The `postgres` user (uid 71) stays: zitadel.nix declares it for its bind-mounted cluster, and life's pgBackRest secret is group 71. |
@@ -302,8 +304,8 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
    below are a second path if the repo is damaged. Kept outside the fleet
    (password manager):
    - restic env (repo, password, backend credentials): **have it**;
-   - sec's encryption key (`/var/lib/secrets_manager/db.key`): **have it**;
-   - zitadel master key (`/var/lib/zitadel/masterkey`, 32 raw bytes, store
+   - sec's encryption key (`/var/lib/secrets_manager/db.key`; after cutover `/srv/containers/sec/data/db.key`): **have it**;
+   - zitadel master key (`/var/lib/zitadel/masterkey`; after cutover `/srv/containers/zitadel/keys/masterkey`, 32 raw bytes, store
      base64): **have it**;
    - an emergency ssh key pair (`root_fleet_backup`): **have it**. The
      public key is authorized for root on every host via common
@@ -343,6 +345,6 @@ need `/dev/kfd` + `/dev/dri` and a ROCm image matching the GPU.
    hosts. Until then every migration
    is in place on its current host.
 8. sec + zitadel to floating containers on h001 (after §4.8 break-glass and
-   the routing steps they rely on: DNS on h005, certs). Same in-place recipe;
-   moving them off h001 follows §4.7 like any service.
+   the routing steps they rely on: DNS on h005, certs). Containers and host changes are ready;
+   the cutover runbook is `containers/sec/README.md`. Moving them off h001 follows §4.7 like any service.
 9. Never: router/NAS/edge (h005, h004, o002).

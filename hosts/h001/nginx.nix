@@ -15,6 +15,12 @@ let
   };
 in
 {
+  # Was opened by hosts/h001/containers/default.nix (old zitadel container).
+  networking.firewall.allowedTCPPorts = [
+    80
+    443
+  ];
+
   # TODO transfer these to o001 to use same certs?
   # Will I ever get rate limited by lets encrypt with both doing their own?
   security.acme = {
@@ -35,8 +41,14 @@ in
   # the daemon being started and races nginx's bind. IPFreeBind=true also lets
   # nginx bind to addresses not yet on any interface as belt-and-suspenders.
   systemd.services.nginx = {
-    wants = [ "network-online.target" "tailscaled-autoconnect.service" ];
-    after = [ "network-online.target" "tailscaled-autoconnect.service" ];
+    wants = [
+      "network-online.target"
+      "tailscaled-autoconnect.service"
+    ];
+    after = [
+      "network-online.target"
+      "tailscaled-autoconnect.service"
+    ];
     serviceConfig.IPFreeBind = true;
   };
 

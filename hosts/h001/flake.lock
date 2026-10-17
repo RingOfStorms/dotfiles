@@ -39,11 +39,11 @@
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1792125289,
-        "narHash": "sha256-maGzVxDJwIVOrzLTHazH3eioUvDUEIYDliKjmv6ljqw=",
+        "lastModified": 1792197720,
+        "narHash": "sha256-QNf6c531z2jY45QUgAl1Ws3KbmUeaP8iTkGKdytVJO0=",
         "ref": "refs/heads/master",
-        "rev": "bfc8a4ce92037ab2edf3f43d951a49c0124f9276",
-        "revCount": 2319,
+        "rev": "30c2d002d5e71274cdc5c329a4640733cbceea43",
+        "revCount": 2329,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -828,8 +828,7 @@
         "home-manager": "home-manager",
         "nixpkgs": "nixpkgs_4",
         "ros_neovim": "ros_neovim",
-        "secrets_manager": "secrets_manager",
-        "zitadel-nixpkgs": "zitadel-nixpkgs"
+        "secrets_manager": "secrets_manager"
       }
     },
     "ros_neovim": {
@@ -954,22 +953,6 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default",
-        "type": "github"
-      }
-    },
-    "zitadel-nixpkgs": {
-      "locked": {
-        "lastModified": 1780243769,
-        "narHash": "sha256-x5UQuRsH3MqI0U9afaXSNqzTPSeZlRLvFAav2Ux1pNw=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "331800de5053fcebacf6813adb5db9c9dca22a0c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
         "type": "github"
       }
     }

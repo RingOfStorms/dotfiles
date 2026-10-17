@@ -12,22 +12,10 @@
     stateVersion = "24.11";
   };
 
-  # Container network (shared host address for all NixOS containers)
-  containerNetwork = {
-    hostAddress = "10.0.0.1";
-    hostAddress6 = "fc00::1";
-  };
-
   services = {
     forgejo.domain = "git.joshuabell.xyz"; # floating container (containers/forgejo)
 
-    zitadel = {
-      port = 8080;
-      dataDir = "/var/lib/zitadel";
-      containerIp = "10.0.0.3";
-      containerIp6 = "fc00::3";
-      domain = "sso.joshuabell.xyz";
-    };
+    zitadel.domain = "sso.joshuabell.xyz"; # floating container (containers/zitadel)
 
     immich.domain = "photos.joshuabell.xyz"; # floating container (containers/immich)
 
@@ -52,16 +40,7 @@
 
     beszelHub.port = 8090; # floating container (containers/beszel), tailnet IP only
 
-    # `sec` — the secrets manager server. Runs on h001 (port 8300,
-    # secrets.joshuabell.xyz). Replaced the old OpenBao server that used to
-    # run here.
-    sec = {
-      port = 8300;
-      dataDir = "/var/lib/secrets_manager";
-      # Single-label, so the existing *.joshuabell.xyz wildcard cert
-      # covers it with no extraDomainNames entry.
-      domain = "secrets.joshuabell.xyz";
-    };
+    sec.domain = "secrets.joshuabell.xyz"; # floating container (containers/sec)
 
     homepage = {
       port = 8082;
