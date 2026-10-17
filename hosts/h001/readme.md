@@ -20,7 +20,7 @@ Everything else runs as floating containers (`cnt ls`). That includes sec
 (`containers/sec/README.md` has the runbook and rollback). Their irreplaceable
 keys live in persist: `/srv/containers/sec/data/db.key` and
 `/srv/containers/zitadel/keys/masterkey`. Break-glass copies are offline
-(`containers/MIGRATION-PLAN.md` §4.8). Until about 2026-10-24, the
+(`containers/ROUTING-PLAN.md` §9.3). Until about 2026-10-24, the
 pre-cutover data stays in `/var/lib/zitadel` and `/var/lib/secrets_manager`
 for rollback.
 

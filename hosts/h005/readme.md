@@ -180,4 +180,4 @@ Today h003 is LUKS + btrfs with a keyfile copied into the initrd (`hosts/h003/ha
 7. Make a USB key stick for h003 (`usb_key.md`). It stays plugged in if h003 must reboot unattended.
 8. Boot the installer and run disko (`encrypted = true`, target `/dev/disk/by-id/nvme-…`). Record the UUIDs in `ringofstorms.impermanence.disk` with `usbKey = true`. Copy the step 5 files into `/mnt/persist` (SSH keys in `/mnt/persist/etc/ssh/`), then `nixos-install --flake`.
 9. Verify: unlocks from the USB key with no prompt; `/` is wiped on reboot while `/persist` keeps its contents; tailnet node and SSH host key unchanged; restore the step 2 state and start the workloads again.
-10. Update `hosts/h003/readme.md` (disk layout table like `hosts/i001/readme.md`) and the host table in `containers/MIGRATION-PLAN.md`.
+10. Update `hosts/h003/readme.md` (disk layout table like `hosts/i001/readme.md`) and the host roles in `containers/ROUTING-PLAN.md`.
