@@ -1,5 +1,7 @@
 # sec + zitadel cutover (h001, in place)
 
+Done on h001 on 2026-10-17; kept as the recipe for a re-run or a move.
+
 `containers/zitadel` and `containers/sec` replace h001's old
 `containers/zitadel.nix` nspawn container and `mods/sec.nix` unit. The
 host-side removal is in the same change, so **deploying the h001 config and
@@ -48,5 +50,16 @@ never print it.
 7. After a week, archive `/var/lib/zitadel` and `/var/lib/secrets_manager`
    to `/home/luser/backups`, then delete them.
 
-**Rollback:** check out the previous h001 config, run
-`cnt stop sec; cnt stop zitadel`, and switch. The old dirs are untouched until step 7.
+**Rollback** (order matters):
+1. `cnt destroy sec`, then `cnt destroy zitadel`. Do not pass `--purge`.
+   `destroy` removes the extra-container units, the nginx snippets and the
+   port files, and keeps `/srv/containers/<svc>`. Don't use `cnt stop` here.
+   It only disables the unit and leaves its nginx snippet behind, so that
+   snippet would clash with the old host vhosts.
+2. Then switch h001 to the previous generation
+   (`nixos-rebuild switch --rollback`, or the pre-cutover commit). If you
+   switch first and stop afterwards, you also stop the restored old
+   `container@zitadel`, because it has the same unit name.
+
+The old dirs (`/var/lib/zitadel`, `/var/lib/secrets_manager`) stay untouched
+until step 7. Data written since the cutover lives only in `/srv/containers`.
