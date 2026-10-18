@@ -25,28 +25,13 @@
 
   backupHook = "set -o pipefail; runuser -u postgres -- pg_dumpall | gzip > /var/backup/postgresql/cnt-dumpall.sql.gz";
 
-  # Same X-Forwarded-Proto https as before: o002 terminates TLS and forwards
-  # plain http over the tailnet; zitadel must still believe it is https.
-  nginx = ''
-    server {
-      listen 80;
-      listen [::]:80;
-      listen 443 ssl;
-      listen [::]:443 ssl;
-      server_name sso.joshuabell.xyz;
-      ssl_certificate /var/lib/acme/joshuabell.xyz/fullchain.pem;
-      ssl_certificate_key /var/lib/acme/joshuabell.xyz/key.pem;
-      location / {
-        proxy_pass http://127.0.0.1:8085;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_read_timeout 60s;
-      }
-    }
-  '';
+  # o002 terminates TLS and forwards plain http over the tailnet; the route
+  # keeps the default forwardedProto = "https" so zitadel still believes it
+  # is https. Public via edge (o002) since every login starts here.
+  routes.web = {
+    port = 8085;
+    name = "sso";
+    exposure = "public";
+    auth = "native";
+  };
 }

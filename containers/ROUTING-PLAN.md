@@ -5,7 +5,7 @@ who can reach it, how, and through what auth. The tooling makes the network
 match that statement, lets it change at runtime (move, temporarily public),
 and shows it on one tailnet-only page.
 
-Status: **proposal**, nothing implemented. Decisions are in §7; §6 lists
+Status: **proposal**; §8 step 1 in progress (`routes` schema, generated host vhost + ports, `cnt routes`, `cnt audit`; sec and zitadel converted). Decisions are in §7; §6 lists
 requirements every step must meet. §9 holds the open items carried over from
 the finished migration plan (all services float since 2026-10-17).
 
@@ -571,7 +571,7 @@ Taken 2026-10-16:
 
 ## 8. Suggested order
 
-1. `routes` schema in service.nix + CLI generation of the host vhost and
+1. **(in progress)** `routes` schema in service.nix + CLI generation of the host vhost and
    firewall, keeping the `nginx` string as an escape hatch while services
    are converted. Add `cnt routes` and `cnt audit` (read-only, useful
    immediately).

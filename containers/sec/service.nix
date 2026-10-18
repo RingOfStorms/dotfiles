@@ -20,27 +20,13 @@
   };
 
   # Dumb proxy, as the old module vhost: the origin authenticates every route.
-  nginx = ''
-    server {
-      listen 80;
-      listen [::]:80;
-      listen 443 ssl;
-      listen [::]:443 ssl;
-      server_name secrets.joshuabell.xyz;
-      ssl_certificate /var/lib/acme/joshuabell.xyz/fullchain.pem;
-      ssl_certificate_key /var/lib/acme/joshuabell.xyz/key.pem;
-      client_max_body_size 64k;
-      location / {
-        proxy_pass http://127.0.0.1:8300;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_read_timeout 60s;
-      }
-    }
-  '';
+  # Public via edge (o002): a new machine reads its headscale join key over
+  # the internet before it is on the tailnet (see o002/nginx.nix).
+  routes.web = {
+    port = 8300;
+    name = "secrets";
+    exposure = "public";
+    auth = "native-oidc";
+    maxBody = "64k";
+  };
 }

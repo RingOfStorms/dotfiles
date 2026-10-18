@@ -38,6 +38,7 @@ type Service struct {
 	Attach      string            `json:"attach"`
 	Internet    *bool             `json:"internet"`
 	Requires    []string          `json:"requires"`
+	Routes      map[string]Route  `json:"routes"`
 }
 
 type Host struct {
@@ -93,6 +94,10 @@ commands:
   move <svc> --to h [--from h] move data and deployment to another host
   destroy <svc> [--host h] [--purge]
                                remove from a host (data kept unless --purge)
+  routes [svc]                 declared routes (fqdn, port, exposure, auth, host)
+  audit [host...]              non-loopback listeners on hosts vs declared ports (read-only)
+  status-server --listen ADDR [--host NAME]
+                               read-only GET /status.json for fleet-edge (run by the host module)
   check-idmap <host>           test idmapped mounts on /srv/containers and /nix
   inventory                    print the inventory JSON
 
@@ -162,6 +167,12 @@ func main() {
 		err = cmdMove(rest)
 	case "destroy", "rm":
 		err = cmdDestroy(rest)
+	case "routes":
+		err = cmdRoutes(rest)
+	case "audit":
+		err = cmdAudit(rest)
+	case "status-server":
+		err = cmdStatusServer(rest)
 	case "check-idmap":
 		err = cmdCheckIdmap(rest)
 	case "inventory":
@@ -879,10 +890,16 @@ func prepareScript(s Service, host string) string {
 	for _, p := range s.UDPPorts {
 		fmt.Fprintf(&ports, "udp %d\n", p)
 	}
+	for _, p := range routePorts(s) {
+		ports.WriteString(p + "\n")
+	}
 	b.WriteString(fmt.Sprintf("printf %%s %s > /var/lib/fleet-containers/ports/%s\n", q(ports.String()), s.Name))
 	b.WriteString("systemctl reload-or-restart fleet-containers-ports.service || true\n")
 	// nginx
-	if s.Nginx != nil && strings.TrimSpace(*s.Nginx) != "" {
+	if v := routesVhost(s); v != "" {
+		conf := "# managed by containers, service " + s.Name + " (generated from routes)\n" + v
+		b.WriteString(nginxSiteScript(nginxDir, s.Name, conf))
+	} else if len(s.Routes) == 0 && s.Nginx != nil && strings.TrimSpace(*s.Nginx) != "" {
 		conf := *s.Nginx
 		if hh, ok := inv.Hosts[host]; ok {
 			if hh.OverlayIP != nil {
@@ -916,6 +933,9 @@ func cmdDeploy(args []string) error {
 }
 
 func deploy(s Service, h, ref string, local bool) error {
+	if err := validateRoutes(s); err != nil {
+		return err
+	}
 	info("deploying %s (%s) to %s from %s", s.Name, s.Kind, h, ref)
 	if err := remote(h, true, prepareScript(s, h)); err != nil {
 		return fmt.Errorf("preparing host: %w", err)

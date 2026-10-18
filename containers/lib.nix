@@ -26,27 +26,223 @@ let
       container = service.persist.${key};
     }) (builtins.attrNames (service.persist or { }));
 
+  domain = "joshuabell.xyz";
+
+  # ---------------------------------------------------------------- routes
+  # ROUTING-PLAN.md §2. Each route is normalized and validated here; any
+  # mistake throws at eval time (the inventory, every flake build).
+  #
+  # Naming: a route called `web` gets the service name (atuin.joshuabell.xyz);
+  # any other route gets "<svc>-<route>" (immich-db). Set `name` to override.
+  # tcp/udp routes have no name, url or fqdn (no DNS yet; that's fleet-edge).
+  routeEnums = {
+    proto = [
+      "http"
+      "tcp"
+      "udp"
+    ];
+    exposure = [
+      "local"
+      "tailnet"
+      "lan"
+      "public"
+    ];
+    auth = [
+      "native-oidc"
+      "native"
+      "oauth2-proxy"
+      "none"
+    ];
+    via = [
+      "edge"
+      "router"
+    ];
+    zone = [
+      "main"
+      "private"
+    ];
+  };
+  commonRouteKeys = [
+    "port"
+    "proto"
+    "exposure"
+    "auth"
+    "via"
+    "allow"
+    "health"
+    "publicWithoutAuth"
+  ];
+  httpRouteKeys = [
+    "name"
+    "zone"
+    "websockets"
+    "maxBody"
+    "buffering"
+    "timeouts"
+    "forwardedProto"
+    "extraConfig"
+  ];
+
+  normalizeRoute =
+    svcName: routeName: r:
+    let
+      where = "${svcName}: routes.${routeName}";
+      fail = msg: throw "${where}: ${msg}";
+      proto = r.proto or "http";
+      isHttp = proto == "http";
+      allowedKeys = commonRouteKeys ++ (if isHttp then httpRouteKeys else [ ]);
+      unknown = builtins.filter (k: !(builtins.elem k allowedKeys)) (builtins.attrNames r);
+      oneOf =
+        field: v:
+        if builtins.elem v routeEnums.${field} then
+          v
+        else
+          fail "${field} = ${builtins.toJSON v} is not one of ${
+            builtins.concatStringsSep ", " routeEnums.${field}
+          }";
+      exposure = oneOf "exposure" (r.exposure or "local");
+      isPublic = exposure == "public";
+      auth = if r ? auth then oneOf "auth" r.auth else null;
+      zone = oneOf "zone" (r.zone or "main");
+      via =
+        if r ? via then
+          (
+            if !isPublic then
+              fail "via only applies to exposure = \"public\""
+            else if !(builtins.isList r.via) || r.via == [ ] then
+              fail "via must be a non-empty list"
+            else
+              map (oneOf "via") r.via
+          )
+        else if isPublic && isHttp then
+          [ "edge" ]
+        else if isPublic then
+          fail "public ${proto} routes need an explicit via (e.g. [ \"router\" ])"
+        else
+          [ ];
+      name = r.name or (if routeName == "web" then svcName else "${svcName}-${routeName}");
+      fqdn = if zone == "private" then "${name}.ts.${domain}" else "${name}.${domain}";
+      checks = [
+        {
+          bad = unknown != [ ];
+          msg =
+            "unknown key(s) ${builtins.concatStringsSep ", " unknown}"
+            + (if isHttp then "" else " (http-only knobs and name are not allowed for proto = \"${proto}\")");
+        }
+        {
+          bad = !(r ? port) || !(builtins.isInt r.port) || r.port < 1 || r.port > 65535;
+          msg = "port must be an integer 1-65535";
+        }
+        {
+          bad = !(builtins.elem proto routeEnums.proto);
+          msg = "proto must be http, tcp or udp";
+        }
+        {
+          bad = exposure != "local" && auth == null;
+          msg = "auth is required when exposure != \"local\" (native-oidc, native, oauth2-proxy or none)";
+        }
+        {
+          bad = isPublic && auth == "none" && !(r.publicWithoutAuth or false);
+          msg = "exposure = \"public\" with auth = \"none\" needs publicWithoutAuth = true";
+        }
+        {
+          bad = isPublic && zone == "private";
+          msg = "zone = \"private\" names can't be public";
+        }
+        {
+          bad = !(builtins.isList (r.allow or [ ])) || !(builtins.all builtins.isString (r.allow or [ ]));
+          msg = "allow must be a list of host names";
+        }
+        {
+          bad = isHttp && (builtins.match "[a-z0-9]([a-z0-9-]*[a-z0-9])?" name == null);
+          msg = "name ${builtins.toJSON name} must be a single DNS label";
+        }
+      ];
+      firstBad = builtins.filter (c: c.bad) checks;
+    in
+    if firstBad != [ ] then
+      fail (builtins.head firstBad).msg
+    else
+      {
+        inherit
+          proto
+          exposure
+          auth
+          via
+          ;
+        port = r.port;
+        allow = r.allow or [ ];
+        health = r.health or null;
+        publicWithoutAuth = r.publicWithoutAuth or false;
+      }
+      // (
+        if isHttp then
+          {
+            inherit name zone fqdn;
+            url = "https://${fqdn}";
+            websockets = r.websockets or true;
+            maxBody = r.maxBody or "100m";
+            buffering = r.buffering or true;
+            timeouts = r.timeouts or "60s";
+            forwardedProto = r.forwardedProto or "https";
+            extraConfig = r.extraConfig or "";
+          }
+        else
+          {
+            name = null;
+            zone = null;
+            fqdn = null;
+            url = null;
+          }
+      );
+
+  normalizeRoutes =
+    svc:
+    let
+      raw = svc.routes or { };
+      routes = builtins.mapAttrs (normalizeRoute svc.name) raw;
+      fqdns = builtins.filter (f: f != null) (map (r: r.fqdn) (builtins.attrValues routes));
+      dup = builtins.filter (f: builtins.length (builtins.filter (x: x == f) fqdns) > 1) fqdns;
+    in
+    if !(builtins.isAttrs raw) then
+      throw "${svc.name}: routes must be an attrset"
+    else if raw != { } && (svc.nginx or null) != null then
+      throw "${svc.name}: set either routes or nginx, not both (nginx is the escape hatch for unconverted services)"
+    else if dup != [ ] then
+      throw "${svc.name}: two routes use the name ${builtins.head dup}"
+    else
+      routes;
+
   # Defaults so service.nix files can stay short.
   normalize =
     service:
-    {
-      kind = "nixos";
-      host = null;
-      persist = { };
-      tcpPorts = [ ];
-      requires = [ ];
-      udpPorts = [ ];
-      nginx = null;
-      # false: podman services join the fleet-noinet network (host-module.nix).
-      # Published ports still work; the container cannot open any connection
-      # (no internet, LAN, host or DNS). Not implemented for kind = "nixos".
-      internet = true;
-      description = "";
-    }
-    // service;
+    let
+      s = {
+        kind = "nixos";
+        host = null;
+        persist = { };
+        tcpPorts = [ ];
+        requires = [ ];
+        udpPorts = [ ];
+        nginx = null;
+        routes = { };
+        # false: podman services join the fleet-noinet network (host-module.nix).
+        # Published ports still work; the container cannot open any connection
+        # (no internet, LAN, host or DNS). Not implemented for kind = "nixos".
+        internet = true;
+        description = "";
+      }
+      // service;
+    in
+    s // { routes = normalizeRoutes s; };
 in
 {
-  inherit dataRoot persistList normalize;
+  inherit
+    dataRoot
+    persistList
+    normalize
+    normalizeRoute
+    ;
 
   # The extra-container `config` for a nixos-kind service. Pass it to
   # extra-container.lib.buildContainers { config = ...; }.

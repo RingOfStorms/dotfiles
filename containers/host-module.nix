@@ -146,6 +146,26 @@ in
       type = lib.types.package;
       description = "The `containers` CLI, installed system-wide.";
     };
+    # Read-only GET /status.json for fleet-edge (ROUTING-PLAN.md §5.4); see
+    # cli/statusserver.go for the JSON contract. Off by default.
+    #
+    # The firewall is NOT opened for it: today tailscale0 is a trusted
+    # interface, so an overlay-IP listener is reachable from high-trust
+    # tailnet nodes. Step 2 (no trusted tailscale0) must add an explicit rule
+    # admitting h005 only.
+    statusEndpoint = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Serve the read-only container status endpoint for fleet-edge.";
+      };
+      listen = lib.mkOption {
+        type = lib.types.str;
+        default = "";
+        example = "100.64.0.13:9101";
+        description = "ADDR:PORT to listen on, normally the host's overlay IP. Required when enabled (never a wildcard).";
+      };
+    };
     privateNetwork = {
       enable = lib.mkOption {
         type = lib.types.bool;
@@ -280,7 +300,10 @@ in
             RequiresMountsFor = [ "/etc/systemd-mutable" ];
             ConditionPathIsMountPoint = "/etc/systemd-mutable";
           };
-          path = [ pkgs.systemd pkgs.coreutils ];
+          path = [
+            pkgs.systemd
+            pkgs.coreutils
+          ];
           serviceConfig.Type = "oneshot";
           script = ''
             systemctl daemon-reload
@@ -372,6 +395,73 @@ in
         systemd.services.nginx.serviceConfig.ReadOnlyPaths = [ "${stateDir}/nginx" ];
         # `containers deploy` validates new sites with `nginx -t` before reloading.
         environment.systemPackages = [ config.services.nginx.package ];
+      })
+
+      # Runs unprivileged: `systemctl show` reads unit properties over the
+      # system D-Bus, which systemd allows to any user, and the unit dir and
+      # gcroot dir are world-readable (0755). So DynamicUser with no
+      # capabilities and a read-only view of the system is enough.
+      # No PrivateUsers: D-Bus EXTERNAL auth from inside a user namespace can
+      # fail (the uid the client sends differs from the peer uid on the socket).
+      (lib.mkIf cfg.statusEndpoint.enable {
+        assertions = [
+          {
+            assertion =
+              builtins.match "(\\[[0-9a-fA-F:]+]|[0-9.]+):[0-9]+" cfg.statusEndpoint.listen != null
+              && !(lib.hasPrefix "0.0.0.0:" cfg.statusEndpoint.listen)
+              && !(lib.hasPrefix "[::]:" cfg.statusEndpoint.listen);
+            message = "ringofstorms.containers.statusEndpoint.listen must be an explicit IP:PORT (e.g. the overlay IP \"100.64.0.13:9101\"), not empty or a wildcard.";
+          }
+        ];
+        systemd.services.fleet-containers-status = {
+          description = "Read-only status endpoint for floating containers (fleet-edge)";
+          wantedBy = [ "multi-user.target" ];
+          wants = [ "network-online.target" ];
+          after = [
+            "network-online.target"
+            "tailscaled.service"
+          ];
+          path = [ pkgs.systemd ];
+          serviceConfig = {
+            ExecStart = "${lib.getExe cfg.package} status-server --listen ${cfg.statusEndpoint.listen} --host ${config.networking.hostName}";
+            # The overlay IP may appear after boot; retry until it can bind.
+            Restart = "always";
+            RestartSec = 5;
+            DynamicUser = true;
+            CapabilityBoundingSet = "";
+            AmbientCapabilities = "";
+            NoNewPrivileges = true;
+            ProtectSystem = "strict";
+            ProtectHome = true;
+            PrivateTmp = true;
+            PrivateDevices = true;
+            ProtectKernelTunables = true;
+            ProtectKernelModules = true;
+            ProtectKernelLogs = true;
+            ProtectControlGroups = true;
+            ProtectClock = true;
+            ProtectHostname = true;
+            ProtectProc = "invisible";
+            ProcSubset = "pid";
+            RestrictNamespaces = true;
+            RestrictRealtime = true;
+            RestrictSUIDSGID = true;
+            LockPersonality = true;
+            MemoryDenyWriteExecute = true;
+            SystemCallArchitectures = "native";
+            SystemCallFilter = [
+              "@system-service"
+              "~@privileged @resources"
+            ];
+            # AF_UNIX for the D-Bus socket used by `systemctl show`.
+            RestrictAddressFamilies = [
+              "AF_UNIX"
+              "AF_INET"
+              "AF_INET6"
+            ];
+            UMask = "0077";
+          };
+        };
       })
 
       (lib.mkIf (cfg.guards != { }) { systemd = guardUnits; })

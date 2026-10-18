@@ -1,5 +1,11 @@
 # Guest config: settings copied verbatim from hosts/h001/mods/litellm.nix.
-{ pkgs, litellmpkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  litellmpkgs,
+  ...
+}:
 let
   declaration = "services/misc/litellm.nix";
   pkgsLitellm = import litellmpkgs {
@@ -14,6 +20,28 @@ let
       litellm_params.model = "github_copilot/${m}";
     }
     // (if mode == null then { } else { model_info.mode = mode; });
+  # Static config as JSON (a YAML subset, which LiteLLM loads fine).
+  baseConfig = pkgs.writeText "litellm-base-config.json" (builtins.toJSON config.services.litellm.settings);
+  runtimeConfig = "/run/litellm/config.yaml";
+  # LiteLLM cannot enumerate OpenRouter models: OpenRouter has no discovery
+  # hook, and the remote cost map it relies on currently has no openrouter
+  # entries. Fetch the full catalog at start instead and add explicit
+  # aliases so every model shows up in /v1/models. If the fetch fails, the
+  # proxy still starts; the wildcard keeps routing working.
+  renderConfig = pkgs.writeShellScript "litellm-render-config" ''
+    set -u
+    models=$(${lib.getExe pkgs.curl} -sfL --max-time 30 --retry 3 \
+      https://openrouter.ai/api/v1/models \
+      | ${lib.getExe pkgs.jq} -c '[.data[].id]') || models='[]'
+    ${lib.getExe pkgs.jq} --argjson ids "$models" '
+      .model_list += [$ids[] | {
+        model_name: "openrouter/\(.)",
+        litellm_params: { model: "openrouter/\(.)" }
+      }]
+    ' ${baseConfig} > ${runtimeConfig}.tmp
+    mv ${runtimeConfig}.tmp ${runtimeConfig}
+    echo "litellm: added $(${lib.getExe pkgs.jq} length <<<"$models") OpenRouter models"
+  '';
 in
 {
   disabledModules = [ declaration ];
@@ -26,10 +54,15 @@ in
   # needs dataDir to be its own symlink into /var/lib/private.
   systemd.tmpfiles.rules = [ "L ${dataDir} - - - - private/litellm" ];
 
-  # copilot models need to reach github; air models reach t on the LAN.
+  # copilot models need to reach github; air models reach t on the LAN;
+  # the OpenRouter catalog is fetched at start.
   systemd.services.litellm = {
     wants = [ "network-online.target" ];
     after = [ "network-online.target" ];
+    serviceConfig = {
+      ExecStartPre = lib.mkAfter [ renderConfig ];
+      ExecStart = lib.mkForce "${lib.getExe config.services.litellm.package} --host \"${config.services.litellm.host}\" --port ${toString config.services.litellm.port} --config ${runtimeConfig}";
+    };
   };
 
   services.litellm = {
@@ -61,16 +94,9 @@ in
         max_response_size_mb = 4000;
       };
       model_list = [
-        # OpenRouter — wildcard catch-all. Any model passed as
-        # `openrouter/<slug>` is forwarded as-is, regardless of
-        # whether litellm knows about it. This works for chat
-        # completions but does NOT make models show up in
-        # /v1/models, because litellm can only enumerate wildcard
-        # providers it has dedicated discovery code for (OpenAI,
-        # Anthropic, Gemini, XAI, Fireworks, Vertex, vLLM, Topaz,
-        # LiteLLM Proxy). OpenRouter is not in that list, so for
-        # any specific OpenRouter model we want to appear in the
-        # model picker, add an explicit alias below.
+        # OpenRouter wildcard: routes any `openrouter/<slug>`. Explicit
+        # aliases (so models appear in /v1/models) are generated at start
+        # from OpenRouter's catalog; see renderConfig above.
         {
           model_name = "openrouter/*";
           litellm_params = {
@@ -78,25 +104,6 @@ in
           };
         }
       ]
-      # OpenRouter explicit aliases — only needed so these show up
-      # in /v1/models (i.e. the OpenWebUI model picker). At call
-      # time the wildcard above would handle them equally well.
-      ++ (builtins.map
-        (m: {
-          model_name = "openrouter/${m}";
-          litellm_params = {
-            model = "openrouter/${m}";
-          };
-        })
-        [
-          # NB: OpenRouter namespaces its own stealth/alpha models under
-          # the literal `openrouter/` vendor, so the slug is
-          # `openrouter/owl-alpha` (was bare `owl-alpha`, now 404s). The
-          "openrouter/owl-alpha"
-          "google/gemini-2.5-flash-lite"
-          "nvidia/nemotron-3-super-120b-a12b:free"
-        ]
-      )
       # Copilot models from ./scripts/probe-copilot-models.sh --nix.
       # Classify from upstream /models supported_endpoints. Chat-only models
       # bridge responses requests; responses-only models bypass chat; models
@@ -104,16 +111,15 @@ in
       # /v1/embeddings endpoint.
       ++ (builtins.map (copilotModel "chat") [
         "claude-haiku-4.5"
-        "claude-opus-4.7"
+        "claude-haiku-5.5"
         "claude-opus-4.8"
         "claude-opus-5"
         "claude-opus-5.5"
         "claude-sonnet-5"
-        "gemini-3.5-flash"
-        "gemini-3.6-flash"
+        "claude-sonnet-5.5"
         "gemini-3.7-flash"
         "gemini-3.8-flash"
-        "kimi-k2.7-code"
+        "gemini-4-argon"
         "kimi-k3"
       ])
       ++ (builtins.map (copilotModel null) [
@@ -130,6 +136,7 @@ in
         "gpt-6-astra"
         "gpt-6-luna"
         "gpt-6-sol"
+        "gpt-6.1-sol"
         "mai-code-1.1-flash"
       ])
       ++ (builtins.map (copilotModel "embedding") [
@@ -179,7 +186,6 @@ in
           "claude-sonnet-5"
           "claude-sonnet-5-5"
           "claude-sonnet-5.5"
-          "codex-auto-review"
           "deepseek-3.1"
           "deepseek-4.1-flash"
           "deepseek-4-flash-0731"
@@ -199,8 +205,10 @@ in
           "gemini-3.5-flash-passthrough"
           "gemini-3.7-flash"
           "gemini-3.8-flash"
+          "gemini-3.8-live"
           "gemini-embedding-001"
           "gemini-embedding-2"
+          "gemini-live-2.5-flash-native-audio"
           "glm-4.7"
           "glm-5"
           "glm-5.1"
@@ -220,6 +228,7 @@ in
           "gpt-5.4-nano"
           "gpt-5.5"
           "gpt-5.6-luna"
+          "gpt-5.6-luna-oai"
           "gpt-5.6-sol"
           "gpt-5.6-terra"
           "gpt-5-batch"
@@ -237,6 +246,8 @@ in
           "minimax-2.5"
           "o3-mini"
           "o4-mini"
+          "qwen3-6-35b-a3b-fp8-fm"
+          "qwen3-8-2-4t-a95b-fp8-fm"
           "text-embedding-005"
           "text-embedding-3-large"
           "text-embedding-3-small"

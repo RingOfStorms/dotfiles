@@ -58,6 +58,7 @@ containers/
 
    ```nix
    ringofstorms.containers.nginx.enable = true;              # nginx + include dir (off by default)
+   ringofstorms.containers.statusEndpoint = { enable = true; listen = "100.64.0.13:9101"; };  # read-only GET /status.json for fleet-edge (off by default; explicit IP:PORT)
    ringofstorms.containers.privateNetwork.enable = false;    # NAT/forward for ve-* (privateNetwork containers)
    ringofstorms.containers.privateNetwork.externalInterface = "enp1s0";
    ```
@@ -93,6 +94,8 @@ must be able to fetch that ref, so pair it with `deploy --local`).
 | `containers move <svc> --to h` | stop, stream data, deploy on target, remove from source |
 | `containers destroy <svc>` | uninstall (data kept; `--purge` deletes it) |
 | `containers check-idmap <host>` | the idmap test above |
+| `containers routes [svc]` | declared routes from the inventory: fqdn, proto, port, exposure, auth, via, host (no network). Unconverted services show as `nginx string` |
+| `containers audit [host...]` | read-only: runs `ss -ltnupH` on each host (default: all container hosts) and lists every non-loopback listener as `declared` (a route, `tcpPorts`/`udpPorts` of a service declared on that host), `host` (small allowlist in `cli/routes.go`: 22, 80, 443, 53, tailscale 41641/udp, dhcp, mdns) or `UNDECLARED` (incl. ports of `exposure = "local"` routes). Always exits 0 |
 
 The host module adds the shell alias `cnt` for `containers`.
 
@@ -128,6 +131,41 @@ default `_` vhost returning 444). On deploy the CLI writes the service's
 reload fails, the previous `<svc>.conf` is put back and the rejected one is
 kept as `<svc>.conf.broken`. Removing the block from `service.nix` (or `destroy`/`move`) deletes
 the file and reloads. No host rebuild is involved.
+
+### Routes (ROUTING-PLAN.md §2, step 1)
+
+`routes` in `service.nix` replaces the `nginx` string. A service sets
+either `routes` or `nginx`, not both (`nginx` stays as the escape hatch for
+unconverted services); `tcpPorts`/`udpPorts` may coexist.
+
+```nix
+routes.web = {
+  port = 8300;               # required, backend port on 127.0.0.1
+  name = "secrets";          # default: service name for `web`, else "<svc>-<route>"
+  proto = "http";            # http (default) | tcp | udp
+  exposure = "public";       # local (default) | tailnet | lan | public
+  auth = "native-oidc";      # native-oidc | native | oauth2-proxy | none; required unless local
+  # via = [ "edge" ];        # public only; default [ "edge" ] for http, required for tcp/udp
+  # allow = [ "lio" ];  zone = "main";  health = "/healthz";
+  # http knobs: websockets = true; maxBody = "100m"; buffering = true;
+  #   timeouts = "60s"; forwardedProto = "https"; extraConfig = "";  (inside location /)
+  # publicWithoutAuth = false;  needed for public + auth = "none"
+};
+```
+
+`lib.nix` fills defaults and throws on: unknown keys, http knobs or `name`
+on tcp/udp, missing auth on a non-local route, public + `auth = "none"`
+without `publicWithoutAuth`, `zone = "private"` + public, `via` on a
+non-public route, duplicate names. The inventory also carries computed
+`fqdn` (`<name>.joshuabell.xyz`, `<name>.ts.joshuabell.xyz` for the private
+zone) and `url` per http route.
+
+On deploy, every http route with exposure != `local` becomes one `server {}`
+in `<svc>.conf` (:80/:443 v4+v6, wildcard cert, proxy to
+`127.0.0.1:<port>`, `X-Forwarded-Proto https`). tcp/udp routes with exposure
+!= `local` are added to the ports file like `tcpPorts`. For now `tailnet`,
+`lan` and `public` produce the same vhost; the listener split, `allow` and
+the edge/DNS side are later steps of the plan. `local` produces nothing.
 
 ssh logs in as each host's `user` from `hosts/fleet.nix` (override for all hosts
 with `--ssh-user` / `CONTAINERS_SSH_USER`; `root` skips sudo). `--dry-run` prints

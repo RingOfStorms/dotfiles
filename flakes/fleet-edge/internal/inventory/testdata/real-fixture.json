@@ -1,0 +1,126 @@
+{
+  "services": {
+    "sec": {
+      "description": "sec secrets manager server (secrets.joshuabell.xyz)",
+      "dir": "sec",
+      "host": "h001",
+      "internet": true,
+      "kind": "nixos",
+      "name": "sec",
+      "nginx": null,
+      "persist": {
+        "data": "/var/lib/secrets_manager",
+        "nixos": "/var/lib/nixos"
+      },
+      "persistPaths": [
+        {
+          "container": "/var/lib/secrets_manager",
+          "host": "/srv/containers/sec/data"
+        },
+        {
+          "container": "/var/lib/nixos",
+          "host": "/srv/containers/sec/nixos"
+        }
+      ],
+      "requires": [],
+      "routes": {
+        "web": {
+          "allow": [],
+          "auth": "native-oidc",
+          "buffering": true,
+          "exposure": "public",
+          "extraConfig": "",
+          "forwardedProto": "https",
+          "fqdn": "secrets.joshuabell.xyz",
+          "health": null,
+          "maxBody": "64k",
+          "name": "secrets",
+          "port": 8300,
+          "proto": "http",
+          "publicWithoutAuth": false,
+          "timeouts": "60s",
+          "url": "https://secrets.joshuabell.xyz",
+          "via": [
+            "edge"
+          ],
+          "websockets": true,
+          "zone": "main"
+        }
+      },
+      "tcpPorts": [],
+      "udpPorts": []
+    },
+    "zitadel": {
+      "backupHook": "set -o pipefail; runuser -u postgres -- pg_dumpall | gzip > /var/backup/postgresql/cnt-dumpall.sql.gz",
+      "description": "Zitadel SSO (sso.joshuabell.xyz)",
+      "dir": "zitadel",
+      "host": "h001",
+      "internet": true,
+      "kind": "nixos",
+      "name": "zitadel",
+      "nginx": null,
+      "persist": {
+        "keys": "/var/lib/zitadel-keys",
+        "nixos": "/var/lib/nixos",
+        "pgdumps": "/var/backup/postgresql",
+        "postgresql": "/var/lib/postgresql"
+      },
+      "persistPaths": [
+        {
+          "container": "/var/lib/zitadel-keys",
+          "host": "/srv/containers/zitadel/keys"
+        },
+        {
+          "container": "/var/lib/nixos",
+          "host": "/srv/containers/zitadel/nixos"
+        },
+        {
+          "container": "/var/backup/postgresql",
+          "host": "/srv/containers/zitadel/pgdumps"
+        },
+        {
+          "container": "/var/lib/postgresql",
+          "host": "/srv/containers/zitadel/postgresql"
+        }
+      ],
+      "requires": [],
+      "routes": {
+        "web": {
+          "allow": [],
+          "auth": "native",
+          "buffering": true,
+          "exposure": "public",
+          "extraConfig": "",
+          "forwardedProto": "https",
+          "fqdn": "sso.joshuabell.xyz",
+          "health": null,
+          "maxBody": "100m",
+          "name": "sso",
+          "port": 8085,
+          "proto": "http",
+          "publicWithoutAuth": false,
+          "timeouts": "60s",
+          "url": "https://sso.joshuabell.xyz",
+          "via": [
+            "edge"
+          ],
+          "websockets": true,
+          "zone": "main"
+        }
+      },
+      "tcpPorts": [],
+      "udpPorts": []
+    }
+  },
+  "hosts": {
+    "h001": {
+      "lanIp": "10.12.14.10",
+      "overlayIp": "100.64.0.13",
+      "trust": "high",
+      "user": "luser"
+    }
+  },
+  "containerHosts": [
+    "h001"
+  ]
+}

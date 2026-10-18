@@ -1,0 +1,46 @@
+{{define "hosts.html"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>fleet-edge — hosts</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 2rem; color: #1a1a1a; }
+  nav a { margin-right: 1rem; }
+  table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+  th, td { border: 1px solid #ccc; padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
+  th { background: #f0f0f0; }
+  .reachable { color: #0a7a2e; font-weight: bold; }
+  .unreachable { color: #b00020; font-weight: bold; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="/">services</a>
+  <a href="/hosts">hosts</a>
+  <a href="/api/state.json">api</a>
+  <a href="/healthz">healthz</a>
+</nav>
+<h1>fleet-edge — hosts</h1>
+<table>
+<tr><th>host</th><th>overlay ip</th><th>lan ip</th><th>last poll</th></tr>
+{{range .Hosts}}
+<tr>
+  <td>{{.Host}}</td>
+  <td>{{.OverlayIP}}</td>
+  <td>{{.LanIP}}</td>
+  <td>
+    {{if .Reachable}}
+      <span class="reachable">ok</span> at {{.PolledAt}}
+    {{else if .Error}}
+      <span class="unreachable">unreachable</span>: {{.Error}} (at {{.PolledAt}})
+    {{else}}
+      <em>not yet polled</em>
+    {{end}}
+  </td>
+</tr>
+{{end}}
+</table>
+<p><small>generated at {{.GeneratedAt}}</small></p>
+</body>
+</html>
+{{end}}

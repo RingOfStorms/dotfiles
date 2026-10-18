@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "hass": {
+      "type": "http",
+      "url": "http://100.64.0.10:8123/api/mcp",
+      "headers": {
+        "Authorization": "!. ./.env.local && printf 'Bearer %s' \"$HASS_TOKEN\""
+      }
+    },
+    "ha-mcp": {
+      "type": "http",
+      "url": "${HA_MCP_URL:-http://100.64.0.10:9583/unset-secret-path}",
+      "timeout": 60000
+    }
+  }
+}
