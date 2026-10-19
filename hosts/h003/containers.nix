@@ -8,8 +8,15 @@
   ringofstorms.containers.nginx.enable = true;
 
   # Per-service nginx sites (written by `containers deploy`) listen on the
-  # tailscale overlay IP. Wait for tailscale to have its address;
-  # IPFreeBind lets nginx bind even if it races.
+  # tailscale overlay IP, which only exists once tailscale has brought the
+  # tailnet up and may not exist yet when nginx starts at boot. Ordering after
+  # tailscaled-autoconnect is not enough (the address can come later), so allow
+  # binding addresses not (yet) assigned to any interface.
+  # (IPFreeBind is not a service directive; systemd ignores it.)
+  boot.kernel.sysctl = {
+    "net.ipv4.ip_nonlocal_bind" = 1;
+    "net.ipv6.ip_nonlocal_bind" = 1;
+  };
   systemd.services.nginx = {
     wants = [
       "network-online.target"
@@ -19,7 +26,6 @@
       "network-online.target"
       "tailscaled-autoconnect.service"
     ];
-    serviceConfig.IPFreeBind = true;
   };
 
   # Impermanent root: keep container data, runtime unit links, runtime
