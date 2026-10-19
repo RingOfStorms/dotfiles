@@ -275,15 +275,15 @@ func auditListeners(ls []listener, svcs []Service, host string) []auditRow {
 		}
 		for _, n := range sortedRouteNames(s) {
 			r := s.Routes[n]
-			proto := r.Proto
-			if proto == "http" {
-				proto = "tcp"
-			}
-			if r.Exposure == "local" {
-				localOnly[proto+"/"+strconv.Itoa(r.Port)] = s.Name + "." + n
+			if r.Proto == "http" {
+				localOnly["tcp/"+strconv.Itoa(r.Port)] = s.Name + "." + n + " is an http backend; must listen on loopback only (nginx proxies it)"
 				continue
 			}
-			declared[proto+"/"+strconv.Itoa(r.Port)] = s.Name + "." + n + " (" + r.Exposure + ")"
+			if r.Exposure == "local" {
+				localOnly[r.Proto+"/"+strconv.Itoa(r.Port)] = s.Name + "." + n + " is exposure=local but listens here"
+				continue
+			}
+			declared[r.Proto+"/"+strconv.Itoa(r.Port)] = s.Name + "." + n + " (" + r.Exposure + ")"
 		}
 	}
 	var rows []auditRow
@@ -303,7 +303,7 @@ func auditListeners(ls []listener, svcs []Service, host string) []auditRow {
 		} else if o, ok := declared[key]; ok {
 			row.Status, row.Owner = "declared", o
 		} else if o, ok := localOnly[key]; ok {
-			row.Status, row.Owner = "UNDECLARED", o+" is exposure=local but listens here"
+			row.Status, row.Owner = "UNDECLARED", o
 		}
 		rows = append(rows, row)
 	}

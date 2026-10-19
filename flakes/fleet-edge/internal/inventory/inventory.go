@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -98,4 +99,30 @@ func Parse(b []byte) (*Inventory, error) {
 		inv.Hosts = map[string]Host{}
 	}
 	return &inv, nil
+}
+
+// PolledHosts returns the hosts that run a status endpoint: inventory
+// containerHosts, or (if that is empty) every host with at least one
+// service. Only names present in Hosts are returned, sorted.
+func (inv *Inventory) PolledHosts() []string {
+	set := map[string]bool{}
+	if len(inv.ContainerHosts) > 0 {
+		for _, h := range inv.ContainerHosts {
+			set[h] = true
+		}
+	} else {
+		for _, s := range inv.Services {
+			if s.Host != "" {
+				set[s.Host] = true
+			}
+		}
+	}
+	var out []string
+	for h := range set {
+		if _, ok := inv.Hosts[h]; ok {
+			out = append(out, h)
+		}
+	}
+	sort.Strings(out)
+	return out
 }

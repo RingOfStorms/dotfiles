@@ -1,0 +1,25 @@
+{{define "nav"}}
+<nav class="topnav">
+  <span class="brand">fleet-edge</span>
+  <a href="/"{{if eq . "services"}} class="active"{{end}}>Services</a>
+  <a href="/hosts"{{if eq . "hosts"}} class="active"{{end}}>Hosts</a>
+  <a href="/api/state.json">JSON</a>
+</nav>
+{{end}}
+
+{{define "exposure-badge"}}
+{{if eq . "local"}}<span class="badge badge-local">local</span>
+{{else if eq . "tailnet"}}<span class="badge badge-tailnet">tailnet</span>
+{{else if eq . "lan"}}<span class="badge badge-lan">lan</span>
+{{else if eq . "public"}}<span class="badge badge-public">public</span>
+{{else}}<span class="badge">{{.}}</span>
+{{end}}
+{{end}}
+
+{{define "status-pill"}}
+{{if eq . "active"}}<span class="pill pill-active">active</span>
+{{else if eq . "inactive"}}<span class="pill pill-inactive">inactive</span>
+{{else if eq . "failed"}}<span class="pill pill-failed">failed</span>
+{{else}}<span class="pill pill-unknown">unknown</span>
+{{end}}
+{{end}}

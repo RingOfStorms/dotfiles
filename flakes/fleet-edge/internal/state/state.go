@@ -74,12 +74,15 @@ type ServiceView struct {
 
 // HostView is one row of the /hosts page.
 type HostView struct {
-	Host      string    `json:"host"`
-	OverlayIP string    `json:"overlayIp"`
-	LanIP     string    `json:"lanIp"`
-	Reachable bool      `json:"reachable"`
-	Error     string    `json:"error,omitempty"`
-	PolledAt  time.Time `json:"polledAt"`
+	Host      string `json:"host"`
+	OverlayIP string `json:"overlayIp"`
+	LanIP     string `json:"lanIp"`
+	Reachable bool   `json:"reachable"`
+	// HasEndpoint is false for hosts not in containerHosts; they are not
+	// polled and not counted as reachable or unreachable.
+	HasEndpoint bool      `json:"hasEndpoint"`
+	Error       string    `json:"error,omitempty"`
+	PolledAt    time.Time `json:"polledAt"`
 }
 
 // Merged is the full state served by /api/state.json and rendered by the
@@ -132,8 +135,8 @@ func hostURL(tmpl, host string, h inventory.Host) string {
 // PollOnce fetches every host's status endpoint once and updates state.
 func (p *Poller) PollOnce(ctx context.Context) {
 	var wg sync.WaitGroup
-	for name, h := range p.inv.Hosts {
-		name, h := name, h
+	for _, name := range p.inv.PolledHosts() {
+		name, h := name, p.inv.Hosts[name]
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -245,15 +248,20 @@ func Merge(inv *inventory.Inventory, polls map[string]HostPoll) Merged {
 		m.Services = append(m.Services, view)
 	}
 
+	polled := map[string]bool{}
+	for _, n := range inv.PolledHosts() {
+		polled[n] = true
+	}
 	for name, h := range inv.Hosts {
 		hv := HostView{Host: name}
+		hv.HasEndpoint = polled[name]
 		if h.OverlayIP != nil {
 			hv.OverlayIP = *h.OverlayIP
 		}
 		if h.LanIP != nil {
 			hv.LanIP = *h.LanIP
 		}
-		if poll, ok := polls[name]; ok {
+		if poll, ok := polls[name]; ok && hv.HasEndpoint {
 			hv.Reachable = poll.OK
 			hv.Error = poll.Error
 			hv.PolledAt = poll.PolledAt

@@ -2,45 +2,47 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fleet-edge — hosts</title>
-<style>
-  body { font-family: system-ui, sans-serif; margin: 2rem; color: #1a1a1a; }
-  nav a { margin-right: 1rem; }
-  table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
-  th, td { border: 1px solid #ccc; padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
-  th { background: #f0f0f0; }
-  .reachable { color: #0a7a2e; font-weight: bold; }
-  .unreachable { color: #b00020; font-weight: bold; }
-</style>
+<link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<nav>
-  <a href="/">services</a>
-  <a href="/hosts">hosts</a>
-  <a href="/api/state.json">api</a>
-  <a href="/healthz">healthz</a>
-</nav>
-<h1>fleet-edge — hosts</h1>
+{{template "nav" "hosts"}}
+<main>
+<h1>Hosts</h1>
+<div class="table-wrap">
 <table>
-<tr><th>host</th><th>overlay ip</th><th>lan ip</th><th>last poll</th></tr>
+<thead>
+<tr><th>host</th><th>overlay ip</th><th>lan ip</th><th>status</th><th>last poll</th><th>error</th></tr>
+</thead>
+<tbody>
 {{range .Hosts}}
-<tr>
+<tr{{if not .HasEndpoint}} class="muted"{{end}}>
   <td>{{.Host}}</td>
-  <td>{{.OverlayIP}}</td>
-  <td>{{.LanIP}}</td>
+  <td class="mono">{{.OverlayIP}}</td>
+  <td class="mono">{{.LanIP}}</td>
   <td>
-    {{if .Reachable}}
-      <span class="reachable">ok</span> at {{.PolledAt}}
-    {{else if .Error}}
-      <span class="unreachable">unreachable</span>: {{.Error}} (at {{.PolledAt}})
+    {{if not .HasEndpoint}}
+      <span class="pill pill-none">no endpoint</span>
+    {{else if .Reachable}}
+      <span class="pill pill-reachable">reachable</span>
     {{else}}
-      <em>not yet polled</em>
+      <span class="pill pill-unreachable">unreachable</span>
     {{end}}
+  </td>
+  <td class="muted">
+    {{if not .HasEndpoint}}—{{else if .PolledAt.IsZero}}<em>not yet polled</em>{{else}}{{.PolledAt}}{{end}}
+  </td>
+  <td>
+    {{if .Error}}<span class="error-text" title="{{.Error}}">{{.Error}}</span>{{else}}<span class="muted">—</span>{{end}}
   </td>
 </tr>
 {{end}}
+</tbody>
 </table>
-<p><small>generated at {{.GeneratedAt}}</small></p>
+</div>
+<footer>generated at {{.GeneratedAt}}</footer>
+</main>
 </body>
 </html>
 {{end}}

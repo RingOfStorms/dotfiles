@@ -197,6 +197,46 @@ func TestAuditListeners(t *testing.T) {
 	}
 }
 
+func TestAuditListenersHTTPBackendMustBeLoopback(t *testing.T) {
+	svcs := []Service{
+		{Name: "sec", Host: "h001", Routes: map[string]Route{
+			"web": {Port: 8300, Proto: "http", Exposure: "public", Auth: sp("native-oidc")},
+		}},
+		{Name: "mc", Host: "h001", Routes: map[string]Route{
+			"game": {Port: 25565, Proto: "tcp", Exposure: "public"},
+		}},
+	}
+
+	// (1) http backend bound to 0.0.0.0 must be flagged, even though its
+	// route is "public" (that exposure governs the nginx vhost, not a raw
+	// listen address).
+	exposed := `tcp   LISTEN 0      4096         0.0.0.0:8300       0.0.0.0:*    users:(("secrets_manager",pid=7,fd=3))
+`
+	rows := auditListeners(parseSS(exposed), svcs, "h001")
+	if len(rows) != 1 || rows[0].Status != "UNDECLARED" {
+		t.Fatalf("want 1 UNDECLARED row, got %+v", rows)
+	}
+	wantOwner := "sec.web is an http backend; must listen on loopback only (nginx proxies it)"
+	if rows[0].Owner != wantOwner {
+		t.Errorf("owner = %q, want %q", rows[0].Owner, wantOwner)
+	}
+
+	// (2) the same port bound to loopback is fine: no row at all.
+	loopback := `tcp   LISTEN 0      4096       127.0.0.1:8300       0.0.0.0:*    users:(("secrets_manager",pid=7,fd=3))
+`
+	if rows := auditListeners(parseSS(loopback), svcs, "h001"); len(rows) != 0 {
+		t.Errorf("loopback http backend should not be listed: %+v", rows)
+	}
+
+	// (3) a public tcp route (not http) still counts as declared.
+	tcpPublic := `tcp   LISTEN 0      4096         0.0.0.0:25565      0.0.0.0:*    users:(("mc",pid=9,fd=3))
+`
+	rows = auditListeners(parseSS(tcpPublic), svcs, "h001")
+	if len(rows) != 1 || rows[0].Status != "declared" {
+		t.Fatalf("want 1 declared row, got %+v", rows)
+	}
+}
+
 func TestRoutesTable(t *testing.T) {
 	tbl := routesTable([]Service{{Name: "sec", Host: "h001", Routes: map[string]Route{"web": httpRoute("secrets", 8300, "public", "native-oidc")}}})
 	if !strings.Contains(tbl, "secrets.joshuabell.xyz") || !strings.Contains(tbl, "native-oidc") || !strings.Contains(tbl, "edge") {

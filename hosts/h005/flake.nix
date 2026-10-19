@@ -10,6 +10,11 @@
     beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
+
+    # Read-only dashboard; path ref ships the working tree.
+    fleet-edge.url = "path:../../flakes/fleet-edge";
+    # Inventory source for fleet-edge (built into the closure).
+    containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=containers";
   };
 
   outputs =
@@ -88,6 +93,7 @@
           (import ./sec-agent.nix { inherit inputs constants; })
 
           ./hardware-configuration.nix
+          ./fleet-edge.nix
         ]
         ++ lib.optionals constants.network.routerEnable [ ./mods ]
         ++ lib.optionals (overlayIp != null) [

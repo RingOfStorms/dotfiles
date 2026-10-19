@@ -61,6 +61,7 @@
 
           inputs.containers.nixosModules.default
           ./floating-containers.nix
+          ../containers-status.nix
           ./hardware-configuration.nix
           ./mods
           # Atuin history sync: the local primary user logs into the shared `josh`

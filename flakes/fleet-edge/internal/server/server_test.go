@@ -32,6 +32,7 @@ func sample() state.Merged {
 		},
 		Hosts: map[string]inventory.Host{
 			"h001": {User: "root"},
+			"gp3":  {User: "josh"},
 		},
 	}
 	polls := map[string]state.HostPoll{
@@ -109,5 +110,37 @@ func TestNoPostHandlers(t *testing.T) {
 		if w.Code >= 500 {
 			t.Fatalf("POST %s caused server error: %d", path, w.Code)
 		}
+	}
+}
+
+func TestStaticStyleCSSServed(t *testing.T) {
+	srv := New(fakeSource{m: sample()})
+	req := httptest.NewRequest(http.MethodGet, "/static/style.css", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+	ct := w.Header().Get("Content-Type")
+	if !strings.Contains(ct, "text/css") {
+		t.Fatalf("expected text/css content type, got %q", ct)
+	}
+	if !strings.Contains(w.Body.String(), "--bg") {
+		t.Fatalf("expected stylesheet body, got: %s", w.Body.String())
+	}
+}
+
+func TestHostsNoEndpointNotCounted(t *testing.T) {
+	srv := New(fakeSource{m: sample()})
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/hosts", nil))
+	body := w.Body.String()
+	if !strings.Contains(body, "no endpoint") || strings.Contains(body, "pill-unreachable") {
+		t.Fatalf("expected gp3 as no endpoint and nothing unreachable, got: %s", body)
+	}
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+	if !strings.Contains(w.Body.String(), "<strong>1</strong>/<strong>1</strong> hosts reachable") {
+		t.Fatalf("expected 1/1 hosts reachable, got: %s", w.Body.String())
 	}
 }

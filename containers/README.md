@@ -95,7 +95,7 @@ must be able to fetch that ref, so pair it with `deploy --local`).
 | `containers destroy <svc>` | uninstall (data kept; `--purge` deletes it) |
 | `containers check-idmap <host>` | the idmap test above |
 | `containers routes [svc]` | declared routes from the inventory: fqdn, proto, port, exposure, auth, via, host (no network). Unconverted services show as `nginx string` |
-| `containers audit [host...]` | read-only: runs `ss -ltnupH` on each host (default: all container hosts) and lists every non-loopback listener as `declared` (a route, `tcpPorts`/`udpPorts` of a service declared on that host), `host` (small allowlist in `cli/routes.go`: 22, 80, 443, 53, tailscale 41641/udp, dhcp, mdns) or `UNDECLARED` (incl. ports of `exposure = "local"` routes). Always exits 0 |
+| `containers audit [host...]` | read-only: runs `ss -ltnupH` on each host (default: all container hosts) and lists every non-loopback listener as `declared` (a route, `tcpPorts`/`udpPorts` of a service declared on that host), `host` (small allowlist in `cli/routes.go`: 22, 80, 443, 53, tailscale 41641/udp, dhcp, mdns) or `UNDECLARED` (incl. ports of `exposure = "local"` routes, and `proto = "http"` backend ports found on a non-loopback address — those must stay on `127.0.0.1`, nginx is the only thing allowed to expose them). Always exits 0 |
 
 The host module adds the shell alias `cnt` for `containers`.
 

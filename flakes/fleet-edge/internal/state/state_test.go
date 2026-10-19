@@ -1,6 +1,7 @@
 package state
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -111,5 +112,63 @@ func TestHostURLSubstitution(t *testing.T) {
 	want := "http://100.64.0.13:9101/status.json"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestPolledHostsContainerHosts(t *testing.T) {
+	inv := sampleInventory()
+	inv.Hosts["gp3"] = inventory.Host{OverlayIP: strp("100.64.0.15")}
+	inv.Hosts["h003"] = inventory.Host{OverlayIP: strp("100.64.0.4")}
+	inv.ContainerHosts = []string{"h003", "h001", "missing"}
+	got := inv.PolledHosts()
+	if len(got) != 2 || got[0] != "h001" || got[1] != "h003" {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestPolledHostsFallbackToServiceHosts(t *testing.T) {
+	inv := sampleInventory()
+	inv.Hosts["gp3"] = inventory.Host{OverlayIP: strp("100.64.0.15")}
+	got := inv.PolledHosts()
+	if len(got) != 1 || got[0] != "h001" {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestMergeNoEndpointHost(t *testing.T) {
+	inv := sampleInventory()
+	inv.Hosts["gp3"] = inventory.Host{OverlayIP: strp("100.64.0.15")}
+	inv.ContainerHosts = []string{"h001"}
+	// A stale poll for a non-endpoint host must be ignored.
+	polls := map[string]HostPoll{
+		"h001": {Host: "h001", OK: true, PolledAt: time.Now()},
+		"gp3":  {Host: "gp3", OK: false, Error: "refused", PolledAt: time.Now()},
+	}
+	m := Merge(inv, polls)
+	for _, h := range m.Hosts {
+		switch h.Host {
+		case "h001":
+			if !h.HasEndpoint || !h.Reachable {
+				t.Fatalf("h001: %+v", h)
+			}
+		case "gp3":
+			if h.HasEndpoint || h.Reachable || h.Error != "" || !h.PolledAt.IsZero() {
+				t.Fatalf("gp3: %+v", h)
+			}
+		}
+	}
+}
+
+func TestPollOnceOnlyPolledHosts(t *testing.T) {
+	inv := sampleInventory()
+	inv.Hosts["gp3"] = inventory.Host{OverlayIP: strp("100.64.0.15")}
+	inv.ContainerHosts = []string{"h001"}
+	p := NewPoller(inv, "http://127.0.0.1:1/{host}", 200*time.Millisecond)
+	p.PollOnce(context.Background())
+	if _, ok := p.polls["gp3"]; ok {
+		t.Fatal("gp3 must not be polled")
+	}
+	if _, ok := p.polls["h001"]; !ok {
+		t.Fatal("h001 must be polled")
 	}
 }

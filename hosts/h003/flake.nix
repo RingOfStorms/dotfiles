@@ -99,6 +99,7 @@
 
           inputs.containers.nixosModules.default
           ./containers.nix
+          ../containers-status.nix
         ]
         ++ lib.optionals (overlayIp != null) [
           inputs.beszel.nixosModules.agent

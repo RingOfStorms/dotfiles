@@ -119,10 +119,13 @@ Generate the inventory file with, e.g.:
 nix eval --json .#inventory > /var/lib/fleet-edge/inventory.json
 ```
 
-(exact generation/refresh mechanism — static file vs. a timer — is left to
-the host that imports this module; this flake only reads the file).
+On h005 (`hosts/h005/fleet-edge.nix`) the inventory is generated at build
+time from the `containers` flake input (`builtins.toJSON
+inputs.containers.inventory` via `pkgs.writeText`). **Refreshing the
+inventory = redeploying h005** (after `nix flake update containers` in
+`hosts/h005`). It is served tailnet-only at `http://h005.net.joshuabell.xyz/`.
 
-## NixOS module (not wired into any host yet)
+## NixOS module (used by h005)
 
 ```nix
 {
