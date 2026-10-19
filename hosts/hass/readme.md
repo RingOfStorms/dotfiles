@@ -52,6 +52,49 @@ git -C "$tmp" log -1 --format='%h %cs'   # update the commit noted above
 rm -rf "$tmp"
 ```
 
+## Backups
+
+Configured in Settings → System → Backups:
+
+- Automatic **daily at 03:45**. Includes all add-ons, the database, and the `media` + `share` folders.
+- Retention: **keep the last 7 automatic backups**. Pruning runs after each new automatic backup. Manual and add-on-update backups are not pruned; delete those by hand.
+- Encrypted. The key (`XXXX-XXXX-…` format) is in the password manager. Without it, no backup can be restored.
+- Stored **only on the Yellow** (`hassio.local`). Copy one off occasionally with the steps below.
+
+### Copy the latest backup off the Yellow (manual)
+
+Uses the **Terminal & SSH** add-on (`core_ssh`) with password login. The password for `root` is in the password manager. `ssh root@hass` works from the tailnet. Backups are `.tar` files in `/backup` on the Yellow.
+
+Don't just grab the newest file. Add-on updates create small add-on-only backups (e.g. "Tailscale 0.30.1") that don't contain HA config. Pick the newest backup whose metadata includes Home Assistant, then copy that one.
+
+```sh
+HASS=root@hass
+DEST=~/backups/hass && mkdir -p "$DEST"
+# reuse one connection so the password is asked once
+SSHOPT=(-o ControlMaster=auto -o ControlPath=/tmp/hass-ssh-%C -o ControlPersist=5m)
+
+# list backups (newest first); "ha": true = contains Home Assistant config
+ssh "${SSHOPT[@]}" "$HASS" \
+  "ha backups list --raw-json | jq -r '.data.backups | sort_by(.date) | reverse[] | \"\(.slug)  \(.date[:16])  ha=\(.content.homeassistant)  \(.size)MB  \(.name)\"'"
+
+# slug of the newest backup that includes Home Assistant
+slug=$(ssh "${SSHOPT[@]}" "$HASS" \
+  "ha backups list --raw-json | jq -r '[.data.backups[] | select(.content.homeassistant)] | sort_by(.date) | last | .slug'")
+echo "slug: $slug"
+
+# find the .tar whose embedded backup.json has that slug (file names are not the slug)
+file=$(ssh "${SSHOPT[@]}" "$HASS" \
+  "for f in /backup/*.tar; do [ \"\$(tar -xOf \"\$f\" ./backup.json 2>/dev/null | jq -r .slug)\" = $slug ] && echo \"\$f\" && break; done")
+echo "file: $file"
+
+scp "${SSHOPT[@]}" "$HASS:$file" "$DEST/${slug}_$(basename "$file")"
+ls -lh "$DEST"
+```
+
+If `file` comes back empty, check the listing and pick the file by hand with `ssh root@hass ls -l /backup`.
+
+Each backup is about 7 GB. Restore by uploading the `.tar` during onboarding or under Settings → System → Backups, and enter the encryption key.
+
 ## Installed extras
 
 - HACS: the HA-MCP custom component / add-on

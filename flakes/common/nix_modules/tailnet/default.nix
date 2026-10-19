@@ -54,117 +54,125 @@ in
 
   config = {
 
-  nixpkgs.overlays = lib.mkIf cfg.omitCaptivePortal [
-    (final: prev: {
-      tailscale = prev.tailscale.overrideAttrs (old: {
-        tags = (old.tags or []) ++ [ "ts_omit_captiveportal" ];
-      });
-    })
-  ];
-
-  environment.systemPackages = with pkgs; [ tailscale ];
-  boot.kernelModules = [ "tun" ];
-
-  # NOTE: h001 service names (*.joshuabell.xyz) are resolved on the tailnet via a
-  # headscale split-DNS nameserver pointing at h003's tailnet dnsmasq listener
-  # (see hosts/oracle/o002/headscale.nix + hosts/h005/mods/networking.nix).
-  # The old `h001DnsHosts` /etc/hosts fallback option was removed: it was
-  # dangerous as a default (static pins break off-tailnet) and unused by any host.
-
-  # Headscale split DNS needs a resolver that supports per-link routing domains.
-  # Tailscale integrates those routes (including ~joshuabell.xyz) with
-  # systemd-resolved; without it, the system resolver can retain or prefer a
-  # public answer instead of the Tailnet DNS view.
-  services.resolved.enable = true;
-
-  services.tailscale = {
-    enable = true;
-    openFirewall = true;
-    useRoutingFeatures = "client";
-    # Idiomatic equivalent of `extraDaemonFlags = [ "--no-logs-no-support" ]`:
-    # sets TS_NO_LOGS_NO_SUPPORT=true, suppressing log uploads / netlog phone-home.
-    # (Does NOT affect captive-portal probes -- see omitCaptivePortal option.)
-    disableUpstreamLogging = true;
-    extraUpFlags = [
-      "--login-server=https://headscale.joshuabell.xyz"
+    nixpkgs.overlays = lib.mkIf cfg.omitCaptivePortal [
+      (final: prev: {
+        tailscale = prev.tailscale.overrideAttrs (old: {
+          tags = (old.tags or [ ]) ++ [ "ts_omit_captiveportal" ];
+        });
+      })
     ];
-  };
 
-  # Explicit oneshot to guarantee the tun module is loaded before tailscaled.
-  # Using dev-net-tun.device directly is racy -- the udev device unit may not
-  # be registered by the time tailscaled starts, causing a hard failure.
-  # modprobe is idempotent so this is safe even when the module is already loaded.
-  systemd.services.ensure-tun = {
-    description = "Ensure tun module is loaded";
-    wantedBy = [ "tailscaled.service" ];
-    before = [ "tailscaled.service" ];
-    after = [ "systemd-modules-load.service" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      ExecStart = "${pkgs.kmod}/bin/modprobe tun";
+    environment.systemPackages = with pkgs; [ tailscale ];
+    boot.kernelModules = [ "tun" ];
+
+    # NOTE: h001 service names (*.joshuabell.xyz) are resolved on the tailnet via a
+    # headscale split-DNS nameserver pointing at h003's tailnet dnsmasq listener
+    # (see hosts/oracle/o002/headscale.nix + hosts/h005/mods/networking.nix).
+    # The old `h001DnsHosts` /etc/hosts fallback option was removed: it was
+    # dangerous as a default (static pins break off-tailnet) and unused by any host.
+
+    # Headscale split DNS needs a resolver that supports per-link routing domains.
+    # Tailscale integrates those routes (including ~joshuabell.xyz) with
+    # systemd-resolved; without it, the system resolver can retain or prefer a
+    # public answer instead of the Tailnet DNS view.
+    services.resolved.enable = true;
+    # Disable LLMNR (UDP/TCP 5355) fleet-wide; it is a legacy fallback resolver
+    # not needed alongside Tailscale/headscale DNS, and leaving it enabled
+    # exposes an unauthenticated multicast listener on all addresses. mDNS
+    # (5353) is left untouched.
+    services.resolved.settings.Resolve.LLMNR = "no";
+
+    services.tailscale = {
+      enable = true;
+      openFirewall = true;
+      useRoutingFeatures = "client";
+      # Idiomatic equivalent of `extraDaemonFlags = [ "--no-logs-no-support" ]`:
+      # sets TS_NO_LOGS_NO_SUPPORT=true, suppressing log uploads / netlog phone-home.
+      # (Does NOT affect captive-portal probes -- see omitCaptivePortal option.)
+      disableUpstreamLogging = true;
+      extraUpFlags = [
+        "--login-server=https://headscale.joshuabell.xyz"
+      ];
     };
-  };
 
-  systemd.services.tailscaled = {
-    after = [
-      "systemd-modules-load.service"
-      "ensure-tun.service"
-    ];
-    wants = [ "ensure-tun.service" ];
-    requires = [ "ensure-tun.service" ];
-  };
-
-  # Headscale's split DNS is delivered asynchronously after tailscaled connects.
-  # `systemd-resolved` retains answers obtained before that route exists (including
-  # public answers for *.joshuabell.xyz), even after tailscale0 receives the
-  # ~joshuabell.xyz route. Clear that stale cache after autoconnect so subsequent
-  # lookups use the Tailnet DNS view. This is harmless on explicit DNS opt-out
-  # hosts: they have no Tailnet route and continue using their normal resolver.
-  systemd.services.tailscale-flush-resolved-dns = {
-    description = "Clear systemd-resolved cache after Tailscale DNS setup";
-    wantedBy = [ "multi-user.target" ];
-    wants = [ "tailscaled.service" "tailscaled-autoconnect.service" ];
-    after = [
-      "tailscaled.service"
-      "tailscaled-autoconnect.service"
-      "systemd-resolved.service"
-    ];
-    partOf = [ "tailscaled.service" ];
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "${pkgs.systemd}/bin/resolvectl flush-caches";
+    # Explicit oneshot to guarantee the tun module is loaded before tailscaled.
+    # Using dev-net-tun.device directly is racy -- the udev device unit may not
+    # be registered by the time tailscaled starts, causing a hard failure.
+    # modprobe is idempotent so this is safe even when the module is already loaded.
+    systemd.services.ensure-tun = {
+      description = "Ensure tun module is loaded";
+      wantedBy = [ "tailscaled.service" ];
+      before = [ "tailscaled.service" ];
+      after = [ "systemd-modules-load.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${pkgs.kmod}/bin/modprobe tun";
+      };
     };
-  };
 
-  # Keep flushing after the initial setup: Tailscale and DHCP changes can
-  # invalidate resolved's cached answer without restarting the host. The
-  # iproute2 monitor covers link, address, and route changes on every host,
-  # including tailscale0; the helper coalesces event bursts before flushing.
-  systemd.services.tailscale-resolved-dns-monitor = {
-    description = "Flush systemd-resolved cache after network state changes";
-    wantedBy = [ "multi-user.target" ];
-    wants = [
-      "tailscaled.service"
-      "tailscaled-autoconnect.service"
-      "tailscale-flush-resolved-dns.service"
-    ];
-    after = [
-      "tailscaled.service"
-      "tailscaled-autoconnect.service"
-      "tailscale-flush-resolved-dns.service"
-      "systemd-resolved.service"
-    ];
-    partOf = [ "tailscaled.service" ];
-    serviceConfig = {
-      Type = "simple";
-      ExecStart = flushResolvedDnsMonitor;
-      Restart = "always";
-      RestartSec = "2s";
+    systemd.services.tailscaled = {
+      after = [
+        "systemd-modules-load.service"
+        "ensure-tun.service"
+      ];
+      wants = [ "ensure-tun.service" ];
+      requires = [ "ensure-tun.service" ];
     };
-  };
 
-  networking.firewall.trustedInterfaces = [ config.services.tailscale.interfaceName ];
-  networking.firewall.checkReversePath = "loose";
+    # Headscale's split DNS is delivered asynchronously after tailscaled connects.
+    # `systemd-resolved` retains answers obtained before that route exists (including
+    # public answers for *.joshuabell.xyz), even after tailscale0 receives the
+    # ~joshuabell.xyz route. Clear that stale cache after autoconnect so subsequent
+    # lookups use the Tailnet DNS view. This is harmless on explicit DNS opt-out
+    # hosts: they have no Tailnet route and continue using their normal resolver.
+    systemd.services.tailscale-flush-resolved-dns = {
+      description = "Clear systemd-resolved cache after Tailscale DNS setup";
+      wantedBy = [ "multi-user.target" ];
+      wants = [
+        "tailscaled.service"
+        "tailscaled-autoconnect.service"
+      ];
+      after = [
+        "tailscaled.service"
+        "tailscaled-autoconnect.service"
+        "systemd-resolved.service"
+      ];
+      partOf = [ "tailscaled.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${pkgs.systemd}/bin/resolvectl flush-caches";
+      };
+    };
+
+    # Keep flushing after the initial setup: Tailscale and DHCP changes can
+    # invalidate resolved's cached answer without restarting the host. The
+    # iproute2 monitor covers link, address, and route changes on every host,
+    # including tailscale0; the helper coalesces event bursts before flushing.
+    systemd.services.tailscale-resolved-dns-monitor = {
+      description = "Flush systemd-resolved cache after network state changes";
+      wantedBy = [ "multi-user.target" ];
+      wants = [
+        "tailscaled.service"
+        "tailscaled-autoconnect.service"
+        "tailscale-flush-resolved-dns.service"
+      ];
+      after = [
+        "tailscaled.service"
+        "tailscaled-autoconnect.service"
+        "tailscale-flush-resolved-dns.service"
+        "systemd-resolved.service"
+      ];
+      partOf = [ "tailscaled.service" ];
+      serviceConfig = {
+        Type = "simple";
+        ExecStart = flushResolvedDnsMonitor;
+        Restart = "always";
+        RestartSec = "2s";
+      };
+    };
+
+    networking.firewall.trustedInterfaces = [ config.services.tailscale.interfaceName ];
+    networking.firewall.checkReversePath = "loose";
   };
 }

@@ -28,6 +28,16 @@ let
   # precedence over MagicDNS's net.joshuabell.xyz zone.
   h001TailnetAliases = [ "secrets.h001.net.${fleet.global.domain}" ];
 
+  # ── Private zone ts.joshuabell.xyz (ROUTING-PLAN §2.2) ─────────────
+  # Generated from the containers inventory in this repo (working tree, not
+  # the pushed containers input): every http route with zone = "private"
+  # and exposure != "local". h005's nginx terminates TLS for these names
+  # (hosts/h005/private-zone.nix), so they resolve to h005's overlay IP.
+  # The zone is answered locally only: unknown ts names get NXDOMAIN and
+  # never reach public DNS.
+  privateZone = "ts.${fleet.global.domain}";
+  privateRoutes = (import ../../../containers/lib.nix).privateRoutes ../../../containers;
+
   # Tailnet clients get the OVERLAY ip of the host serving each listed name
   # (h001 or lio) so they're reachable from ANY tailnet client (home or
   # remote), unlike the LAN answer the AdGuard/9053 path gives non-tailnet LAN
@@ -68,6 +78,14 @@ let
     ${lib.concatMapStringsSep "\n"
       (n: "host-record=${n}.${fleet.global.domain},${lioOverlay}")
       lioServices}
+
+    # Private tailnet-only zone: answered here only (NXDOMAIN for unknown
+    # names, never forwarded to public DNS). Names point at h005, whose
+    # nginx terminates TLS with *.${privateZone}.
+    local=/${privateZone}/
+    ${lib.concatMapStringsSep "\n"
+      (r: "host-record=${r.fqdn},${selfOverlay}")
+      privateRoutes}
 
     # Fallthrough: any other joshuabell.xyz name -> external resolvers
     # (domain-scoped; never AdGuard/127.0.0.1:53 -> no loop).

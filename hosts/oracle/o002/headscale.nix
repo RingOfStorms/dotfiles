@@ -77,21 +77,24 @@ in
         urls = [ ];
         auto_update_enable = false;
       };
-      # Explicit MagicDNS record for the Tailnet-only secrets manager endpoint.
-      # Unlike `secrets.joshuabell.xyz`, this name has no public DNS record and
-      # remains available even if the public-zone split DNS answer is cached.
-      extra_records = [
-        {
-          name = "secrets.h001.net.${splitDomain}";
-          type = "A";
-          value = h001OverlayIp;
-        }
-      ];
-
       dns = {
         magic_dns = true;
         base_domain = hs.baseDomain;
         override_local_dns = false;
+
+        # Explicit MagicDNS record for the Tailnet-only secrets manager
+        # endpoint. Unlike `secrets.joshuabell.xyz`, this name has no public
+        # DNS record. It must live under `dns` (headscale ignores a top-level
+        # `extra_records`, which is where it sat until 2026-10-19). MagicDNS
+        # answers net.joshuabell.xyz itself, so this is the only way to add
+        # names below it; exact names only, no wildcards.
+        extra_records = [
+          {
+            name = "secrets.h001.net.${splitDomain}";
+            type = "A";
+            value = h001OverlayIp;
+          }
+        ];
 
         # Split-DNS (restricted) nameserver: route ONLY joshuabell.xyz queries
         # to the router's tailnet dnsmasq listener over the overlay. Everything else
@@ -105,14 +108,16 @@ in
         # net.joshuabell.xyz, so MagicDNS only advertised a split route for
         # net.joshuabell.xyz and clients never sent joshuabell.xyz queries to
         # MagicDNS at all.
+        #
+        # Private tailnet-only names (*.ts.joshuabell.xyz) also ride this
+        # route; h005's dnsmasq answers that zone locally.
+        #
+        # No more-specific split under net.joshuabell.xyz: clients answer the
+        # MagicDNS suffix themselves and never use such routes (the old
+        # h001.net route was ignored; verified 2026-10-19). Use
+        # dns.extra_records above for names under net.joshuabell.xyz.
         nameservers.split = {
           "${splitDomain}" = [ routerOverlayIp ];
-
-          # MagicDNS owns the more-specific `net.joshuabell.xyz` suffix, so it
-          # would otherwise win over the broad joshuabell.xyz split route for
-          # sec.h001.net.joshuabell.xyz. Route this backup hostname explicitly
-          # to the router's authoritative Tailnet dnsmasq instead.
-          "h001.net.${splitDomain}" = [ routerOverlayIp ];
         };
       };
     };

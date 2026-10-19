@@ -1,9 +1,8 @@
 # h001 as a floating-container host (containers/README.md).
 { constants, ... }:
 {
-  # litellm (containers/litellm) binds 0.0.0.0:8094 on the host network; other
-  # hosts reach it over the tailnet only.
-  networking.firewall.interfaces."tailscale0".allowedTCPPorts = [ 8094 ];
+  # litellm (containers/litellm) is on 127.0.0.1:8094 behind the tailnet
+  # vhost litellm.joshuabell.xyz; no raw port to open.
 
   ringofstorms.containers = {
     enable = true;

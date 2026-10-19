@@ -30,7 +30,23 @@
   # all (gallery installs and backend downloads then fail). Ports still work.
   internet = false;
 
-  # http://joe:8080/v1/images/generations
+  # https://localai.ts.joshuabell.xyz/v1/images/generations (private zone,
+  # tailnet-only DNS). h005's nginx terminates TLS with *.ts.joshuabell.xyz
+  # and proxies to joe's overlay IP:8080 (hosts/h005/private-zone.nix).
+  # auth = "none": LocalAI has no login (only an optional API_KEY, which
+  # would break the existing Open WebUI / agent clients); the tailnet is the
+  # boundary, same as the raw port before this route.
+  routes.web = {
+    port = 8080;
+    zone = "private";
+    exposure = "tailnet";
+    auth = "none";
+    # Image generation can take minutes; uploads are small.
+    timeouts = "600s";
+  };
+
+  # Still opened for http://joe:8080 and for h005's proxy (bound to the
+  # overlay IP only, below).
   tcpPorts = [ 8080 ];
   podman = {
     image = "docker.io/localai/localai:v4.11.0-gpu-nvidia-cuda-12";

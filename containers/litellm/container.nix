@@ -21,7 +21,9 @@ let
     }
     // (if mode == null then { } else { model_info.mode = mode; });
   # Static config as JSON (a YAML subset, which LiteLLM loads fine).
-  baseConfig = pkgs.writeText "litellm-base-config.json" (builtins.toJSON config.services.litellm.settings);
+  baseConfig = pkgs.writeText "litellm-base-config.json" (
+    builtins.toJSON config.services.litellm.settings
+  );
   runtimeConfig = "/run/litellm/config.yaml";
   # LiteLLM cannot enumerate OpenRouter models: OpenRouter has no discovery
   # hook, and the remote cost map it relies on currently has no openrouter
@@ -68,7 +70,8 @@ in
   services.litellm = {
     enable = true;
     port = 8094;
-    host = "0.0.0.0";
+    # Loopback only; host nginx fronts it (routes.web, tailnet).
+    host = "127.0.0.1";
     openFirewall = false;
     package = pkgsLitellm.litellm;
     # gives openrouter key

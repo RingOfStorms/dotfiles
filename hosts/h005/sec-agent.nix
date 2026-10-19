@@ -20,10 +20,13 @@ import ../sec-agent.nix {
       softDepend = [ "h005-isp-speedtest" ];
     };
 
-    # Shared with h001's ACME DNS-01 credential.
+    # Shared with h001's ACME DNS-01 credential. Also DNS-01 for the
+    # private-zone wildcard *.ts.joshuabell.xyz (private-zone.nix).
     bunny_rw_dns_2026-03-15 = {
       remotePath = "machines/high-trust/bunny_rw_dns_2026-03-15";
       softDepend = [ "ddns-update" ];
+      configChanges.security.acme.certs."ts.joshuabell.xyz".credentialFiles.BUNNY_API_KEY_FILE =
+        "$SECRET_PATH";
     };
   };
 }

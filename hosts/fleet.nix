@@ -225,6 +225,8 @@ rec {
     "location"
     "docs"
     "life"
+    # tailnet-only LiteLLM vhost (containers/litellm)
+    "litellm"
     # `secrets` is the secrets manager server (hosts/h001/mods/sec.nix).
     "secrets"
   ];

@@ -33,7 +33,7 @@ in
   options.ringofstorms.llm = {
     baseUrl = mkOption {
       type = types.str;
-      default = "http://h001.net.joshuabell.xyz:8094";
+      default = "https://litellm.joshuabell.xyz";
       description = "LiteLLM base URL.";
     };
     smart = tierOptions {

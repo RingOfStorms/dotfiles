@@ -33,5 +33,7 @@
     name = "sso";
     exposure = "public";
     auth = "native";
+    # h001's http-level limit, which the old hand-written vhost inherited.
+    maxBody = "500m";
   };
 }

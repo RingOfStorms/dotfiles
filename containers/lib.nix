@@ -244,6 +244,25 @@ in
     normalizeRoute
     ;
 
+  # Every exposed http route with zone = "private" across all services in
+  # `dir` (the containers directory). Each item is the normalized route plus
+  # `service` (normalized service.nix). Read by h005 for the private zone's
+  # DNS records and TLS-terminating vhosts (ROUTING-PLAN §2.2).
+  privateRoutes =
+    dir:
+    let
+      entries = builtins.readDir dir;
+      dirs = builtins.filter (
+        d: entries.${d} == "directory" && builtins.pathExists (dir + "/${d}/service.nix")
+      ) (builtins.attrNames entries);
+      services = map (d: normalize (import (dir + "/${d}/service.nix"))) dirs;
+    in
+    builtins.filter (r: r.proto == "http" && r.zone == "private" && r.exposure != "local") (
+      builtins.concatMap (
+        s: map (r: r // { service = s; }) (builtins.attrValues s.routes)
+      ) services
+    );
+
   # The extra-container `config` for a nixos-kind service. Pass it to
   # extra-container.lib.buildContainers { config = ...; }.
   #

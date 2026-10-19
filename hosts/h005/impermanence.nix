@@ -29,6 +29,14 @@ in
     hideMounts = true;
     directories = shared.system.directories ++ [
       "/var/lib/secrets_manager_hydrated"
+      # *.ts.joshuabell.xyz wildcard (private-zone.nix); avoid re-issuing
+      # on every boot (Let's Encrypt rate limits).
+      {
+        directory = "/var/lib/acme";
+        user = "acme";
+        group = "acme";
+        mode = "0755";
+      }
       # Preserve DHCP client identity/leases in both bench and router modes.
       {
         directory = "/var/lib/dhcpcd";

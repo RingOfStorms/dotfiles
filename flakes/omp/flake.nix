@@ -56,7 +56,7 @@
               default = ''
                 providers:
                   litellm:
-                    baseUrl: http://h001.net.joshuabell.xyz:8094/v1
+                    baseUrl: https://litellm.joshuabell.xyz/v1
                     api: openai-completions
                     auth: none
                     discovery:
