@@ -19,26 +19,11 @@
 
   # vaultwarden listens on 127.0.0.1:8222 (host network). o002 terminates TLS
   # for the public name and proxies to h001:80 over the tailnet.
-  nginx = ''
-    server {
-      listen 80;
-      listen [::]:80;
-      listen 443 ssl;
-      listen [::]:443 ssl;
-      server_name vault.joshuabell.xyz;
-      ssl_certificate /var/lib/acme/joshuabell.xyz/fullchain.pem;
-      ssl_certificate_key /var/lib/acme/joshuabell.xyz/key.pem;
-      client_max_body_size 525m;
-      location / {
-        proxy_pass http://127.0.0.1:8222;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-      }
-    }
-  '';
+  routes.web = {
+    port = 8222;
+    name = "vault";
+    exposure = "public";
+    auth = "native";
+    maxBody = "525m";
+  };
 }

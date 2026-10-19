@@ -19,32 +19,19 @@
 
   backupHook = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
 
-  # recommendedProxySettings is NOT applied to these include files, so each
-  # header is sent once (duplicate X-Forwarded-Proto/Host broke login before).
-  nginx = ''
-    server {
-      listen 80;
-      listen [::]:80;
-      listen 443 ssl;
-      listen [::]:443 ssl;
-      server_name location.joshuabell.xyz;
-      ssl_certificate /var/lib/acme/joshuabell.xyz/fullchain.pem;
-      ssl_certificate_key /var/lib/acme/joshuabell.xyz/key.pem;
-      client_max_body_size 50G;
-      proxy_read_timeout 600s;
-      proxy_send_timeout 600s;
+  # Generated vhost sends each header once (duplicate X-Forwarded-Proto/Host
+  # broke login before).
+  # puma binds 127.0.0.1:3001 (BINDING in container.nix).
+  routes.web = {
+    port = 3001;
+    name = "location";
+    exposure = "public";
+    auth = "native";
+    maxBody = "50G";
+    timeouts = "600s";
+    extraConfig = ''
+      proxy_set_header X-Forwarded-Host $host;
       send_timeout 600s;
-      location / {
-        proxy_pass http://127.0.0.1:3001;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-Proto https;
-      }
-    }
-  '';
+    '';
+  };
 }

@@ -28,26 +28,11 @@
 
   # o002 terminates TLS for the public name and proxies to h001:80 over the
   # tailnet; LAN/tailnet clients may hit h001:443 directly (wildcard cert).
-  nginx = ''
-    server {
-      listen 80;
-      listen [::]:80;
-      listen 443 ssl;
-      listen [::]:443 ssl;
-      server_name gist.joshuabell.xyz;
-      ssl_certificate /var/lib/acme/joshuabell.xyz/fullchain.pem;
-      ssl_certificate_key /var/lib/acme/joshuabell.xyz/key.pem;
-      client_max_body_size 64m;
-      location / {
-        proxy_pass http://127.0.0.1:6157;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-      }
-    }
-  '';
+  routes.web = {
+    port = 6157;
+    name = "gist";
+    exposure = "public";
+    auth = "native";
+    maxBody = "64m";
+  };
 }

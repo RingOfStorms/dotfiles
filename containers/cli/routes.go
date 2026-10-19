@@ -11,6 +11,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"sort"
 	"strconv"
@@ -213,6 +214,47 @@ var hostAllowlist = map[string]string{
 	"udp/5353":  "mdns",
 }
 
+// tailnetNets: tailscale's overlay ranges (CGNAT v4, ULA v6).
+var tailnetNets = func() []*net.IPNet {
+	var ns []*net.IPNet
+	for _, c := range []string{"100.64.0.0/10", "fd7a:115c:a1e0::/48"} {
+		_, n, _ := net.ParseCIDR(c)
+		ns = append(ns, n)
+	}
+	return ns
+}()
+
+func isTailnetOrWildcard(addr string) bool {
+	if addr == "*" || addr == "0.0.0.0" || addr == "::" {
+		return true
+	}
+	ip := net.ParseIP(addr)
+	if ip == nil {
+		return false
+	}
+	for _, n := range tailnetNets {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// hostProcessOwner classifies host daemons whose ports can't go in
+// hostAllowlist: tailscaled opens random tcp ports (peerapi, one per
+// address family) on the overlay IPs, and systemd-resolved answers LLMNR on
+// 5355. Matched by process name, never by port alone; tailscaled only on
+// tailnet or wildcard addresses (on a LAN IP it stays UNDECLARED).
+func hostProcessOwner(l listener) string {
+	if strings.Contains(l.Process, "tailscaled") && isTailnetOrWildcard(l.Addr) {
+		return "tailscaled (dynamic peerapi/derp socket)"
+	}
+	if strings.HasPrefix(l.Process, "systemd-resolve") && l.Port == "5355" {
+		return "llmnr (systemd-resolved; propose disabling)"
+	}
+	return ""
+}
+
 type listener struct {
 	Proto, Addr, Port, Process string
 }
@@ -299,6 +341,8 @@ func auditListeners(ls []listener, svcs []Service, host string) []auditRow {
 		seen[key+" "+l.Addr] = true
 		row := auditRow{listener: l, Status: "UNDECLARED"}
 		if o, ok := hostAllowlist[key]; ok {
+			row.Status, row.Owner = "host", o
+		} else if o := hostProcessOwner(l); o != "" {
 			row.Status, row.Owner = "host", o
 		} else if o, ok := declared[key]; ok {
 			row.Status, row.Owner = "declared", o

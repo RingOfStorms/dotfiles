@@ -1,6 +1,5 @@
-# Guest config. Host network: puma on 3001 (APPLICATION_HOSTS limits it to
-# 127.0.0.1/::1/the domain; port not opened in the firewall); postgres and
-# redis on unix sockets only. uids pinned to match the copied data.
+# Guest config. Host network: puma on 127.0.0.1:3001 (BINDING; host nginx
+# fronts it); postgres and redis on unix sockets only. uids pinned to match the copied data.
 {
   config,
   pkgs,
@@ -57,6 +56,8 @@
       # The module hardcodes APPLICATION_PROTOCOL=http; behind TLS that breaks
       # login (CSRF origin mismatch) and ActionCable websockets.
       APPLICATION_PROTOCOL = "https";
+      # rails server defaults to 0.0.0.0 in production; loopback only.
+      BINDING = "127.0.0.1";
     };
   };
 

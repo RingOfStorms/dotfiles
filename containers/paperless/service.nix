@@ -20,35 +20,21 @@
 
   backupHook = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
 
-  # recommendedProxySettings is NOT applied to these include files; headers explicit.
-  nginx = ''
-    server {
-      listen 80;
-      listen [::]:80;
-      listen 443 ssl;
-      listen [::]:443 ssl;
-      server_name docs.joshuabell.xyz;
-      ssl_certificate /var/lib/acme/joshuabell.xyz/fullchain.pem;
-      ssl_certificate_key /var/lib/acme/joshuabell.xyz/key.pem;
-      # Tailnet-only: overlay network and localhost.
+  # Tailnet-only (not proxied by o002); the allow/deny keeps that enforced in
+  # nginx until the internal listener split (ROUTING-PLAN §2.3).
+  routes.web = {
+    port = 28981;
+    name = "docs";
+    exposure = "tailnet";
+    auth = "native";
+    maxBody = "100M";
+    timeouts = "600s";
+    extraConfig = ''
+      proxy_set_header X-Forwarded-Host $host;
+      send_timeout 600s;
       allow 100.64.0.0/10;
       allow 127.0.0.0/8;
       deny all;
-      client_max_body_size 100M;
-      proxy_read_timeout 600s;
-      proxy_send_timeout 600s;
-      send_timeout 600s;
-      location / {
-        proxy_pass http://127.0.0.1:28981;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-Proto https;
-      }
-    }
-  '';
+    '';
+  };
 }

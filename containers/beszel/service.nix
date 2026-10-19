@@ -13,7 +13,13 @@
     nixos = "/var/lib/nixos";
   };
 
-  # Tailnet-only: reached directly on the overlay IP (tailscale0 is a trusted
-  # interface on h001), no nginx vhost.
-  nginx = null;
+  # Tailnet-only, no nginx vhost: agents and browsers hit the overlay IP
+  # directly. The socket exists only on 100.64.0.13, so the ports-file
+  # entry this adds cannot expose it on the LAN.
+  routes.hub = {
+    port = 8090;
+    proto = "tcp";
+    exposure = "tailnet";
+    auth = "native";
+  };
 }

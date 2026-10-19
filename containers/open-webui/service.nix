@@ -12,26 +12,14 @@
     nixos = "/var/lib/nixos";
   };
 
-  nginx = ''
-    server {
-      listen 80;
-      listen [::]:80;
-      listen 443 ssl;
-      listen [::]:443 ssl;
-      server_name chat.joshuabell.xyz;
-      ssl_certificate /var/lib/acme/joshuabell.xyz/fullchain.pem;
-      ssl_certificate_key /var/lib/acme/joshuabell.xyz/key.pem;
-      location / {
-        proxy_pass http://127.0.0.1:8084;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-Host $host;
-      }
-    }
-  '';
+  # maxBody 500m = h001's http-level client_max_body_size, which the old
+  # vhost (no own limit) inherited.
+  routes.web = {
+    port = 8084;
+    name = "chat";
+    exposure = "public";
+    auth = "native-oidc";
+    maxBody = "500m";
+    extraConfig = "proxy_set_header X-Forwarded-Host $host;";
+  };
 }

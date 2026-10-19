@@ -237,6 +237,50 @@ func TestAuditListenersHTTPBackendMustBeLoopback(t *testing.T) {
 	}
 }
 
+func TestAuditListenersHostProcesses(t *testing.T) {
+	ss := `tcp   LISTEN 0      4096     100.64.0.13:43119      0.0.0.0:*    users:(("tailscaled",pid=5,fd=20))
+tcp   LISTEN 0      4096  [fd7a:115c:a1e0::d]:42415    [::]:*    users:(("tailscaled",pid=5,fd=21))
+tcp   LISTEN 0      4096     100.64.0.13:41000      0.0.0.0:*    users:((".tailscaled-wra",pid=5,fd=22))
+tcp   LISTEN 0      4096     10.12.14.20:43120      0.0.0.0:*    users:(("tailscaled",pid=5,fd=23))
+tcp   LISTEN 0      4096     100.64.0.13:43121      0.0.0.0:*    users:(("evil",pid=6,fd=3))
+tcp   LISTEN 0      4096         0.0.0.0:5355       0.0.0.0:*    users:(("systemd-resolve",pid=8,fd=12))
+udp   UNCONN 0      0               [::]:5355          [::]:*    users:(("systemd-resolve",pid=8,fd=13))
+tcp   LISTEN 0      4096         0.0.0.0:5355       0.0.0.0:*    users:(("other",pid=9,fd=3))
+`
+	rows := auditListeners(parseSS(ss), nil, "h001")
+	got := map[string]auditRow{}
+	for _, r := range rows {
+		got[r.Proto+"/"+r.Port+"@"+r.Addr+"#"+r.Process] = r
+	}
+	want := map[string]string{
+		"tcp/43119@100.64.0.13#tailscaled":       "host",
+		"tcp/42415@fd7a:115c:a1e0::d#tailscaled": "host",
+		"tcp/41000@100.64.0.13#.tailscaled-wra":  "host",
+		"tcp/43120@10.12.14.20#tailscaled":       "UNDECLARED", // LAN IP: not tailnet
+		"tcp/43121@100.64.0.13#evil":             "UNDECLARED", // tailnet addr, wrong process
+		"tcp/5355@0.0.0.0#systemd-resolve":       "host",
+		"udp/5355@::#systemd-resolve":            "host",
+	}
+	for k, v := range want {
+		if r, ok := got[k]; !ok || r.Status != v {
+			t.Errorf("%s: %+v, want %s", k, r, v)
+		}
+	}
+	if o := got["tcp/5355@0.0.0.0#systemd-resolve"].Owner; !strings.Contains(o, "llmnr") {
+		t.Errorf("llmnr owner = %q", o)
+	}
+	if o := got["tcp/43119@100.64.0.13#tailscaled"].Owner; !strings.Contains(o, "tailscaled") {
+		t.Errorf("tailscaled owner = %q", o)
+	}
+	// The second 5355 listener (other process) is deduped by addr; make sure
+	// a non-resolved process on 5355 alone stays UNDECLARED.
+	other := `tcp   LISTEN 0      4096         0.0.0.0:5355       0.0.0.0:*    users:(("other",pid=9,fd=3))
+`
+	if r := auditListeners(parseSS(other), nil, "h001"); len(r) != 1 || r[0].Status != "UNDECLARED" {
+		t.Errorf("5355 by another process: %+v", r)
+	}
+}
+
 func TestRoutesTable(t *testing.T) {
 	tbl := routesTable([]Service{{Name: "sec", Host: "h001", Routes: map[string]Route{"web": httpRoute("secrets", 8300, "public", "native-oidc")}}})
 	if !strings.Contains(tbl, "secrets.joshuabell.xyz") || !strings.Contains(tbl, "native-oidc") || !strings.Contains(tbl, "edge") {
