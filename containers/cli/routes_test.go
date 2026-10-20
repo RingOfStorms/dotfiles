@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"os"
 	"strings"
 	"testing"
 )
@@ -285,5 +287,64 @@ func TestRoutesTable(t *testing.T) {
 	tbl := routesTable([]Service{{Name: "sec", Host: "h001", Routes: map[string]Route{"web": httpRoute("secrets", 8300, "public", "native-oidc")}}})
 	if !strings.Contains(tbl, "secrets.joshuabell.xyz") || !strings.Contains(tbl, "native-oidc") || !strings.Contains(tbl, "edge") {
 		t.Errorf("table:\n%s", tbl)
+	}
+}
+
+func TestSudoNeedsPassword(t *testing.T) {
+	cases := []struct {
+		err  error
+		want bool
+	}{
+		{nil, false},
+		{errors.New("exit status 1: sudo: a password is required"), true},
+		{errors.New("exit status 255: ssh: connect to host h001 port 22: Connection refused"), false},
+	}
+	for _, c := range cases {
+		if got := sudoNeedsPassword(c.err); got != c.want {
+			t.Errorf("sudoNeedsPassword(%v) = %v, want %v", c.err, got, c.want)
+		}
+	}
+}
+
+func TestCmdAuditStdin(t *testing.T) {
+	oldInv := inv
+	t.Cleanup(func() { inv = oldInv })
+	inv = &Inventory{Services: map[string]Service{
+		"mc": {Name: "mc", Host: "h001", TCPPorts: []int{25565}},
+	}}
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.WriteString(`tcp   LISTEN 0      4096       0.0.0.0:25565      0.0.0.0:*    users:(("java",pid=1,fd=5))
+`)
+	w.Close()
+	oldStdin := os.Stdin
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = oldStdin })
+
+	oldStdout := os.Stdout
+	outR, outW, _ := os.Pipe()
+	os.Stdout = outW
+	err = cmdAudit([]string{"h001", "--stdin"})
+	outW.Close()
+	os.Stdout = oldStdout
+	if err != nil {
+		t.Fatalf("cmdAudit: %v", err)
+	}
+	buf := make([]byte, 4096)
+	n, _ := outR.Read(buf)
+	out := string(buf[:n])
+	if !strings.Contains(out, "declared") || !strings.Contains(out, "25565") {
+		t.Errorf("output:\n%s", out)
+	}
+}
+
+func TestCmdAuditStdinRequiresOneHost(t *testing.T) {
+	oldInv := inv
+	t.Cleanup(func() { inv = oldInv })
+	inv = &Inventory{Services: map[string]Service{}}
+	if err := cmdAudit([]string{"h001", "h002", "--stdin"}); err == nil {
+		t.Fatal("expected error for --stdin with multiple hosts")
 	}
 }

@@ -50,6 +50,18 @@ in
         Triggers a local rebuild of the tailscale package.
       '';
     };
+
+    trustInterface = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Put tailscale0 in `networking.firewall.trustedInterfaces`, so every
+        listening port is reachable from the whole tailnet. Set to `false` on
+        hosts that list what the tailnet may reach explicitly
+        (`networking.firewall.interfaces.tailscale0.*`, `extraInputRules`);
+        see containers/ROUTING-PLAN.md §5.1.
+      '';
+    };
   };
 
   config = {
@@ -172,7 +184,9 @@ in
       };
     };
 
-    networking.firewall.trustedInterfaces = [ config.services.tailscale.interfaceName ];
+    networking.firewall.trustedInterfaces = lib.mkIf cfg.trustInterface [
+      config.services.tailscale.interfaceName
+    ];
     networking.firewall.checkReversePath = "loose";
   };
 }

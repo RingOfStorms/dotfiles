@@ -81,6 +81,7 @@
 
           (import ./sec-agent.nix { inherit inputs constants; })
           ./nginx.nix
+          ./firewall.nix
           ./autofs.nix
 
           # Host-specific config

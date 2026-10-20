@@ -95,7 +95,10 @@ commands:
   destroy <svc> [--host h] [--purge]
                                remove from a host (data kept unless --purge)
   routes [svc]                 declared routes (fqdn, port, exposure, auth, host)
-  audit [host...]              non-loopback listeners on hosts vs declared ports (read-only)
+  audit [host...] [--stdin]    non-loopback listeners on hosts vs declared ports (read-only)
+                               --stdin reads 'ss -ltnupH' output from stdin for one host
+                               instead of ssh (e.g. when sudo there needs a password):
+                                 ssh host sudo ss -ltnupH | containers audit host --stdin
   status-server --listen ADDR [--host NAME]
                                read-only GET /status.json for fleet-edge (run by the host module)
   check-idmap <host>           test idmapped mounts on /srv/containers and /nix

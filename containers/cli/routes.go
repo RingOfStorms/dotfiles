@@ -10,7 +10,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"sort"
@@ -382,13 +384,22 @@ func auditTable(rows []auditRow) string {
 }
 
 // cmdAudit is read-only and informational: it always exits 0 unless the
-// host can't be reached.
+// host can't be reached. It needs root on the remote host to see process
+// names (ss -p); sshArgs already wraps non-root users in `sudo -n` (see
+// main.go), which fails cleanly instead of hanging when sudo wants a
+// password. --stdin reads `ss -ltnupH` output from stdin instead of ssh,
+// for hosts where sudo needs a password:
+//
+//	ssh lio sudo ss -ltnupH | cnt audit lio --stdin
 func cmdAudit(args []string) error {
-	f := parse(args)
+	f := parse(args, "stdin")
 	loadInventory()
 	hosts := f.pos
 	if len(hosts) == 0 {
 		hosts = containerHosts()
+	}
+	if f.bools["stdin"] && len(hosts) != 1 {
+		return errors.New("usage: containers audit <host> --stdin   (reads ss -ltnupH from stdin, exactly one host)")
 	}
 	var svcs []Service
 	for _, s := range inv.Services {
@@ -396,6 +407,15 @@ func cmdAudit(args []string) error {
 	}
 	for _, h := range hosts {
 		fmt.Printf("== %s\n", h)
+		if f.bools["stdin"] {
+			b, err := io.ReadAll(os.Stdin)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%s: %v\n", h, err)
+				continue
+			}
+			fmt.Print(auditTable(auditListeners(parseSS(string(b)), svcs, h)))
+			continue
+		}
 		if dryRun {
 			fmt.Printf("[%s (root)] ss -ltnupH\n", h)
 			continue
@@ -404,10 +424,20 @@ func cmdAudit(args []string) error {
 		out, err := remoteOut(ctx, h, true, "ss -ltnupH")
 		cancel()
 		if err != nil {
+			if sudoNeedsPassword(err) {
+				fmt.Fprintf(os.Stderr, "audit needs root on %s: run 'sudo ss -ltnupH' there and pipe it in\n", h)
+				return errors.New("audit needs root")
+			}
 			fmt.Fprintf(os.Stderr, "%s: %v\n", h, err)
 			continue
 		}
 		fmt.Print(auditTable(auditListeners(parseSS(out), svcs, h)))
 	}
 	return nil
+}
+
+// sudoNeedsPassword reports whether err looks like `sudo -n`'s failure when
+// it needs an interactive password (as opposed to e.g. a dead host).
+func sudoNeedsPassword(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "a password is required")
 }
