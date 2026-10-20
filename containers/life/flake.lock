@@ -64,11 +64,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1792419217,
-        "narHash": "sha256-e7OsBFJ4Z0vUeAX5SqBFEq2M5fa0z6u5PleEorQEPpE=",
+        "lastModified": 1792466575,
+        "narHash": "sha256-K90PicYDUnpLGHaJfZILQJRyy/FsYBU/Pxy/kPD22o4=",
         "ref": "refs/heads/main",
-        "rev": "ae1ba88d92f7b884dc4701dc8b38ff9fec9fd020",
-        "revCount": 96,
+        "rev": "a7b8ff5155b3a8c03c2d727a82fe3e0fc49d54b3",
+        "revCount": 97,
         "type": "git",
         "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/life.git"
       },
