@@ -120,7 +120,7 @@
               '';
             };
             environment.shellAliases = let
-              no_proxy = "NO_PROXY='h001.net.joshuabell.xyz,*.ts.net,127.0.0.1,localhost,100.64.0.0/10'";
+              no_proxy = "NO_PROXY='h001.net.joshuabell.xyz,litellm.joshuabell.xyz,.ts.joshuabell.xyz,*.ts.net,127.0.0.1,localhost,100.64.0.0/10'";
               nono_base = "nono run --allow-cwd --silent --read \"$(git rev-parse --git-common-dir 2>/dev/null || echo /tmp)\"";
             in {
               mva = "${no_proxy} ${nono_base} --profile mva-full -- /home/josh/projects/mva/target/release/mva";
