@@ -383,14 +383,12 @@ func auditTable(rows []auditRow) string {
 	return b.String()
 }
 
-// cmdAudit is read-only and informational: it always exits 0 unless the
-// host can't be reached. It needs root on the remote host to see process
-// names (ss -p); sshArgs already wraps non-root users in `sudo -n` (see
-// main.go), which fails cleanly instead of hanging when sudo wants a
-// password. --stdin reads `ss -ltnupH` output from stdin instead of ssh,
-// for hosts where sudo needs a password:
-//
-//	ssh lio sudo ss -ltnupH | cnt audit lio --stdin
+// cmdAudit is read-only and informational: it exits 0 unless the host can't
+// be reached or the input is unusable. It needs root on the remote host to
+// see process names (ss -p); sshArgs already wraps non-root users in
+// `sudo -n` (see main.go), which fails cleanly instead of hanging when sudo
+// wants a password. Plain ssh has no TTY, so password sudo can't prompt
+// there: run ss locally on the host and feed the file in with --stdin.
 func cmdAudit(args []string) error {
 	f := parse(args, "stdin")
 	loadInventory()
@@ -406,16 +404,20 @@ func cmdAudit(args []string) error {
 		svcs = append(svcs, s)
 	}
 	for _, h := range hosts {
-		fmt.Printf("== %s\n", h)
 		if f.bools["stdin"] {
 			b, err := io.ReadAll(os.Stdin)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "%s: %v\n", h, err)
-				continue
+				return fmt.Errorf("%s: reading stdin: %v", h, err)
 			}
-			fmt.Print(auditTable(auditListeners(parseSS(string(b)), svcs, h)))
+			ls := parseSS(string(b))
+			if len(ls) == 0 {
+				return errors.New("no ss output on stdin; collection failed?")
+			}
+			fmt.Printf("== %s\n", h)
+			fmt.Print(auditTable(auditListeners(ls, svcs, h)))
 			continue
 		}
+		fmt.Printf("== %s\n", h)
 		if dryRun {
 			fmt.Printf("[%s (root)] ss -ltnupH\n", h)
 			continue
@@ -425,7 +427,7 @@ func cmdAudit(args []string) error {
 		cancel()
 		if err != nil {
 			if sudoNeedsPassword(err) {
-				fmt.Fprintf(os.Stderr, "audit needs root on %s: run 'sudo ss -ltnupH' there and pipe it in\n", h)
+				fmt.Fprint(os.Stderr, needsRootMsg(h))
 				return errors.New("audit needs root")
 			}
 			fmt.Fprintf(os.Stderr, "%s: %v\n", h, err)
@@ -434,6 +436,16 @@ func cmdAudit(args []string) error {
 		fmt.Print(auditTable(auditListeners(parseSS(out), svcs, h)))
 	}
 	return nil
+}
+
+// needsRootMsg: sudo over plain ssh has no TTY to ask for a password.
+func needsRootMsg(h string) string {
+	return fmt.Sprintf(`audit needs root on %[1]s and sudo there wants a password (plain ssh has no TTY to prompt).
+Either run it on %[1]s itself:
+  sudo ss -ltnupH > /tmp/%[1]s.ss && cnt audit %[1]s --stdin < /tmp/%[1]s.ss
+or collect over ssh with a TTY and feed the file in:
+  ssh -t %[1]s 'sudo ss -ltnupH > /tmp/%[1]s.ss' && scp %[1]s:/tmp/%[1]s.ss /tmp/ && cnt audit %[1]s --stdin < /tmp/%[1]s.ss
+`, h)
 }
 
 // sudoNeedsPassword reports whether err looks like `sudo -n`'s failure when

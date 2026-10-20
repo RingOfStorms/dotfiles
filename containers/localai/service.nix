@@ -45,9 +45,9 @@
     timeouts = "600s";
   };
 
-  # Still opened for http://joe:8080 and for h005's proxy (bound to the
-  # overlay IP only, below).
-  tcpPorts = [ 8080 ];
+  # No tcpPorts: joe's firewall (hosts/joe/firewall.nix) admits 8080 on
+  # tailscale0 from h005's private-zone proxy only; the socket is bound to the
+  # overlay IP (below).
   podman = {
     image = "docker.io/localai/localai:v4.11.0-gpu-nvidia-cuda-12";
     # Tailnet only (joe overlay IP); not reachable from the LAN.

@@ -95,7 +95,9 @@ must be able to fetch that ref, so pair it with `deploy --local`).
 | `containers destroy <svc>` | uninstall (data kept; `--purge` deletes it) |
 | `containers check-idmap <host>` | the idmap test above |
 | `containers routes [svc]` | declared routes from the inventory: fqdn, proto, port, exposure, auth, via, host (no network). Unconverted services show as `nginx string` |
-| `containers audit [host...] [--stdin]` | read-only: runs `ss -ltnupH` on each host (default: all container hosts) and lists every non-loopback listener as `declared` (a route, `tcpPorts`/`udpPorts` of a service declared on that host), `host` (small allowlist in `cli/routes.go`: 22, 80, 443, 53, tailscale 41641/udp, dhcp, mdns; plus, matched by process name rather than port, tailscaled's dynamic sockets on tailnet/wildcard addresses and systemd-resolved LLMNR on 5355) or `UNDECLARED` (incl. ports of `exposure = "local"` routes, and `proto = "http"` backend ports found on a non-loopback address — those must stay on `127.0.0.1`, nginx is the only thing allowed to expose them). Needs root on the remote host to see process names; non-root users get `sudo -n` (fails fast instead of hanging if it needs a password). If that fails, run it yourself and pipe the output in with `--stdin` (exactly one host): `ssh host sudo ss -ltnupH \| containers audit host --stdin`. Always exits 0 |
+| `containers audit [host...] [--stdin]` | read-only: runs `ss -ltnupH` on each host (default: all container hosts) and lists every non-loopback listener as `declared` (a route, `tcpPorts`/`udpPorts` of a service declared on that host), `host` (small allowlist in `cli/routes.go`: 22, 80, 443, 53, tailscale 41641/udp, dhcp, mdns; plus, matched by process name rather than port, tailscaled's dynamic sockets on tailnet/wildcard addresses and systemd-resolved LLMNR on 5355) or `UNDECLARED` (incl. ports of `exposure = "local"` routes, and `proto = "http"` backend ports found on a non-loopback address — those must stay on `127.0.0.1`, nginx is the only thing allowed to expose them). Needs root on the remote host to see process names; non-root users get `sudo -n` (fails fast instead of hanging if it needs a password). If sudo there needs a password, plain ssh can't prompt (no TTY): run it on the host itself and feed the file in with `--stdin` (exactly one host): `sudo ss -ltnupH > /tmp/<host>.ss && cnt audit <host> --stdin < /tmp/<host>.ss`, or collect the file with `ssh -t`. Empty `--stdin` input (or input with no listeners) is an error, so a failed collection never looks like a clean host. Otherwise exits 0 |
+| `containers port open <svc> <port>/<tcp\|udp> --for <dur> [--from <host\|cidr>]... [--iface tailnet\|lan\|any] [--host h]` | open a port temporarily (see [Temporary ports](#temporary-ports-cnt-port)) |
+| `containers port ls [host...]` / `port close <svc> <port>/<proto> [--from ...] [--iface ...]` | list / close them early |
 
 The host module adds the shell alias `cnt` for `containers`.
 
@@ -175,6 +177,29 @@ Updating: commit + push, then `containers deploy <svc>`. nspawn containers whose
 only change is the system closure switch in place
 (`switch-to-configuration test`); changes to the container settings (binds,
 ports) restart them.
+
+### Temporary ports (`cnt port`)
+
+`cnt port open <svc> <port>/<tcp|udp> --for <dur>` opens a port for at most
+24h with no rebuild. The only state is an element in an nft set of
+`inet nixos-fw` (`cnt-tmp`, or `cnt-tmp4`/`cnt-tmp6` with `--from`). Each
+element has a timeout and the comment `svc=<svc>`. The kernel expires it,
+and a firewall reload empties the sets, so they fail closed. Open and close
+are logged with `logger -t cnt-port`.
+
+- `--iface tailnet` (default) is tailscale0. `lan` needs
+  `ringofstorms.containers.lanInterface` on the host and is refused without
+  it. `any` means every interface and prints a warning.
+- `--from` (repeatable) takes a fleet host name (its `overlayIp`, plus
+  `overlayIp6` if the inventory has one) or an IP/CIDR.
+- The command refuses an http-route backend port of any service on that host
+  unless `--force-backend` is given. It answers "already open (declared)"
+  for ports the service already declares. It warns but continues when
+  nothing listens. It fails if the service isn't installed on the host.
+- `cnt port ls [host...]` lists the elements with their service and time
+  left. `cnt port close` takes the same `--from`/`--iface` as the open.
+  `--dry-run` prints the script.
+- The host module asserts `networking.nftables.enable`.
 
 ## Adding a service
 

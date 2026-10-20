@@ -94,6 +94,7 @@
 
           ./hardware-configuration.nix
           ./fleet-edge.nix
+          ./firewall.nix
         ]
         ++ lib.optionals constants.network.routerEnable [
           ./mods

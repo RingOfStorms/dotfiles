@@ -45,6 +45,8 @@ type Host struct {
 	User      string  `json:"user"`
 	OverlayIP *string `json:"overlayIp"`
 	LanIP     *string `json:"lanIp"`
+	// Optional tailnet v6 (not in fleet.nix today; used by `cnt port --from`).
+	OverlayIP6 *string `json:"overlayIp6"`
 }
 
 type Inventory struct {
@@ -97,8 +99,17 @@ commands:
   routes [svc]                 declared routes (fqdn, port, exposure, auth, host)
   audit [host...] [--stdin]    non-loopback listeners on hosts vs declared ports (read-only)
                                --stdin reads 'ss -ltnupH' output from stdin for one host
-                               instead of ssh (e.g. when sudo there needs a password):
-                                 ssh host sudo ss -ltnupH | containers audit host --stdin
+                               instead of ssh (when sudo there needs a password; plain
+                               ssh has no TTY to prompt). Run on the host itself:
+                                 sudo ss -ltnupH > /tmp/host.ss && cnt audit host --stdin < /tmp/host.ss
+                               or collect with 'ssh -t'. Empty input is an error.
+  port open <svc> <port>/<tcp|udp> --for DUR [--from host|cidr]... [--iface tailnet|lan|any]
+            [--host h] [--force-backend]
+                               open a port for a while (max 24h); nft set elements that the
+                               kernel expires (no other state). --iface default tailnet
+  port ls [host...]            temporarily open ports, their service and time left
+  port close <svc> <port>/<proto> [--from ...] [--iface ...] [--host h]
+                               close one early (same --from/--iface as the open)
   status-server --listen ADDR [--host NAME]
                                read-only GET /status.json for fleet-edge (run by the host module)
   check-idmap <host>           test idmapped mounts on /srv/containers and /nix
@@ -174,6 +185,8 @@ func main() {
 		err = cmdRoutes(rest)
 	case "audit":
 		err = cmdAudit(rest)
+	case "port":
+		err = cmdPort(rest)
 	case "status-server":
 		err = cmdStatusServer(rest)
 	case "check-idmap":

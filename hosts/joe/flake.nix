@@ -134,6 +134,7 @@
           ./containers.nix
           ./homepage-dashboard.nix
           ./nginx.nix
+          ./firewall.nix
           (import ./impermanence.nix {
             inherit primaryUser;
             impermanence_mod = inputs.impermanence_mod;

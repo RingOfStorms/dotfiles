@@ -99,6 +99,7 @@
 
           inputs.containers.nixosModules.default
           ./containers.nix
+          ./firewall.nix
           ../containers-status.nix
         ]
         ++ lib.optionals (overlayIp != null) [

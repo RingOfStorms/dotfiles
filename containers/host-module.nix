@@ -166,6 +166,15 @@ in
         description = "ADDR:PORT to listen on, normally the host's overlay IP. Required when enabled (never a wildcard).";
       };
     };
+    lanInterface = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "enp3s0";
+      description = ''
+        The host's LAN interface, for `cnt port open --iface lan` (written to
+        /etc/fleet-containers/lan-interface). null: `--iface lan` is refused.
+      '';
+    };
     privateNetwork = {
       enable = lib.mkOption {
         type = lib.types.bool;
@@ -193,6 +202,40 @@ in
         in service.nix is only deployed or moved to hosts that list them all
         (the CLI checks /etc/fleet-containers/capabilities/<name>).
       '';
+    };
+    publishedPorts = lib.mkOption {
+      default = [ ];
+      description = ''
+        Source filters for podman ports published on a host address. netavark
+        DNATs published ports in prerouting, so nixos-fw's input rules never
+        see them. Each entry adds, in a prerouting chain before netavark's
+        dstnat: accept from `from`, drop everyone else, for new and existing
+        flows to address:port (the pre-DNAT destination).
+      '';
+      type = lib.types.listOf (
+        lib.types.submodule {
+          options = {
+            address = lib.mkOption { type = lib.types.str; };
+            port = lib.mkOption { type = lib.types.port; };
+            proto = lib.mkOption {
+              type = lib.types.enum [
+                "tcp"
+                "udp"
+              ];
+              default = "tcp";
+            };
+            from = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [ ];
+              description = "Allowed source addresses/CIDRs (v4 and v6 may be mixed).";
+            };
+            comment = lib.mkOption {
+              type = lib.types.str;
+              default = "published port";
+            };
+          };
+        }
+      );
     };
     guards = lib.mkOption {
       default = { };
@@ -261,9 +304,42 @@ in
           "d ${holdDir} 0755 root root -"
         ];
 
-        environment.etc = lib.listToAttrs (
-          map (c: lib.nameValuePair "fleet-containers/capabilities/${c}" { text = ""; }) cfg.capabilities
-        );
+        environment.etc =
+          lib.listToAttrs (
+            map (c: lib.nameValuePair "fleet-containers/capabilities/${c}" { text = ""; }) cfg.capabilities
+          )
+          // lib.optionalAttrs (cfg.lanInterface != null) {
+            "fleet-containers/lan-interface".text = cfg.lanInterface;
+          };
+
+        # `cnt port open` (ROUTING-PLAN §8 step 2): temporary ports as nft set
+        # elements with timeouts; the kernel expires them and a firewall
+        # reload empties the sets (fail closed). ifname "any" is a sentinel
+        # the CLI uses for --iface any; the const rules below match it on
+        # every interface. Elements carry comment "svc=<svc>".
+        assertions = [
+          {
+            assertion = config.networking.nftables.enable;
+            message = "ringofstorms.containers needs networking.nftables.enable = true (cnt port uses nft sets in inet nixos-fw).";
+          }
+        ];
+        networking.nftables.tables.nixos-fw.content = lib.mkAfter ''
+          set cnt-tmp {
+            comment "cnt port open: ifname . proto . port"
+            type ifname . inet_proto . inet_service
+            flags timeout
+          }
+          set cnt-tmp4 {
+            comment "cnt port open --from (v4)"
+            type ifname . inet_proto . inet_service . ipv4_addr
+            flags interval,timeout
+          }
+          set cnt-tmp6 {
+            comment "cnt port open --from (v6)"
+            type ifname . inet_proto . inet_service . ipv6_addr
+            flags interval,timeout
+          }
+        '';
 
         # Re-adds runtime ports after every firewall start or reload
         # (flushRuleset wipes them).
@@ -368,10 +444,41 @@ in
             }
           '';
         };
+        # See publishedPorts. Runs before netavark's dstnat (priority -100) and
+        # lives in its own declarative table, so podman restarts can't remove it.
+        networking.nftables.tables.fleet-publish = lib.mkIf (cfg.publishedPorts != [ ]) {
+          family = "inet";
+          content = ''
+            chain prerouting {
+              type filter hook prerouting priority dstnat - 10; policy accept;
+            ${lib.concatMapStrings (
+              p:
+              let
+                fam = if lib.hasInfix ":" p.address then "ip6" else "ip";
+                from = builtins.filter (a: (lib.hasInfix ":" a) == (fam == "ip6")) p.from;
+              in
+              lib.optionalString (from != [ ]) ''
+                ${fam} daddr ${p.address} ${p.proto} dport ${toString p.port} ${fam} saddr { ${lib.concatStringsSep ", " from} } accept comment "${p.comment}"
+              ''
+              + ''
+                ${fam} daddr ${p.address} ${p.proto} dport ${toString p.port} drop comment "${p.comment}: other sources"
+              ''
+            ) cfg.publishedPorts}
+            }
+          '';
+        };
+
         # DNS (aardvark-dns on the bridge) for containers that are online.
         # Only reachable here once the chain above let the packet through.
+        # Then the `cnt port` sets declared above.
         networking.firewall.extraInputRules = ''
           iifname "fleet-noinet" meta l4proto { tcp, udp } th dport 53 accept
+          iifname . meta l4proto . th dport @cnt-tmp accept comment "cnt port"
+          "any" . meta l4proto . th dport @cnt-tmp accept comment "cnt port --iface any"
+          iifname . meta l4proto . th dport . ip saddr @cnt-tmp4 accept comment "cnt port --from"
+          "any" . meta l4proto . th dport . ip saddr @cnt-tmp4 accept comment "cnt port --iface any --from"
+          iifname . meta l4proto . th dport . ip6 saddr @cnt-tmp6 accept comment "cnt port --from v6"
+          "any" . meta l4proto . th dport . ip6 saddr @cnt-tmp6 accept comment "cnt port --iface any --from v6"
         '';
       }
 
