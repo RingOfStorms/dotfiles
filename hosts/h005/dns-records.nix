@@ -130,5 +130,43 @@ in
         records = gen ++ hand;
         # home's A record is written by the DDNS timer (mods/ddns.nix).
         external = [ "home" ];
+        # Deleted by `fleet-edge dns-plan --apply` only while the live record
+        # matches name, type and value exactly (else: retire-mismatch, no
+        # writes at all). Retired 2026-10-21: dead services and old hosts;
+        # docs leaked h001's overlay IP publicly. Keep entries until a later
+        # plan shows them gone, then they can be dropped from this list.
+        retire = [
+          {
+            name = "docs";
+            type = "A";
+            value = "100.64.0.13";
+          }
+          {
+            name = "l001";
+            type = "A";
+            value = "172.236.111.33";
+          }
+          {
+            name = "o001";
+            type = "A";
+            value = "64.181.210.7";
+          }
+        ]
+        ++
+          map
+            (name: {
+              inherit name;
+              type = "CNAME";
+              value = "o002.${domain}";
+            })
+            [
+              "element"
+              "etebase"
+              "kura"
+              "matrix"
+              "n8n"
+              "pim"
+              "pkm"
+            ];
       };
 }

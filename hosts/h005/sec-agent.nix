@@ -27,6 +27,9 @@ import ../sec-agent.nix {
       softDepend = [ "ddns-update" ];
       configChanges.security.acme.certs."ts.joshuabell.xyz".credentialFiles.BUNNY_API_KEY_FILE =
         "$SECRET_PATH";
+      # Public wildcard (wildcard-cert.nix), pushed to o002 and h001.
+      configChanges.security.acme.certs."joshuabell.xyz".credentialFiles.BUNNY_API_KEY_FILE =
+        "$SECRET_PATH";
     };
   };
 }

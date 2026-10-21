@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -33,15 +34,18 @@ func envDefault(key, def string) string {
 	return def
 }
 
-// dnsPlan: `fleet-edge dns-plan --spec records.json --key-file f`.
-// Read-only: fetches the zone and prints what a reconcile would do
-// (ROUTING-PLAN §8 step 4). There is no apply yet.
+// dnsPlan: `fleet-edge dns-plan --spec records.json --key-file f [--apply]`.
+// Fetches the zone and prints what a reconcile would do (ROUTING-PLAN §8
+// step 4). With --apply it then executes only the create/update/retire rows
+// (refusing the whole plan on any conflict or retire-mismatch).
 func dnsPlan(args []string) {
 	fs := flag.NewFlagSet("dns-plan", flag.ExitOnError)
 	specFile := fs.String("spec", "", "desired records JSON (generated on h005)")
 	keyFile := fs.String("key-file", "", "file holding the bunny API key")
 	zoneFile := fs.String("zone-json", "", "use this saved zone JSON instead of the API (offline)")
+	apply := fs.Bool("apply", false, "execute creates, updates and exact-match retires")
 	_ = fs.Parse(args)
+	var client *bunny.Client
 	spec, err := bunny.LoadSpec(*specFile)
 	if err != nil {
 		log.Fatal(err)
@@ -61,14 +65,38 @@ func dnsPlan(args []string) {
 		if err != nil {
 			log.Fatal(err)
 		}
+		client = &bunny.Client{Key: strings.TrimSpace(string(key))}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		z, err = (&bunny.Client{Key: strings.TrimSpace(string(key))}).ZoneByDomain(ctx, spec.Zone)
+		z, err = client.ZoneByDomain(ctx, spec.Zone)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
-	bunny.Render(os.Stdout, spec.Zone, bunny.Plan(spec, z))
+	plan := bunny.Plan(spec, z)
+	bunny.Render(os.Stdout, spec.Zone, plan)
+	ops, err := bunny.Ops(z.ID, plan)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("\n%d operations:\n", len(ops))
+	for _, op := range ops {
+		fmt.Printf("  %-6s %s  (%s %s %s)\n", op.Method, op.Path, op.Change.Action, op.Change.Name, op.Change.Type)
+	}
+	if !*apply {
+		fmt.Println("dry run; pass --apply to execute")
+		return
+	}
+	if client == nil {
+		log.Fatal("--apply needs the API (no --zone-json)")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	err = client.Apply(ctx, ops, func(op bunny.Op) { fmt.Printf("done   %s %s\n", op.Method, op.Path) })
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("applied %d operations\n", len(ops))
 }
 
 func main() {

@@ -5,10 +5,12 @@
 // routes plus a hand-kept list (hosts/h005). Plan compares it with the live
 // zone and never touches a record it doesn't own: records in the zone that
 // aren't declared are reported as unmanaged and left alone. There is no
-// write path in this package yet; the first runs are diff only.
+// write path except Apply, which only executes a plan's create/update/retire
+// rows; retire deletes only records listed exactly (name, type, value).
 package bunny
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -66,6 +68,17 @@ type Spec struct {
 	// External lists names written by something else on purpose (e.g. the
 	// DDNS updater owns "home"). They are reported as such, never planned.
 	External []string `json:"external"`
+	// Retire lists records to delete: only a live record matching name,
+	// type and value exactly is deleted. Anything else under that name is
+	// reported as retire-mismatch and blocks Apply.
+	Retire []Retired `json:"retire"`
+}
+
+// Retired is one record to delete.
+type Retired struct {
+	Name  string `json:"name"`
+	Type  string `json:"type"`
+	Value string `json:"value"`
 }
 
 // Action kinds.
@@ -76,6 +89,10 @@ const (
 	Conflict  = "conflict"  // declared name exists with another type: needs a human
 	External  = "external"  // owned by another writer (DDNS)
 	Unmanaged = "unmanaged" // in the zone, not declared: left alone
+	Retire    = "retire"    // listed in Retire and matching exactly: delete
+	// RetireMismatch: a Retire entry's name exists with another type or
+	// value. Never deleted; blocks Apply until the list is fixed.
+	RetireMismatch = "retire-mismatch"
 )
 
 // Change is one line of the plan.
@@ -87,6 +104,9 @@ type Change struct {
 	New    string // value/ttl wanted
 	ID     int64
 	Source string
+	// wanted record, for Apply (create/update)
+	Value string
+	TTL   int
 }
 
 // LoadSpec reads the desired record set.
@@ -132,6 +152,16 @@ func (s *Spec) Validate() error {
 			return fmt.Errorf("%s: ttl %d < 60", d.Name, d.TTL)
 		}
 	}
+	for _, r := range s.Retire {
+		if _, err := typeNumber(r.Type); err != nil || r.Name == "" || r.Value == "" {
+			return fmt.Errorf("retire %q %s %q: need name, a known type and value", r.Name, r.Type, r.Value)
+		}
+		for _, d := range s.Records {
+			if strings.EqualFold(d.Name, r.Name) {
+				return fmt.Errorf("retire %s: name is also declared", r.Name)
+			}
+		}
+	}
 	return nil
 }
 
@@ -150,6 +180,10 @@ func Plan(spec *Spec, z *Zone) []Change {
 	for _, r := range z.Records {
 		byName[strings.ToLower(r.Name)] = append(byName[strings.ToLower(r.Name)], r)
 	}
+	retire := map[string]Retired{}
+	for _, r := range spec.Retire {
+		retire[strings.ToLower(r.Name)] = r
+	}
 	declared := map[string]bool{}
 	for _, d := range spec.Records {
 		name := strings.ToLower(d.Name)
@@ -162,7 +196,7 @@ func Plan(spec *Spec, z *Zone) []Change {
 				other = append(other, r)
 			}
 		}
-		c := Change{Name: d.Name, Type: d.Type, New: fmtVal(d.Value, d.TTL), Source: d.Source}
+		c := Change{Name: d.Name, Type: d.Type, New: fmtVal(d.Value, d.TTL), Source: d.Source, Value: d.Value, TTL: d.TTL}
 		switch {
 		case len(same) == 1:
 			r := same[0]
@@ -191,9 +225,19 @@ func Plan(spec *Spec, z *Zone) []Change {
 		if external[name] {
 			a = External
 		}
-		out = append(out, Change{Action: a, Name: r.Name, Type: TypeName(r.Type), Old: fmtVal(r.Value, r.TTL), ID: r.ID})
+		src := ""
+		if rt, ok := retire[name]; ok {
+			src = "retire list"
+			if rt.Type == TypeName(r.Type) && norm(rt.Value) == norm(r.Value) {
+				a = Retire
+			} else {
+				a = RetireMismatch
+				src = fmt.Sprintf("retire list wants %s %s", rt.Type, rt.Value)
+			}
+		}
+		out = append(out, Change{Action: a, Name: r.Name, Type: TypeName(r.Type), Old: fmtVal(r.Value, r.TTL), ID: r.ID, Source: src})
 	}
-	order := map[string]int{Conflict: 0, Create: 1, Update: 2, Keep: 3, External: 4, Unmanaged: 5}
+	order := map[string]int{Conflict: 0, RetireMismatch: 0, Create: 1, Update: 2, Retire: 3, Keep: 4, External: 5, Unmanaged: 6}
 	sort.SliceStable(out, func(i, j int) bool {
 		if order[out[i].Action] != order[out[j].Action] {
 			return order[out[i].Action] < order[out[j].Action]
@@ -229,11 +273,11 @@ func Render(w io.Writer, zone string, plan []Change) {
 		}
 		fmt.Fprintln(w, strings.TrimRight(line, " "))
 	}
-	fmt.Fprintf(w, "\n%s: %d create, %d update, %d conflict, %d keep, %d external, %d unmanaged (never deleted)\n",
-		zone, counts[Create], counts[Update], counts[Conflict], counts[Keep], counts[External], counts[Unmanaged])
+	fmt.Fprintf(w, "\n%s: %d create, %d update, %d retire, %d conflict, %d retire-mismatch, %d keep, %d external, %d unmanaged (never deleted)\n",
+		zone, counts[Create], counts[Update], counts[Retire], counts[Conflict], counts[RetireMismatch], counts[Keep], counts[External], counts[Unmanaged])
 }
 
-// Client reads zones from the bunny API. Read-only on purpose.
+// Client talks to the bunny API. Only Apply writes.
 type Client struct {
 	Key  string
 	Base string // default https://api.bunny.net
@@ -276,4 +320,122 @@ func (c *Client) ZoneByDomain(ctx context.Context, domain string) (*Zone, error)
 		}
 	}
 	return nil, fmt.Errorf("zone %s not found in bunny", domain)
+}
+
+func (c *Client) base() string {
+	if c.Base == "" {
+		return "https://api.bunny.net"
+	}
+	return c.Base
+}
+
+func (c *Client) do(ctx context.Context, method, path string, body any, want int) error {
+	hc := c.HTTP
+	if hc == nil {
+		hc = &http.Client{Timeout: 20 * time.Second}
+	}
+	var rd io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		rd = bytes.NewReader(b)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, c.base()+path, rd)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("AccessKey", c.Key)
+	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	if resp.StatusCode != want && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("bunny %s %s: %s", method, path, resp.Status)
+	}
+	return nil
+}
+
+func typeNumber(name string) (int, error) {
+	for n, s := range typeNames {
+		if s == name {
+			return n, nil
+		}
+	}
+	return 0, fmt.Errorf("unknown record type %s", name)
+}
+
+// Op is one write Apply performed (or would perform).
+type Op struct {
+	Method string
+	Path   string
+	Change Change
+}
+
+// Ops turns a plan into the API calls for its create, update and retire
+// rows, in that order. It refuses the whole plan if any row is a conflict
+// or retire-mismatch, so nothing is written while a human is needed.
+func Ops(zoneID int64, plan []Change) ([]Op, error) {
+	var ops []Op
+	for _, c := range plan {
+		switch c.Action {
+		case Conflict, RetireMismatch:
+			return nil, fmt.Errorf("refusing to apply: %s %s %s (%s); fix the spec first", c.Action, c.Name, c.Type, c.Old)
+		}
+	}
+	for _, want := range []string{Create, Update, Retire} {
+		for _, c := range plan {
+			if c.Action != want {
+				continue
+			}
+			switch want {
+			case Create:
+				ops = append(ops, Op{"PUT", fmt.Sprintf("/dnszone/%d/records", zoneID), c})
+			case Update:
+				ops = append(ops, Op{"POST", fmt.Sprintf("/dnszone/%d/records/%d", zoneID, c.ID), c})
+			case Retire:
+				if c.ID == 0 {
+					return nil, fmt.Errorf("retire %s: no record id", c.Name)
+				}
+				ops = append(ops, Op{"DELETE", fmt.Sprintf("/dnszone/%d/records/%d", zoneID, c.ID), c})
+			}
+		}
+	}
+	return ops, nil
+}
+
+// Apply executes ops in order and stops at the first error. done reports
+// each op that succeeded (for the log).
+func (c *Client) Apply(ctx context.Context, ops []Op, done func(Op)) error {
+	for _, op := range ops {
+		var body any
+		want := http.StatusNoContent
+		if op.Method != http.MethodDelete {
+			t, err := typeNumber(op.Change.Type)
+			if err != nil {
+				return err
+			}
+			body = map[string]any{"Type": t, "Name": op.Change.Name, "Value": op.Change.Value, "Ttl": op.Change.TTL}
+			if op.Method == "POST" {
+				body.(map[string]any)["Id"] = op.Change.ID
+			}
+			if op.Method == "PUT" {
+				want = http.StatusCreated
+			}
+		}
+		if err := c.do(ctx, op.Method, op.Path, body, want); err != nil {
+			return err
+		}
+		if done != nil {
+			done(op)
+		}
+	}
+	return nil
 }

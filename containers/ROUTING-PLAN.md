@@ -671,17 +671,26 @@ Taken 2026-10-16:
      the old `docs` A record; never replaced automatically) / **external**
      (`home`, written by DDNS) / **unmanaged** (everything else: mail,
      DKIM, old names; never deleted). Ownership = the spec; anything not
-     in it is someone else's. Apply (next): write only create/update rows,
-     one batch per run, then re-plan to confirm. Deleting a name means
-     moving it to an explicit `retire` list, never just dropping it. DDNS
-     stays the `ddns-update` timer for now and folds in later as a spec
-     entry with a dynamic value.
-   - **Certificates: one wildcard issued on h005.** `*.joshuabell.xyz` +
-     apex via DNS-01 on h005 (the key is already there), pushed to sec, and
-     o002 and h001 pull it on a timer and reload nginx (§6 item 15). That
-     retires o002's per-name http-01 and h001's bunny key. Until the
-     distribution path exists, o002 keeps per-name certs (they work,
-     and a new public name only needs its CNAME).
+     in it is someone else's. **Applied 2026-10-21** with
+     `fleet-edge dns-plan --apply`: it executes only create/update rows and
+     exact-match `retire` rows (name + type + value in `publicSpec.retire`),
+     and refuses the whole run on any conflict or `retire-mismatch`. First
+     apply: 19 TTL updates (3600→300) + 10 retires (docs A 100.64.0.13,
+     l001, o001, element, etebase, kura, matrix, n8n, pim, pkm); re-plan
+     0/0/0. The pre-apply plan (old values = rollback data) is in
+     `/root/bunny-backup/` on h005. DDNS stays the `ddns-update` timer for
+     now and folds in later as a spec entry with a dynamic value.
+   - **Certificates: one wildcard issued on h005, pushed (not via sec).**
+     sec can't carry it: only the `admin` role may write, only to existing
+     paths, so a machine can't publish a renewal. `hosts/h005/wildcard-cert.nix`
+     issues `joshuabell.xyz` + `*.joshuabell.xyz` (DNS-01, bunny key from
+     sec-agent) and `wildcard-push` sends the pair over root SSH (nix2nix
+     key, pinned host keys) to o002 and h001 after each issue/renew + daily.
+     `hosts/wildcard-cert-receiver.nix` validates (expiry, key matches cert),
+     swaps the files under `/var/lib/fleet-cert/<domain>/` and reloads nginx.
+     Vhosts opt in with `config.fleet.wildcardTls` (lib `edgeVirtualHosts`
+     already takes `tls`). Not §9.2: no container grant involved. Then
+     h001 drops its own ACME cert and bunny grant. **Code done, not deployed.**
    - **Router forwards: build-time too.** `lib.nix` `routerForwards` lists
      public `via = router` tcp/udp routes of services with a host → DNAT to
      the host's LAN IP (`networking.nat.forwardPorts`) plus one exact
@@ -690,8 +699,13 @@ Taken 2026-10-16:
      answers the LAN IP). Inactive service (`host = null`) → no forward.
      minecraft is converted (`routes.game` tcp 25565 via router,
      `routes.web` = squaremap at `computerboyz` via edge). Code done,
-     **not deployed**.
-   - **Order**: DNS (done) → bunny apply (TTL-only diff today) →
+     **not deployed**. **Before re-enabling** (minecraft stays off by
+     decision): a tcp/udp route has `fqdn = null`, so `dnsRecords` gives it
+     no tailnet or LAN record; `minecraft` only exists as the public CNAME
+     → `home`, and with no hairpin NAT a LAN player resolving it gets the
+     WAN IP and fails. Give raw routes a DNS name first (tailnet/LAN →
+     host IP, public → `home`).
+   - **Order**: DNS (done) → bunny apply (done) →
      minecraft (restore on a LAN host, set `host`, deploy, rebuild h005
      for the forward, rebuild o002 for the generated `computerboyz`, drop
      its hand vhost and hand CNAME) → wildcard on h005 + distribution →

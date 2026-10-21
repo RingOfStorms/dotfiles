@@ -94,6 +94,7 @@
           ./hardware-configuration.nix
           ./configuration.nix
           ./nginx.nix
+          ../../wildcard-cert-receiver.nix
           ./headscale.nix
         ] ++ impermanenceModules;
       };

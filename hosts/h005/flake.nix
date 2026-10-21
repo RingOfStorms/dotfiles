@@ -101,6 +101,7 @@
           ./mods
           # Needs the bunny key, which sec-agent only fetches in router mode.
           ./private-zone.nix
+          ./wildcard-cert.nix
         ]
         ++ lib.optionals (overlayIp != null) [
           inputs.beszel.nixosModules.agent
