@@ -14,10 +14,19 @@ import ../sec-agent.nix {
       mode = "0400";
       hardDepend = [ "atuin-autologin" ];
     };
-  } // inputs.nixpkgs.lib.optionalAttrs constants.network.routerEnable {
+  }
+  // inputs.nixpkgs.lib.optionalAttrs constants.network.routerEnable {
     hass_isp_speedtest_token = {
       remotePath = "machines/by-host/h005/hass_isp_speedtest_token";
       softDepend = [ "h005-isp-speedtest" ];
+    };
+
+    # Fleet oauth2-proxy (oauth2-proxy.nix): same env file as the legacy
+    # trilium instance on h001 (client id/secret + cookie secret).
+    # Loaded via systemd EnvironmentFile (root), so default owner/mode.
+    oauth2_proxy_key_file_2026-03-15 = {
+      remotePath = "machines/high-trust/oauth2_proxy_key_file_2026-03-15";
+      softDepend = [ "oauth2-proxy" ];
     };
 
     # Shared with h001's ACME DNS-01 credential. Also DNS-01 for the

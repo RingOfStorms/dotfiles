@@ -14,46 +14,23 @@ let
     inherit (fleet) hosts;
   };
 
-  # Unconverted h001 services (nginx strings / host modules): trilium
-  # (notes, sso-proxy), arr (jellyfin, media = seerr, books = kavita).
-  handTailnet =
-    map
-      (n: {
-        fqdn = "${n}.${domain}";
-        ip = h001.overlayIp;
-        source = "hand (h005/dns-records.nix)";
-      })
-      [
-        "jellyfin"
-        "media"
-        "books"
-        "notes"
-        "sso-proxy"
-      ]
-    ++ [
-      # Fully-qualified tailnet alias. ~joshuabell.xyz split DNS wins over
-      # MagicDNS's net.joshuabell.xyz zone, so it has to be answered here.
-      {
-        fqdn = "secrets.h001.net.${domain}";
-        ip = h001.overlayIp;
-        source = "hand (h005/dns-records.nix)";
-      }
-    ];
-
-  # LAN answers for unconverted h001 services (were _constants.nix
-  # localDnsRecords).
-  handLan =
-    map
-      (n: {
-        fqdn = "${n}.${domain}";
-        ip = h001.lanIp;
-        source = "hand (h005/dns-records.nix)";
-      })
-      [
-        "media"
-        "jellyfin"
-        "books"
-      ];
+  # notes is a generated route now (containers/trilium). sso-proxy is the
+  # fleet oauth2-proxy's sign-in host on h005 (oauth2-proxy.nix);
+  # tailnet-only (no public CNAME, no LAN record).
+  handTailnet = [
+    {
+      fqdn = "sso-proxy.${domain}";
+      ip = fleet.hosts.h005.overlayIp;
+      source = "hand (h005/oauth2-proxy.nix)";
+    }
+    # Fully-qualified tailnet alias. ~joshuabell.xyz split DNS wins over
+    # MagicDNS's net.joshuabell.xyz zone, so it has to be answered here.
+    {
+      fqdn = "secrets.h001.net.${domain}";
+      ip = h001.overlayIp;
+      source = "hand (h005/dns-records.nix)";
+    }
+  ];
 
   merge =
     what: gen: hand:
@@ -68,7 +45,8 @@ let
 in
 {
   tailnet = merge "tailnet" generated.tailnet handTailnet;
-  lan = merge "lan" generated.lan handLan;
+  # No hand LAN names left (trilium is tailnet-only; arr is generated).
+  lan = generated.lan;
   public = generated.public;
 
   # Desired bunny zone for `fleet-edge dns-plan` (ROUTING-PLAN §8 step 4).
@@ -107,15 +85,10 @@ in
           source = "hand (headscale on o002)";
         }
       ]
-      # o002 hand vhosts (hosts/oracle/o002/nginx.nix) and unconverted h001 services.
+      # o002 hand vhosts (hosts/oracle/o002/nginx.nix).
       ++ map (cname "o002") [
         "www"
         "computerboyz"
-        "notes"
-        "sso-proxy"
-        "jellyfin"
-        "books"
-        "media"
       ]
       # minecraft: router path (step 4, router forwards).
       ++ map (cname "home") [ "minecraft" ];
@@ -167,6 +140,11 @@ in
               "n8n"
               "pim"
               "pkm"
+              # trilium made tailnet-only 2026-10-21.
+              "notes"
+              "sso-proxy"
+              # kavita made tailnet-only 2026-10-21.
+              "books"
             ];
       };
 }

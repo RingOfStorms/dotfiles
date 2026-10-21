@@ -16,8 +16,10 @@ let
     "chat.joshuabell.xyz"
     "gist.joshuabell.xyz"
     "git.joshuabell.xyz"
+    "jellyfin.joshuabell.xyz"
     "life.joshuabell.xyz"
     "location.joshuabell.xyz"
+    "media.joshuabell.xyz"
     "photos.joshuabell.xyz"
     "puzzles.joshuabell.xyz"
     "secrets.joshuabell.xyz"
@@ -34,7 +36,11 @@ let
       msg = "names: ${builtins.toJSON names}";
     }
     {
-      ok = !(v ? "docs.joshuabell.xyz") && !(v ? "litellm.joshuabell.xyz");
+      ok =
+        !(v ? "docs.joshuabell.xyz")
+        && !(v ? "litellm.joshuabell.xyz")
+        && !(v ? "books.joshuabell.xyz")
+        && !(v ? "notes.joshuabell.xyz");
       msg = "tailnet routes must not reach the edge";
     }
     {

@@ -20,8 +20,8 @@
 
   backupHook = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
 
-  # Tailnet-only (not proxied by o002); the allow/deny keeps that enforced in
-  # nginx until the internal listener split (ROUTING-PLAN §2.3).
+  # Tailnet-only (not proxied by o002); the internal server includes
+  # nginx-acl-tailnet.conf from host-module.nix (ROUTING-PLAN §2.1).
   routes.web = {
     group = "Productivity";
     port = 28981;
@@ -33,9 +33,6 @@
     extraConfig = ''
       proxy_set_header X-Forwarded-Host $host;
       send_timeout 600s;
-      allow 100.64.0.0/10;
-      allow 127.0.0.0/8;
-      deny all;
     '';
   };
 }

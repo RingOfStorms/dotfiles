@@ -14,8 +14,8 @@
     nixos = "/var/lib/nixos";
   };
 
-  # Tailnet-only (not proxied by o002); the allow/deny keeps that enforced in
-  # nginx until the internal listener split (ROUTING-PLAN §2.3). Streaming
+  # Tailnet-only (not proxied by o002); the internal server includes
+  # nginx-acl-tailnet.conf from host-module.nix (ROUTING-PLAN §2.1). Streaming
   # completions: no proxy buffering, long timeouts.
   routes.web = {
     group = "AI";
@@ -27,9 +27,6 @@
     timeouts = "600s";
     extraConfig = ''
       send_timeout 600s;
-      allow 100.64.0.0/10;
-      allow 127.0.0.0/8;
-      deny all;
     '';
   };
 }

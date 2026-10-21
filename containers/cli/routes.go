@@ -46,6 +46,9 @@ type Route struct {
 	RequestBuffering *bool  `json:"requestBuffering"`
 	ForwardedProto   string `json:"forwardedProto"`
 	ExtraConfig      string `json:"extraConfig"`
+	// auth = oauth2-proxy only: zitadel roles (any of), unauthenticated path prefixes.
+	Groups []string `json:"groups"`
+	Bypass []string `json:"bypass"`
 }
 
 func sortedRouteNames(s Service) []string {
@@ -97,10 +100,30 @@ func validateRoutes(s Service) error {
 		if r.Proto == "http" && r.FQDN == nil {
 			return fmt.Errorf("%s: http route without fqdn (old lib.nix?)", where)
 		}
+		if (len(r.Groups) > 0 || len(r.Bypass) > 0) && str(r.Auth) != "oauth2-proxy" {
+			return fmt.Errorf("%s: groups/bypass only apply to auth oauth2-proxy", where)
+		}
+		for _, g := range r.Groups {
+			if g == "" || strings.Trim(g, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-") != "" {
+				return fmt.Errorf("%s: group %q is not allowed", where, g)
+			}
+		}
+		for _, p := range r.Bypass {
+			if !strings.HasPrefix(p, "/") || strings.Trim(p, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./-") != "" {
+				return fmt.Errorf("%s: bypass %q is not allowed", where, p)
+			}
+		}
 		// Values pasted into nginx: no statement injection via ; { } or newlines.
 		for _, v := range []string{str(r.FQDN), r.MaxBody, r.Timeouts, r.ForwardedProto} {
 			if strings.ContainsAny(v, "; {}\n\t\"'$") {
 				return fmt.Errorf("%s: value %q is not allowed in nginx config", where, v)
+			}
+		}
+		// Location-level allow/deny replaces (not extends) the server-level
+		// exposure ACL (writeExposureACL), so it could widen a route.
+		for _, l := range strings.Split(r.ExtraConfig, "\n") {
+			if f := strings.Fields(l); len(f) > 0 && (f[0] == "allow" || f[0] == "deny" || f[0] == "satisfy") {
+				return fmt.Errorf("%s: extraConfig must not set %s (exposure is the ACL)", where, f[0])
 			}
 		}
 	}
@@ -139,9 +162,9 @@ func isEdgeRoute(r Route) bool {
 //     returns 444 unless the TCP peer ($realip_remote_addr) is the edge,
 //     and only it trusts X-Forwarded-For (real_ip) from the edge.
 //
-// tailnet and lan routes get only the internal server; their per-source
-// allow lists come with fleet-edge (step 4). Returns "" when nothing is
-// exposed.
+// tailnet and lan routes get only the internal server. Their source ACL
+// (§2.1: enforced by transport peer, never DNS) is an include written by
+// host-module.nix, see writeExposureACL. Returns "" when nothing is exposed.
 func routesVhost(s Service) string {
 	var b strings.Builder
 	for _, n := range sortedRouteNames(s) {
@@ -159,6 +182,7 @@ func routesVhost(s Service) string {
 		// Cert paths live in one place: host-module.nix nginx.tls.certDir.
 		b.WriteString("  include /etc/fleet-containers/nginx-tls.conf;\n")
 		b.WriteString("  if ($fleet_edge_block_internal) {\n    return 444;\n  }\n")
+		writeExposureACL(&b, r)
 		writeRouteBody(&b, r)
 		b.WriteString("}\n")
 		if !isEdgeRoute(r) {
@@ -176,13 +200,103 @@ func routesVhost(s Service) string {
 	return b.String()
 }
 
-// writeRouteBody writes client_max_body_size and the proxy location.
+// writeExposureACL restricts the internal server to the route's exposure
+// (ROUTING-PLAN §2.1). The CIDRs live in Nix: host-module.nix writes
+// /etc/fleet-containers/nginx-acl-{tailnet,lan}.conf (allow ...; deny all;).
+// Server level, so every location (incl. /oauth2/ and the auth_request
+// subrequest) inherits it; locations must not set their own allow/deny.
+// nginx runs allow/deny in the access phase before auth_request, and the
+// edge-peer 444 above (rewrite phase) before both. public: no ACL here
+// (LAN and tailnet use the internal listener; the edge server is separate).
+func writeExposureACL(b *strings.Builder, r Route) {
+	switch r.Exposure {
+	case "tailnet", "lan":
+		fmt.Fprintf(b, "  include /etc/fleet-containers/nginx-acl-%s.conf;\n", r.Exposure)
+	}
+}
+
+// Fleet oauth2-proxy (ROUTING-PLAN §4, §8 step 6). It runs on h005
+// (hosts/h005/oauth2-proxy.nix). auth_request subrequests go straight to it
+// over the tailnet (plain http inside WireGuard; h005's firewall admits 4180
+// only from container hosts). Browser login starts and ends on
+// oauth2SigninHost, the one redirect URI registered in zitadel; the session
+// cookie is on .joshuabell.xyz, so every gated vhost sees it. Keep these in
+// sync with hosts/h005/oauth2-proxy.nix.
+const (
+	oauth2Upstream   = "http://100.64.0.3:4180"
+	oauth2SigninHost = "sso-proxy.joshuabell.xyz"
+)
+
+// writeCookieStrip removes oauth2-proxy cookies (_oauth2_proxy, split
+// _oauth2_proxy_0.., _oauth2_proxy*_csrf) from what the backend sees, on
+// every route, gated or not: a compromised app never gets a fleet session.
+// Server-level `if`/`set` (rewrite phase) so the vhost needs nothing from
+// the host module. One cookie per round; four covers session + 2 splits + csrf.
+func writeCookieStrip(b *strings.Builder) {
+	b.WriteString("  # Strip oauth2-proxy cookies before the backend (ROUTING-PLAN §4).\n")
+	b.WriteString("  set $fleet_cookie $http_cookie;\n")
+	for i := 0; i < 4; i++ {
+		b.WriteString("  if ($fleet_cookie ~ \"^(.*?)(?:^|;\\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$\") {\n    set $fleet_cookie $1$2;\n  }\n")
+	}
+}
+
+// writeRouteBody writes client_max_body_size, the oauth2-proxy locations
+// for gated routes, and the proxy location(s).
 // X-Real-IP/$remote_addr is the TCP peer on the internal listener and the
 // client (from o002's X-Forwarded-For via real_ip) on the edge listener, so
 // the last X-Forwarded-For entry is trustworthy on both.
 func writeRouteBody(b *strings.Builder, r Route) {
 	fmt.Fprintf(b, "  client_max_body_size %s;\n", r.MaxBody)
-	b.WriteString("  location / {\n")
+	writeCookieStrip(b)
+	gated := str(r.Auth) == "oauth2-proxy"
+	if gated {
+		q := ""
+		if len(r.Groups) > 0 {
+			q = "?allowed_groups=" + strings.Join(r.Groups, ",")
+		}
+		b.WriteString("  # auth = oauth2-proxy: fleet oauth2-proxy on h005 (ROUTING-PLAN §8 step 6).\n")
+		b.WriteString("  location = /oauth2/auth {\n")
+		fmt.Fprintf(b, "    proxy_pass %s/oauth2/auth%s;\n", oauth2Upstream, q)
+		b.WriteString("    proxy_pass_request_body off;\n")
+		b.WriteString("    proxy_set_header Content-Length \"\";\n")
+		writeOauth2Headers(b)
+		b.WriteString("  }\n")
+		b.WriteString("  location /oauth2/ {\n")
+		fmt.Fprintf(b, "    proxy_pass %s;\n", oauth2Upstream)
+		writeOauth2Headers(b)
+		b.WriteString("  }\n")
+		b.WriteString("  location @fleet_oauth2_signin {\n")
+		fmt.Fprintf(b, "    return 302 https://%s/oauth2/start?rd=https://$host$request_uri;\n", oauth2SigninHost)
+		b.WriteString("  }\n")
+	}
+	writeProxyLocation(b, r, "/", gated)
+	if gated {
+		for _, p := range r.Bypass {
+			writeProxyLocation(b, r, "^~ "+p, false)
+		}
+	}
+}
+
+func writeOauth2Headers(b *strings.Builder) {
+	b.WriteString("    proxy_set_header Host $host;\n")
+	b.WriteString("    proxy_set_header X-Real-IP $remote_addr;\n")
+	b.WriteString("    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
+	b.WriteString("    proxy_set_header X-Forwarded-Proto https;\n")
+	b.WriteString("    proxy_set_header X-Forwarded-Host $host;\n")
+	b.WriteString("    proxy_set_header X-Forwarded-Uri $request_uri;\n")
+}
+
+func writeProxyLocation(b *strings.Builder, r Route, loc string, gated bool) {
+	fmt.Fprintf(b, "  location %s {\n", loc)
+	if gated {
+		b.WriteString("    auth_request /oauth2/auth;\n")
+		b.WriteString("    error_page 401 = @fleet_oauth2_signin;\n")
+		b.WriteString("    auth_request_set $fleet_auth_user $upstream_http_x_auth_request_user;\n")
+		b.WriteString("    auth_request_set $fleet_auth_email $upstream_http_x_auth_request_email;\n")
+		b.WriteString("    auth_request_set $fleet_auth_groups $upstream_http_x_auth_request_groups;\n")
+		b.WriteString("    auth_request_set $fleet_auth_cookie $upstream_http_set_cookie;\n")
+		b.WriteString("    add_header Set-Cookie $fleet_auth_cookie;\n")
+	}
 	fmt.Fprintf(b, "    proxy_pass http://127.0.0.1:%d;\n", r.Port)
 	b.WriteString("    proxy_http_version 1.1;\n")
 	if r.Websockets {
@@ -193,7 +307,18 @@ func writeRouteBody(b *strings.Builder, r Route) {
 	b.WriteString("    proxy_set_header X-Real-IP $remote_addr;\n")
 	b.WriteString("    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
 	fmt.Fprintf(b, "    proxy_set_header X-Forwarded-Proto %s;\n", r.ForwardedProto)
-	b.WriteString("    # TODO(ROUTING-PLAN §8 step 6): strip _oauth2_proxy* cookies before the backend.\n")
+	b.WriteString("    proxy_set_header Cookie $fleet_cookie;\n")
+	// Identity only from auth_request; always overwritten so clients can't
+	// inject it (empty = header not sent).
+	if gated {
+		b.WriteString("    proxy_set_header X-Auth-Request-User $fleet_auth_user;\n")
+		b.WriteString("    proxy_set_header X-Auth-Request-Email $fleet_auth_email;\n")
+		b.WriteString("    proxy_set_header X-Auth-Request-Groups $fleet_auth_groups;\n")
+	} else {
+		b.WriteString("    proxy_set_header X-Auth-Request-User \"\";\n")
+		b.WriteString("    proxy_set_header X-Auth-Request-Email \"\";\n")
+		b.WriteString("    proxy_set_header X-Auth-Request-Groups \"\";\n")
+	}
 	fmt.Fprintf(b, "    proxy_buffering %s;\n", onOff(r.Buffering))
 	if r.RequestBuffering != nil && !*r.RequestBuffering {
 		b.WriteString("    proxy_request_buffering off;\n")

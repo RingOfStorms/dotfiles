@@ -366,7 +366,7 @@ at the pinned version before relying on it):
 |---|---|---|---|
 | open-webui | native OIDC ✓ | `native-oidc` | API keys |
 | life | own auth + OIDC ✓ | `native-oidc` | — |
-| trilium | oauth2-proxy (own instance) ✓ | `oauth2-proxy` groups=notes | trilium sync clients (?) |
+| trilium | fleet oauth2-proxy ✓ (2026-10-21) | `oauth2-proxy` groups=notes, tailnet | trilium sync clients (no bypass yet) |
 | vaultwarden | native | `native` (SSO support ?) | **all Bitwarden apps**, so never gate |
 | atuin | native (sync key) | `native` | atuin CLI, so never gate |
 | forgejo | native | `native-oidc` (? supported) | git over https, SSH :3032 |
@@ -716,7 +716,58 @@ Taken 2026-10-16:
      and DKIM records (unmanaged).
 5. Private container networking, service by service, arr last.
 6. Fleet oauth2-proxy on h005 + per-route `auth`, with cookie stripping
-   from the first gated route.
+   from the first gated route. **Done 2026-10-21 (tailnet routes).**
+   - **Where**: `hosts/h005/oauth2-proxy.nix`, a host service rather than
+     a container. h005 is always on and already holds the wildcard. It
+     listens on `100.64.0.3:4180`; nftables admits 4180 only from the
+     container hosts (h001, h003, lio) on `tailscale0`, and those are the
+     only `trustedProxyIP`s.
+   - **How vhosts reach it**: **direct `auth_request` across the tailnet**,
+     not h005 fronting the routes. The host vhost keeps serving the app
+     (no extra hop, no h005 dependency for data), and `routes.go` renders,
+     per gated route, `location = /oauth2/auth` → `http://100.64.0.3:4180/oauth2/auth?allowed_groups=<groups>`,
+     `location /oauth2/` → the proxy (so `/oauth2/sign_out` etc. work on
+     every name), `error_page 401 = @fleet_oauth2_signin` →
+     `302 https://sso-proxy.joshuabell.xyz/oauth2/start?rd=https://$host$request_uri`,
+     and `X-Auth-Request-{User,Email,Groups}` to the app. h005 down →
+     auth_request fails → 500, so it fails closed.
+   - **Sign-in host**: `sso-proxy.joshuabell.xyz` is now h005 (tailnet DNS,
+     h005 nginx on its overlay IP, wildcard cert). It's the only redirect
+     URI in zitadel, so a new gated route needs no zitadel change. Same
+     client and sec key (`machines/high-trust/oauth2_proxy_key_file_2026-03-15`)
+     as the old trilium instance.
+   - **Cookie**: `_oauth2_proxy` on `.joshuabell.xyz`, Secure, HttpOnly,
+     SameSite=Lax, 168h, refresh 12h. `whitelist-domain=.joshuabell.xyz`.
+   - **Schema**: `auth = "oauth2-proxy"` plus optional `groups = [ "<zitadel role>" ]`
+     (any of; via the `flatRolesClaim` claim) and `bypass = [ "/api/" ]`
+     (unauthenticated `^~` prefix locations, for clients with their own
+     tokens). `allow` stays the *source host* list (§5.1), not groups.
+     lib.nix and `validateRoutes` refuse groups/bypass on other auth
+     values, odd characters, gated `zone = "private"` routes (h005's
+     private-zone vhosts have no auth_request yet) and **gated `public`
+     routes** (below).
+   - **Cookie stripping**: every generated server, gated or not, rewrites
+     `$http_cookie` minus every `_oauth2_proxy*` cookie into
+     `$fleet_cookie` and sends that as `Cookie`. Identity headers are
+     always overwritten (empty on ungated routes), so clients can't inject
+     them.
+   - **Edge vs tailnet**: the gate is rendered into the server block, so
+     the internal and edge (`:8443`) servers of a route enforce it alike;
+     o002 doesn't need to know. **Public gated routes are refused for now**
+     because the sign-in host is tailnet-only (routes-convert dropped its
+     public CNAME and o002 vhost 2026-10-21 on the user's request). To
+     allow them: give `sso-proxy` a public CNAME → o002 plus an o002 vhost
+     → h005 (an edge listener on h005 or a hand vhost), then drop the
+     lib.nix/route check.
+   - **Legacy retired**: the trilium container no longer runs oauth2-proxy
+     (no env bind). Its nginx string is replaced by `routes.web` (notes,
+     tailnet, `groups = [ "notes" ]`), and `dns-records.nix` points
+     `sso-proxy` at h005 and generates `notes`. h001 still has the
+     `oauth2_proxy_key_file` sec-agent entry, which is unused now. Remove it
+     on the next h001 rebuild.
+   - **Deployed**: h005 switched (oauth2-proxy + DNS); `cnt deploy trilium`;
+     `deploy --vhost-only` for every other h001 service (cookie strip).
+     h003/lio generated vhosts get the strip on their next deploy.
 7. `cnt expose` overrides with expiry.
 8. Read-only dashboard in fleet-edge; homepage-dashboard retired.
 9. Then `cnt move` for real. Needs §9.1 first.

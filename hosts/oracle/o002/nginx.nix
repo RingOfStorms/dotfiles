@@ -24,7 +24,7 @@ let
   # *.joshuabell.xyz + apex wildcard that h005 issues and pushes
   # (hosts/wildcard-cert-receiver.nix) instead of their own http-01 cert.
   # Moved over one name at a time; "all" switches every joshuabell.xyz
-  # vhost. ellalala.com is not covered and keeps http-01.
+  # vhost.
   wildcardNames = [ "all" ];
   coveredByWildcard =
     name:
@@ -35,17 +35,6 @@ let
   withTls =
     name: v:
     if useWildcard name then builtins.removeAttrs v [ "enableACME" ] // config.fleet.wildcardTls else v;
-
-  # Unconverted h001 services (no `routes` yet): still proxied to h001's
-  # internal listener (:80). Move each to `routes` and delete it here.
-  proxyToUpstream = {
-    enableACME = true;
-    forceSSL = true;
-    locations."/" = {
-      proxyWebsockets = true;
-      proxyPass = "http://${upstream}";
-    };
-  };
 in
 {
   # nginx proxies to tailscale overlay IPs and binds on overlayIp.
@@ -137,21 +126,6 @@ in
             };
           };
 
-          "www.ellalala.com" = {
-            enableACME = true;
-            forceSSL = true;
-            locations."/" = {
-              return = "301 https://ellalala.com";
-            };
-          };
-          "ellalala.com" = {
-            enableACME = true;
-            forceSSL = true;
-            locations."/" = {
-              return = "444";
-            };
-          };
-
           # ── Headscale coordination server (runs locally on o002) ──
           # Proxy to 127.0.0.1 (not localhost) — headscale binds IPv4 only, and
           # nginx resolving localhost to [::1] gives connection-refused.
@@ -161,43 +135,6 @@ in
             locations."/" = {
               proxyWebsockets = true;
               proxyPass = "http://127.0.0.1:${toString constants.services.headscale.port}";
-            };
-          };
-
-          # ── Unconverted h001 services (no `routes` yet) ──
-          # Proxied to h001's internal listener (:80). Move each to `routes`
-          # in its service.nix and delete it here.
-          "notes.${domain}" = proxyToUpstream;
-
-          "sso-proxy.${domain}" = {
-            enableACME = true;
-            forceSSL = true;
-            locations."/" = {
-              proxyPass = "http://${upstream}";
-              extraConfig = ''
-                proxy_set_header X-Forwarded-Proto https;
-              '';
-            };
-          };
-          "jellyfin.${domain}" = {
-            enableACME = true;
-            forceSSL = true;
-            locations."/" = {
-              proxyPass = "http://${upstream}";
-            };
-          };
-          "books.${domain}" = {
-            enableACME = true;
-            forceSSL = true;
-            locations."/" = {
-              proxyPass = "http://${upstream}";
-            };
-          };
-          "media.${domain}" = {
-            enableACME = true;
-            forceSSL = true;
-            locations."/" = {
-              proxyPass = "http://${upstream}";
             };
           };
 

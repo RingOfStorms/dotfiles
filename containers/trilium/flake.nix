@@ -1,5 +1,5 @@
 {
-  description = "trilium: Trilium notes + oauth2-proxy as one floating container";
+  description = "trilium: Trilium notes as a floating container (gated by the fleet oauth2-proxy)";
 
   # Managed with the `containers` CLI (see ../README.md and ./README.md).
 
@@ -22,10 +22,6 @@
     }:
     let
       containersLib = import ../lib.nix;
-      fleet = import ../../hosts/fleet.nix;
-      # Rendered on h001 by sec-agent (hosts/h001/sec-agent.nix). Dated name:
-      # a rotation is a new path, so binding the single file is safe.
-      envSecret = "${fleet.global.secretsDir}/oauth2_proxy_key_file_2026-03-15";
     in
     extra-container.lib.eachSupportedSystem (system: {
       packages.default = extra-container.lib.buildContainers {
@@ -36,13 +32,6 @@
           guestNixpkgs = guestpkgs;
           # Host network; idmapped persist (ext4), container uids are not host uids.
           privateNetwork = false;
-          binds = [
-            {
-              host = envSecret;
-              container = "/var/secrets/oauth2-proxy.env";
-              readOnly = true;
-            }
-          ];
         };
       };
     });

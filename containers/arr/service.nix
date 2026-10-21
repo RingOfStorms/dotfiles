@@ -31,9 +31,35 @@
     51820
   ];
   udpPorts = [ 51820 ];
-  # jellyfin/seerr/kavita/media-health vhosts stay in the h001 host config
-  # (hosts/h001/mods/arr-nginx.nix); ports are unchanged on the host network.
-  nginx = null;
+  # jellyfin + media: public via the o002 edge (ROUTING-PLAN §2.3); books
+  # (kavita): tailnet only. Each app has its own
+  # accounts (TV/mobile clients), so no gate. maxBody 500m = h001's old
+  # global client_max_body_size these vhosts inherited.
+  routes = {
+    jellyfin = {
+      name = "jellyfin";
+      port = 8096;
+      exposure = "public";
+      auth = "native";
+      maxBody = "500m";
+    };
+    media = {
+      name = "media"; # seerr
+      port = 5055;
+      exposure = "public";
+      auth = "native";
+      maxBody = "500m";
+    };
+    books = {
+      name = "books"; # kavita
+      port = 5000;
+      exposure = "tailnet";
+      auth = "native";
+      maxBody = "500m";
+    };
+  };
+  # The :9091 transmission proxy and /media-health/ on h001.net stay in
+  # hosts/h001/mods/arr-nginx.nix (not routes: a netns upstream and a static alias).
   backupHook = null;
   attach = null;
 }

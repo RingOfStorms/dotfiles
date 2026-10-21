@@ -84,6 +84,9 @@ let
     "requestBuffering"
     "forwardedProto"
     "extraConfig"
+    # auth = "oauth2-proxy" only (ROUTING-PLAN §8 step 6)
+    "groups"
+    "bypass"
   ];
 
   normalizeRoute =
@@ -168,6 +171,36 @@ let
           bad = isHttp && (builtins.match "[a-z0-9]([a-z0-9-]*[a-z0-9])?" name == null);
           msg = "name ${builtins.toJSON name} must be a single DNS label";
         }
+        {
+          bad = (r ? groups || r ? bypass) && auth != "oauth2-proxy";
+          msg = "groups/bypass only apply to auth = \"oauth2-proxy\"";
+        }
+        {
+          bad =
+            !(builtins.isList (r.groups or [ ]))
+            || !(builtins.all (g: builtins.isString g && builtins.match "[A-Za-z0-9_.-]+" g != null) (
+              r.groups or [ ]
+            ));
+          msg = "groups must be a list of zitadel role names ([A-Za-z0-9_.-])";
+        }
+        {
+          bad =
+            !(builtins.isList (r.bypass or [ ]))
+            || !(builtins.all (p: builtins.isString p && builtins.match "/[A-Za-z0-9_./-]*" p != null) (
+              r.bypass or [ ]
+            ));
+          msg = "bypass must be a list of path prefixes like \"/api/\"";
+        }
+        {
+          bad = auth == "oauth2-proxy" && zone == "private";
+          msg = "auth = \"oauth2-proxy\" isn't supported in the private zone yet (h005 private-zone.nix has no auth_request)";
+        }
+        {
+          # The sign-in host (sso-proxy, h005) is tailnet-only; internet
+          # clients would be sent to a name they can't resolve.
+          bad = auth == "oauth2-proxy" && isPublic;
+          msg = "auth = \"oauth2-proxy\" is tailnet/lan only until the sign-in host is published (ROUTING-PLAN §8 step 6)";
+        }
       ];
       firstBad = builtins.filter (c: c.bad) checks;
     in
@@ -202,6 +235,9 @@ let
             requestBuffering = r.requestBuffering or true;
             forwardedProto = r.forwardedProto or "https";
             extraConfig = r.extraConfig or "";
+            # oauth2-proxy: zitadel roles (any of) and unauthenticated path prefixes
+            groups = r.groups or [ ];
+            bypass = r.bypass or [ ];
           }
         else
           {

@@ -147,6 +147,8 @@ routes.web = {
   proto = "http";            # http (default) | tcp | udp
   exposure = "public";       # local (default) | tailnet | lan | public
   auth = "native-oidc";      # native-oidc | native | oauth2-proxy | none; required unless local
+  # groups = [ "notes" ];     auth = "oauth2-proxy" only: zitadel roles (any of)
+  # bypass = [ "/api/" ];     auth = "oauth2-proxy" only: ungated path prefixes
   # via = [ "edge" ];        # public only; default [ "edge" ] for http, required for tcp/udp
   # allow = [ "lio" ];  zone = "main";  health = "/healthz";
   # http knobs: websockets = true; maxBody = "100m"; buffering = true;
@@ -168,6 +170,14 @@ in `<svc>.conf` (:80/:443 v4+v6, wildcard cert, proxy to
 != `local` are added to the ports file like `tcpPorts`. For now `tailnet`,
 `lan` and `public` produce the same vhost; the listener split, `allow` and
 the edge/DNS side are later steps of the plan. `local` produces nothing.
+
+`auth = "oauth2-proxy"` routes (tailnet/lan only for now) are gated by the
+fleet oauth2-proxy on h005 (`hosts/h005/oauth2-proxy.nix`): nginx
+`auth_request`s `http://100.64.0.3:4180/oauth2/auth?allowed_groups=...`,
+sends a 401 to `https://sso-proxy.joshuabell.xyz/oauth2/start`, proxies
+`/oauth2/` and passes `X-Auth-Request-{User,Email,Groups}`. Every generated
+server, gated or not, removes `_oauth2_proxy*` cookies before the backend
+(ROUTING-PLAN §4, §8 step 6).
 
 ssh logs in as each host's `user` from `hosts/fleet.nix` (override for all hosts
 with `--ssh-user` / `CONTAINERS_SSH_USER`; `root` skips sudo). `--dry-run` prints

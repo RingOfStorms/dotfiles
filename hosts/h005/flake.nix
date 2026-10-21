@@ -102,6 +102,8 @@
           # Needs the bunny key, which sec-agent only fetches in router mode.
           ./private-zone.nix
           ./wildcard-cert.nix
+          # Fleet oauth2-proxy; uses the wildcard above for its sign-in host.
+          ./oauth2-proxy.nix
         ]
         ++ lib.optionals (overlayIp != null) [
           inputs.beszel.nixosModules.agent

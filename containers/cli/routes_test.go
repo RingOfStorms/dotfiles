@@ -29,6 +29,20 @@ server {
     return 444;
   }
   client_max_body_size 64k;
+  # Strip oauth2-proxy cookies before the backend (ROUTING-PLAN §4).
+  set $fleet_cookie $http_cookie;
+  if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
+    set $fleet_cookie $1$2;
+  }
+  if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
+    set $fleet_cookie $1$2;
+  }
+  if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
+    set $fleet_cookie $1$2;
+  }
+  if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
+    set $fleet_cookie $1$2;
+  }
   location / {
     proxy_pass http://127.0.0.1:8300;
     proxy_http_version 1.1;
@@ -38,7 +52,10 @@ server {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
-    # TODO(ROUTING-PLAN §8 step 6): strip _oauth2_proxy* cookies before the backend.
+    proxy_set_header Cookie $fleet_cookie;
+    proxy_set_header X-Auth-Request-User "";
+    proxy_set_header X-Auth-Request-Email "";
+    proxy_set_header X-Auth-Request-Groups "";
     proxy_buffering on;
     proxy_read_timeout 60s;
     proxy_send_timeout 60s;
@@ -55,6 +72,20 @@ server {
     return 444;
   }
   client_max_body_size 64k;
+  # Strip oauth2-proxy cookies before the backend (ROUTING-PLAN §4).
+  set $fleet_cookie $http_cookie;
+  if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
+    set $fleet_cookie $1$2;
+  }
+  if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
+    set $fleet_cookie $1$2;
+  }
+  if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
+    set $fleet_cookie $1$2;
+  }
+  if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
+    set $fleet_cookie $1$2;
+  }
   location / {
     proxy_pass http://127.0.0.1:8300;
     proxy_http_version 1.1;
@@ -64,7 +95,10 @@ server {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
-    # TODO(ROUTING-PLAN §8 step 6): strip _oauth2_proxy* cookies before the backend.
+    proxy_set_header Cookie $fleet_cookie;
+    proxy_set_header X-Auth-Request-User "";
+    proxy_set_header X-Auth-Request-Email "";
+    proxy_set_header X-Auth-Request-Groups "";
     proxy_buffering on;
     proxy_read_timeout 60s;
     proxy_send_timeout 60s;
@@ -84,7 +118,22 @@ server {
   if ($fleet_edge_block_internal) {
     return 444;
   }
+  include /etc/fleet-containers/nginx-acl-tailnet.conf;
   client_max_body_size 100m;
+  # Strip oauth2-proxy cookies before the backend (ROUTING-PLAN §4).
+  set $fleet_cookie $http_cookie;
+  if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
+    set $fleet_cookie $1$2;
+  }
+  if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
+    set $fleet_cookie $1$2;
+  }
+  if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
+    set $fleet_cookie $1$2;
+  }
+  if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
+    set $fleet_cookie $1$2;
+  }
   location / {
     proxy_pass http://127.0.0.1:8094;
     proxy_http_version 1.1;
@@ -94,10 +143,110 @@ server {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
-    # TODO(ROUTING-PLAN §8 step 6): strip _oauth2_proxy* cookies before the backend.
+    proxy_set_header Cookie $fleet_cookie;
+    proxy_set_header X-Auth-Request-User "";
+    proxy_set_header X-Auth-Request-Email "";
+    proxy_set_header X-Auth-Request-Groups "";
     proxy_buffering off;
     proxy_read_timeout 600s;
     proxy_send_timeout 600s;
+  }
+}
+`
+
+// Golden: a gated tailnet route (notes-like): oauth2-proxy locations on the
+// internal listener only, allowed_groups, an unauthenticated bypass prefix.
+const notesVhostGolden = `# route web: exposure tailnet, auth oauth2-proxy; internal listener
+server {
+  listen 80;
+  listen [::]:80;
+  listen 443 ssl;
+  listen [::]:443 ssl;
+  server_name notes.joshuabell.xyz;
+  include /etc/fleet-containers/nginx-tls.conf;
+  if ($fleet_edge_block_internal) {
+    return 444;
+  }
+  include /etc/fleet-containers/nginx-acl-tailnet.conf;
+  client_max_body_size 0;
+  # Strip oauth2-proxy cookies before the backend (ROUTING-PLAN §4).
+  set $fleet_cookie $http_cookie;
+  if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
+    set $fleet_cookie $1$2;
+  }
+  if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
+    set $fleet_cookie $1$2;
+  }
+  if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
+    set $fleet_cookie $1$2;
+  }
+  if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
+    set $fleet_cookie $1$2;
+  }
+  # auth = oauth2-proxy: fleet oauth2-proxy on h005 (ROUTING-PLAN §8 step 6).
+  location = /oauth2/auth {
+    proxy_pass http://100.64.0.3:4180/oauth2/auth?allowed_groups=notes;
+    proxy_pass_request_body off;
+    proxy_set_header Content-Length "";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Uri $request_uri;
+  }
+  location /oauth2/ {
+    proxy_pass http://100.64.0.3:4180;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Uri $request_uri;
+  }
+  location @fleet_oauth2_signin {
+    return 302 https://sso-proxy.joshuabell.xyz/oauth2/start?rd=https://$host$request_uri;
+  }
+  location / {
+    auth_request /oauth2/auth;
+    error_page 401 = @fleet_oauth2_signin;
+    auth_request_set $fleet_auth_user $upstream_http_x_auth_request_user;
+    auth_request_set $fleet_auth_email $upstream_http_x_auth_request_email;
+    auth_request_set $fleet_auth_groups $upstream_http_x_auth_request_groups;
+    auth_request_set $fleet_auth_cookie $upstream_http_set_cookie;
+    add_header Set-Cookie $fleet_auth_cookie;
+    proxy_pass http://127.0.0.1:9111;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header Cookie $fleet_cookie;
+    proxy_set_header X-Auth-Request-User $fleet_auth_user;
+    proxy_set_header X-Auth-Request-Email $fleet_auth_email;
+    proxy_set_header X-Auth-Request-Groups $fleet_auth_groups;
+    proxy_buffering on;
+    proxy_read_timeout 60s;
+    proxy_send_timeout 60s;
+  }
+  location ^~ /api/ {
+    proxy_pass http://127.0.0.1:9111;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header Cookie $fleet_cookie;
+    proxy_set_header X-Auth-Request-User "";
+    proxy_set_header X-Auth-Request-Email "";
+    proxy_set_header X-Auth-Request-Groups "";
+    proxy_buffering on;
+    proxy_read_timeout 60s;
+    proxy_send_timeout 60s;
   }
 }
 `
@@ -485,5 +634,102 @@ func TestSiteScriptVhostOnly(t *testing.T) {
 	}
 	if ps := prepareScript(s, "h001"); !strings.Contains(ps, ss) {
 		t.Error("prepareScript must embed siteScript")
+	}
+}
+
+func TestRoutesVhostOauth2Proxy(t *testing.T) {
+	n := httpRoute("notes", 9111, "tailnet", "oauth2-proxy")
+	n.Via, n.MaxBody = nil, "0"
+	n.Groups, n.Bypass = []string{"notes"}, []string{"/api/"}
+	if got := routesVhost(Service{Name: "trilium", Routes: map[string]Route{"web": n}}); got != notesVhostGolden {
+		t.Fatalf("gated vhost mismatch:\n%s\nwant:\n%s", got, notesVhostGolden)
+	}
+	// Public + gated: both listeners get the gate; no groups -> no query.
+	p := httpRoute("app", 1, "public", "oauth2-proxy")
+	v := routesVhost(Service{Name: "app", Routes: map[string]Route{"web": p}})
+	if strings.Count(v, "auth_request /oauth2/auth;") != 2 || strings.Count(v, "location = /oauth2/auth {") != 2 ||
+		strings.Contains(v, "allowed_groups") || strings.Count(v, "return 302 https://sso-proxy.joshuabell.xyz/oauth2/start?rd=https://$host$request_uri;") != 2 {
+		t.Errorf("public gated vhost:\n%s", v)
+	}
+	// Ungated routes still strip the cookie and blank identity headers.
+	u := routesVhost(Service{Name: "a", Routes: map[string]Route{"web": httpRoute("a", 1, "tailnet", "native")}})
+	if strings.Contains(u, "auth_request") || !strings.Contains(u, "proxy_set_header Cookie $fleet_cookie;") ||
+		!strings.Contains(u, `proxy_set_header X-Auth-Request-User "";`) {
+		t.Errorf("ungated vhost:\n%s", u)
+	}
+}
+
+func TestValidateRoutesOauth2(t *testing.T) {
+	g := httpRoute("a", 80, "tailnet", "oauth2-proxy")
+	g.Groups, g.Bypass = []string{"notes"}, []string{"/api/"}
+	for name, c := range map[string]struct {
+		mut func(*Route)
+		err string
+	}{
+		"ok":            {func(r *Route) {}, ""},
+		"groups+native": {func(r *Route) { r.Auth = sp("native") }, "only apply"},
+		"bad group":     {func(r *Route) { r.Groups = []string{"a,b"} }, "group"},
+		"bad bypass":    {func(r *Route) { r.Bypass = []string{"api; x"} }, "bypass"},
+	} {
+		r := g
+		c.mut(&r)
+		err := validateRoutes(Service{Name: "a", Routes: map[string]Route{"web": r}})
+		if c.err == "" && err != nil || c.err != "" && (err == nil || !strings.Contains(err.Error(), c.err)) {
+			t.Errorf("%s: err = %v, want %q", name, err, c.err)
+		}
+	}
+}
+
+// Exposure ACL (ROUTING-PLAN §2.1): tailnet/lan internal servers include
+// their host-module ACL at server level, after the edge-peer 444 and before
+// any location (so /oauth2/ and auth_request inherit it); public internal
+// and edge servers get none.
+func TestRoutesVhostExposureACL(t *testing.T) {
+	for _, c := range []struct {
+		exposure, auth, acl string
+	}{
+		{"tailnet", "native", "/etc/fleet-containers/nginx-acl-tailnet.conf"},
+		{"tailnet", "oauth2-proxy", "/etc/fleet-containers/nginx-acl-tailnet.conf"},
+		{"lan", "native", "/etc/fleet-containers/nginx-acl-lan.conf"},
+		{"lan", "oauth2-proxy", "/etc/fleet-containers/nginx-acl-lan.conf"},
+		{"public", "native", ""},
+		{"public", "oauth2-proxy", ""},
+	} {
+		r := httpRoute("a", 1, c.exposure, c.auth)
+		if c.exposure != "public" {
+			r.Via = nil
+		}
+		v := routesVhost(Service{Name: "x", Routes: map[string]Route{"web": r}})
+		name := c.exposure + "/" + c.auth
+		if c.acl == "" {
+			if strings.Contains(v, "nginx-acl-") || strings.Contains(v, "deny ") {
+				t.Errorf("%s: public route must have no ACL\n%s", name, v)
+			}
+			if !strings.Contains(v, "listen 8443;") {
+				t.Errorf("%s: public edge server missing\n%s", name, v)
+			}
+			continue
+		}
+		if strings.Count(v, "nginx-acl-") != 1 || strings.Count(v, "server {") != 1 {
+			t.Errorf("%s: want exactly one internal server with one ACL\n%s", name, v)
+			continue
+		}
+		inc := strings.Index(v, "  include "+c.acl+";\n")
+		block := strings.Index(v, "$fleet_edge_block_internal")
+		loc := strings.Index(v, "  location ")
+		if inc < 0 || block < 0 || loc < 0 || !(block < inc && inc < loc) {
+			t.Errorf("%s: ACL must be server level, after edge block, before locations\n%s", name, v)
+		}
+	}
+}
+
+func TestValidateRoutesRejectsLocationACL(t *testing.T) {
+	for _, x := range []string{"allow 0.0.0.0/0;", "  deny all;", "satisfy any;"} {
+		r := httpRoute("a", 1, "tailnet", "native")
+		r.ExtraConfig = "send_timeout 1s;\n" + x
+		err := validateRoutes(Service{Name: "a", Routes: map[string]Route{"web": r}})
+		if err == nil || !strings.Contains(err.Error(), "exposure is the ACL") {
+			t.Errorf("%q: err=%v", x, err)
+		}
 	}
 }

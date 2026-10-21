@@ -22,7 +22,7 @@ let
   domain = fleet.global.domain;
   certDir = config.security.acme.certs.${domain}.directory;
   # Same path on every receiver (wildcard-cert-receiver.nix).
-  remoteDir = "/var/lib/fleet-cert/${domain}";
+  remoteDir = "/var/lib/fleet-cert/${domain}/current";
   # Pinned host keys (ssh-keyscan over the tailnet, 2026-10-21). A
   # rebuilt target needs its new key here before pushes work again.
   targets = {
@@ -47,11 +47,14 @@ let
       pkgs.coreutils
     ];
     text = ''
-      # Every target is tried; the unit fails if any failed (retried daily).
+      # Every target is tried; the unit succeeds only if every receiver exited
+      # 0 (ssh returns the remote status), otherwise it fails and is retried
+      # daily.
       rc=0
       for t in ${lib.concatStringsSep " " (map (t: t.ip) (builtins.attrValues targets))}; do
-        # The receiver unpacks into a temp dir and renames, so nginx never
-        # sees half a pair; its path unit reloads nginx.
+        # The receiver stages the pair in a new version dir, swaps the
+        # `current` symlink, runs nginx -t and reloads; on failure it restores
+        # the previous version and exits non-zero (wildcard-cert-receiver.nix).
         if tar -C ${certDir} -cf - fullchain.pem key.pem \
           | timeout 60 ssh -i ${sshKey} -o BatchMode=yes -o IdentitiesOnly=yes \
               -o UserKnownHostsFile=${knownHosts} -o StrictHostKeyChecking=yes \

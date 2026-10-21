@@ -20,6 +20,17 @@ let
   stateDir = "/var/lib/fleet-containers";
   holdDir = "/run/fleet-containers/hold";
   mutable = "/etc/systemd-mutable/system";
+  # nginx allow list for nginx.acl (ROUTING-PLAN §2.1), deny-by-default.
+  aclText =
+    cidrs:
+    lib.concatMapStrings (c: "allow ${c};\n") (
+      cidrs
+      ++ lib.optionals cfg.nginx.acl.loopback [
+        "127.0.0.1"
+        "::1"
+      ]
+    )
+    + "deny all;\n";
   guardScript =
     name: g:
     pkgs.writeShellScript "fleet-guard-${name}" ''
@@ -145,7 +156,7 @@ in
     nginx.tls.certDir = lib.mkOption {
       type = lib.types.str;
       default = "/var/lib/acme/joshuabell.xyz";
-      example = "/var/lib/fleet-cert/joshuabell.xyz";
+      example = "/var/lib/fleet-cert/joshuabell.xyz/current";
       description = ''
         Directory holding fullchain.pem and key.pem for the generated
         internal :443 listeners, written to
@@ -183,6 +194,30 @@ in
     package = lib.mkOption {
       type = lib.types.package;
       description = "The `containers` CLI, installed system-wide.";
+    };
+    # Exposure ACLs for the generated internal :80/:443 servers (ROUTING-PLAN
+    # §2.1): cli/routes.go includes /etc/fleet-containers/nginx-acl-<exposure>.conf
+    # in every tailnet/lan server. Enforced by TCP peer, never by DNS.
+    nginx.acl = {
+      tailnet = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [
+          "100.64.0.0/10"
+          "fd7a:115c:a1e0::/48"
+        ];
+        description = "High-trust overlay CIDRs allowed on tailnet routes (edge peers still get 444 with edge.blockInternal).";
+      };
+      lan = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        example = [ "10.12.14.0/24" ];
+        description = "The host's LAN subnet(s); lan routes allow these plus nginx.acl.tailnet.";
+      };
+      loopback = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Also allow 127.0.0.1 and ::1 (only for local health checks via the vhost).";
+      };
     };
     # Read-only GET /status.json for fleet-edge (ROUTING-PLAN.md §5.4); see
     # cli/statusserver.go for the JSON contract. Off by default.
@@ -572,6 +607,12 @@ in
           ssl_certificate ${cfg.nginx.tls.certDir}/fullchain.pem;
           ssl_certificate_key ${cfg.nginx.tls.certDir}/key.pem;
         '';
+        # Exposure ACLs (cli/routes.go writeExposureACL). Server level, so
+        # every location incl. /oauth2/ inherits them.
+        environment.etc."fleet-containers/nginx-acl-tailnet.conf".text = aclText cfg.nginx.acl.tailnet;
+        environment.etc."fleet-containers/nginx-acl-lan.conf".text = aclText (
+          cfg.nginx.acl.tailnet ++ cfg.nginx.acl.lan
+        );
         # Edge listener: only the edge peers, only on the tailnet.
         networking.firewall.extraInputRules = lib.concatMapStrings (
           p:
