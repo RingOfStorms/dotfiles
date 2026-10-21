@@ -4,6 +4,8 @@
 # backends are on the same ports.
 { constants, fleet, ... }:
 let
+  # oauth2-proxy cookie/identity hygiene (containers/lib.nix, shared with routes.go).
+  inherit (import ../../../containers/lib.nix) nginxSnippets;
   c = constants.services.nixarr;
   mi = constants.services.mediaIntegrity;
   tls = {
@@ -30,6 +32,7 @@ in
     # lives in the wg netns at 192.168.15.1; sonarr/radarr reach it via
     # localhost:9091. The guest has no nginx, so the host proxies it.
     "127.0.0.1:9091" = {
+      extraConfig = nginxSnippets.cookieStrip;
       listen = [
         {
           addr = "0.0.0.0";
@@ -40,6 +43,7 @@ in
         recommendedProxySettings = true;
         proxyWebsockets = true;
         proxyPass = "http://192.168.15.1:9091";
+        extraConfig = nginxSnippets.identityClear;
       };
     };
     # jellyfin, media (seerr) and books (kavita) are routes in
@@ -47,6 +51,12 @@ in
     "h001.net.${fleet.global.domain}".locations."${mi.webPath}" = {
       alias = "/srv/containers/${c.containerName}/${baseNameOf mi.dataDir}/";
       extraConfig = ''
+        # tailnet only, no login; o002 (public edge) counts as internet
+        deny 100.64.0.5;
+        deny fd7a:115c:a1e0::5;
+        allow 100.64.0.0/10;
+        allow fd7a:115c:a1e0::/48;
+        deny all;
         index index.html;
         autoindex off;
         add_header Cache-Control "no-store" always;

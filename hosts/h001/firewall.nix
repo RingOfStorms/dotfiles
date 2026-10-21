@@ -8,14 +8,16 @@ let
   # tailnet v6 addresses of the same hosts (headscale-assigned, stable).
   lio6 = "fd7a:115c:a1e0::1";
   h005_6 = "fd7a:115c:a1e0::3";
+  o002 = fleet.hosts.o002.overlayIp; # public edge: counts as internet (ROUTING-PLAN §2.1)
+  o002_6 = "fd7a:115c:a1e0::5";
 in
 {
   ringofstorms.tailnet.trustInterface = false;
 
   networking.firewall.interfaces.tailscale0 = {
     allowedTCPPorts = [
-      # 22, 80, 443 and the temp-ports set (3032 forgejo ssh, 8090 beszel hub,
-      # arr's 6336/8087/9292/51820) are already open on every interface.
+      # 22, 80, 443 and the temp-ports set (3032 forgejo ssh, 8090 beszel hub)
+      # are already open on every interface.
       # arr UIs the fleet-edge start page (h005) links to directly (h001.net.joshuabell.xyz:<port>);
       # drop each once it is a route behind nginx.
       7878 # radarr
@@ -33,5 +35,7 @@ in
     iifname "tailscale0" ip6 saddr ${lio6} tcp dport { 5432, 3003 } accept comment "immich pg + ML for lio (v6)"
     iifname "tailscale0" ip saddr ${h005} tcp dport 9101 accept comment "containers status endpoint, polled by h005"
     iifname "tailscale0" ip6 saddr ${h005_6} tcp dport 9101 accept comment "containers status endpoint (v6)"
+    iifname "tailscale0" ip saddr != ${o002} tcp dport 6336 accept comment "sabnzbd UI: tailnet except the o002 edge"
+    iifname "tailscale0" ip6 saddr != ${o002_6} tcp dport 6336 accept comment "sabnzbd UI (v6), not o002"
   '';
 }

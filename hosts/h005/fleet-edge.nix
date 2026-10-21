@@ -21,6 +21,8 @@
 }:
 let
   overlayIp = constants.host.overlayIp;
+  # oauth2-proxy cookie/identity hygiene (containers/lib.nix, shared with routes.go).
+  inherit (import ../../containers/lib.nix) nginxSnippets;
   domain = fleet.global.domain;
   h001 = "http://h001.net.${domain}";
   link = group: name: url: icon: description: exposure: {
@@ -57,7 +59,6 @@ in
       (on "h001" (media "Jellyfin" "https://jellyfin.${domain}" "jellyfin" "Media Streaming" "public"))
       (on "h001" (media "Jellyseerr" "https://media.${domain}" "jellyseerr" "Media Requests" "public"))
       (on "h001" (media "Kavita" "https://books.${domain}" "kavita" "Ebook Library" "public"))
-      (media "Audiobookshelf" "${h001}:9292" "audiobookshelf" "Audiobooks & Podcasts" "tailnet")
       (media "Photos" "https://photos.${domain}" "immich" "Immich" "public")
 
       (arr "Radarr" "${h001}:7878" "radarr" "Movie Automation" "tailnet")
@@ -66,7 +67,9 @@ in
       (arr "Prowlarr" "${h001}:9696" "prowlarr" "Indexer Manager" "tailnet")
       (arr "SABnzbd" "${h001}:6336" "sabnzbd" "Usenet Downloader" "tailnet")
       (arr "Transmission" "${h001}:9091" "transmission" "Torrent Downloader" "tailnet")
-      (arr "Shelfmark" "${h001}:8087" "shelfmark" "Books & Audiobooks" "tailnet")
+      (on "h001" (
+        arr "Shelfmark" "https://shelfmark.${domain}" "shelfmark" "Books & Audiobooks" "tailnet"
+      ))
       (arr "Media Integrity" "${h001}/media-health/"
         "https://api.iconify.design/mdi/movie-check-outline.svg?color=%237fb0e8"
         "FFmpeg Integrity Report"
@@ -111,6 +114,7 @@ in
     virtualHosts.fleet = {
       default = true;
       serverName = "h005.net.joshuabell.xyz";
+      extraConfig = nginxSnippets.cookieStrip;
       listen = [
         {
           addr = overlayIp;
@@ -123,6 +127,7 @@ in
           allow 100.64.0.0/10;
           allow fd7a:115c:a1e0::/48;
           deny all;
+          ${nginxSnippets.identityClear}
         '';
       };
     };

@@ -42,7 +42,6 @@
 
     sec.domain = "secrets.joshuabell.xyz"; # floating container (containers/sec)
 
-
     mediaIntegrity = {
       dataDir = "/var/lib/media-integrity";
       webPath = "/media-health/";
@@ -78,7 +77,6 @@
       jellyfinPort = 8096;
       jellyseerrPort = 5055;
       shelfmarkPort = 8087;
-      audiobookshelfPort = 9292;
       kavitaPort = 5000;
       transmissionPeerPort = 51820;
       mediaDir = "/nfs/h002/nixarr/media";

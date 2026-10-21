@@ -292,6 +292,16 @@ let
   # sync with cli/routes.go edgePort.
   edgePort = 8443;
 
+  # oauth2-proxy hygiene for any vhost under .joshuabell.xyz that proxies to
+  # an app (ROUTING-PLAN §4). Same files cli/routes.go embeds, so there is one
+  # copy. cookieStrip goes in the server block (sets $fleet_cookie);
+  # identityClear in each app-facing proxy location (never in oauth2-proxy's
+  # own /oauth2/ locations, which need the cookie).
+  nginxSnippets = {
+    cookieStrip = builtins.readFile ./cli/nginx/oauth2-cookie-strip.conf;
+    identityClear = builtins.readFile ./cli/nginx/oauth2-identity-clear.conf;
+  };
+
   allServices =
     dir:
     let
@@ -325,6 +335,7 @@ in
     normalizeRoute
     edgePort
     edgeRoutes
+    nginxSnippets
     ;
 
   # services.nginx.virtualHosts for the public edge (o002), generated from

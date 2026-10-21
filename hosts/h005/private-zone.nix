@@ -18,7 +18,10 @@
 let
   overlayIp = constants.host.overlayIp;
   zone = "ts.${fleet.global.domain}";
-  privateRoutes = (import ../../containers/lib.nix).privateRoutes ../../containers;
+  containersLib = import ../../containers/lib.nix;
+  privateRoutes = containersLib.privateRoutes ../../containers;
+  # oauth2-proxy cookie/identity hygiene, shared with cli/routes.go.
+  inherit (containersLib) nginxSnippets;
 
   backend =
     r:
@@ -48,6 +51,7 @@ let
       ];
       extraConfig = ''
         client_max_body_size ${r.maxBody};
+        ${nginxSnippets.cookieStrip}
       '';
       locations."/" = {
         proxyPass = backend r;
@@ -59,6 +63,7 @@ let
           proxy_buffering ${if r.buffering then "on" else "off"};
           proxy_read_timeout ${r.timeouts};
           proxy_send_timeout ${r.timeouts};
+          ${nginxSnippets.identityClear}
         '';
       };
     };
@@ -87,5 +92,7 @@ in
   networking.firewall.interfaces.tailscale0.allowedTCPPorts = [ 443 ];
 
   # Assert the pilot didn't silently produce nothing.
-  warnings = lib.optional (privateRoutes == [ ]) "private-zone: no zone = \"private\" routes in the containers inventory";
+  warnings = lib.optional (
+    privateRoutes == [ ]
+  ) "private-zone: no zone = \"private\" routes in the containers inventory";
 }

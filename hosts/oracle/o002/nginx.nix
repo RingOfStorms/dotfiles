@@ -15,6 +15,8 @@ let
   # §8 step 3), generated from containers/*/service.nix. Each proxies to the
   # service host's edge listener (<overlayIp>:8443).
   containersLib = import ../../../containers/lib.nix;
+  # oauth2-proxy cookie/identity hygiene for app-facing hand vhosts (shared with routes.go).
+  inherit (containersLib) nginxSnippets;
   containerVhosts = containersLib.edgeVirtualHosts {
     dir = ../../../containers;
     inherit (fleet) hosts;
@@ -132,9 +134,11 @@ in
           "headscale.${domain}" = {
             enableACME = true;
             forceSSL = true;
+            extraConfig = nginxSnippets.cookieStrip;
             locations."/" = {
               proxyWebsockets = true;
               proxyPass = "http://127.0.0.1:${toString constants.services.headscale.port}";
+              extraConfig = nginxSnippets.identityClear;
             };
           };
 
@@ -143,11 +147,13 @@ in
           "computerboyz.${domain}" = {
             enableACME = true;
             forceSSL = true;
+            extraConfig = nginxSnippets.cookieStrip;
             locations."/" = {
               return = "444";
             };
             locations."/map/survival/" = {
               proxyPass = "http://${fleet.hosts.h003.overlayIp}:80/map/survival/";
+              extraConfig = nginxSnippets.identityClear;
               proxyWebsockets = true;
             };
           };

@@ -10,6 +10,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"io"
@@ -233,10 +234,20 @@ const (
 // Server-level `if`/`set` (rewrite phase) so the vhost needs nothing from
 // the host module. One cookie per round; four covers session + 2 splits + csrf.
 func writeCookieStrip(b *strings.Builder) {
-	b.WriteString("  # Strip oauth2-proxy cookies before the backend (ROUTING-PLAN §4).\n")
-	b.WriteString("  set $fleet_cookie $http_cookie;\n")
-	for i := 0; i < 4; i++ {
-		b.WriteString("  if ($fleet_cookie ~ \"^(.*?)(?:^|;\\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$\") {\n    set $fleet_cookie $1$2;\n  }\n")
+	writeIndented(b, "  ", nginxCookieStrip)
+}
+
+// Shared with lib.nix nginxSnippets (h005 private zone, hand vhosts): one copy.
+//
+//go:embed nginx/oauth2-cookie-strip.conf
+var nginxCookieStrip string
+
+//go:embed nginx/oauth2-identity-clear.conf
+var nginxIdentityClear string
+
+func writeIndented(b *strings.Builder, indent, s string) {
+	for _, l := range strings.Split(strings.TrimRight(s, "\n"), "\n") {
+		b.WriteString(indent + l + "\n")
 	}
 }
 
@@ -307,17 +318,15 @@ func writeProxyLocation(b *strings.Builder, r Route, loc string, gated bool) {
 	b.WriteString("    proxy_set_header X-Real-IP $remote_addr;\n")
 	b.WriteString("    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
 	fmt.Fprintf(b, "    proxy_set_header X-Forwarded-Proto %s;\n", r.ForwardedProto)
-	b.WriteString("    proxy_set_header Cookie $fleet_cookie;\n")
 	// Identity only from auth_request; always overwritten so clients can't
 	// inject it (empty = header not sent).
 	if gated {
+		b.WriteString("    proxy_set_header Cookie $fleet_cookie;\n")
 		b.WriteString("    proxy_set_header X-Auth-Request-User $fleet_auth_user;\n")
 		b.WriteString("    proxy_set_header X-Auth-Request-Email $fleet_auth_email;\n")
 		b.WriteString("    proxy_set_header X-Auth-Request-Groups $fleet_auth_groups;\n")
 	} else {
-		b.WriteString("    proxy_set_header X-Auth-Request-User \"\";\n")
-		b.WriteString("    proxy_set_header X-Auth-Request-Email \"\";\n")
-		b.WriteString("    proxy_set_header X-Auth-Request-Groups \"\";\n")
+		writeIndented(b, "    ", nginxIdentityClear)
 	}
 	fmt.Fprintf(b, "    proxy_buffering %s;\n", onOff(r.Buffering))
 	if r.RequestBuffering != nil && !*r.RequestBuffering {

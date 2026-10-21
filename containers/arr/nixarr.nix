@@ -83,7 +83,14 @@ in
           enable-nixarr-apps = true;
           sonarr.config.fields = {
             syncCategories = [
-              5000 5010 5020 5030 5040 5045 5050 5090
+              5000
+              5010
+              5020
+              5030
+              5040
+              5045
+              5050
+              5090
             ];
             animeSyncCategories = [ 5070 ];
             syncAnimeStandardFormatSearch = true;
@@ -91,7 +98,17 @@ in
           };
           radarr.config.fields = {
             syncCategories = [
-              2000 2010 2020 2030 2040 2045 2050 2060 2070 2080 2090
+              2000
+              2010
+              2020
+              2030
+              2040
+              2045
+              2050
+              2060
+              2070
+              2080
+              2090
             ];
             syncRejectBlocklistedTorrentHashesWhileGrabbing = false;
           };
@@ -176,28 +193,25 @@ in
           ];
         };
       };
-       bazarr = {
+      bazarr = {
         enable = true; # subtitles for sonarr and radarr
         settings-sync = {
           sonarr.enable = true;
           radarr.enable = true;
         };
       };
-      # Direct tailnet/LAN access, matching SABnzbd and the existing *arr UIs.
-      # Configure Shelfmark's acquisition sources/destinations and both apps'
-      # accounts/libraries in their own UIs; nixarr manages service state/paths.
+      # Loopback only: reached through the host nginx route
+      # (shelfmark.joshuabell.xyz, tailnet, containers/arr/service.nix).
+      # Configure acquisition sources/destinations in its own UI.
       shelfmark = {
         enable = true;
         port = c.shelfmarkPort;
-        host = "0.0.0.0";
-        openFirewall = true;
+        host = "127.0.0.1";
+        openFirewall = false;
       };
-      audiobookshelf = {
-        enable = true;
-        port = c.audiobookshelfPort;
-        host = "0.0.0.0";
-        openFirewall = true;
-      };
+      # audiobookshelf removed (kavita is used instead). Its state stays in
+      # /var/lib/nixarr/state/audiobookshelf (not deleted).
+      audiobookshelf.enable = false;
       lidarr.enable = false; # preserved in the h001 migration backup; out of scope
       recyclarr = {
         enable = true;
@@ -277,7 +291,10 @@ in
                 # them mandatory for the initial original-language download.
                 trash_ids = [ "418f50b10f1907201b6cfdf881f467b7" ]; # Anime Dual Audio
                 assign_scores_to = [
-                  { name = "Anime"; score = 10; }
+                  {
+                    name = "Anime";
+                    score = 10;
+                  }
                 ];
               }
               {
@@ -285,8 +302,14 @@ in
                 # profile and is the required format for the dub-only profile.
                 trash_ids = [ "9c14d194486c4014d422adc64092d794" ]; # Dubs Only
                 assign_scores_to = [
-                  { name = "Anime"; score = -10000; }
-                  { name = "Anime English Dub Only"; score = 2000; }
+                  {
+                    name = "Anime";
+                    score = -10000;
+                  }
+                  {
+                    name = "Anime English Dub Only";
+                    score = 2000;
+                  }
                 ];
               }
             ];
@@ -319,12 +342,22 @@ in
               {
                 # Reject CAM/TS releases with recorded theatre audio.
                 trash_ids = [ "c465ccc73923871b3eb1802042331306" ]; # Line/Mic Dubbed
-                assign_scores_to = [{ name = "Remux"; score = -10000; }];
+                assign_scores_to = [
+                  {
+                    name = "Remux";
+                    score = -10000;
+                  }
+                ];
               }
               {
                 # Avoid Dolby Vision-only releases on players without DV support.
                 trash_ids = [ "923b6abef9b17f937fab56cfcf89e1f1" ]; # DV (w/o HDR fallback)
-                assign_scores_to = [{ name = "Remux"; score = -10000; }];
+                assign_scores_to = [
+                  {
+                    name = "Remux";
+                    score = -10000;
+                  }
+                ];
               }
             ];
           };
@@ -391,12 +424,43 @@ in
         };
 
         categories = {
-          "*" = { name = "*"; order = 0; pp = 3; script = "None"; priority = 0; };
-          movies = { name = "movies"; order = 1; script = "Default"; priority = -100; };
-          tv = { name = "tv"; order = 2; script = "Default"; priority = -100; };
-          audio = { name = "audio"; order = 3; script = "Default"; priority = -100; };
-          software = { name = "software"; order = 4; script = "Default"; priority = -100; };
-          books = { name = "books"; order = 5; script = "Default"; priority = -100; };
+          "*" = {
+            name = "*";
+            order = 0;
+            pp = 3;
+            script = "None";
+            priority = 0;
+          };
+          movies = {
+            name = "movies";
+            order = 1;
+            script = "Default";
+            priority = -100;
+          };
+          tv = {
+            name = "tv";
+            order = 2;
+            script = "Default";
+            priority = -100;
+          };
+          audio = {
+            name = "audio";
+            order = 3;
+            script = "Default";
+            priority = -100;
+          };
+          software = {
+            name = "software";
+            order = 4;
+            script = "Default";
+            priority = -100;
+          };
+          books = {
+            name = "books";
+            order = 5;
+            script = "Default";
+            priority = -100;
+          };
         };
       };
     };
