@@ -1,11 +1,6 @@
-{ constants, ... }:
+{ constants, fleet, ... }:
 let
   c = constants.host;
-  homepagePort = constants.services.homepage.port;
-  homepage = {
-    proxyWebsockets = true;
-    proxyPass = "http://localhost:${toString homepagePort}";
-  };
 in
 {
   # nginx waits for tailscale to be up (listens on overlay IP).
@@ -19,16 +14,17 @@ in
     serviceConfig.IPFreeBind = true;
   };
 
+  # joe used to serve a homepage-dashboard here; the start page is now
+  # fleet-edge on h005. Redirect so old bookmarks keep working.
   services.nginx = {
     enable = true;
-    recommendedProxySettings = true;
     virtualHosts = {
       "localhost" = {
         listen = [
           { addr = "127.0.0.1"; port = 80; }
           { addr = c.overlayIp; port = 80; }
         ];
-        locations."/" = homepage;
+        locations."/".return = "302 http://h005.net.${fleet.global.domain}/";
       };
     };
   };

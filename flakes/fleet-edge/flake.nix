@@ -101,6 +101,67 @@
               default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
               description = "fleet-edge package to run.";
             };
+
+            title = lib.mkOption {
+              type = lib.types.str;
+              default = "fleet-edge";
+              description = "Page title shown in the nav bar and browser tab.";
+            };
+
+            background = lib.mkOption {
+              type = lib.types.nullOr (lib.types.either lib.types.path lib.types.str);
+              default = null;
+              example = "https://w.wallhaven.cc/full/k9/wallhaven-k912lq.png";
+              description = ''
+                Background image. An http(s) URL is used directly by the
+                browser; anything else is a local file served at /assets/bg
+                (a Nix path is copied into the store; a string path must be
+                readable by the sandboxed DynamicUser, i.e. not under /home).
+                Passed as FLEET_EDGE_BACKGROUND.
+              '';
+            };
+
+            iconBase = lib.mkOption {
+              type = lib.types.str;
+              default = "https://cdn.jsdelivr.net/gh/selfhst/icons/svg/{name}.svg";
+              description = ''
+                CDN template for named icons; `{name}` is replaced by the icon
+                name. Icons that are full URLs are used as-is; tiles without
+                an icon (or whose icon fails to load) show their first letter.
+              '';
+            };
+
+            links = lib.mkOption {
+              default = [ ];
+              description = ''
+                Start-page entries that aren't container routes (or that
+                override a route's tile: a link whose url matches an inventory
+                route url takes its place and shows its polled state). Groups
+                are rendered in order of first appearance; unclaimed inventory
+                routes follow under "Fleet services".
+              '';
+              type = lib.types.listOf (
+                lib.types.submodule {
+                  options = {
+                    name = lib.mkOption { type = lib.types.str; };
+                    url = lib.mkOption { type = lib.types.str; };
+                    icon = lib.mkOption {
+                      type = lib.types.str;
+                      default = "";
+                      description = "Icon URL or CDN icon name; empty for the letter fallback.";
+                    };
+                    group = lib.mkOption {
+                      type = lib.types.str;
+                      default = "";
+                    };
+                    description = lib.mkOption {
+                      type = lib.types.str;
+                      default = "";
+                    };
+                  };
+                }
+              );
+            };
           };
 
           config = lib.mkIf cfg.enable {
@@ -109,6 +170,16 @@
               wantedBy = [ "multi-user.target" ];
               after = [ "network-online.target" ];
               wants = [ "network-online.target" ];
+
+              environment = {
+                FLEET_EDGE_TITLE = cfg.title;
+                FLEET_EDGE_ICON_BASE = cfg.iconBase;
+                FLEET_EDGE_LINKS = toString (pkgs.writeText "fleet-edge-links.json" (builtins.toJSON cfg.links));
+              }
+              // lib.optionalAttrs (cfg.background != null) {
+                FLEET_EDGE_BACKGROUND =
+                  if builtins.isPath cfg.background then "${cfg.background}" else cfg.background;
+              };
 
               serviceConfig = {
                 ExecStart = ''

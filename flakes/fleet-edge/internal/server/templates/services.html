@@ -1,14 +1,6 @@
-{{define "index.html"}}<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>fleet-edge — services</title>
-<link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-{{template "nav" "services"}}
+{{define "services.html"}}{{template "head" .}}
 <main>
+<header class="page-head">
 <h1>Services</h1>
 <p class="summary">
   <strong>{{.TotalServices}}</strong> services ·
@@ -16,7 +8,8 @@
   <strong>{{.FailedCount}}</strong> failed ·
   <strong>{{.HostsUp}}</strong>/<strong>{{.HostsTotal}}</strong> hosts reachable
 </p>
-<div class="table-wrap">
+</header>
+<div class="scroll table-wrap">
 <table>
 <thead>
 <tr>
@@ -60,6 +53,4 @@
 </div>
 <footer>generated at {{.GeneratedAt}}</footer>
 </main>
-</body>
-</html>
-{{end}}
+{{template "foot" .}}{{end}}

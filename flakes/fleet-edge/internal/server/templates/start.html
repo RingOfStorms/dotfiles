@@ -1,0 +1,29 @@
+{{define "start.html"}}{{template "head" .}}
+<main>
+<header class="page-head">
+  <h1>Apps</h1>
+  <p class="summary"><strong>{{.HostsUp}}</strong>/<strong>{{.HostsTotal}}</strong> hosts reachable · <a href="/services">routes</a> · <a href="/hosts">health</a></p>
+</header>
+<div class="scroll">
+{{range .Groups}}
+<section class="group">
+  <h2>{{.Name}}</h2>
+  <div class="tiles">
+  {{range .Tiles}}
+    <a class="tile" href="{{.URL}}" title="{{.URL}}">
+      <span class="icon">{{if .IconURL}}<img src="{{.IconURL}}" alt="" loading="lazy" onerror="this.remove()">{{end}}<span class="letter">{{.Letter}}</span></span>
+      <span class="tile-text">
+        <span class="tile-name">{{.Name}}{{template "status-dot" .Active}}</span>
+        {{if .Description}}<span class="tile-desc">{{.Description}}</span>{{end}}
+      </span>
+    </a>
+  {{end}}
+  </div>
+</section>
+{{else}}
+<p class="muted">No apps: no inventory routes with URLs and no links configured.</p>
+{{end}}
+</div>
+<footer>generated at {{.GeneratedAt}}</footer>
+</main>
+{{template "foot" .}}{{end}}

@@ -28,6 +28,6 @@ for rollback.
 |---|---|
 | nginx + ACME | Wildcard `*.joshuabell.xyz` (bunny DNS-01); floating sites in `/var/lib/fleet-containers/nginx`. ACME moves to h005 (`containers/ROUTING-PLAN.md`). |
 | restic backup | `mods/restic-backup.nix`, nightly. |
-| homepage-dashboard | To be replaced by the fleet dashboard. |
+| homepage-dashboard | Replaced by fleet-edge on h005; h001.net/h001.local `/` redirects there. |
 | autofs NFS client, storage guard `fleet-guard-h004` | Host plumbing for `arr`. |
 | Per-host agents | sec-agent, beszel-agent, fail2ban, tailscaled. |

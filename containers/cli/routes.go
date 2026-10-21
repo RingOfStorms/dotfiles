@@ -30,6 +30,7 @@ type Route struct {
 	Via               []string `json:"via"`
 	Allow             []string `json:"allow"`
 	Health            *string  `json:"health"`
+	Icon              *string  `json:"icon"` // informational (fleet-edge start page)
 	PublicWithoutAuth bool     `json:"publicWithoutAuth"`
 	// http only (null for tcp/udp)
 	Name       *string `json:"name"`

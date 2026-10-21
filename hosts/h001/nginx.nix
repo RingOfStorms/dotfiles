@@ -8,10 +8,10 @@
 let
   c = constants.host;
   domain = fleet.global.domain;
-  homepagePort = constants.services.homepage.port;
-  homepage = {
-    proxyWebsockets = true;
-    proxyPass = "http://localhost:${toString homepagePort}";
+  # The homepage-dashboard that used to live here moved to fleet-edge on h005;
+  # keep old bookmarks (h001.net / h001.local) working with a redirect.
+  dashboard = {
+    return = "302 http://h005.net.${domain}/";
   };
 in
 {
@@ -72,7 +72,7 @@ in
       };
       "h001.local.${domain}" = {
         locations = {
-          "/" = homepage;
+          "/" = dashboard;
         };
       };
       "${c.overlayIp}" = {
@@ -82,7 +82,7 @@ in
       };
       "h001.net.${domain}" = {
         locations = {
-          "/" = homepage;
+          "/" = dashboard;
         };
       };
 

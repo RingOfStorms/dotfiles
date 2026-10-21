@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/dash"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/state"
 )
@@ -42,8 +45,8 @@ func sample() state.Merged {
 }
 
 func TestHandleIndexRenders(t *testing.T) {
-	srv := New(fakeSource{m: sample()})
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	srv := New(fakeSource{m: sample()}, Config{})
+	req := httptest.NewRequest(http.MethodGet, "/services", nil)
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -56,7 +59,7 @@ func TestHandleIndexRenders(t *testing.T) {
 }
 
 func TestHandleHosts(t *testing.T) {
-	srv := New(fakeSource{m: sample()})
+	srv := New(fakeSource{m: sample()}, Config{})
 	req := httptest.NewRequest(http.MethodGet, "/hosts", nil)
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
@@ -69,7 +72,7 @@ func TestHandleHosts(t *testing.T) {
 }
 
 func TestHandleHealthz(t *testing.T) {
-	srv := New(fakeSource{m: sample()})
+	srv := New(fakeSource{m: sample()}, Config{})
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
@@ -79,7 +82,7 @@ func TestHandleHealthz(t *testing.T) {
 }
 
 func TestHandleAPIStateJSON(t *testing.T) {
-	srv := New(fakeSource{m: sample()})
+	srv := New(fakeSource{m: sample()}, Config{})
 	req := httptest.NewRequest(http.MethodGet, "/api/state.json", nil)
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
@@ -96,8 +99,8 @@ func TestHandleAPIStateJSON(t *testing.T) {
 }
 
 func TestNoPostHandlers(t *testing.T) {
-	srv := New(fakeSource{m: sample()})
-	for _, path := range []string{"/", "/hosts", "/healthz", "/api/state.json"} {
+	srv := New(fakeSource{m: sample()}, Config{})
+	for _, path := range []string{"/", "/services", "/hosts", "/healthz", "/api/state.json"} {
 		req := httptest.NewRequest(http.MethodPost, path, nil)
 		w := httptest.NewRecorder()
 		srv.ServeHTTP(w, req)
@@ -114,7 +117,7 @@ func TestNoPostHandlers(t *testing.T) {
 }
 
 func TestStaticStyleCSSServed(t *testing.T) {
-	srv := New(fakeSource{m: sample()})
+	srv := New(fakeSource{m: sample()}, Config{})
 	req := httptest.NewRequest(http.MethodGet, "/static/style.css", nil)
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
@@ -131,7 +134,7 @@ func TestStaticStyleCSSServed(t *testing.T) {
 }
 
 func TestHostsNoEndpointNotCounted(t *testing.T) {
-	srv := New(fakeSource{m: sample()})
+	srv := New(fakeSource{m: sample()}, Config{})
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/hosts", nil))
 	body := w.Body.String()
@@ -139,8 +142,68 @@ func TestHostsNoEndpointNotCounted(t *testing.T) {
 		t.Fatalf("expected gp3 as no endpoint and nothing unreachable, got: %s", body)
 	}
 	w = httptest.NewRecorder()
-	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
 	if !strings.Contains(w.Body.String(), "<strong>1</strong>/<strong>1</strong> hosts reachable") {
 		t.Fatalf("expected 1/1 hosts reachable, got: %s", w.Body.String())
+	}
+}
+
+func TestStartPageTilesAndIcons(t *testing.T) {
+	cfg := Config{
+		Title: "Josh's Homelab",
+		Links: []dash.Link{
+			{Name: "Photos", URL: "https://photos.joshuabell.xyz", Icon: "immich", Group: "Photos & Docs"},
+			{Name: "Radarr", URL: "http://h001:7878", Group: "Media"},
+		},
+	}
+	srv := New(fakeSource{m: sample()}, cfg)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+	body := w.Body.String()
+	for _, want := range []string{
+		"Photos &amp; Docs",
+		"https://cdn.jsdelivr.net/gh/selfhst/icons/svg/immich.svg",
+		`<span class="letter">R</span>`,
+		"dot-unknown",
+		"Josh&#39;s Homelab",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("start page missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, `class="bg"`) {
+		t.Fatal("no background configured, but bg div rendered")
+	}
+}
+
+func TestBackgroundURL(t *testing.T) {
+	srv := New(fakeSource{m: sample()}, Config{Background: "https://example.com/bg.png"})
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+	if !strings.Contains(w.Body.String(), "https://example.com/bg.png") {
+		t.Fatalf("expected background URL, got %s", w.Body.String())
+	}
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/assets/bg", nil))
+	if w.Code == http.StatusOK {
+		t.Fatal("/assets/bg should not be served for a URL background")
+	}
+}
+
+func TestBackgroundFile(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "bg.svg")
+	if err := os.WriteFile(p, []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv := New(fakeSource{m: sample()}, Config{Background: p})
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/hosts", nil))
+	if !strings.Contains(w.Body.String(), "/assets/bg") || strings.Contains(w.Body.String(), p) {
+		t.Fatalf("expected /assets/bg reference (not the path), got %s", w.Body.String())
+	}
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/assets/bg", nil))
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "<svg") {
+		t.Fatalf("/assets/bg = %d %s", w.Code, w.Body.String())
 	}
 }

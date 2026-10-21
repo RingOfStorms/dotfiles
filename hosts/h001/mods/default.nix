@@ -9,7 +9,6 @@
     ./arr-nginx.nix
     ./hardware-transcoding.nix
     # sec + zitadel run in floating containers (containers/{sec,zitadel}).
-    ./homepage-dashboard.nix
     # ./vault.nix
     ./restic-backup.nix
   ];

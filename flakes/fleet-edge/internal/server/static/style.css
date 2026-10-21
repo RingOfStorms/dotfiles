@@ -1,6 +1,8 @@
 :root {
   color-scheme: dark;
   --bg: #1b1d23;
+  --tile: rgba(35, 38, 46, 0.72);
+  --tile-hover: rgba(53, 65, 74, 0.85);
   --surface: #23262e;
   --surface-alt: #2a2d36;
   --border: #353946;
@@ -26,51 +28,45 @@
   --badge-public-bg: #3a331f;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
-    --bg: #f4f5f7;
-    --surface: #ffffff;
-    --surface-alt: #eceef2;
-    --border: #d8dbe2;
-    --text: #272a33;
-    --muted: #666b7a;
-    --accent: #2b6f99;
-    --accent-soft: #dbeaf3;
-    --green: #22813f;
-    --green-bg: #e2f3e7;
-    --grey: #666b7a;
-    --grey-bg: #eceef2;
-    --red: #b3303e;
-    --red-bg: #f8e2e4;
-    --amber: #9a6c15;
-    --amber-bg: #f6ead0;
-    --badge-local: #566273;
-    --badge-local-bg: #e7e9ee;
-    --badge-tailnet: #5d4b9e;
-    --badge-tailnet-bg: #e9e4f6;
-    --badge-lan: #2b6f99;
-    --badge-lan-bg: #dcecf5;
-    --badge-public: #9a6c15;
-    --badge-public-bg: #f6ead0;
-  }
-}
-
 * { box-sizing: border-box; }
 
+/* Exactly one scrollbar: the page is pinned to the viewport (flex column)
+   and only the .scroll container inside <main> scrolls. */
 html, body {
   margin: 0;
   padding: 0;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
   background: var(--bg);
   color: var(--text);
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 15px;
 }
 
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+.bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+  /* soften the image so text stays readable */
+  filter: brightness(0.45) saturate(0.85);
+}
+
+body.has-bg { background: transparent; }
+body.has-bg .topnav { background: color-mix(in srgb, var(--surface) 75%, transparent); backdrop-filter: blur(8px); }
+
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 .topnav {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 1.25rem;
@@ -86,6 +82,7 @@ a:hover { text-decoration: underline; }
   font-size: 1.05rem;
   margin-right: 0.5rem;
   white-space: nowrap;
+  border-bottom: none;
 }
 
 .topnav a {
@@ -103,9 +100,22 @@ a:hover { text-decoration: underline; }
 }
 
 main {
-  padding: 1.25rem;
+  flex: 1 1 auto;
+  min-height: 0; /* let the flex child shrink so .scroll can scroll */
+  display: flex;
+  flex-direction: column;
+  width: 100%;
   max-width: 1200px;
   margin: 0 auto;
+  padding: 1.25rem;
+}
+
+.page-head { flex: 0 0 auto; }
+
+.scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 h1 {
@@ -122,12 +132,92 @@ h1 {
 .summary strong { color: var(--text); }
 
 .table-wrap {
-  overflow: auto;
-  max-height: calc(100vh - 9rem);
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
 }
+
+/* ---- start page ---- */
+
+.group { margin-bottom: 1.5rem; }
+
+.group h2 {
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 0 0 0.6rem 0.2rem;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.75rem;
+}
+
+.tile {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.75rem 0.9rem;
+  background: var(--tile);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  backdrop-filter: blur(6px);
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+  min-width: 0;
+}
+
+.tile:hover {
+  background: var(--tile-hover);
+  border-color: var(--accent);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.icon {
+  position: relative;
+  flex: 0 0 2.5rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.icon img {
+  position: absolute;
+  inset: 0.25rem;
+  width: calc(100% - 0.5rem);
+  height: calc(100% - 0.5rem);
+  object-fit: contain;
+}
+
+/* letter fallback: hidden behind the image, visible if it is missing or fails */
+.icon img + .letter { visibility: hidden; }
+.letter { font-weight: 700; font-size: 1.1rem; color: var(--accent); }
+
+.tile-text { display: flex; flex-direction: column; min-width: 0; }
+.tile-name { font-weight: 600; display: flex; align-items: center; gap: 0.4rem; }
+.tile-desc {
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; display: inline-block; background: var(--amber); }
+.dot-active { background: var(--green); }
+.dot-inactive { background: var(--grey); }
+.dot-failed { background: var(--red); }
+
+/* ---- tables ---- */
 
 table {
   border-collapse: collapse;
@@ -236,12 +326,14 @@ code, .mono {
 }
 
 footer {
+  flex: 0 0 auto;
   color: var(--muted);
   font-size: 0.8rem;
-  margin-top: 1.25rem;
+  margin-top: 0.75rem;
 }
 
 @media (max-width: 600px) {
   main { padding: 0.75rem; }
   .topnav { padding: 0.6rem 0.75rem; gap: 0.85rem; }
+  .tiles { grid-template-columns: 1fr; }
 }

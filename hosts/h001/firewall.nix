@@ -17,7 +17,7 @@ in
       # 22, 80, 443 and the temp-ports set (3032 forgejo ssh, 8090 beszel hub,
       # arr's 6336/8087/9292/51820) are already open on every interface.
       9112 # trilium desktop-sync listener on the overlay IP (containers/trilium)
-      # arr UIs the homepage links to directly (h001.net.joshuabell.xyz:<port>);
+      # arr UIs the fleet-edge start page (h005) links to directly (h001.net.joshuabell.xyz:<port>);
       # drop each once it is a route behind nginx.
       7878 # radarr
       8989 # sonarr

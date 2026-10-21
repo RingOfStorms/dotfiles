@@ -70,6 +70,7 @@ let
     "via"
     "allow"
     "health"
+    "icon"
     "publicWithoutAuth"
   ];
   httpRouteKeys = [
@@ -151,6 +152,10 @@ let
           msg = "zone = \"private\" names can't be public";
         }
         {
+          bad = (r ? icon) && !(builtins.isString r.icon);
+          msg = "icon must be a string (URL or icon name)";
+        }
+        {
           bad = !(builtins.isList (r.allow or [ ])) || !(builtins.all builtins.isString (r.allow or [ ]));
           msg = "allow must be a list of host names";
         }
@@ -174,6 +179,8 @@ let
         port = r.port;
         allow = r.allow or [ ];
         health = r.health or null;
+        # informational: start-page icon for fleet-edge (URL or CDN icon name)
+        icon = r.icon or null;
         publicWithoutAuth = r.publicWithoutAuth or false;
       }
       // (

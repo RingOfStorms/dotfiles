@@ -7,7 +7,8 @@ in
 {
   ringofstorms.tailnet.trustInterface = false;
 
-  # nginx on the overlay IP: homepage (lio and others use it).
+  # nginx on the overlay IP: redirect to the fleet-edge start page on h005
+  # (was the homepage; kept so bookmarks keep working).
   networking.firewall.interfaces.tailscale0.allowedTCPPorts = [ 80 ];
 
   # LocalAI (containers/localai, podman publish 100.64.0.12:8080) is reached

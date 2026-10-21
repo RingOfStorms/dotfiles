@@ -29,7 +29,7 @@
     };
 
     # Floating containers: containers/{life,litellm,open-webui,searx,trilium,puzzles}
-    # (ports, vhosts live there). Domains kept for the homepage tiles.
+    # (ports, vhosts live there). Domains kept for reference.
     openWebui = {
       domain = "chat.joshuabell.xyz";
     };
@@ -42,9 +42,6 @@
 
     sec.domain = "secrets.joshuabell.xyz"; # floating container (containers/sec)
 
-    homepage = {
-      port = 8082;
-    };
 
     mediaIntegrity = {
       dataDir = "/var/lib/media-integrity";

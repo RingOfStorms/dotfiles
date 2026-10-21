@@ -1,16 +1,7 @@
-{{define "hosts.html"}}<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>fleet-edge — hosts</title>
-<link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-{{template "nav" "hosts"}}
+{{define "hosts.html"}}{{template "head" .}}
 <main>
-<h1>Hosts</h1>
-<div class="table-wrap">
+<header class="page-head"><h1>Hosts</h1></header>
+<div class="scroll table-wrap">
 <table>
 <thead>
 <tr><th>host</th><th>overlay ip</th><th>lan ip</th><th>status</th><th>last poll</th><th>error</th></tr>
@@ -43,6 +34,4 @@
 </div>
 <footer>generated at {{.GeneratedAt}}</footer>
 </main>
-</body>
-</html>
-{{end}}
+{{template "foot" .}}{{end}}

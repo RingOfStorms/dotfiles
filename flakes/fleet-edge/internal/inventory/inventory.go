@@ -27,6 +27,8 @@ type Route struct {
 	// e.g. ["edge"] or ["router"]; empty/absent for non-public routes.
 	Via    []string `json:"via"`
 	Health *string  `json:"health"`
+	// Icon is an optional start-page icon: a URL or a CDN icon name.
+	Icon *string `json:"icon"`
 }
 
 // Str returns s dereferenced, or "" if s is nil. Used by templates and
@@ -46,6 +48,7 @@ func (r Route) URLStr() string  { return Str(r.URL) }
 func (r Route) AuthStr() string { return Str(r.Auth) }
 func (r Route) NameStr() string { return Str(r.Name) }
 func (r Route) ViaStr() string  { return strings.Join(r.Via, ", ") }
+func (r Route) IconStr() string { return Str(r.Icon) }
 
 // Service is one entry of inventory.services.
 type Service struct {

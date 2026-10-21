@@ -228,11 +228,13 @@ adding protection.
   alone. The wildcard for o002 comes in step 4 (issued on h005, distributed
   via sec). Names stay in CT logs, which is fine for public names. Per-name
   certs keep working for new routes because http-01 needs only the CNAME.
-- **`blockInternal` stays off** until the last unconverted service has
-  `routes`, because those still reach h001 `:80` from o002. Until then
-  o002 can technically use the internal listener for any name. That's the
-  same as today, not a regression. Turning it on is the last item of step
-  3 (then `cnt audit` should show o002 hits on `:80` as zero).
+- **`blockInternal` is on for h001** (2026-10-20, generation 818,
+  `hosts/h001/floating-containers.nix`). It only fills
+  `$fleet_edge_block_internal`, which only generated (routes) vhosts check.
+  So o002 now gets 444 (empty reply) for generated names on h001 `:80/:443`,
+  and the unconverted nginx-string sites (notes, sso-proxy, jellyfin, books,
+  media) still reach `:80` from o002 as before. Each service that gets
+  converted is covered automatically.
 - **Migration (zero downtime).** It's additive first, then switches the
   consumer:
   1. h001 rebuild: maps, catch-all and firewall rule. No route uses `:8443` yet.
@@ -639,8 +641,8 @@ Taken 2026-10-16:
    the `tailscale0` trust host by host (h001 first). Add `cnt port open`.
 3. Internal/edge listener split (§2.3, §2.3.1), o002 generated vhosts and
    a wildcard. This retires the hand-kept o002 list. **Done 2026-10-20**,
-   except: the o002 wildcard waits for step 4 (no bunny key on o002), and
-   `blockInternal` waits for the last unconverted service.
+   except: the o002 wildcard waits for step 4 (no bunny key on o002).
+   `blockInternal` is on for h001 (generated vhosts only; see §2.3.1).
 4. `flakes/fleet-edge` on h005: tailnet/LAN DNS records (retires
    `h001Subdomains` and the hand host records), bunny import (diff only,
    adopt existing CNAMEs) + `cnt dns`, DDNS folded in, then cert
