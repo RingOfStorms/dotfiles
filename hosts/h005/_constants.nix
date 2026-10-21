@@ -78,11 +78,14 @@
       { mac = "01:ca:0c:47:ab:d7:4d"; name = "Jos_Mac"; ip = "10.12.14.159"; }
     ];
 
-    # DNS split-horizon records (resolve to local IPs when on home network)
-    localDnsRecords = [
-      { hostname = "media.joshuabell.xyz"; ip = "10.12.14.10"; }
-      { hostname = "jellyfin.joshuabell.xyz"; ip = "10.12.14.10"; }
-      { hostname = "books.joshuabell.xyz"; ip = "10.12.14.10"; }
+    # Devices that may talk on their VLAN but must never reach the internet
+    # (IPv4 or IPv6). Matched by source MAC in the router-isolation forward
+    # chain, before the established/related accept, so existing flows die too.
+    # Same-VLAN traffic (e.g. Home Assistant <-> TV on vlan20) is switched at
+    # L2 and never hits this chain, so LAN control is unaffected.
+    wanDenied = [
+      # LG 75UN9070AUD: telemetry/ACR/ads/OTA. HA controls it locally (ssap :3001).
+      { mac = "24:e8:53:73:a3:c6"; name = "LGWEBOSTV"; }
     ];
 
     # ── Shared DNS upstreams (single source of truth) ──────────────────
@@ -93,7 +96,7 @@
     #   encrypted — DoH/DoT/DoQ URLs. AdGuard ONLY (dnsmasq can't do encrypted).
     #
     # dnsmasq uses `plainIp` for the joshuabell.xyz fallthrough (names not in
-    # localDnsRecords). AdGuard uses plainIp ++ encrypted as its global upstreams.
+    # hosts/h005/dns-records.nix). AdGuard uses plainIp ++ encrypted as its global upstreams.
     #
     # NOTE: dnsmasq's fallthrough upstream MUST be external (never 127.0.0.1:53
     # / AdGuard) or it would create an AdGuard<->dnsmasq loop. `plainIp` is all

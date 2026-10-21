@@ -19,29 +19,29 @@
     nixos = "/var/lib/nixos"; # uid/gid map, keeps file owners stable
   };
 
-  # Opened in the host firewall at deploy time (container shares host network).
-  tcpPorts = [ 25565 ];
+  # Velocity: the only port players use. Public through the router (h005
+  # DNATs WAN :25565 to the host's LAN IP; containers/lib.nix
+  # routerForwards), so the home IP is exposed for this name. Players
+  # connect to minecraft.joshuabell.xyz (CNAME home). Auth: Velocity
+  # online-mode (Mojang accounts) + whitelist.
+  routes.game = {
+    port = 25565;
+    proto = "tcp";
+    exposure = "public";
+    auth = "native";
+    via = [ "router" ];
+  };
 
-  # Written to /var/lib/fleet-containers/nginx/minecraft.conf on the host.
-  # @OVERLAY_IP@ is replaced with the host's tailscale IP from hosts/fleet.nix.
-  # o002 terminates TLS for computerboyz.joshuabell.xyz and proxies here.
-  nginx = ''
-    server {
-      listen @OVERLAY_IP@:80;
-      server_name computerboyz.joshuabell.xyz;
-      location / { return 444; }
-      location /map/survival/ {
-        proxy_pass http://127.0.0.1:8080/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-      }
-    }
-  '';
+  # squaremap (survival), read-only web map on 127.0.0.1:8080. Public via
+  # the edge at https://computerboyz.joshuabell.xyz/ (was /map/survival/).
+  routes.web = {
+    port = 8080;
+    name = "computerboyz";
+    exposure = "public";
+    auth = "none";
+    publicWithoutAuth = true; # read-only map, no accounts
+    group = "Games";
+  };
 
   # Run before stop when backing up / moving. Output: SQL dump in a
   # persisted dir so it travels with the data.

@@ -15,18 +15,11 @@ let
   # h005's overlay IP (this box, constants.host.overlayIp) — the tailnet dnsmasq listener binds here.
   # headscale routes joshuabell.xyz split-DNS to this IP (see o002/headscale.nix).
   selfOverlay = constants.host.overlayIp; # h005 (100.64.0.3)
-  h001Overlay = fleet.hosts.h001.overlayIp; # 100.64.0.13
-  # h001 service subdomains (single source of truth in fleet.nix).
-  h001Services = fleet.h001Subdomains;
-  lioOverlay = fleet.hosts.lio.overlayIp; # 100.64.0.1
-  # lio service subdomains (single source of truth in fleet.nix).
-  lioServices = fleet.lioSubdomains;
 
-  # Fully-qualified Tailnet-only aliases cannot be represented by
-  # `h001Subdomains` (which contains one-label public-zone service names).
-  # Keep them in this split-DNS authority because ~joshuabell.xyz takes
-  # precedence over MagicDNS's net.joshuabell.xyz zone.
-  h001TailnetAliases = [ "secrets.h001.net.${fleet.global.domain}" ];
+  # Service names: generated from containers/*/service.nix routes plus the
+  # few hand-kept ones (../dns-records.nix). Tailnet answers are the serving
+  # host's overlay IP; LAN answers its LAN IP.
+  dnsRecords = import ../dns-records.nix { inherit fleet; };
 
   # ── Private zone ts.joshuabell.xyz (ROUTING-PLAN §2.2) ─────────────
   # Generated from the containers inventory in this repo (working tree, not
@@ -57,41 +50,23 @@ let
     # (No dhcp-range defined here, so this instance serves no DHCP.)
     no-resolv
     no-hosts
-    # All h001 service names -> h001 overlay IP.
-    ${lib.concatMapStringsSep "\n"
-      (n: "host-record=${n}.${fleet.global.domain},${h001Overlay}")
-      h001Services}
+    # Service names -> serving host's overlay IP (../dns-records.nix).
+    ${lib.concatMapStringsSep "\n" (r: "host-record=${r.fqdn},${r.ip}") dnsRecords.tailnet}
 
     # Keep listed service names local for every RR type. `host-record` supplies
     # the local A/PTR data; without this rule, AAAA/CNAME/HTTPS queries fall
     # through to the public CNAME chain and can poison client resolver caches.
-    ${lib.concatMapStringsSep "\n"
-      (n: "local=/${n}.${fleet.global.domain}/")
-      (h001Services ++ lioServices)}
-
-    # Fully-qualified Tailnet-only aliases -> h001 overlay IP.
-    ${lib.concatMapStringsSep "\n"
-      (n: "host-record=${n},${h001Overlay}")
-      h001TailnetAliases}
-
-    # All lio service names -> lio overlay IP.
-    ${lib.concatMapStringsSep "\n"
-      (n: "host-record=${n}.${fleet.global.domain},${lioOverlay}")
-      lioServices}
+    ${lib.concatMapStringsSep "\n" (r: "local=/${r.fqdn}/") dnsRecords.tailnet}
 
     # Private tailnet-only zone: answered here only (NXDOMAIN for unknown
     # names, never forwarded to public DNS). Names point at h005, whose
     # nginx terminates TLS with *.${privateZone}.
     local=/${privateZone}/
-    ${lib.concatMapStringsSep "\n"
-      (r: "host-record=${r.fqdn},${selfOverlay}")
-      privateRoutes}
+    ${lib.concatMapStringsSep "\n" (r: "host-record=${r.fqdn},${selfOverlay}") privateRoutes}
 
     # Fallthrough: any other joshuabell.xyz name -> external resolvers
     # (domain-scoped; never AdGuard/127.0.0.1:53 -> no loop).
-    ${lib.concatMapStringsSep "\n"
-      (u: "server=/${fleet.global.domain}/${u}")
-      net.dnsUpstreams.plainIp}
+    ${lib.concatMapStringsSep "\n" (u: "server=/${fleet.global.domain}/${u}") net.dnsUpstreams.plainIp}
   '';
 in
 {
@@ -175,7 +150,11 @@ in
           iifname "${lan.name}" oifname "${mng.name}" drop
           iifname "${mng.name}" oifname "${lan.name}" drop
           ct state invalid drop
+          ${lib.concatMapStringsSep "\n          " (
+            d: ''ether saddr ${d.mac} counter drop comment "wanDenied ${d.name}"''
+          ) net.wanDenied}
           ct state { established, related } accept
+          ${config.ringofstorms.router.forwardRules}
           iifname "${mng.name}" oifname "${net.wanInterface}" accept
           iifname "${lan.name}" oifname "${net.wanInterface}" accept
         }
@@ -202,7 +181,8 @@ in
       interfaces = {
         # WAN interface - allow nothing inbound by default
         ${net.wanInterface} = {
-          # Block all WAN inbound (no port forwards on h005).
+          # Nothing on h005 itself is open to the WAN. Port forwards to LAN hosts
+          # are DNAT (../router-forwards.nix), not input rules.
           allowedTCPPorts = [ ];
           allowedUDPPorts = [ ];
         };
@@ -218,7 +198,8 @@ in
             53 # DNS
             67 # DHCP server
             68
-          ] ++ lib.optionals config.networking.enableIPv6 [ 547 ]; # DHCPv6 server
+          ]
+          ++ lib.optionals config.networking.enableIPv6 [ 547 ]; # DHCPv6 server
         };
 
         # LAN interface (VLAN 20) - FULL SERVICE
@@ -233,7 +214,8 @@ in
             53 # DNS queries
             67 # DHCP server (dnsmasq)
             68 # DHCP client responses
-          ] ++ lib.optionals config.networking.enableIPv6 [ 547 ]; # DHCPv6 server
+          ]
+          ++ lib.optionals config.networking.enableIPv6 [ 547 ]; # DHCPv6 server
         };
       };
     };
@@ -256,14 +238,14 @@ in
       # AdGuard routes that entire zone here with ONE upstream line (see
       # adguardhome.nix):  [/joshuabell.xyz/]127.0.0.1:9053
       # so ALL local DNS for joshuabell.xyz is configured HERE, declaratively,
-      # via `localDnsRecords` — single source of truth, no per-name AdGuard UI.
+      # via ../dns-records.nix (generated from container routes + a few hand
+      # names) — no per-name AdGuard UI.
       listen-address = "127.0.0.1";
       port = constants.services.dnsmasq.dnsPort;
 
       # Local records: these names resolve to the configured IP. Any
       # joshuabell.xyz name NOT listed falls through to `server=` below.
-      host-record =
-        map (r: "${r.hostname},${r.ip}") net.localDnsRecords;
+      host-record = map (r: "${r.fqdn},${r.ip}") dnsRecords.lan;
 
       # Fallthrough for joshuabell.xyz names not in host-record: forward to the
       # shared external plain-IP upstreams. Domain-scoped so dnsmasq only
@@ -288,7 +270,8 @@ in
         "tag:lan,option:router,${lan.ipv4}"
         "tag:mng,option:dns-server,${mng.ipv4}"
         "tag:lan,option:dns-server,${lan.ipv4}"
-      ] ++ lib.optionals config.networking.enableIPv6 [
+      ]
+      ++ lib.optionals config.networking.enableIPv6 [
         # Explicit DHCPv6 option 23 and RA RDNSS: clients must use AdGuard's
         # VLAN addresses on port 53, not dnsmasq's DNS listener on 9053.
         "tag:mng,option6:dns-server,[${mng.ipv6}]"
@@ -329,7 +312,10 @@ in
   systemd.services.dnsmasq-tailnet = {
     description = "dnsmasq (tailnet DNS-split for *.joshuabell.xyz -> serving host's overlay)";
     # Needs the overlay IP to exist -> tailscaled up first.
-    after = [ "network.target" "tailscaled.service" ];
+    after = [
+      "network.target"
+      "tailscaled.service"
+    ];
     wants = [ "tailscaled.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {

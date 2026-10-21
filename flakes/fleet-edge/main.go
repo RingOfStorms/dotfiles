@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"log"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/bunny"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/dash"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/server"
@@ -31,7 +33,49 @@ func envDefault(key, def string) string {
 	return def
 }
 
+// dnsPlan: `fleet-edge dns-plan --spec records.json --key-file f`.
+// Read-only: fetches the zone and prints what a reconcile would do
+// (ROUTING-PLAN §8 step 4). There is no apply yet.
+func dnsPlan(args []string) {
+	fs := flag.NewFlagSet("dns-plan", flag.ExitOnError)
+	specFile := fs.String("spec", "", "desired records JSON (generated on h005)")
+	keyFile := fs.String("key-file", "", "file holding the bunny API key")
+	zoneFile := fs.String("zone-json", "", "use this saved zone JSON instead of the API (offline)")
+	_ = fs.Parse(args)
+	spec, err := bunny.LoadSpec(*specFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var z *bunny.Zone
+	if *zoneFile != "" {
+		b, err := os.ReadFile(*zoneFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		z = &bunny.Zone{}
+		if err := json.Unmarshal(b, z); err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		key, err := os.ReadFile(*keyFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		z, err = (&bunny.Client{Key: strings.TrimSpace(string(key))}).ZoneByDomain(ctx, spec.Zone)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	bunny.Render(os.Stdout, spec.Zone, bunny.Plan(spec, z))
+}
+
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "dns-plan" {
+		dnsPlan(os.Args[2:])
+		return
+	}
 	listen := flag.String("listen", "127.0.0.1:8099", "address to bind the HTTP server to")
 	inventoryFile := flag.String("inventory", "", "path to inventory JSON (nix eval --json <containers-flake>#inventory)")
 	statusURLTemplate := flag.String("status-url-template", "http://{overlayIp}:9101/status.json",

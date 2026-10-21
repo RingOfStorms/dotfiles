@@ -208,31 +208,8 @@ rec {
     in
     builtins.foldl' (acc: name: acc // mkBlock name hosts.${name}) { } (builtins.attrNames hosts);
 
-  # ─── SERVICE DNS RECORDS ──────────────────────────────────────────
-  # Subdomains served by h001. Consumed by h005's tailnet dnsmasq
-  # (hosts/h005/mods/networking.nix), which resolves them to h001's overlay IP.
-  h001Subdomains = [
-    "jellyfin"
-    "media"
-    "books"
-    "notes"
-    "chat"
-    "sso-proxy"
-    "sso"
-    "gist"
-    "git"
-    "photos"
-    "location"
-    "docs"
-    "life"
-    # tailnet-only LiteLLM vhost (containers/litellm)
-    "litellm"
-    # `secrets` is the secrets manager server (hosts/h001/mods/sec.nix).
-    "secrets"
-  ];
-
-  # Tailnet-only subdomains served by lio (currently none).
-  lioSubdomains = [ ];
+  # Service DNS records (tailnet + LAN) are generated from container routes
+  # on h005 (hosts/h005/dns-records.nix, containers/lib.nix dnsRecords).
 
   # ─── HOST BUILDER ─────────────────────────────────────────────────
   #
@@ -314,8 +291,6 @@ rec {
         inherit
           global
           hosts
-          h001Subdomains
-          lioSubdomains
           mkSshMatchBlocks
           ;
       };

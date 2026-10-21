@@ -355,6 +355,134 @@ in
       builtins.concatMap (s: map (r: r // { service = s; }) (builtins.attrValues s.routes)) services
     );
 
+  # DNS records for every exposed main-zone route, from service.nix
+  # (ROUTING-PLAN §2.1, §8 step 4). Build-time: h005 (tailnet + LAN
+  # dnsmasq) and the bunny reconciler read this, so a record changes when
+  # h005 is rebuilt from a tree with the new service.nix.
+  #   dir    the containers directory
+  #   hosts  fleet.nix hosts (overlayIp, lanIp)
+  # Returns lists of { fqdn; source; ... }, sorted by fqdn:
+  #   tailnet  every non-local route -> its host's overlay IP
+  #   lan      lan + public routes -> its host's LAN IP (hosts without a
+  #            lanIp get no LAN record: LAN clients fall through to public)
+  #   public   public routes -> CNAME o002 (via edge) or home (via router)
+  # Private-zone routes are handled by privateRoutes (h005 terminates them).
+  # Services without a host are skipped (nothing answers there).
+  dnsRecords =
+    { dir, hosts }:
+    let
+      routes = builtins.filter (r: r.exposure != "local" && r.fqdn != null && r.zone != "private") (
+        builtins.concatMap (
+          s:
+          map (
+            n:
+            s.routes.${n}
+            // {
+              source = "${s.name}.${n}";
+              host = s.host;
+            }
+          ) (builtins.attrNames s.routes)
+        ) (builtins.filter (s: s.host != null) (allServices dir))
+      );
+      hostIp =
+        r: field:
+        (hosts.${r.host} or (throw "dnsRecords: ${r.source}: host ${r.host} is not in fleet.nix")).${field}
+          or null;
+      overlayIp =
+        r:
+        let
+          ip = hostIp r "overlayIp";
+        in
+        if ip == null then throw "dnsRecords: ${r.source}: host ${r.host} has no overlayIp" else ip;
+      sortByName = builtins.sort (a: b: a.fqdn < b.fqdn);
+      dups =
+        l:
+        let
+          names = map (x: x.fqdn) l;
+        in
+        builtins.filter (n: builtins.length (builtins.filter (x: x == n) names) > 1) names;
+      checked =
+        l:
+        if dups l != [ ] then
+          throw "dnsRecords: ${builtins.head (dups l)} is declared twice"
+        else
+          sortByName l;
+    in
+    {
+      tailnet = checked (
+        map (r: {
+          inherit (r) fqdn source;
+          ip = overlayIp r;
+        }) routes
+      );
+      lan = checked (
+        map
+          (r: {
+            inherit (r) fqdn source;
+            ip = hostIp r "lanIp";
+          })
+          (
+            builtins.filter (
+              r: (r.exposure == "lan" || r.exposure == "public") && hostIp r "lanIp" != null
+            ) routes
+          )
+      );
+      public = checked (
+        map (r: {
+          inherit (r) fqdn source;
+          type = "CNAME";
+          target = "${if builtins.elem "edge" r.via then "o002" else "home"}.${domain}";
+        }) (builtins.filter (r: r.exposure == "public") routes)
+      );
+    };
+
+  # WAN port forwards on the router (h005) for public `via = router`
+  # tcp/udp routes (ROUTING-PLAN §2.4, §8 step 4). DNAT goes to the
+  # service host's LAN IP, so the host must have one in fleet.nix.
+  # Services without a host are skipped (no forward while inactive).
+  # Returns [ { proto; port; host; ip; source; } ] sorted by proto/port;
+  # two routes forwarding the same proto/port throw.
+  routerForwards =
+    { dir, hosts }:
+    let
+      fwds = builtins.concatMap (
+        s:
+        map
+          (
+            n:
+            let
+              r = s.routes.${n};
+              ip = (hosts.${s.host} or { }).lanIp or null;
+            in
+            if ip == null then
+              throw "routerForwards: ${s.name}.${n}: host ${s.host} has no lanIp in fleet.nix (the router can only forward to the LAN)"
+            else
+              {
+                inherit (r) proto port;
+                inherit ip;
+                host = s.host;
+                source = "${s.name}.${n}";
+              }
+          )
+          (
+            builtins.filter (
+              n:
+              let
+                r = s.routes.${n};
+              in
+              r.exposure == "public" && r.proto != "http" && builtins.elem "router" r.via
+            ) (builtins.attrNames s.routes)
+          )
+      ) (builtins.filter (s: s.host != null) (allServices dir));
+      key = f: "${f.proto}/${toString f.port}";
+      keys = map key fwds;
+      dup = builtins.filter (k: builtins.length (builtins.filter (x: x == k) keys) > 1) keys;
+    in
+    if dup != [ ] then
+      throw "routerForwards: ${builtins.head dup} is forwarded by two routes"
+    else
+      builtins.sort (a: b: key a < key b) fwds;
+
   # The extra-container `config` for a nixos-kind service. Pass it to
   # extra-container.lib.buildContainers { config = ...; }.
   #

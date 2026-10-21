@@ -647,7 +647,59 @@ Taken 2026-10-16:
    `h001Subdomains` and the hand host records), bunny import (diff only,
    adopt existing CNAMEs) + `cnt dns`, DDNS folded in, then cert
    issuance (retires h001's bunny key), then router forwards + DDNS
-   (minecraft back online).
+   (minecraft back online). **Design and status (2026-10-20):**
+   - **Records are build-time Nix, not runtime.** `containers/lib.nix`
+     `dnsRecords { dir; hosts; }` gives `tailnet` (every non-local
+     main-zone route → host overlay IP), `lan` (lan/public → host LAN IP,
+     if it has one) and `public` (public → CNAME `o002`, or `home` for
+     `via = router`). `hosts/h005/dns-records.nix` adds the few hand names
+     (unconverted trilium/arr names, `secrets.h001.net`) and throws if a
+     hand name is also generated. Both dnsmasq instances render them.
+     h005 reads the repo's working tree by path, like `private-zone.nix`,
+     so a route change takes effect on the next h005 rebuild. No runtime
+     path: records only change when a service.nix changes, which is already
+     a commit and a deploy. A runtime writer (hostsdir + inotify) would add
+     a second source of truth and a failure mode for every lookup, and
+     saves only one rebuild. Revisit with `cnt expose`/`move` (step 7/9),
+     where a hostsdir fed by fleet-edge is the natural extension. **Done**:
+     h005 switched; `h001Subdomains`/`lioSubdomains`/`localDnsRecords` are gone.
+   - **Public (bunny): declarative reconcile from h005, plan first.**
+     `dns-records.nix` `publicSpec` = generated CNAMEs + hand names
+     (anchors `o002`/`headscale` A, o002 hand vhosts, `minecraft`), TTL
+     300. `fleet-edge dns-plan` (read-only GET) compares it with the zone:
+     create / update / keep / **conflict** (another type in the way, e.g.
+     the old `docs` A record; never replaced automatically) / **external**
+     (`home`, written by DDNS) / **unmanaged** (everything else: mail,
+     DKIM, old names; never deleted). Ownership = the spec; anything not
+     in it is someone else's. Apply (next): write only create/update rows,
+     one batch per run, then re-plan to confirm. Deleting a name means
+     moving it to an explicit `retire` list, never just dropping it. DDNS
+     stays the `ddns-update` timer for now and folds in later as a spec
+     entry with a dynamic value.
+   - **Certificates: one wildcard issued on h005.** `*.joshuabell.xyz` +
+     apex via DNS-01 on h005 (the key is already there), pushed to sec, and
+     o002 and h001 pull it on a timer and reload nginx (§6 item 15). That
+     retires o002's per-name http-01 and h001's bunny key. Until the
+     distribution path exists, o002 keeps per-name certs (they work,
+     and a new public name only needs its CNAME).
+   - **Router forwards: build-time too.** `lib.nix` `routerForwards` lists
+     public `via = router` tcp/udp routes of services with a host → DNAT to
+     the host's LAN IP (`networking.nat.forwardPorts`) plus one exact
+     accept rule in h005's `router-isolation` chain
+     (`hosts/h005/router-forwards.nix`). IPv4 only, no hairpin (LAN DNS
+     answers the LAN IP). Inactive service (`host = null`) → no forward.
+     minecraft is converted (`routes.game` tcp 25565 via router,
+     `routes.web` = squaremap at `computerboyz` via edge). Code done,
+     **not deployed**.
+   - **Order**: DNS (done) → bunny apply (TTL-only diff today) →
+     minecraft (restore on a LAN host, set `host`, deploy, rebuild h005
+     for the forward, rebuild o002 for the generated `computerboyz`, drop
+     its hand vhost and hand CNAME) → wildcard on h005 + distribution →
+     drop h001's key. **Rollback**: h005 previous generation (DNS and
+     forwards are in the system closure); bunny via the plan's old values.
+   - **Stays hand-kept**: unconverted service names (trilium, arr) in
+     `dns-records.nix`; apex/www/ellalala/headscale/o002 on o002; mail
+     and DKIM records (unmanaged).
 5. Private container networking, service by service, arr last.
 6. Fleet oauth2-proxy on h005 + per-route `auth`, with cookie stripping
    from the first gated route.

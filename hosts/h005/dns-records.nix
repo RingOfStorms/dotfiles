@@ -1,0 +1,134 @@
+# Tailnet + LAN DNS records served by h005's dnsmasq (ROUTING-PLAN §8 step 4).
+#
+# Container routes are generated from containers/*/service.nix by
+# containers/lib.nix `dnsRecords` (read from this repo's working tree at build
+# time, like private-zone.nix). Only names that aren't container routes yet
+# are listed here by hand. Converting a service to `routes` means deleting
+# its names below; the eval refuses a name that is both.
+{ fleet }:
+let
+  domain = fleet.global.domain;
+  h001 = fleet.hosts.h001;
+  generated = (import ../../containers/lib.nix).dnsRecords {
+    dir = ../../containers;
+    inherit (fleet) hosts;
+  };
+
+  # Unconverted h001 services (nginx strings / host modules): trilium
+  # (notes, sso-proxy), arr (jellyfin, media = seerr, books = kavita).
+  handTailnet =
+    map
+      (n: {
+        fqdn = "${n}.${domain}";
+        ip = h001.overlayIp;
+        source = "hand (h005/dns-records.nix)";
+      })
+      [
+        "jellyfin"
+        "media"
+        "books"
+        "notes"
+        "sso-proxy"
+      ]
+    ++ [
+      # Fully-qualified tailnet alias. ~joshuabell.xyz split DNS wins over
+      # MagicDNS's net.joshuabell.xyz zone, so it has to be answered here.
+      {
+        fqdn = "secrets.h001.net.${domain}";
+        ip = h001.overlayIp;
+        source = "hand (h005/dns-records.nix)";
+      }
+    ];
+
+  # LAN answers for unconverted h001 services (were _constants.nix
+  # localDnsRecords).
+  handLan =
+    map
+      (n: {
+        fqdn = "${n}.${domain}";
+        ip = h001.lanIp;
+        source = "hand (h005/dns-records.nix)";
+      })
+      [
+        "media"
+        "jellyfin"
+        "books"
+      ];
+
+  merge =
+    what: gen: hand:
+    let
+      genNames = map (r: r.fqdn) gen;
+      clash = builtins.filter (r: builtins.elem r.fqdn genNames) hand;
+    in
+    if clash != [ ] then
+      throw "h005/dns-records.nix: ${what} ${(builtins.head clash).fqdn} is generated from containers now; delete the hand entry"
+    else
+      gen ++ hand;
+in
+{
+  tailnet = merge "tailnet" generated.tailnet handTailnet;
+  lan = merge "lan" generated.lan handLan;
+  public = generated.public;
+
+  # Desired bunny zone for `fleet-edge dns-plan` (ROUTING-PLAN §8 step 4).
+  # Generated route CNAMEs plus the hand-kept public names below. Records
+  # in the zone that are neither are reported as unmanaged, never deleted.
+  publicSpec =
+    let
+      ttl = 300;
+      cname = target: n: {
+        name = n;
+        type = "CNAME";
+        value = "${target}.${domain}";
+        inherit ttl;
+        source = "hand (h005/dns-records.nix)";
+      };
+      gen = map (r: {
+        name = builtins.replaceStrings [ ".${domain}" ] [ "" ] r.fqdn;
+        type = r.type;
+        value = r.target;
+        inherit ttl;
+        inherit (r) source;
+      }) generated.public;
+      hand = [
+        {
+          name = "o002";
+          type = "A";
+          value = fleet.hosts.o002.publicIp;
+          inherit ttl;
+          source = "hand (edge anchor)";
+        }
+        {
+          name = "headscale";
+          type = "A";
+          value = fleet.hosts.o002.publicIp;
+          inherit ttl;
+          source = "hand (headscale on o002)";
+        }
+      ]
+      # o002 hand vhosts (hosts/oracle/o002/nginx.nix) and unconverted h001 services.
+      ++ map (cname "o002") [
+        "www"
+        "computerboyz"
+        "notes"
+        "sso-proxy"
+        "jellyfin"
+        "books"
+        "media"
+      ]
+      # minecraft: router path (step 4, router forwards).
+      ++ map (cname "home") [ "minecraft" ];
+      genNames = map (r: r.name) gen;
+      clash = builtins.filter (r: builtins.elem r.name genNames) hand;
+    in
+    if clash != [ ] then
+      throw "h005/dns-records.nix: public ${(builtins.head clash).name} is generated from containers now; delete the hand entry"
+    else
+      {
+        zone = domain;
+        records = gen ++ hand;
+        # home's A record is written by the DDNS timer (mods/ddns.nix).
+        external = [ "home" ];
+      };
+}

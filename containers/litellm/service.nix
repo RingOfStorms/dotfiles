@@ -1,6 +1,6 @@
 # LiteLLM proxy on 127.0.0.1:8094 (host network). open-webui uses it over
 # loopback; other hosts go through the tailnet-only vhost
-# https://litellm.joshuabell.xyz (the name is in fleet.nix h001Subdomains).
+# https://litellm.joshuabell.xyz (tailnet DNS generated from this route on h005).
 # Was hosts/h001/mods/litellm.nix on bare metal.
 {
   name = "litellm";

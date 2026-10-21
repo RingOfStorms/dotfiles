@@ -89,7 +89,7 @@ in
           # Upstreams. The ENTIRE joshuabell.xyz zone is routed to the local
           # dnsmasq (127.0.0.1:9053), which is the single authoritative source
           # for all local records under that domain (see networking.nix +
-          # _constants.nix:localDnsRecords). Everything else uses the shared
+          # dns-records.nix). Everything else uses the shared
           # upstream set (plain IPs + encrypted), from _constants.nix so AdGuard
           # and dnsmasq stay in sync.
           upstream_dns = [
