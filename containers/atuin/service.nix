@@ -20,6 +20,8 @@
   # o002 terminates TLS for the public name and proxies to h001:80 over the
   # tailnet; tailnet clients may hit h001:443 directly (wildcard cert).
   routes.web = {
+    group = "Personal";
+    icon = "https://api.iconify.design/mdi/console.svg?color=%237ee787";
     port = 8888;
     exposure = "public";
     auth = "native";

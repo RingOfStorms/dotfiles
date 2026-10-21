@@ -24,13 +24,19 @@ const DefaultGroup = "Fleet services"
 
 // Link is a configured start-page entry that isn't (necessarily) a
 // container route. A link whose URL equals a route URL replaces that
-// route's tile and inherits its polled state.
+// route's tile and inherits its polled state (including its host).
+// Host optionally names the fleet host serving a non-route link; when
+// empty the host is inferred from the URL.
 type Link struct {
 	Name        string `json:"name"`
 	URL         string `json:"url"`
 	Icon        string `json:"icon"`
 	Group       string `json:"group"`
 	Description string `json:"description"`
+	Host        string `json:"host"`
+	// Exposure (public, tailnet, lan, local) labels the link; a matching
+	// inventory route's exposure wins.
+	Exposure string `json:"exposure"`
 }
 
 // LoadLinks reads a JSON array of links. An empty path means no links.
@@ -104,13 +110,14 @@ func Letter(name string) string {
 
 // Build merges inventory http routes with links into ordered groups.
 // Link groups come first, in order of first appearance; unclaimed routes
-// follow in DefaultGroup, sorted by name.
+// follow in their route group (DefaultGroup if unset), sorted by name.
 func Build(m state.Merged, links []Link, iconBase string) []Group {
 	type routeInfo struct {
 		svc  state.ServiceView
 		icon string
 		exp  string
 		name string
+		grp  string
 	}
 	byURL := map[string]routeInfo{}
 	var urls []string
@@ -123,7 +130,7 @@ func Build(m state.Merged, links []Link, iconBase string) []Group {
 			if _, dup := byURL[u]; !dup {
 				urls = append(urls, u)
 			}
-			byURL[u] = routeInfo{svc: svc, icon: rt.IconStr(), exp: rt.Exposure, name: rt.NameStr()}
+			byURL[u] = routeInfo{svc: svc, icon: rt.IconStr(), exp: rt.Exposure, name: rt.NameStr(), grp: rt.GroupStr()}
 		}
 	}
 
@@ -157,6 +164,12 @@ func Build(m state.Merged, links []Link, iconBase string) []Group {
 			}
 		}
 		t.IconURL = ResolveIcon(icon, iconBase)
+		if t.Exposure == "" {
+			t.Exposure = l.Exposure
+		}
+		if t.Host == "" {
+			t.Host = l.Host
+		}
 		if t.Host == "" {
 			t.Host = hosts.Infer(l.URL)
 		}
@@ -169,7 +182,7 @@ func Build(m state.Merged, links []Link, iconBase string) []Group {
 			continue
 		}
 		ri := byURL[u]
-		add(DefaultGroup, Tile{
+		add(ri.grp, Tile{
 			Name: ri.name, URL: u, Letter: Letter(ri.name),
 			IconURL:     ResolveIcon(ri.icon, iconBase),
 			Description: ri.svc.Description, Service: ri.svc.Name,

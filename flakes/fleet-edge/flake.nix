@@ -138,7 +138,7 @@
                 override a route's tile: a link whose url matches an inventory
                 route url takes its place and shows its polled state). Groups
                 are rendered in order of first appearance; unclaimed inventory
-                routes follow under "Fleet services".
+                routes follow under their route `group` ("Fleet services" if unset).
               '';
               type = lib.types.listOf (
                 lib.types.submodule {
@@ -157,6 +157,24 @@
                     description = lib.mkOption {
                       type = lib.types.str;
                       default = "";
+                    };
+                    host = lib.mkOption {
+                      type = lib.types.str;
+                      default = "";
+                      description = ''
+                        Fleet host serving this link. Ignored when the url
+                        matches an inventory route (the route's host wins);
+                        empty means infer from the url.
+                      '';
+                    };
+                    exposure = lib.mkOption {
+                      type = lib.types.enum [ "" "public" "tailnet" "lan" "local" ];
+                      default = "";
+                      description = ''
+                        Exposure badge for this link. Ignored when the url
+                        matches an inventory route (the route's exposure wins);
+                        empty shows no badge.
+                      '';
                     };
                   };
                 }

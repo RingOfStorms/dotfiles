@@ -18,6 +18,8 @@
   # nginx until the internal listener split (ROUTING-PLAN §2.3). Streaming
   # completions: no proxy buffering, long timeouts.
   routes.web = {
+    group = "AI";
+    icon = "https://api.iconify.design/fluent-emoji-flat/locomotive.svg";
     port = 8094;
     exposure = "tailnet";
     auth = "native";

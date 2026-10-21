@@ -7,10 +7,11 @@
 # source ranges. URL: http://h005.net.joshuabell.xyz/ (MagicDNS).
 #
 # Start page: replaces the homepage-dashboard instances that used to run on
-# h001 (h001.net/h001.local) and joe (now redirects here). `links` below is
-# the ported h001 homepage content; links whose url matches an inventory
+# h001 and joe (retired, no redirects left). `links` below is the ported
+# h001 homepage content; `host` pins the serving host for links the URL
+# can't be traced to (public vhosts proxied to h001); links whose url matches an inventory
 # route take over that route's tile (and show its polled state). Remaining
-# inventory routes appear under "Fleet services".
+# inventory routes appear under their route `group` (containers/<svc>/service.nix).
 {
   inputs,
   constants,
@@ -22,21 +23,25 @@ let
   overlayIp = constants.host.overlayIp;
   domain = fleet.global.domain;
   h001 = "http://h001.net.${domain}";
-  link = group: name: url: icon: description: {
+  link = group: name: url: icon: description: exposure: {
     inherit
       group
       name
       url
       icon
       description
+      exposure
       ;
   };
-  apps = link "Public Apps";
+  # explicit serving host for public vhosts the URL can't be traced to
+  on = host: l: l // { inherit host; };
   media = link "Media";
-  docs = link "Photos & Docs";
+  arr = link "Media Automation";
+  prod = link "Productivity";
   ident = link "Identity & Security";
   net = link "Network";
   ai = link "AI";
+  personal = link "Personal";
 in
 {
   imports = [ inputs.fleet-edge.nixosModules.default ];
@@ -46,41 +51,57 @@ in
     inventoryFile = pkgs.writeText "fleet-inventory.json" (builtins.toJSON inputs.containers.inventory);
     title = "Josh's Homelab";
     background = "https://w.wallhaven.cc/full/k9/wallhaven-k912lq.png";
+    # exposure: badge for links that aren't inventory routes (a matching
+    # route's exposure wins). Unclaimed routes use their own route group.
     links = [
-      (apps "Git" "https://git.${domain}" "forgejo" "Forgejo")
-      (apps "Gist" "https://gist.${domain}" "opengist" "Opengist")
-      (apps "Open WebUI" "https://chat.${domain}" "open-webui" "LLM Chats")
-      (apps "Puzzles" "https://puzzles.${domain}" "" "Puzzles")
+      (on "h001" (media "Jellyfin" "https://jellyfin.${domain}" "jellyfin" "Media Streaming" "public"))
+      (on "h001" (media "Jellyseerr" "https://media.${domain}" "jellyseerr" "Media Requests" "public"))
+      (on "h001" (media "Kavita" "https://books.${domain}" "kavita" "Ebook Library" "public"))
+      (media "Audiobookshelf" "${h001}:9292" "audiobookshelf" "Audiobooks & Podcasts" "tailnet")
+      (media "Photos" "https://photos.${domain}" "immich" "Immich" "public")
 
-      (media "Jellyfin" "https://jellyfin.${domain}" "jellyfin" "Media Streaming")
-      (media "Jellyseerr" "https://media.${domain}" "jellyseerr" "Media Requests")
-      (media "Radarr" "${h001}:7878" "radarr" "Movie Automation")
-      (media "Sonarr" "${h001}:8989" "sonarr" "Show Automation")
-      (media "Bazarr" "${h001}:6767" "bazarr" "Subtitle Automation")
-      (media "Prowlarr" "${h001}:9696" "prowlarr" "Indexer Manager")
-      (media "SABnzbd" "${h001}:6336" "sabnzbd" "Usenet Downloader")
-      (media "Transmission" "${h001}:9091" "transmission" "Torrent Downloader")
-      (media "Shelfmark" "${h001}:8087" "shelfmark" "Books & Audiobooks")
-      (media "Kavita" "https://books.${domain}" "kavita" "Ebook Library")
-      (media "Audiobookshelf" "${h001}:9292" "audiobookshelf" "Audiobooks & Podcasts")
-      (media "Media Integrity" "${h001}/media-health/" "" "FFmpeg Integrity Report")
+      (arr "Radarr" "${h001}:7878" "radarr" "Movie Automation" "tailnet")
+      (arr "Sonarr" "${h001}:8989" "sonarr" "Show Automation" "tailnet")
+      (arr "Bazarr" "${h001}:6767" "bazarr" "Subtitle Automation" "tailnet")
+      (arr "Prowlarr" "${h001}:9696" "prowlarr" "Indexer Manager" "tailnet")
+      (arr "SABnzbd" "${h001}:6336" "sabnzbd" "Usenet Downloader" "tailnet")
+      (arr "Transmission" "${h001}:9091" "transmission" "Torrent Downloader" "tailnet")
+      (arr "Shelfmark" "${h001}:8087" "shelfmark" "Books & Audiobooks" "tailnet")
+      (arr "Media Integrity" "${h001}/media-health/"
+        "https://api.iconify.design/mdi/movie-check-outline.svg?color=%237fb0e8"
+        "FFmpeg Integrity Report"
+        "tailnet"
+      )
 
-      (docs "Photos" "https://photos.${domain}" "immich" "Immich")
-      (docs "Docs" "https://docs.${domain}" "paperless-ngx" "Paperless-ngx")
-      (docs "Notes" "https://notes.${domain}" "trilium-notes" "Trilium")
-      (docs "Location" "https://location.${domain}" "dawarich" "Dawarich")
+      (prod "Docs" "https://docs.${domain}" "paperless-ngx" "Paperless-ngx" "tailnet")
+      (on "h001" (prod "Notes" "https://notes.${domain}" "trilium-notes" "Trilium" "public"))
+      (prod "Git" "https://git.${domain}" "forgejo" "Forgejo" "public")
+      (prod "Gist" "https://gist.${domain}" "opengist" "Opengist" "public")
 
-      (ident "SSO" "https://sso.${domain}" "zitadel" "Zitadel")
-      (ident "Secrets" "https://secrets.${domain}" "" "Secrets Manager")
+      (ident "SSO" "https://sso.${domain}" "zitadel" "Zitadel" "public")
+      # icon from the route (containers/sec)
+      (ident "Secrets" "https://secrets.${domain}" "" "Secrets Manager" "public")
+
+      (ai "Open WebUI" "https://chat.${domain}" "open-webui" "LLM Chats" "public")
+      # was joe's homepage (its only tile); icon from the route
+      (ai "LocalAI" "https://localai.ts.${domain}" "" "Image generation + TTS API (joe)" "tailnet")
 
       # AdGuard runs on h005; its admin UI (:3000) is reachable from the LAN only.
       (net "AdGuard Home" "http://${constants.network.vlans.lan.ipv4}:3000" "adguard-home"
         "Ad-blocker (LAN only)"
+        "lan"
       )
-      (net "Beszel" "${h001}:8090" "beszel" "Server Metrics")
+      (net "Beszel" "${h001}:8090" "beszel" "Server Metrics" "tailnet")
+      (on "h005" (
+        net "Fleet Edge" "http://h005.net.${domain}/"
+          "https://api.iconify.design/mdi/view-dashboard-outline.svg?color=%237fb0e8"
+          "This dashboard: routes + host health"
+          "tailnet"
+      ))
 
-      # was joe's homepage (its only tile)
-      (ai "LocalAI" "https://localai.ts.${domain}" "" "Image generation + TTS API (joe)")
+      # icon from the route (containers/puzzles)
+      (personal "Puzzles" "https://puzzles.${domain}" "" "Puzzles" "public")
+      (personal "Location" "https://location.${domain}" "dawarich" "Dawarich" "public")
     ];
   };
 

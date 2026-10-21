@@ -19,6 +19,8 @@
   backupHook = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
 
   routes.web = {
+
+    group = "Productivity";
     port = 3000;
     name = "git";
     exposure = "public";

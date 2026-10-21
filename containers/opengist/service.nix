@@ -29,6 +29,7 @@
   # o002 terminates TLS for the public name and proxies to h001:80 over the
   # tailnet; LAN/tailnet clients may hit h001:443 directly (wildcard cert).
   routes.web = {
+    group = "Productivity";
     port = 6157;
     name = "gist";
     exposure = "public";

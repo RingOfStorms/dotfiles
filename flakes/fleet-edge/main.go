@@ -44,7 +44,7 @@ func main() {
 	iconBase := flag.String("icon-base", envDefault("FLEET_EDGE_ICON_BASE", dash.DefaultIconBase),
 		"CDN template for named icons, {name} substituted (env FLEET_EDGE_ICON_BASE)")
 	linksFile := flag.String("links", envDefault("FLEET_EDGE_LINKS", ""),
-		"JSON array of extra start-page links [{name,url,icon,group,description}] (env FLEET_EDGE_LINKS)")
+		"JSON array of extra start-page links [{name,url,icon,group,description,host,exposure}] (env FLEET_EDGE_LINKS)")
 	flag.Parse()
 
 	if *inventoryFile == "" {

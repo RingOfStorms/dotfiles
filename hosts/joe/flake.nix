@@ -132,7 +132,6 @@
           ./nixld.nix
           inputs.containers.nixosModules.default
           ./containers.nix
-          ./nginx.nix
           ./firewall.nix
           (import ./impermanence.nix {
             inherit primaryUser;

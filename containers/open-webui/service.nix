@@ -15,6 +15,7 @@
   # maxBody 500m = h001's http-level client_max_body_size, which the old
   # vhost (no own limit) inherited.
   routes.web = {
+    group = "AI";
     port = 8084;
     name = "chat";
     exposure = "public";

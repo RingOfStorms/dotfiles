@@ -13,7 +13,7 @@
     <a class="tile" href="{{.URL}}" title="{{.URL}}">
       <span class="icon">{{if .IconURL}}<img src="{{.IconURL}}" alt="" loading="lazy" onerror="this.remove()">{{end}}<span class="letter">{{.Letter}}</span></span>
       <span class="tile-text">
-        <span class="tile-name">{{.Name}}{{template "status-dot" .Active}}{{if .Host}}<span class="host-pill" title="host {{.Host}}">{{.Host}}</span>{{end}}</span>
+        <span class="tile-name">{{.Name}}{{template "status-dot" .Active}}<span class="tile-badges">{{if .Exposure}}<span class="exp-pill exp-{{.Exposure}}" title="exposure {{.Exposure}}">{{.Exposure}}</span>{{end}}{{if .Host}}<span class="host-pill" title="host {{.Host}}">{{.Host}}</span>{{end}}</span></span>
         {{if .Description}}<span class="tile-desc">{{.Description}}</span>{{end}}
       </span>
     </a>

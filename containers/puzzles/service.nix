@@ -14,6 +14,8 @@
   # maxBody 500m = h001's http-level client_max_body_size, which the old
   # vhost (no own limit) inherited.
   routes.web = {
+    group = "Personal";
+    icon = "https://api.iconify.design/fluent-emoji-flat/puzzle-piece.svg";
     port = 8093;
     exposure = "public";
     auth = "native";

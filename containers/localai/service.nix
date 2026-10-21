@@ -37,6 +37,8 @@
   # would break the existing Open WebUI / agent clients); the tailnet is the
   # boundary, same as the raw port before this route.
   routes.web = {
+    group = "AI";
+    icon = "https://api.iconify.design/fluent-emoji-flat/llama.svg";
     port = 8080;
     zone = "private";
     exposure = "tailnet";

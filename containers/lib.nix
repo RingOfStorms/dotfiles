@@ -71,6 +71,7 @@ let
     "allow"
     "health"
     "icon"
+    "group"
     "publicWithoutAuth"
   ];
   httpRouteKeys = [
@@ -156,6 +157,10 @@ let
           msg = "icon must be a string (URL or icon name)";
         }
         {
+          bad = (r ? group) && !(builtins.isString r.group && r.group != "");
+          msg = "group must be a non-empty string";
+        }
+        {
           bad = !(builtins.isList (r.allow or [ ])) || !(builtins.all builtins.isString (r.allow or [ ]));
           msg = "allow must be a list of host names";
         }
@@ -181,6 +186,8 @@ let
         health = r.health or null;
         # informational: start-page icon for fleet-edge (URL or CDN icon name)
         icon = r.icon or null;
+        # informational: start-page category for fleet-edge
+        group = r.group or null;
         publicWithoutAuth = r.publicWithoutAuth or false;
       }
       // (

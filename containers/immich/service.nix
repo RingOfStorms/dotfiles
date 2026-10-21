@@ -25,6 +25,7 @@
   # route would add them to the ports file, which opens them on every
   # interface, wider than today (tailscale0 only, via its trust).
   routes.web = {
+    group = "Media";
     port = 2283;
     name = "photos";
     exposure = "public";

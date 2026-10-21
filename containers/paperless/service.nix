@@ -23,6 +23,7 @@
   # Tailnet-only (not proxied by o002); the allow/deny keeps that enforced in
   # nginx until the internal listener split (ROUTING-PLAN §2.3).
   routes.web = {
+    group = "Productivity";
     port = 28981;
     name = "docs";
     exposure = "tailnet";

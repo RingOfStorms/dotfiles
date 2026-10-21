@@ -241,7 +241,7 @@ adding protection.
   2. `cnt deploy <svc>` for each public route service: adds the edge
      servers, and the internal ones keep serving o002 on `:80`.
   3. o002 rebuild: the generated vhosts point at `:8443`.
-  4. (later) `blockInternal = true` on h001.
+  4. `blockInternal = true` on h001 (done; legacy sites unaffected, see above).
 
   Rollback is the reverse at any point. o002's previous generation points
   at `:80`, which keeps working throughout, and the h001 additions are inert

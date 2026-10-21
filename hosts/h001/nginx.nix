@@ -8,10 +8,10 @@
 let
   c = constants.host;
   domain = fleet.global.domain;
-  # The homepage-dashboard that used to live here moved to fleet-edge on h005;
-  # keep old bookmarks (h001.net / h001.local) working with a redirect.
-  dashboard = {
-    return = "302 http://h005.net.${domain}/";
+  # The homepage-dashboard that used to live here moved to fleet-edge on h005
+  # (http://h005.net.${domain}/); the old entry points are retired.
+  retired = {
+    locations."/".return = "500";
   };
 in
 {
@@ -63,29 +63,12 @@ in
       proxy_headers_hash_max_size 1024;
     '';
     virtualHosts = {
-      "${c.lanIp}" = {
-        locations = {
-          "/" = {
-            return = "301 http://h001.local.${domain}";
-          };
-        };
-      };
-      "h001.local.${domain}" = {
-        locations = {
-          "/" = dashboard;
-        };
-      };
-      "${c.overlayIp}" = {
-        locations."/" = {
-          return = "301 http://h001.net.${domain}";
-        };
-      };
-      "h001.net.${domain}" = {
-        locations = {
-          "/" = dashboard;
-        };
-      };
-
+      # h001.net.${domain}: /media-health/ (longer prefix, wins) is declared in
+      # mods/arr-nginx.nix; everything else is retired.
+      "h001.net.${domain}" = retired;
+      "h001.local.${domain}" = retired;
+      "${c.lanIp}" = retired;
+      "${c.overlayIp}" = retired;
       "_" = {
         rejectSSL = true;
         default = true;

@@ -23,6 +23,7 @@
   # broke login before).
   # puma binds 127.0.0.1:3001 (BINDING in container.nix).
   routes.web = {
+    group = "Personal";
     port = 3001;
     name = "location";
     exposure = "public";

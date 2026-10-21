@@ -17,8 +17,6 @@ Desktop (HP OMEN 20L)
 
 | Service | Notes |
 |---|---|
-| nginx | Floating sites |
-| homepage-dashboard | Removed; nginx :80 redirects to fleet-edge on h005 |
 | Per-host agents | sec-agent, fail2ban, tailscaled |
 
 Floating: `localai` (podman, `cnt ls`).

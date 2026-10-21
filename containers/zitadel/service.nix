@@ -29,6 +29,7 @@
   # keeps the default forwardedProto = "https" so zitadel still believes it
   # is https. Public via edge (o002) since every login starts here.
   routes.web = {
+    group = "Identity & Security";
     port = 8085;
     name = "sso";
     exposure = "public";

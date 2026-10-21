@@ -17,6 +17,7 @@
   # directly. The socket exists only on 100.64.0.13, so the ports-file
   # entry this adds cannot expose it on the LAN.
   routes.hub = {
+    group = "Network";
     port = 8090;
     proto = "tcp";
     exposure = "tailnet";

@@ -20,6 +20,8 @@
   # vaultwarden listens on 127.0.0.1:8222 (host network). o002 terminates TLS
   # for the public name and proxies to h001:80 over the tailnet.
   routes.web = {
+    group = "Identity & Security";
+    icon = "https://api.iconify.design/mdi/shield-lock.svg?color=%237fb0e8";
     port = 8222;
     name = "vault";
     exposure = "public";

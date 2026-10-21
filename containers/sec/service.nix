@@ -23,6 +23,8 @@
   # Public via edge (o002): a new machine reads its headscale join key over
   # the internet before it is on the tailnet (see o002/nginx.nix).
   routes.web = {
+    group = "Identity & Security";
+    icon = "https://api.iconify.design/game-icons/locked-chest.svg?color=%23e0b25c";
     port = 8300;
     name = "secrets";
     exposure = "public";

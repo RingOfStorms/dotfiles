@@ -140,3 +140,67 @@ func TestHostInference(t *testing.T) {
 		}
 	}
 }
+
+func TestLinkHostPrecedence(t *testing.T) {
+	inv := &inventory.Inventory{
+		Services: map[string]inventory.Service{
+			"immich": {Name: "immich", Host: "h001", Routes: map[string]inventory.Route{
+				"web": {Name: strp("photos"), URL: strp("https://photos.example.com")},
+			}},
+		},
+		Hosts: map[string]inventory.Host{
+			"h001": {}, "h002": {}, "h005": {LanIP: strp("10.12.14.1")},
+		},
+	}
+	m := state.Merge(inv, nil)
+	links := []Link{
+		// inventory route host beats explicit host
+		{Name: "Photos", URL: "https://photos.example.com/", Host: "h002"},
+		// explicit host beats inference
+		{Name: "Jellyfin", URL: "http://10.12.14.1:8096", Host: "h001"},
+		// no explicit host: inferred
+		{Name: "Other", URL: "http://10.12.14.1:3000"},
+		// explicit host with nothing inferable
+		{Name: "Ext", URL: "https://example.org", Host: "h002"},
+	}
+	gs := Build(m, links, "")
+	want := []string{"h001", "h001", "h005", "h002"}
+	for i, w := range want {
+		if got := gs[0].Tiles[i].Host; got != w {
+			t.Errorf("tile %s host = %q, want %q", gs[0].Tiles[i].Name, got, w)
+		}
+	}
+}
+
+func TestBuildRouteGroupAndLinkExposure(t *testing.T) {
+	inv := &inventory.Inventory{
+		Services: map[string]inventory.Service{
+			"life": {Name: "life", Host: "h001", Routes: map[string]inventory.Route{
+				"web": {Name: strp("life"), URL: strp("https://life.example"), Exposure: "public", Group: strp("Personal")},
+			}},
+			"git": {Name: "git", Host: "h001", Routes: map[string]inventory.Route{
+				"web": {Name: strp("git"), URL: strp("https://git.example"), Exposure: "public"},
+			}},
+		},
+		Hosts: map[string]inventory.Host{"h001": {}},
+	}
+	m := state.Merge(inv, nil)
+	links := []Link{
+		{Name: "Git", URL: "https://git.example", Group: "Dev", Exposure: "tailnet"}, // route wins
+		{Name: "AdGuard", URL: "http://10.0.0.1:3000", Group: "Net", Exposure: "lan", Host: "h005"},
+		{Name: "Plain", URL: "http://x.example", Group: "Net"},
+	}
+	gs := Build(m, links, "")
+	if len(gs) != 3 || gs[2].Name != "Personal" || gs[2].Tiles[0].Exposure != "public" {
+		t.Fatalf("groups = %+v", gs)
+	}
+	if gs[0].Tiles[0].Exposure != "public" {
+		t.Fatalf("route exposure should win: %+v", gs[0].Tiles[0])
+	}
+	if a := gs[1].Tiles[0]; a.Exposure != "lan" || a.Host != "h005" {
+		t.Fatalf("adguard = %+v", a)
+	}
+	if p := gs[1].Tiles[1]; p.Exposure != "" {
+		t.Fatalf("plain = %+v", p)
+	}
+}

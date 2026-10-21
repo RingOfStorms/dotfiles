@@ -24,6 +24,8 @@
   # only o002 (100.64.0.5) for X-Forwarded-For, Life takes the last entry.
   # Blob uploads up to 100 MiB, streamed; long downloads / live sync.
   routes.web = {
+    group = "Personal";
+    icon = "https://api.iconify.design/game-icons/bonsai-tree.svg?color=%2386c88f";
     port = 8080;
     exposure = "public";
     auth = "native";

@@ -29,6 +29,8 @@ type Route struct {
 	Health *string  `json:"health"`
 	// Icon is an optional start-page icon: a URL or a CDN icon name.
 	Icon *string `json:"icon"`
+	// Group is an optional start-page category for the route's tile.
+	Group *string `json:"group"`
 }
 
 // Str returns s dereferenced, or "" if s is nil. Used by templates and
@@ -43,12 +45,13 @@ func Str(s *string) string {
 // FQDNStr, URLStr, AuthStr and NameStr return the nullable string fields
 // as plain strings ("" if null), for use in templates. ViaStr joins the
 // via list with ", " ("" if empty/absent, e.g. non-public routes).
-func (r Route) FQDNStr() string { return Str(r.FQDN) }
-func (r Route) URLStr() string  { return Str(r.URL) }
-func (r Route) AuthStr() string { return Str(r.Auth) }
-func (r Route) NameStr() string { return Str(r.Name) }
-func (r Route) ViaStr() string  { return strings.Join(r.Via, ", ") }
-func (r Route) IconStr() string { return Str(r.Icon) }
+func (r Route) FQDNStr() string  { return Str(r.FQDN) }
+func (r Route) URLStr() string   { return Str(r.URL) }
+func (r Route) AuthStr() string  { return Str(r.Auth) }
+func (r Route) NameStr() string  { return Str(r.Name) }
+func (r Route) ViaStr() string   { return strings.Join(r.Via, ", ") }
+func (r Route) IconStr() string  { return Str(r.Icon) }
+func (r Route) GroupStr() string { return Str(r.Group) }
 
 // Service is one entry of inventory.services.
 type Service struct {
