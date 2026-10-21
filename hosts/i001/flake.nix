@@ -67,6 +67,7 @@
           inputs.common.nixosModules.tmux
           inputs.common.nixosModules.boot_systemd
           inputs.common.nixosModules.hardening
+          inputs.common.nixosModules.ssh_root
           inputs.common.nixosModules.jetbrains_font
           inputs.common.nixosModules.nix_options
           inputs.common.nixosModules.no_sleep
@@ -88,7 +89,6 @@
           # Host-specific config
           ({ pkgs, ... }: {
             networking.networkmanager.enable = true;
-            users.users.root.openssh.authorizedKeys.keys = [ fleet.global.sshPubKey ];
             environment.systemPackages = with pkgs; [
               qdirstat google-chrome
               jellyfin-media-player

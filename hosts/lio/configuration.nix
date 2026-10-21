@@ -22,9 +22,6 @@ in
     ip saddr 10.12.14.0/24 tcp dport 22 accept
   '';
 
-  # No root SSH on lio (overrides the shared hardening module).
-  services.openssh.settings.PermitRootLogin = lib.mkForce "no";
-
   hardware.enableAllFirmware = true;
 
   # Connectivity

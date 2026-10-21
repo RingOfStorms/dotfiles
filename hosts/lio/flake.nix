@@ -28,7 +28,6 @@
       fleet = import "${inputs.common}/../../hosts/fleet.nix";
       constants = import ./_constants.nix;
       overlayIp = constants.host.overlayIp;
-      primaryUser = constants.host.primaryUser;
     in
     {
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
@@ -68,6 +67,7 @@
           inputs.common.nixosModules.tmux
           inputs.common.nixosModules.boot_systemd
           inputs.common.nixosModules.hardening
+          inputs.common.nixosModules.ssh_root
           inputs.common.nixosModules.jetbrains_font
           inputs.common.nixosModules.nix_options
           inputs.common.nixosModules.no_sleep

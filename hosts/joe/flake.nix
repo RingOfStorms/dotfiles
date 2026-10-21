@@ -103,6 +103,7 @@
           inputs.common.nixosModules.tmux
           inputs.common.nixosModules.boot_systemd
           inputs.common.nixosModules.hardening
+          inputs.common.nixosModules.ssh_root
           inputs.common.nixosModules.jetbrains_font
           inputs.common.nixosModules.nix_options
           inputs.common.nixosModules.no_sleep

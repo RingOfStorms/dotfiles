@@ -44,6 +44,7 @@
           inputs.common.nixosModules.tmux
           inputs.common.nixosModules.boot_systemd
           inputs.common.nixosModules.hardening
+          inputs.common.nixosModules.ssh_root
           inputs.common.nixosModules.nix_options
           inputs.common.nixosModules.podman
           inputs.common.nixosModules.tailnet
@@ -90,7 +91,6 @@
             {
               users.users.root = {
                 shell = pkgs.zsh;
-                openssh.authorizedKeys.keys = [ fleet.global.sshPubKey ];
               };
               environment.systemPackages = with pkgs; [
                 lua

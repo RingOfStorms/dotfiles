@@ -85,6 +85,7 @@
           inputs.common.nixosModules.boot_systemd
           inputs.common.nixosModules.plymouth
           inputs.common.nixosModules.hardening
+          inputs.common.nixosModules.ssh_root
           inputs.common.nixosModules.jetbrains_font
           inputs.common.nixosModules.nix_options
           inputs.common.nixosModules.timezone_auto
@@ -109,11 +110,6 @@
           })
 
           (import ./sec-agent.nix { inherit inputs constants; })
-
-          ({ pkgs, ... }: {
-            # Root deploys from lio via the nix2nix key.
-            users.users.root.openssh.authorizedKeys.keys = [ fleet.global.sshPubKey ];
-          })
 
           ./hardware-configuration.nix
           (import ./impermanence.nix {

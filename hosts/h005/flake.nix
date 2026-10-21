@@ -69,6 +69,7 @@
           inputs.common.nixosModules.tmux
           inputs.common.nixosModules.boot_systemd
           inputs.common.nixosModules.hardening
+          inputs.common.nixosModules.ssh_root
           inputs.common.nixosModules.nix_options
           inputs.common.nixosModules.no_sleep
           inputs.common.nixosModules.timezone_chi
@@ -119,7 +120,6 @@
               # the WAN and configures the two tagged gateway interfaces.
               networking.useDHCP = !constants.network.routerEnable;
               security.sudo.wheelNeedsPassword = false;
-              users.users.root.openssh.authorizedKeys.keys = [ fleet.global.sshPubKey ];
               environment.systemPackages = with pkgs; [
                 tcpdump
                 dig

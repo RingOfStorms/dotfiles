@@ -198,6 +198,7 @@
           inputs.common.nixosModules.git
           inputs.common.nixosModules.tmux
           inputs.common.nixosModules.hardening
+          inputs.common.nixosModules.ssh_root
           inputs.common.nixosModules.nix_options
           inputs.common.nixosModules.timezone_auto
           inputs.common.nixosModules.tty_caps_esc
@@ -227,14 +228,6 @@
           (
             { pkgs, ... }:
             {
-              # Allow root deploys via SSH using the nix2nix key (matches
-              # joe/lio/h00x). Required so the root flake's `deploy_juni`
-              # script can run `nix-env --set` + `switch-to-configuration`
-              # on the target.
-              users.users.root.openssh.authorizedKeys.keys = [
-                fleet.global.sshPubKey
-              ];
-
               environment.shellAliases =
                 let
                   no_proxy = "NO_PROXY='h001.net.joshuabell.xyz,*.ts.net,127.0.0.1,localhost,100.64.0.0/10'";

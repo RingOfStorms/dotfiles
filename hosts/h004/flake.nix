@@ -69,6 +69,7 @@
           inputs.common.nixosModules.tmux
           inputs.common.nixosModules.boot_systemd
           inputs.common.nixosModules.hardening
+          inputs.common.nixosModules.ssh_root
           inputs.common.nixosModules.nix_options
           inputs.common.nixosModules.no_sleep
           inputs.common.nixosModules.timezone_chi
@@ -124,9 +125,6 @@
           ({
             networking.networkmanager.enable = true;
             security.sudo.wheelNeedsPassword = false;
-            users.users.root.openssh.authorizedKeys.keys = [
-              fleet.global.sshPubKey
-            ];
           })
         ];
       };
