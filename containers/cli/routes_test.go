@@ -15,8 +15,9 @@ func httpRoute(name string, port int, exposure, auth string) Route {
 		Websockets: true, MaxBody: "100m", Buffering: true, Timeouts: "60s", ForwardedProto: "https"}
 }
 
-// Golden: sec's route as lib.nix normalizes it (maxBody 64k).
-const secVhostGolden = `# route web: exposure public, auth native-oidc
+// Golden: sec's route as lib.nix normalizes it (maxBody 64k). Public via
+// edge: internal server plus edge server.
+const secVhostGolden = `# route web: exposure public, auth native-oidc; internal listener
 server {
   listen 80;
   listen [::]:80;
@@ -25,6 +26,35 @@ server {
   server_name secrets.joshuabell.xyz;
   ssl_certificate /var/lib/acme/joshuabell.xyz/fullchain.pem;
   ssl_certificate_key /var/lib/acme/joshuabell.xyz/key.pem;
+  if ($fleet_edge_block_internal) {
+    return 444;
+  }
+  client_max_body_size 64k;
+  location / {
+    proxy_pass http://127.0.0.1:8300;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+    # TODO(ROUTING-PLAN §8 step 6): strip _oauth2_proxy* cookies before the backend.
+    proxy_buffering on;
+    proxy_read_timeout 60s;
+    proxy_send_timeout 60s;
+  }
+}
+
+# route web: edge listener (only the edge peer; X-Forwarded-For trusted)
+server {
+  listen 8443;
+  listen [::]:8443;
+  server_name secrets.joshuabell.xyz;
+  include /etc/fleet-containers/nginx-edge-realip.conf;
+  if ($fleet_edge_peer = 0) {
+    return 444;
+  }
   client_max_body_size 64k;
   location / {
     proxy_pass http://127.0.0.1:8300;
@@ -43,12 +73,79 @@ server {
 }
 `
 
+// Golden: a tailnet route gets only the internal server.
+const litellmVhostGolden = `# route web: exposure tailnet, auth native; internal listener
+server {
+  listen 80;
+  listen [::]:80;
+  listen 443 ssl;
+  listen [::]:443 ssl;
+  server_name litellm.joshuabell.xyz;
+  ssl_certificate /var/lib/acme/joshuabell.xyz/fullchain.pem;
+  ssl_certificate_key /var/lib/acme/joshuabell.xyz/key.pem;
+  if ($fleet_edge_block_internal) {
+    return 444;
+  }
+  client_max_body_size 100m;
+  location / {
+    proxy_pass http://127.0.0.1:8094;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+    # TODO(ROUTING-PLAN §8 step 6): strip _oauth2_proxy* cookies before the backend.
+    proxy_buffering off;
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+  }
+}
+`
+
 func TestRoutesVhostGolden(t *testing.T) {
 	r := httpRoute("secrets", 8300, "public", "native-oidc")
 	r.MaxBody = "64k"
 	s := Service{Name: "sec", Routes: map[string]Route{"web": r}}
 	if got := routesVhost(s); got != secVhostGolden {
-		t.Fatalf("vhost mismatch:\n%s\nwant:\n%s", got, secVhostGolden)
+		t.Fatalf("public vhost mismatch:\n%s\nwant:\n%s", got, secVhostGolden)
+	}
+	l := httpRoute("litellm", 8094, "tailnet", "native")
+	l.Via, l.Buffering, l.Timeouts = nil, false, "600s"
+	if got := routesVhost(Service{Name: "litellm", Routes: map[string]Route{"web": l}}); got != litellmVhostGolden {
+		t.Fatalf("tailnet vhost mismatch:\n%s\nwant:\n%s", got, litellmVhostGolden)
+	}
+}
+
+func TestRoutesVhostEdgeOnlyForPublicViaEdge(t *testing.T) {
+	off := false
+	cases := []struct {
+		name string
+		r    Route
+		edge bool
+	}{
+		{"public edge", httpRoute("a", 1, "public", "native"), true},
+		{"lan", func() Route { r := httpRoute("a", 1, "lan", "native"); r.Via = nil; return r }(), false},
+		{"public router only", func() Route { r := httpRoute("a", 1, "public", "native"); r.Via = []string{"router"}; return r }(), false},
+		{"public edge+router", func() Route {
+			r := httpRoute("a", 1, "public", "native")
+			r.Via = []string{"router", "edge"}
+			r.RequestBuffering = &off
+			return r
+		}(), true},
+	}
+	for _, c := range cases {
+		v := routesVhost(Service{Name: "x", Routes: map[string]Route{"web": c.r}})
+		if got := strings.Contains(v, "listen 8443;"); got != c.edge {
+			t.Errorf("%s: edge server=%v want %v\n%s", c.name, got, c.edge, v)
+		}
+		if strings.Count(v, "nginx-edge-realip.conf") != map[bool]int{true: 1, false: 0}[c.edge] {
+			t.Errorf("%s: real_ip must be on the edge server only\n%s", c.name, v)
+		}
+		if c.r.RequestBuffering != nil && strings.Count(v, "proxy_request_buffering off;") != 2 {
+			t.Errorf("%s: requestBuffering=false must reach both servers\n%s", c.name, v)
+		}
 	}
 }
 
@@ -97,6 +194,35 @@ udp 9000
 	s.Routes = map[string]Route{"web": {Port: 1, Proto: "http", Exposure: "local"}}
 	if ps := prepareScript(s, "h001"); !strings.Contains(ps, "rm -f /var/lib/fleet-containers/nginx/sec.conf") {
 		t.Errorf("local-only should remove site:\n%s", ps)
+	}
+}
+
+func TestPrepareScriptNginxGating(t *testing.T) {
+	inv = &Inventory{DataRoot: "/srv/containers", Hosts: map[string]Host{}}
+	priv := httpRoute("localai", 8080, "tailnet", "none")
+	priv.Zone = sp("private")
+	pub := httpRoute("chat", 8084, "public", "native")
+	tcp := Route{Port: 3032, Proto: "tcp", Exposure: "tailnet", Auth: sp("native")}
+	cases := []struct {
+		name   string
+		routes map[string]Route
+		vhost  bool
+	}{
+		{"private only (localai on joe)", map[string]Route{"web": priv}, false},
+		{"tcp only", map[string]Route{"hub": tcp}, false},
+		{"no routes", nil, false},
+		{"private + tcp", map[string]Route{"web": priv, "raw": tcp}, false},
+		{"public", map[string]Route{"web": pub}, true},
+		{"public + private", map[string]Route{"web": pub, "p": priv}, true},
+	}
+	for _, c := range cases {
+		ps := prepareScript(Service{Name: "svc", Routes: c.routes}, "joe")
+		if got := strings.Contains(ps, "nginx -t"); got != c.vhost {
+			t.Errorf("%s: nginx -t present=%v, want %v\n%s", c.name, got, c.vhost, ps)
+		}
+		if !c.vhost && !strings.Contains(ps, "rm -f /var/lib/fleet-containers/nginx/svc.conf.broken") {
+			t.Errorf("%s: should clear stale .broken site", c.name)
+		}
 	}
 }
 
@@ -346,5 +472,20 @@ func TestCmdAuditStdinRequiresOneHost(t *testing.T) {
 	inv = &Inventory{Services: map[string]Service{}}
 	if err := cmdAudit([]string{"h001", "h002", "--stdin"}); err == nil {
 		t.Fatal("expected error for --stdin with multiple hosts")
+	}
+}
+
+func TestSiteScriptVhostOnly(t *testing.T) {
+	inv = &Inventory{DataRoot: "/srv/containers", Hosts: map[string]Host{}}
+	s := Service{Name: "sec", Routes: map[string]Route{"web": httpRoute("secrets", 8300, "public", "native-oidc")}}
+	ss := siteScript(s, "h001")
+	if !strings.Contains(ss, "listen 8443;") || !strings.Contains(ss, "nginx -t") {
+		t.Errorf("site script lacks edge server or validation:\n%s", ss)
+	}
+	if strings.Contains(ss, "ports/") || strings.Contains(ss, "/srv/containers") {
+		t.Errorf("site script must only touch nginx:\n%s", ss)
+	}
+	if ps := prepareScript(s, "h001"); !strings.Contains(ps, ss) {
+		t.Error("prepareScript must embed siteScript")
 	}
 }

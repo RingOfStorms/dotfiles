@@ -89,10 +89,6 @@ func TestPortOpenScriptCombos(t *testing.T) {
 				t.Errorf("%s %v: unexpected %q", c.iface, c.from, n)
 			}
 		}
-		cl := portCloseScript(s, r)
-		if !strings.Contains(cl, "logger -t cnt-port") || strings.Contains(cl, "add element") || !strings.Contains(cl, "delete element") {
-			t.Errorf("close script:\n%s", cl)
-		}
 	}
 }
 
@@ -199,5 +195,74 @@ func TestNeedsRootMsg(t *testing.T) {
 		if !strings.Contains(m, w) {
 			t.Errorf("missing %q in %s", w, m)
 		}
+	}
+}
+
+// Real `nft -j list set` output (h001, nft 1.1.6): mc has a bare element and
+// v4/v6 --from elements on tailscale0, plus one on the lan iface; other svc
+// "zz" shares the port.
+const closeJSON = `{"nftables": [{"metainfo": {"version": "1.1.6"}}, {"set": {"family": "inet", "name": "cnt-tmp", "table": "nixos-fw", "elem": [{"elem": {"val": {"concat": ["tailscale0", "tcp", 8000]}, "timeout": 30, "expires": 29, "comment": "svc=mc"}}, {"elem": {"val": {"concat": ["tailscale0", "tcp", 8000]}, "expires": 9, "comment": "svc=zz"}}]}}]}
+{"nftables": [{"set": {"family": "inet", "name": "cnt-tmp4", "table": "nixos-fw", "elem": [{"elem": {"val": {"concat": ["tailscale0", "tcp", 8000, "100.64.0.1"]}, "expires": 29, "comment": "svc=mc"}}, {"elem": {"val": {"concat": ["tailscale0", "tcp", 8000, {"prefix": {"addr": "10.0.0.0", "len": 8}}]}, "expires": 29, "comment": "svc=mc"}}, {"elem": {"val": {"concat": ["enp1s0", "tcp", 8000, "100.64.0.1"]}, "expires": 29, "comment": "svc=mc"}}, {"elem": {"val": {"concat": ["tailscale0", "udp", 8000, "100.64.0.1"]}, "expires": 29, "comment": "svc=mc"}}]}}]}
+{"nftables": [{"set": {"family": "inet", "name": "cnt-tmp6", "table": "nixos-fw", "elem": [{"elem": {"val": {"concat": ["tailscale0", "tcp", 8000, "fd7a:115c:a1e0::3"]}, "expires": 29, "comment": "svc=mc"}}]}}]}
+`
+
+func TestPortCloseTargets(t *testing.T) {
+	es, err := parseNftSetJSON(closeJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := func(ts []portEntry) string {
+		var out []string
+		for _, e := range ts {
+			out = append(out, e.Set+":"+e.From)
+		}
+		return strings.Join(out, " ")
+	}
+	r := portReq{Svc: "mc", Port: 8000, Proto: "tcp", Iface: "tailnet"}
+	// No --from: every mc tcp/8000 element on tailscale0, all three sets;
+	// not zz's, not udp, not the lan iface.
+	if got := keys(closeTargets(es, r, "tailscale0")); got != "cnt-tmp:all cnt-tmp4:100.64.0.1 cnt-tmp4:10.0.0.0/8 cnt-tmp6:fd7a:115c:a1e0::3" {
+		t.Errorf("no --from: %s", got)
+	}
+	// --from (resolved CIDRs, /32 and /128 as the CLI produces them): only those.
+	r.From = []string{"100.64.0.1/32", "fd7a:115c:a1e0::3/128"}
+	if got := keys(closeTargets(es, r, "tailscale0")); got != "cnt-tmp4:100.64.0.1 cnt-tmp6:fd7a:115c:a1e0::3" {
+		t.Errorf("--from: %s", got)
+	}
+	r.From = []string{"10.0.0.0/8"}
+	if got := keys(closeTargets(es, r, "tailscale0")); got != "cnt-tmp4:10.0.0.0/8" {
+		t.Errorf("--from cidr: %s", got)
+	}
+	r.From = nil
+	if got := keys(closeTargets(es, r, "enp1s0")); got != "cnt-tmp4:100.64.0.1" {
+		t.Errorf("lan iface: %s", got)
+	}
+	r.Svc = "nope"
+	if ts := closeTargets(es, r, "tailscale0"); len(ts) != 0 {
+		t.Errorf("other svc: %v", ts)
+	}
+
+	r = portReq{Svc: "mc", Port: 8000, Proto: "tcp", Iface: "tailnet"}
+	sc := portCloseScript(Service{Name: "mc"}, r, "tailscale0", closeTargets(es, r, "tailscale0"))
+	for _, w := range []string{
+		`delete element inet nixos-fw cnt-tmp { "tailscale0" . tcp . 8000 }`,
+		`delete element inet nixos-fw cnt-tmp4 { "tailscale0" . tcp . 8000 . 100.64.0.1 }`,
+		`delete element inet nixos-fw cnt-tmp4 { "tailscale0" . tcp . 8000 . 10.0.0.0/8 }`,
+		`delete element inet nixos-fw cnt-tmp6 { "tailscale0" . tcp . 8000 . fd7a:115c:a1e0::3 }`,
+		"logger -t cnt-port", "n=4",
+	} {
+		if !strings.Contains(sc, w) {
+			t.Errorf("missing %q in\n%s", w, sc)
+		}
+	}
+	if strings.Contains(sc, "add element") || strings.Contains(sc, "enp1s0") || strings.Contains(sc, "udp") {
+		t.Errorf("close script touches too much:\n%s", sc)
+	}
+}
+
+func TestPortNeedsRootMsg(t *testing.T) {
+	m := portNeedsRootMsg("lio")
+	if !strings.Contains(m, "lio") || !strings.Contains(m, "password") {
+		t.Errorf("msg: %s", m)
 	}
 }

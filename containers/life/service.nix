@@ -29,11 +29,11 @@
     auth = "native";
     maxBody = "110m";
     timeouts = "1h";
+    requestBuffering = false;
+    # Client IP: the generated edge listener trusts X-Forwarded-For from o002
+    # only (ROUTING-PLAN §2.3); Life takes the last X-Forwarded-For entry.
     extraConfig = ''
       proxy_set_header X-Forwarded-Host $host;
-      proxy_request_buffering off;
-      set_real_ip_from 100.64.0.5;
-      real_ip_header X-Forwarded-For;
     '';
   };
 }

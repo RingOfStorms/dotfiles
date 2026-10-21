@@ -11,8 +11,18 @@ let
   domain = fleet.global.domain;
   upstream = c.upstreamHost;
 
-  # All public vhosts proxy to h001 over the tailnet. h001's own nginx
-  # terminates per-service and forwards to the right container.
+  # Public `via = edge` routes of floating containers (ROUTING-PLAN §2.3,
+  # §8 step 3), generated from containers/*/service.nix. Each proxies to the
+  # service host's edge listener (<overlayIp>:8443). TLS: per-name http-01
+  # as before; o002 has no bunny key (h005/fleet-edge will own it, step 4).
+  containersLib = import ../../../containers/lib.nix;
+  containerVhosts = containersLib.edgeVirtualHosts {
+    dir = ../../../containers;
+    inherit (fleet) hosts;
+  };
+
+  # Unconverted h001 services (no `routes` yet): still proxied to h001's
+  # internal listener (:80). Move each to `routes` and delete it here.
   proxyToUpstream = {
     enableACME = true;
     forceSSL = true;
@@ -71,218 +81,139 @@ in
             };
           };
         };
-      in
-      {
-        # Redirect self IP to domain
-        "${c.host.publicIp}" = {
-          locations."/" = {
-            return = "301 https://${domain}";
+        handVhosts = {
+          # Redirect self IP to domain
+          "${c.host.publicIp}" = {
+            locations."/" = {
+              return = "301 https://${domain}";
+            };
           };
-        };
 
-        "${c.host.overlayIp}" = tailnetConfig;
-        "o002.net.${domain}" = tailnetConfig;
+          "${c.host.overlayIp}" = tailnetConfig;
+          "o002.net.${domain}" = tailnetConfig;
 
-        "www.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            return = "301 https://${domain}";
+          "www.${domain}" = {
+            enableACME = true;
+            forceSSL = true;
+            locations."/" = {
+              return = "301 https://${domain}";
+            };
           };
-        };
-        "${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations = {
-            "/" = {
+          "${domain}" = {
+            enableACME = true;
+            forceSSL = true;
+            locations = {
+              "/" = {
+                extraConfig = ''
+                  default_type text/html;
+                  return 200 '
+                    <html>
+                      <body style="width:100vw;height:100vh;overflow:hidden">
+                        <div style="display: flex;width:100vw;height:100vh;justify-content: center;align-items:center;text-align:center;overflow:hidden">
+                          In the void you roam,</br>
+                          A page that cannot be found-</br>
+                          Turn back, seek anew.
+                        </div>
+                      </body>
+                    </html>
+                  ';
+                '';
+              };
+            };
+          };
+
+          "www.ellalala.com" = {
+            enableACME = true;
+            forceSSL = true;
+            locations."/" = {
+              return = "301 https://ellalala.com";
+            };
+          };
+          "ellalala.com" = {
+            enableACME = true;
+            forceSSL = true;
+            locations."/" = {
+              return = "444";
+            };
+          };
+
+          # ── Headscale coordination server (runs locally on o002) ──
+          # Proxy to 127.0.0.1 (not localhost) — headscale binds IPv4 only, and
+          # nginx resolving localhost to [::1] gives connection-refused.
+          "headscale.${domain}" = {
+            enableACME = true;
+            forceSSL = true;
+            locations."/" = {
+              proxyWebsockets = true;
+              proxyPass = "http://127.0.0.1:${toString constants.services.headscale.port}";
+            };
+          };
+
+          # ── Unconverted h001 services (no `routes` yet) ──
+          # Proxied to h001's internal listener (:80). Move each to `routes`
+          # in its service.nix and delete it here.
+          "notes.${domain}" = proxyToUpstream;
+
+          "sso-proxy.${domain}" = {
+            enableACME = true;
+            forceSSL = true;
+            locations."/" = {
+              proxyPass = "http://${upstream}";
               extraConfig = ''
-                default_type text/html;
-                return 200 '
-                  <html>
-                    <body style="width:100vw;height:100vh;overflow:hidden">
-                      <div style="display: flex;width:100vw;height:100vh;justify-content: center;align-items:center;text-align:center;overflow:hidden">
-                        In the void you roam,</br>
-                        A page that cannot be found-</br>
-                        Turn back, seek anew.
-                      </div>
-                    </body>
-                  </html>
-                ';
+                proxy_set_header X-Forwarded-Proto https;
               '';
             };
           };
-        };
+          "jellyfin.${domain}" = {
+            enableACME = true;
+            forceSSL = true;
+            locations."/" = {
+              proxyPass = "http://${upstream}";
+            };
+          };
+          "books.${domain}" = {
+            enableACME = true;
+            forceSSL = true;
+            locations."/" = {
+              proxyPass = "http://${upstream}";
+            };
+          };
+          "media.${domain}" = {
+            enableACME = true;
+            forceSSL = true;
+            locations."/" = {
+              proxyPass = "http://${upstream}";
+            };
+          };
 
-        "www.ellalala.com" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            return = "301 https://ellalala.com";
+          # ── Minecraft survival map (squaremap) ─────────────────────────────
+          # Proxied to h003's nginx over tailscale, which proxies to squaremap
+          "computerboyz.${domain}" = {
+            enableACME = true;
+            forceSSL = true;
+            locations."/" = {
+              return = "444";
+            };
+            locations."/map/survival/" = {
+              proxyPass = "http://${fleet.hosts.h003.overlayIp}:80/map/survival/";
+              proxyWebsockets = true;
+            };
           };
-        };
-        "ellalala.com" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            return = "444";
-          };
-        };
 
-        # ── Headscale coordination server (runs locally on o002) ──
-        # Proxy to 127.0.0.1 (not localhost) — headscale binds IPv4 only, and
-        # nginx resolving localhost to [::1] gives connection-refused.
-        "headscale.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://127.0.0.1:${toString constants.services.headscale.port}";
+          "_" = {
+            rejectSSL = true;
+            default = true;
+            locations."/" = {
+              return = "444"; # 404 for not found or 444 for drop
+            };
           };
         };
-
-        # ── Services migrated off o001 onto h001 (proxied over tailnet) ──
-        "vault.${domain}" = proxyToUpstream;
-        "atuin.${domain}" = proxyToUpstream;
-
-        # PROXY HOSTS (all forwarded to h001 over the tailnet)
-        "chat.${domain}" = proxyToUpstream;
-        "gist.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyPass = "http://${upstream}";
-          };
-        };
-        "git.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyPass = "http://${upstream}";
-          };
-        };
-        "notes.${domain}" = proxyToUpstream;
-
-        # ── secrets manager (secrets.) — public bootstrap edge ──────────
-        # A plain proxy. The secrets manager's login handler IS the JWT
-        # verifier, with rate limiting in front of it, and every other
-        # route authenticates for itself.
-        #
-        # Same bootstrap requirement as the old OpenBao edge: a brand-new
-        # machine reads its headscale join key over the public internet
-        # before it is on the tailnet. Once joined, split DNS resolves this
-        # name to h001's overlay IP and traffic stops touching this vhost.
-        "secrets.${domain}" = proxyToUpstream;
-        "sso.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyPass = "http://${upstream}";
-            extraConfig = ''
-              proxy_set_header X-Forwarded-Proto https;
-            '';
-          };
-        };
-        "sso-proxy.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyPass = "http://${upstream}";
-            extraConfig = ''
-              proxy_set_header X-Forwarded-Proto https;
-            '';
-          };
-        };
-        "jellyfin.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyPass = "http://${upstream}";
-          };
-        };
-        "books.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyPass = "http://${upstream}";
-          };
-        };
-        "media.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyPass = "http://${upstream}";
-          };
-        };
-        "puzzles.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyPass = "http://${upstream}";
-          };
-        };
-        # ── life — Life server (h001 container) ─────────────────────────
-        # Spelled out rather than proxyToUpstream: blob uploads are up to
-        # 100 MiB and streamed (no request buffering), and downloads plus the
-        # coming live sync outlast the 60s default timeouts.
-        "life.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://${upstream}";
-            extraConfig = ''
-              client_max_body_size 110m;
-              proxy_request_buffering off;
-              proxy_read_timeout 1h;
-              proxy_send_timeout 1h;
-            '';
-          };
-        };
-        "location.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://${upstream}";
-            extraConfig = ''
-              client_max_body_size 50G;
-            '';
-          };
-        };
-        "photos.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            proxyWebsockets = true;
-            proxyPass = "http://${upstream}";
-            extraConfig = ''
-              client_max_body_size 100G;
-            '';
-          };
-        };
-
-        # ── Minecraft survival map (squaremap) ─────────────────────────────
-        # Proxied to h003's nginx over tailscale, which proxies to squaremap
-        "computerboyz.${domain}" = {
-          enableACME = true;
-          forceSSL = true;
-          locations."/" = {
-            return = "444";
-          };
-          locations."/map/survival/" = {
-            proxyPass = "http://${fleet.hosts.h003.overlayIp}:80/map/survival/";
-            proxyWebsockets = true;
-          };
-        };
-
-        "_" = {
-          rejectSSL = true;
-          default = true;
-          locations."/" = {
-            return = "444"; # 404 for not found or 444 for drop
-          };
-        };
-      };
+        clash = builtins.attrNames (builtins.intersectAttrs handVhosts containerVhosts);
+      in
+      assert lib.assertMsg (
+        clash == [ ]
+      ) "o002 nginx: ${toString clash} is both hand-kept and generated from containers routes";
+      handVhosts // containerVhosts;
 
     # STREAMS
     streamConfig = ''

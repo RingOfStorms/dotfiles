@@ -186,6 +186,66 @@ listener:
   `public` routes. That set is driven by the same state, so it fails closed
   too.
 
+#### 2.3.1 Step 3 as built (2026-10-20)
+
+Corrections to the text above: o002's overlay IP is **`100.64.0.5`**
+(`fd7a:115c:a1e0::5`), not `.2` (that's oren). The edge listener binds
+`:8443` on all addresses; the **firewall** limits it to o002 on
+`tailscale0`. Binding the overlay IP would add a startup race without
+adding protection.
+
+- **Host module** (`nginx.edge.{port,peers,blockInternal}`, default 8443,
+  o002 v4+v6) adds three things to the http block:
+  - `map $realip_remote_addr $fleet_edge_peer` (1 = o002);
+  - `$fleet_edge_block_internal` (1 = o002, only when `blockInternal`);
+  - a `:8443` `default_server` returning 444, plus
+    `/etc/fleet-containers/nginx-edge-realip.conf` (`set_real_ip_from` o002,
+    `X-Forwarded-For`, not recursive).
+
+  The firewall gets `iifname tailscale0 ip(6) saddr <o002> tcp dport 8443
+  accept` and nothing else for 8443. The CLI renders no IPs.
+- **Generated vhost** (`routesVhost`): every non-local http route gets the
+  **internal** server (`:80/:443`, wildcard cert, no `real_ip`, `if
+  ($fleet_edge_block_internal) return 444`). Public `via = edge` routes also
+  get an **edge** server (`:8443`, the realip include, `if ($fleet_edge_peer
+  = 0) return 444`). Tailnet and lan routes get only the internal server;
+  their allow lists come with fleet-edge. Downgrading a route and
+  redeploying removes its edge server, so o002 gets 444 from the catch-all
+  even with a stale vhost.
+- **o002** calls `containers/lib.nix` `edgeVirtualHosts { dir; hosts; }`
+  (imported by path like `fleet.nix`, so no new flake input). For each
+  public `via = edge` http route it proxies to
+  `http://<host overlayIp>:8443` with the route's
+  `maxBody`/buffering/`requestBuffering`/timeouts/websockets. `X-Forwarded-*` comes from
+  `recommendedProxySettings`. Non-container names (apex, www, ellalala,
+  headscale, computerboyz) and unconverted h001 services (notes, sso-proxy,
+  jellyfin, books, media) stay hand-kept. Unconverted ones still go to
+  h001 `:80`. An eval assertion refuses a name that is both hand-kept and
+  generated. Test: `nix eval --impure --expr 'import
+  ./containers/tests/edge-vhosts.nix'`.
+- **TLS on o002: unchanged, per-name http-01.** o002 has no bunny key (its
+  sec grants are join/git tokens only), and §5.2 gives the key to h005
+  alone. The wildcard for o002 comes in step 4 (issued on h005, distributed
+  via sec). Names stay in CT logs, which is fine for public names. Per-name
+  certs keep working for new routes because http-01 needs only the CNAME.
+- **`blockInternal` stays off** until the last unconverted service has
+  `routes`, because those still reach h001 `:80` from o002. Until then
+  o002 can technically use the internal listener for any name. That's the
+  same as today, not a regression. Turning it on is the last item of step
+  3 (then `cnt audit` should show o002 hits on `:80` as zero).
+- **Migration (zero downtime).** It's additive first, then switches the
+  consumer:
+  1. h001 rebuild: maps, catch-all and firewall rule. No route uses `:8443` yet.
+  2. `cnt deploy <svc>` for each public route service: adds the edge
+     servers, and the internal ones keep serving o002 on `:80`.
+  3. o002 rebuild: the generated vhosts point at `:8443`.
+  4. (later) `blockInternal = true` on h001.
+
+  Rollback is the reverse at any point. o002's previous generation points
+  at `:80`, which keeps working throughout, and the h001 additions are inert
+  without o002. Each rebuild ran as `test` under a 5-minute
+  `systemd-run` auto-revert.
+
 ### 2.4 Public paths
 
 `public` says *who* may connect; `via` says *how* the internet gets in. A
@@ -577,8 +637,10 @@ Taken 2026-10-16:
    immediately).
 2. Firewall: inventory each host's listeners, add explicit rules, then drop
    the `tailscale0` trust host by host (h001 first). Add `cnt port open`.
-3. Internal/edge listener split (§2.3), o002 generated vhosts and a
-   wildcard. This retires the hand-kept o002 list.
+3. Internal/edge listener split (§2.3, §2.3.1), o002 generated vhosts and
+   a wildcard. This retires the hand-kept o002 list. **Done 2026-10-20**,
+   except: the o002 wildcard waits for step 4 (no bunny key on o002), and
+   `blockInternal` waits for the last unconverted service.
 4. `flakes/fleet-edge` on h005: tailnet/LAN DNS records (retires
    `h001Subdomains` and the hand host records), bunny import (diff only,
    adopt existing CNAMEs) + `cnt dns`, DDNS folded in, then cert

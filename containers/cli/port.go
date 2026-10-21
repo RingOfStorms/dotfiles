@@ -292,19 +292,90 @@ func portOpenScript(s Service, r portReq) string {
 	return b.String()
 }
 
-func portCloseScript(s Service, r portReq) string {
+// portCloseScript deletes exactly the given live elements (found by
+// closeTargets from `nft -j list set`), in one nft transaction.
+func portCloseScript(s Service, r portReq, iface string, es []portEntry) string {
 	var b strings.Builder
 	b.WriteString("set -eu\n")
-	b.WriteString(ifaceScript(r.Iface))
 	b.WriteString("nft -f - <<EOF || { echo 'not open (or already expired); see cnt port ls' >&2; exit 1; }\n")
-	for _, e := range portElems(r) {
-		fmt.Fprintf(&b, "delete element inet nixos-fw %s { %s }\n", e[0], e[1])
+	for _, e := range es {
+		key := fmt.Sprintf(`"%s" . %s . %s`, e.Iface, e.Proto, e.Port)
+		if e.Set != "cnt-tmp" {
+			key += " . " + e.From
+		}
+		fmt.Fprintf(&b, "delete element inet nixos-fw %s { %s }\n", e.Set, key)
 	}
 	b.WriteString("EOF\n")
 	desc := portDesc(s, r)
-	fmt.Fprintf(&b, "logger -t cnt-port \"close %s iface=$IFACE by=${SUDO_USER:-$(id -un)}\"\n", desc)
-	fmt.Fprintf(&b, "echo \"closed %s on $IFACE\"\n", desc)
+	fmt.Fprintf(&b, "logger -t cnt-port \"close %s iface=%s n=%d by=${SUDO_USER:-$(id -un)}\"\n", desc, iface, len(es))
+	fmt.Fprintf(&b, "echo \"closed %s on %s (%d element(s))\"\n", desc, iface, len(es))
 	return b.String()
+}
+
+// closeTargets picks the live elements a close removes: same svc (comment),
+// port, proto and iface, across all three sets. With --from, only those
+// sources (nft prints /32 and /128 without the prefix length).
+func closeTargets(es []portEntry, r portReq, iface string) []portEntry {
+	want := map[string]bool{}
+	for _, c := range r.From {
+		want[normCIDR(c)] = true
+	}
+	var out []portEntry
+	for _, e := range es {
+		if e.Svc != r.Svc || e.Port != strconv.Itoa(r.Port) || e.Proto != r.Proto || e.Iface != iface {
+			continue
+		}
+		if len(want) > 0 && (e.Set == "cnt-tmp" || !want[normCIDR(e.From)]) {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
+func normCIDR(c string) string {
+	return strings.TrimSuffix(strings.TrimSuffix(c, "/32"), "/128")
+}
+
+// ifaceName resolves --iface to the name stored in the set elements.
+func ifaceName(ctx context.Context, h, iface string) (string, error) {
+	switch iface {
+	case "tailnet":
+		return "tailscale0", nil
+	case "any":
+		return anyIface, nil
+	}
+	out, err := remoteOut(ctx, h, false, "cat "+lanIfaceEtc)
+	if err != nil || strings.TrimSpace(out) == "" {
+		return "", fmt.Errorf("--iface lan: %s has no %s (ringofstorms.containers.lanInterface)", h, lanIfaceEtc)
+	}
+	return strings.TrimSpace(out), nil
+}
+
+func portClose(s Service, r portReq, h string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	iface, err := ifaceName(ctx, h, r.Iface)
+	if err != nil {
+		return err
+	}
+	out, err := remoteOut(ctx, h, true, portLsScript)
+	if err != nil {
+		if sudoNeedsPassword(err) {
+			fmt.Fprint(os.Stderr, portNeedsRootMsg(h))
+			return errors.New("port close needs root")
+		}
+		return fmt.Errorf("%s: listing open ports: %v", h, err)
+	}
+	es, err := parseNftSetJSON(out)
+	if err != nil {
+		return fmt.Errorf("%s: %v", h, err)
+	}
+	ts := closeTargets(es, r, iface)
+	if len(ts) == 0 {
+		return fmt.Errorf("%s: nothing open for %s on %s (or already expired); see cnt port ls", h, portDesc(s, r), iface)
+	}
+	return remote(h, true, portCloseScript(s, r, iface, ts))
 }
 
 func portDesc(s Service, r portReq) string {
@@ -364,7 +435,11 @@ func cmdPort(args []string) error {
 		fmt.Fprintln(os.Stderr, "warning: --iface any opens the port on every interface (LAN and, on hosts with one, WAN)")
 	}
 	if closing {
-		return remote(h, true, portCloseScript(s, r))
+		if dryRun {
+			fmt.Printf("[%s (root)] %s\n# then delete every element of %s on --iface %s found in cnt-tmp/cnt-tmp4/cnt-tmp6 (comment svc=%s)\n", h, portLsScript, portDesc(s, r), r.Iface, s.Name)
+			return nil
+		}
+		return portClose(s, r, h)
 	}
 	return remote(h, true, portOpenScript(s, r))
 }
@@ -491,7 +566,11 @@ func cmdPortLs(args []string) error {
 		out, err := remoteOut(ctx, h, true, portLsScript)
 		cancel()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %v\n", h, err)
+			if sudoNeedsPassword(err) {
+				fmt.Fprint(os.Stderr, portNeedsRootMsg(h))
+			} else {
+				fmt.Fprintf(os.Stderr, "%s: %v\n", h, err)
+			}
 			failed = append(failed, h)
 			continue
 		}
@@ -511,4 +590,12 @@ func cmdPortLs(args []string) error {
 		return fmt.Errorf("could not list: %s", strings.Join(failed, ", "))
 	}
 	return nil
+}
+
+// portNeedsRootMsg mirrors audit's needsRootMsg: `sudo -n` over plain ssh
+// can't prompt for a password.
+func portNeedsRootMsg(h string) string {
+	return fmt.Sprintf(`%[1]s: cnt port needs root and sudo there wants a password (plain ssh has no TTY to prompt).
+  Run it on %[1]s itself (sudo cnt port ...), or use ssh as root / passwordless sudo for %[1]s.
+`, h)
 }

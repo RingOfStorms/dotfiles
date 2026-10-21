@@ -142,6 +142,33 @@ in
       default = false;
       description = "Enable nginx and include ${stateDir}/nginx/*.conf in the http block.";
     };
+    # Internal/edge listener split (ROUTING-PLAN §2.3). Generated vhosts put
+    # public `via = edge` routes on <overlayIp>:edge.port as well; only
+    # edge.peers may connect there (firewall + per-vhost check).
+    nginx.edge = {
+      port = lib.mkOption {
+        type = lib.types.port;
+        default = 8443;
+        description = "Edge listener port. Must match lib.nix edgePort and cli/routes.go edgePort.";
+      };
+      peers = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [
+          "100.64.0.5"
+          "fd7a:115c:a1e0::5"
+        ];
+        description = "Overlay addresses of the public edge (o002), v4 and v6.";
+      };
+      blockInternal = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Drop edge peers on the internal :80/:443 listener (generated vhosts
+          return 444 when $fleet_edge_peer is 1). Turn on only once the edge
+          proxies to the edge listener, or public names break.
+        '';
+      };
+    };
     package = lib.mkOption {
       type = lib.types.package;
       description = "The `containers` CLI, installed system-wide.";
@@ -490,7 +517,33 @@ in
         services.nginx = {
           enable = true;
           enableReload = true;
+          # Edge/internal split (ROUTING-PLAN §2.3), used by generated vhosts:
+          #   $fleet_edge_peer          1 when the TCP peer is the edge (o002).
+          #                             $realip_remote_addr is the real peer even
+          #                             where real_ip rewrote $remote_addr.
+          #   $fleet_edge_block_internal 1 when the internal listener must drop
+          #                             this peer (nginx.edge.blockInternal).
+          #   /etc/fleet-containers/nginx-edge-realip.conf, included by edge
+          #                             servers only: trust X-Forwarded-For from the edge.
           appendHttpConfig = ''
+            map $realip_remote_addr $fleet_edge_peer {
+              default 0;
+            ${lib.concatMapStrings (p: "  ${p} 1;\n") cfg.nginx.edge.peers}}
+            map $realip_remote_addr $fleet_edge_block_internal {
+              default 0;
+            ${
+              lib.optionalString cfg.nginx.edge.blockInternal (
+                lib.concatMapStrings (p: "  ${p} 1;\n") cfg.nginx.edge.peers
+              )
+            }}
+            # Edge listener catch-all: unknown names (or a route that is no
+            # longer public here) get 444, never another route's backend.
+            server {
+              listen ${toString cfg.nginx.edge.port} default_server;
+              listen [::]:${toString cfg.nginx.edge.port} default_server;
+              server_name _;
+              return 444;
+            }
             include ${stateDir}/nginx/*.conf;
           '';
           # Drop anything not matched by a real vhost.
@@ -499,6 +552,19 @@ in
             locations."/".return = lib.mkDefault "444";
           };
         };
+        environment.etc."fleet-containers/nginx-edge-realip.conf".text =
+          lib.concatMapStrings (p: "set_real_ip_from ${p};\n") cfg.nginx.edge.peers
+          + "real_ip_header X-Forwarded-For;\nreal_ip_recursive off;\n";
+        # Edge listener: only the edge peers, only on the tailnet.
+        networking.firewall.extraInputRules = lib.concatMapStrings (
+          p:
+          let
+            fam = if lib.hasInfix ":" p then "ip6" else "ip";
+          in
+          ''
+            iifname "tailscale0" ${fam} saddr ${p} tcp dport ${toString cfg.nginx.edge.port} accept comment "nginx edge listener (ROUTING-PLAN 2.3)"
+          ''
+        ) cfg.nginx.edge.peers;
         systemd.services.nginx.serviceConfig.ReadOnlyPaths = [ "${stateDir}/nginx" ];
         # `containers deploy` validates new sites with `nginx -t` before reloading.
         environment.systemPackages = [ config.services.nginx.package ];

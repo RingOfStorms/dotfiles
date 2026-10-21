@@ -77,8 +77,9 @@ commands:
   watch [--all] [-n secs]      refreshing status view (q / ctrl-c to quit)
   logs <svc> [-n N] [--no-follow] [--host h] [--unit]
                                stream logs (inside the container; --unit = nspawn unit)
-  deploy <svc> [--host h] [--local] [--rev REV]
+  deploy <svc> [--host h] [--local] [--rev REV] [--vhost-only]
                                deploy or update to the latest pushed definition
+                               (--vhost-only: rewrite just the nginx site, no restart)
   start|stop|restart <svc> [--host h]
                                stop blocks until fully down and keeps it stopped
                                across reboots; start/restart/deploy re-enable it
@@ -911,8 +912,18 @@ func prepareScript(s Service, host string) string {
 	}
 	b.WriteString(fmt.Sprintf("printf %%s %s > /var/lib/fleet-containers/ports/%s\n", q(ports.String()), s.Name))
 	b.WriteString("systemctl reload-or-restart fleet-containers-ports.service || true\n")
-	// nginx
-	if v := routesVhost(s); v != "" {
+	b.WriteString(siteScript(s, host))
+	return b.String()
+}
+
+// siteScript writes (or removes) the service's nginx site on host, validated
+// with nginx -t and rolled back on failure. Used by prepareScript and by
+// `deploy --vhost-only`.
+func siteScript(s Service, host string) string {
+	var b strings.Builder
+	// nginx: only when a route needs a vhost on this host (see needsHostVhost);
+	// hosts without containers.nginx (joe) must never be asked to run nginx -t.
+	if v := routesVhost(s); v != "" && needsHostVhost(s) {
 		conf := "# managed by containers, service " + s.Name + " (generated from routes)\n" + v
 		b.WriteString(nginxSiteScript(nginxDir, s.Name, conf))
 	} else if len(s.Routes) == 0 && s.Nginx != nil && strings.TrimSpace(*s.Nginx) != "" {
@@ -928,9 +939,23 @@ func prepareScript(s Service, host string) string {
 		conf = "# managed by containers, service " + s.Name + "\n" + conf
 		b.WriteString(nginxSiteScript(nginxDir, s.Name, conf))
 	} else {
+		b.WriteString(fmt.Sprintf("rm -f /var/lib/fleet-containers/nginx/%[1]s.conf.broken\n", s.Name))
 		b.WriteString(fmt.Sprintf("if [ -e /var/lib/fleet-containers/nginx/%[1]s.conf ]; then rm -f /var/lib/fleet-containers/nginx/%[1]s.conf /var/lib/fleet-containers/nginx/%[1]s.conf.prev; systemctl reload nginx; fi\n", s.Name))
 	}
 	return b.String()
+}
+
+// needsHostVhost reports whether some route must be served by nginx on the
+// service's own host: an http route that leaves the host (exposure != local)
+// and is not in the private zone (h005's private-zone.nix serves those from
+// the inventory). tcp/udp routes go through the ports file, not nginx.
+func needsHostVhost(s Service) bool {
+	for _, r := range s.Routes {
+		if r.Proto == "http" && r.Exposure != "local" && (r.Zone == nil || *r.Zone != "private") {
+			return true
+		}
+	}
+	return false
 }
 
 func cleanupScript(s Service) string {
@@ -941,9 +966,18 @@ if [ -e /var/lib/fleet-containers/nginx/%[1]s.conf ]; then rm -f /var/lib/fleet-
 }
 
 func cmdDeploy(args []string) error {
-	f := parse(args, "local")
+	f := parse(args, "local", "vhost-only")
 	s := f.svc()
 	h := hostFor(s, f)
+	if f.bools["vhost-only"] {
+		// Regenerate only the nginx site (e.g. after a routesVhost change);
+		// the container and its ports are not touched.
+		if err := validateRoutes(s); err != nil {
+			return err
+		}
+		info("rewriting the nginx site of %s on %s", s.Name, h)
+		return remote(h, true, "set -euo pipefail\n"+siteScript(s, h))
+	}
 	ref := withRev(flakeRef(s.Dir), f.vals["rev"])
 	return deploy(s, h, ref, f.bools["local"])
 }

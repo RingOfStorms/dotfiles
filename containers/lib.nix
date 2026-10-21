@@ -79,6 +79,7 @@ let
     "maxBody"
     "buffering"
     "timeouts"
+    "requestBuffering"
     "forwardedProto"
     "extraConfig"
   ];
@@ -184,6 +185,7 @@ let
             maxBody = r.maxBody or "100m";
             buffering = r.buffering or true;
             timeouts = r.timeouts or "60s";
+            requestBuffering = r.requestBuffering or true;
             forwardedProto = r.forwardedProto or "https";
             extraConfig = r.extraConfig or "";
           }
@@ -235,6 +237,35 @@ let
       // service;
     in
     s // { routes = normalizeRoutes s; };
+
+  # The edge listener port on service hosts (ROUTING-PLAN §2.3). Keep in
+  # sync with cli/routes.go edgePort.
+  edgePort = 8443;
+
+  allServices =
+    dir:
+    let
+      entries = builtins.readDir dir;
+      dirs = builtins.filter (
+        d: entries.${d} == "directory" && builtins.pathExists (dir + "/${d}/service.nix")
+      ) (builtins.attrNames entries);
+    in
+    map (d: normalize (import (dir + "/${d}/service.nix"))) dirs;
+
+  # Public http routes reached through the edge (o002), each with `service`.
+  # Services without a declared host are skipped (nothing to proxy to).
+  edgeRoutes =
+    dir:
+    builtins.filter
+      (
+        r:
+        r.proto == "http" && r.exposure == "public" && builtins.elem "edge" r.via && r.service.host != null
+      )
+      (
+        builtins.concatMap (s: map (r: r // { service = s; }) (builtins.attrValues s.routes)) (
+          allServices dir
+        )
+      );
 in
 {
   inherit
@@ -242,7 +273,56 @@ in
     persistList
     normalize
     normalizeRoute
+    edgePort
+    edgeRoutes
     ;
+
+  # services.nginx.virtualHosts for the public edge (o002), generated from
+  # every public `via = edge` http route (ROUTING-PLAN §2.3, §8 step 3).
+  # Each proxies over the tailnet to the service host's edge listener
+  # (<overlayIp>:edgePort), which admits only the edge's overlay IP and
+  # serves only routes that are public there right now.
+  #   dir    the containers directory (inputs.containers.outPath or ./.)
+  #   hosts  fleet.nix hosts (overlay IPs)
+  #   tls    TLS attrs merged into every vhost; default per-name http-01
+  #          (o002 holds no bunny key, so no wildcard there yet; §8 step 4).
+  edgeVirtualHosts =
+    {
+      dir,
+      hosts,
+      tls ? {
+        enableACME = true;
+        forceSSL = true;
+      },
+    }:
+    builtins.listToAttrs (
+      map (
+        r:
+        let
+          h = r.service.host;
+          ip =
+            hosts.${h}.overlayIp
+              or (throw "edgeVirtualHosts: ${r.fqdn}: host ${h} has no overlayIp in fleet.nix");
+        in
+        {
+          name = r.fqdn;
+          value = tls // {
+            locations."/" = {
+              proxyPass = "http://${ip}:${toString edgePort}";
+              proxyWebsockets = r.websockets;
+              extraConfig = ''
+                # generated: containers ${r.service.name} (lib.nix edgeVirtualHosts)
+                client_max_body_size ${r.maxBody};
+                proxy_buffering ${if r.buffering then "on" else "off"};
+                proxy_request_buffering ${if r.requestBuffering then "on" else "off"};
+                proxy_read_timeout ${r.timeouts};
+                proxy_send_timeout ${r.timeouts};
+              '';
+            };
+          };
+        }
+      ) (edgeRoutes dir)
+    );
 
   # Every exposed http route with zone = "private" across all services in
   # `dir` (the containers directory). Each item is the normalized route plus
@@ -258,9 +338,7 @@ in
       services = map (d: normalize (import (dir + "/${d}/service.nix"))) dirs;
     in
     builtins.filter (r: r.proto == "http" && r.zone == "private" && r.exposure != "local") (
-      builtins.concatMap (
-        s: map (r: r // { service = s; }) (builtins.attrValues s.routes)
-      ) services
+      builtins.concatMap (s: map (r: r // { service = s; }) (builtins.attrValues s.routes)) services
     );
 
   # The extra-container `config` for a nixos-kind service. Pass it to

@@ -32,16 +32,18 @@ type Route struct {
 	Health            *string  `json:"health"`
 	PublicWithoutAuth bool     `json:"publicWithoutAuth"`
 	// http only (null for tcp/udp)
-	Name           *string `json:"name"`
-	Zone           *string `json:"zone"`
-	FQDN           *string `json:"fqdn"`
-	URL            *string `json:"url"`
-	Websockets     bool    `json:"websockets"`
-	MaxBody        string  `json:"maxBody"`
-	Buffering      bool    `json:"buffering"`
-	Timeouts       string  `json:"timeouts"`
-	ForwardedProto string  `json:"forwardedProto"`
-	ExtraConfig    string  `json:"extraConfig"`
+	Name       *string `json:"name"`
+	Zone       *string `json:"zone"`
+	FQDN       *string `json:"fqdn"`
+	URL        *string `json:"url"`
+	Websockets bool    `json:"websockets"`
+	MaxBody    string  `json:"maxBody"`
+	Buffering  bool    `json:"buffering"`
+	Timeouts   string  `json:"timeouts"`
+	// nil (older lib.nix) or true: nginx default; false: stream request bodies.
+	RequestBuffering *bool  `json:"requestBuffering"`
+	ForwardedProto   string `json:"forwardedProto"`
+	ExtraConfig      string `json:"extraConfig"`
 }
 
 func sortedRouteNames(s Service) []string {
@@ -103,12 +105,41 @@ func validateRoutes(s Service) error {
 	return nil
 }
 
+// Edge listener (ROUTING-PLAN §2.3). o002 proxies public `via = edge` routes
+// to <overlayIp>:edgePort on the service host over the tailnet (plain http
+// inside WireGuard; TLS ends on o002). Keep edgePort in sync with lib.nix
+// edgePort and host-module.nix nginx.edge.port. The host module defines
+// the peer maps and the real_ip include used below, and its firewall admits
+// edgePort only from the edge's overlay addresses.
+const edgePort = 8443
+
+// isEdgeRoute: http, public, and reached through the edge (o002).
+func isEdgeRoute(r Route) bool {
+	if r.Proto != "http" || r.Exposure != "public" {
+		return false
+	}
+	for _, v := range r.Via {
+		if v == "edge" {
+			return true
+		}
+	}
+	return false
+}
+
 // routesVhost renders the host nginx config for a service's http routes
-// that leave the host (exposure != local). Same shape as the hand-written
-// vhosts: one server per route on :80/:443 (v4+v6) with the wildcard cert.
-// Step 1 renders tailnet, lan and public identically; the internal/edge
-// listener split and per-source allow lists come in step 3 (§2.3).
-// Returns "" when nothing is exposed.
+// that leave the host (exposure != local):
+//
+//   - internal server (:80/:443, v4+v6, wildcard cert) for every such
+//     route, public ones included (LAN/tailnet clients go direct). It never
+//     trusts forwarded headers. With the host module's
+//     nginx.edge.blockInternal on, it returns 444 to the edge peer.
+//   - edge server (:8443, v4+v6) only for public routes via edge. It
+//     returns 444 unless the TCP peer ($realip_remote_addr) is the edge,
+//     and only it trusts X-Forwarded-For (real_ip) from the edge.
+//
+// tailnet and lan routes get only the internal server; their per-source
+// allow lists come with fleet-edge (step 4). Returns "" when nothing is
+// exposed.
 func routesVhost(s Service) string {
 	var b strings.Builder
 	for _, n := range sortedRouteNames(s) {
@@ -119,36 +150,67 @@ func routesVhost(s Service) string {
 		if b.Len() > 0 {
 			b.WriteString("\n")
 		}
-		fmt.Fprintf(&b, "# route %s: exposure %s, auth %s\n", n, r.Exposure, str(r.Auth))
+		fmt.Fprintf(&b, "# route %s: exposure %s, auth %s; internal listener\n", n, r.Exposure, str(r.Auth))
 		b.WriteString("server {\n")
 		b.WriteString("  listen 80;\n  listen [::]:80;\n  listen 443 ssl;\n  listen [::]:443 ssl;\n")
 		fmt.Fprintf(&b, "  server_name %s;\n", str(r.FQDN))
 		b.WriteString("  ssl_certificate /var/lib/acme/joshuabell.xyz/fullchain.pem;\n")
 		b.WriteString("  ssl_certificate_key /var/lib/acme/joshuabell.xyz/key.pem;\n")
-		fmt.Fprintf(&b, "  client_max_body_size %s;\n", r.MaxBody)
-		b.WriteString("  location / {\n")
-		fmt.Fprintf(&b, "    proxy_pass http://127.0.0.1:%d;\n", r.Port)
-		b.WriteString("    proxy_http_version 1.1;\n")
-		if r.Websockets {
-			b.WriteString("    proxy_set_header Upgrade $http_upgrade;\n")
-			b.WriteString("    proxy_set_header Connection $connection_upgrade;\n")
+		b.WriteString("  if ($fleet_edge_block_internal) {\n    return 444;\n  }\n")
+		writeRouteBody(&b, r)
+		b.WriteString("}\n")
+		if !isEdgeRoute(r) {
+			continue
 		}
-		b.WriteString("    proxy_set_header Host $host;\n")
-		b.WriteString("    proxy_set_header X-Real-IP $remote_addr;\n")
-		b.WriteString("    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
-		fmt.Fprintf(&b, "    proxy_set_header X-Forwarded-Proto %s;\n", r.ForwardedProto)
-		b.WriteString("    # TODO(ROUTING-PLAN §8 step 6): strip _oauth2_proxy* cookies before the backend.\n")
-		fmt.Fprintf(&b, "    proxy_buffering %s;\n", map[bool]string{true: "on", false: "off"}[r.Buffering])
-		fmt.Fprintf(&b, "    proxy_read_timeout %s;\n", r.Timeouts)
-		fmt.Fprintf(&b, "    proxy_send_timeout %s;\n", r.Timeouts)
-		if x := strings.TrimSpace(r.ExtraConfig); x != "" {
-			for _, l := range strings.Split(x, "\n") {
-				b.WriteString("    " + strings.TrimSpace(l) + "\n")
-			}
-		}
-		b.WriteString("  }\n}\n")
+		fmt.Fprintf(&b, "\n# route %s: edge listener (only the edge peer; X-Forwarded-For trusted)\n", n)
+		b.WriteString("server {\n")
+		fmt.Fprintf(&b, "  listen %d;\n  listen [::]:%d;\n", edgePort, edgePort)
+		fmt.Fprintf(&b, "  server_name %s;\n", str(r.FQDN))
+		b.WriteString("  include /etc/fleet-containers/nginx-edge-realip.conf;\n")
+		b.WriteString("  if ($fleet_edge_peer = 0) {\n    return 444;\n  }\n")
+		writeRouteBody(&b, r)
+		b.WriteString("}\n")
 	}
 	return b.String()
+}
+
+// writeRouteBody writes client_max_body_size and the proxy location.
+// X-Real-IP/$remote_addr is the TCP peer on the internal listener and the
+// client (from o002's X-Forwarded-For via real_ip) on the edge listener, so
+// the last X-Forwarded-For entry is trustworthy on both.
+func writeRouteBody(b *strings.Builder, r Route) {
+	fmt.Fprintf(b, "  client_max_body_size %s;\n", r.MaxBody)
+	b.WriteString("  location / {\n")
+	fmt.Fprintf(b, "    proxy_pass http://127.0.0.1:%d;\n", r.Port)
+	b.WriteString("    proxy_http_version 1.1;\n")
+	if r.Websockets {
+		b.WriteString("    proxy_set_header Upgrade $http_upgrade;\n")
+		b.WriteString("    proxy_set_header Connection $connection_upgrade;\n")
+	}
+	b.WriteString("    proxy_set_header Host $host;\n")
+	b.WriteString("    proxy_set_header X-Real-IP $remote_addr;\n")
+	b.WriteString("    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
+	fmt.Fprintf(b, "    proxy_set_header X-Forwarded-Proto %s;\n", r.ForwardedProto)
+	b.WriteString("    # TODO(ROUTING-PLAN §8 step 6): strip _oauth2_proxy* cookies before the backend.\n")
+	fmt.Fprintf(b, "    proxy_buffering %s;\n", onOff(r.Buffering))
+	if r.RequestBuffering != nil && !*r.RequestBuffering {
+		b.WriteString("    proxy_request_buffering off;\n")
+	}
+	fmt.Fprintf(b, "    proxy_read_timeout %s;\n", r.Timeouts)
+	fmt.Fprintf(b, "    proxy_send_timeout %s;\n", r.Timeouts)
+	if x := strings.TrimSpace(r.ExtraConfig); x != "" {
+		for _, l := range strings.Split(x, "\n") {
+			b.WriteString("    " + strings.TrimSpace(l) + "\n")
+		}
+	}
+	b.WriteString("  }\n")
+}
+
+func onOff(v bool) string {
+	if v {
+		return "on"
+	}
+	return "off"
 }
 
 // routePorts lists raw tcp/udp routes that leave the host, in the ports
@@ -208,6 +270,7 @@ var hostAllowlist = map[string]string{
 	"tcp/22":    "sshd",
 	"tcp/80":    "nginx",
 	"tcp/443":   "nginx",
+	"tcp/8443":  "nginx edge listener (ROUTING-PLAN 2.3)",
 	"tcp/53":    "dns",
 	"udp/53":    "dns",
 	"udp/41641": "tailscaled",
