@@ -13,13 +13,28 @@ let
 
   # Public `via = edge` routes of floating containers (ROUTING-PLAN §2.3,
   # §8 step 3), generated from containers/*/service.nix. Each proxies to the
-  # service host's edge listener (<overlayIp>:8443). TLS: per-name http-01
-  # as before; o002 has no bunny key (h005/fleet-edge will own it, step 4).
+  # service host's edge listener (<overlayIp>:8443).
   containersLib = import ../../../containers/lib.nix;
   containerVhosts = containersLib.edgeVirtualHosts {
     dir = ../../../containers;
     inherit (fleet) hosts;
   };
+
+  # TLS (ROUTING-PLAN §8 step 4): names listed here serve the
+  # *.joshuabell.xyz + apex wildcard that h005 issues and pushes
+  # (hosts/wildcard-cert-receiver.nix) instead of their own http-01 cert.
+  # Moved over one name at a time; "all" switches every joshuabell.xyz
+  # vhost. ellalala.com is not covered and keeps http-01.
+  wildcardNames = [ "all" ];
+  coveredByWildcard =
+    name:
+    name == domain
+    || (lib.hasSuffix ".${domain}" name && !lib.hasInfix "." (lib.removeSuffix ".${domain}" name));
+  useWildcard =
+    name: coveredByWildcard name && (wildcardNames == [ "all" ] || builtins.elem name wildcardNames);
+  withTls =
+    name: v:
+    if useWildcard name then builtins.removeAttrs v [ "enableACME" ] // config.fleet.wildcardTls else v;
 
   # Unconverted h001 services (no `routes` yet): still proxied to h001's
   # internal listener (:80). Move each to `routes` and delete it here.
@@ -213,7 +228,7 @@ in
       assert lib.assertMsg (
         clash == [ ]
       ) "o002 nginx: ${toString clash} is both hand-kept and generated from containers routes";
-      handVhosts // containerVhosts;
+      lib.mapAttrs withTls (handVhosts // containerVhosts);
 
     # STREAMS
     streamConfig = ''

@@ -73,6 +73,14 @@ in
     # credentialFiles.BUNNY_API_KEY_FILE injected via sec-agent configChanges
     # (hosts/h005/sec-agent.nix).
     dnsProvider = "bunny";
+    # Check propagation against public resolvers, not h005's own dnsmasq/
+    # AdGuard (127.0.0.53), which can answer from cache before bunny has the
+    # TXT. Apex + wildcard share _acme-challenge (two TXT values).
+    dnsResolver = "1.1.1.1:53";
+    extraLegoFlags = [
+      "--dns.propagation-wait"
+      "60s"
+    ];
     # Only the push unit reads it; nginx on h005 doesn't serve these names.
     group = "acme";
     postRun = "systemctl start --no-block wildcard-push.service";

@@ -158,6 +158,24 @@ in
           iifname "${mng.name}" oifname "${net.wanInterface}" accept
           iifname "${lan.name}" oifname "${net.wanInterface}" accept
         }
+
+        # The forward drop above only covers routed packets. A denied device can
+        # still reach the router itself, whose AdGuard listener forwards DNS to
+        # external upstreams: that path is INPUT -> OUTPUT and never traverses
+        # the forward chain. Close it here, at a lower priority than the NixOS
+        # input chain so nothing earlier can accept first.
+        # Only DNS (53) is blocked - DHCP (67/68/547), NDP and ICMPv6 keep
+        # working, so the device stays addressable and same-VLAN control is
+        # unaffected.
+        chain input {
+          type filter hook input priority filter - 5; policy accept;
+          ${lib.concatMapStringsSep "\n          " (
+            d: ''ether saddr ${d.mac} udp dport 53 counter drop comment "wanDenied ${d.name} dns/udp"''
+          ) net.wanDenied}
+          ${lib.concatMapStringsSep "\n          " (
+            d: ''ether saddr ${d.mac} tcp dport 53 counter drop comment "wanDenied ${d.name} dns/tcp"''
+          ) net.wanDenied}
+        }
       '';
     };
 

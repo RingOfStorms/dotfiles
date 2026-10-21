@@ -156,8 +156,8 @@ func routesVhost(s Service) string {
 		b.WriteString("server {\n")
 		b.WriteString("  listen 80;\n  listen [::]:80;\n  listen 443 ssl;\n  listen [::]:443 ssl;\n")
 		fmt.Fprintf(&b, "  server_name %s;\n", str(r.FQDN))
-		b.WriteString("  ssl_certificate /var/lib/acme/joshuabell.xyz/fullchain.pem;\n")
-		b.WriteString("  ssl_certificate_key /var/lib/acme/joshuabell.xyz/key.pem;\n")
+		// Cert paths live in one place: host-module.nix nginx.tls.certDir.
+		b.WriteString("  include /etc/fleet-containers/nginx-tls.conf;\n")
 		b.WriteString("  if ($fleet_edge_block_internal) {\n    return 444;\n  }\n")
 		writeRouteBody(&b, r)
 		b.WriteString("}\n")

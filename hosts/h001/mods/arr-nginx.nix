@@ -8,8 +8,9 @@ let
   mi = constants.services.mediaIntegrity;
   tls = {
     addSSL = true;
-    sslCertificate = "/var/lib/acme/${fleet.global.domain}/fullchain.pem";
-    sslCertificateKey = "/var/lib/acme/${fleet.global.domain}/key.pem";
+    # Wildcard pushed by h005 (hosts/wildcard-cert-receiver.nix).
+    sslCertificate = "/var/lib/fleet-cert/${fleet.global.domain}/fullchain.pem";
+    sslCertificateKey = "/var/lib/fleet-cert/${fleet.global.domain}/key.pem";
   };
   proxy = port: {
     proxyWebsockets = true;

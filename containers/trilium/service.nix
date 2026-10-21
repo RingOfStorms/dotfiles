@@ -25,8 +25,7 @@
       listen 443 ssl;
       listen [::]:443 ssl;
       server_name sso-proxy.joshuabell.xyz;
-      ssl_certificate /var/lib/acme/joshuabell.xyz/fullchain.pem;
-      ssl_certificate_key /var/lib/acme/joshuabell.xyz/key.pem;
+      include /etc/fleet-containers/nginx-tls.conf; # cert: host-module nginx.tls.certDir
       location / {
         proxy_pass http://127.0.0.1:4180;
         proxy_http_version 1.1;
@@ -57,8 +56,7 @@
       listen 443 ssl;
       listen [::]:443 ssl;
       server_name notes.joshuabell.xyz;
-      ssl_certificate /var/lib/acme/joshuabell.xyz/fullchain.pem;
-      ssl_certificate_key /var/lib/acme/joshuabell.xyz/key.pem;
+      include /etc/fleet-containers/nginx-tls.conf; # cert: host-module nginx.tls.certDir
       client_max_body_size 0; # TRILIUM_NO_UPLOAD_LIMIT
 
       auth_request /oauth2/auth;

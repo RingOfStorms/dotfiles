@@ -21,19 +21,10 @@ in
     443
   ];
 
-  # TODO transfer these to o001 to use same certs?
-  # Will I ever get rate limited by lets encrypt with both doing their own?
-  security.acme = {
-    acceptTerms = true;
-    defaults.email = fleet.global.acmeEmail;
-    certs."${domain}" = {
-      inherit domain;
-      extraDomainNames = [ "*.${domain}" ];
-      # credentialFiles.BUNNY_API_KEY_FILE injected via sec-agent configChanges
-      dnsProvider = "bunny";
-      group = "nginx";
-    };
-  };
+  # TLS: no ACME here. The *.joshuabell.xyz wildcard is issued on h005 and
+  # pushed to /var/lib/fleet-cert (hosts/wildcard-cert-receiver.nix); the
+  # generated vhosts include /etc/fleet-containers/nginx-tls.conf and the
+  # hand vhosts (mods/arr-nginx.nix) name it directly. ROUTING-PLAN §8 step 4.
 
   # nginx listens on overlay IP, needs tailscale interface up.
   # tailscaled-autoconnect.service (Type=notify) only finishes once `tailscale up`

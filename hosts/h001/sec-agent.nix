@@ -20,12 +20,6 @@ import ../sec-agent.nix {
       hardDepend = [ "atuin-autologin" ];
     };
 
-    bunny_rw_dns_2026-03-15 = {
-      remotePath = "machines/high-trust/bunny_rw_dns_2026-03-15";
-      configChanges.security.acme.certs."joshuabell.xyz".credentialFiles.BUNNY_API_KEY_FILE =
-        "$SECRET_PATH";
-    };
-
     # Read by the arr container (containers/arr/container.nix) through the
     # secrets bind mount.
     us_chi_wg_2026-03-15 = {

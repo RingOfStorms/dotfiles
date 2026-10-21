@@ -75,7 +75,7 @@
   # ── high-trust: h001 service secrets ──────────────────────────
   "machines/high-trust/bunny_rw_dns_2026-03-15" = {
     fields = [ "value" ];
-    description = "bunny.net DNS API key (ACME wildcard + h003 DDNS).";
+    description = "bunny.net DNS API key (h005: public + ts wildcard ACME, DDNS, fleet-edge dns-plan).";
     access = [
       {
         type = "role";

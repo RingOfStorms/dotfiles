@@ -142,6 +142,17 @@ in
       default = false;
       description = "Enable nginx and include ${stateDir}/nginx/*.conf in the http block.";
     };
+    nginx.tls.certDir = lib.mkOption {
+      type = lib.types.str;
+      default = "/var/lib/acme/joshuabell.xyz";
+      example = "/var/lib/fleet-cert/joshuabell.xyz";
+      description = ''
+        Directory holding fullchain.pem and key.pem for the generated
+        internal :443 listeners, written to
+        /etc/fleet-containers/nginx-tls.conf. Set to the wildcard pushed by
+        h005 (hosts/wildcard-cert-receiver.nix) to drop the host's own ACME.
+      '';
+    };
     # Internal/edge listener split (ROUTING-PLAN §2.3). Generated vhosts put
     # public `via = edge` routes on <overlayIp>:edge.port as well; only
     # edge.peers may connect there (firewall + per-vhost check).
@@ -555,6 +566,12 @@ in
         environment.etc."fleet-containers/nginx-edge-realip.conf".text =
           lib.concatMapStrings (p: "set_real_ip_from ${p};\n") cfg.nginx.edge.peers
           + "real_ip_header X-Forwarded-For;\nreal_ip_recursive off;\n";
+        # Certificate for the generated internal :443 listeners (one place;
+        # cli/routes.go only `include`s this file). ROUTING-PLAN §8 step 4.
+        environment.etc."fleet-containers/nginx-tls.conf".text = ''
+          ssl_certificate ${cfg.nginx.tls.certDir}/fullchain.pem;
+          ssl_certificate_key ${cfg.nginx.tls.certDir}/key.pem;
+        '';
         # Edge listener: only the edge peers, only on the tailnet.
         networking.firewall.extraInputRules = lib.concatMapStrings (
           p:

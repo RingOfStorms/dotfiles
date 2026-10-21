@@ -24,8 +24,7 @@ server {
   listen 443 ssl;
   listen [::]:443 ssl;
   server_name secrets.joshuabell.xyz;
-  ssl_certificate /var/lib/acme/joshuabell.xyz/fullchain.pem;
-  ssl_certificate_key /var/lib/acme/joshuabell.xyz/key.pem;
+  include /etc/fleet-containers/nginx-tls.conf;
   if ($fleet_edge_block_internal) {
     return 444;
   }
@@ -81,8 +80,7 @@ server {
   listen 443 ssl;
   listen [::]:443 ssl;
   server_name litellm.joshuabell.xyz;
-  ssl_certificate /var/lib/acme/joshuabell.xyz/fullchain.pem;
-  ssl_certificate_key /var/lib/acme/joshuabell.xyz/key.pem;
+  include /etc/fleet-containers/nginx-tls.conf;
   if ($fleet_edge_block_internal) {
     return 444;
   }
