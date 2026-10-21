@@ -5,6 +5,7 @@ package dash
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -126,6 +127,8 @@ func Build(m state.Merged, links []Link, iconBase string) []Group {
 		}
 	}
 
+	hosts := NewHostIndex(m)
+
 	var order []string
 	groups := map[string]*Group{}
 	add := func(g string, t Tile) {
@@ -154,6 +157,9 @@ func Build(m state.Merged, links []Link, iconBase string) []Group {
 			}
 		}
 		t.IconURL = ResolveIcon(icon, iconBase)
+		if t.Host == "" {
+			t.Host = hosts.Infer(l.URL)
+		}
 		add(l.Group, t)
 	}
 
@@ -176,4 +182,68 @@ func Build(m state.Merged, links []Link, iconBase string) []Group {
 		out = append(out, *groups[g])
 	}
 	return out
+}
+
+// HostIndex maps URL hostnames to fleet host names.
+type HostIndex struct {
+	hosts  map[string]string // lowercased fleet host name -> name
+	byName map[string]string // exact hostname/IP -> fleet host
+}
+
+// NewHostIndex indexes fleet hosts (name, <name>.local, overlay and LAN
+// IPs) and the hostnames of inventory route URLs (-> the service's host).
+func NewHostIndex(m state.Merged) HostIndex {
+	ix := HostIndex{hosts: map[string]string{}, byName: map[string]string{}}
+	for _, h := range m.Hosts {
+		if h.Host == "" {
+			continue
+		}
+		lc := strings.ToLower(h.Host)
+		ix.hosts[lc] = h.Host
+		ix.byName[lc] = h.Host
+		ix.byName[lc+".local"] = h.Host
+		for _, ip := range []string{h.OverlayIP, h.LanIP} {
+			if ip != "" {
+				ix.byName[strings.ToLower(ip)] = h.Host
+			}
+		}
+	}
+	for _, svc := range m.Services {
+		if svc.DeclaredHost == "" {
+			continue
+		}
+		for _, rt := range svc.Routes {
+			if hn := urlHostname(rt.URLStr()); hn != "" {
+				if _, taken := ix.byName[hn]; !taken {
+					ix.byName[hn] = svc.DeclaredHost
+				}
+			}
+		}
+	}
+	return ix
+}
+
+func urlHostname(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+}
+
+// Infer returns the fleet host serving rawURL, or "" if unknown. It
+// matches <host>.net.<domain>, <host>.local, a host's overlay/LAN IP, or
+// the hostname of an inventory route URL.
+func (ix HostIndex) Infer(rawURL string) string {
+	hn := urlHostname(rawURL)
+	if hn == "" {
+		return ""
+	}
+	if h, ok := ix.byName[hn]; ok {
+		return h
+	}
+	if first, rest, ok := strings.Cut(hn, "."); ok && strings.HasPrefix(rest, "net.") && len(rest) > len("net.") {
+		return ix.hosts[first]
+	}
+	return ""
 }

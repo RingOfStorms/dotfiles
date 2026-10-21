@@ -73,7 +73,10 @@ in
       (ident "SSO" "https://sso.${domain}" "zitadel" "Zitadel")
       (ident "Secrets" "https://secrets.${domain}" "" "Secrets Manager")
 
-      (net "AdGuard Home" "http://h003.net.${domain}:3000" "adguard-home" "Network-wide Ad-blocker")
+      # AdGuard runs on h005; its admin UI (:3000) is reachable from the LAN only.
+      (net "AdGuard Home" "http://${constants.network.vlans.lan.ipv4}:3000" "adguard-home"
+        "Ad-blocker (LAN only)"
+      )
       (net "Beszel" "${h001}:8090" "beszel" "Server Metrics")
 
       # was joe's homepage (its only tile)

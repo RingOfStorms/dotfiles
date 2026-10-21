@@ -83,3 +83,60 @@ func TestLoadLinks(t *testing.T) {
 		t.Fatal("expected error for missing url")
 	}
 }
+
+func TestHostInference(t *testing.T) {
+	inv := &inventory.Inventory{
+		Services: map[string]inventory.Service{
+			"immich": {Name: "immich", Host: "h001", Routes: map[string]inventory.Route{
+				"web": {Name: strp("photos"), URL: strp("https://photos.example.com")},
+			}},
+			"localai": {Name: "localai", Host: "joe", Routes: map[string]inventory.Route{
+				"web": {Name: strp("localai"), URL: strp("https://localai.ts.example.com/api")},
+			}},
+		},
+		Hosts: map[string]inventory.Host{
+			"h001": {OverlayIP: strp("100.64.0.1"), LanIP: strp("10.12.14.10")},
+			"h005": {OverlayIP: strp("100.64.0.5"), LanIP: strp("10.12.14.1")},
+			"joe":  {},
+		},
+	}
+	m := state.Merge(inv, nil)
+	ix := NewHostIndex(m)
+	cases := map[string]string{
+		"http://h001.net.example.com:7878":     "h001",
+		"http://H001.NET.joshuabell.xyz/":      "h001",
+		"http://h005.local:3000":               "h005",
+		"http://10.12.14.1:3000":               "h005",
+		"http://100.64.0.1:8090/x":             "h001",
+		"https://localai.ts.example.com":       "joe",
+		"https://photos.example.com/share/abc": "h001",
+		"http://h001:7878":                     "h001",
+		"https://git.example.com":              "",
+		"http://h999.net.example.com":          "",
+		"http://net.example.com":               "",
+		"http://h001.net.":                     "",
+		"http://h001.lan":                      "",
+		"not a url":                            "",
+		"":                                     "",
+	}
+	for u, want := range cases {
+		if got := ix.Infer(u); got != want {
+			t.Errorf("Infer(%q) = %q, want %q", u, got, want)
+		}
+	}
+
+	links := []Link{
+		{Name: "Radarr", URL: "http://h001.net.example.com:7878", Group: "Media"},
+		{Name: "Photos", URL: "https://photos.example.com/", Group: "Docs"},
+		{Name: "Elsewhere", URL: "https://example.org", Group: "Docs"},
+	}
+	gs := Build(m, links, "")
+	if len(gs) != 3 || gs[0].Tiles[0].Host != "h001" || gs[1].Tiles[0].Host != "h001" || gs[1].Tiles[1].Host != "" {
+		t.Fatalf("groups = %+v", gs)
+	}
+	for _, tl := range gs[2].Tiles {
+		if tl.Host == "" {
+			t.Fatalf("inventory tile without host: %+v", tl)
+		}
+	}
+}
