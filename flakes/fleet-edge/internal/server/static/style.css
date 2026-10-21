@@ -203,7 +203,7 @@ h1 {
 .letter { font-weight: 700; font-size: 1.1rem; color: var(--accent); }
 
 .tile-text { display: flex; flex-direction: column; min-width: 0; }
-.tile-name { font-weight: 600; display: flex; align-items: center; gap: 0.4rem; }
+.tile-name { font-weight: 600; display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.4rem; overflow-wrap: anywhere; }
 .tile-desc {
   color: var(--muted);
   font-size: 0.85rem;
