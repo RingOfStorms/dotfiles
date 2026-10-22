@@ -1,4 +1,4 @@
-# Puzzles server (puzzles.joshuabell.xyz), 127.0.0.1:8093.
+# Puzzles server (puzzles.joshuabell.xyz), :8093 in its own netns (net.private).
 # Was hosts/h001/mods/puzzles.nix on bare metal.
 {
   name = "puzzles";
@@ -9,6 +9,13 @@
   persist = {
     data = "/var/lib/puzzles-server"; # data.db, auxiliary.db, storage/
     nixos = "/var/lib/nixos";
+  };
+
+  # Private network (ROUTING-PLAN §8 step 5): guest 10.233.2.2, host nginx
+  # proxies there; no host port. index is fleet-wide unique, never reuse.
+  net = {
+    private = true;
+    index = 2;
   };
 
   # maxBody 500m = h001's http-level client_max_body_size, which the old

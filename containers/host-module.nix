@@ -84,14 +84,47 @@ let
         probe || exit 1
       done
     '';
+  # Ports file lines (written by `containers deploy`):
+  #   <tcp|udp> <port>                    open on every interface (temp-ports)
+  #   <tcp|udp> <port> dnat <guest ipv4>  private-network route: DNAT host
+  #                                       port -> guest (fleet-net-nat @routes)
+  #   noinet <ve-iface>                   private guest with internet = false
+  # @routes and @noinet are flushed and refilled on every run, so a redeploy
+  # or a removed ports file drops stale entries.
   applyPorts = pkgs.writeShellScript "fleet-containers-apply-ports" ''
     set -u
     nft=${pkgs.nftables}/bin/nft
     shopt -s nullglob
+    fleetnet=0
+    if $nft list table ip fleet-net-nat >/dev/null 2>&1; then
+      fleetnet=1
+      $nft flush map ip fleet-net-nat routes
+      $nft flush set inet fleet-net noinet
+    fi
     for f in ${stateDir}/ports/*; do
-      while read -r proto port; do
+      while read -r proto port mode ip; do
+        if [ "$proto" = noinet ]; then
+          case "$port" in ve-*) ;; *) continue ;; esac
+          if [ "$fleetnet" = 1 ]; then
+            $nft add element inet fleet-net noinet "{ \"$port\" }" \
+              || echo "containers: could not cut egress of $port (from $f)" >&2
+          else
+            echo "containers: $f wants noinet but privateNetwork is off on this host" >&2
+          fi
+          continue
+        fi
         case "$proto" in tcp|udp) ;; *) continue ;; esac
         case "$port" in ""|*[!0-9]*) continue ;; esac
+        if [ "''${mode:-}" = dnat ]; then
+          case "$ip" in 10.233.*) ;; *) echo "containers: bad dnat target '$ip' (from $f)" >&2; continue ;; esac
+          if [ "$fleetnet" = 1 ]; then
+            $nft add element ip fleet-net-nat routes "{ $proto . $port : $ip }" \
+              || echo "containers: could not DNAT $proto/$port to $ip (from $f)" >&2
+          else
+            echo "containers: $f wants DNAT but privateNetwork is off on this host" >&2
+          fi
+          continue
+        fi
         $nft add element inet nixos-fw temp-ports "{ $proto . $port }" \
           || echo "containers: could not open $proto/$port (from $f)" >&2
       done < "$f"
@@ -248,20 +281,19 @@ in
         /etc/fleet-containers/lan-interface). null: `--iface lan` is refused.
       '';
     };
-    privateNetwork = {
-      enable = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-        description = ''
-          Allow containers with privateNetwork (ve-* interfaces) to reach the
-          internet. Adds ve-+ to NAT and trusts and forwards it.
-        '';
-      };
-      externalInterface = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = "Interface to NAT container traffic out of.";
-      };
+    # Private container networking (ROUTING-PLAN §8 step 5) for services
+    # with net.private in service.nix: veth ve-<name>, guest
+    # 10.233.<index>.2, host side lib.nix netHostAddress (10.233.0.1).
+    privateNetwork.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Host side for net.private containers: masquerade 10.233.0.0/16 out
+        of every non-ve interface, DNAT for their tcp/udp routes
+        (fleet-net-nat @routes, filled from the ports files), no direct
+        container-to-container traffic, @noinet for internet = false, and
+        DNS on 10.233.0.1 (resolved stub). ve-* is not trusted.
+      '';
     };
     capabilities = lib.mkOption {
       type = lib.types.listOf lib.types.str;
@@ -698,17 +730,59 @@ in
       (lib.mkIf (cfg.guards != { }) { systemd = guardUnits; })
 
       (lib.mkIf cfg.privateNetwork.enable {
-        networking.nat = {
-          enable = true;
-          internalInterfaces = [ "ve-+" ];
-          externalInterface = lib.mkIf (
-            cfg.privateNetwork.externalInterface != null
-          ) cfg.privateNetwork.externalInterface;
+        assertions = [
+          {
+            assertion = config.services.resolved.enable;
+            message = "ringofstorms.containers.privateNetwork needs systemd-resolved (guest DNS is its stub on 10.233.0.1).";
+          }
+        ];
+        boot.kernel.sysctl."net.ipv4.conf.all.forwarding" = lib.mkDefault true;
+        # Guests ask the host's resolver; freebind, so it binds before any veth exists.
+        services.resolved.settings.Resolve.DNSStubListenerExtra = [ "10.233.0.1" ];
+        networking.nftables.tables.fleet-net = {
+          family = "inet";
+          content = ''
+            set noinet {
+              comment "net.private guests with internet = false (ports files)"
+              type ifname
+            }
+            chain forward {
+              type filter hook forward priority filter - 5; policy accept;
+              iifname @noinet ct direction original drop comment "internet = false"
+              iifname "ve-*" oifname "ve-*" ct direction original ct status dnat accept comment "declared tcp/udp route via a host address"
+              iifname "ve-*" oifname "ve-*" ct direction original drop comment "no direct container to container"
+            }
+          '';
         };
-        networking.firewall.trustedInterfaces = [ "ve-+" ];
-        networking.firewall.extraForwardRules = lib.mkBefore ''
-          iifname "ve-*" accept
-          oifname "ve-*" accept
+        networking.nftables.tables.fleet-net-nat = {
+          family = "ip";
+          content = ''
+            map routes {
+              comment "net.private tcp/udp routes: proto . host port -> guest (ports files)"
+              type inet_proto . inet_service : ipv4_addr
+            }
+            chain prerouting {
+              type nat hook prerouting priority dstnat; policy accept;
+              fib daddr type local dnat ip to meta l4proto . th dport map @routes
+            }
+            chain output {
+              type nat hook output priority -100; policy accept;
+              ip daddr != 127.0.0.0/8 fib daddr type local dnat ip to meta l4proto . th dport map @routes
+            }
+            chain postrouting {
+              type nat hook postrouting priority srcnat; policy accept;
+              ip saddr 10.233.0.0/16 oifname != "ve-*" masquerade
+            }
+          '';
+        };
+        networking.firewall.extraInputRules = ''
+          iifname "ve-*" ip daddr 10.233.0.1 meta l4proto { tcp, udp } th dport 53 accept comment "guest DNS (resolved stub)"
+        '';
+        # Only used where networking.firewall.filterForward is on (h003).
+        # fleet-net's forward chain has already dropped what must not pass.
+        networking.firewall.extraForwardRules = ''
+          iifname "ve-*" accept comment "net.private egress"
+          oifname "ve-*" ct status dnat accept comment "net.private tcp/udp routes"
         '';
       })
     ]

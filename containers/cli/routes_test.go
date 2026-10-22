@@ -43,6 +43,14 @@ server {
   if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
     set $fleet_cookie $1$2;
   }
+  # Fail closed: more matching cookies than rounds -> drop the whole header.
+  if ($fleet_cookie ~ "_oauth2_proxy") {
+    set $fleet_cookie "";
+  }
+  # Tidy a leftover "; " prefix when the first cookie was stripped.
+  if ($fleet_cookie ~ "^;\s*(.*)$") {
+    set $fleet_cookie $1;
+  }
   location / {
     proxy_pass http://127.0.0.1:8300;
     proxy_http_version 1.1;
@@ -85,6 +93,14 @@ server {
   }
   if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
     set $fleet_cookie $1$2;
+  }
+  # Fail closed: more matching cookies than rounds -> drop the whole header.
+  if ($fleet_cookie ~ "_oauth2_proxy") {
+    set $fleet_cookie "";
+  }
+  # Tidy a leftover "; " prefix when the first cookie was stripped.
+  if ($fleet_cookie ~ "^;\s*(.*)$") {
+    set $fleet_cookie $1;
   }
   location / {
     proxy_pass http://127.0.0.1:8300;
@@ -134,6 +150,14 @@ server {
   if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
     set $fleet_cookie $1$2;
   }
+  # Fail closed: more matching cookies than rounds -> drop the whole header.
+  if ($fleet_cookie ~ "_oauth2_proxy") {
+    set $fleet_cookie "";
+  }
+  # Tidy a leftover "; " prefix when the first cookie was stripped.
+  if ($fleet_cookie ~ "^;\s*(.*)$") {
+    set $fleet_cookie $1;
+  }
   location / {
     proxy_pass http://127.0.0.1:8094;
     proxy_http_version 1.1;
@@ -182,6 +206,14 @@ server {
   }
   if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
     set $fleet_cookie $1$2;
+  }
+  # Fail closed: more matching cookies than rounds -> drop the whole header.
+  if ($fleet_cookie ~ "_oauth2_proxy") {
+    set $fleet_cookie "";
+  }
+  # Tidy a leftover "; " prefix when the first cookie was stripped.
+  if ($fleet_cookie ~ "^;\s*(.*)$") {
+    set $fleet_cookie $1;
   }
   # auth = oauth2-proxy: fleet oauth2-proxy on h005 (ROUTING-PLAN §8 step 6).
   location = /oauth2/auth {

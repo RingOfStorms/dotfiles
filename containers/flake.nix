@@ -26,20 +26,23 @@
       serviceDirs = builtins.filter (
         n: entries.${n} == "directory" && builtins.pathExists (./. + "/${n}/service.nix")
       ) (builtins.attrNames entries);
+      # checkNetIndexes: two services with the same net.index fail the eval.
       services = builtins.listToAttrs (
-        map (dir: {
-          name = dir;
-          value =
-            let
-              s = containersLib.normalize (import (./. + "/${dir}/service.nix"));
-            in
-            s
-            // {
-              inherit dir;
-              persistPaths = containersLib.persistList s;
-            };
-        }) serviceDirs
+        map (s: {
+          name = s.dir;
+          value = s;
+        }) (containersLib.checkNetIndexes (map serviceOf serviceDirs))
       );
+      serviceOf =
+        dir:
+        let
+          s = containersLib.normalize (import (./. + "/${dir}/service.nix"));
+        in
+        s
+        // {
+          inherit dir;
+          persistPaths = containersLib.persistList s;
+        };
     in
     {
       # Hosts import this once: inputs.containers.nixosModules.default

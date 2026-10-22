@@ -4,6 +4,7 @@
   pkgs,
   lib,
   puzzles,
+  fleetNet,
   ...
 }:
 {
@@ -23,6 +24,8 @@
     enable = true;
     # Build with the guest's nixpkgs so the unfree predicate above applies.
     package = pkgs.callPackage "${puzzles}/nix/package.nix" { };
-    settings.http = "127.0.0.1:8093";
+    # 0.0.0.0 in its private netns (the guest firewall admits 8093 only),
+    # 127.0.0.1 if net.private is turned off again.
+    settings.http = "${fleetNet.bindAddress}:8093";
   };
 }

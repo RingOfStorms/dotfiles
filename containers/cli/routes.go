@@ -50,6 +50,9 @@ type Route struct {
 	// auth = oauth2-proxy only: zitadel roles (any of), unauthenticated path prefixes.
 	Groups []string `json:"groups"`
 	Bypass []string `json:"bypass"`
+	// Set by routesVhost from the service (not in the inventory): the
+	// backend address nginx proxies to. "" means 127.0.0.1.
+	backend string
 }
 
 func sortedRouteNames(s Service) []string {
@@ -173,6 +176,8 @@ func routesVhost(s Service) string {
 		if r.Proto != "http" || r.Exposure == "local" {
 			continue
 		}
+		// Private network (ROUTING-PLAN §8 step 5): proxy to the guest IP.
+		r.backend = backendAddr(s)
 		if b.Len() > 0 {
 			b.WriteString("\n")
 		}
@@ -308,7 +313,11 @@ func writeProxyLocation(b *strings.Builder, r Route, loc string, gated bool) {
 		b.WriteString("    auth_request_set $fleet_auth_cookie $upstream_http_set_cookie;\n")
 		b.WriteString("    add_header Set-Cookie $fleet_auth_cookie;\n")
 	}
-	fmt.Fprintf(b, "    proxy_pass http://127.0.0.1:%d;\n", r.Port)
+	backend := r.backend
+	if backend == "" {
+		backend = "127.0.0.1"
+	}
+	fmt.Fprintf(b, "    proxy_pass http://%s:%d;\n", backend, r.Port)
 	b.WriteString("    proxy_http_version 1.1;\n")
 	if r.Websockets {
 		b.WriteString("    proxy_set_header Upgrade $http_upgrade;\n")
@@ -358,6 +367,34 @@ func routePorts(s Service) []string {
 		if (r.Proto == "tcp" || r.Proto == "udp") && r.Exposure != "local" {
 			out = append(out, fmt.Sprintf("%s %d", r.Proto, r.Port))
 		}
+	}
+	return out
+}
+
+// portsFileLines is the service's ports file (host-module.nix applyPorts):
+// tcpPorts/udpPorts and routePorts open on the host ("tcp 3032"). For a
+// private-network service (ROUTING-PLAN §8 step 5) its tcp/udp routes are
+// DNATed to the guest instead ("tcp 3032 dnat 10.233.3.2"), and
+// internet = false adds "noinet ve-<name>". lib.nix refuses
+// tcpPorts/udpPorts together with net.private.
+func portsFileLines(s Service) []string {
+	var out []string
+	if !s.Net.Private {
+		for _, p := range s.TCPPorts {
+			out = append(out, fmt.Sprintf("tcp %d", p))
+		}
+		for _, p := range s.UDPPorts {
+			out = append(out, fmt.Sprintf("udp %d", p))
+		}
+	}
+	for _, l := range routePorts(s) {
+		if s.Net.Private {
+			l += " dnat " + backendAddr(s)
+		}
+		out = append(out, l)
+	}
+	if s.Net.Private && s.Internet != nil && !*s.Internet {
+		out = append(out, "noinet ve-"+s.Name)
 	}
 	return out
 }
@@ -502,12 +539,28 @@ type auditRow struct {
 	Status, Owner string
 }
 
-// auditListeners classifies the non-loopback listeners on host.
+// auditListeners classifies the non-loopback listeners on host. Route
+// ports of net.private services (ROUTING-PLAN §8 step 5) live in the
+// guest's netns, so a *host* listener on one, loopback included, is STALE
+// (an old host-network instance or a leak), unless a host-network service
+// on the same host declares that port too.
 func auditListeners(ls []listener, svcs []Service, host string) []auditRow {
 	declared := map[string]string{}
 	localOnly := map[string]string{} // exposure = local: must not be on the network
+	private := map[string]string{}
 	for _, s := range svcs {
 		if s.Host != host {
+			continue
+		}
+		if s.Net.Private {
+			for _, n := range sortedRouteNames(s) {
+				r := s.Routes[n]
+				p := r.Proto
+				if p == "http" {
+					p = "tcp"
+				}
+				private[p+"/"+strconv.Itoa(r.Port)] = s.Name + "." + n + " is in a private netns (" + backendAddr(s) + "); the host must not listen on it"
+			}
 			continue
 		}
 		for _, p := range s.TCPPorts {
@@ -532,10 +585,19 @@ func auditListeners(ls []listener, svcs []Service, host string) []auditRow {
 	var rows []auditRow
 	seen := map[string]bool{}
 	for _, l := range ls {
+		key := l.Proto + "/" + l.Port
+		_, hostDeclared := declared[key]
+		_, hostLocal := localOnly[key]
+		if o, ok := private[key]; ok && !hostDeclared && !hostLocal {
+			if !seen[key+" "+l.Addr] {
+				seen[key+" "+l.Addr] = true
+				rows = append(rows, auditRow{listener: l, Status: "STALE", Owner: o})
+			}
+			continue
+		}
 		if isLoopback(l.Addr) {
 			continue
 		}
-		key := l.Proto + "/" + l.Port
 		if seen[key+" "+l.Addr] {
 			continue
 		}
@@ -553,8 +615,9 @@ func auditListeners(ls []listener, svcs []Service, host string) []auditRow {
 		rows = append(rows, row)
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
-		if (rows[i].Status == "UNDECLARED") != (rows[j].Status == "UNDECLARED") {
-			return rows[i].Status == "UNDECLARED"
+		bad := func(s string) bool { return s == "UNDECLARED" || s == "STALE" }
+		if bad(rows[i].Status) != bad(rows[j].Status) {
+			return bad(rows[i].Status)
 		}
 		pi, _ := strconv.Atoi(rows[i].Port)
 		pj, _ := strconv.Atoi(rows[j].Port)

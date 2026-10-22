@@ -715,6 +715,93 @@ Taken 2026-10-16:
      `dns-records.nix`; apex/www/ellalala/headscale/o002 on o002; mail
      and DKIM records (unmanaged).
 5. Private container networking, service by service, arr last.
+   **Design (2026-10-21); mechanism built, puzzles first:**
+   - **Opt-in per service**: `net = { private = true; index = <1-254>; }`
+     in service.nix. `index` is explicit and **fleet-wide unique**: the
+     inventory eval throws on a duplicate. It's never derived from the name,
+     so renames and hash collisions can't move an address. The guest is
+     `10.233.<index>.2`, the same on every host, so a `move` changes nothing.
+     The host side of every veth is the same `10.233.0.1` (point-to-point
+     /32 routes, as nixos-containers sets up `hostAddress`/`localAddress`).
+     Name ≤ 11 chars (`ve-<name>`). Without `net.private`, the host network
+     stays as today.
+   - **Guest** (`mkNixosContainer`): `privateNetwork = true`, those
+     addresses, `useHostResolvConf = false`, nameserver `10.233.0.1`, and
+     the guest firewall **on**, admitting only the service's route ports.
+     container.nix binds `fleetNet.bindAddress` (specialArgs:
+     `127.0.0.1` on the host network, `0.0.0.0` when private), so
+     flipping the flag needs no other edit.
+   - **Host** (`ringofstorms.containers.privateNetwork.enable`, replaces
+     the old trust-`ve-+` + NAT option, which no host used): tables
+     `inet fleet-net` (filter) and `ip fleet-net-nat`:
+     - `ve-*` is **not** trusted. Input from `ve-*` gets DNS on
+       `10.233.0.1:53` (resolved `DNSStubListenerExtra`, so containers
+       see the same split-horizon answers as the host) plus whatever the
+       host already opens on every interface (22/80/443, ports files).
+       Host loopback services (`127.0.0.1:*`, the old shared-loopback
+       problem) are unreachable.
+     - Forward: `ve` → `ve` new connections are dropped (no container
+       reaches another directly); `→ ve` is admitted only for DNATed flows.
+     - **Egress**: masquerade `10.233.0.0/16` out of any non-`ve`
+       interface (internet, LAN, tailnet, as on the host network today).
+       `internet = false` now also works for nixos-kind, but only with
+       `net.private`: the ports file carries `noinet ve-<name>`, and the
+       host drops new forwarded connections from that interface. DNS on
+       the host stays allowed, and so do replies to inbound connections.
+   - **HTTP**: `routes.go` proxies to `http://10.233.<index>.2:<port>`
+     instead of `127.0.0.1`. ACLs, edge, auth and DNS are unchanged: the
+     host nginx is still the only way in.
+   - **tcp/udp routes** (forgejo ssh 3032, beszel 8090, immich pg 5432):
+     the ports file line becomes `dnat <proto> <port> <guest ip>`.
+     `fleet-containers-ports` flushes and refills the `fleet-net-nat @routes` map (v4
+     only) from the files after every firewall reload. Prerouting/output
+     DNATs `fib daddr type local` traffic on that port to the guest, and
+     forward admits `ct status dnat`. That's the same reach as `tcpPorts`
+     today (any interface). Per-route `allow` (immich pg → lio) becomes a
+     source match in the same element in a later batch; until then immich
+     stays on the host network. DNAT ports never touch `temp-ports`.
+     `cnt port open` refuses private services (use a route; a temp DNAT
+     is later work). `fleet-publish`/podman are unchanged: podman already
+     has its own bridge, and its publish → bridge IP is a separate item.
+   - **Audit**: a private service's route ports are owned by the guest.
+     A host listener on one (loopback included) is `STALE` (the old
+     host-network instance or a port leak). DNAT ports don't show up in
+     `ss`, by design.
+   - **Inter-container**: no direct path. Callers use the route name
+     through the host nginx (sec, zitadel OIDC, litellm). Input 80/443
+     from `ve-*` is open, but nginx ACLs see `10.233.x.2`: public routes
+     work, tailnet/lan routes refuse it. Before migrating a caller of a
+     tailnet route (open-webui → litellm), add `uses = [ "litellm.web" ]`,
+     which adds the guest IPs to that route's ACL. Order matters: callees
+     before callers, otherwise nothing changes. sec/zitadel are public
+     routes, so they're fine.
+   - **Data**: persist/binds/devices unchanged (idmapped binds don't care
+     about the netns). Containers bound to a host-network service's
+     socket would break, but there are none.
+   - **Migration per service**: set `net`, make container.nix bind
+     `fleetNet.bindAddress`, then `cnt deploy`. The container restarts on
+     the veth, the vhost/ports file switch to the guest IP, and the old
+     host port disappears with the old instance. Downtime = one container
+     restart. **Rollback**: drop `net` (or `git revert`) and redeploy;
+     the host part is inert without private services. Probe: route through
+     the edge and tailnet, `ss` on the host, `cnt audit`, egress from the
+     guest, and a blocked `curl 10.233.0.1:<loopback port>`/other-guest IP.
+   - **CLI**: `deploy` (vhost upstream, `dnat`/`noinet` ports lines),
+     `audit` (STALE), `port open` (refuse), the inventory check (unique
+     index). `routes` shows `net` in a later pass.
+   - **arr (last)**: one guest owns the WireGuard netns (it creates it
+     inside its own netns, needs `CAP_NET_ADMIN`; the host `wg-br`/veth
+     setup and 51820/udp leave the host). sabnzbd and transmission stay in
+     that inner netns, the *arr apps talk over the guest loopback as now.
+     UIs: sonarr, radarr, prowlarr, bazarr, sabnzbd and transmission become
+     **`exposure = "tailnet"`, `auth = "none"` http routes** like
+     shelfmark: tailnet only, no LAN, no login. They're on high-trust
+     nodes, and the apps' own auth is set to "disabled for local
+     addresses" only if it's needed. The `firewall.nix` 7878/8989/6767/9696/9091/6336
+     opens and `arr-nginx.nix` go away. jellyfin, seerr, kavita stay
+     public `native`. Jellyfin `8096` direct stays a DNAT tcp route
+     (`tailnet`) until the TV apps use the name. QSV `/dev/dri` and NFS
+     binds are unchanged. DLNA (UDP 1900/7359) is dropped.
 6. Fleet oauth2-proxy on h005 + per-route `auth`, with cookie stripping
    from the first gated route. **Done 2026-10-21 (tailnet routes).**
    - **Where**: `hosts/h005/oauth2-proxy.nix`, a host service rather than

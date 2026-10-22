@@ -16,6 +16,9 @@
     # Internal :443 listeners use the wildcard pushed by h005
     # (hosts/wildcard-cert-receiver.nix), not this host's ACME.
     nginx.tls.certDir = "/var/lib/fleet-cert/joshuabell.xyz/current";
+    # Host side for service.nix net.private (ROUTING-PLAN §8 step 5): NAT,
+    # DNAT for tcp/udp routes, DNS on 10.233.0.1, no container-to-container.
+    privateNetwork.enable = true;
     # Checked by `containers deploy/move` against service.nix `requires`.
     capabilities = [
       "nfs-h004" # /nfs/h002 autofs mount of the h004 NAS (path name kept: stored in arr app state)

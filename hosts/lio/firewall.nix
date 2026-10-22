@@ -1,25 +1,30 @@
-# DRAFT, not imported yet (see the note at the end). lio stops trusting
-# tailscale0 (ROUTING-PLAN §5.1). configuration.nix already closes the global
-# allow-list and opens 22 on tailscale0 + LAN; this adds only what other
-# tailnet hosts need from lio.
+# lio does not trust tailscale0 (ROUTING-PLAN §5.1). configuration.nix already
+# empties the global TCP allow-list and opens 22 on tailscale0 + the LAN CIDR;
+# this adds only what other tailnet hosts need from lio.
 #
-# Fill the TODOs from the snapshot (as root on lio):
-#   ss -ltunpH | grep -v -E '127\.0\.0\.|\[::1\]'      # who owns :80, :5000
-#   conntrack -L -d 100.64.0.1 | grep -v 'dport=22 '   # tailnet inbound flows
-#   nft list ruleset > /tmp/lio.nft
-# then import ./firewall.nix in flake.nix and `nixos-rebuild test` first.
-{ ... }:
+# Still reachable without rules here:
+# - 8443 nginx edge listener: o002 only, added by the containers host module.
+# - 1714-1764 tcp/udp KDE Connect: global range from programs.kdeconnect.
+# - 41641/udp tailscale: global.
+# Deliberately closed on tailscale0:
+# - 80 nginx: lio serves only the default `_` vhost and no inventory route.
+# - tailscaled peerapi (random port, taildrop): not used in this repo.
+{ fleet, ... }:
+let
+  # nix-serve clients: hosts importing common.nixosModules.remote_lio_builds
+  # (substituter http://lio:5000). v6 addresses are headscale-assigned, stable.
+  juni = fleet.hosts.juni.overlayIp;
+  juni6 = "fd7a:115c:a1e0::12";
+  gp3 = fleet.hosts.gp3.overlayIp;
+  gp3_6 = "fd7a:115c:a1e0::f";
+  oren = fleet.hosts.oren.overlayIp;
+  oren6 = "fd7a:115c:a1e0::2";
+in
 {
   ringofstorms.tailnet.trustInterface = false;
 
-  networking.firewall.interfaces.tailscale0 = {
-    allowedTCPPorts = [
-      # 22 is already opened in configuration.nix.
-      # TODO 80   nginx (0.0.0.0:80): keep only if another host uses it
-      # TODO 5000 (0.0.0.0:5000, owner unknown without root): keep only if used
-    ];
-    allowedUDPPorts = [
-      # TODO: KDE Connect (1714-1764 tcp/udp) if phones pair over the tailnet
-    ];
-  };
+  networking.firewall.extraInputRules = ''
+    iifname "tailscale0" ip saddr { ${juni}, ${gp3}, ${oren} } tcp dport 5000 accept comment "nix-serve for remote_lio_builds hosts"
+    iifname "tailscale0" ip6 saddr { ${juni6}, ${gp3_6}, ${oren6} } tcp dport 5000 accept comment "nix-serve for remote_lio_builds hosts (v6)"
+  '';
 }

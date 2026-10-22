@@ -39,6 +39,24 @@ type Service struct {
 	Internet    *bool             `json:"internet"`
 	Requires    []string          `json:"requires"`
 	Routes      map[string]Route  `json:"routes"`
+	Net         Net               `json:"net"`
+}
+
+// Net is lib.nix normalizeNet (ROUTING-PLAN §8 step 5). IP is the guest
+// address (10.233.<index>.2) when Private, else empty.
+type Net struct {
+	Private bool    `json:"private"`
+	Index   *int    `json:"index"`
+	IP      *string `json:"ip"`
+}
+
+// backendAddr is where the host reaches the service: its private guest IP,
+// or loopback on the host network.
+func backendAddr(s Service) string {
+	if s.Net.Private && s.Net.IP != nil {
+		return *s.Net.IP
+	}
+	return "127.0.0.1"
 }
 
 type Host struct {
@@ -888,6 +906,10 @@ func prepareScript(s Service, host string) string {
 	b.WriteString("set -euo pipefail\n")
 	b.WriteString("test -d /etc/systemd-mutable/system -o -d /var/lib/fleet-containers || { echo 'host is missing the containers host module (inputs.containers.nixosModules.default)'; exit 1; }\n")
 	b.WriteString(requiresScript(s, host))
+	if s.Net.Private {
+		// ROUTING-PLAN §8 step 5: the host side (NAT, DNAT map, DNS on the veth).
+		b.WriteString(fmt.Sprintf("nft list table ip fleet-net-nat >/dev/null 2>&1 || { echo '%s has net.private but %s lacks ringofstorms.containers.privateNetwork.enable' >&2; exit 1; }\n", s.Name, host))
+	}
 	b.WriteString("install -d -m755 /var/lib/fleet-containers/nginx /var/lib/fleet-containers/ports\n")
 	b.WriteString(fmt.Sprintf("install -d -m755 %s\n", q(dataDir(s))))
 	keys := make([]string, 0, len(s.Persist))
@@ -901,14 +923,8 @@ func prepareScript(s Service, host string) string {
 	}
 	// ports
 	var ports strings.Builder
-	for _, p := range s.TCPPorts {
-		fmt.Fprintf(&ports, "tcp %d\n", p)
-	}
-	for _, p := range s.UDPPorts {
-		fmt.Fprintf(&ports, "udp %d\n", p)
-	}
-	for _, p := range routePorts(s) {
-		ports.WriteString(p + "\n")
+	for _, l := range portsFileLines(s) {
+		ports.WriteString(l + "\n")
 	}
 	b.WriteString(fmt.Sprintf("printf %%s %s > /var/lib/fleet-containers/ports/%s\n", q(ports.String()), s.Name))
 	b.WriteString("systemctl reload-or-restart fleet-containers-ports.service || true\n")
@@ -1584,7 +1600,7 @@ printf 'Installed\t%s\n' "$( [ -e "$m" ] && echo yes || echo no)"
 printf 'BootStart\t%s\n' "$( [ -e "$wl" ] && echo yes || echo no)"
 `)
 	fmt.Fprintf(&b, "ports=/var/lib/fleet-containers/ports/%s\n", s.Name)
-	b.WriteString(`[ -r "$ports" ] && while read -r pr po; do [ -n "$po" ] && printf 'Port\t%s/%s\n' "$po" "$pr"; done < "$ports"
+	b.WriteString(`[ -r "$ports" ] && while read -r pr po _; do case "$pr" in tcp|udp) ;; *) continue ;; esac; [ -n "$po" ] && printf 'Port\t%s/%s\n' "$po" "$pr"; done < "$ports"
 `)
 	fmt.Fprintf(&b, "n=%s/%s.conf\n", q(nginxDir), s.Name)
 	b.WriteString(`if [ -r "$n" ]; then while IFS= read -r l; do printf 'Nginx\t%s\n' "$l"; done < "$n"; fi

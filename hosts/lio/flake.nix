@@ -139,6 +139,7 @@
           inputs.beszel.nixosModules.agent
           ({ services.beszel.agent.environment.EXTRA_FILESYSTEMS = "/mnt/nvme1tb__nvme1tb"; beszelAgent = { listen = "${overlayIp}:45876"; token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e"; }; })
           ./configuration.nix
+          ./firewall.nix
           ./hardware-configuration.nix
           (import ./containers.nix { inherit inputs; })
           ./vms.nix

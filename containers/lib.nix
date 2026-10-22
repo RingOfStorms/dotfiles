@@ -265,6 +265,70 @@ let
     else
       routes;
 
+  # Private container networking (ROUTING-PLAN §8 step 5). Opt-in per
+  # service: net = { private = true; index = N; }. The guest is
+  # 10.233.<N>.2 on every host (index is fleet-wide unique, checked by
+  # checkNetIndexes); the host side of every veth is netHostAddress.
+  netHostAddress = "10.233.0.1";
+  normalizeNet =
+    s:
+    let
+      n = {
+        private = false;
+        index = null;
+      }
+      // (s.net or { });
+      fail = msg: throw "${s.name}: net: ${msg}";
+      unknown = builtins.filter (
+        k:
+        !(builtins.elem k [
+          "private"
+          "index"
+        ])
+      ) (builtins.attrNames n);
+    in
+    if unknown != [ ] then
+      fail "unknown key(s) ${builtins.concatStringsSep ", " unknown}"
+    else if !n.private then
+      {
+        private = false;
+        index = null;
+        ip = null;
+      }
+    else if s.kind != "nixos" then
+      fail "private is only implemented for kind = \"nixos\" (podman has its own bridge)"
+    else if !(builtins.isInt n.index) || n.index < 1 || n.index > 254 then
+      fail "index must be an integer 1-254 (fleet-wide unique, never reuse one)"
+    else if builtins.stringLength s.name > 11 then
+      fail "service name must be <= 11 characters (veth ve-<name>)"
+    else if s.tcpPorts != [ ] || s.udpPorts != [ ] then
+      fail "tcpPorts/udpPorts don't reach a private guest; declare tcp/udp routes instead (they get DNAT)"
+    else if s.nginx != null then
+      fail "nginx strings proxy to 127.0.0.1; convert to routes first"
+    else
+      {
+        private = true;
+        inherit (n) index;
+        ip = "10.233.${toString n.index}.2";
+      };
+
+  # Throws if two services share a net.index (normalized services).
+  checkNetIndexes =
+    services:
+    let
+      priv = builtins.filter (s: s.net.private) services;
+      idx = map (s: s.net.index) priv;
+      dup = builtins.filter (i: builtins.length (builtins.filter (x: x == i) idx) > 1) idx;
+    in
+    if dup != [ ] then
+      throw "net.index ${toString (builtins.head dup)} is used by ${
+        builtins.concatStringsSep " and " (
+          map (s: s.name) (builtins.filter (s: s.net.index == builtins.head dup) priv)
+        )
+      }"
+    else
+      services;
+
   # Defaults so service.nix files can stay short.
   normalize =
     service:
@@ -278,15 +342,20 @@ let
         udpPorts = [ ];
         nginx = null;
         routes = { };
-        # false: podman services join the fleet-noinet network (host-module.nix).
-        # Published ports still work; the container cannot open any connection
-        # (no internet, LAN, host or DNS). Not implemented for kind = "nixos".
+        # false: podman services join the fleet-noinet network (host-module.nix);
+        # nixos services need net.private and get their veth in the host's
+        # fleet-net @noinet set. Published ports/routes still work; the
+        # container cannot open any connection (podman: not even DNS).
         internet = true;
         description = "";
       }
       // service;
     in
-    s // { routes = normalizeRoutes s; };
+    s
+    // {
+      routes = normalizeRoutes s;
+      net = normalizeNet s;
+    };
 
   # The edge listener port on service hosts (ROUTING-PLAN §2.3). Keep in
   # sync with cli/routes.go edgePort.
@@ -310,7 +379,7 @@ let
         d: entries.${d} == "directory" && builtins.pathExists (dir + "/${d}/service.nix")
       ) (builtins.attrNames entries);
     in
-    map (d: normalize (import (dir + "/${d}/service.nix"))) dirs;
+    checkNetIndexes (map (d: normalize (import (dir + "/${d}/service.nix"))) dirs);
 
   # Public http routes reached through the edge (o002), each with `service`.
   # Services without a declared host are skipped (nothing to proxy to).
@@ -336,6 +405,8 @@ in
     edgePort
     edgeRoutes
     nginxSnippets
+    netHostAddress
+    checkNetIndexes
     ;
 
   # services.nginx.virtualHosts for the public edge (o002), generated from
@@ -568,19 +639,34 @@ in
         let
           s = normalize service;
         in
-        if s.internet then
+        if s.internet || s.net.private then
           s
         else
-          throw "${s.name}: internet = false is only implemented for kind = \"podman\"";
+          throw "${s.name}: internet = false needs net.private for kind = \"nixos\"";
+      # net.private (service.nix) is the supported switch; the legacy
+      # privateNetwork argument gives a veth without addresses (unused).
+      private = svc.net.private || privateNetwork;
+      exposed = builtins.filter (r: r.exposure != "local") (builtins.attrValues svc.routes);
+      portsOf = proto: map (r: r.port) (builtins.filter (r: r.proto == proto) exposed);
       idmap = if privateUsers == "no" then "" else ":idmap";
       bindFlag =
         b: "--bind${if b.readOnly or false then "-ro" else ""}=${b.host}:${b.container or b.host}${idmap}";
+      # Passed to the guest (specialArgs.fleetNet): what to bind, where the host is.
+      fleetNet = {
+        inherit (svc.net) private ip;
+        bindAddress = if svc.net.private then "0.0.0.0" else "127.0.0.1";
+        hostAddress = if svc.net.private then netHostAddress else "127.0.0.1";
+      };
     in
     {
       containers.${svc.name} = {
         ephemeral = true;
         autoStart = true;
-        inherit privateUsers privateNetwork specialArgs;
+        inherit privateUsers;
+        privateNetwork = private;
+        specialArgs = specialArgs // {
+          inherit fleetNet;
+        };
         extraFlags =
           map (b: "--bind=${b.host}:${b.container}${idmap}") (persistList svc)
           ++ map bindFlag binds
@@ -593,13 +679,39 @@ in
         config =
           { lib, ... }:
           {
-            imports = [ config ];
+            imports = [
+              config
+              (
+                if svc.net.private then
+                  {
+                    # Private network (ROUTING-PLAN §8 step 5): the guest firewall
+                    # admits only the exposed route ports (host nginx or DNAT).
+                    # DNS goes to the host's resolved stub on the veth, so the
+                    # guest gets the same split-horizon answers as the host.
+                    networking.useHostResolvConf = lib.mkForce false;
+                    networking.nameservers = [ netHostAddress ];
+                    networking.firewall.allowedTCPPorts = portsOf "http" ++ portsOf "tcp";
+                    networking.firewall.allowedUDPPorts = portsOf "udp";
+                  }
+                else
+                  { }
+              )
+            ];
             # With the host network the guest has no CAP_NET_ADMIN on the host
             # namespace (privateUsers), so its firewall can't load. The host
             # firewall is the one that counts; ports are opened by `containers`.
-            networking.firewall.enable = lib.mkIf (!privateNetwork) (lib.mkForce false);
+            networking.firewall.enable = lib.mkIf (!private) (lib.mkForce false);
           };
       }
+      // (
+        if svc.net.private then
+          {
+            hostAddress = netHostAddress;
+            localAddress = svc.net.ip;
+          }
+        else
+          { }
+      )
       // (if guestNixpkgs == null then { } else { nixpkgs = guestNixpkgs; })
       // extraContainerConfig;
       # Don't start (and stop) when a persist/bind source's mount is missing,

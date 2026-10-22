@@ -390,6 +390,11 @@ func portDesc(s Service, r portReq) string {
 // and stop with (declared), or an error.
 func portGuards(s Service, r portReq, host string, svcs map[string]Service) (string, error) {
 	if !r.Closer {
+		if s.Net.Private {
+			// ROUTING-PLAN §8 step 5: the app is in its own netns, so a host
+			// port opens nothing. Declare a tcp/udp route (DNAT) instead.
+			return "", fmt.Errorf("%s has net.private: a host port doesn't reach it; declare a tcp/udp route (DNAT) instead", s.Name)
+		}
 		if b := backendOf(svcs, host, r.Port, r.Proto); b != "" && !r.Force {
 			return "", fmt.Errorf("%d/%s is the http backend of %s on %s; nginx must stay the only way in (--force-backend to override)", r.Port, r.Proto, b, host)
 		}
