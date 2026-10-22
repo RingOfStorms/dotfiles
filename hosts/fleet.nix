@@ -354,11 +354,11 @@ rec {
 
       # ── NixOS base modules ──
       # Common NixOS modules included on all hosts (unless includeBaseNixModules = false).
-      # If a host flake declares `inputs.fleet-agent` (and doesn't already import
-      # `inputs.containers`, which bundles it), include `fleet-agent` automatically.
+      # If a host flake declares `inputs.fleet-agent`, include its NixOS module
+      # automatically (container hosts import `inputs.containers` instead).
       baseNixModules =
         if includeBaseNixModules then
-          lib.optional ((inputs ? fleet-agent) && !(inputs ? containers)) inputs.fleet-agent.nixosModules.default
+          lib.optional (inputs ? fleet-agent) inputs.fleet-agent.nixosModules.default
         else
           [ ];
 

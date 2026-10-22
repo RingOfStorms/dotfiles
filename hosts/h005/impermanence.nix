@@ -20,8 +20,12 @@ let
   );
 in
 {
-  systemd.tmpfiles.rules = lib.optionals constants.network.routerEnable [
-    "d /var/lib/private 0700 root root -"
+  # Impermanence creates parent directories (`/var/lib/private`) with mode 0755
+  # when mounting `/var/lib/private/fleet-edge` or `/var/lib/private/AdGuardHome`,
+  # whereas systemd DynamicUser StateDirectory requires `/var/lib/private` to be
+  # mode 0700 (`z` adjusts existing directory mode, unlike `d`).
+  systemd.tmpfiles.rules = [
+    "z /var/lib/private 0700 root root -"
   ];
 
   environment.persistence."/persist" = {

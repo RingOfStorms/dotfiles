@@ -250,6 +250,12 @@
           };
 
           config = lib.mkIf cfg.enable {
+            # Ensure /var/lib/private is 0700 even when Impermanence pre-creates
+            # parent directories with 0755 for /var/lib/private/fleet-edge.
+            systemd.tmpfiles.rules = [
+              "z /var/lib/private 0700 root root -"
+            ];
+
             systemd.services.fleet-edge = {
               description = "fleet-edge read-only dashboard";
               wantedBy = [ "multi-user.target" ];
