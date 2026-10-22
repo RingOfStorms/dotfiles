@@ -20,4 +20,4 @@ Primary desktop workstation
 | nix-serve | Binary cache for the fleet |
 | libvirtd | Local VMs |
 | nginx | Floating sites |
-| Per-host agents | sec-agent, beszel-agent, fail2ban, tailscaled |
+| Per-host agents | sec-agent, fleet-agent, fail2ban, tailscaled |

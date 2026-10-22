@@ -38,8 +38,6 @@
       domain = "notes.joshuabell.xyz";
     };
 
-    beszelHub.port = 8090; # floating container (containers/beszel), tailnet IP only
-
     sec.domain = "secrets.joshuabell.xyz"; # floating container (containers/sec)
 
     mediaIntegrity = {

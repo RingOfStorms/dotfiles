@@ -781,7 +781,7 @@ in
           pkgs.rsync
           cfg.package
         ];
-        environment.shellAliases.cnt = "containers";
+        environment.shellAliases.cnt = "fleet containers";
 
         # Network for podman services with `internet = false`. Traffic
         # *from* it is dropped (internet, LAN, tailnet, host, DNS), including
@@ -953,83 +953,11 @@ in
         };
       })
 
-      # Host daemons this module declares, for `cnt audit` (cli/routes.go
-      # hostListenersFile): "<proto> <addr> <port> <owner>".
-      # The status endpoint's listen is asserted to be IP:PORT below.
-      {
-        environment.etc."fleet-containers/host-listeners".text =
-          let
-            m = builtins.match "\\[?([0-9a-fA-F:.]+)]?:([0-9]+)" cfg.statusEndpoint.listen;
-          in
-          lib.optionalString (cfg.statusEndpoint.enable && m != null) ''
-            tcp ${builtins.elemAt m 0} ${builtins.elemAt m 1} host (status endpoint)
-          '';
-      }
-
-      # Runs unprivileged: `systemctl show` reads unit properties over the
-      # system D-Bus, which systemd allows to any user, and the unit dir and
-      # gcroot dir are world-readable (0755). So DynamicUser with no
-      # capabilities and a read-only view of the system is enough.
-      # No PrivateUsers: D-Bus EXTERNAL auth from inside a user namespace can
-      # fail (the uid the client sends differs from the peer uid on the socket).
+      # Forward legacy `ringofstorms.containers.statusEndpoint` to `ringofstorms.fleetAgent`.
       (lib.mkIf cfg.statusEndpoint.enable {
-        assertions = [
-          {
-            assertion =
-              builtins.match "(\\[[0-9a-fA-F:]+]|[0-9.]+):[0-9]+" cfg.statusEndpoint.listen != null
-              && !(lib.hasPrefix "0.0.0.0:" cfg.statusEndpoint.listen)
-              && !(lib.hasPrefix "[::]:" cfg.statusEndpoint.listen);
-            message = "ringofstorms.containers.statusEndpoint.listen must be an explicit IP:PORT (e.g. the overlay IP \"100.64.0.13:9101\"), not empty or a wildcard.";
-          }
-        ];
-        systemd.services.fleet-containers-status = {
-          description = "Read-only status endpoint for floating containers (fleet-edge)";
-          wantedBy = [ "multi-user.target" ];
-          wants = [ "network-online.target" ];
-          after = [
-            "network-online.target"
-            "tailscaled.service"
-          ];
-          path = [ pkgs.systemd ];
-          serviceConfig = {
-            ExecStart = "${lib.getExe cfg.package} status-server --listen ${cfg.statusEndpoint.listen} --host ${config.networking.hostName}";
-            # The overlay IP may appear after boot; retry until it can bind.
-            Restart = "always";
-            RestartSec = 5;
-            DynamicUser = true;
-            CapabilityBoundingSet = "";
-            AmbientCapabilities = "";
-            NoNewPrivileges = true;
-            ProtectSystem = "strict";
-            ProtectHome = true;
-            PrivateTmp = true;
-            PrivateDevices = true;
-            ProtectKernelTunables = true;
-            ProtectKernelModules = true;
-            ProtectKernelLogs = true;
-            ProtectControlGroups = true;
-            ProtectClock = true;
-            ProtectHostname = true;
-            ProtectProc = "invisible";
-            ProcSubset = "pid";
-            RestrictNamespaces = true;
-            RestrictRealtime = true;
-            RestrictSUIDSGID = true;
-            LockPersonality = true;
-            MemoryDenyWriteExecute = true;
-            SystemCallArchitectures = "native";
-            SystemCallFilter = [
-              "@system-service"
-              "~@privileged @resources"
-            ];
-            # AF_UNIX for the D-Bus socket used by `systemctl show`.
-            RestrictAddressFamilies = [
-              "AF_UNIX"
-              "AF_INET"
-              "AF_INET6"
-            ];
-            UMask = "0077";
-          };
+        ringofstorms.fleetAgent = {
+          enable = lib.mkDefault true;
+          listen = lib.mkDefault cfg.statusEndpoint.listen;
         };
       })
       (lib.mkIf bcfg.enable {
@@ -1123,7 +1051,7 @@ in
         # ve-* interfaces/addresses (lio's 10.0.0.x) are not touched.
         networking.nftables.tables.fleet-net = {
           family = "inet";
-          content = builtins.readFile ./cli/fleet-net.nft;
+          content = builtins.readFile ../flakes/fleet-agent/internal/containers/fleet-net.nft;
         };
         networking.nftables.tables.fleet-net-nat = {
           family = "ip";
@@ -1137,7 +1065,7 @@ in
                   builtins.filter (p: !(lib.hasInfix ":" p)) cfg.nginx.edge.peers ++ [ "0.0.0.0" ]
                 ))
               ]
-              (builtins.readFile ./cli/fleet-net-nat.nft);
+              (builtins.readFile ../flakes/fleet-agent/internal/containers/fleet-net-nat.nft);
         };
         networking.firewall.extraInputRules = ''
           iifname "ve-*" ip daddr 10.233.0.1 meta l4proto { tcp, udp } th dport 53 accept comment "guest DNS (resolved stub)"

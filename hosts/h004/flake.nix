@@ -7,7 +7,7 @@
     # impermanence_mod.url = "path:../../flakes/impermanence";
     impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
-    beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
+    fleet-agent.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/fleet-agent";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
@@ -108,17 +108,8 @@
         ++ lib.optionals constants.dataPool.enable [
           ./nfs-data.nix
           ./nfs-data-users-nixarr.nix
-        ]
-        ++ lib.optionals (overlayIp != null) [
-          inputs.beszel.nixosModules.agent
           ({
-            beszelAgent = {
-              listen = "${overlayIp}:45876";
-              token = "3a0fe19c-f7a9-4506-b76b-61ce2612cfbd";
-            };
-            services.beszel.agent.environment = lib.optionalAttrs constants.dataPool.enable {
-              EXTRA_FILESYSTEMS = "/data__Data";
-            };
+            ringofstorms.fleetAgent.extraFilesystems = [ "/data" ];
           })
         ]
         ++ [

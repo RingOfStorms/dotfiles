@@ -1,36 +1,142 @@
+{{define "host-card"}}
+<div class="host-card{{if not .HasEndpoint}} muted{{end}}">
+  <div class="host-card-head">
+    <div class="host-title-row">
+      <a class="host-name" href="/hosts/{{.Host}}">{{.Host}}</a>
+      {{if .Replaces}}<span class="badge badge-local" title="Replaces retired host">{{range .Replaces}}← {{.}}{{end}}</span>{{end}}
+      {{if .Role}}<span class="badge badge-tailnet">{{.Role}}</span>{{end}}
+    </div>
+    <div>
+      {{if not .HasEndpoint}}
+        <span class="pill pill-none">no endpoint</span>
+      {{else if .Reachable}}
+        <span class="pill pill-reachable">reachable</span>
+      {{else if eq .StateBadge "sleeping"}}
+        <span class="pill pill-sleeping" title="Intermittent workstation/laptop{{if .LastSeenAge}} · last seen {{.LastSeenAge}} ago{{end}}">sleep / offline{{if .LastSeenAge}} · {{.LastSeenAge}} ago{{end}}</span>
+      {{else}}
+        <span class="pill pill-unreachable">unreachable</span>
+      {{end}}
+    </div>
+  </div>
+
+  <div class="host-ips mono">
+    {{if .OverlayIP}}<span>tailnet {{.OverlayIP}}</span>{{end}}
+    {{if .LanIP}}<span>lan {{.LanIP}}</span>{{end}}
+    {{if .UptimeStr}}<span>up {{.UptimeStr}}</span>{{end}}
+  </div>
+
+  {{if .Status}}
+    {{if .Status.System}}
+    <div class="host-metrics-grid">
+      <div class="metric-box">
+        <div class="metric-label">
+          <span>CPU</span>
+          <strong>{{printf "%.1f%%" .Status.System.CPUPercent}} <span class="muted">(load {{printf "%.2f" .Status.System.Load1}})</span></strong>
+        </div>
+        {{.CPUSparkline}}
+      </div>
+      <div class="metric-box">
+        <div class="metric-label">
+          <span>Memory</span>
+          <strong>{{.MemSummary}} ({{printf "%.0f%%" .MemPercent}})</strong>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: {{printf "%.1f%%" .MemPercent}}"></div>
+        </div>
+      </div>
+    </div>
+    {{end}}
+
+    {{if .Status.Filesystems}}
+    <div class="host-fs-list">
+      {{range .Status.Filesystems}}
+      <div class="fs-row">
+        <div class="fs-head">
+          <span class="mono"><strong>{{.Mount}}</strong>{{if .Submounts}} <span class="muted">(+{{len .Submounts}} subvols)</span>{{end}} <span class="badge">{{.FSType}}</span></span>
+          {{if .Bcachefs}}
+            <span class="mono">{{formatBytes .Bcachefs.UsableUsedBytes}} / {{formatBytes .Bcachefs.UsableTotalBytes}} usable{{if gt .Bcachefs.DataReplicas 1}} ({{.Bcachefs.DataReplicas}}x){{end}}</span>
+          {{else}}
+            <span class="mono">{{formatBytes .UsedBytes}} / {{formatBytes .TotalBytes}} ({{printf "%.0f%%" .UsedPercent}})</span>
+          {{end}}
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill{{if gt .UsedPercent 85.0}} bar-warn{{end}}" style="width: {{printf "%.1f%%" .UsedPercent}}"></div>
+        </div>
+        {{if .Bcachefs}}
+        <div class="fs-sub muted mono">
+          raw pool: {{formatBytes .Bcachefs.RawUsedBytes}} / {{formatBytes .Bcachefs.RawCapacityBytes}}
+          {{if .Bcachefs.Compression}} · {{.Bcachefs.Compression.Type}} {{formatBytes .Bcachefs.Compression.CompressedBytes}} / {{formatBytes .Bcachefs.Compression.UncompressedBytes}}{{end}}
+          · {{len .Bcachefs.Devices}} drives
+        </div>
+        {{end}}
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+
+    <div class="host-badges-foot">
+      {{if gt .MaxTempC 0.0}}
+        <span class="pill {{if ge .MaxTempC 75.0}}pill-failed{{else}}pill-active{{end}}">temp {{printf "%.0f°C" .MaxTempC}}</span>
+      {{end}}
+      {{if gt .SmartTotal 0}}
+        {{if gt .SmartFailed 0}}
+          <span class="pill pill-failed">SMART {{.SmartFailed}} failed ({{.SmartOK}}/{{.SmartTotal}} ok)</span>
+        {{else}}
+          <span class="pill pill-active">SMART {{.SmartOK}}/{{.SmartTotal}} healthy</span>
+        {{end}}
+      {{end}}
+      {{if .Status.Fail2ban}}
+        <span class="pill {{if gt .BannedCount 0}}pill-stale{{else}}pill-none{{end}}">fail2ban: {{.BannedCount}} banned</span>
+      {{end}}
+    </div>
+  {{else}}
+    <div class="host-empty muted">
+      {{if not .HasEndpoint}}
+        No fleet-agent endpoint configured.
+      {{else if .PolledAt.IsZero}}
+        <em>not yet polled</em>
+      {{else if .Error}}
+        <span class="error-text">{{.Error}}</span>
+      {{else}}
+        Waiting for first telemetry snapshot…
+      {{end}}
+    </div>
+  {{end}}
+</div>
+{{end}}
+
 {{define "hosts.html"}}{{template "head" .}}
 <main>
-<header class="page-head"><h1>Hosts</h1></header>
-<div class="scroll table-wrap">
-<table>
-<thead>
-<tr><th>host</th><th>overlay ip</th><th>lan ip</th><th>status</th><th>last poll</th><th>error</th></tr>
-</thead>
-<tbody>
-{{range .Hosts}}
-<tr{{if not .HasEndpoint}} class="muted"{{end}}>
-  <td>{{.Host}}</td>
-  <td class="mono">{{.OverlayIP}}</td>
-  <td class="mono">{{.LanIP}}</td>
-  <td>
-    {{if not .HasEndpoint}}
-      <span class="pill pill-none">no endpoint</span>
-    {{else if .Reachable}}
-      <span class="pill pill-reachable">reachable</span>
-    {{else}}
-      <span class="pill pill-unreachable">unreachable</span>
-    {{end}}
-  </td>
-  <td class="muted">
-    {{if not .HasEndpoint}}—{{else if .PolledAt.IsZero}}<em>not yet polled</em>{{else}}{{.PolledAt}}{{end}}
-  </td>
-  <td>
-    {{if .Error}}<span class="error-text" title="{{.Error}}">{{.Error}}</span>{{else}}<span class="muted">—</span>{{end}}
-  </td>
-</tr>
-{{end}}
-</tbody>
-</table>
+<header class="page-head">
+  <h1>Hosts</h1>
+</header>
+<div class="scroll">
+  {{if .ServerHosts}}
+  <section class="group">
+    <h2>Always-On Servers</h2>
+    <div class="host-cards">
+      {{range .ServerHosts}}{{template "host-card" .}}{{end}}
+    </div>
+  </section>
+  {{end}}
+
+  {{if .WorkstationHosts}}
+  <section class="group">
+    <h2>Workstations &amp; Laptops</h2>
+    <div class="host-cards">
+      {{range .WorkstationHosts}}{{template "host-card" .}}{{end}}
+    </div>
+  </section>
+  {{end}}
+
+  {{if .OtherHosts}}
+  <section class="group">
+    <h2>Other Inventory Hosts</h2>
+    <div class="host-cards">
+      {{range .OtherHosts}}{{template "host-card" .}}{{end}}
+    </div>
+  </section>
+  {{end}}
 </div>
 <footer>generated at {{.GeneratedAt}}</footer>
 </main>

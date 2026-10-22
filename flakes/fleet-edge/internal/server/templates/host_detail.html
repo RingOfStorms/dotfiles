@@ -1,0 +1,294 @@
+{{define "host_detail.html"}}{{template "head" .}}
+<main>
+<header class="page-head detail-head">
+  <div class="detail-title-group">
+    <a class="back-link" href="/hosts">← Hosts</a>
+    <h1>{{.Host.Host}}</h1>
+    {{if .Host.Replaces}}<span class="badge badge-local">{{range .Host.Replaces}}replaces {{.}}{{end}}</span>{{end}}
+    {{if .Host.Role}}<span class="badge badge-tailnet">{{.Host.Role}}</span>{{end}}
+    {{if .Host.Reachable}}
+      <span class="pill pill-reachable">online</span>
+    {{else if eq .Host.StateBadge "sleeping"}}
+      <span class="pill pill-sleeping">sleep / offline{{if .Host.LastSeenAge}} · last seen {{.Host.LastSeenAge}} ago{{end}}</span>
+    {{else}}
+      <span class="pill pill-unreachable">unreachable</span>
+    {{end}}
+  </div>
+  <div class="range-tabs">
+    {{range .Ranges}}
+      <a class="range-tab{{if eq . $.RangeKey}} active{{end}}" href="/hosts/{{$.Host.Host}}?range={{.}}">{{.}}</a>
+    {{end}}
+  </div>
+</header>
+
+<div class="scroll detail-scroll">
+  <div class="host-ips mono detail-meta">
+    {{if .Host.OverlayIP}}<span>tailnet: {{.Host.OverlayIP}}</span>{{end}}
+    {{if .Host.LanIP}}<span>lan: {{.Host.LanIP}}</span>{{end}}
+    {{if .Host.Status}}{{if .Host.Status.System}}
+      {{if .Host.Status.System.Kernel}}<span>kernel: {{.Host.Status.System.Kernel}}</span>{{end}}
+      {{if .Host.Status.System.CPUCores}}<span>cores: {{.Host.Status.System.CPUCores}}</span>{{end}}
+      <span>uptime: {{.Host.UptimeStr}}</span>
+    {{end}}{{end}}
+  </div>
+
+  <!-- Historical Charts Grid -->
+  <section class="group">
+    <h2>Historical Telemetry ({{.RangeKey}})</h2>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-head">
+          <span>CPU Usage (%) &amp; Peak</span>
+          {{if .Host.Status}}{{if .Host.Status.System}}<strong class="mono">{{printf "%.1f%%" .Host.Status.System.CPUPercent}} · load {{printf "%.2f / %.2f / %.2f" .Host.Status.System.Load1 .Host.Status.System.Load5 .Host.Status.System.Load15}}</strong>{{end}}{{end}}
+        </div>
+        {{.CPUChart}}
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-head">
+          <span>Memory &amp; Swap Used</span>
+          {{if .Host.MemSummary}}<strong class="mono">{{.Host.MemSummary}}</strong>{{end}}
+        </div>
+        {{.MemChart}}
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-head">
+          <span>Network Throughput (RX solid / TX dashed)</span>
+        </div>
+        {{.NetChart}}
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-head">
+          <span>Disk I/O Throughput (Read solid / Write dashed)</span>
+        </div>
+        {{.DiskChart}}
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-head">
+          <span>Temperature (°C)</span>
+          {{if gt .Host.MaxTempC 0.0}}<strong class="mono">{{printf "%.1f°C" .Host.MaxTempC}}</strong>{{end}}
+        </div>
+        {{.TempChart}}
+      </div>
+    </div>
+  </section>
+
+  <!-- Filesystems & Bcachefs Pools -->
+  {{if .Host.Status}}{{if .Host.Status.Filesystems}}
+  <section class="group">
+    <h2>Filesystems &amp; Bcachefs Pools</h2>
+    {{range .Host.Status.Filesystems}}
+    <div class="panel-card">
+      <div class="fs-head">
+        <span>
+          <strong class="mono">{{.Mount}}</strong>
+          {{if .Submounts}}<span class="muted mono"> (mounts: {{range $i, $m := .Submounts}}{{if $i}}, {{end}}{{$m}}{{end}})</span>{{end}}
+          <span class="badge">{{.FSType}}</span>
+          {{if .UUID}}<span class="muted mono">uuid {{.UUID}}</span>{{end}}
+        </span>
+        {{if .Bcachefs}}
+          <strong class="mono">{{formatBytes .Bcachefs.UsableUsedBytes}} / {{formatBytes .Bcachefs.UsableTotalBytes}} usable ({{printf "%.1f%%" .UsedPercent}})</strong>
+        {{else}}
+          <strong class="mono">{{formatBytes .UsedBytes}} / {{formatBytes .TotalBytes}} ({{printf "%.1f%%" .UsedPercent}})</strong>
+        {{end}}
+      </div>
+      <div class="bar-track" style="margin: 0.45rem 0;">
+        <div class="bar-fill{{if gt .UsedPercent 85.0}} bar-warn{{end}}" style="width: {{printf "%.1f%%" .UsedPercent}}"></div>
+      </div>
+
+      {{if .Bcachefs}}
+      <div class="bcachefs-meta mono muted">
+        <span>Raw pool: <strong>{{formatBytes .Bcachefs.RawUsedBytes}} / {{formatBytes .Bcachefs.RawCapacityBytes}}</strong> (reserved {{formatBytes .Bcachefs.RawReservedBytes}})</span>
+        <span>Replicas: data={{.Bcachefs.DataReplicas}}x, metadata={{.Bcachefs.MetadataReplicas}}x</span>
+        {{if .Bcachefs.Compression}}
+          <span>Compression ({{.Bcachefs.Compression.Type}}): {{formatBytes .Bcachefs.Compression.CompressedBytes}} compressed ← {{formatBytes .Bcachefs.Compression.UncompressedBytes}} uncompressed</span>
+        {{end}}
+      </div>
+
+      {{if .Bcachefs.Devices}}
+      <div class="table-wrap" style="margin-top: 0.6rem;">
+        <table>
+          <thead>
+            <tr><th>device</th><th>label</th><th>state</th><th>used / capacity</th><th>free</th><th>io errors (r/w/csum)</th></tr>
+          </thead>
+          <tbody>
+            {{range .Bcachefs.Devices}}
+            <tr>
+              <td class="mono">/dev/{{.Name}}</td>
+              <td class="mono">{{if .Label}}{{.Label}}{{else}}—{{end}}</td>
+              <td><span class="pill {{if eq .State "rw"}}pill-active{{else}}pill-failed{{end}}">{{.State}}</span></td>
+              <td class="mono">{{formatBytes .UsedBytes}} / {{formatBytes .SizeBytes}} ({{printf "%.0f%%" (pct .UsedBytes .SizeBytes)}})</td>
+              <td class="mono">{{formatBytes .FreeBytes}}</td>
+              <td class="mono">
+                {{if or (gt .IOErrorsRead 0) (or (gt .IOErrorsWrite 0) (gt .IOErrorsCsum 0))}}
+                  <span class="error-text">{{.IOErrorsRead}} / {{.IOErrorsWrite}} / {{.IOErrorsCsum}}</span>
+                {{else}}
+                  <span class="muted">0 / 0 / 0</span>
+                {{end}}
+              </td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{end}}
+      {{end}}
+    </div>
+    {{end}}
+  </section>
+  {{end}}{{end}}
+
+  <!-- SMART Drive Health -->
+  {{if .Host.Status}}{{if .Host.Status.Smart}}
+  <section class="group">
+    <h2>Drive Health (SMART)</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>device</th><th>model</th><th>serial</th><th>proto</th><th>status</th><th>temp</th><th>power-on</th><th>realloc / pending / uncorr</th></tr>
+        </thead>
+        <tbody>
+          {{range .Host.Status.Smart}}
+          <tr>
+            <td class="mono">{{.Device}}</td>
+            <td>{{if .Model}}{{.Model}}{{else}}<span class="muted">—</span>{{end}}</td>
+            <td class="mono muted">{{if .Serial}}{{.Serial}}{{else}}—{{end}}</td>
+            <td class="mono">{{if .Protocol}}{{.Protocol}}{{else}}—{{end}}</td>
+            <td>
+              {{if .Standby}}
+                <span class="pill pill-sleeping">standby</span>
+              {{else if .Healthy}}
+                <span class="pill pill-active">healthy</span>
+              {{else}}
+                <span class="pill pill-failed">failed</span>
+              {{end}}
+            </td>
+            <td class="mono">{{if gt .TempC 0}}{{.TempC}}°C{{else}}—{{end}}</td>
+            <td class="mono">{{if gt .PowerOnHours 0}}{{.PowerOnHours}}h{{else}}—{{end}}</td>
+            <td class="mono">
+              {{if or (gt .ReallocatedSectors 0) (or (gt .PendingSectors 0) (gt .UncorrectableErrors 0))}}
+                <span class="error-text">{{.ReallocatedSectors}} / {{.PendingSectors}} / {{.UncorrectableErrors}}</span>
+              {{else}}
+                <span class="muted">0 / 0 / 0</span>
+              {{end}}
+              {{if gt .WearPercentUsed 0}} <span class="muted">(wear {{.WearPercentUsed}}%)</span>{{end}}
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {{end}}{{end}}
+
+  <!-- Fail2ban Bans & Jails -->
+  {{if .Host.Status}}{{if .Host.Status.Fail2ban}}
+  <section class="group">
+    <h2>Fail2ban Jails &amp; Recent Bans</h2>
+    <div class="panel-card">
+      <div class="f2b-jails">
+        {{range .Host.Status.Fail2ban.Jails}}
+        <div class="f2b-jail-chip">
+          <strong class="mono">{{.Name}}</strong>
+          <span class="pill {{if gt .CurrentlyBanned 0}}pill-stale{{else}}pill-active{{end}}">{{.CurrentlyBanned}} active</span>
+          <span class="muted mono">{{.TotalBanned}} total</span>
+        </div>
+        {{else}}
+        <span class="muted">No active fail2ban jails reported.</span>
+        {{end}}
+      </div>
+
+      {{if .Host.Status.Fail2ban.RecentBans}}
+      <div class="table-wrap" style="margin-top: 0.75rem;">
+        <table>
+          <thead>
+            <tr><th>jail</th><th>ip</th><th>state</th><th>banned at</th><th>duration</th><th>failures</th></tr>
+          </thead>
+          <tbody>
+            {{range .Host.Status.Fail2ban.RecentBans}}
+            <tr>
+              <td class="mono">{{.Jail}}</td>
+              <td class="mono"><strong>{{.IP}}</strong></td>
+              <td>{{if .Active}}<span class="pill pill-failed">banned</span>{{else}}<span class="pill pill-none">expired</span>{{end}}</td>
+              <td class="mono muted">{{.BannedAt}}</td>
+              <td class="mono">{{formatUptime .BanSeconds}}</td>
+              <td class="mono">{{.Failures}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{end}}
+    </div>
+  </section>
+  {{end}}{{end}}
+
+  <!-- Live Systemd / Container Log Viewer -->
+  <section class="group" id="logs">
+    <h2>Systemd &amp; Container Logs</h2>
+    <div class="panel-card">
+      <form class="log-controls" method="get" action="/hosts/{{.Host.Host}}#logs">
+        <input type="hidden" name="range" value="{{.RangeKey}}">
+        <label>
+          <span class="muted">Kind:</span>
+          <select name="log_kind">
+            <option value="guest"{{if eq .SelectedLogKind "guest"}} selected{{end}}>Guest Container Journal (-D / -M)</option>
+            <option value="unit"{{if ne .SelectedLogKind "guest"}} selected{{end}}>Host / Podman Unit (-u)</option>
+          </select>
+        </label>
+        <label>
+          <span class="muted">Target:</span>
+          <select name="log_target">
+            <option value="">— select service or unit —</option>
+            {{range .LogTargets}}
+              <option value="{{.Target}}" data-kind="{{.Kind}}"{{if eq .Target $.SelectedLogTgt}} selected{{end}}>{{.Label}}</option>
+            {{end}}
+          </select>
+        </label>
+        <label>
+          <span class="muted">Lines:</span>
+          <select name="log_lines">
+            <option value="100"{{if eq .SelectedLogLines "100"}} selected{{end}}>100</option>
+            <option value="250"{{if eq .SelectedLogLines "250"}} selected{{end}}>250</option>
+            <option value="500"{{if eq .SelectedLogLines "500"}} selected{{end}}>500</option>
+          </select>
+        </label>
+        <button type="submit" class="btn">Fetch Logs</button>
+      </form>
+
+      {{if .LogError}}
+        <div class="error-text" style="margin-top: 0.75rem;">{{.LogError}}</div>
+      {{end}}
+
+      {{if .LogEntries}}
+      <div class="log-viewer mono">
+        {{range .LogEntries}}
+        <div class="log-line prio-{{.Priority}}">
+          <span class="log-time muted">{{.Time}}</span>
+          {{if .Unit}}<span class="log-unit">{{.Unit}}</span>{{end}}
+          <span class="log-msg">{{.Message}}</span>
+        </div>
+        {{end}}
+      </div>
+      {{else if .SelectedLogTgt}}
+        {{if not .LogError}}<p class="muted" style="margin: 0.75rem 0 0 0;">No journal entries returned for {{.SelectedLogTgt}}.</p>{{end}}
+      {{end}}
+    </div>
+  </section>
+</div>
+</main>
+<script>
+// Sync the Kind dropdown automatically when picking a target with data-kind
+document.querySelectorAll('select[name="log_target"]').forEach(function(sel) {
+  sel.addEventListener('change', function() {
+    var opt = sel.options[sel.selectedIndex];
+    var kind = opt && opt.getAttribute('data-kind');
+    var kindSel = document.querySelector('select[name="log_kind"]');
+    if (kind && kindSel) kindSel.value = kind;
+  });
+});
+</script>
+{{template "foot" .}}{{end}}

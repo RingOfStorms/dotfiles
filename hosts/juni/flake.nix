@@ -14,8 +14,7 @@
     omp-flake.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/omp";
     # sec-agent replaces secrets-bao on this host.
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
-    # beszel.url = "path:../../flakes/beszel";
-    beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
+    fleet-agent.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/fleet-agent";
     # de_plasma.url = "path:../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     # stt_ime.url = "path:../../flakes/stt_ime";
@@ -239,8 +238,6 @@
           )
           ./nono.nix
 
-          inputs.beszel.nixosModules.agent
-          ({ beszelAgent.token = "2fb5f0a0-24aa-4044-a893-6d0f916cd063"; })
 
           ./hardware-configuration.nix
           ./firewall.nix

@@ -239,3 +239,101 @@ func TestServicesShowBackupAge(t *testing.T) {
 		t.Errorf("state.json lacks backup state: %s", w.Body.String())
 	}
 }
+
+func TestHostDetailAndBcachefsDrillDown(t *testing.T) {
+	alwaysFalse := false
+	inv := &inventory.Inventory{
+		Hosts: map[string]inventory.Host{
+			"h004": {User: "luser", OverlayIP: strp("100.64.0.17"), Role: "server", Replaces: []string{"h002"}},
+			"oren": {User: "josh", OverlayIP: strp("100.64.0.2"), Role: "laptop", AlwaysOn: &alwaysFalse},
+		},
+		AgentHosts: []string{"h004", "oren"},
+	}
+	now := time.Now().UTC()
+	polls := map[string]state.HostPoll{
+		"h004": {
+			Host:     "h004",
+			OK:       true,
+			PolledAt: now,
+			Status: &state.HostStatus{
+				Host: "h004",
+				Time: now.Format(time.RFC3339),
+				System: &state.SystemMetrics{
+					Kernel:        "6.18.55",
+					UptimeSec:     86400,
+					Load1:         0.42,
+					CPUPercent:    14.5,
+					MemTotalBytes: 64_000_000_000,
+					MemUsedBytes:  16_000_000_000,
+				},
+				Filesystems: []state.FilesystemMount{
+					{
+						Mount:       "/data",
+						FSType:      "bcachefs",
+						TotalBytes:  25_000_000_000_000,
+						UsedBytes:   10_000_000_000_000,
+						UsedPercent: 40.0,
+						Bcachefs: &state.BcachefsInfo{
+							RawCapacityBytes: 50_000_000_000_000,
+							RawUsedBytes:     20_000_000_000_000,
+							UsableTotalBytes: 25_000_000_000_000,
+							UsableUsedBytes:  10_000_000_000_000,
+							DataReplicas:     2,
+							MetadataReplicas: 2,
+							Devices: []state.BcachefsDevice{
+								{Name: "sda", Label: "hdd.0", State: "rw", SizeBytes: 12_000_000_000_000, UsedBytes: 5_000_000_000_000},
+							},
+						},
+					},
+				},
+				Smart: []state.SmartDrive{
+					{Device: "/dev/sda", Model: "ST12000NT001", Healthy: true, TempC: 34, PowerOnHours: 12000},
+				},
+				Fail2ban: &state.Fail2banSummary{
+					Jails: []state.Fail2banJail{{Name: "sshd", CurrentlyBanned: 1, TotalBanned: 5}},
+				},
+			},
+		},
+		"oren": {
+			Host:     "oren",
+			OK:       false,
+			Error:    "timeout",
+			PolledAt: now,
+		},
+	}
+
+	srv := New(fakeSource{m: state.Merge(inv, polls)}, Config{})
+
+	// 1. /hosts shows bcachefs usable vs raw and oren as sleep / offline
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/hosts", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("/hosts status = %d", w.Code)
+	}
+	hostsBody := w.Body.String()
+	for _, want := range []string{"10.0 TB / 25.0 TB usable (2x)", "raw pool: 20.0 TB / 50.0 TB", "sleep / offline", "← h002"} {
+		if !strings.Contains(hostsBody, want) {
+			t.Fatalf("/hosts missing %q:\n%s", want, hostsBody)
+		}
+	}
+
+	// 2. /hosts/h002 redirects to /hosts/h004
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/hosts/h002", nil))
+	if w.Code != http.StatusMovedPermanently || w.Header().Get("Location") != "/hosts/h004" {
+		t.Fatalf("expected 301 redirect /hosts/h002 -> /hosts/h004, got %d (%s)", w.Code, w.Header().Get("Location"))
+	}
+
+	// 3. /hosts/h004 renders drill-down charts, bcachefs devices, SMART, fail2ban, and log controls
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/hosts/h004?range=7d", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("/hosts/h004 status = %d: %s", w.Code, w.Body.String())
+	}
+	detailBody := w.Body.String()
+	for _, want := range []string{"ST12000NT001", "hdd.0", "sshd", "history-chart", "Systemd &amp; Container Logs"} {
+		if !strings.Contains(detailBody, want) {
+			t.Fatalf("/hosts/h004 missing %q:\n%s", want, detailBody)
+		}
+	}
+}

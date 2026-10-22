@@ -24,8 +24,13 @@
             version = "0.1.0";
             src = ./.;
             vendorHash = null;
+            nativeBuildInputs = [ pkgs.makeWrapper ];
+            nativeCheckInputs = [ pkgs.sqlite ];
+            postInstall = ''
+              wrapProgram $out/bin/fleet-edge --suffix PATH : ${pkgs.lib.makeBinPath [ pkgs.sqlite ]}
+            '';
             meta = {
-              description = "Read-only fleet dashboard: services, routes, host poll status";
+              description = "Read-only fleet dashboard: services, routes, host poll status, and metrics";
               mainProgram = "fleet-edge";
             };
           };
@@ -95,6 +100,62 @@
                 this endpoint must implement.
               '';
             };
+            dbPath = lib.mkOption {
+              type = lib.types.str;
+              default = "/var/lib/fleet-edge/metrics.db";
+              description = "Path to the SQLite time-series metrics database (empty string disables persistence).";
+            };
+
+            auth = {
+              zitadel = {
+                enable = lib.mkEnableOption "Zitadel OIDC PKCE authentication";
+                issuer = lib.mkOption {
+                  type = lib.types.str;
+                  default = "";
+                  example = "https://sso.joshuabell.xyz";
+                  description = "Zitadel OIDC issuer URL (empty disables OIDC login).";
+                };
+                projectId = lib.mkOption {
+                  type = lib.types.str;
+                  default = "";
+                  example = "344379162166820867";
+                  description = "Zitadel project ID.";
+                };
+                claim = lib.mkOption {
+                  type = lib.types.str;
+                  default = "flatRolesClaim";
+                  description = "Zitadel JWT claim containing flat role names.";
+                };
+                clientId = lib.mkOption {
+                  type = lib.types.str;
+                  default = "";
+                  description = "Zitadel OIDC PKCE application client ID.";
+                };
+                redirectUri = lib.mkOption {
+                  type = lib.types.str;
+                  default = "";
+                  example = "https://fleet.joshuabell.xyz/auth/callback";
+                  description = "Zitadel OIDC callback URL (auto-derived from request Host if empty).";
+                };
+                allowedRole = lib.mkOption {
+                  type = lib.types.str;
+                  default = "";
+                  description = "Required Zitadel role (empty allows any authenticated user of the project).";
+                };
+              };
+              apiKeysFile = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                example = "/var/lib/secrets_manager_hydrated/fleet-edge-api-keys";
+                description = "Path to newline-delimited plain API keys for Authorization: Bearer <key> or X-API-Key: <key>.";
+              };
+              sessionKeyFile = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "Optional path to HMAC session signing key file.";
+              };
+            };
+
 
             package = lib.mkOption {
               type = lib.types.package;
@@ -199,10 +260,23 @@
                 FLEET_EDGE_TITLE = cfg.title;
                 FLEET_EDGE_ICON_BASE = cfg.iconBase;
                 FLEET_EDGE_LINKS = toString (pkgs.writeText "fleet-edge-links.json" (builtins.toJSON cfg.links));
+                FLEET_EDGE_DB = cfg.dbPath;
+                FLEET_EDGE_ZITADEL_ISSUER = if cfg.auth.zitadel.enable then cfg.auth.zitadel.issuer else "";
+                FLEET_EDGE_ZITADEL_PROJECT_ID = if cfg.auth.zitadel.enable then cfg.auth.zitadel.projectId else "";
+                FLEET_EDGE_ZITADEL_CLAIM = cfg.auth.zitadel.claim;
+                FLEET_EDGE_ZITADEL_CLIENT_ID = if cfg.auth.zitadel.enable then cfg.auth.zitadel.clientId else "";
+                FLEET_EDGE_ZITADEL_REDIRECT_URI = cfg.auth.zitadel.redirectUri;
+                FLEET_EDGE_ZITADEL_ROLE = cfg.auth.zitadel.allowedRole;
               }
               // lib.optionalAttrs (cfg.background != null) {
                 FLEET_EDGE_BACKGROUND =
                   if builtins.isPath cfg.background then "${cfg.background}" else cfg.background;
+              }
+              // lib.optionalAttrs (cfg.auth.apiKeysFile != null) {
+                FLEET_EDGE_API_KEYS_FILE = cfg.auth.apiKeysFile;
+              }
+              // lib.optionalAttrs (cfg.auth.sessionKeyFile != null) {
+                FLEET_EDGE_SESSION_KEY_FILE = cfg.auth.sessionKeyFile;
               };
 
               serviceConfig = {
@@ -215,10 +289,10 @@
                 Restart = "on-failure";
                 RestartSec = "5s";
 
-                # Sandboxing: read-only dashboard, no reason to touch disk
-                # beyond reading the inventory file, or escalate privilege.
+                StateDirectory = "fleet-edge";
+                StateDirectoryMode = "0750";
+
                 DynamicUser = true;
-                NoNewPrivileges = true;
                 ProtectSystem = "strict";
                 ProtectHome = true;
                 PrivateTmp = true;

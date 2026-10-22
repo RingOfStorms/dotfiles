@@ -1,27 +1,6 @@
 // Package state polls each host's status endpoint and merges the results
-// with the static inventory into the data the dashboard renders.
-//
-// Status endpoint contract (to be implemented by the host module,
-// ROUTING-PLAN.md §5.4): each host serves, over the tailnet,
-//
-//	GET <status-url-template with {overlayIp} substituted>
-//
-//	{
-//	  "host": "h001",
-//	  "time": "2026-10-17T00:00:00Z",      // RFC3339
-//	  "services": {
-//	    "<svc>": {
-//	      "unit": "container@x",
-//	      "active": "active|inactive|failed",
-//	      "enabled": true,
-//	      "lastBackup": "2026-10-17T03:05:00Z"  // optional: last successful
-//	    }                                      // fleet-backup on that host
-//	  }
-//	}
-//
-// A host that cannot be reached (timeout, connection refused, non-200,
-// bad JSON) is recorded as unreachable; its services simply have no
-// entry and the dashboard shows "unknown" for them.
+// with the static inventory and SQLite historical store into the data the
+// dashboard renders.
 package state
 
 import (
@@ -30,20 +9,21 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/store"
 )
 
 // ServiceStatus is one entry of a host status response's "services" map.
 type ServiceStatus struct {
-	Unit    string `json:"unit"`
-	Active  string `json:"active"`
-	Enabled bool   `json:"enabled"`
-	// LastBackup is RFC3339; empty if the host has no successful
-	// fleet-backup of the service (or no backups at all).
+	Unit       string `json:"unit"`
+	Active     string `json:"active"`
+	Enabled    bool   `json:"enabled"`
+	Kind       string `json:"kind,omitempty"`
 	LastBackup string `json:"lastBackup,omitempty"`
 }
 
@@ -51,11 +31,157 @@ type ServiceStatus struct {
 // this is flagged stale (the nightly job missed at least one run).
 const BackupStaleAfter = 36 * time.Hour
 
+// SystemMetrics holds host-wide CPU, load, memory, swap, and uptime metrics.
+type SystemMetrics struct {
+	Kernel         string  `json:"kernel,omitempty"`
+	UptimeSec      uint64  `json:"uptimeSec"`
+	Load1          float64 `json:"load1"`
+	Load5          float64 `json:"load5"`
+	Load15         float64 `json:"load15"`
+	CPUCores       int     `json:"cpuCores,omitempty"`
+	CPUPercent     float64 `json:"cpuPercent"`
+	MemTotalBytes  uint64  `json:"memTotalBytes"`
+	MemUsedBytes   uint64  `json:"memUsedBytes"`
+	MemAvailBytes  uint64  `json:"memAvailBytes"`
+	SwapTotalBytes uint64  `json:"swapTotalBytes"`
+	SwapUsedBytes  uint64  `json:"swapUsedBytes"`
+}
+
+// BcachefsDevice describes one member disk inside a bcachefs pool.
+type BcachefsDevice struct {
+	Name          string `json:"name"`
+	Label         string `json:"label"`
+	State         string `json:"state"`
+	SizeBytes     uint64 `json:"sizeBytes"`
+	UsedBytes     uint64 `json:"usedBytes"`
+	FreeBytes     uint64 `json:"freeBytes"`
+	BucketSize    uint64 `json:"bucketSize,omitempty"`
+	IOErrorsRead  uint64 `json:"ioErrorsRead"`
+	IOErrorsWrite uint64 `json:"ioErrorsWrite"`
+	IOErrorsCsum  uint64 `json:"ioErrorsChecksum"`
+}
+
+// BcachefsCompression reports pool compression ratio.
+type BcachefsCompression struct {
+	Type              string `json:"type"`
+	CompressedBytes   uint64 `json:"compressedBytes"`
+	UncompressedBytes uint64 `json:"uncompressedBytes"`
+}
+
+// BcachefsDataTypeBreakdown reports raw bytes per data type (user, btree, cached, etc.).
+type BcachefsDataTypeBreakdown struct {
+	Type     string `json:"type"`
+	Replicas string `json:"replicas,omitempty"`
+	Devices  string `json:"devices,omitempty"`
+	Bytes    uint64 `json:"bytes"`
+}
+
+// BcachefsInfo holds detailed bcachefs pool health and capacity metrics.
+type BcachefsInfo struct {
+	RawCapacityBytes uint64                      `json:"rawCapacityBytes"`
+	RawUsedBytes     uint64                      `json:"rawUsedBytes"`
+	RawReservedBytes uint64                      `json:"rawReservedBytes"`
+	UsableTotalBytes uint64                      `json:"usableTotalBytes"`
+	UsableUsedBytes  uint64                      `json:"usableUsedBytes"`
+	UsableFreeBytes  uint64                      `json:"usableFreeBytes"`
+	DataReplicas     uint                        `json:"dataReplicas"`
+	MetadataReplicas uint                        `json:"metadataReplicas"`
+	Compression      *BcachefsCompression        `json:"compression,omitempty"`
+	DataTypes        []BcachefsDataTypeBreakdown `json:"dataTypes,omitempty"`
+	Devices          []BcachefsDevice            `json:"devices,omitempty"`
+}
+
+// FilesystemMount describes one mounted filesystem (or deduplicated bcachefs pool).
+type FilesystemMount struct {
+	Mount       string        `json:"mount"`
+	Submounts   []string      `json:"submounts,omitempty"`
+	Label       string        `json:"label"`
+	Device      string        `json:"device"`
+	FSType      string        `json:"fstype"`
+	UUID        string        `json:"uuid,omitempty"`
+	TotalBytes  uint64        `json:"totalBytes"`
+	UsedBytes   uint64        `json:"usedBytes"`
+	AvailBytes  uint64        `json:"availBytes"`
+	UsedPercent float64       `json:"usedPercent"`
+	Bcachefs    *BcachefsInfo `json:"bcachefs,omitempty"`
+}
+
+// DiskIORate holds rolling read/write throughput for a block device.
+type DiskIORate struct {
+	ReadBytesPerSec  uint64 `json:"readBytesPerSec"`
+	WriteBytesPerSec uint64 `json:"writeBytesPerSec"`
+}
+
+// NetIORate holds rolling rx/tx throughput for a network interface.
+type NetIORate struct {
+	RxBytesPerSec uint64 `json:"rxBytesPerSec"`
+	TxBytesPerSec uint64 `json:"txBytesPerSec"`
+}
+
+// TempSensor represents one hwmon temperature reading.
+type TempSensor struct {
+	Sensor  string  `json:"sensor"`
+	Label   string  `json:"label,omitempty"`
+	Celsius float64 `json:"celsius"`
+}
+
+// SmartDrive holds normalized drive health attributes from `smartctl -j -a`.
+type SmartDrive struct {
+	Device              string `json:"device"`
+	Model               string `json:"model,omitempty"`
+	Serial              string `json:"serial,omitempty"`
+	Protocol            string `json:"protocol,omitempty"`
+	RotationRate        int    `json:"rotationRate,omitempty"`
+	Healthy             bool   `json:"healthy"`
+	Standby             bool   `json:"standby"`
+	TempC               int    `json:"tempC,omitempty"`
+	PowerOnHours        uint64 `json:"powerOnHours,omitempty"`
+	ReallocatedSectors  uint64 `json:"reallocatedSectors"`
+	PendingSectors      uint64 `json:"pendingSectors"`
+	UncorrectableErrors uint64 `json:"uncorrectableErrors"`
+	WearPercentUsed     int    `json:"wearPercentUsed,omitempty"`
+	MediaErrors         uint64 `json:"mediaErrors,omitempty"`
+	UpdatedAt           string `json:"updatedAt,omitempty"`
+}
+
+// Fail2banJail summarizes one active fail2ban jail.
+type Fail2banJail struct {
+	Name            string   `json:"name"`
+	CurrentlyBanned int      `json:"currentlyBanned"`
+	TotalBanned     int      `json:"totalBanned"`
+	BannedIPs       []string `json:"bannedIPs"`
+}
+
+// Fail2banBanEvent represents one historical or active ban record.
+type Fail2banBanEvent struct {
+	Jail       string `json:"jail"`
+	IP         string `json:"ip"`
+	BannedAt   string `json:"bannedAt"`
+	BanSeconds int64  `json:"banSeconds"`
+	Failures   int    `json:"failures"`
+	Active     bool   `json:"active"`
+}
+
+// Fail2banSummary holds active jails and recent ban events.
+type Fail2banSummary struct {
+	UpdatedAt  string             `json:"updatedAt,omitempty"`
+	Jails      []Fail2banJail     `json:"jails"`
+	RecentBans []Fail2banBanEvent `json:"recentBans,omitempty"`
+}
+
 // HostStatus is the full JSON document a host's status endpoint returns.
 type HostStatus struct {
-	Host     string                   `json:"host"`
-	Time     string                   `json:"time"`
-	Services map[string]ServiceStatus `json:"services"`
+	Host        string                   `json:"host"`
+	Time        string                   `json:"time"`
+	Services    map[string]ServiceStatus `json:"services"`
+	HostUnits   map[string]ServiceStatus `json:"hostUnits,omitempty"`
+	System      *SystemMetrics           `json:"system,omitempty"`
+	Filesystems []FilesystemMount        `json:"filesystems,omitempty"`
+	DiskIO      map[string]DiskIORate    `json:"diskIO,omitempty"`
+	NetIO       map[string]NetIORate     `json:"netIO,omitempty"`
+	Temps       []TempSensor             `json:"temps,omitempty"`
+	Smart       []SmartDrive             `json:"smart,omitempty"`
+	Fail2ban    *Fail2banSummary         `json:"fail2ban,omitempty"`
 }
 
 // HostPoll records the outcome of the most recent poll of one host.
@@ -78,24 +204,32 @@ type ServiceView struct {
 	Enabled      *bool             `json:"enabled,omitempty"`
 	Unit         string            `json:"unit,omitempty"`
 	Routes       []inventory.Route `json:"routes"`
-	// Backup: "ok", "stale" (older than BackupStaleAfter), "none" (the host
-	// reports the service but no backup) or "unknown" (no data).
-	Backup     string     `json:"backup"`
-	LastBackup *time.Time `json:"lastBackup,omitempty"`
-	BackupAge  string     `json:"backupAge,omitempty"` // e.g. "5h", "2d 3h"
+	Backup       string            `json:"backup"`
+	LastBackup   *time.Time        `json:"lastBackup,omitempty"`
+	BackupAge    string            `json:"backupAge,omitempty"`
 }
 
-// HostView is one row of the /hosts page.
+// HostView is one row/card of the /hosts page.
 type HostView struct {
-	Host      string `json:"host"`
-	OverlayIP string `json:"overlayIp"`
-	LanIP     string `json:"lanIp"`
-	Reachable bool   `json:"reachable"`
-	// HasEndpoint is false for hosts not in containerHosts; they are not
-	// polled and not counted as reachable or unreachable.
-	HasEndpoint bool      `json:"hasEndpoint"`
-	Error       string    `json:"error,omitempty"`
-	PolledAt    time.Time `json:"polledAt"`
+	Host        string      `json:"host"`
+	OverlayIP   string      `json:"overlayIp"`
+	LanIP       string      `json:"lanIp"`
+	Role        string      `json:"role"`
+	AlwaysOn    bool        `json:"alwaysOn"`
+	Replaces    []string    `json:"replaces,omitempty"`
+	Reachable   bool        `json:"reachable"`
+	HasEndpoint bool        `json:"hasEndpoint"`
+	StateBadge  string      `json:"stateBadge"` // "online", "down", "sleeping", "no-endpoint"
+	LastSeen    time.Time   `json:"lastSeen,omitempty"`
+	LastSeenAge string      `json:"lastSeenAge,omitempty"`
+	Error       string      `json:"error,omitempty"`
+	PolledAt    time.Time   `json:"polledAt"`
+	Status      *HostStatus `json:"status,omitempty"`
+	MaxTempC    float64     `json:"maxTempC,omitempty"`
+	SmartOK     int         `json:"smartOk"`
+	SmartTotal  int         `json:"smartTotal"`
+	SmartFailed int         `json:"smartFailed"`
+	BannedCount int         `json:"bannedCount"`
 }
 
 // Merged is the full state served by /api/state.json and rendered by the
@@ -106,15 +240,22 @@ type Merged struct {
 	Hosts       []HostView    `json:"hosts"`
 }
 
-// Poller periodically fetches every host's status endpoint and keeps the
-// latest Merged view available via Current.
+// Poller periodically fetches every host's status endpoint, persists metrics to
+// SQLite (if configured), and keeps the latest Merged view available via Current.
 type Poller struct {
 	inv        *inventory.Inventory
 	urlTmpl    string
 	httpClient *http.Client
+	store      *store.Store
 
-	mu    sync.RWMutex
-	polls map[string]HostPoll // keyed by host name
+	mu         sync.RWMutex
+	polls      map[string]HostPoll // keyed by host name
+	lastStates map[string]lastKnownHost
+}
+
+type lastKnownHost struct {
+	LastSeen time.Time
+	Status   *HostStatus
 }
 
 // NewPoller builds a poller for inv, substituting {overlayIp} (and
@@ -125,7 +266,56 @@ func NewPoller(inv *inventory.Inventory, urlTmpl string, timeout time.Duration) 
 		urlTmpl:    urlTmpl,
 		httpClient: &http.Client{Timeout: timeout},
 		polls:      map[string]HostPoll{},
+		lastStates: map[string]lastKnownHost{},
 	}
+}
+
+// SetStore attaches a SQLite store to persist time-series samples and preload
+// last-known host states across restarts.
+func (p *Poller) SetStore(st *store.Store) {
+	p.mu.Lock()
+	p.store = st
+	p.mu.Unlock()
+	if st == nil {
+		return
+	}
+	if loaded, err := st.LoadAllLastStates(context.Background()); err == nil {
+		p.mu.Lock()
+		for host, ls := range loaded {
+			var doc HostStatus
+			if err := json.Unmarshal(ls.StatusRaw, &doc); err == nil {
+				p.lastStates[host] = lastKnownHost{
+					LastSeen: ls.LastSeen,
+					Status:   &doc,
+				}
+			}
+		}
+		p.mu.Unlock()
+	}
+}
+
+// Store returns the attached SQLite store (or nil).
+func (p *Poller) Store() *store.Store {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.store
+}
+
+// Inventory returns the static inventory.
+func (p *Poller) Inventory() *inventory.Inventory {
+	return p.inv
+}
+
+// StatusURLFor returns the resolved status.json URL for host.
+func (p *Poller) StatusURLFor(host string) (string, bool) {
+	if p.inv == nil {
+		return "", false
+	}
+	h, ok := p.inv.Hosts[host]
+	if !ok {
+		return "", false
+	}
+	return hostURL(p.urlTmpl, host, h), true
 }
 
 func hostURL(tmpl, host string, h inventory.Host) string {
@@ -161,47 +351,119 @@ func (p *Poller) PollOnce(ctx context.Context) {
 
 func (p *Poller) pollHost(ctx context.Context, name string, h inventory.Host) {
 	url := hostURL(p.urlTmpl, name, h)
-	poll := HostPoll{Host: name, URL: url, PolledAt: time.Now().UTC()}
+	now := time.Now().UTC()
+	poll := HostPoll{Host: name, URL: url, PolledAt: now}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	// Intermittent laptops/workstations get a short 1.2s timeout so sleeping
+	// machines never slow down a poll cycle.
+	reqCtx := ctx
+	var cancel context.CancelFunc
+	if !h.IsAlwaysOn() {
+		reqCtx, cancel = context.WithTimeout(ctx, 1200*time.Millisecond)
+		defer cancel()
+	}
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, url, nil)
 	if err != nil {
 		poll.Error = err.Error()
-		p.setPoll(name, poll)
+		p.setPoll(name, poll, nil)
 		return
 	}
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		poll.Error = err.Error()
-		p.setPoll(name, poll)
+		p.setPoll(name, poll, nil)
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		poll.Error = fmt.Sprintf("status %d", resp.StatusCode)
-		p.setPoll(name, poll)
+		p.setPoll(name, poll, nil)
 		return
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		poll.Error = err.Error()
-		p.setPoll(name, poll)
+		p.setPoll(name, poll, nil)
 		return
 	}
 	var st HostStatus
 	if err := json.Unmarshal(body, &st); err != nil {
 		poll.Error = fmt.Sprintf("bad json: %v", err)
-		p.setPoll(name, poll)
+		p.setPoll(name, poll, nil)
 		return
 	}
 	poll.OK = true
 	poll.Status = &st
-	p.setPoll(name, poll)
+	p.setPoll(name, poll, body)
 }
 
-func (p *Poller) setPoll(name string, poll HostPoll) {
+func (p *Poller) setPoll(name string, poll HostPoll, rawJSON []byte) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	p.polls[name] = poll
+	if poll.OK && poll.Status != nil {
+		p.lastStates[name] = lastKnownHost{
+			LastSeen: poll.PolledAt,
+			Status:   poll.Status,
+		}
+	}
+	st := p.store
+	p.mu.Unlock()
+
+	if poll.OK && poll.Status != nil && st != nil {
+		sample, fsSamples := buildStoreSamples(name, poll.PolledAt, poll.Status)
+		_ = st.RecordPoll(context.Background(), sample, fsSamples, rawJSON)
+	}
+}
+
+func buildStoreSamples(host string, polledAt time.Time, st *HostStatus) (store.Sample, []store.FSSample) {
+	ts := polledAt.Unix()
+	s := store.Sample{
+		Host:         host,
+		RecordedHost: host,
+		TS:           ts,
+		Tier:         "30s",
+	}
+	if st.System != nil {
+		s.CPUPct = st.System.CPUPercent
+		s.CPUMax = st.System.CPUPercent
+		s.Load1 = st.System.Load1
+		s.MemUsed = st.System.MemUsedBytes
+		s.MemTotal = st.System.MemTotalBytes
+		s.SwapUsed = st.System.SwapUsedBytes
+	}
+	for _, nr := range st.NetIO {
+		s.NetRxBps += nr.RxBytesPerSec
+		s.NetTxBps += nr.TxBytesPerSec
+	}
+	for _, dr := range st.DiskIO {
+		s.DiskRBps += dr.ReadBytesPerSec
+		s.DiskWBps += dr.WriteBytesPerSec
+	}
+	for _, t := range st.Temps {
+		if t.Celsius > s.TempMaxC {
+			s.TempMaxC = t.Celsius
+		}
+	}
+
+	var fsOut []store.FSSample
+	for _, fs := range st.Filesystems {
+		row := store.FSSample{
+			Host:       host,
+			Mount:      fs.Mount,
+			FSType:     fs.FSType,
+			TS:         ts,
+			Tier:       "30s",
+			UsedBytes:  fs.UsedBytes,
+			TotalBytes: fs.TotalBytes,
+		}
+		if fs.Bcachefs != nil {
+			row.RawUsedBytes = fs.Bcachefs.RawUsedBytes
+			row.RawCapBytes = fs.Bcachefs.RawCapacityBytes
+		}
+		fsOut = append(fsOut, row)
+	}
+	return s, fsOut
 }
 
 // Run polls every interval until ctx is cancelled. It polls once
@@ -228,9 +490,13 @@ func (p *Poller) Current() Merged {
 	for k, v := range p.polls {
 		polls[k] = v
 	}
+	last := make(map[string]lastKnownHost, len(p.lastStates))
+	for k, v := range p.lastStates {
+		last[k] = v
+	}
 	p.mu.RUnlock()
 
-	return Merge(p.inv, polls)
+	return mergeWithLast(p.inv, polls, last, time.Now())
 }
 
 // Merge combines inventory with a set of host polls (keyed by host name)
@@ -242,9 +508,20 @@ func Merge(inv *inventory.Inventory, polls map[string]HostPoll) Merged {
 
 // MergeAt is Merge with an explicit clock (backup ages).
 func MergeAt(inv *inventory.Inventory, polls map[string]HostPoll, now time.Time) Merged {
+	return mergeWithLast(inv, polls, nil, now)
+}
+
+func mergeWithLast(inv *inventory.Inventory, polls map[string]HostPoll, last map[string]lastKnownHost, now time.Time) Merged {
 	m := Merged{GeneratedAt: now.UTC()}
 
-	for name, svc := range inv.Services {
+	svcNames := make([]string, 0, len(inv.Services))
+	for name := range inv.Services {
+		svcNames = append(svcNames, name)
+	}
+	sort.Strings(svcNames)
+
+	for _, name := range svcNames {
+		svc := inv.Services[name]
 		view := ServiceView{
 			Name:         name,
 			Kind:         svc.Kind,
@@ -253,8 +530,13 @@ func MergeAt(inv *inventory.Inventory, polls map[string]HostPoll, now time.Time)
 			Active:       "unknown",
 			Backup:       "unknown",
 		}
-		for _, rt := range svc.Routes {
-			view.Routes = append(view.Routes, rt)
+		routeNames := make([]string, 0, len(svc.Routes))
+		for rn := range svc.Routes {
+			routeNames = append(routeNames, rn)
+		}
+		sort.Strings(routeNames)
+		for _, rn := range routeNames {
+			view.Routes = append(view.Routes, svc.Routes[rn])
 		}
 		if poll, ok := polls[svc.Host]; ok && poll.OK && poll.Status != nil {
 			if ss, ok := poll.Status.Services[name]; ok {
@@ -280,19 +562,79 @@ func MergeAt(inv *inventory.Inventory, polls map[string]HostPoll, now time.Time)
 	for _, n := range inv.PolledHosts() {
 		polled[n] = true
 	}
-	for name, h := range inv.Hosts {
-		hv := HostView{Host: name}
-		hv.HasEndpoint = polled[name]
+
+	hostNames := make([]string, 0, len(inv.Hosts))
+	for name := range inv.Hosts {
+		hostNames = append(hostNames, name)
+	}
+	sort.Strings(hostNames)
+
+	for _, name := range hostNames {
+		h := inv.Hosts[name]
+		role := h.Role
+		if role == "" {
+			role = "server"
+		}
+		hv := HostView{
+			Host:        name,
+			Role:        role,
+			AlwaysOn:    h.IsAlwaysOn(),
+			Replaces:    h.Replaces,
+			HasEndpoint: polled[name],
+			StateBadge:  "no-endpoint",
+		}
 		if h.OverlayIP != nil {
 			hv.OverlayIP = *h.OverlayIP
 		}
 		if h.LanIP != nil {
 			hv.LanIP = *h.LanIP
 		}
+		if hv.HasEndpoint {
+			if !hv.AlwaysOn {
+				hv.StateBadge = "sleeping"
+			} else {
+				hv.StateBadge = "down"
+			}
+		}
 		if poll, ok := polls[name]; ok && hv.HasEndpoint {
 			hv.Reachable = poll.OK
 			hv.Error = poll.Error
 			hv.PolledAt = poll.PolledAt
+			if poll.OK {
+				hv.StateBadge = "online"
+				hv.LastSeen = poll.PolledAt
+				hv.LastSeenAge = FormatAge(now.Sub(poll.PolledAt))
+				hv.Status = poll.Status
+			}
+		}
+		if hv.Status == nil && last != nil {
+			if lk, ok := last[name]; ok && lk.Status != nil {
+				hv.Status = lk.Status
+				hv.LastSeen = lk.LastSeen
+				if !lk.LastSeen.IsZero() {
+					hv.LastSeenAge = FormatAge(now.Sub(lk.LastSeen))
+				}
+			}
+		}
+		if hv.Status != nil {
+			for _, t := range hv.Status.Temps {
+				if t.Celsius > hv.MaxTempC {
+					hv.MaxTempC = t.Celsius
+				}
+			}
+			for _, d := range hv.Status.Smart {
+				hv.SmartTotal++
+				if d.Healthy {
+					hv.SmartOK++
+				} else {
+					hv.SmartFailed++
+				}
+			}
+			if hv.Status.Fail2ban != nil {
+				for _, j := range hv.Status.Fail2ban.Jails {
+					hv.BannedCount += j.CurrentlyBanned
+				}
+			}
 		}
 		m.Hosts = append(m.Hosts, hv)
 	}

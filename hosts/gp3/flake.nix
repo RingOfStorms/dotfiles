@@ -16,6 +16,7 @@
     # sec-agent replaces secrets-bao on this host.
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
 
+    fleet-agent.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/fleet-agent";
     omp-flake.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/omp";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
@@ -120,6 +121,7 @@
           })
 
           (import ./sec-agent.nix { inherit inputs constants; })
+
 
           ./hardware-configuration.nix
           ./firewall.nix

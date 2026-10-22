@@ -1,13 +1,11 @@
 # fleet-edge
 
-Read-only fleet dashboard. Packaged like `flakes/ports` (stdlib Go, no
-external deps, `go1.22`), with a NixOS module. This is a skeleton: it has no
-write paths anywhere, and it is not wired into any host yet.
+Read-only fleet dashboard and host health/metrics monitor. Packaged like
+`flakes/ports` (stdlib Go, no external Go deps, `go1.22`, runtime `sqlite3`
+for time-series storage), with a NixOS module.
 
-See `containers/ROUTING-PLAN.md` §5.2 ("Generated pieces and who writes
-them") and §5.4 ("Dashboard") for the full design this implements a first
-slice of.
-
+See `containers/ROUTING-PLAN.md` §5.2/§5.4 and `MONITORING-PLAN.md` for the
+design.
 ## What's implemented (this skeleton)
 
 A single Go binary, `fleet-edge`:
@@ -24,19 +22,28 @@ A single Go binary, `fleet-edge`:
   3s timeout, tolerating failures. A host that can't be reached (timeout,
   refused, bad JSON) is recorded as unreachable; every service declared on
   that host shows `unknown` state rather than failing the page.
-- Serves, on `--listen` (default `127.0.0.1:8099`, meant to sit behind
-  nginx per ROUTING-PLAN §5.4 — tailnet-only, `oauth2-proxy` gated, o002
-  excluded):
-  - `GET /` — table of every service: name, declared host, polled state
-    (`active`/`inactive`/`failed`/`unknown`), routes (fqdn as a link,
-    exposure, auth), description.
-  - `GET /hosts` — per host: overlay IP, LAN IP, last poll result
-    (reachable/unreachable + error + timestamp).
-  - `GET /healthz` — `ok`.
-  - `GET /api/state.json` — the same merged view as JSON, for scripting or
-    a future UI.
-- No POST handlers anywhere. No action can be taken from this server; it
-  only reads the inventory file and polls read-only HTTP endpoints.
+- Stores 30s time-series samples (`host_samples`, `fs_samples`), offline host
+  snapshots (`host_last_state`), and host lineage events (`host_events`) in a
+  SQLite WAL database (`/var/lib/fleet-edge/metrics.db`) with automatic 5m and
+  1h rollups, plus `fleet-edge import-beszel` for migrating historical Beszel
+  databases (including `h002` -> `h004` host replacement lineage).
+- Authenticates requests via Zitadel OIDC Authorization Code + PKCE (`admin`
+  role claim, `fleet_session` HMAC cookie) or `Bearer` / `X-API-Key` tokens.
+- Serves, on `--listen` (default `127.0.0.1:8099`, behind nginx on `h005` at
+  `https://fleet.joshuabell.xyz`):
+  - `GET /` — start page of app tiles.
+  - `GET /services` — table of every service: name, declared host, polled state,
+    backup age, routes, description.
+  - `GET /hosts` — Fleet Health Overview split into Always-On Servers and
+    Workstations & Laptops (`ONLINE` / `SLEEP` / `DOWN`), with 24h CPU & Net
+    sparklines, bcachefs usable vs. raw storage bars, SMART, Fail2ban, and
+    container badges.
+  - `GET /hosts/{name}?range=1h|24h|7d|30d|1y` — Per-host drill-down with
+    inline SVG time-series charts, bcachefs pool/device breakdown, SMART drive
+    table, Fail2ban jails & banned IPs, and live systemd/container log viewer
+    (proxying `:9101/logs.json`).
+  - `GET /healthz` — `ok` (unauthenticated).
+  - `GET /api/state.json` — the merged view as JSON.
 
 ## What's planned (not in this skeleton — see ROUTING-PLAN §5.2)
 
@@ -159,7 +166,11 @@ nix build . --no-link
 
 Layout:
 
-- `main.go` — flags, wiring.
-- `internal/inventory` — inventory JSON parsing.
-- `internal/state` — status polling + merge into dashboard view.
-- `internal/server` — HTTP handlers + embedded `html/template` pages.
+- `main.go` — flags, wiring, `dns-plan` and `import-beszel` subcommands.
+- `internal/auth` — Zitadel OIDC PKCE + JWKS verification and API key auth.
+- `internal/bunny` — Bunny DNS reconciliation.
+- `internal/dash` — Start-page tile merging.
+- `internal/inventory` — Inventory JSON parsing (`hosts`, `services`, `agentHosts`, `replaces`).
+- `internal/state` — Status polling, log proxying, and merge into dashboard view.
+- `internal/store` — SQLite WAL time-series store, rollups, and Beszel importer.
+- `internal/server` — HTTP handlers, inline SVG chart generator, and embedded `html/template` pages.

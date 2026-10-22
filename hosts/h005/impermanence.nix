@@ -31,6 +31,9 @@ in
       shared.system.directories
       ++ [
         "/var/lib/secrets_manager_hydrated"
+        # DynamicUser owns the private directory; systemd creates the public
+        # /var/lib/fleet-edge symlink for SQLite metrics.db at service startup.
+        "/var/lib/private/fleet-edge"
         # *.ts.joshuabell.xyz wildcard (private-zone.nix); avoid re-issuing
         # on every boot (Let's Encrypt rate limits).
         {

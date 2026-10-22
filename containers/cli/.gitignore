@@ -1,5 +1,0 @@
-# go test temp dirs (if a test ever writes relative paths)
-/Test*/
-# nix build output
-result
-containers

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Update the given flake inputs in every host flake under this directory.
-#   ./update-all-host-flakes.sh common containers beszel
-# Inputs a host doesn't have (per its flake.lock root inputs) are skipped.
+#   ./update-all-host-flakes.sh common containers fleet-agent
+# Inputs a host doesn't have (per its flake.nix inputs or flake.lock root inputs) are skipped.
 
 set -uo pipefail
 
@@ -17,9 +17,17 @@ mapfile -t HOST_DIRS < <(find . -type f -name 'flake.nix' -not -path '*/.*' -pri
 TMP_RESULTS="$(mktemp -t update-host-flakes.XXXXXX)"
 trap 'rm -f "$TMP_RESULTS"' EXIT
 
-# Root input names of a flake.lock, one per line.
+# Root input names declared in flake.nix or locked in flake.lock, one per line.
 root_inputs() {
-  perl -MJSON::PP -0777 -ne 'my $l = decode_json($_); print "$_\n" for keys %{ $l->{nodes}{ $l->{root} }{inputs} || {} }' "$1"
+  local dir="$1"
+  {
+    if [ -f "$dir/flake.lock" ]; then
+      perl -MJSON::PP -0777 -ne 'my $l = decode_json($_); print "$_\n" for keys %{ $l->{nodes}{ $l->{root} }{inputs} || {} }' "$dir/flake.lock"
+    fi
+    if [ -f "$dir/flake.nix" ]; then
+      perl -0777 -ne 'if (/inputs\s*=\s*\{(.*?)\n  \};/s) { my $b = $1; while ($b =~ /^\s*([A-Za-z0-9_-]+)\s*(?:\.[A-Za-z0-9_.-]+)?\s*=/mg) { print "$1\n"; } }' "$dir/flake.nix"
+    fi
+  } | sort -u
 }
 
 for dir in "${HOST_DIRS[@]}"; do
@@ -28,7 +36,7 @@ for dir in "${HOST_DIRS[@]}"; do
       echo "SKIP:$dir:no flake.lock" >>"$TMP_RESULTS"
       exit 0
     fi
-    have="$(root_inputs "$dir/flake.lock")"
+    have="$(root_inputs "$dir")"
     wanted=()
     for name in "$@"; do
       grep -qx -- "$name" <<<"$have" && wanted+=("$name")

@@ -94,9 +94,8 @@ in
         "Ad-blocker (LAN only)"
         "lan"
       )
-      (net "Beszel" "${h001}:8090" "beszel" "Server Metrics" "tailnet")
       (on "h005" (
-        net "Fleet Edge" "http://h005.net.${domain}/"
+        net "Fleet Edge" "https://fleet.${domain}/"
           "https://api.iconify.design/mdi/view-dashboard-outline.svg?color=%237fb0e8"
           "This dashboard: routes + host health"
           "tailnet"
@@ -106,21 +105,44 @@ in
       (personal "Puzzles" "https://puzzles.${domain}" "" "Puzzles" "public")
       (personal "Location" "https://location.${domain}" "dawarich" "Dawarich" "public")
     ];
+    auth.zitadel = {
+      enable = true;
+      issuer = "https://sso.${domain}";
+      clientId = "384856081475633155";
+      redirectUri = "https://fleet.${domain}/auth/callback";
+      allowedRole = "admin";
+    };
   };
 
   services.nginx = {
     enable = true;
     recommendedProxySettings = true;
-    virtualHosts.fleet = {
+    virtualHosts."fleet.${domain}" = {
       default = true;
-      serverName = "h005.net.joshuabell.xyz";
+      serverName = "fleet.${domain}";
+      serverAliases = [ "h005.net.${domain}" ];
+      useACMEHost = if constants.network.routerEnable then domain else null;
+      forceSSL = constants.network.routerEnable;
       extraConfig = nginxSnippets.cookieStrip;
-      listen = [
-        {
-          addr = overlayIp;
-          port = 80;
-        }
-      ];
+      listen =
+        [
+          {
+            addr = overlayIp;
+            port = 80;
+          }
+        ]
+        ++ (
+          if constants.network.routerEnable then
+            [
+              {
+                addr = overlayIp;
+                port = 443;
+                ssl = true;
+              }
+            ]
+          else
+            [ ]
+        );
       locations."/" = {
         proxyPass = "http://127.0.0.1:8099";
         extraConfig = ''

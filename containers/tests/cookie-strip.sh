@@ -4,7 +4,7 @@
 # snippet and proxies to a back server that echoes the Cookie it received.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-snippet="$here/../cli/nginx/oauth2-cookie-strip.conf"
+snippet="$here/../../flakes/fleet-agent/internal/containers/nginx/oauth2-cookie-strip.conf"
 prefix=$(mktemp -d)
 trap 'kill "$(cat "$prefix/nginx.pid" 2>/dev/null)" 2>/dev/null || true; rm -rf "$prefix"' EXIT
 front=${FRONT_PORT:-18471}

@@ -23,6 +23,11 @@ let
       ip = fleet.hosts.h005.overlayIp;
       source = "hand (h005/oauth2-proxy.nix)";
     }
+    {
+      fqdn = "fleet.${domain}";
+      ip = fleet.hosts.h005.overlayIp;
+      source = "hand (h005/fleet-edge.nix)";
+    }
     # Fully-qualified tailnet alias. ~joshuabell.xyz split DNS wins over
     # MagicDNS's net.joshuabell.xyz zone, so it has to be answered here.
     {

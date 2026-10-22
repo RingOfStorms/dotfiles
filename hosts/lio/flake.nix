@@ -7,7 +7,6 @@
     # common.url = "path:../../flakes/common";
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
-    beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     stt_ime.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/stt_ime";
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
@@ -182,13 +181,8 @@
                 };
             }
           )
-          inputs.beszel.nixosModules.agent
           ({
-            services.beszel.agent.environment.EXTRA_FILESYSTEMS = "/mnt/nvme1tb__nvme1tb";
-            beszelAgent = {
-              listen = "${overlayIp}:45876";
-              token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
-            };
+            ringofstorms.fleetAgent.extraFilesystems = [ "/mnt/nvme1tb" ];
           })
           ./configuration.nix
           ./firewall.nix

@@ -45,16 +45,30 @@
         };
     in
     {
+      # Standalone host telemetry & status agent (`ringofstorms.fleetAgent`),
+      # re-exported from flakes/fleet-agent.
+      nixosModules.agent =
+        { pkgs, ... }:
+        {
+          imports = [ ../flakes/fleet-agent/agent-module.nix ];
+          ringofstorms.fleetAgent.package = nixpkgs.lib.mkDefault (pkgs.callPackage ../flakes/fleet-agent/default.nix { });
+        };
+
       # Hosts import this once: inputs.containers.nixosModules.default
       nixosModules.default =
         { pkgs, ... }:
+        let
+          fleetPkg = pkgs.callPackage ../flakes/fleet-agent/default.nix { };
+        in
         {
           imports = [
             extra-container.nixosModules.default
+            ../flakes/fleet-agent/agent-module.nix
             ./host-module.nix
           ];
-          # the CLI, built with the host's pkgs (no extra nixpkgs eval)
-          ringofstorms.containers.package = nixpkgs.lib.mkDefault (pkgs.callPackage ./cli { });
+          # the CLI/agent, built with the host's pkgs (no extra nixpkgs eval)
+          ringofstorms.containers.package = nixpkgs.lib.mkDefault fleetPkg;
+          ringofstorms.fleetAgent.package = nixpkgs.lib.mkDefault fleetPkg;
         };
 
       lib = containersLib;
@@ -73,20 +87,29 @@
           "h003"
           "lio"
         ];
+        # Every host running fleet-agent (:9101), including NAS/router/VPS/laptops.
+        agentHosts = builtins.filter (
+          h: ((import ../hosts/fleet.nix).hosts.${h}.overlayIp or null) != null
+        ) (builtins.attrNames (import ../hosts/fleet.nix).hosts);
         dataRoot = containersLib.dataRoot;
       };
 
       packages = forAll (pkgs: rec {
-        containers = pkgs.callPackage ./cli { };
-        default = containers;
+        fleet = pkgs.callPackage ../flakes/fleet-agent/default.nix { };
+        containers = fleet;
+        default = fleet;
       });
 
       apps = forAll (pkgs: rec {
+        fleet = {
+          type = "app";
+          program = "${self.packages.${pkgs.system}.fleet}/bin/fleet";
+        };
         containers = {
           type = "app";
-          program = "${self.packages.${pkgs.system}.containers}/bin/containers";
+          program = "${self.packages.${pkgs.system}.fleet}/bin/containers";
         };
-        default = containers;
+        default = fleet;
       });
     };
 }

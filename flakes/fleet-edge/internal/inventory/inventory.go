@@ -70,9 +70,23 @@ type Service struct {
 
 // Host is one entry of inventory.hosts.
 type Host struct {
-	User      string  `json:"user"`
-	OverlayIP *string `json:"overlayIp"`
-	LanIP     *string `json:"lanIp"`
+	User      string   `json:"user"`
+	OverlayIP *string  `json:"overlayIp"`
+	LanIP     *string  `json:"lanIp"`
+	PublicIP  *string  `json:"publicIp"`
+	Trust     string   `json:"trust"`
+	Role      string   `json:"role"`
+	AlwaysOn  *bool    `json:"alwaysOn"`
+	Replaces  []string `json:"replaces"`
+}
+
+// IsAlwaysOn reports whether the host is expected to be online 24/7.
+// Defaults to true when Role == "server" or AlwaysOn is nil on a containerHost.
+func (h Host) IsAlwaysOn() bool {
+	if h.AlwaysOn != nil {
+		return *h.AlwaysOn
+	}
+	return h.Role == "" || h.Role == "server"
 }
 
 // Inventory is the full document.
@@ -80,6 +94,7 @@ type Inventory struct {
 	Services       map[string]Service `json:"services"`
 	Hosts          map[string]Host    `json:"hosts"`
 	ContainerHosts []string           `json:"containerHosts"`
+	AgentHosts     []string           `json:"agentHosts"`
 }
 
 // Load reads and parses the inventory JSON file at path.
@@ -107,16 +122,25 @@ func Parse(b []byte) (*Inventory, error) {
 	return &inv, nil
 }
 
-// PolledHosts returns the hosts that run a status endpoint: inventory
-// containerHosts, or (if that is empty) every host with at least one
+// PolledHosts returns the hosts that run a status/fleet-agent endpoint:
+// inventory agentHosts (plus any host in Hosts with a declared Role), or
+// containerHosts, or (if both are empty) every host with at least one
 // service. Only names present in Hosts are returned, sorted.
 func (inv *Inventory) PolledHosts() []string {
 	set := map[string]bool{}
+	for _, h := range inv.AgentHosts {
+		set[h] = true
+	}
+	for name, h := range inv.Hosts {
+		if h.Role != "" && h.OverlayIP != nil && *h.OverlayIP != "" {
+			set[name] = true
+		}
+	}
 	if len(inv.ContainerHosts) > 0 {
 		for _, h := range inv.ContainerHosts {
 			set[h] = true
 		}
-	} else {
+	} else if len(set) == 0 {
 		for _, s := range inv.Services {
 			if s.Host != "" {
 				set[s.Host] = true
@@ -131,4 +155,23 @@ func (inv *Inventory) PolledHosts() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// CanonicalHost maps any retired host name declared in another host's
+// `replaces` list (e.g. "h002" -> "h004") to its successor.
+func (inv *Inventory) CanonicalHost(name string) string {
+	if inv == nil {
+		return name
+	}
+	if _, ok := inv.Hosts[name]; ok {
+		return name
+	}
+	for canon, h := range inv.Hosts {
+		for _, old := range h.Replaces {
+			if old == name {
+				return canon
+			}
+		}
+	}
+	return name
 }

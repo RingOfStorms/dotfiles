@@ -1,0 +1,769 @@
+package containers
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"maps"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+)
+
+// The tests run the real backup/move code paths. `ssh` is replaced by a
+// script that runs the remote command locally, and systemctl/extra-container
+// are stubs that log their calls. A "break" dir can shadow tar/zstd to inject
+// failures on one side only.
+
+type rig struct {
+	t      *testing.T
+	root   string // fake /srv/containers on "src"
+	dst    string // fake /srv/containers on "dst"
+	log    string
+	bin    string
+	breaks map[string]string // host -> dir with broken tools
+}
+
+func newRig(t *testing.T) *rig {
+	t.Helper()
+	for _, tool := range []string{"tar", "zstd", "bash", "find", "sha256sum"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("%s not available", tool)
+		}
+	}
+	oldHold := holdDir
+	t.Cleanup(func() { holdDir = oldHold })
+	holdDir = filepath.Join(t.TempDir(), "hold")
+	d := t.TempDir()
+	r := &rig{t: t, root: filepath.Join(d, "src"), dst: filepath.Join(d, "dst"), log: filepath.Join(d, "calls.log"), bin: filepath.Join(d, "bin"), breaks: map[string]string{}}
+	for _, p := range []string{r.root + "/svc/data/sub", r.dst, r.bin} {
+		must(t, os.MkdirAll(p, 0o755))
+	}
+	for i, body := range []string{"hello", strings.Repeat("x", 100000), "db"} {
+		must(t, os.WriteFile(filepath.Join(r.root, "svc/data", []string{"a", "b", "sub/c"}[i]), []byte(body), 0o644))
+	}
+	// Fake ssh: args are [...opts, target, "bash -c '<script>'"]. Each host maps
+	// its data root via sed so src and dst are separate dirs.
+	ssh := "#!" + realPath(t, "bash") + `
+target=""; for a in "$@"; do last="$a"; done
+for a in "$@"; do case "$a" in -o|-t) ;; *@*) target="${a#*@}"; break;; esac; done
+echo "ssh $target: $last" >> ` + r.log + `
+host="$target"
+script="$last"
+script="${script//test -d \/etc\/systemd-mutable\/system/test -d \/}"
+st='` + r.root + `.state'
+script="${script//\/var\/lib\/fleet-containers/$st/vlfc}"
+script="${script//\/etc\/fleet-containers/$st/efc}"
+script="${script//\/var\/lib\/fleet-backup/$st/vlfb}"
+script="${script//\/var\/tmp/$st/tmp}"
+export FAKE_HOST="$host" FAKE_ROOT='` + r.root + `' FAKE_STATE="$st" FAKE_REPO='` + filepath.Join(d, "repo") + `'
+if [ "$host" = dst ]; then s='` + r.root + `'; d='` + r.dst + `'; script="${script//"$s"/"$d"}"; FAKE_ROOT="$d"; FAKE_STATE="$d.state"; fi
+mkdir -p "$FAKE_STATE/vlfc" "$FAKE_STATE/efc" "$FAKE_STATE/tmp"
+brk="BREAK_$host"; extra="${!brk:-}"
+PATH="${extra:+$extra:}` + r.bin + `:$PATH" eval "$script"
+`
+	writeExe(t, filepath.Join(r.bin, "ssh"), ssh)
+	for _, stub := range []string{"systemctl", "extra-container", "nixos-container", "nginx"} {
+		writeExe(t, filepath.Join(r.bin, stub), "#!/bin/sh\necho \""+stub+" $*\" >> "+r.log+"\ncase \"$1\" in is-active) exit 3;; esac\nexit 0\n")
+	}
+	t.Setenv("PATH", r.bin+":"+os.Getenv("PATH"))
+
+	sshUser = "root"
+	dryRun = false
+	inv = &Inventory{
+		DataRoot:       r.root,
+		Services:       map[string]Service{"svc": {Name: "svc", Dir: "svc", Kind: "podman", Host: "src"}},
+		Hosts:          map[string]Host{"src": {User: "root"}, "dst": {User: "root"}},
+		ContainerHosts: []string{"src", "dst"},
+	}
+	return r
+}
+
+// breakTool makes `tool` fail on host (after partially working, like a real
+// read/disk error).
+func (r *rig) breakTool(host, tool, script string) {
+	dir := filepath.Join(filepath.Dir(r.bin), "break-"+host)
+	must(r.t, os.MkdirAll(dir, 0o755))
+	writeExe(r.t, filepath.Join(dir, tool), script)
+	r.t.Setenv("BREAK_"+host, dir)
+}
+
+func (r *rig) calls() string {
+	b, _ := os.ReadFile(r.log)
+	return string(b)
+}
+
+func writeExe(t *testing.T, p, body string) {
+	t.Helper()
+	must(t, os.WriteFile(p, []byte(body), 0o755))
+}
+
+func must(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func realPath(t *testing.T, tool string) string {
+	p, err := exec.LookPath(tool)
+	must(t, err)
+	return p
+}
+
+// A failing producer on the left of a pipe must not be masked.
+func TestPackScriptPropagatesTarFailure(t *testing.T) {
+	r := newRig(t)
+	r.breakTool("src", "tar", "#!/bin/sh\necho partial\necho 'tar: data/b: Cannot open: Input/output error' >&2\nexit 2\n")
+	// Sanity: the naive pipeline (what the code used before) reports success.
+	naive := exec.Command("ssh", "root@src", "bash -c 'tar -C "+r.root+" -cf - svc | zstd -q -c'")
+	naive.Stdout = nil
+	if err := naive.Run(); err != nil {
+		t.Fatalf("expected naive pipeline to hide the failure, got %v", err)
+	}
+	c := exec.Command("ssh", sshArgs("src", false, packScript(r.root, "svc"), true)...)
+	if err := c.Run(); err == nil {
+		t.Fatal("packScript succeeded although tar failed")
+	}
+}
+
+func TestBackupFailsOnSourceReadError(t *testing.T) {
+	r := newRig(t)
+	r.breakTool("src", "tar", "#!/bin/sh\nprintf 'partial-archive'\necho 'tar: Cannot open: Input/output error' >&2\nexit 2\n")
+	out := filepath.Join(t.TempDir(), "b.tar.zst")
+	err := cmdBackup([]string{"svc", "-o", out})
+	if err == nil {
+		t.Fatal("backup reported success with a failing tar")
+	}
+	assertNoArchive(t, out)
+	if !strings.Contains(r.calls(), "systemctl start") && strings.Contains(r.calls(), "was-running") {
+		t.Error("service was not restarted after the failed backup")
+	}
+}
+
+func TestBackupFailsOnCompressionError(t *testing.T) {
+	newRig(t)
+	dir := t.TempDir()
+	writeExe(t, filepath.Join(dir, "zstd"), "#!/bin/sh\nhead -c 100 >/dev/null; printf 'trunc'; echo 'zstd: write error' >&2; exit 1\n")
+	t.Setenv("BREAK_src", dir)
+	out := filepath.Join(t.TempDir(), "b.tar.zst")
+	if err := cmdBackup([]string{"svc", "-o", out}); err == nil {
+		t.Fatal("backup reported success with a failing compressor")
+	}
+	assertNoArchive(t, out)
+}
+
+func TestBackupSucceedsAndRoundTrips(t *testing.T) {
+	newRig(t)
+	out := filepath.Join(t.TempDir(), "b.tar.zst")
+	must(t, cmdBackup([]string{"svc", "-o", out}))
+	x := t.TempDir()
+	cmd := exec.Command("bash", "-c", "zstd -d -q -c "+out+" | tar -xf - -C "+x)
+	must(t, cmd.Run())
+	got, err := os.ReadFile(filepath.Join(x, "svc/data/b"))
+	must(t, err)
+	if len(got) != 100000 {
+		t.Fatalf("round trip lost data: %d bytes", len(got))
+	}
+}
+
+func assertNoArchive(t *testing.T, out string) {
+	t.Helper()
+	if _, err := os.Stat(out); err == nil {
+		t.Errorf("archive %s exists after a failed backup", out)
+	}
+	m, _ := filepath.Glob(filepath.Join(filepath.Dir(out), ".*partial*"))
+	if len(m) > 0 {
+		t.Errorf("partial temp files left behind: %v", m)
+	}
+}
+
+func itoa(i int) string { return fmt.Sprint(i) }
+
+func TestSSHUserFallback(t *testing.T) {
+	defer func(u string, i *Inventory) { sshUser, inv = u, i }(sshUser, inv)
+	defer func(f func(string) bool) { rootLogin = f }(rootLogin)
+	rootLogin = func(string) bool { return false }
+	inv = &Inventory{Hosts: map[string]Host{"h003": {User: "luser"}}}
+	sshUser = ""
+	a := sshArgs("h003", false, "true", true)
+	if !slices.Contains(a, "luser@h003") || !strings.HasPrefix(a[len(a)-1], "sudo -n ") {
+		t.Fatalf("fleet user not used: %v", a)
+	}
+	if a := sshArgs("other", false, "true", false); !slices.Contains(a, "other") {
+		t.Fatalf("unknown host should use ssh default user: %v", a)
+	}
+	sshUser = "root"
+	a = sshArgs("h003", false, "true", true)
+	if !slices.Contains(a, "root@h003") || strings.HasPrefix(a[len(a)-1], "sudo") {
+		t.Fatalf("--ssh-user must override fleet user: %v", a)
+	}
+	// Root keys work: root work skips sudo; unprivileged work keeps the user.
+	sshUser = ""
+	rootLogin = func(string) bool { return true }
+	if a := sshArgs("h003", false, "true", true); !slices.Contains(a, "root@h003") || strings.HasPrefix(a[len(a)-1], "sudo") {
+		t.Fatalf("root login should replace sudo: %v", a)
+	}
+	if a := sshArgs("h003", false, "true", false); !slices.Contains(a, "luser@h003") {
+		t.Fatalf("unprivileged work should keep the fleet user: %v", a)
+	}
+}
+
+// Discovery must find services that are installed but stopped, disabled and
+// no longer loaded in systemd (so absent from `list-units --all`).
+func TestProbeFindsInstalledButUnloaded(t *testing.T) {
+	r := newRig(t)
+	root := t.TempDir()
+	must(t, os.MkdirAll(root+"/etc/systemd-mutable/system", 0o755))
+	must(t, os.MkdirAll(root+"/nix/var/nix/gcroots/fleet-containers", 0o755))
+	must(t, os.WriteFile(root+"/etc/systemd-mutable/system/container@mc.service", nil, 0o644))
+	must(t, os.WriteFile(root+"/etc/systemd-mutable/system/container@.service", nil, 0o644))
+	must(t, os.Symlink(root, root+"/nix/var/nix/gcroots/fleet-containers/web"))
+	// systemctl knows nothing: list-units prints only an unrelated helper,
+	// show prints nothing (as for an unloaded unit).
+	writeExe(t, filepath.Join(r.bin, "systemctl"), "#!/bin/sh\ncase \"$1\" in list-units) echo 'fleet-containers-ports.service loaded active exited x';; esac\nexit 0\n")
+	t.Setenv("CONTAINERS_PROBE_ROOT", root)
+	rows, err := probe(context.Background(), "src")
+	must(t, err)
+	got := map[string]string{}
+	for _, x := range rows {
+		got[x.svc] = x.kind + "/" + x.state
+	}
+	want := map[string]string{"mc": "nixos/inactive", "web": "podman/inactive"}
+	if !maps.Equal(got, want) {
+		t.Fatalf("probe = %v, want %v", got, want)
+	}
+}
+
+// fakeFleet is a probe over an in-memory fleet: host -> installed services.
+// Hosts listed in down return an error, as an ssh failure would.
+func fakeFleet(installed map[string][]string, down ...string) func(context.Context, string) ([]row, error) {
+	return func(_ context.Context, h string) ([]row, error) {
+		if slices.Contains(down, h) {
+			return nil, errors.New("ssh: connect to host " + h + ": No route to host")
+		}
+		var rows []row
+		for _, n := range installed[h] {
+			// "name+" = installed and active
+			st := "inactive"
+			if m, ok := strings.CutSuffix(n, "+"); ok {
+				n, st = m, "active"
+			}
+			rows = append(rows, row{host: h, svc: n, state: st})
+		}
+		return rows, nil
+	}
+}
+
+func TestPlacementThroughLocate(t *testing.T) {
+	s := Service{Name: "mc", Dir: "mc", Host: "h003"}
+	inv = &Inventory{
+		Services:       map[string]Service{"mc": s},
+		ContainerHosts: []string{"h001", "h003"},
+	}
+	cases := []struct {
+		name      string
+		installed map[string][]string
+		down      []string
+		refuse    string // substring of the error, "" = allowed
+	}{
+		{"first deploy, all hosts answer", nil, nil, ""},
+		{"only on declared host", map[string][]string{"h003": {"mc"}}, nil, ""},
+		{"moved, service.nix stale", map[string][]string{"h001": {"mc"}}, nil, `host = "h001"`},
+		// The duplicate must be seen even though the declared host has it.
+		{"declared host has it and so does another", map[string][]string{"h003": {"mc"}, "h001": {"mc"}}, nil, "h001, h003"},
+		// Moved to h001, which is now down: must not reinstall on h003.
+		{"moved target unreachable", nil, []string{"h001"}, "h001 did not answer"},
+		// Running where declared: an offline box must not block work on it.
+		{"running on declared host, other host unreachable", map[string][]string{"h003": {"mc+"}}, []string{"h001"}, ""},
+		// A move to h001 deployed there, then failed to clean up h003 (stopped,
+		// still installed); h001 is now down. Deploying on h003 would start a
+		// second copy.
+		{"failed move cleanup, target unreachable", map[string][]string{"h003": {"mc"}}, []string{"h001"}, "h001 did not answer"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := checkPlacement(s, locate(s, fakeFleet(c.installed, c.down...)))
+			switch {
+			case c.refuse == "" && err != nil:
+				t.Fatalf("refused: %v", err)
+			case c.refuse != "" && (err == nil || !strings.Contains(err.Error(), c.refuse)):
+				t.Fatalf("want refusal containing %q, got %v", c.refuse, err)
+			}
+		})
+	}
+}
+
+func TestMoveSourceThroughLocate(t *testing.T) {
+	s := Service{Name: "mc", Dir: "mc", Host: "h003"}
+	inv = &Inventory{Services: map[string]Service{"mc": s}, ContainerHosts: []string{"h001", "h003", "lio"}}
+	if from, err := moveSource(s, locate(s, fakeFleet(map[string][]string{"h001": {"mc"}}))); err != nil || from != "h001" {
+		t.Errorf("source should be where it is installed: %q %v", from, err)
+	}
+	if _, err := moveSource(s, locate(s, fakeFleet(map[string][]string{"h003": {"mc"}}, "lio"))); err == nil {
+		t.Error("must refuse when a host is unreachable")
+	}
+	if _, err := moveSource(s, locate(s, fakeFleet(map[string][]string{"h003": {"mc"}, "lio": {"mc"}}))); err == nil {
+		t.Error("must refuse when installed on several hosts")
+	}
+}
+
+func TestMoveWarning(t *testing.T) {
+	s := Service{Name: "mc", Dir: "mc", Host: "h003"}
+	if w := moveWarning(s, "h001"); !strings.Contains(w, `host = "h001"`) || !strings.Contains(w, "containers/mc/service.nix") {
+		t.Errorf("warning lacks the edit to make:\n%s", w)
+	}
+}
+
+// A rejected update must not lose the last good site: after valid deploy ->
+// invalid update -> an unrelated deploy that reloads nginx, the first
+// service's route must still be the valid one.
+func TestNginxRejectedUpdateKeepsLastGoodSite(t *testing.T) {
+	bash := realPath(t, "bash")
+	dir, bin := t.TempDir(), t.TempDir()
+	log := filepath.Join(bin, "reloads")
+	// nginx -t fails if any loaded site contains BAD; reload records which
+	// sites nginx would serve now.
+	writeExe(t, filepath.Join(bin, "nginx"), "#!"+bash+"\n! grep -l BAD "+dir+"/*.conf\n")
+	writeExe(t, filepath.Join(bin, "systemctl"), "#!"+bash+"\ncat "+dir+"/*.conf >> "+log+"; echo --- >> "+log+"\n")
+	run := func(name, conf string) error {
+		c := exec.Command(bash, "-c", "set -euo pipefail\n"+nginxSiteScript(dir, name, conf))
+		c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+		out, err := c.CombinedOutput()
+		t.Logf("%s: %s", name, out)
+		return err
+	}
+	must(t, run("mc", "server { good; }"))
+	if err := run("mc", "server { BAD; }"); err == nil {
+		t.Fatal("invalid site was accepted")
+	}
+	must(t, run("other", "server { other; }"))
+
+	got, err := os.ReadFile(filepath.Join(dir, "mc.conf"))
+	must(t, err)
+	if !strings.Contains(string(got), "good") {
+		t.Fatalf("mc.conf after rejected update = %q, want the last good site", got)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "mc.conf.broken")); !strings.Contains(string(b), "BAD") {
+		t.Errorf("rejected site not kept as .broken: %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "mc.conf.prev")); err == nil {
+		t.Error("mc.conf.prev left behind")
+	}
+	reloads, _ := os.ReadFile(log)
+	last := strings.Split(strings.TrimSuffix(string(reloads), "---\n"), "---\n")
+	if final := last[len(last)-1]; !strings.Contains(final, "good") || !strings.Contains(final, "other") {
+		t.Errorf("last reload served %q, want both the good mc site and other", final)
+	}
+}
+
+func TestStatusColumnsAlign(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	for _, s := range []string{"STATE", "active", "inactive", "failed", "not installed"} {
+		if n := len(colorState(s)) - len(s); n != 9 {
+			t.Errorf("colorState(%q) adds %d bytes, want 9 for every cell", s, n)
+		}
+	}
+}
+
+func TestHostCmdLocal(t *testing.T) {
+	old := localHost
+	t.Cleanup(func() { localHost = old })
+	localHost = "h003"
+	if c := hostCmd(context.Background(), "h003", false, false, "echo hi"); filepath.Base(c.Path) != "bash" || c.Args[len(c.Args)-1] != "echo hi" {
+		t.Errorf("local host should run bash directly, got %v", c.Args)
+	}
+	if c := hostCmd(context.Background(), "h003", false, true, "id"); os.Geteuid() != 0 && filepath.Base(c.Path) != "sudo" {
+		t.Errorf("local root as non-root should use sudo, got %v", c.Args)
+	}
+	if c := hostCmd(context.Background(), "lio", false, false, "x"); filepath.Base(c.Path) != "ssh" {
+		t.Errorf("other host should use ssh, got %v", c.Args)
+	}
+}
+
+// stop must drop the boot-time wants link (stays stopped after reboot);
+// start must restore it, but only for an installed unit.
+func TestStopStaysStoppedAcrossReboot(t *testing.T) {
+	oldU, oldH := mutableUnits, holdDir
+	t.Cleanup(func() { mutableUnits, holdDir = oldU, oldH })
+	mutableUnits, holdDir = t.TempDir(), filepath.Join(t.TempDir(), "hold")
+	bash := realPath(t, "bash")
+	sh := func(script string) {
+		out, err := exec.Command(bash, "-c", "set -euo pipefail\n"+script).CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+	}
+	for _, s := range []Service{{Name: "mc", Kind: "nixos"}, {Name: "web", Kind: "podman"}} {
+		link := wantsLink(s)
+		sh(enableScript(s)) // not installed: must not create a dangling link
+		if _, err := os.Lstat(link); err == nil {
+			t.Fatalf("%s: enable created a link for an uninstalled unit", s.Name)
+		}
+		must(t, os.WriteFile(filepath.Join(mutableUnits, unitOf(s)), nil, 0o644))
+		sh(enableScript(s))
+		if dst, err := os.Readlink(link); err != nil || dst != "../"+unitOf(s) {
+			t.Fatalf("%s: start did not enable boot start: %q %v", s.Name, dst, err)
+		}
+		sh(disableScript(s))
+		if _, err := os.Lstat(link); err == nil {
+			t.Fatalf("%s: stop left boot start enabled", s.Name)
+		}
+		sh(disableScript(s)) // idempotent
+	}
+}
+
+// stop -> deploy of the same build must re-enable boot start. The fake
+// extra-container mimics the pinned one: it links the unit and wants only
+// when the build changed, but always starts.
+func TestRedeployUnchangedReenablesBootStart(t *testing.T) {
+	oldU, oldH := mutableUnits, holdDir
+	t.Cleanup(func() { mutableUnits, holdDir = oldU, oldH })
+	mutableUnits, holdDir = t.TempDir(), filepath.Join(t.TempDir(), "hold")
+	bash := realPath(t, "bash")
+	bin, out := t.TempDir(), t.TempDir()
+	s := Service{Name: "hello-nixos", Kind: "nixos"}
+	u := unitOf(s)
+	must(t, os.MkdirAll(filepath.Join(out, "bin"), 0o755))
+	writeExe(t, filepath.Join(out, "bin", "container"), "#!"+bash+`
+m=`+mutableUnits+`
+if [ "$(cat $m/.built 2>/dev/null)" != v1 ]; then
+  mkdir -p $m/machines.target.wants
+  : > $m/real.unit; ln -sfn $m/real.unit $m/`+u+`
+  ln -sfn ../`+u+` $m/machines.target.wants/`+u+`
+  echo v1 > $m/.built
+fi
+`)
+	writeExe(t, filepath.Join(bin, "systemctl"), "#!/bin/sh\nexit 0\n")
+	sh := func(script string) {
+		c := exec.Command(bash, "-c", "set -euo pipefail\nout="+q(out)+"\n"+script)
+		c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+		if o, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, o)
+		}
+	}
+	sh(installScript(s)) // first deploy
+	sh(disableScript(s)) // cnt stop
+	sh(installScript(s)) // redeploy, same build: extra-container relinks nothing
+	if _, err := os.Lstat(wantsLink(s)); err != nil {
+		t.Fatalf("redeploy of an unchanged build left boot start disabled: %v", err)
+	}
+}
+
+func TestBackupDestDefaultsToHomeBackups(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	got, err := backupDest("", "svc.tar.zst", true)
+	if err != nil || got != filepath.Join(home, "backups", "svc.tar.zst") {
+		t.Fatalf("default: %q %v", got, err)
+	}
+	if st, err := os.Stat(filepath.Join(home, "backups")); err != nil || !st.IsDir() {
+		t.Fatalf("~/backups not created: %v", err)
+	}
+	got, _ = backupDest("~/x/", "svc.tar.zst", true)
+	if got != filepath.Join(home, "x", "svc.tar.zst") {
+		t.Fatalf("-o dir: %q", got)
+	}
+	got, _ = backupDest(filepath.Join(home, "y", "f.tar.zst"), "svc.tar.zst", true)
+	if got != filepath.Join(home, "y", "f.tar.zst") {
+		t.Fatalf("-o file: %q", got)
+	}
+}
+
+// status <svc>: run the real detail script against a fake host tree.
+func TestStatusDetail(t *testing.T) {
+	bash := realPath(t, "bash")
+	d := t.TempDir()
+	oldM, oldN, oldInv := mutableUnits, nginxDir, inv
+	t.Cleanup(func() { mutableUnits, nginxDir, inv = oldM, oldN, oldInv })
+	mutableUnits, nginxDir = d+"/units", d+"/nginx"
+	inv = &Inventory{DataRoot: d + "/srv"}
+	s := Service{Name: "hello-podman", Kind: "podman", Description: "test", Host: "lio",
+		Persist: map[string]string{"data": "/data", "gone": "/x"}, TCPPorts: []int{8082}}
+	for _, p := range []string{mutableUnits + "/multi-user.target.wants", nginxDir, d + "/srv/hello-podman/data"} {
+		must(t, os.MkdirAll(p, 0o755))
+	}
+	must(t, os.WriteFile(mutableUnits+"/"+unitOf(s), nil, 0o644))
+	must(t, os.WriteFile(nginxDir+"/hello-podman.conf", []byte("server { listen 1.2.3.4:80; }\n"), 0o644))
+	must(t, os.WriteFile(d+"/srv/hello-podman/data/f", []byte("hello"), 0o644))
+	bin := t.TempDir()
+	writeExe(t, filepath.Join(bin, "systemctl"), "#!/bin/sh\ncase \"$3\" in ActiveState) echo active;; SubState) echo running;; MemoryCurrent) echo 1048576;; NRestarts) echo 0;; esac\n")
+	script := strings.ReplaceAll(detailScript(s), "/var/lib/fleet-containers/ports", d)
+	must(t, os.WriteFile(d+"/hello-podman", []byte("tcp 8082\n"), 0o644))
+	c := exec.Command(bash, "-c", script)
+	c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+	out, err := c.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	r := renderDetail(s, "lio", string(out))
+	for _, want := range []string{"state       active (running)", "on boot     no", "8082/tcp", "listen 1.2.3.4:80", "data        /data", "missing"} {
+		if !strings.Contains(strings.Join(strings.Fields(r), " "), strings.Join(strings.Fields(want), " ")) {
+			t.Errorf("missing %q in:\n%s", want, r)
+		}
+	}
+}
+
+func TestHostForReadLocal(t *testing.T) {
+	dir := t.TempDir()
+	oldM, oldG, oldL := mutableUnits, gcroots, localHost
+	mutableUnits, gcroots, localHost = dir, dir, "joe"
+	defer func() { mutableUnits, gcroots, localHost = oldM, oldG, oldL }()
+	pod := Service{Name: "localai", Kind: "podman", Host: "joe"}
+	nix := Service{Name: "mc", Kind: "nixos", Host: "h003"}
+	if installedHere(pod) || installedHere(nix) {
+		t.Fatal("nothing installed yet")
+	}
+	os.WriteFile(dir+"/localai", nil, 0o644)
+	os.WriteFile(dir+"/container@mc.service", nil, 0o644)
+	if !installedHere(pod) || !installedHere(nix) {
+		t.Fatal("installed services not detected")
+	}
+	if h := hostForRead(pod, flags{vals: map[string]string{}}); h != "joe" {
+		t.Fatalf("got %q, want local joe", h)
+	}
+	if h := hostForRead(pod, flags{vals: map[string]string{"host": "lio"}}); h != "lio" {
+		t.Fatalf("--host must win, got %q", h)
+	}
+}
+
+// stop/move write the hold marker a storage guard honours; start clears it.
+func TestHoldMarker(t *testing.T) {
+	oldU, oldH := mutableUnits, holdDir
+	t.Cleanup(func() { mutableUnits, holdDir = oldU, oldH })
+	mutableUnits, holdDir = t.TempDir(), filepath.Join(t.TempDir(), "hold")
+	bash := realPath(t, "bash")
+	sh := func(script string) {
+		if out, err := exec.Command(bash, "-c", "set -euo pipefail\n"+script).CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+	}
+	s := Service{Name: "arr", Kind: "nixos"}
+	marker := filepath.Join(holdDir, "arr")
+	sh(disableScript(s))
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("stop did not hold: %v", err)
+	}
+	sh(enableScript(s))
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("start left the hold marker")
+	}
+	sh(unholdScript(s)) // idempotent
+}
+
+func TestRequiresScript(t *testing.T) {
+	old := capDir
+	t.Cleanup(func() { capDir = old })
+	capDir = t.TempDir()
+	bash := realPath(t, "bash")
+	run := func(s Service) (string, error) {
+		out, err := exec.Command(bash, "-c", "set -euo pipefail\n"+requiresScript(s, "h9")+"echo ok").CombinedOutput()
+		return string(out), err
+	}
+	if out, err := run(Service{Name: "plain"}); err != nil || !strings.Contains(out, "ok") {
+		t.Fatalf("no requires must pass: %v %s", err, out)
+	}
+	s := Service{Name: "arr", Requires: []string{"nfs-h004", "intel-qsv"}}
+	must(t, os.WriteFile(filepath.Join(capDir, "nfs-h004"), nil, 0o644))
+	out, err := run(s)
+	if err == nil || !strings.Contains(out, "intel-qsv") || strings.Contains(out, "nfs-h004,") || strings.Contains(out, "ok") {
+		t.Fatalf("missing capability must fail and name it: %v %s", err, out)
+	}
+	must(t, os.WriteFile(filepath.Join(capDir, "intel-qsv"), nil, 0o644))
+	if out, err := run(s); err != nil {
+		t.Fatalf("all present must pass: %v %s", err, out)
+	}
+}
+
+// The guard (host-module.nix) checks the hold and enqueues a start under
+// <hold>/<svc>.lock. Simulated here with the same lock/checks.
+func guardStart(s Service) string {
+	return fmt.Sprintf(`( flock 9
+  if [ -e %[1]s ] && ! [ -e %[2]s ] && ls %[3]s/*.wants/%[4]s >/dev/null 2>&1 && ! systemctl is-active -q %[4]s; then systemctl start %[4]s; fi
+) 9>%[2]s.lock
+`, q(mutableUnits+"/"+unitOf(s)), q(holdDir+"/"+s.Name), q(mutableUnits), unitOf(s))
+}
+
+// Backup of a service that was inactive at the CLI's status read, but that a
+// recovering storage guard starts before the hold lands: the backup must
+// still stop it before copying and restart it afterwards.
+func TestBackupStopsServiceStartedByGuardAfterStatusRead(t *testing.T) {
+	oldU, oldH := mutableUnits, holdDir
+	t.Cleanup(func() { mutableUnits, holdDir = oldU, oldH })
+	mutableUnits, holdDir = t.TempDir(), filepath.Join(t.TempDir(), "hold")
+	must(t, os.MkdirAll(holdDir, 0o755)) // tmpfiles on a real host
+	bash := realPath(t, "bash")
+	bin, state := t.TempDir(), t.TempDir()
+	writeExe(t, filepath.Join(bin, "systemctl"), "#!"+bash+`
+s=`+state+`
+case "$1" in
+  is-active) [ "$2" = -q ] && u=$3 || u=$2; [ -e $s/$u ] ;;
+  start) touch $s/$2 ;;
+  stop) rm -f $s/$2 ;;
+esac
+`)
+	fcl := t.TempDir() // stands in for /var/lib/fleet-containers
+	sh := func(script string) {
+		script = strings.ReplaceAll(script, "/var/lib/fleet-containers/", fcl+"/")
+		c := exec.Command(bash, "-c", "set -euo pipefail\n"+script)
+		c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+		if o, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, o)
+		}
+	}
+	s := Service{Name: "arr", Kind: "nixos"}
+	u := unitOf(s)
+	must(t, os.WriteFile(filepath.Join(mutableUnits, u), nil, 0o644))
+	sh(enableScript(s))
+	running := func() bool { _, err := os.Stat(filepath.Join(state, u)); return err == nil }
+
+	// CLI read "inactive"; now the guard recovers and starts it.
+	sh(guardStart(s))
+	if !running() {
+		t.Fatal("setup: guard did not start the unit")
+	}
+	sh(backupStopScript(s)) // what cmdBackup runs before copying (both branches)
+	if running() {
+		t.Fatal("backup would copy a live service")
+	}
+	sh(guardStart(s)) // guard tick during the copy
+	if running() {
+		t.Fatal("guard restarted a held service during backup")
+	}
+	sh(unholdScript(s) + fmt.Sprintf("if [ -e /var/lib/fleet-containers/%[2]s.was-running ]; then rm -f /var/lib/fleet-containers/%[2]s.was-running; systemctl start %[1]s; fi\n", u, s.Name))
+	if !running() {
+		t.Fatal("backup did not restart the service it stopped")
+	}
+}
+
+// While a hold is being written under the lock, the guard must wait and then
+// see it (it never enqueues a start after the hold).
+func TestGuardWaitsForHoldLock(t *testing.T) {
+	oldU, oldH := mutableUnits, holdDir
+	t.Cleanup(func() { mutableUnits, holdDir = oldU, oldH })
+	mutableUnits, holdDir = t.TempDir(), filepath.Join(t.TempDir(), "hold")
+	bash := realPath(t, "bash")
+	bin, state := t.TempDir(), t.TempDir()
+	writeExe(t, filepath.Join(bin, "systemctl"), "#!"+bash+"\ncase \"$1\" in is-active) exit 1;; start) touch "+state+"/started;; esac\n")
+	s := Service{Name: "arr", Kind: "nixos"}
+	must(t, os.WriteFile(filepath.Join(mutableUnits, unitOf(s)), nil, 0o644))
+	run := func(script string) *exec.Cmd {
+		c := exec.Command(bash, "-c", "set -euo pipefail\n"+script)
+		c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+		return c
+	}
+	must(t, run(enableScript(s)).Run())
+	// Hold the lock (as holdScript does) and only create the marker once the
+	// guard is already blocked on it.
+	ready := filepath.Join(t.TempDir(), "locked")
+	holder := run(fmt.Sprintf("mkdir -p %[1]s; (flock 9; touch %[4]s; sleep 0.5; touch %[2]s) 9>%[3]s",
+		q(holdDir), q(holdDir+"/"+s.Name), q(holdDir+"/"+s.Name+".lock"), q(ready)))
+	must(t, holder.Start())
+	for range 200 {
+		if _, err := os.Stat(ready); err == nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if o, err := run(guardStart(s)).CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, o)
+	}
+	must(t, holder.Wait())
+	if _, err := os.Stat(filepath.Join(state, "started")); err == nil {
+		t.Fatal("guard started the unit although the hold was written while it waited")
+	}
+}
+
+// The guard enqueues with --no-block: its start job can still be pending
+// (unit reads "inactive") when the backup takes the hold. The backup must
+// cancel that job before copying and start the service again afterwards.
+func TestBackupCancelsQueuedGuardStart(t *testing.T) {
+	oldU, oldH := mutableUnits, holdDir
+	t.Cleanup(func() { mutableUnits, holdDir = oldU, oldH })
+	mutableUnits, holdDir = t.TempDir(), filepath.Join(t.TempDir(), "hold")
+	must(t, os.MkdirAll(holdDir, 0o755))
+	bash := realPath(t, "bash")
+	bin, state, jobs := t.TempDir(), t.TempDir(), t.TempDir()
+	// Minimal systemd: start --no-block queues a job; runjobs executes them;
+	// stop cancels a queued start and stops the unit (like a stop job does).
+	writeExe(t, filepath.Join(bin, "systemctl"), "#!"+bash+`
+s=`+state+` j=`+jobs+`
+case "$1" in
+  is-active) [ "$2" = -q ] && u=$3 || u=$2; if [ -e $s/$u ]; then echo active; else echo inactive; exit 3; fi ;;
+  list-jobs) [ -e $j/$3 ] && echo "1 $3 start waiting"; true ;;
+  start) if [ "$2" = --no-block ]; then touch $j/$3; else touch $s/$2; fi ;;
+  stop) rm -f $j/$2 $s/$2 ;;
+  runjobs) for f in $j/*; do [ -e "$f" ] || continue; touch $s/$(basename $f); rm $f; done ;;
+esac
+`)
+	fcl := t.TempDir()
+	sh := func(script string) {
+		script = strings.ReplaceAll(script, "/var/lib/fleet-containers/", fcl+"/")
+		c := exec.Command(bash, "-c", "set -euo pipefail\n"+script)
+		c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+		if o, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, o)
+		}
+	}
+	s := Service{Name: "arr", Kind: "nixos"}
+	u := unitOf(s)
+	must(t, os.WriteFile(filepath.Join(mutableUnits, u), nil, 0o644))
+	sh(enableScript(s))
+	running := func() bool { _, err := os.Stat(filepath.Join(state, u)); return err == nil }
+
+	// The real guard's enqueue (no-block), not yet executed by systemd.
+	sh(strings.Replace(guardStart(s), "systemctl start "+u, "systemctl start --no-block "+u, 1))
+	sh(backupStopScript(s))
+	sh("systemctl runjobs") // systemd gets to its queue during the copy
+	if running() {
+		t.Fatal("queued guard start ran during the backup")
+	}
+	sh(unholdScript(s) + fmt.Sprintf("if [ -e /var/lib/fleet-containers/%[2]s.was-running ]; then rm -f /var/lib/fleet-containers/%[2]s.was-running; systemctl start %[1]s; fi\n", u, s.Name))
+	if !running() {
+		t.Fatal("backup did not start the service the guard wanted up")
+	}
+}
+
+func TestStatusUnknownLast(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	inv = &Inventory{Services: map[string]Service{
+		"zz": {Name: "zz", Host: "h001", Kind: "nixos"},
+		"mc": {Name: "mc", Host: "h003", Kind: "nixos"},
+	}}
+	out := renderStatus(false, fakeFleet(map[string][]string{"h001": {"zz", "atuin"}, "h003": {"mc"}}))
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	var order []string
+	for _, l := range lines[1:] {
+		order = append(order, strings.Fields(l)[0])
+	}
+	if want := []string{"mc", "zz", "---", "atuin"}; !slices.Equal(order, want) {
+		t.Fatalf("order %v, want %v\n%s", order, want, out)
+	}
+}
+
+func TestRenderDetailDataUnavailable(t *testing.T) {
+	s := Service{Name: "x", Kind: "podman", Persist: map[string]string{"data": "/data"}}
+	r := renderDetail(s, "h", "Installed\tyes\nActiveState\tactive\nSubState\trunning\nDataUnavailable\tssh: connect refused\n")
+	if !strings.Contains(r, "unavailable: ssh: connect refused") || strings.Contains(r, "nothing to back up") {
+		t.Errorf("unexpected render:\n%s", r)
+	}
+	if !strings.Contains(r, "active (running)") {
+		t.Errorf("status lost:\n%s", r)
+	}
+}
+
+func TestStatusProbesRegisteredHosts(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	inv = &Inventory{
+		Services:       map[string]Service{"mc": {Name: "mc", Host: "h003", Kind: "nixos"}},
+		ContainerHosts: []string{"h004", "h003"},
+	}
+	out := renderStatus(false, fakeFleet(map[string][]string{"h004": {"mc+"}}))
+	if !strings.Contains(out, "h004") || strings.Contains(out, "not installed") {
+		t.Fatalf("mc on undeclared h004 not shown:\n%s", out)
+	}
+}

@@ -392,8 +392,8 @@ let
   # identityClear in each app-facing proxy location (never in oauth2-proxy's
   # own /oauth2/ locations, which need the cookie).
   nginxSnippets = {
-    cookieStrip = builtins.readFile ./cli/nginx/oauth2-cookie-strip.conf;
-    identityClear = builtins.readFile ./cli/nginx/oauth2-identity-clear.conf;
+    cookieStrip = builtins.readFile ../flakes/fleet-agent/internal/containers/nginx/oauth2-cookie-strip.conf;
+    identityClear = builtins.readFile ../flakes/fleet-agent/internal/containers/nginx/oauth2-identity-clear.conf;
   };
 
   allServices =

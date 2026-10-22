@@ -12,8 +12,7 @@
     impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # beszel.url = "path:../../flakes/beszel";
-    beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
+    fleet-agent.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/fleet-agent";
     # de_plasma.url = "path:../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     # ports.url = "path:../../flakes/ports";
@@ -165,13 +164,6 @@
           # explicit consumer paths below point there as well.
           (import ./sec-agent.nix { inherit inputs constants; })
 
-          inputs.beszel.nixosModules.agent
-          ({
-            beszelAgent = {
-              listen = "${overlayIp}:45876";
-              token = "f8a54c41-486b-487a-a78d-a087385c317b";
-            };
-          })
 
           ./hardware-configuration.nix
           ./firewall.nix

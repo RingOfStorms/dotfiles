@@ -48,6 +48,8 @@ rec {
       overlayIp = "100.64.0.13";
       lanIp = "10.12.14.10";
       trust = "high";
+      role = "server";
+      alwaysOn = true;
     };
     # Containers host (router until 2026-10-15, re-imaged; hosts/h003/readme.md).
     # LAN by plain DHCP; services are reached over the tailnet.
@@ -55,6 +57,8 @@ rec {
       user = "luser";
       overlayIp = "100.64.0.4";
       trust = "high";
+      role = "server";
+      alwaysOn = true;
     };
     # NAS (successor of the retired h002). LAN address is a static DHCP
     # reservation on h005 (hosts/h005/_constants.nix).
@@ -63,6 +67,9 @@ rec {
       overlayIp = "100.64.0.17";
       lanIp = "10.12.14.184";
       trust = "high";
+      role = "server";
+      alwaysOn = true;
+      replaces = [ "h002" ];
     };
     # Router (replaced h003 on 2026-10-15, h005/readme.md).
     h005 = {
@@ -70,49 +77,64 @@ rec {
       overlayIp = "100.64.0.3";
       lanIp = "10.12.14.1";
       trust = "high";
+      role = "server";
+      alwaysOn = true;
     };
     i001 = {
       user = "luser";
       lanIp = "10.12.14.119";
       trust = "low";
+      role = "workstation";
+      alwaysOn = false;
     };
     joe = {
       user = "josh";
       overlayIp = "100.64.0.12";
       lanIp = "10.12.14.126";
       trust = "low";
+      role = "workstation";
+      alwaysOn = false;
     };
     juni = {
       user = "josh";
       overlayIp = "100.64.0.18";
       lanIp = "10.12.14.172";
       trust = "high";
+      role = "laptop";
+      alwaysOn = false;
     };
     lio = {
       user = "josh";
       overlayIp = "100.64.0.1";
       lanIp = "10.12.14.116";
       trust = "high";
+      role = "workstation";
+      alwaysOn = false;
     };
     oren = {
       user = "josh";
       overlayIp = "100.64.0.2";
       trust = "high";
+      role = "laptop";
+      alwaysOn = false;
     };
     gp3 = {
       user = "josh";
       overlayIp = "100.64.0.15";
       lanIp = "10.12.14.101";
       trust = "high";
+      role = "laptop";
+      alwaysOn = false;
     };
     o002 = {
       user = "root";
       overlayIp = "100.64.0.5";
       publicIp = "164.152.19.60";
       trust = "high";
+      role = "server";
+      alwaysOn = true;
       flakePath = "hosts/oracle/o002";
     };
-    # Non-deployable hosts referenced in SSH configs
     t = {
       user = "joshua.bell";
       lanIp = "10.12.14.181";
@@ -332,11 +354,11 @@ rec {
 
       # ── NixOS base modules ──
       # Common NixOS modules included on all hosts (unless includeBaseNixModules = false).
-      # Currently empty — add modules here as patterns emerge across hosts.
+      # If a host flake declares `inputs.fleet-agent` (and doesn't already import
+      # `inputs.containers`, which bundles it), include `fleet-agent` automatically.
       baseNixModules =
         if includeBaseNixModules then
-          [
-          ]
+          lib.optional ((inputs ? fleet-agent) && !(inputs ? containers)) inputs.fleet-agent.nixosModules.default
         else
           [ ];
 

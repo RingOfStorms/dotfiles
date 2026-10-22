@@ -19,11 +19,13 @@ import (
 	"syscall"
 	"time"
 
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/auth"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/bunny"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/dash"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/server"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/state"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/store"
 )
 
 // envDefault returns $key if set, else def; flags still override.
@@ -99,10 +101,43 @@ func dnsPlan(args []string) {
 	fmt.Printf("applied %d operations\n", len(ops))
 }
 
+// importBeszel: `fleet-edge import-beszel --beszel-db /path/to/data.db --db /var/lib/fleet-edge/metrics.db [--map h002=h004]`.
+func importBeszel(args []string) {
+	fs := flag.NewFlagSet("import-beszel", flag.ExitOnError)
+	beszelDB := fs.String("beszel-db", "", "path to Beszel PocketBase data.db")
+	targetDB := fs.String("db", "/var/lib/fleet-edge/metrics.db", "path to fleet-edge SQLite metrics.db")
+	mapSpec := fs.String("map", "h002=h004", "comma-separated old=new host mappings (e.g. h002=h004)")
+	_ = fs.Parse(args)
+	if *beszelDB == "" {
+		log.Fatal("--beszel-db is required")
+	}
+	hostMap := map[string]string{}
+	for _, pair := range strings.Split(*mapSpec, ",") {
+		if oldH, newH, ok := strings.Cut(strings.TrimSpace(pair), "="); ok && oldH != "" && newH != "" {
+			hostMap[strings.TrimSpace(oldH)] = strings.TrimSpace(newH)
+		}
+	}
+	st, err := store.Open(*targetDB)
+	if err != nil {
+		log.Fatalf("open store %s: %v", *targetDB, err)
+	}
+	n, err := st.ImportBeszel(context.Background(), *beszelDB, hostMap)
+	if err != nil {
+		log.Fatalf("import-beszel: %v", err)
+	}
+	fmt.Printf("imported %d Beszel stat rows into %s (mappings: %v)\n", n, *targetDB, hostMap)
+}
+
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "dns-plan" {
-		dnsPlan(os.Args[2:])
-		return
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "dns-plan":
+			dnsPlan(os.Args[2:])
+			return
+		case "import-beszel":
+			importBeszel(os.Args[2:])
+			return
+		}
 	}
 	listen := flag.String("listen", "127.0.0.1:8099", "address to bind the HTTP server to")
 	inventoryFile := flag.String("inventory", "", "path to inventory JSON (nix eval --json <containers-flake>#inventory)")
@@ -110,6 +145,7 @@ func main() {
 		"per-host status endpoint URL template; {overlayIp}, {lanIp} and {host} are substituted")
 	pollInterval := flag.Duration("poll-interval", 30*time.Second, "how often to poll each host's status endpoint")
 	pollTimeout := flag.Duration("poll-timeout", 3*time.Second, "per-host poll timeout")
+	dbPath := flag.String("db", envDefault("FLEET_EDGE_DB", ""), "path to SQLite metrics database (empty disables persistence)")
 	title := flag.String("title", envDefault("FLEET_EDGE_TITLE", "fleet-edge"), "page title (env FLEET_EDGE_TITLE)")
 	background := flag.String("background", envDefault("FLEET_EDGE_BACKGROUND", ""),
 		"background image: http(s) URL used directly, or a local file served at /assets/bg (env FLEET_EDGE_BACKGROUND)")
@@ -117,6 +153,14 @@ func main() {
 		"CDN template for named icons, {name} substituted (env FLEET_EDGE_ICON_BASE)")
 	linksFile := flag.String("links", envDefault("FLEET_EDGE_LINKS", ""),
 		"JSON array of extra start-page links [{name,url,icon,group,description,host,exposure}] (env FLEET_EDGE_LINKS)")
+	zitadelIssuer := flag.String("zitadel-issuer", envDefault("FLEET_EDGE_ZITADEL_ISSUER", ""), "Zitadel OIDC issuer URL")
+	zitadelProjectID := flag.String("zitadel-project-id", envDefault("FLEET_EDGE_ZITADEL_PROJECT_ID", ""), "Zitadel project ID")
+	zitadelClaim := flag.String("zitadel-claim", envDefault("FLEET_EDGE_ZITADEL_CLAIM", "flatRolesClaim"), "Zitadel roles claim")
+	zitadelClientID := flag.String("zitadel-client-id", envDefault("FLEET_EDGE_ZITADEL_CLIENT_ID", ""), "Zitadel OIDC client ID")
+	zitadelRedirectURI := flag.String("zitadel-redirect-uri", envDefault("FLEET_EDGE_ZITADEL_REDIRECT_URI", ""), "Zitadel OIDC redirect URI")
+	zitadelRole := flag.String("zitadel-role", envDefault("FLEET_EDGE_ZITADEL_ROLE", ""), "required Zitadel role (empty allows any project user)")
+	apiKeysFile := flag.String("api-keys-file", envDefault("FLEET_EDGE_API_KEYS_FILE", ""), "file holding newline-delimited plain API keys")
+	sessionKeyFile := flag.String("session-key-file", envDefault("FLEET_EDGE_SESSION_KEY_FILE", ""), "file holding HMAC session key (optional)")
 	flag.Parse()
 
 	if *inventoryFile == "" {
@@ -138,6 +182,37 @@ func main() {
 	}
 
 	poller := state.NewPoller(inv, *statusURLTemplate, *pollTimeout)
+	if *dbPath != "" {
+		st, err := store.Open(*dbPath)
+		if err != nil {
+			log.Fatalf("opening metrics db %s: %v", *dbPath, err)
+		}
+		poller.SetStore(st)
+	}
+
+	var sessionSecret []byte
+	if *sessionKeyFile != "" {
+		b, err := os.ReadFile(*sessionKeyFile)
+		if err != nil {
+			log.Fatalf("reading session-key-file %s: %v", *sessionKeyFile, err)
+		}
+		sessionSecret = []byte(strings.TrimSpace(string(b)))
+	}
+	authn, err := auth.New(auth.Config{
+		Zitadel: auth.ZitadelConfig{
+			Issuer:      *zitadelIssuer,
+			ProjectID:   *zitadelProjectID,
+			Claim:       *zitadelClaim,
+			ClientID:    *zitadelClientID,
+			RedirectURI: *zitadelRedirectURI,
+			AllowedRole: *zitadelRole,
+		},
+		APIKeysFile:   *apiKeysFile,
+		SessionSecret: sessionSecret,
+	})
+	if err != nil {
+		log.Fatalf("configuring auth: %v", err)
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -152,10 +227,9 @@ func main() {
 	})
 	httpServer := &http.Server{
 		Addr:              *listen,
-		Handler:           srv,
+		Handler:           authn.Wrap(srv),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)

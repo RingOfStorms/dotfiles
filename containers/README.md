@@ -26,10 +26,9 @@ Both use the same model:
 
 ```
 containers/
-  flake.nix          host module, lib, inventory, `containers` package
-  host-module.nix    what each host needs (one rebuild)
+  flake.nix          host module, lib, inventory, `fleet` package (from `flakes/fleet-agent`)
+  host-module.nix    what each container host needs (one rebuild)
   lib.nix            mkNixosContainer, mkPodmanService
-  cli/               Go CLI (`containers`, alias `cnt`)
   minecraft/         a nixos-kind service
   hello-nixos/       test service, nixos kind: nginx splash page on :8081
   hello-podman/      test service, podman kind: nginx splash page on :8082
@@ -52,13 +51,14 @@ containers/
 
 2. In the host flake: `inputs.containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=containers";`
    and add `inputs.containers.nixosModules.default` to the modules. Rebuild once.
-   This also installs the `containers` CLI on the host (`ringofstorms.containers.package`).
+   This also installs the `fleet` CLI on the host (`ringofstorms.containers.package`, aliased as `cnt = "fleet containers"`).
+   Non-container hosts add `inputs.fleet-agent` (`flakes/fleet-agent`), which `fleet.mkHost` imports automatically to run the bare-metal `:9101` status/metrics/log agent (`ringofstorms.fleetAgent`).
 
    Options (all optional):
 
    ```nix
    ringofstorms.containers.nginx.enable = true;              # nginx + include dir (off by default)
-   ringofstorms.containers.statusEndpoint = { enable = true; listen = "100.64.0.13:9101"; };  # read-only GET /status.json for fleet-edge (off by default; explicit IP:PORT)
+   ringofstorms.fleetAgent = { enable = true; listen = "100.64.0.13:9101"; };  # read-only GET /status.json & /logs.json for fleet-edge
    ringofstorms.containers.privateNetwork.enable = false;    # NAT/forward for ve-* (privateNetwork containers)
    ringofstorms.containers.privateNetwork.externalInterface = "enp1s0";
    ```
@@ -67,11 +67,11 @@ containers/
    services on the host network (the default) or enable `privateNetwork`,
    which puts accept rules for `ve-*` at the top of the forward chain.
 
-## The `containers` CLI
+## The `fleet containers` (`cnt`) CLI
 
 ```sh
-nix run git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=containers -- <cmd>
-# or install: inputs.containers.packages.${system}.containers
+nix run git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=containers -- containers <cmd>
+# or install: inputs.containers.packages.${system}.fleet (aliased as `cnt = "fleet containers"`)
 ```
 
 It reads the inventory (`containers/*/service.nix` + `hosts/fleet.nix`) from the
@@ -102,7 +102,7 @@ must be able to fetch that ref, so pair it with `deploy --local`).
 | `containers port ls [host...]` / `port close <svc> <port>/<proto> [--from ...] [--iface ...]` | list / close them early |
 | `containers expose <svc>[.<route>] --exposure tailnet\|lan --for DUR [--reason T]` | widen one http route on its host for a while (max 24h; ROUTING-PLAN §8 step 7). The host reverts it at expiry (transient timer, plus `fleet-containers-expose-expire` at boot and every minute). `public` is refused until fleet-edge/o002 can do it at runtime. `expose --list [host...]` / `expose --revoke <svc>`; `deploy` drops an override; `routes` and `audit` show them |
 
-The host module adds the shell alias `cnt` for `containers`.
+The host module adds the shell alias `cnt = "fleet containers"`.
 
 ### Where a service runs
 

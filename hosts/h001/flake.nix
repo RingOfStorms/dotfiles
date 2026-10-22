@@ -7,8 +7,6 @@
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # beszel.url = "path:../../flakes/beszel";
-    beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
     secrets_manager.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/secrets_manager.git";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
@@ -52,17 +50,11 @@
           inputs.common.nixosModules.tty_caps_esc
           inputs.common.nixosModules.zsh
 
-          inputs.beszel.nixosModules.agent
-          ({
-            beszelAgent = {
-              token = "20208198-87c2-4bd1-ab09-b97c3b9c6a6e";
-              extraFilesystems = "sda__Media";
-            };
-          })
-
           inputs.containers.nixosModules.default
           ./floating-containers.nix
-          ../containers-status.nix
+          ({
+            ringofstorms.fleetAgent.extraFilesystems = [ "/mnt/media" ];
+          })
           ./hardware-configuration.nix
           ./mods
           # Atuin history sync: the local primary user logs into the shared `josh`

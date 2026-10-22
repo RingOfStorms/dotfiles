@@ -7,7 +7,6 @@
     # impermanence_mod.url = "path:../../flakes/impermanence";
     impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
-    beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
@@ -101,16 +100,6 @@
           inputs.containers.nixosModules.default
           ./containers.nix
           ./firewall.nix
-          ../containers-status.nix
-        ]
-        ++ lib.optionals (overlayIp != null) [
-          inputs.beszel.nixosModules.agent
-          ({
-            beszelAgent = {
-              listen = "${overlayIp}:45876";
-              token = "a2daeb72-6270-485f-8428-4e14eecd1746";
-            };
-          })
         ]
         ++ [
           # Host-specific config

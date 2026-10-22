@@ -95,7 +95,7 @@ Standard `statfs` (`df`) on a multi-device `bcachefs` pool with `replicas=2` (li
 - Extracts: `device`, `model`, `serial`, `protocol` (`ATA`/`NVMe`), `healthy` (SMART passed), `tempC`, `powerOnHours`, `reallocatedSectors`, `pendingSectors`, `uncorrectableErrors`, `nvmePercentageUsed`, `crcErrors`, `lastTestStatus`.
 
 ### 3.2 Fail2ban Status (`fleet-agent-fail2ban.timer`, every 1m when `services.fail2ban.enable`)
-- Reads `/var/lib/fail2ban/fail2ban.sqlite3` (in read-only mode: `file:/var/lib/fail2ban/fail2ban.sqlite3?mode=ro&immutable=1`) and/or `fail2ban-client status`.
+- Reads `/var/lib/fail2ban/fail2ban.sqlite3` in read-only mode with normal locking (`file:/var/lib/fail2ban/fail2ban.sqlite3?mode=ro` or via a consistent `.backup` snapshot, never `immutable=1` on a live DB) and/or `fail2ban-client status`.
 - Exports active jails, `currentlyBanned` count, `totalBanned` count, and the list of active bans (`ip`, `jail`, `timeOfBan`, `banSecondsRemaining`, `failures`) plus recent historical bans (last 50) so you can inspect who got banned and when.
 
 ### 3.3 Live Logs Endpoint (`GET /logs.json`)

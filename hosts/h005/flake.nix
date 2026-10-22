@@ -7,7 +7,6 @@
     # impermanence_mod.url = "path:../../flakes/impermanence";
     impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
-    beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
@@ -15,6 +14,7 @@
     fleet-edge.url = "path:../../flakes/fleet-edge";
     # Inventory source for fleet-edge (built into the closure).
     containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=containers";
+    fleet-agent.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/fleet-agent";
   };
 
   outputs =
@@ -104,15 +104,6 @@
           ./wildcard-cert.nix
           # Fleet oauth2-proxy; uses the wildcard above for its sign-in host.
           ./oauth2-proxy.nix
-        ]
-        ++ lib.optionals (overlayIp != null) [
-          inputs.beszel.nixosModules.agent
-          ({
-            beszelAgent = {
-              listen = "${overlayIp}:45876";
-              token = "aa8fa5d1-3edd-46d6-944d-abe1bcbf155a";
-            };
-          })
         ]
         ++ [
           # Host-specific config
