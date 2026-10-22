@@ -1,41 +1,5 @@
 {
   "nodes": {
-    "beszel": {
-      "inputs": {
-        "beszel-nixpkgs": "beszel-nixpkgs"
-      },
-      "locked": {
-        "dir": "flakes/beszel",
-        "lastModified": 1792466588,
-        "narHash": "sha256-73kH8Z0x6hAlLeNK/DKIlk8JboBeznZY74Xd0wS8BPY=",
-        "ref": "refs/heads/master",
-        "rev": "92da346e1150aa66ab7e3e710318efae987bef20",
-        "revCount": 2344,
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      },
-      "original": {
-        "dir": "flakes/beszel",
-        "type": "git",
-        "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
-      }
-    },
-    "beszel-nixpkgs": {
-      "locked": {
-        "lastModified": 1791956154,
-        "narHash": "sha256-jBYGPi4udQ9uo4KQp9m2J0546nJVQitG15gvZSaVVAs=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "55bfb4d7437bd4e09ab7cba58a43bd68eb310044",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
     "bun2nix": {
       "inputs": {
         "flake-parts": "flake-parts",
@@ -89,11 +53,11 @@
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1792683902,
-        "narHash": "sha256-UxnOGMSiflLJobz4Oq9aQsyHXFdIAU9fZqyvTNaLTEU=",
+        "lastModified": 1792702420,
+        "narHash": "sha256-sbYjlD/DR1r4XpaNemUblcOrl30hd2XmcKQ3M6f92oE=",
         "ref": "refs/heads/master",
-        "rev": "f763ad5b83fdd3e7be7e3e925170629cbb8c56ae",
-        "revCount": 2380,
+        "rev": "ae8913e3dd717db2f4780ab9d8285fd3fa97e98e",
+        "revCount": 2388,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -110,11 +74,11 @@
       },
       "locked": {
         "dir": "containers",
-        "lastModified": 1792692400,
-        "narHash": "sha256-yMg0Qa1J4tPnAjF5QxXrm0CNhXACzu4Ax1CZhKhLDe0=",
+        "lastModified": 1792702420,
+        "narHash": "sha256-sbYjlD/DR1r4XpaNemUblcOrl30hd2XmcKQ3M6f92oE=",
         "ref": "refs/heads/master",
-        "rev": "4cc4a9ee31c12e02f2f1778b1b09b52f16affb3d",
-        "revCount": 2385,
+        "rev": "ae8913e3dd717db2f4780ab9d8285fd3fa97e98e",
+        "revCount": 2388,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -1300,7 +1264,6 @@
     },
     "root": {
       "inputs": {
-        "beszel": "beszel",
         "common": "common",
         "containers": "containers",
         "de_plasma": "de_plasma",
