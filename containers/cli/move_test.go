@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,6 +46,7 @@ func newMoveRig(t *testing.T) *moveRig {
 		must(t, os.WriteFile(st+"/efc/backup", nil, 0o644))
 	}
 	must(t, os.WriteFile(r.root+".state/active-fleet-svc.service", nil, 0o644))
+	must(t, os.WriteFile(r.root+".state/installed-fleet-svc.service", nil, 0o644))
 
 	writeExe(t, filepath.Join(r.bin, "systemctl"), "#!"+bash+`
 echo "systemctl $*" >> `+r.log+`
@@ -54,7 +56,11 @@ is-active)
   shift; [ "$1" = -q ] && { q=1; shift; }
   if [ -e "$FAKE_STATE/active-$1" ]; then [ -n "${q:-}" ] || echo active; exit 0; fi
   [ -n "${q:-}" ] || echo inactive; exit 3 ;;
-stop) rm -f "$FAKE_STATE/active-$2" ;;
+show)
+  u=${!#}; if [ -e "$FAKE_STATE/installed-$u" ]; then echo loaded; else echo not-found; fi ;;
+stop)
+  [ -e "$FAKE_STATE/installed-$2" ] || { echo "Failed to stop $2: Unit $2 not loaded." >&2; exit 5; }
+  rm -f "$FAKE_STATE/active-$2" ;;
 start)
   case "$2" in
   fleet-backup-svc@*)
@@ -68,7 +74,7 @@ start)
     echo "$FAKE_HOST" > "$FAKE_REPO/$id/host"; touch -d "@$(( $(date +%s) + $(ls "$FAKE_REPO" | wc -l) ))" "$FAKE_REPO/$id"
     mkdir -p "$FAKE_STATE/vlfc/backup-last"
     echo "time=$(date -u +%Y-%m-%dT%H:%M:%SZ) snapshot=$id host=$FAKE_HOST" > "$FAKE_STATE/vlfc/backup-last/$svc" ;;
-  *) touch "$FAKE_STATE/active-$2" ;;
+  *) [ -e "$FAKE_STATE/installed-$2" ] || { echo "Unit $2 not found." >&2; exit 5; }; touch "$FAKE_STATE/active-$2" ;;
   esac ;;
 esac
 exit 0
@@ -89,8 +95,13 @@ f=$2; if grep -q CORRUPT "$f"; then echo "*** in database main ***"; echo "Page 
 `)
 	out := filepath.Join(filepath.Dir(r.root), "out")
 	must(t, os.MkdirAll(out+"/bin", 0o755))
-	writeExe(t, out+"/bin/fleet-install", "#!"+bash+"\ntouch \"$FAKE_STATE/active-fleet-svc.service\"\n")
+	writeExe(t, out+"/bin/fleet-install", "#!"+bash+"\ntouch \"$FAKE_STATE/active-fleet-svc.service\" \"$FAKE_STATE/installed-fleet-svc.service\" \"$FAKE_STATE/podman-svc\"\n")
 	writeExe(t, filepath.Join(r.bin, "nix"), "#!/bin/sh\necho "+out+"\n")
+	writeExe(t, filepath.Join(r.bin, "podman"), "#!"+bash+`
+[ "$1 $2" = "container exists" ] || exit 125
+[ -e "$FAKE_STATE/podman-$3" ]
+`)
+	must(t, os.WriteFile(r.root+".state/podman-svc", nil, 0o644))
 	return m
 }
 
@@ -261,6 +272,9 @@ func TestMoveFailsWhenBackupDoesNotRun(t *testing.T) {
 	}
 }
 
+// The deploy fails before the unit exists on the target: stopping it fails
+// like real systemd ("not loaded"), absence is proven, so the rollback
+// succeeds and the source is started again.
 func TestMoveFailedDeployRollsBack(t *testing.T) {
 	m := newMoveRig(t)
 	writeExe(t, filepath.Join(m.bin, "nix"), "#!/bin/sh\necho 'error: build failed' >&2; exit 1\n")
@@ -269,6 +283,9 @@ func TestMoveFailedDeployRollsBack(t *testing.T) {
 	}
 	m.assertSourceIntact(t)
 	m.assertTargetClean(t)
+	if g, _ := filepath.Glob(filepath.Join(m.dst, "svc.failed-move-*")); len(g) != 1 {
+		t.Fatalf("restored target data not moved aside: %v", g)
+	}
 }
 
 // A stopped source stays stopped when the move fails.
@@ -296,9 +313,11 @@ func TestMoveRerunAfterInterruption(t *testing.T) {
 	must(t, os.Remove(m.srcState()+"/active-fleet-svc.service"))
 	must(t, os.WriteFile(m.srcState()+"/vlfc/move-svc.was-running", nil, 0o644))
 	writeExe(t, filepath.Join(m.bin, "nix"), "#!/bin/sh\nexit 1\n")
-	if err := runMove(t); err == nil {
+	err := runMove(t)
+	if err == nil {
 		t.Fatal("expected the deploy to fail")
 	}
+	t.Log(err)
 	m.assertSourceIntact(t) // started again: it was running before the first attempt
 	if g, _ := filepath.Glob(filepath.Join(m.dst, "svc.failed-move-*")); len(g) < 1 {
 		t.Fatal("leftovers not moved aside")
@@ -492,5 +511,296 @@ func TestHealthScript(t *testing.T) {
 	}
 	if healthScript(Service{Name: "x"}, "") != "" {
 		t.Error("no routes: no script")
+	}
+}
+
+// rollbackRig runs the real rollback/switch scripts in bash against temp
+// dirs, with stub systemctl/machinectl/extra-container in PATH. Stub
+// behaviour comes from files in st: active (unit up), stop-fails,
+// stop-ignored (stop "succeeds" but the unit stays up), kill-works,
+// machine (nixos machine registered), uninstall-fails, loaded (unit
+// known to systemd; stopping an unknown unit fails like real systemd),
+// container (podman container exists).
+type rollbackRig struct {
+	t                  *testing.T
+	bash, dir, bin, st string
+	s                  Service
+}
+
+func newRollbackRig(t *testing.T, kind string) *rollbackRig {
+	t.Helper()
+	if _, err := exec.LookPath("flock"); err != nil {
+		t.Skip("flock not available")
+	}
+	r := &rollbackRig{t: t, bash: realPath(t, "bash"), dir: t.TempDir(), bin: t.TempDir()}
+	r.st = filepath.Join(r.dir, "state")
+	oldI, oldH, oldM, oldN, oldO, oldMU, oldW := inv, holdDir, moveMarkerDir, nginxDir, overridesDir, mutableUnits, moveStopWait
+	t.Cleanup(func() {
+		inv, holdDir, moveMarkerDir, nginxDir, overridesDir, mutableUnits, moveStopWait = oldI, oldH, oldM, oldN, oldO, oldMU, oldW
+	})
+	inv = &Inventory{DataRoot: filepath.Join(r.dir, "srv")}
+	holdDir, moveMarkerDir = filepath.Join(r.dir, "hold"), filepath.Join(r.dir, "vlfc")
+	nginxDir, overridesDir, mutableUnits = filepath.Join(r.dir, "nginx"), filepath.Join(r.dir, "ov"), filepath.Join(r.dir, "units")
+	moveStopWait = 1
+	r.s = Service{Name: "svc", Kind: kind}
+	for _, d := range []string{r.st, moveMarkerDir, filepath.Join(inv.DataRoot, "svc/data")} {
+		must(t, os.MkdirAll(d, 0o755))
+	}
+	must(t, os.WriteFile(filepath.Join(inv.DataRoot, "svc/data/f"), []byte("x"), 0o644))
+	must(t, os.WriteFile(moveMarker("svc"), nil, 0o644))
+	must(t, os.WriteFile(filepath.Join(r.st, "active"), nil, 0o644))
+	must(t, os.WriteFile(filepath.Join(r.st, "loaded"), nil, 0o644))
+	st := r.st
+	writeExe(t, filepath.Join(r.bin, "systemctl"), "#!"+r.bash+`
+echo "$*" >> `+st+`/log
+case "$1" in
+is-active) if [ -e `+st+`/active ]; then echo active; exit 0; fi; echo inactive; exit 3 ;;
+show) [ -e `+st+`/loaded ] && echo loaded || echo not-found ;;
+stop) [ -e `+st+`/loaded ] || { echo "Failed to stop $2: Unit $2 not loaded." >&2; exit 5; }
+  [ -e `+st+`/stop-fails ] && exit 1; [ -e `+st+`/stop-ignored ] || rm -f `+st+`/active; rm -f `+st+`/machine ;;
+kill) [ -e `+st+`/kill-works ] && rm -f `+st+`/active ;;
+esac
+exit 0
+`)
+	writeExe(t, filepath.Join(r.bin, "machinectl"), "#!"+r.bash+"\n[ -e "+st+"/machine ]\n")
+	writeExe(t, filepath.Join(r.bin, "podman"), "#!"+r.bash+"\n[ \"$1 $2\" = \"container exists\" ] || exit 125\n[ -e "+st+"/container ]\n")
+	writeExe(t, filepath.Join(r.bin, "extra-container"), "#!"+r.bash+"\n! [ -e "+st+"/uninstall-fails ]\n")
+	return r
+}
+
+func (r *rollbackRig) set(f string) { must(r.t, os.WriteFile(filepath.Join(r.st, f), nil, 0o644)) }
+
+func (r *rollbackRig) run(script string) (string, error) {
+	c := exec.Command(r.bash, "-c", script)
+	c.Env = append(os.Environ(), "PATH="+r.bin+":"+os.Getenv("PATH"))
+	out, err := c.CombinedOutput()
+	return string(out), err
+}
+
+// untouched: data in place, nothing moved aside, marker kept.
+func (r *rollbackRig) assertUntouched(out string) {
+	r.t.Helper()
+	if !exists(filepath.Join(inv.DataRoot, "svc/data/f")) {
+		r.t.Fatalf("data moved although the target was not confirmed down:\n%s", out)
+	}
+	if g, _ := filepath.Glob(filepath.Join(inv.DataRoot, "svc.failed-move-*")); len(g) > 0 {
+		r.t.Fatalf("data moved aside: %v", g)
+	}
+	if !exists(moveMarker("svc")) {
+		r.t.Fatalf("move marker removed after a failed rollback:\n%s", out)
+	}
+}
+
+func TestRollbackTargetFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name, kind string
+		flags      []string
+	}{
+		{"stop fails", "nixos", []string{"stop-fails"}},
+		{"unit stays active", "podman", []string{"stop-ignored"}},
+		{"unit stays active after kill", "nixos", []string{"stop-ignored"}},
+		{"machine still registered", "nixos", []string{"machine", "stop-fails"}},
+		{"uninstall fails", "nixos", []string{"uninstall-fails"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newRollbackRig(t, tc.kind)
+			for _, f := range tc.flags {
+				r.set(f)
+			}
+			out, err := r.run(rollbackTargetScript(r.s))
+			if err == nil {
+				t.Fatalf("rollback succeeded:\n%s", out)
+			}
+			r.assertUntouched(out)
+		})
+	}
+}
+
+// A machine that stays registered (nsenter-able) after the unit is down
+// is not "down" either.
+func TestRollbackTargetWaitsForMachine(t *testing.T) {
+	r := newRollbackRig(t, "nixos")
+	writeExe(t, filepath.Join(r.bin, "machinectl"), "#!"+r.bash+"\nexit 0\n") // always registered
+	out, err := r.run(rollbackTargetScript(r.s))
+	if err == nil {
+		t.Fatalf("rollback succeeded with the machine still registered:\n%s", out)
+	}
+	r.assertUntouched(out)
+}
+
+func TestRollbackTargetKillsStuckUnit(t *testing.T) {
+	r := newRollbackRig(t, "podman")
+	r.set("stop-ignored")
+	r.set("kill-works")
+	out, err := r.run(rollbackTargetScript(r.s))
+	if err != nil {
+		t.Fatalf("rollback: %v\n%s", err, out)
+	}
+	if !strings.Contains(readFile(t, filepath.Join(r.st, "log")), "kill --signal=SIGKILL") {
+		t.Fatal("stuck unit not killed")
+	}
+}
+
+func TestRollbackTargetHappyPath(t *testing.T) {
+	for _, kind := range []string{"nixos", "podman"} {
+		t.Run(kind, func(t *testing.T) {
+			r := newRollbackRig(t, kind)
+			out, err := r.run(rollbackTargetScript(r.s))
+			if err != nil {
+				t.Fatalf("rollback: %v\n%s", err, out)
+			}
+			if exists(filepath.Join(inv.DataRoot, "svc")) || exists(moveMarker("svc")) || exists(filepath.Join(r.st, "active")) {
+				t.Fatalf("not rolled back:\n%s", out)
+			}
+			if g, _ := filepath.Glob(filepath.Join(inv.DataRoot, "svc.failed-move-*/data/f")); len(g) != 1 {
+				t.Fatalf("data not moved aside: %v", g)
+			}
+		})
+	}
+}
+
+func TestSwitchRequiresStoppedSource(t *testing.T) {
+	r := newRollbackRig(t, "nixos")
+	must(t, os.WriteFile(moveSourceMarker("svc"), nil, 0o644))
+	r.set("stop-fails")
+	out, err := r.run(switchScript(r.s))
+	if err == nil {
+		t.Fatalf("switch succeeded with the source up:\n%s", out)
+	}
+	if !exists(filepath.Join(inv.DataRoot, "svc/data/f")) || !exists(moveSourceMarker("svc")) {
+		t.Fatal("source renamed or marker dropped while it may be running")
+	}
+	must(t, os.Remove(filepath.Join(r.st, "stop-fails")))
+	if out, err := r.run(switchScript(r.s)); err != nil {
+		t.Fatalf("switch: %v\n%s", err, out)
+	}
+	if g, _ := filepath.Glob(filepath.Join(inv.DataRoot, "svc.moved-*")); len(g) != 1 || exists(moveSourceMarker("svc")) {
+		t.Fatalf("not switched: %v", g)
+	}
+}
+
+func TestPreflightLeftoverCleanupFailureRefuses(t *testing.T) {
+	r := newRollbackRig(t, "nixos")
+	r.set("stop-fails")
+	// only the leftover part: the rest needs the real host layout
+	body := strict + "if [ -e " + q(moveMarker("svc")) + " ]; then\n" + retireTargetBody(r.s) + "fi\n"
+	if !strings.Contains(movePreflightTarget(r.s, "dst"), strings.TrimSpace(strings.Split(retireTargetBody(r.s), "\n")[0])) {
+		t.Fatal("preflight does not use the confirmed retire")
+	}
+	if strings.Contains(movePreflightTarget(r.s, "dst"), ") || true\n") {
+		t.Fatal("preflight still masks leftover cleanup failures")
+	}
+	out, err := r.run(body)
+	if err == nil {
+		t.Fatalf("leftover cleanup succeeded:\n%s", out)
+	}
+	r.assertUntouched(out)
+}
+
+func TestRestartSourceAfterUndo(t *testing.T) {
+	for _, c := range []struct{ down, was, want bool }{
+		{true, true, true}, {true, false, false}, {false, true, false}, {false, false, false},
+	} {
+		if got := restartSourceAfterUndo(c.down, c.was); got != c.want {
+			t.Errorf("restartSourceAfterUndo(%v, %v) = %v", c.down, c.was, got)
+		}
+	}
+	msg := rollbackFailedMsg(Service{Name: "svc", Kind: "nixos"}, "src", "dst", errors.New("boom"))
+	for _, w := range []string{"ROLLBACK ON dst FAILED", "NOT started again on src", "boom", "was-running"} {
+		if !strings.Contains(msg, w) {
+			t.Errorf("message lacks %q:\n%s", w, msg)
+		}
+	}
+}
+
+// End to end: the target's stop fails during rollback, so the source must
+// stay stopped with its was-running marker, and the move fails.
+func TestMoveFailedRollbackKeepsSourceStopped(t *testing.T) {
+	m := newMoveRig(t)
+	moveStopWait = 1
+	t.Cleanup(func() { moveStopWait = 60 })
+	writeExe(t, filepath.Join(m.bin, "nix"), "#!/bin/sh\nexit 1\n")
+	// stop on the target fails (the fake ssh sets FAKE_HOST)
+	sc := readFile(t, filepath.Join(m.bin, "systemctl"))
+	writeExe(t, filepath.Join(m.bin, "systemctl"), strings.Replace(sc, "  rm -f \"$FAKE_STATE/active-$2\" ;;", "  [ \"$FAKE_HOST\" = dst ] && exit 1; rm -f \"$FAKE_STATE/active-$2\" ;;", 1))
+	// the unit is loaded on the target (left from an earlier attempt), so the failing stop counts
+	must(t, os.MkdirAll(m.dstState(), 0o755))
+	must(t, os.WriteFile(m.dstState()+"/installed-fleet-svc.service", nil, 0o644))
+	err := runMove(t)
+	if err == nil || !strings.Contains(err.Error(), "ROLLBACK ON dst FAILED") {
+		t.Fatalf("got %v\n%s", err, m.calls())
+	}
+	if exists(m.srcState() + "/active-fleet-svc.service") {
+		t.Fatal("source started although the target rollback failed")
+	}
+	if !exists(m.srcState() + "/vlfc/move-svc.was-running") {
+		t.Fatal("was-running marker dropped")
+	}
+	if !exists(m.dstState() + "/vlfc/move-svc") {
+		t.Fatal("target marker dropped")
+	}
+}
+
+// neverInstalled: deploy failed before the unit existed.
+func (r *rollbackRig) neverInstalled() {
+	for _, f := range []string{"active", "loaded"} {
+		must(r.t, os.Remove(filepath.Join(r.st, f)))
+	}
+	r.set("uninstall-fails") // must not even be tried
+}
+
+func TestRollbackTargetNeverInstalled(t *testing.T) {
+	for _, kind := range []string{"nixos", "podman"} {
+		t.Run(kind, func(t *testing.T) {
+			r := newRollbackRig(t, kind)
+			r.neverInstalled()
+			out, err := r.run(rollbackTargetScript(r.s))
+			if err != nil {
+				t.Fatalf("rollback: %v\n%s", err, out)
+			}
+			if exists(filepath.Join(inv.DataRoot, "svc")) || exists(moveMarker("svc")) {
+				t.Fatalf("not rolled back:\n%s", out)
+			}
+			if g, _ := filepath.Glob(filepath.Join(inv.DataRoot, "svc.failed-move-*/data/f")); len(g) != 1 {
+				t.Fatalf("data not moved aside: %v", g)
+			}
+		})
+	}
+	// no data at all is fine too
+	r := newRollbackRig(t, "nixos")
+	r.neverInstalled()
+	must(t, os.RemoveAll(filepath.Join(inv.DataRoot, "svc")))
+	if out, err := r.run(rollbackTargetScript(r.s)); err != nil || exists(moveMarker("svc")) {
+		t.Fatalf("rollback without data: %v\n%s", err, out)
+	}
+}
+
+func TestRollbackTargetAbsenceNotProven(t *testing.T) {
+	for _, tc := range []struct {
+		name, kind string
+		setup      func(r *rollbackRig)
+	}{
+		{"machine still registered", "nixos", func(r *rollbackRig) { r.set("machine") }},
+		{"container still exists", "podman", func(r *rollbackRig) { r.set("container") }},
+		{"unit file present", "nixos", func(r *rollbackRig) {
+			must(r.t, os.MkdirAll(mutableUnits, 0o755))
+			must(r.t, os.WriteFile(mutableUnits+"/"+unitOf(r.s), nil, 0o644))
+		}},
+		{"podman broken", "podman", func(r *rollbackRig) {
+			writeExe(r.t, filepath.Join(r.bin, "podman"), "#!"+r.bash+"\nexit 125\n")
+		}},
+		{"loaded unit, stop fails", "nixos", func(r *rollbackRig) { r.set("loaded"); r.set("stop-fails") }},
+		{"loaded podman unit, stop fails", "podman", func(r *rollbackRig) { r.set("loaded"); r.set("stop-fails") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newRollbackRig(t, tc.kind)
+			r.neverInstalled()
+			tc.setup(r)
+			out, err := r.run(rollbackTargetScript(r.s))
+			if err == nil {
+				t.Fatalf("rollback succeeded:\n%s", out)
+			}
+			r.assertUntouched(out)
+		})
 	}
 }

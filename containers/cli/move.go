@@ -22,8 +22,11 @@ package main
 //	7 switch      uninstall on the source, rename its data <svc>.moved-<date>
 //	              (fleet-backup skips it)
 //
-// Any failure in 2-6 undoes the target (uninstall, data moved aside as
-// <svc>.failed-move-<time>) and starts the source again if it was running.
+// Any failure in 2-6 undoes the target: stop confirmed (killed if needed),
+// uninstall, data moved aside as <svc>.failed-move-<time>, marker removed
+// last; then the source starts again if it was running. If that rollback
+// fails the source is NOT started (no two live copies): both stay stopped,
+// the error says what to do by hand.
 // Re-running after a failure or an interrupted run is safe.
 
 import (
@@ -100,18 +103,16 @@ func backupCheckScript(host string) string {
 // anything else in the way is refused.
 func movePreflightTarget(s Service, to string) string {
 	dst := dataDir(s)
-	return "set -e\n" + fmt.Sprintf(`test -d /etc/systemd-mutable/system || { echo "%[3]s lacks the containers host module" >&2; exit 1; }
+	return strict + fmt.Sprintf(`test -d /etc/systemd-mutable/system || { echo "%[3]s lacks the containers host module" >&2; exit 1; }
 `, unitOf(s), s.Name, to) + backupCheckScript(to) + requiresScript(s, to) + fmt.Sprintf(`if [ -e %[6]s ]; then
   echo "%[3]s: leftovers of an unfinished move of %[2]s; removing them" >&2
-  ( %[7]s ) || true
-  if [ -e %[4]s ]; then mv -T %[4]s %[4]s.failed-move-$(date +%%Y%%m%%dT%%H%%M%%S); fi
-  rm -f %[6]s
+  %[7]s
 fi
 if systemctl is-active -q %[1]s; then echo "%[2]s already running on %[3]s" >&2; exit 1; fi
 if [ -e %[4]s ] && [ -n "$(ls -A %[4]s)" ]; then echo "%[4]s already exists on %[3]s; move it away first" >&2; exit 1; fi
 install -d -m755 %[5]s
 `, unitOf(s), s.Name, to, q(dst), q(inv.DataRoot), q(moveMarker(s.Name)),
-		strings.ReplaceAll(strings.TrimSpace(uninstallScript(s)+cleanupScript(s)), "\n", "\n    "))
+		strings.ReplaceAll(strings.TrimSpace(retireTargetBody(s)), "\n", "\n  "))
 }
 
 func movePreflightSource(s Service, from string) string {
@@ -128,7 +129,7 @@ else
   case "$st" in active|activating|reloading) touch %[2]s ;; esac
 fi
 `, unitOf(s), q(moveSourceMarker(s.Name))) +
-		hookScript(s) + disableScript(s) + "systemctl stop " + unitOf(s) + "\n" +
+		hookScript(s) + disableScript(s) + stopConfirmScript(s) +
 		backupRunScript(s)
 }
 
@@ -208,20 +209,109 @@ func liveDBListScript(s Service) string {
 	return fmt.Sprintf("cd %s && for p in %s; do [ -d \"$p\" ] && echo \"$p\"; done; true\n", q(inv.DataRoot), strings.Join(g, " "))
 }
 
-// rollbackTargetScript undoes a partial move on the target.
-func rollbackTargetScript(s Service) string {
-	return disableScript(s) + "systemctl stop " + unitOf(s) + " || true\n" + uninstallScript(s) + cleanupScript(s) + fmt.Sprintf("if [ -e %[1]s ]; then mv -T %[1]s %[1]s.failed-move-$(date +%%Y%%m%%dT%%H%%M%%S); fi\nrm -f %[2]s\n",
-		q(dataDir(s)), q(moveMarker(s.Name)))
+// moveStopWait bounds how long (seconds) a stop may take before the unit
+// is killed, and again after the kill. var for tests.
+var moveStopWait = 60
+
+// stopConfirmScript stops the unit and fails unless it is confirmed down:
+// systemctl reports it neither active, activating, deactivating nor
+// reloading, and (nixos kind) machinectl knows no machine of that name.
+// A failing stop fails the script unless the service is proven never
+// installed (cnt_absent: LoadState not-found, no unit file, no machine /
+// podman container); then CNT_ABSENT=1 and the uninstall is skipped. A unit
+// still up after moveStopWait is killed (SIGKILL) and checked again.
+// Needs set -e.
+func stopConfirmScript(s Service) string {
+	machine, present := "", ""
+	if s.Kind == "podman" {
+		// exit 1 = no such container; anything else (0, or podman broken) is not proof
+		present = fmt.Sprintf("  if podman container exists %[1]s >/dev/null 2>&1; then return 1; else [ $? -eq 1 ] || return 1; fi\n", q(s.Name))
+	} else {
+		machine = fmt.Sprintf("  if machinectl show %s >/dev/null 2>&1; then return 1; fi\n", q(s.Name))
+		present = machine
+	}
+	return fmt.Sprintf(`cnt_down() {
+  case "$(systemctl is-active %[1]s 2>/dev/null || true)" in
+    ""|active|activating|deactivating|reloading|refreshing) return 1 ;;
+  esac
+%[3]s  return 0
+}
+cnt_wait_down() {
+  for _ in $(seq 1 %[2]d); do cnt_down && return 0; sleep 1; done
+  cnt_down
+}
+cnt_absent() {
+  [ "$(systemctl show -p LoadState --value %[1]s 2>/dev/null || true)" = not-found ] || return 1
+  [ ! -e %[5]s ] && [ ! -L %[5]s ] || return 1
+%[4]s  return 0
+}
+CNT_ABSENT=0
+if ! systemctl stop %[1]s; then
+  if cnt_absent; then
+    CNT_ABSENT=1
+    echo "%[1]s is not installed here; nothing to stop or uninstall" >&2
+  else
+    echo "stopping %[1]s failed; refusing to go on" >&2; exit 1
+  fi
+fi
+if ! cnt_wait_down; then
+  echo "%[1]s still up after %[2]ds; killing it" >&2
+  systemctl kill --signal=SIGKILL %[1]s || true
+  cnt_wait_down || { echo "%[1]s is still running after SIGKILL; refusing to go on" >&2; exit 1; }
+fi
+`, unitOf(s), moveStopWait, machine, present, q(mutableUnits+"/"+unitOf(s)))
 }
 
-// switchScript retires the source copy: <svc>.moved-<date> (with the time
-// added if that exists already, e.g. a second move the same day).
+// uninstallUnlessAbsent: uninstall (failures fail) unless stopConfirmScript
+// proved the service was never installed.
+func uninstallUnlessAbsent(s Service) string {
+	return "if [ \"$CNT_ABSENT\" != 1 ]; then\n" + uninstallScript(s) + "fi\n"
+}
+
+// retireTargetBody (needs set -e) takes the service down on the target,
+// confirmed, uninstalls it (failures fail), moves the data aside, and only
+// then removes the move marker, so any failure leaves the marker for a
+// re-run.
+func retireTargetBody(s Service) string {
+	return disableScript(s) + stopConfirmScript(s) + uninstallUnlessAbsent(s) + cleanupScript(s) +
+		"cnt_down || { echo \"" + unitOf(s) + " came back up during uninstall\" >&2; exit 1; }\n" +
+		fmt.Sprintf("if [ -e %[1]s ]; then d=%[1]s.failed-move-$(date +%%Y%%m%%dT%%H%%M%%S); [ ! -e \"$d\" ] || d=$d-$$; mv -T %[1]s \"$d\"; fi\nrm -f %[2]s\n",
+			q(dataDir(s)), q(moveMarker(s.Name)))
+}
+
+// rollbackTargetScript undoes a partial move on the target.
+func rollbackTargetScript(s Service) string { return strict + retireTargetBody(s) }
+
+// switchScript retires the source copy once it is confirmed stopped:
+// <svc>.moved-<date> (with the time added if that exists already, e.g. a
+// second move the same day). The was-running marker goes last.
 func switchScript(s Service) string {
-	return uninstallScript(s) + cleanupScript(s) + "rm -f " + q(moveSourceMarker(s.Name)) + "\n" + fmt.Sprintf(`d=%[1]s.moved-$(date +%%F)
+	return strict + disableScript(s) + stopConfirmScript(s) + uninstallUnlessAbsent(s) + cleanupScript(s) +
+		"cnt_down || { echo \"" + unitOf(s) + " came back up during uninstall\" >&2; exit 1; }\n" + fmt.Sprintf(`d=%[1]s.moved-$(date +%%F)
 [ ! -e "$d" ] || d=%[1]s.moved-$(date +%%F-%%H%%M%%S)
 mv -T %[1]s "$d"
 echo "source data kept as $d"
-`, q(dataDir(s)))
+`, q(dataDir(s))) + "rm -f " + q(moveSourceMarker(s.Name)) + "\n"
+}
+
+// restartSourceAfterUndo: the source may only start again if the target
+// is confirmed down (rolled back, or never touched) and it was running.
+func restartSourceAfterUndo(targetDown, wasRunning bool) bool { return targetDown && wasRunning }
+
+// rollbackFailedMsg: both hosts left stopped; what to do by hand.
+func rollbackFailedMsg(s Service, from, to string, err error) string {
+	return fmt.Sprintf(`
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ROLLBACK ON %[2]s FAILED (%[4]v).
+%[1]s may still be running on %[2]s. It was NOT started again on %[3]s, to
+avoid two live copies of the same data. Both are left as they are.
+By hand:
+  1. on %[2]s: systemctl stop/kill %[5]s until it is down; containers destroy %[1]s --host %[2]s
+  2. on %[2]s: move %[6]s aside (e.g. .failed-move-<time>), then rm %[7]s
+  3. re-run: containers move %[1]s --to %[2]s --from %[3]s  (or containers start %[1]s --host %[3]s)
+%[3]s keeps %[8]s, so a re-run still knows to start it again.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`,
+		s.Name, to, from, err, unitOf(s), dataDir(s), moveMarker(s.Name), moveSourceMarker(s.Name))
 }
 
 func cmdMove(args []string) error {
@@ -267,16 +357,20 @@ func cmdMove(args []string) error {
 	wasRunning := !dryRun
 	undo := func(step string, err error, target bool) error {
 		msg := fmt.Sprintf("%s: %v", step, err)
+		targetDown := true
 		if target {
 			info("rolling back %s", to)
 			if e := remote(to, true, rollbackTargetScript(s)); e != nil {
-				msg += fmt.Sprintf("\nrollback on %s FAILED (%v): check `containers ls` before starting %s anywhere", to, e, s.Name)
-				return errors.New(msg)
+				targetDown = false
+				msg += rollbackFailedMsg(s, from, to, e)
 			}
 		}
-		if wasRunning {
+		if !targetDown {
+			return errors.New(msg)
+		}
+		if restartSourceAfterUndo(targetDown, wasRunning) {
 			info("starting %s again on %s", s.Name, from)
-			if e := remote(from, true, enableScript(s)+"systemctl start "+unitOf(s)+" && systemctl is-active "+unitOf(s)+" && rm -f "+q(moveSourceMarker(s.Name))); e != nil {
+			if e := remote(from, true, strict+enableScript(s)+"systemctl start "+unitOf(s)+"\nsystemctl is-active "+unitOf(s)+"\nrm -f "+q(moveSourceMarker(s.Name))+"\n"); e != nil {
 				msg += fmt.Sprintf("\nrestart on %s FAILED (%v): containers start %s --host %s", from, e, s.Name, from)
 			}
 		} else {

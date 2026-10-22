@@ -668,9 +668,20 @@ Taken 2026-10-16:
    - lio (gen 1231): 22 on tailscale0; nix-serve 5000 from juni/gp3/oren.
      Verified by store path only (no root here).
    - o002 (gen 64): none (80/443/3032, 3478/udp are public).
-   - **Open: juni, oren, gp3, l002, t.** Never rolled out; they still trust
-     `tailscale0` if they use the module. §5.1 requires no host trust it,
-     so this is the outstanding item for this step.
+   - juni, oren, gp3 (2026-10-22): **config ready, not deployed.** All
+     three import the module and were offline (headscale: last seen 5d,
+     never, 8d; ssh to name/overlay IP and via lio timed out).
+     `firewall.nix` sets `trustInterface = false` with no tailscale0 rules
+     (laptops; global 22, kdeconnect, 41641/udp, oren's 9991 remain; the
+     beszel agent connects out). Eval: trusted = `lo` only. Toplevel builds
+     for juni and gp3. oren's toplevel currently fails on an unrelated
+     `opencode` bun lockfile, so only its nftables unit was built. These apply on
+     each host's next rebuild.
+   - l002, t: **not on the module.** They have no NixOS config in this repo,
+     only ssh aliases in `fleet.nix`, outside `deployableHosts`. t is a
+     macOS laptop (Darwin, no tailscale CLI). l002 (public IP, root) timed
+     out on 22.
+   - **Open:** deploy juni, oren and gp3 when they're next online.
    - The edge hop o002 → host is plain `http://<overlayIp>:8443` with the
      route `Host`; https or no `Host` fails by design.
 3. Internal/edge listener split (§2.3, §2.3.1), o002 generated vhosts and
@@ -1029,13 +1040,20 @@ under tag `h001`; its `forget` is restricted to `--tag h001`. Pre-2026-10-22
 Verified on h001: manual run, `restic snapshots --tag svc:puzzles`, restore of
 puzzles to /tmp diffed clean against the live dir.
 
-Other hosts: h003 has no services, so nothing is enabled. joe runs `localai`
-(models are large and regenerable) but has no restic credentials. To enable
-it, put an env secret (same repo vars as h001's, or a grant of the same one)
-on joe through sec-agent, set
-`ringofstorms.containers.backup = { enable = true; environmentFile = …; }`,
-and probably exclude `/srv/containers/localai/{models,backends}`. All hosts
-should share **one repository** so `svc:` history follows moves.
+Other hosts: all hosts share **one repository** so `svc:` history follows
+moves. The repo env secret `machines/high-trust/restic_h001_env_2026-10-01`
+already has a `device_high_trust` role grant, so any high-trust host can
+fetch it with no registry change and no sec deploy (the name is historical:
+it is the fleet repo). To enable a high-trust host, add it to the host's
+`sec-agent.nix` `extraSecrets` with
+`configChanges.ringofstorms.containers.backup.environmentFile =
+"$SECRET_PATH"` and set `ringofstorms.containers.backup.enable = true`.
+lio (hello-nixos, hello-podman) is configured this way (2026-10-22). It needs
+the `containers` input at ≥ 6b242c5e, so run `nix flake update containers`
+in hosts/lio after the push. h003 has no services, so nothing is enabled.
+joe is low-trust: running `localai` there would need a grant of that key
+to joe's `sub` (or `device_low_trust`), which is a trust decision. It would
+also need to exclude `/srv/containers/localai/{models,backends}`.
 
 **Done (2026-10-22): `move` through restic, restore check, backup age.**
 
@@ -1052,11 +1070,19 @@ should share **one repository** so `svc:` history follows moves.
   manifest) → 4 deploy and route health (`cnt health`) → 5 restore check
   (`cnt restore-check`: scratch restore, SQLite `PRAGMA integrity_check`,
   PG dumps non-empty, valid gzip, complete, `PGDMP` for custom format) → 6
-  first backup on the target → 7 switch: uninstall the source and rename it
-  to `.moved-<date>`. A failure in 2-6 undoes the target (data kept as
-  `.failed-move-<time>`) and restarts the source if it was running.
-  Re-runs are safe (`move-<svc>` marker on the target, `.was-running` on
-  the source). `--dry-run` prints the whole plan.
+  first backup on the target → 7 switch: confirmed stop of the source, then
+  uninstall and rename to `.moved-<date>`. A failure in 2-6 rolls the target
+  back (`set -euo pipefail`). It stops the unit and confirms it is down: not
+  active/activating/deactivating per `systemctl is-active`, and no
+  `machinectl` machine for nixos-kind. It waits a bounded time and
+  `systemctl kill`s the unit if needed. A failed uninstall fails the
+  rollback. Only then is the data moved aside as `.failed-move-<time>`, and
+  the `move-<svc>` marker goes last. The source restarts only after a
+  successful rollback, if it was running. If the rollback fails, both hosts
+  stay stopped and move exits non-zero with the manual steps (no split
+  brain). Preflight leftover cleanup uses the same confirmed path. Re-runs
+  are safe (`move-<svc>` marker on the target, `.was-running` on the source).
+  `--dry-run` prints the whole plan.
 - Status endpoint: `lastBackup` per service, read from the stamp (no restic).
   fleet-edge `/services` has a backup column (age, **stale** after 36h, `never`)
   and a stale count. h005 is deployed with `--override-input fleet-edge`

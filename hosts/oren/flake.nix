@@ -161,6 +161,7 @@
           })
 
           ./hardware-configuration.nix
+          ./firewall.nix
           ./nono.nix
           (import ./impermanence.nix {
             inherit primaryUser;

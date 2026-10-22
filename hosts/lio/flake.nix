@@ -93,6 +93,9 @@
             # net.private guests (ROUTING-PLAN §8 step 5); the legacy 10.0.0.x
             # containers in containers.nix are outside its scope.
             ringofstorms.containers.privateNetwork.enable = true;
+            # Per-service restic into the shared fleet repo (ROUTING-PLAN
+            # §9.1); environmentFile comes from sec-agent.nix configChanges.
+            ringofstorms.containers.backup.enable = true;
           })
           inputs.common.nixosModules.essentials
           (import ../../flakes/common/nix_modules/git/default.nix)
