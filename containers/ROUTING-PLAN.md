@@ -7,6 +7,7 @@ and shows it on one tailnet-only page.
 
 Status: **being implemented**; see §8 for per-step status. Done: step 1
 (`routes` schema, generated host vhost + ports, `cnt routes`, `cnt audit`),
+step 2 (`cnt port`, per-host `trustInterface = false` fleet-wide),
 step 3 (internal/edge listener split), step 6 (fleet oauth2-proxy),
 step 7 (`cnt expose` overrides with expiry, tailnet/lan only), step 8
 (read-only dashboard in fleet-edge, homepage-dashboard retired).
@@ -650,7 +651,7 @@ Taken 2026-10-16:
    firewall, keeping the `nginx` string as an escape hatch while services
    are converted. `cnt routes` and `cnt audit` (read-only) exist
    (`containers/cli/routes.go`).
-2. **Partial.** `cnt port open|ls|close` exists (`containers/cli/port.go`):
+2. **Done 2026-10-22.** `cnt port open|ls|close` exists (`containers/cli/port.go`):
    it opens a port on a host for a limited time without a rebuild, by
    adding elements to three nft sets (`cnt-tmp`, `cnt-tmp4`, `cnt-tmp6`)
    that the host module's firewall rules match and the kernel expires;
@@ -668,20 +669,19 @@ Taken 2026-10-16:
    - lio (gen 1231): 22 on tailscale0; nix-serve 5000 from juni/gp3/oren.
      Verified by store path only (no root here).
    - o002 (gen 64): none (80/443/3032, 3478/udp are public).
-   - juni, oren, gp3 (2026-10-22): **config ready, not deployed.** All
-     three import the module and were offline (headscale: last seen 5d,
-     never, 8d; ssh to name/overlay IP and via lio timed out).
-     `firewall.nix` sets `trustInterface = false` with no tailscale0 rules
-     (laptops; global 22, kdeconnect, 41641/udp, oren's 9991 remain; the
-     beszel agent connects out). Eval: trusted = `lo` only. Toplevel builds
-     for juni and gp3. oren's toplevel currently fails on an unrelated
-     `opencode` bun lockfile, so only its nftables unit was built. These apply on
-     each host's next rebuild.
+   - juni (gen 159), gp3 (gen 8), oren (gen 25), deployed 2026-10-22:
+     none on tailscale0 (laptops; global 22, kdeconnect 1714-1764,
+     41641/udp and oren's 9991 remain; beszel agent connects out).
+     Inventory: only sshd, kdeconnect, LLMNR 5355, tailscaled. Probes from
+     lio after `test`: ssh 22 and kdeconnect 1716 open, tailnet LLMNR 5355
+     now refused (9991 on oren has no listener). The tailscaled peerapi port
+     still answers: tailscaled serves it itself, so nft doesn't see it.
+     oren's opencode build fixed by bumping it to lio's pin (8a8bd62)
+     with lio's node_modules hash and `postInstall = ""` overrides.
    - l002, t: **not on the module.** They have no NixOS config in this repo,
      only ssh aliases in `fleet.nix`, outside `deployableHosts`. t is a
      macOS laptop (Darwin, no tailscale CLI). l002 (public IP, root) timed
      out on 22.
-   - **Open:** deploy juni, oren and gp3 when they're next online.
    - The edge hop o002 → host is plain `http://<overlayIp>:8443` with the
      route `Host`; https or no `Host` fails by design.
 3. Internal/edge listener split (§2.3, §2.3.1), o002 generated vhosts and
@@ -1000,9 +1000,14 @@ Taken 2026-10-16:
 9. **Built (2026-10-22), not yet run for real.** `cnt move` goes through
    restic (§9.1): final backup on the source, restore on the target, deploy
    and route health, restore check, first backup on the target, then the
-   source becomes `.moved-<date>`. Any earlier failure undoes the target and
-   restarts the source. A real move waits for a second host with
-   `ringofstorms.containers.backup` (only h001 has it today).
+   source becomes `.moved-<date>`. Any earlier failure rolls the target
+   back: the rollback confirms the target is down (`LoadState` not-found,
+   no unit file in `/etc/systemd-mutable/system`, no `machinectl` machine /
+   no podman container, podman exit 1 required) before uninstalling, then
+   restarts the source only after a successful rollback. A failed rollback
+   leaves both hosts stopped with `.was-running` kept and prints manual
+   steps. A real move is now possible between h001 and lio, the only two
+   hosts with `ringofstorms.containers.backup`.
 
 ## 9. Carried over from the migration plan
 
@@ -1048,16 +1053,24 @@ it is the fleet repo). To enable a high-trust host, add it to the host's
 `sec-agent.nix` `extraSecrets` with
 `configChanges.ringofstorms.containers.backup.environmentFile =
 "$SECRET_PATH"` and set `ringofstorms.containers.backup.enable = true`.
-lio (hello-nixos, hello-podman) is configured this way (2026-10-22). It needs
-the `containers` input at ≥ 6b242c5e, so run `nix flake update containers`
-in hosts/lio after the push. h003 has no services, so nothing is enabled.
-joe is low-trust: running `localai` there would need a grant of that key
-to joe's `sub` (or `device_low_trust`), which is a trust decision. It would
-also need to exclude `/srv/containers/localai/{models,backends}`.
+lio has `ringofstorms.containers.backup` enabled (2026-10-22), using the
+same repo as h001 (repo id `7f023d4a`) via the existing high-trust grant of
+`machines/high-trust/restic_h001_env_2026-10-01`; no registry change. It
+needs the `containers` input at ≥ 6b242c5e, so run `nix flake update
+containers` in hosts/lio after the push. Verified: snapshots `771250b9`
+(`svc:hello-nixos`) and `2b4175bc` (`svc:hello-podman`), taken on host lio,
+are visible from h001. h003 has no services, so nothing is enabled.
+joe is low-trust: giving it the key (vs. `device_low_trust`) is a user
+decision; running `localai` there would also need to exclude
+`/srv/containers/localai/{models,backends}`.
 
 **Done (2026-10-22): `move` through restic, restore check, backup age.**
 
-- `fleet-backup <svc>` / `fleet-backup-svc@<svc>.service`: one service, even
+- `fleet-backup`/`fleet-backup-svc@<svc>.service` (not on PATH: both are
+  `writeShellScript`, run only by units). Manual one-service run:
+  `systemctl start fleet-backup-svc@<svc>.service`; manual full run:
+  `systemctl start fleet-backup.service`. `fleet-restic` is the only
+  helper on PATH. `fleet-backup-svc@<svc>`: one service, even
   if stopped, no prune; per-service flock. Every success writes
   `/var/lib/fleet-containers/backup-last/<svc>`
   (`time=… snapshot=<id> host=…`). SQLite copies keep the live file's
@@ -1075,14 +1088,20 @@ also need to exclude `/srv/containers/localai/{models,backends}`.
   back (`set -euo pipefail`). It stops the unit and confirms it is down: not
   active/activating/deactivating per `systemctl is-active`, and no
   `machinectl` machine for nixos-kind. It waits a bounded time and
-  `systemctl kill`s the unit if needed. A failed uninstall fails the
-  rollback. Only then is the data moved aside as `.failed-move-<time>`, and
-  the `move-<svc>` marker goes last. The source restarts only after a
-  successful rollback, if it was running. If the rollback fails, both hosts
-  stay stopped and move exits non-zero with the manual steps (no split
-  brain). Preflight leftover cleanup uses the same confirmed path. Re-runs
-  are safe (`move-<svc>` marker on the target, `.was-running` on the source).
-  `--dry-run` prints the whole plan.
+  `systemctl kill`s the unit if needed. If the stop itself fails, that's
+  taken as proof the service was never installed (`LoadState` not-found, no
+  unit file in `/etc/systemd-mutable/system`, no `machinectl` machine / no
+  podman container, podman exit 1 required), and the uninstall step is
+  skipped. A failed uninstall fails the rollback. Only then is the data
+  moved aside as `.failed-move-<time>`, and the `move-<svc>` marker goes
+  last. The source restarts only after a successful rollback, if it was
+  running. If the rollback fails, both hosts stay stopped with
+  `.was-running` kept on the source and move exits non-zero with the
+  manual steps printed (no split brain). Preflight leftover cleanup uses
+  the same confirmed path. Re-runs are safe (`move-<svc>` marker on the
+  target, `.was-running` on the source). `--dry-run` prints the whole
+  plan. A real move is now possible between h001 and lio, the only two
+  hosts with `ringofstorms.containers.backup`.
 - Status endpoint: `lastBackup` per service, read from the stamp (no restic).
   fleet-edge `/services` has a backup column (age, **stale** after 36h, `never`)
   and a stale count. h005 is deployed with `--override-input fleet-edge`

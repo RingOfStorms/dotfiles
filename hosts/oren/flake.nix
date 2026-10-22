@@ -23,7 +23,7 @@
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
     # mva.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/mva.git";
 
-    opencode.url = "github:anomalyco/opencode/375444a149780c7121bd8964685c4bfe8edd1870";
+    opencode.url = "github:anomalyco/opencode/8a8bd622a3d7dc29ccf30ec17f84e363ed95ed72";
     nono.url = "github:always-further/nono/b251c72fe5a4c7b1d1323307493db736be42c912";
     nono.flake = false;
     # Used to pin a newer rustc than what nixpkgs ships (needed by nono).
@@ -95,9 +95,22 @@
 
           (
             { pkgs, ... }:
+            let
+              # OpenCode v2.0.21 ships a stale x86_64-linux node_modules hash (same fix as lio).
+              opencode = inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default;
+              opencodePackage =
+                (opencode.override {
+                  node_modules = opencode.node_modules.override {
+                    hash = "sha256-8c/wmYczopurElpy8jNYH66TlHG8RAQ1FGSGKqbQEaA=";
+                  };
+                }).overrideAttrs
+                  {
+                    postInstall = ""; # upstream calls `opencode completion`, removed in v2
+                  };
+            in
             {
               environment.systemPackages = [
-                inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.default
+                opencodePackage
                 # inputs.mva.packages.${pkgs.stdenv.hostPlatform.system}.default
               ];
               environment.shellAliases =
