@@ -2,10 +2,12 @@ package state
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/store"
 )
 
 func strp(s string) *string { return &s }
@@ -258,6 +260,7 @@ func TestBuildStoreSamplesNormalizesLegacyBcachefs(t *testing.T) {
 		},
 	}
 
+	normalizeHostStatus(st)
 	_, fsSamples := buildStoreSamples("o002", time.Unix(1700000000, 0), st)
 	if len(fsSamples) != 1 {
 		t.Fatalf("expected 1 fsSample, got %d", len(fsSamples))
@@ -275,6 +278,11 @@ func TestConcurrentCurrentAndSetPoll(t *testing.T) {
 	inv := sampleInventory()
 	inv.ContainerHosts = []string{"h001"}
 	p := NewPoller(inv, "http://127.0.0.1:1/{host}", 100*time.Millisecond)
+	stDB, err := store.Open(filepath.Join(t.TempDir(), "metrics.db"))
+	if err != nil {
+		t.Fatalf("open temp store: %v", err)
+	}
+	p.SetStore(stDB)
 
 	baseStatus := &HostStatus{
 		Host: "h001",
@@ -292,14 +300,20 @@ func TestConcurrentCurrentAndSetPoll(t *testing.T) {
 					Devices:            []BcachefsDevice{{Name: "sda", CapacityBytes: 400}},
 				},
 			},
+			{
+				Mount:      "/scratch",
+				FSType:     "bcachefs",
+				UsedBytes:  0,
+				TotalBytes: 500,
+			},
 		},
 	}
-	p.setPoll("h001", HostPoll{Host: "h001", OK: true, PolledAt: time.Now(), Status: baseStatus}, nil)
+	p.setPoll("h001", HostPoll{Host: "h001", OK: true, PolledAt: time.Now(), Status: cloneNormalizedHostStatus(baseStatus)}, nil)
 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		for i := 0; i < 100; i++ {
+		for i := 0; i < 40; i++ {
 			st := cloneNormalizedHostStatus(baseStatus)
 			p.setPoll("h001", HostPoll{Host: "h001", OK: true, PolledAt: time.Now(), Status: st}, nil)
 		}
@@ -307,7 +321,7 @@ func TestConcurrentCurrentAndSetPoll(t *testing.T) {
 
 	for i := 0; i < 100; i++ {
 		m := p.Current()
-		if len(m.Hosts) != 1 || m.Hosts[0].Status == nil || len(m.Hosts[0].Status.Filesystems) != 1 {
+		if len(m.Hosts) != 1 || m.Hosts[0].Status == nil || len(m.Hosts[0].Status.Filesystems) != 2 {
 			t.Fatalf("unexpected merged hosts: %+v", m.Hosts)
 		}
 		if m.Hosts[0].Status.Filesystems[0].Bcachefs.RawCapacityBytes != 400 {

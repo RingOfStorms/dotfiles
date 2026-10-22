@@ -498,6 +498,19 @@ footer {
   padding-top: 0.35rem;
 }
 
+.hosts-table td { vertical-align: middle; }
+.host-col-system { min-width: 9.5rem; }
+.host-col-status { min-width: 7.5rem; white-space: nowrap; }
+.host-col-cpu { min-width: 9.5rem; width: 11rem; }
+.host-col-mem { min-width: 10.5rem; width: 12rem; }
+.host-col-fs { min-width: 18rem; }
+.host-col-io { min-width: 8.5rem; white-space: nowrap; font-size: 0.78rem; line-height: 1.45; }
+.host-col-health { min-width: 8rem; }
+.host-sub-meta { font-size: 0.75rem; margin-top: 0.2rem; background: transparent; padding: 0; }
+.metric-cell { display: flex; flex-direction: column; gap: 0.25rem; }
+.table-fs-list { display: flex; flex-direction: column; gap: 0.45rem; }
+.host-badges-cell { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+
 .detail-head {
   display: flex;
   justify-content: space-between;

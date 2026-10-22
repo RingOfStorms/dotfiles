@@ -82,6 +82,7 @@ rec {
     };
     i001 = {
       user = "luser";
+      overlayIp = "100.64.0.6";
       lanIp = "10.12.14.119";
       trust = "low";
       role = "workstation";
@@ -121,7 +122,6 @@ rec {
     gp3 = {
       user = "josh";
       overlayIp = "100.64.0.15";
-      lanIp = "10.12.14.101";
       trust = "high";
       role = "laptop";
       alwaysOn = false;
@@ -139,17 +139,12 @@ rec {
       user = "joshua.bell";
       lanIp = "10.12.14.181";
     };
-    l002 = {
-      user = "root";
-      publicIp = "172.234.26.141";
-    };
   };
 
   # ─── DEPLOY TARGETS ───────────────────────────────────────────────
   # Hosts that can be deployed to from the root flake devShell.
   deployableHosts = builtins.removeAttrs hosts [
     "t"
-    "l002"
   ];
 
   # ─── SSH MATCH BLOCK HOSTS ────────────────────────────────────────

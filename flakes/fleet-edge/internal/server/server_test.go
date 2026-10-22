@@ -262,6 +262,8 @@ func TestHostDetailAndBcachefsDrillDown(t *testing.T) {
 					Kernel:        "6.18.55",
 					UptimeSec:     86400,
 					Load1:         0.42,
+					Load5:         0.38,
+					Load15:        0.31,
 					CPUPercent:    14.5,
 					MemTotalBytes: 64_000_000_000,
 					MemUsedBytes:  16_000_000_000,
@@ -311,9 +313,14 @@ func TestHostDetailAndBcachefsDrillDown(t *testing.T) {
 		t.Fatalf("/hosts status = %d", w.Code)
 	}
 	hostsBody := w.Body.String()
-	for _, want := range []string{"10.0 TB / 25.0 TB usable (40%) · 2x", "raw pool: 20.0 TB / 50.0 TB", "sleep / offline", "← h002"} {
+	for _, want := range []string{"<table class=\"hosts-table\">", "load 0.42 / 0.38 / 0.31", "10.0 TB / 25.0 TB usable (40%) · 2x", "raw pool: 20.0 TB / 50.0 TB", "sleep / offline", "← h002"} {
 		if !strings.Contains(hostsBody, want) {
 			t.Fatalf("/hosts missing %q:\n%s", want, hostsBody)
+		}
+	}
+	for _, unwanted := range []string{"Always-On Servers", "Workstations &amp; Laptops", "Other Inventory Hosts"} {
+		if strings.Contains(hostsBody, unwanted) {
+			t.Fatalf("/hosts still contains category header %q:\n%s", unwanted, hostsBody)
 		}
 	}
 

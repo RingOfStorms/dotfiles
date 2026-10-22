@@ -12,6 +12,7 @@
     # sec-agent replaces secrets-bao on this host.
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
 
+    fleet-agent.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/fleet-agent";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
 

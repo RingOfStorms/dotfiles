@@ -26,7 +26,7 @@
           flakePath = hostDef.flakePath or "hosts/${name}";
 
           # Determine deploy target: prefer lanIp for local hosts, else hostname
-          target = if hostDef ? lanIp then "root@${hostDef.lanIp}" else name;
+          target = if hostDef ? lanIp then "root@${hostDef.lanIp}" else "root@${name}";
 
           # Hosts accessed by name (on tailnet) that already have SSH keys configured
           # don't need NIX_SSHOPTS. Hosts accessed by raw IP do.
@@ -38,7 +38,7 @@
           ${sshOpts}nixos-rebuild --flake $(git rev-parse --show-toplevel)'/${flakePath}#${name}' --target-host ${target} --use-substitutes --no-reexec switch
         '';
 
-      # Which hosts get deploy scripts (exclude non-deployable entries like 't' and 'l002')
+      # Which hosts get deploy scripts (exclude non-deployable entries like 't')
       deployHosts = builtins.attrNames fleet.deployableHosts;
 
       # Security auditor — scans every flake.lock for stale/off-branch nixpkgs

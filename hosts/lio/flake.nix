@@ -56,10 +56,6 @@
                 hostname = fleet.hosts.joe.lanIp;
                 user = fleet.hosts.joe.user;
               };
-              "gp3_" = {
-                hostname = fleet.hosts.gp3.lanIp;
-                user = fleet.hosts.gp3.user;
-              };
             };
           })
         ];

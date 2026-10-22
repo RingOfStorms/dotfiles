@@ -1,7 +1,7 @@
 {
   host = {
     name = "oren";
-    overlayIp = "100.64.0.5";
+    overlayIp = "100.64.0.2";
     primaryUser = "josh";
     stateVersion = "25.11";
   };

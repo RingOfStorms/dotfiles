@@ -98,15 +98,21 @@ type HostCardView struct {
 	MemPercent   float64
 	MemSummary   string
 	UptimeStr    string
+	NetRxBps     uint64
+	NetTxBps     uint64
+	DiskReadBps  uint64
+	DiskWriteBps uint64
 }
 
 // HostsData is the view model for hosts.html.
 type HostsData struct {
 	state.Merged
 	Common
-	ServerHosts      []HostCardView
-	WorkstationHosts []HostCardView
-	OtherHosts       []HostCardView
+	Hosts           []HostCardView
+	PolledTotal     int
+	ReachableCount  int
+	SleepingCount   int
+	UnreachableHost int
 }
 
 // LogTargetOption represents one selectable log source in the drill-down log viewer.
@@ -291,12 +297,25 @@ func (s *Server) handleServices(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) enrichHostCard(ctx context.Context, hv state.HostView, now time.Time) HostCardView {
 	card := HostCardView{HostView: hv}
-	if hv.Status != nil && hv.Status.System != nil {
-		sys := hv.Status.System
-		card.UptimeStr = FormatUptime(sys.UptimeSec)
-		if sys.MemTotalBytes > 0 {
-			card.MemPercent = (float64(sys.MemUsedBytes) / float64(sys.MemTotalBytes)) * 100
-			card.MemSummary = fmt.Sprintf("%s / %s", FormatBytes(sys.MemUsedBytes), FormatBytes(sys.MemTotalBytes))
+	if hv.Status != nil {
+		if hv.Status.System != nil {
+			sys := hv.Status.System
+			card.UptimeStr = FormatUptime(sys.UptimeSec)
+			if sys.MemTotalBytes > 0 {
+				card.MemPercent = (float64(sys.MemUsedBytes) / float64(sys.MemTotalBytes)) * 100
+				card.MemSummary = fmt.Sprintf("%s / %s", FormatBytes(sys.MemUsedBytes), FormatBytes(sys.MemTotalBytes))
+			}
+		}
+		for name, nio := range hv.Status.NetIO {
+			if strings.HasPrefix(name, "lo") || strings.HasPrefix(name, "veth") || strings.HasPrefix(name, "ve-") || strings.HasPrefix(name, "br-") || strings.HasPrefix(name, "podman") || strings.HasPrefix(name, "docker") {
+				continue
+			}
+			card.NetRxBps += nio.RxBytesPerSec
+			card.NetTxBps += nio.TxBytesPerSec
+		}
+		for _, dio := range hv.Status.DiskIO {
+			card.DiskReadBps += dio.ReadBytesPerSec
+			card.DiskWriteBps += dio.WriteBytesPerSec
 		}
 	}
 
@@ -327,13 +346,17 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 
 	for _, hv := range m.Hosts {
 		card := s.enrichHostCard(r.Context(), hv, now)
-		switch {
-		case !hv.HasEndpoint:
-			data.OtherHosts = append(data.OtherHosts, card)
-		case hv.AlwaysOn:
-			data.ServerHosts = append(data.ServerHosts, card)
-		default:
-			data.WorkstationHosts = append(data.WorkstationHosts, card)
+		data.Hosts = append(data.Hosts, card)
+		if hv.HasEndpoint {
+			data.PolledTotal++
+			switch {
+			case hv.Reachable:
+				data.ReachableCount++
+			case hv.StateBadge == "sleeping":
+				data.SleepingCount++
+			default:
+				data.UnreachableHost++
+			}
 		}
 	}
 	s.render(w, "hosts.html", data)

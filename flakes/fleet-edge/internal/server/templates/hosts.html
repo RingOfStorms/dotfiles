@@ -1,142 +1,163 @@
-{{define "host-card"}}
-<div class="host-card{{if not .HasEndpoint}} muted{{end}}">
-  <div class="host-card-head">
+{{define "hosts.html"}}{{template "head" .}}
+<main>
+<header class="page-head">
+  <h1>Hosts</h1>
+  <p class="summary">
+    <strong>{{.ReachableCount}}</strong>/<strong>{{.PolledTotal}}</strong> polled hosts online
+    {{if .SleepingCount}} · <strong>{{.SleepingCount}}</strong> sleeping{{end}}
+    {{if .UnreachableHost}} · <strong class="warn">{{.UnreachableHost}}</strong> unreachable{{end}}
+  </p>
+</header>
+<div class="scroll table-wrap">
+<table class="hosts-table">
+<thead>
+<tr>
+  <th>system</th>
+  <th>status</th>
+  <th>cpu</th>
+  <th>memory</th>
+  <th>filesystems</th>
+  <th>net / disk io</th>
+  <th>health</th>
+</tr>
+</thead>
+<tbody>
+{{range .Hosts}}
+<tr class="{{if not .HasEndpoint}}muted{{end}}">
+  <td class="host-col-system">
     <div class="host-title-row">
       <a class="host-name" href="/hosts/{{.Host}}">{{.Host}}</a>
       {{if .Replaces}}<span class="badge badge-local" title="Replaces retired host">{{range .Replaces}}← {{.}}{{end}}</span>{{end}}
       {{if .Role}}<span class="badge badge-tailnet">{{.Role}}</span>{{end}}
     </div>
+    <div class="host-ips mono">
+      {{if .OverlayIP}}<span>{{.OverlayIP}}</span>{{end}}
+      {{if .LanIP}}<span>lan {{.LanIP}}</span>{{end}}
+      {{if .Status}}{{if .Status.System}}{{if .Status.System.Kernel}}<span>k{{.Status.System.Kernel}}</span>{{end}}{{end}}{{end}}
+    </div>
+  </td>
+
+  <td class="host-col-status">
     <div>
       {{if not .HasEndpoint}}
         <span class="pill pill-none">no endpoint</span>
       {{else if .Reachable}}
-        <span class="pill pill-reachable">reachable</span>
+        <span class="pill pill-reachable">online</span>
       {{else if eq .StateBadge "sleeping"}}
-        <span class="pill pill-sleeping" title="Intermittent workstation/laptop{{if .LastSeenAge}} · last seen {{.LastSeenAge}} ago{{end}}">sleep / offline{{if .LastSeenAge}} · {{.LastSeenAge}} ago{{end}}</span>
+        <span class="pill pill-sleeping" title="Intermittent workstation/laptop{{if .LastSeenAge}} · last seen {{.LastSeenAge}} ago{{end}}">sleep / offline</span>
       {{else}}
         <span class="pill pill-unreachable">unreachable</span>
       {{end}}
     </div>
-  </div>
+    <div class="host-sub-meta mono muted">
+      {{if and .Reachable .UptimeStr}}
+        up {{.UptimeStr}}
+      {{else if and (not .Reachable) .LastSeenAge}}
+        seen {{.LastSeenAge}} ago
+      {{else if and (not .Reachable) .Error}}
+        <span class="error-text">{{.Error}}</span>
+      {{end}}
+    </div>
+  </td>
 
-  <div class="host-ips mono">
-    {{if .OverlayIP}}<span>tailnet {{.OverlayIP}}</span>{{end}}
-    {{if .LanIP}}<span>lan {{.LanIP}}</span>{{end}}
-    {{if .UptimeStr}}<span>up {{.UptimeStr}}</span>{{end}}
-  </div>
-
-  {{if .Status}}
-    {{if .Status.System}}
-    <div class="host-metrics-grid">
-      <div class="metric-box">
+  <td class="host-col-cpu">
+    {{if and .Status .Status.System}}
+      <div class="metric-cell">
         <div class="metric-label">
-          <span>CPU</span>
-          <strong>{{printf "%.1f%%" .Status.System.CPUPercent}} <span class="muted">(load {{printf "%.2f" .Status.System.Load1}})</span></strong>
+          <strong>{{printf "%.1f%%" .Status.System.CPUPercent}}</strong>
+          <span class="muted mono" title="Load average (1m / 5m / 15m)">load {{printf "%.2f / %.2f / %.2f" .Status.System.Load1 .Status.System.Load5 .Status.System.Load15}}</span>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill{{if gt .Status.System.CPUPercent 85.0}} bar-warn{{end}}" style="width: {{printf "%.1f%%" .Status.System.CPUPercent}}"></div>
         </div>
         {{.CPUSparkline}}
       </div>
-      <div class="metric-box">
+    {{else}}
+      <span class="muted">—</span>
+    {{end}}
+  </td>
+
+  <td class="host-col-mem">
+    {{if and .Status .Status.System}}
+      <div class="metric-cell">
         <div class="metric-label">
-          <span>Memory</span>
-          <strong>{{.MemSummary}} ({{printf "%.0f%%" .MemPercent}})</strong>
+          <strong>{{printf "%.0f%%" .MemPercent}}</strong>
+          <span class="muted mono">{{.MemSummary}}</span>
         </div>
         <div class="bar-track">
-          <div class="bar-fill" style="width: {{printf "%.1f%%" .MemPercent}}"></div>
+          <div class="bar-fill{{if gt .MemPercent 85.0}} bar-warn{{end}}" style="width: {{printf "%.1f%%" .MemPercent}}"></div>
         </div>
       </div>
-    </div>
+    {{else}}
+      <span class="muted">—</span>
     {{end}}
+  </td>
 
-    {{if .Status.Filesystems}}
-    <div class="host-fs-list">
-      {{range .Status.Filesystems}}
-      <div class="fs-row">
-        <div class="fs-head">
-          <span class="mono"><strong>{{.Mount}}</strong>{{if .Submounts}} <span class="muted">(+{{len .Submounts}} subvols)</span>{{end}} <span class="badge">{{.FSType}}</span></span>
+  <td class="host-col-fs">
+    {{if and .Status .Status.Filesystems}}
+      <div class="table-fs-list">
+        {{range .Status.Filesystems}}
+        <div class="fs-row">
+          <div class="fs-head">
+            <span class="mono"><strong>{{.Mount}}</strong>{{if .Submounts}} <span class="muted">(+{{len .Submounts}})</span>{{end}} <span class="badge">{{.FSType}}</span></span>
+            {{if .Bcachefs}}
+              <span class="mono">{{formatBytes .Bcachefs.UsableUsedBytes}} / {{formatBytes .Bcachefs.UsableTotalBytes}} usable ({{printf "%.0f%%" .UsedPercent}}){{if gt .Bcachefs.DataReplicas 1.0}} · {{printf "%.0fx" .Bcachefs.DataReplicas}}{{end}}</span>
+            {{else}}
+              <span class="mono">{{formatBytes .UsedBytes}} / {{formatBytes .TotalBytes}} ({{printf "%.0f%%" .UsedPercent}})</span>
+            {{end}}
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill{{if gt .UsedPercent 85.0}} bar-warn{{end}}" style="width: {{printf "%.1f%%" .UsedPercent}}"></div>
+          </div>
           {{if .Bcachefs}}
-            <span class="mono">{{formatBytes .Bcachefs.UsableUsedBytes}} / {{formatBytes .Bcachefs.UsableTotalBytes}} usable ({{printf "%.0f%%" .UsedPercent}}){{if gt .Bcachefs.DataReplicas 1.0}} · {{printf "%.0fx" .Bcachefs.DataReplicas}}{{end}}</span>
-          {{else}}
-            <span class="mono">{{formatBytes .UsedBytes}} / {{formatBytes .TotalBytes}} ({{printf "%.0f%%" .UsedPercent}})</span>
+          <div class="fs-sub muted mono">
+            raw pool: {{formatBytes .Bcachefs.RawUsedBytes}} / {{formatBytes .Bcachefs.RawCapacityBytes}}
+            {{if .Bcachefs.Compression}} · {{.Bcachefs.Compression.Type}} {{formatBytes .Bcachefs.Compression.CompressedBytes}} / {{formatBytes .Bcachefs.Compression.UncompressedBytes}}{{end}}
+            {{if .Bcachefs.Devices}} · {{len .Bcachefs.Devices}} drives{{end}}
+          </div>
           {{end}}
         </div>
-        <div class="bar-track">
-          <div class="bar-fill{{if gt .UsedPercent 85.0}} bar-warn{{end}}" style="width: {{printf "%.1f%%" .UsedPercent}}"></div>
-        </div>
-        {{if .Bcachefs}}
-        <div class="fs-sub muted mono">
-          raw pool: {{formatBytes .Bcachefs.RawUsedBytes}} / {{formatBytes .Bcachefs.RawCapacityBytes}}
-          {{if .Bcachefs.Compression}} · {{.Bcachefs.Compression.Type}} {{formatBytes .Bcachefs.Compression.CompressedBytes}} / {{formatBytes .Bcachefs.Compression.UncompressedBytes}}{{end}}
-          · {{len .Bcachefs.Devices}} drives
-        </div>
         {{end}}
       </div>
-      {{end}}
-    </div>
+    {{else}}
+      <span class="muted">—</span>
     {{end}}
+  </td>
 
-    <div class="host-badges-foot">
-      {{if gt .MaxTempC 0.0}}
-        <span class="pill {{if ge .MaxTempC 75.0}}pill-failed{{else}}pill-active{{end}}">temp {{printf "%.0f°C" .MaxTempC}}</span>
-      {{end}}
-      {{if gt .SmartTotal 0}}
-        {{if gt .SmartFailed 0}}
-          <span class="pill pill-failed">SMART {{.SmartFailed}} failed ({{.SmartOK}}/{{.SmartTotal}} ok)</span>
-        {{else}}
-          <span class="pill pill-active">SMART {{.SmartOK}}/{{.SmartTotal}} healthy</span>
+  <td class="host-col-io mono">
+    {{if .Status}}
+      <div><span class="muted">net</span> ↓{{formatRate .NetRxBps}} ↑{{formatRate .NetTxBps}}</div>
+      <div><span class="muted">dsk</span> R:{{formatRate .DiskReadBps}} W:{{formatRate .DiskWriteBps}}</div>
+    {{else}}
+      <span class="muted">—</span>
+    {{end}}
+  </td>
+
+  <td class="host-col-health">
+    {{if .Status}}
+      <div class="host-badges-cell">
+        {{if gt .MaxTempC 0.0}}
+          <span class="pill {{if ge .MaxTempC 75.0}}pill-failed{{else}}pill-active{{end}}">{{printf "%.0f°C" .MaxTempC}}</span>
         {{end}}
-      {{end}}
-      {{if .Status.Fail2ban}}
-        <span class="pill {{if gt .BannedCount 0}}pill-stale{{else}}pill-none{{end}}">fail2ban: {{.BannedCount}} banned</span>
-      {{end}}
-    </div>
-  {{else}}
-    <div class="host-empty muted">
-      {{if not .HasEndpoint}}
-        No fleet-agent endpoint configured.
-      {{else if .PolledAt.IsZero}}
-        <em>not yet polled</em>
-      {{else if .Error}}
-        <span class="error-text">{{.Error}}</span>
-      {{else}}
-        Waiting for first telemetry snapshot…
-      {{end}}
-    </div>
-  {{end}}
-</div>
+        {{if gt .SmartTotal 0}}
+          {{if gt .SmartFailed 0}}
+            <span class="pill pill-failed">SMART {{.SmartFailed}} fail ({{.SmartOK}}/{{.SmartTotal}})</span>
+          {{else}}
+            <span class="pill pill-active">SMART {{.SmartOK}}/{{.SmartTotal}}</span>
+          {{end}}
+        {{end}}
+        {{if .Status.Fail2ban}}
+          <span class="pill {{if gt .BannedCount 0}}pill-stale{{else}}pill-none{{end}}">f2b: {{.BannedCount}}</span>
+        {{end}}
+      </div>
+    {{else}}
+      <span class="muted">—</span>
+    {{end}}
+  </td>
+</tr>
 {{end}}
-
-{{define "hosts.html"}}{{template "head" .}}
-<main>
-<header class="page-head">
-  <h1>Hosts</h1>
-</header>
-<div class="scroll">
-  {{if .ServerHosts}}
-  <section class="group">
-    <h2>Always-On Servers</h2>
-    <div class="host-cards">
-      {{range .ServerHosts}}{{template "host-card" .}}{{end}}
-    </div>
-  </section>
-  {{end}}
-
-  {{if .WorkstationHosts}}
-  <section class="group">
-    <h2>Workstations &amp; Laptops</h2>
-    <div class="host-cards">
-      {{range .WorkstationHosts}}{{template "host-card" .}}{{end}}
-    </div>
-  </section>
-  {{end}}
-
-  {{if .OtherHosts}}
-  <section class="group">
-    <h2>Other Inventory Hosts</h2>
-    <div class="host-cards">
-      {{range .OtherHosts}}{{template "host-card" .}}{{end}}
-    </div>
-  </section>
-  {{end}}
+</tbody>
+</table>
 </div>
 <footer>generated at {{.GeneratedAt}}</footer>
 </main>

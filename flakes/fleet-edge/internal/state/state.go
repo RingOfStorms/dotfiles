@@ -436,7 +436,7 @@ func normalizeHostStatus(st *HostStatus) {
 				}
 			}
 		}
-		if fs.UsedPercent == 0 && fs.TotalBytes > 0 {
+		if fs.UsedPercent == 0 && fs.UsedBytes > 0 && fs.TotalBytes > 0 {
 			fs.UsedPercent = (float64(fs.UsedBytes) / float64(fs.TotalBytes)) * 100
 		}
 	}
@@ -498,7 +498,6 @@ func (p *Poller) setPoll(name string, poll HostPoll, rawJSON []byte) {
 }
 
 func buildStoreSamples(host string, polledAt time.Time, st *HostStatus) (store.Sample, []store.FSSample) {
-	normalizeHostStatus(st)
 	ts := polledAt.Unix()
 	s := store.Sample{
 		Host:         host,
@@ -542,6 +541,9 @@ func buildStoreSamples(host string, polledAt time.Time, st *HostStatus) (store.S
 		if fs.Bcachefs != nil {
 			row.RawUsedBytes = fs.Bcachefs.RawUsedBytes
 			row.RawCapBytes = fs.Bcachefs.RawCapacityBytes
+			if row.RawCapBytes == 0 {
+				row.RawCapBytes = fs.Bcachefs.RawTotalBytes
+			}
 		}
 		fsOut = append(fsOut, row)
 	}
