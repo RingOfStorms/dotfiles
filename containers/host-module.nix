@@ -827,60 +827,7 @@ in
         # ve-* interfaces/addresses (lio's 10.0.0.x) are not touched.
         networking.nftables.tables.fleet-net = {
           family = "inet";
-          content = ''
-            set guests {
-              comment "ve-<name> of net.private guests (ports files: guest)"
-              type ifname
-            }
-            set noinet {
-              comment "net.private guests with internet = false (ports files)"
-              type ifname
-            }
-            set egress {
-              comment "net.uses / net.egress exceptions: guest . daddr . proto . port (ports files)"
-              type ifname . ipv4_addr . inet_proto . inet_service
-            }
-            set blocked4 {
-              comment "never reachable from a guest (beyond DNAT routes and net.egress)"
-              type ipv4_addr
-              flags interval
-              elements = { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8,
-                           169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16,
-                           224.0.0.0/3 }
-            }
-            # Base chains only classify; guest traffic jumps to the
-            # guest-* chains, everything else is untouched. Priority
-            # filter - 5 runs before nixos-fw (trusted interfaces such as
-            # lio's ve-*, global allowed ports). The guest chains only drop;
-            # what they let through still has to pass nixos-fw.
-            chain input {
-              type filter hook input priority filter - 5; policy accept;
-              iifname @guests jump guest-in
-              ip saddr 10.233.0.0/16 jump guest-in
-              iifname "podman0" jump guest-in comment "podman default bridge (opengist): same isolation"
-            }
-            chain guest-in {
-              ct state established,related return
-              meta nfproto ipv6 counter drop comment "no IPv6 to the host"
-              ip daddr 10.233.0.1 meta l4proto { tcp, udp } th dport 53 return comment "guest DNS (resolved stub)"
-              iifname . ip daddr . meta l4proto . th dport @egress return comment "net.uses (this host's nginx) / net.egress"
-              counter drop comment "guest -> host: nothing else"
-            }
-            chain forward {
-              type filter hook forward priority filter - 5; policy accept;
-              iifname @guests jump guest-fwd
-              ip saddr 10.233.0.0/16 jump guest-fwd
-              iifname "podman0" jump guest-fwd comment "podman default bridge: internet + published ports only"
-            }
-            chain guest-fwd {
-              ct direction reply return comment "replies to inbound (DNAT) flows"
-              ct status dnat return comment "declared tcp/udp route (to another guest or host port)"
-              iifname . ip daddr . meta l4proto . th dport @egress return comment "net.uses / net.egress"
-              iifname @noinet counter drop comment "internet = false"
-              meta nfproto ipv6 counter drop comment "no IPv6 egress"
-              ip daddr @blocked4 counter drop comment "no LAN, tailnet, link-local or other guests"
-            }
-          '';
+          content = builtins.readFile ./cli/fleet-net.nft;
         };
         networking.nftables.tables.fleet-net-nat = {
           family = "ip";
