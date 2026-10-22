@@ -85,6 +85,7 @@
           })
 
           ./hardware-configuration.nix
+          ./firewall.nix
           (import ./impermanence.nix {
             impermanence_mod = inputs.impermanence_mod;
           })

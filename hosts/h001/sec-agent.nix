@@ -26,12 +26,6 @@ import ../sec-agent.nix {
       remotePath = "machines/high-trust/us_chi_wg_2026-03-15";
     };
 
-    oauth2_proxy_key_file_2026-03-15 = {
-      remotePath = "machines/high-trust/oauth2_proxy_key_file_2026-03-15";
-      # Bound read-only into the trilium floating container.
-      softDepend = [ "container@trilium" ];
-    };
-
     openwebui_env_2026-03-15 = {
       remotePath = "machines/high-trust/openwebui_env_2026-03-15";
       softDepend = [ "container@open-webui" ];

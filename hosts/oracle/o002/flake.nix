@@ -98,6 +98,7 @@
 
           diskoModule
           ./hardware-configuration.nix
+          ./firewall.nix
           ./configuration.nix
           ./nginx.nix
           ../../wildcard-cert-receiver.nix

@@ -27,7 +27,7 @@ keys live in persist: `/srv/containers/sec/data/db.key` and
 
 | Service | Notes |
 |---|---|
-| nginx + ACME | Wildcard `*.joshuabell.xyz` (bunny DNS-01); floating sites in `/var/lib/fleet-containers/nginx`. ACME moves to h005 (`containers/ROUTING-PLAN.md`). |
+| nginx | No ACME or bunny key here. TLS is the `*.joshuabell.xyz` + apex wildcard issued on h005 and pushed to `/var/lib/fleet-cert/joshuabell.xyz/current` (`hosts/wildcard-cert-receiver.nix`); floating sites in `/var/lib/fleet-containers/nginx`. |
 | restic backup | Containers: `fleet-backup` (`ringofstorms.containers.backup` in `floating-containers.nix`, one snapshot per `svc:<name>`). Host data (wd10 media, ~luser/backups): `mods/restic-backup.nix`. Both nightly at 03:00, same repo. |
 | homepage-dashboard | Replaced by fleet-edge on h005; no redirect is left behind. |
 | autofs NFS client, storage guard `fleet-guard-h004` | Host plumbing for `arr`. |

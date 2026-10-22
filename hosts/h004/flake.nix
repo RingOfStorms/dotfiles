@@ -96,6 +96,7 @@
           (import ./sec-agent.nix { inherit inputs constants; })
 
           ./hardware-configuration.nix
+          ./firewall.nix
           ./data-pool.nix
 
           # nixarr module only for its shared media uids/gids (nfs-data-users-nixarr.nix).

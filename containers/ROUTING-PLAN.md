@@ -5,7 +5,16 @@ who can reach it, how, and through what auth. The tooling makes the network
 match that statement, lets it change at runtime (move, temporarily public),
 and shows it on one tailnet-only page.
 
-Status: **proposal**; §8 step 1 in progress (`routes` schema, generated host vhost + ports, `cnt routes`, `cnt audit`; sec and zitadel converted). Decisions are in §7; §6 lists
+Status: **being implemented**; see §8 for per-step status. Done: step 1
+(`routes` schema, generated host vhost + ports, `cnt routes`, `cnt audit`),
+step 3 (internal/edge listener split), step 6 (fleet oauth2-proxy),
+step 7 (`cnt expose` overrides with expiry, tailnet/lan only), step 8
+(read-only dashboard in fleet-edge, homepage-dashboard retired), step 2
+(firewall: no reachable host trusts `tailscale0`, 2026-10-22).
+Partial: step 4 (DNS/bunny and wildcard certs done; router forwards code
+done, off by decision), step 5 (private networking mechanism built, rollout
+service-by-service), step 9 (`cnt move`, blocked on §9.1). Decisions are
+in §7; §6 lists
 requirements every step must meet. §9 holds the open items carried over from
 the finished migration plan (all services float since 2026-10-17).
 
@@ -14,6 +23,9 @@ DNS, always on), **h004 = NAS**, **o002 = public TLS edge**, h001/h003/lio/joe
 = service hosts.
 
 ## 1. Today (audit 2026-10-14, h001)
+
+This section is a historical snapshot (audit date below); §8 tracks what has
+since changed.
 
 How a request gets in now:
 
@@ -633,12 +645,32 @@ Taken 2026-10-16:
 
 ## 8. Suggested order
 
-1. **(in progress)** `routes` schema in service.nix + CLI generation of the host vhost and
+1. **Done.** `routes` schema in service.nix + CLI generation of the host vhost and
    firewall, keeping the `nginx` string as an escape hatch while services
-   are converted. Add `cnt routes` and `cnt audit` (read-only, useful
-   immediately).
-2. Firewall: inventory each host's listeners, add explicit rules, then drop
-   the `tailscale0` trust host by host (h001 first). Add `cnt port open`.
+   are converted. `cnt routes` and `cnt audit` (read-only) exist
+   (`containers/cli/routes.go`).
+2. **Done 2026-10-22.** `cnt port open|ls|close` exists (`containers/cli/port.go`):
+   it opens a port on a host for a limited time without a rebuild, by
+   adding elements to three nft sets (`cnt-tmp`, `cnt-tmp4`, `cnt-tmp6`)
+   that the host module's firewall rules match and the kernel expires;
+   `port ls` lists the live elements and `port close` removes them early.
+   `ringofstorms.tailnet.trustInterface = false` per host (`firewall.nix`);
+   live `nft` trusts only `lo`. Rolled out with a 10-min auto-revert and
+   probes before/after:
+   - h001 (gen 845): 9101 from h005 only.
+   - h003 (gen 10): 80/443 on tailscale0; 9101 from h005 only.
+   - h004 (gen 7): none (NFS is LAN, opened globally).
+   - h005 (gen 28): 53 tcp/udp and 80 on tailscale0; 443 (private-zone);
+     oauth2-proxy rule.
+   - i001 (gen 39): none (tailnet LLMNR 5355 now refused).
+   - joe (gen 73): localai 8080 from h005 only (pre-DNAT).
+   - lio (gen 1231): 22 on tailscale0; nix-serve 5000 from juni/gp3/oren.
+     Verified by store path only (no root here).
+   - o002 (gen 64): none (80/443/3032, 3478/udp are public).
+   - Unreachable: juni, oren, gp3, l002, t. They still trust `tailscale0`
+     if they use the module.
+   - The edge hop o002 → host is plain `http://<overlayIp>:8443` with the
+     route `Host`; https or no `Host` fails by design.
 3. Internal/edge listener split (§2.3, §2.3.1), o002 generated vhosts and
    a wildcard. This retires the hand-kept o002 list. **Done 2026-10-20**,
    except: the o002 wildcard waits for step 4 (no bunny key on o002).
@@ -690,7 +722,9 @@ Taken 2026-10-16:
      swaps the files under `/var/lib/fleet-cert/<domain>/` and reloads nginx.
      Vhosts opt in with `config.fleet.wildcardTls` (lib `edgeVirtualHosts`
      already takes `tls`). Not §9.2: no container grant involved. Then
-     h001 drops its own ACME cert and bunny grant. **Code done, not deployed.**
+     h001 drops its own ACME cert and bunny grant. **Deployed 2026-10-21**;
+     h001 has no ACME or bunny key, old per-name ACME dirs removed
+     2026-10-22.
    - **Router forwards: build-time too.** `lib.nix` `routerForwards` lists
      public `via = router` tcp/udp routes of services with a host → DNAT to
      the host's LAN IP (`networking.nat.forwardPorts`) plus one exact
@@ -698,9 +732,8 @@ Taken 2026-10-16:
      (`hosts/h005/router-forwards.nix`). IPv4 only, no hairpin (LAN DNS
      answers the LAN IP). Inactive service (`host = null`) → no forward.
      minecraft is converted (`routes.game` tcp 25565 via router,
-     `routes.web` = squaremap at `computerboyz` via edge). Code done,
-     **not deployed**. **Before re-enabling** (minecraft stays off by
-     decision): a tcp/udp route has `fqdn = null`, so `dnsRecords` gives it
+     `routes.web` = squaremap at `computerboyz` via edge). **Code done, off by
+     decision.** **Before re-enabling** (minecraft stays off): a tcp/udp route has `fqdn = null`, so `dnsRecords` gives it
      no tailnet or LAN record; `minecraft` only exists as the public CNAME
      → `home`, and with no hairpin NAT a LAN player resolving it gets the
      WAN IP and fails. Give raw routes a DNS name first (tailnet/LAN →
@@ -873,9 +906,9 @@ Taken 2026-10-16:
    - **Legacy retired**: the trilium container no longer runs oauth2-proxy
      (no env bind). Its nginx string is replaced by `routes.web` (notes,
      tailnet, `groups = [ "notes" ]`), and `dns-records.nix` points
-     `sso-proxy` at h005 and generates `notes`. h001 still has the
-     `oauth2_proxy_key_file` sec-agent entry, which is unused now. Remove it
-     on the next h001 rebuild.
+     `sso-proxy` at h005 and generates `notes`. The unused h001
+     `oauth2_proxy_key_file` sec-agent entry has been removed
+     (`hosts/h001/sec-agent.nix`).
    - **Deployed**: h005 switched (oauth2-proxy + DNS); `cnt deploy trilium`;
      `deploy --vhost-only` for every other h001 service (cookie strip).
      h003/lio generated vhosts get the strip on their next deploy.
@@ -913,8 +946,19 @@ Taken 2026-10-16:
      expired.
      The nginx reload is queued (`--no-block`): the unit is `Before=nginx`,
      so a blocking reload deadlocks (seen in the first h001 test).
-   - **service.nix wins**: `cnt deploy` (also `--vhost-only`) and `destroy`
-     drop the service's override first.
+   - **service.nix wins**: `cnt deploy` (also `--vhost-only`), full
+     `deploy` and `destroy` drop the service's override **last**, only
+     after the new site has passed `nginx -t` and been reloaded (or, for
+     `destroy`, after the site is gone). Dropping it earlier would leave a
+     widened site behind with nothing left to expire it if the site step
+     then failed; on failure the override and its timer stay, so expiry
+     still narrows the restored site back down
+     (`cli/expose.go` `dropOverrideScript`). Regression tests in
+     `cli/expose_test.go` cover this: `TestVhostOnlyDeployFailureKeepsOverride`,
+     `TestFullDeployFailureKeepsOverride`, `TestDestroyRemovesSiteBeforeOverride`,
+     `TestVhostOnlyDeploySuccessDropsOverride`, and
+     `TestReexposeFailureKeepsOldOverride` (a rejected re-expose must not
+     delete the live override it was replacing).
    - **Visibility**: `cnt routes` shows `lan (OVERRIDDEN from tailnet, 2m
      left)`. `cnt audit` lists active overrides below the listener table
      (same ssh call). Every apply/revert is logged (`logger -t cnt-expose`).
@@ -936,7 +980,9 @@ Taken 2026-10-16:
      `cnt audit h001` clean.
    - **Not yet**: h005 as the authority, `cnt move` carrying overrides,
      `--reset` for several overrides (one per service today).
-8. Read-only dashboard in fleet-edge; homepage-dashboard retired.
+8. **Done.** Read-only dashboard in `fleet-edge` on h005 (`hosts/h005/fleet-edge.nix`,
+   `flakes/fleet-edge`); `homepage-dashboard` retired (h001 and joe), no
+   redirects left behind.
 9. Then `cnt move` for real. Needs §9.1 first: the per-host `fleet-backup`
    job is in place (svc-tagged history follows the service); the `move`
    hooks (first backup on target, restore check) are still open.
