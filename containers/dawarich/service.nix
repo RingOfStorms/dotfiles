@@ -21,7 +21,13 @@
 
   # Generated vhost sends each header once (duplicate X-Forwarded-Proto/Host
   # broke login before).
-  # puma binds 127.0.0.1:3001 (BINDING in container.nix).
+  # puma binds :3001 in its private netns (BINDING in container.nix).
+  # Private network (ROUTING-PLAN §8 step 5): guest 10.233.10.2.
+  net = {
+    private = true;
+    index = 10;
+  };
+
   routes.web = {
     group = "Personal";
     port = 3001;

@@ -1,7 +1,7 @@
 # Zitadel SSO (sso.joshuabell.xyz) + its PostgreSQL 17, one container.
 # Was hosts/h001/containers/zitadel.nix (private-network nixos container,
-# 10.0.0.3:8080). Host network now: zitadel on :8085 (127.0.0.1:8080 is
-# life's), postgres on its unix socket only (h001's own postgres owns :5432).
+# 10.0.0.3:8080). Private network (net.private, 10.233.13.2): zitadel on
+# :8085 behind host nginx, postgres on its unix socket only.
 #
 # Everyone (sec, life, open-webui, trilium, every sec-agent) logs in
 # here, so a broken zitadel locks the fleet out of sec. Break-glass: the
@@ -28,6 +28,12 @@
   # o002 terminates TLS and forwards plain http over the tailnet; the route
   # keeps the default forwardedProto = "https" so zitadel still believes it
   # is https. Public via edge (o002) since every login starts here.
+  # Private network (ROUTING-PLAN §8 step 5). index is fleet-wide unique.
+  net = {
+    private = true;
+    index = 13;
+  };
+
   routes.web = {
     group = "Identity & Security";
     port = 8085;

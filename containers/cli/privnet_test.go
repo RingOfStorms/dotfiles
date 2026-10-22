@@ -39,13 +39,13 @@ func TestPortsFileLines(t *testing.T) {
 		"ssh": {Port: 3032, Proto: "tcp", Exposure: "public"},
 		"ml":  {Port: 3003, Proto: "tcp", Exposure: "local"},
 	}
-	got := strings.Join(portsFileLines(s), "\n")
-	want := "tcp 3032 dnat 10.233.3.2\nnoinet ve-forgejo"
+	got := strings.Join(portsFileLines(s, "h001"), "\n")
+	want := "guest ve-forgejo\ntcp 3032 dnat 10.233.3.2\nnoinet ve-forgejo"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
 	h := Service{Name: "x", TCPPorts: []int{8090}, Routes: map[string]Route{"ssh": {Port: 3032, Proto: "tcp", Exposure: "tailnet"}}}
-	if got := strings.Join(portsFileLines(h), "\n"); got != "tcp 8090\ntcp 3032" {
+	if got := strings.Join(portsFileLines(h, "h001"), "\n"); got != "tcp 8090\ntcp 3032" {
 		t.Fatalf("host network: got %q", got)
 	}
 }
@@ -69,5 +69,81 @@ func TestPortGuardPrivate(t *testing.T) {
 	s := privSvc("puzzles", 2)
 	if _, err := portGuards(s, portReq{Port: 9000, Proto: "tcp"}, "h001", nil); err == nil {
 		t.Fatal("cnt port open must refuse a net.private service")
+	}
+}
+
+func TestNetExceptionsAndCallers(t *testing.T) {
+	old := inv
+	defer func() { inv = old }()
+	ov := "100.64.0.13"
+	ov3 := "100.64.0.17"
+	ow := privSvc("open-webui", 6)
+	ow.Net.Uses = []string{"litellm.web", "searx.api", "remote.web"}
+	ow.Net.Egress = []string{"10.12.14.181:9010/tcp"}
+	lit := privSvc("litellm", 7)
+	lit.Routes = map[string]Route{"web": httpRoute("litellm", 8094, "tailnet", "native")}
+	sx := privSvc("searx", 8)
+	sx.Routes = map[string]Route{"api": {Port: 8889, Proto: "tcp", Exposure: "tailnet"}}
+	rem := Service{Name: "remote", Host: "h003", Routes: map[string]Route{"web": httpRoute("remote", 1, "public", "native")}}
+	inv = &Inventory{
+		Services: map[string]Service{"open-webui": ow, "litellm": lit, "searx": sx, "remote": rem},
+		Hosts:    map[string]Host{"h001": {OverlayIP: &ov}, "h003": {OverlayIP: &ov3}},
+	}
+	got := strings.Join(netExceptions(ow, "h001"), "\n")
+	want := strings.Join([]string{
+		"allow ve-open-webui 10.233.7.2 tcp 8094",
+		"allow ve-open-webui 10.233.0.1 tcp 80",
+		"allow ve-open-webui 10.233.0.1 tcp 443",
+		"allow ve-open-webui 100.64.0.13 tcp 80",
+		"allow ve-open-webui 100.64.0.13 tcp 443",
+		"allow ve-open-webui 10.233.8.2 tcp 8889",
+		"allow ve-open-webui 10.233.0.1 tcp 8889",
+		"allow ve-open-webui 100.64.0.13 tcp 8889",
+		"allow ve-open-webui 100.64.0.17 tcp 80",
+		"allow ve-open-webui 100.64.0.17 tcp 443",
+		"allow ve-open-webui 10.12.14.181 tcp 9010",
+	}, "\n")
+	if got != want {
+		t.Fatalf("got\n%s\nwant\n%s", got, want)
+	}
+	v := routesVhost(lit)
+	if !strings.Contains(v, "allow 10.233.6.2; # net.uses\n  include /etc/fleet-containers/nginx-acl-tailnet.conf;") {
+		t.Fatalf("caller allow missing or after the ACL:\n%s", v)
+	}
+	if strings.Contains(routesVhost(rem), "allow 10.233.") {
+		t.Fatal("remote-host callers must not be allowed by guest IP")
+	}
+}
+
+func TestPortsFileTailnetDnat(t *testing.T) {
+	old := inv
+	defer func() { inv = old }()
+	ov := "100.64.0.13"
+	inv = &Inventory{Services: map[string]Service{}, Hosts: map[string]Host{"h001": {OverlayIP: &ov}}}
+	s := privSvc("beszel", 12)
+	s.Routes = map[string]Route{"hub": {Port: 8090, Proto: "tcp", Exposure: "tailnet"}}
+	got := strings.Join(portsFileLines(s, "h001"), "\n")
+	if want := "guest ve-beszel\ntcp 8090 dnat 10.233.12.2 100.64.0.13"; got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+	// Unknown overlay IP: no DNAT at all (fail closed), never any-address.
+	if got := strings.Join(portsFileLines(s, "h009"), "\n"); got != "guest ve-beszel" {
+		t.Fatalf("no overlay: got %q", got)
+	}
+}
+
+func TestPortsFileTailnetAllow(t *testing.T) {
+	old := inv
+	defer func() { inv = old }()
+	ov, lio := "100.64.0.13", "100.64.0.1"
+	inv = &Inventory{Services: map[string]Service{}, Hosts: map[string]Host{"h001": {OverlayIP: &ov}, "lio": {OverlayIP: &lio}}}
+	s := privSvc("immich", 15)
+	s.Routes = map[string]Route{
+		"pg":  {Port: 5432, Proto: "tcp", Exposure: "tailnet", Allow: []string{"lio", "nosuch"}},
+		"bad": {Port: 9, Proto: "tcp", Exposure: "public", Allow: []string{"lio"}},
+	}
+	got := strings.Join(portsFileLines(s, "h001"), "\n")
+	if want := "guest ve-immich\ntcp 5432 dnat 10.233.15.2 100.64.0.13 100.64.0.1"; got != want {
+		t.Fatalf("got %q want %q", got, want)
 	}
 }

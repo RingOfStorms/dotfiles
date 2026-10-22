@@ -45,9 +45,11 @@ type Service struct {
 // Net is lib.nix normalizeNet (ROUTING-PLAN §8 step 5). IP is the guest
 // address (10.233.<index>.2) when Private, else empty.
 type Net struct {
-	Private bool    `json:"private"`
-	Index   *int    `json:"index"`
-	IP      *string `json:"ip"`
+	Private bool     `json:"private"`
+	Index   *int     `json:"index"`
+	IP      *string  `json:"ip"`
+	Uses    []string `json:"uses"`
+	Egress  []string `json:"egress"`
 }
 
 // backendAddr is where the host reaches the service: its private guest IP,
@@ -923,7 +925,7 @@ func prepareScript(s Service, host string) string {
 	}
 	// ports
 	var ports strings.Builder
-	for _, l := range portsFileLines(s) {
+	for _, l := range portsFileLines(s, host) {
 		ports.WriteString(l + "\n")
 	}
 	b.WriteString(fmt.Sprintf("printf %%s %s > /var/lib/fleet-containers/ports/%s\n", q(ports.String()), s.Name))

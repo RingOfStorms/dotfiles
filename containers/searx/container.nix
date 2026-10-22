@@ -1,5 +1,5 @@
 # Guest config: settings copied verbatim from hosts/h001/mods/searx.nix.
-{ pkgs, ... }:
+{ pkgs, fleetNet, ... }:
 let
   secretKeyEnvFile = "/var/lib/searx/secret-key.env";
 in
@@ -16,7 +16,7 @@ in
     environmentFile = secretKeyEnvFile;
     settings = {
       server = {
-        bind_address = "127.0.0.1";
+        bind_address = fleetNet.bindAddress;
         port = 8889;
         secret_key = "$SEARX_SECRET_KEY";
       };

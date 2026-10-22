@@ -88,9 +88,16 @@ let
   #   <tcp|udp> <port>                    open on every interface (temp-ports)
   #   <tcp|udp> <port> dnat <guest ipv4>  private-network route: DNAT host
   #                                       port -> guest (fleet-net-nat @routes)
+  #   <tcp|udp> <port> dnat <guest ipv4> <host ipv4>   same, only for that
+  #                                       destination (tailnet routes: overlay IP,
+  #                                       fleet-net-nat @routes_at)
+  #   <tcp|udp> <port> dnat <guest ipv4> <host ipv4> <src ipv4>   same, only
+  #                                       from that source (route allow, @routes_from)
+  #   guest <ve-iface>                    net.private guest (isolated, fleet-net @guests)
   #   noinet <ve-iface>                   private guest with internet = false
-  # @routes and @noinet are flushed and refilled on every run, so a redeploy
-  # or a removed ports file drops stale entries.
+  #   allow <ve-iface> <ipv4> <tcp|udp> <port>   net.uses / net.egress exception
+  # @routes, @routes_at, @routes_from, @guests, @noinet and @egress are flushed and refilled on every
+  # run, so a redeploy or a removed ports file drops stale entries.
   applyPorts = pkgs.writeShellScript "fleet-containers-apply-ports" ''
     set -u
     nft=${pkgs.nftables}/bin/nft
@@ -99,25 +106,63 @@ let
     if $nft list table ip fleet-net-nat >/dev/null 2>&1; then
       fleetnet=1
       $nft flush map ip fleet-net-nat routes
+      $nft flush map ip fleet-net-nat routes_at
+      $nft flush map ip fleet-net-nat routes_from
+      $nft flush set ip fleet-net-nat uses
+      $nft flush set inet fleet-net guests
       $nft flush set inet fleet-net noinet
+      $nft flush set inet fleet-net egress
     fi
     for f in ${stateDir}/ports/*; do
-      while read -r proto port mode ip; do
-        if [ "$proto" = noinet ]; then
-          case "$port" in ve-*) ;; *) continue ;; esac
-          if [ "$fleetnet" = 1 ]; then
-            $nft add element inet fleet-net noinet "{ \"$port\" }" \
-              || echo "containers: could not cut egress of $port (from $f)" >&2
-          else
-            echo "containers: $f wants noinet but privateNetwork is off on this host" >&2
-          fi
-          continue
-        fi
+      while read -r proto port mode ip rest; do
+        case "$proto" in
+          guest|noinet|allow)
+            case "$port" in ve-*) ;; *) continue ;; esac
+            if [ "$fleetnet" != 1 ]; then
+              echo "containers: $f has '$proto' but privateNetwork is off on this host" >&2
+              continue
+            fi
+            case "$proto" in
+              guest) set=guests; el="\"$port\"" ;;
+              noinet) set=noinet; el="\"$port\"" ;;
+              allow)
+                case "$mode" in *[!0-9.]*|"") continue ;; esac
+                case "$ip" in tcp|udp) ;; *) continue ;; esac
+                case "''${rest:-}" in ""|*[!0-9]*) continue ;; esac
+                set=egress; el="\"$port\" . $mode . $ip . $rest" ;;
+            esac
+            if [ "$proto" = allow ]; then
+              $nft add element ip fleet-net-nat uses "{ $el }" \
+                || echo "containers: could not add $el to nat @uses (from $f)" >&2
+            fi
+            $nft add element inet fleet-net $set "{ $el }" \
+              || echo "containers: could not add $el to @$set (from $f)" >&2
+            continue
+            ;;
+        esac
         case "$proto" in tcp|udp) ;; *) continue ;; esac
         case "$port" in ""|*[!0-9]*) continue ;; esac
         if [ "''${mode:-}" = dnat ]; then
           case "$ip" in 10.233.*) ;; *) echo "containers: bad dnat target '$ip' (from $f)" >&2; continue ;; esac
+          # A DNAT port is never a plain host port: drop a leftover temp-ports
+          # element from before the service went private (no flush: the set
+          # is shared, e.g. with agnos).
+          $nft delete element inet nixos-fw temp-ports "{ $proto . $port }" 2>/dev/null || true
           if [ "$fleetnet" = 1 ]; then
+            if [ -n "''${rest:-}" ]; then
+              read -r at src extra <<< "$rest"
+              case "$at" in ""|*[!0-9.]*) echo "containers: bad dnat address '$at' (from $f)" >&2; continue ;; esac
+              if [ -n "''${src:-}" ]; then
+                case "$src" in *[!0-9.]*) echo "containers: bad dnat source '$src' (from $f)" >&2; continue ;; esac
+                $nft add element ip fleet-net-nat routes_from "{ $src . $at . $proto . $port : $ip }" \
+                  || echo "containers: could not DNAT $src -> $at $proto/$port to $ip (from $f)" >&2
+                continue
+              fi
+              rest=$at
+              $nft add element ip fleet-net-nat routes_at "{ $rest . $proto . $port : $ip }" \
+                || echo "containers: could not DNAT $rest $proto/$port to $ip (from $f)" >&2
+              continue
+            fi
             $nft add element ip fleet-net-nat routes "{ $proto . $port : $ip }" \
               || echo "containers: could not DNAT $proto/$port to $ip (from $f)" >&2
           else
@@ -739,41 +784,117 @@ in
         boot.kernel.sysctl."net.ipv4.conf.all.forwarding" = lib.mkDefault true;
         # Guests ask the host's resolver; freebind, so it binds before any veth exists.
         services.resolved.settings.Resolve.DNSStubListenerExtra = [ "10.233.0.1" ];
+        # Host side of a guest veth, the moment nspawn creates it
+        # (ROUTING-PLAN §8 step 5). nixos-containers only configures
+        # ve-<name> in container@'s postStart, which (Type=notify) runs after
+        # the guest is READY, so guest units that need the network at boot
+        # would stall. udev fires on the veth add; the oneshot reads the
+        # container's /etc/nixos-containers/<name>.conf and only touches our
+        # scheme (HOST_ADDRESS 10.233.0.1, LOCAL_ADDRESS 10.233.*). No
+        # networkd needed (h001 runs dhcpcd, which denies ve-*; NM hosts get
+        # ve-* unmanaged below). lib.nix makes postStart idempotent.
+        services.udev.extraRules = ''
+          SUBSYSTEM=="net", ACTION=="add", KERNEL=="ve-*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="fleet-veth@%k.service"
+        '';
+        systemd.services."fleet-veth@" = {
+          description = "Host side of container veth %i (net.private)";
+          path = [ pkgs.iproute2 ];
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "${pkgs.writeShellScript "fleet-veth" ''
+              set -u
+              ifc=$1
+              conf=/etc/nixos-containers/''${ifc#ve-}.conf
+              [ -r "$conf" ] || exit 0
+              h=$(sed -n 's/^HOST_ADDRESS=//p' "$conf")
+              l=$(sed -n 's/^LOCAL_ADDRESS=//p' "$conf")
+              [ "$h" = 10.233.0.1 ] || exit 0
+              case "$l" in 10.233.*) ;; *) exit 0 ;; esac
+              ip link set dev "$ifc" up
+              ip addr replace "$h" dev "$ifc"
+              ip route replace "$l" dev "$ifc"
+              echo "$ifc: $h -> $l"
+            ''} %i";
+          };
+        };
+        networking.networkmanager.unmanaged = lib.mkIf config.networking.networkmanager.enable [
+          "interface-name:ve-*"
+        ];
+        # Guest isolation (ROUTING-PLAN §8 step 5). Scope: interfaces in
+        # @guests (ve-<name> of net.private services, from the ports files)
+        # and, as a static fallback while the sets are being refilled, any
+        # source in 10.233.0.0/16. Legacy privateNetwork containers on other
+        # ve-* interfaces/addresses (lio's 10.0.0.x) are not touched.
         networking.nftables.tables.fleet-net = {
           family = "inet";
           content = ''
+            set guests {
+              comment "ve-<name> of net.private guests (ports files: guest)"
+              type ifname
+            }
             set noinet {
               comment "net.private guests with internet = false (ports files)"
               type ifname
             }
+            set egress {
+              comment "net.uses / net.egress exceptions: guest . daddr . proto . port (ports files)"
+              type ifname . ipv4_addr . inet_proto . inet_service
+            }
+            set blocked4 {
+              comment "never reachable from a guest (beyond DNAT routes and net.egress)"
+              type ipv4_addr
+              flags interval
+              elements = { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8,
+                           169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16,
+                           224.0.0.0/3 }
+            }
+            # Base chains only classify; guest traffic jumps to the
+            # guest-* chains, everything else is untouched. Priority
+            # filter - 5 runs before nixos-fw (trusted interfaces such as
+            # lio's ve-*, global allowed ports). The guest chains only drop;
+            # what they let through still has to pass nixos-fw.
+            chain input {
+              type filter hook input priority filter - 5; policy accept;
+              iifname @guests jump guest-in
+              ip saddr 10.233.0.0/16 jump guest-in
+              iifname "podman0" jump guest-in comment "podman default bridge (opengist): same isolation"
+            }
+            chain guest-in {
+              ct state established,related return
+              meta nfproto ipv6 counter drop comment "no IPv6 to the host"
+              ip daddr 10.233.0.1 meta l4proto { tcp, udp } th dport 53 return comment "guest DNS (resolved stub)"
+              iifname . ip daddr . meta l4proto . th dport @egress return comment "net.uses (this host's nginx) / net.egress"
+              counter drop comment "guest -> host: nothing else"
+            }
             chain forward {
               type filter hook forward priority filter - 5; policy accept;
-              iifname @noinet ct direction original drop comment "internet = false"
-              iifname "ve-*" oifname "ve-*" ct direction original ct status dnat accept comment "declared tcp/udp route via a host address"
-              iifname "ve-*" oifname "ve-*" ct direction original drop comment "no direct container to container"
+              iifname @guests jump guest-fwd
+              ip saddr 10.233.0.0/16 jump guest-fwd
+              iifname "podman0" jump guest-fwd comment "podman default bridge: internet + published ports only"
+            }
+            chain guest-fwd {
+              ct direction reply return comment "replies to inbound (DNAT) flows"
+              ct status dnat return comment "declared tcp/udp route (to another guest or host port)"
+              iifname . ip daddr . meta l4proto . th dport @egress return comment "net.uses / net.egress"
+              iifname @noinet counter drop comment "internet = false"
+              meta nfproto ipv6 counter drop comment "no IPv6 egress"
+              ip daddr @blocked4 counter drop comment "no LAN, tailnet, link-local or other guests"
             }
           '';
         };
         networking.nftables.tables.fleet-net-nat = {
           family = "ip";
-          content = ''
-            map routes {
-              comment "net.private tcp/udp routes: proto . host port -> guest (ports files)"
-              type inet_proto . inet_service : ipv4_addr
-            }
-            chain prerouting {
-              type nat hook prerouting priority dstnat; policy accept;
-              fib daddr type local dnat ip to meta l4proto . th dport map @routes
-            }
-            chain output {
-              type nat hook output priority -100; policy accept;
-              ip daddr != 127.0.0.0/8 fib daddr type local dnat ip to meta l4proto . th dport map @routes
-            }
-            chain postrouting {
-              type nat hook postrouting priority srcnat; policy accept;
-              ip saddr 10.233.0.0/16 oifname != "ve-*" masquerade
-            }
-          '';
+          # Tailnet routes only for real tailnet peers (tailscale0, overlay
+          # range, not the edge); see fleet-net-nat.nft.
+          content =
+            builtins.replaceStrings
+              [ "@EDGE4@" ]
+              [
+                (lib.concatStringsSep ", " (
+                  builtins.filter (p: !(lib.hasInfix ":" p)) cfg.nginx.edge.peers ++ [ "0.0.0.0" ]
+                ))
+              ]
+              (builtins.readFile ./cli/fleet-net-nat.nft);
         };
         networking.firewall.extraInputRules = ''
           iifname "ve-*" ip daddr 10.233.0.1 meta l4proto { tcp, udp } th dport 53 accept comment "guest DNS (resolved stub)"

@@ -25,12 +25,39 @@
   # Was a sec-agent configChange on the host; the secret is bound in read-only.
   nixarr.vpn.wgConf = "${fleet.global.secretsDir}/us_chi_wg_2026-03-15";
 
-  # The guest has no nginx; the host keeps the vhosts.
+  # The guest has no nginx; the host vhosts are routes (service.nix).
   services.nginx.enable = lib.mkForce false;
 
-  # Host already forwards (NAT for ve-*); boot.kernel.sysctl doesn't apply
-  # inside nspawn.
+  # boot.kernel.sysctl doesn't apply inside nspawn (read-only /proc/sys);
+  # with net.private the guest has its own netns and /proc/sys/net is
+  # writable, so the forwarding VPN-Confinement needs (veth -> wg netns DNAT
+  # for transmission's rpc) is set by a unit before the netns comes up.
   boot.kernel.sysctl = lib.mkForce { };
+  systemd.services.guest-ip-forward = {
+    description = "net.ipv4.ip_forward=1 in the guest netns (wg port mapping)";
+    wantedBy = [ "multi-user.target" ];
+    before = [ "wg.service" ];
+    requiredBy = [ "wg.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${pkgs.procps}/bin/sysctl -w net.ipv4.ip_forward=1";
+    };
+  };
+  # sonarr/radarr store transmission as localhost:9091 (their DB). Before
+  # net.private the host nginx answered there; now a guest-local forward
+  # into the wg netns does. Host nginx reaches 9091 via the VPN-Confinement
+  # DNAT on the guest veth instead.
+  systemd.services.transmission-rpc-forward = {
+    description = "127.0.0.1:9091 -> transmission rpc in the wg netns";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "wg.service" ];
+    serviceConfig = {
+      ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:9091,bind=127.0.0.1,reuseaddr,fork TCP:192.168.15.1:9091";
+      Restart = "always";
+      DynamicUser = true;
+    };
+  };
 
   # transmission runs with RootDirectory=/run/transmission and BindPaths=/run.
   # Under nspawn systemd also stages os-release into /run/host inside that

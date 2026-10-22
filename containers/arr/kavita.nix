@@ -1,6 +1,7 @@
 {
   constants,
   fleet,
+  fleetNet,
   pkgs,
   ...
 }:
@@ -25,7 +26,7 @@ in
     tokenKeyFile = "/var/lib/kavita/token-key";
     settings = {
       Port = c.kavitaPort;
-      IpAddresses = "127.0.0.1";
+      IpAddresses = fleetNet.bindAddress;
     };
   };
 

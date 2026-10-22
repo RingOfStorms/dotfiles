@@ -4,6 +4,7 @@
   lib,
   pkgs,
   litellmpkgs,
+  fleetNet,
   ...
 }:
 let
@@ -29,12 +30,30 @@ let
   # hook, and the remote cost map it relies on currently has no openrouter
   # entries. Fetch the full catalog at start instead and add explicit
   # aliases so every model shows up in /v1/models. If the fetch fails, the
-  # proxy still starts; the wildcard keeps routing working.
+  # last fetched list (or none) is used; the wildcard keeps routing working.
+  #
+  # On a private network the fetch always fails during container boot: the
+  # host configures its end of the veth only after the guest reports ready,
+  # and the guest is not ready until this unit has started. So the fetch is
+  # short and never retried here; openrouterRefresh restarts litellm once
+  # after boot when it had to fall back.
+  openrouterCache = "${dataDir}/openrouter-models.json";
+  openrouterFresh = "/run/litellm/openrouter-fresh";
   renderConfig = pkgs.writeShellScript "litellm-render-config" ''
-    set -u
-    models=$(${lib.getExe pkgs.curl} -sfL --max-time 30 --retry 3 \
+    set -u -o pipefail
+    if models=$(${lib.getExe pkgs.curl} -sfL --connect-timeout 5 --max-time 20 \
       https://openrouter.ai/api/v1/models \
-      | ${lib.getExe pkgs.jq} -c '[.data[].id]') || models='[]'
+      | ${lib.getExe pkgs.jq} -ec '[.data[].id]') && [ -n "$models" ]; then
+      printf '%s\n' "$models" > ${openrouterCache}.tmp
+      mv ${openrouterCache}.tmp ${openrouterCache}
+      touch ${openrouterFresh}
+    elif [ -s ${openrouterCache} ]; then
+      echo "litellm: OpenRouter fetch failed, using the cached list"
+      models=$(cat ${openrouterCache})
+    else
+      echo "litellm: OpenRouter fetch failed and there is no cached list"
+      models='[]'
+    fi
     ${lib.getExe pkgs.jq} --argjson ids "$models" '
       .model_list += [$ids[] | {
         model_name: "openrouter/\(.)",
@@ -67,11 +86,26 @@ in
     };
   };
 
+  # See renderConfig: retry the OpenRouter fetch once the network is up.
+  systemd.services.litellm-openrouter-refresh = {
+    description = "Restart litellm if its start-time OpenRouter fetch failed";
+    serviceConfig.Type = "oneshot";
+    script = ''
+      if systemctl is-active --quiet litellm.service && [ ! -e ${openrouterFresh} ]; then
+        systemctl restart litellm.service
+      fi
+    '';
+  };
+  systemd.timers.litellm-openrouter-refresh = {
+    wantedBy = [ "timers.target" ];
+    timerConfig.OnStartupSec = "1min";
+  };
+
   services.litellm = {
     enable = true;
     port = 8094;
     # Loopback only; host nginx fronts it (routes.web, tailnet).
-    host = "127.0.0.1";
+    host = fleetNet.bindAddress;
     openFirewall = false;
     package = pkgsLitellm.litellm;
     # gives openrouter key

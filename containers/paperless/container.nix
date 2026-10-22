@@ -1,10 +1,11 @@
-# Guest config. Host network: paperless on 127.0.0.1:28981, tika on
-# 127.0.0.1:9998, gotenberg moved to 127.0.0.1:3002 (3000 is forgejo's),
+# Guest config. Private network: paperless on :28981, tika on
+# 127.0.0.1:9998 (guest loopback), gotenberg moved to 127.0.0.1:3002 (3000 is forgejo's),
 # postgres and redis on unix sockets. uids pinned to the copied data
 # (paperless 915; postgres is 71 by default).
 {
   pkgs,
   lib,
+  fleetNet,
   ...
 }:
 {
@@ -18,7 +19,7 @@
     package = pkgs.postgresql_16;
     enableJIT = true;
     dataDir = "/var/lib/postgresql/16";
-    # Host network: the host's postgres owns 5432; unix socket only.
+    # unix socket only.
     settings.listen_addresses = lib.mkForce "";
     authentication = lib.mkForce ''
       local all all trust
@@ -38,7 +39,7 @@
 
   services.paperless = {
     enable = true;
-    address = "127.0.0.1";
+    address = fleetNet.bindAddress;
     port = 28981;
     dataDir = "/var/lib/paperless";
     mediaDir = "/var/lib/paperless/media";

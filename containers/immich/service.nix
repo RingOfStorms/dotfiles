@@ -20,10 +20,29 @@
 
   backupHook = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
 
-  # Only the web vhost is a route. postgres *:5432 (immich_ro, tailnet) and
-  # ML *:3003 (unauthenticated) stay undeclared on purpose: a tailnet tcp
-  # route would add them to the ports file, which opens them on every
-  # interface, wider than today (tailscale0 only, via its trust).
+  # Private network (ROUTING-PLAN §8 step 5). index is fleet-wide unique.
+  net = {
+    private = true;
+    index = 15;
+  };
+
+  # postgres (immich_ro) and ML (unauthenticated) for immich_manager on lio:
+  # DNAT only for h001's overlay IP and only from lio's (allow).
+  routes.pg = {
+    port = 5432;
+    proto = "tcp";
+    exposure = "tailnet";
+    auth = "native";
+    allow = [ "lio" ];
+  };
+  routes.ml = {
+    port = 3003;
+    proto = "tcp";
+    exposure = "tailnet";
+    auth = "none";
+    allow = [ "lio" ];
+  };
+
   routes.web = {
     group = "Media";
     port = 2283;

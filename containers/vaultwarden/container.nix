@@ -1,5 +1,5 @@
-# Guest config. Host network: vaultwarden on 127.0.0.1:8222.
-{ lib, ... }:
+# Guest config. Private network (service.nix net): vaultwarden on :8222.
+{ lib, fleetNet, ... }:
 {
   system.stateVersion = "24.11";
 
@@ -16,7 +16,7 @@
     config = {
       DOMAIN = "https://vault.joshuabell.xyz";
       SIGNUPS_ALLOWED = false;
-      ROCKET_ADDRESS = "127.0.0.1";
+      ROCKET_ADDRESS = fleetNet.bindAddress;
       ROCKET_PORT = 8222;
     };
   };

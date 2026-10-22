@@ -731,6 +731,21 @@ Taken 2026-10-16:
      container.nix binds `fleetNet.bindAddress` (specialArgs:
      `127.0.0.1` on the host network, `0.0.0.0` when private), so
      flipping the flag needs no other edit.
+   - **Host side up before the guest boots**: nixos-containers only
+     configures `ve-<name>` in `container@`'s postStart, which runs after
+     READY, so guest units that need the network at boot (litellm's model
+     fetch, ACME, DB connections) failed. The host module adds a udev rule
+     (`SUBSYSTEM=net, KERNEL=ve-*, ACTION=add`) → `fleet-veth@ve-<name>`
+     oneshot that reads `/etc/nixos-containers/<name>.conf` and sets
+     `10.233.0.1/32` + the guest's /32 route the moment nspawn creates the
+     veth (before the guest's init). It needs no networkd (h001 runs
+     dhcpcd, which denies `ve-*`; NM hosts get `unmanaged = ve-*`).
+     `mkNixosContainer` replaces the stock postStart with an idempotent
+     `ip addr/route replace`, so hosts without the hook still work (late).
+     Restarts, `cnt deploy` and host reboots all create a fresh veth, which
+     fires the rule again. Evidence: the host `fleet-veth@` journal (done before the
+     guest init starts). No in-guest boot probe: a oneshot ordered on READY
+     would recreate the stall when egress is down.
    - **Host** (`ringofstorms.containers.privateNetwork.enable`, replaces
      the old trust-`ve-+` + NAT option, which no host used): tables
      `inet fleet-net` (filter) and `ip fleet-net-nat`:
@@ -789,19 +804,28 @@ Taken 2026-10-16:
    - **CLI**: `deploy` (vhost upstream, `dnat`/`noinet` ports lines),
      `audit` (STALE), `port open` (refuse), the inventory check (unique
      index). `routes` shows `net` in a later pass.
-   - **arr (last)**: one guest owns the WireGuard netns (it creates it
-     inside its own netns, needs `CAP_NET_ADMIN`; the host `wg-br`/veth
-     setup and 51820/udp leave the host). sabnzbd and transmission stay in
-     that inner netns, the *arr apps talk over the guest loopback as now.
-     UIs: sonarr, radarr, prowlarr, bazarr, sabnzbd and transmission become
-     **`exposure = "tailnet"`, `auth = "none"` http routes** like
-     shelfmark: tailnet only, no LAN, no login. They're on high-trust
-     nodes, and the apps' own auth is set to "disabled for local
-     addresses" only if it's needed. The `firewall.nix` 7878/8989/6767/9696/9091/6336
-     opens and `arr-nginx.nix` go away. jellyfin, seerr, kavita stay
-     public `native`. Jellyfin `8096` direct stays a DNAT tcp route
-     (`tailnet`) until the TV apps use the name. QSV `/dev/dri` and NFS
-     binds are unchanged. DLNA (UDP 1900/7359) is dropped.
+   - **arr (done 2026-10-22, index 16)**: the guest owns the `wg` netns
+     (VPN-Confinement runs inside it; `/run/netns` is no longer bound from
+     the host, and the host `wg-br` is gone). A guest unit sets
+     `ip_forward=1` before `wg.service`. sonarr/radarr keep `localhost:9091`
+     through a guest socat into the netns. sonarr, radarr, prowlarr,
+     bazarr, sabnzbd, transmission = `tailnet`/`none` http routes; the
+     *arr apps use `auth.method = External` (no login, the route is the
+     gate). sabnzbd's login comes from its host-managed secrets.ini (user
+     decision). Jellyfin `:8096` direct = `jellyfin-direct` tailnet tcp
+     route (DNAT on the overlay IP only). `firewall.nix` arr opens and the
+     `:9091` vhost are gone; fleet-edge links use the route names. DLNA
+     dropped.
+   - **Tailnet DNAT guard (2026-10-22)**: `cli/fleet-net-nat.nft`. Prerouting
+     consults `@routes_at`/`@routes_from` only for `iifname tailscale0`,
+     `saddr 100.64.0.0/10`, not in `@edge` (nginx.edge.peers v4), or for a
+     declared local caller (`@uses`, from the ports-file `allow` lines).
+     Output (the host itself) is unchanged; public `@routes` (forgejo
+     3032) stay any-interface. Before: o002 and LAN packets to the overlay
+     IP reached beszel 8090 / jellyfin 8096.
+   - **podman default bridge** (opengist): `podman0` jumps to the same
+     guest-in/guest-fwd chains (internet + DNAT/published ports only).
+     Its DNS stays 8.8.8.8 over the internet path.
 6. Fleet oauth2-proxy on h005 + per-route `auth`, with cookie stripping
    from the first gated route. **Done 2026-10-21 (tailnet routes).**
    - **Where**: `hosts/h005/oauth2-proxy.nix`, a host service rather than

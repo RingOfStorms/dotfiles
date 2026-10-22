@@ -10,7 +10,9 @@
 
   # Survives restarts and travels with `move`. Unused by nginx; drop marker
   # files in /srv/containers/hello-nixos/data to see them follow a move.
-  persist = { data = "/data"; };
+  persist = {
+    data = "/data";
+  };
 
   # Host network: nginx in the container listens here; opened in the host
   # firewall at deploy time. http://<host>:8081/

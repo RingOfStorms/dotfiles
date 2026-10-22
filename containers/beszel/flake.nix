@@ -30,8 +30,7 @@
           service = import ./service.nix;
           config = import ./container.nix;
           guestNixpkgs = guestpkgs;
-          # Host network (binds the host's tailnet IP); idmapped persist (ext4).
-          privateNetwork = false;
+          # Network: service.nix net (private, 10.233.12.2); idmapped persist (ext4).
         };
       };
     });

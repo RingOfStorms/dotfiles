@@ -29,8 +29,7 @@
           service = import ./service.nix;
           config = import ./container.nix;
           guestNixpkgs = guestpkgs;
-          # Host network; idmapped persist (ext4).
-          privateNetwork = false;
+          # Network: service.nix net (private, 10.233.13.2); idmapped persist (ext4).
         };
       };
     });

@@ -22,10 +22,13 @@
     recyclarr = "/var/lib/recyclarr";
     nixos = "/var/lib/nixos";
   };
-  # No raw ports. sabnzbd (6336) is tailnet-only via hosts/h001/firewall.nix;
-  # shelfmark is a route below. 51820 (transmission peer port) lives in the
-  # wg netns and is reached over the VPN tunnel only; the host wg client
-  # dials out from a random port, so nothing inbound is needed here.
+  # Private network (ROUTING-PLAN §8 step 5): guest 10.233.16.2. The guest
+  # owns the `wg` VPN netns (transmission); 51820 is reached over the VPN
+  # tunnel only. No raw ports: every UI is a route below.
+  net = {
+    private = true;
+    index = 16;
+  };
   tcpPorts = [ ];
   udpPorts = [ ];
   # jellyfin + media: public via the o002 edge (ROUTING-PLAN §2.3); books
@@ -60,9 +63,64 @@
       auth = "native";
       maxBody = "500m";
     };
+    # *arr UIs: tailnet only (no LAN, no o002), no login. The apps see the
+    # host veth (10.233.0.1) as the client, a local address, so their own
+    # auth (DisabledForLocalAddresses) stays out of the way.
+    sonarr = {
+      name = "sonarr";
+      port = 8989;
+      exposure = "tailnet";
+      auth = "none";
+      group = "Media Automation";
+    };
+    radarr = {
+      name = "radarr";
+      port = 7878;
+      exposure = "tailnet";
+      auth = "none";
+      group = "Media Automation";
+    };
+    bazarr = {
+      name = "bazarr";
+      port = 6767;
+      exposure = "tailnet";
+      auth = "none";
+      group = "Media Automation";
+    };
+    prowlarr = {
+      name = "prowlarr";
+      port = 9696;
+      exposure = "tailnet";
+      auth = "none";
+      group = "Media Automation";
+    };
+    sabnzbd = {
+      name = "sabnzbd";
+      port = 6336;
+      exposure = "tailnet";
+      auth = "none";
+      group = "Media Automation";
+      maxBody = "100m"; # nzb uploads
+    };
+    transmission = {
+      name = "transmission";
+      port = 9091; # guest DNATs it into the wg netns (192.168.15.1)
+      exposure = "tailnet";
+      auth = "none";
+      group = "Media Automation";
+      maxBody = "100m"; # .torrent uploads
+    };
+    # Jellyfin direct (TV/mobile apps configured with h001:8096): DNAT on
+    # h001's overlay IP only, until the apps use jellyfin.joshuabell.xyz.
+    jellyfin-direct = {
+      port = 8096;
+      proto = "tcp";
+      exposure = "tailnet";
+      auth = "native";
+    };
   };
-  # The :9091 transmission proxy and /media-health/ on h001.net stay in
-  # hosts/h001/mods/arr-nginx.nix (not routes: a netns upstream and a static alias).
+  # /media-health/ on h001.net stays in hosts/h001/mods/arr-nginx.nix (a
+  # static alias of the persist dir, not a backend).
   backupHook = null;
   attach = null;
 }

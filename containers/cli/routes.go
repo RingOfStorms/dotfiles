@@ -188,6 +188,11 @@ func routesVhost(s Service) string {
 		// Cert paths live in one place: host-module.nix nginx.tls.certDir.
 		b.WriteString("  include /etc/fleet-containers/nginx-tls.conf;\n")
 		b.WriteString("  if ($fleet_edge_block_internal) {\n    return 444;\n  }\n")
+		// net.uses callers on this host (private guests, 10.233.x.2) come
+		// in on 10.233.0.1, which the tailnet/lan ACL would refuse.
+		for _, ip := range callerIPs(s, n) {
+			fmt.Fprintf(&b, "  allow %s; # net.uses\n", ip)
+		}
 		writeExposureACL(&b, r)
 		writeRouteBody(&b, r)
 		b.WriteString("}\n")
@@ -377,8 +382,11 @@ func routePorts(s Service) []string {
 // DNATed to the guest instead ("tcp 3032 dnat 10.233.3.2"), and
 // internet = false adds "noinet ve-<name>". lib.nix refuses
 // tcpPorts/udpPorts together with net.private.
-func portsFileLines(s Service) []string {
+func portsFileLines(s Service, host string) []string {
 	var out []string
+	if s.Net.Private {
+		out = append(out, "guest ve-"+s.Name)
+	}
 	if !s.Net.Private {
 		for _, p := range s.TCPPorts {
 			out = append(out, fmt.Sprintf("tcp %d", p))
@@ -387,15 +395,43 @@ func portsFileLines(s Service) []string {
 			out = append(out, fmt.Sprintf("udp %d", p))
 		}
 	}
-	for _, l := range routePorts(s) {
+	for _, n := range sortedRouteNames(s) {
+		r := s.Routes[n]
+		if (r.Proto != "tcp" && r.Proto != "udp") || r.Exposure == "local" {
+			continue
+		}
+		l := fmt.Sprintf("%s %d", r.Proto, r.Port)
 		if s.Net.Private {
 			l += " dnat " + backendAddr(s)
+			// tailnet: only on the host's overlay IP, as a socket bound
+			// there was. Without a known overlay IP, skip it (fail closed).
+			if r.Exposure == "tailnet" {
+				ip := hostOverlayIP(host)
+				if ip == "" {
+					continue
+				}
+				l += " " + ip
+				// allow = [ hosts ]: one line per source overlay IP
+				// (fleet-net-nat @routes_from); unknown hosts are dropped.
+				if len(r.Allow) > 0 {
+					for _, a := range r.Allow {
+						if src := hostOverlayIP(a); src != "" {
+							out = append(out, l+" "+src)
+						}
+					}
+					continue
+				}
+			} else if len(r.Allow) > 0 {
+				// allow is only implemented for tailnet tcp/udp routes.
+				continue
+			}
 		}
 		out = append(out, l)
 	}
 	if s.Net.Private && s.Internet != nil && !*s.Internet {
 		out = append(out, "noinet ve-"+s.Name)
 	}
+	out = append(out, netExceptions(s, host)...)
 	return out
 }
 
@@ -714,4 +750,122 @@ or collect over ssh with a TTY and feed the file in:
 // it needs an interactive password (as opposed to e.g. a dead host).
 func sudoNeedsPassword(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "a password is required")
+}
+
+// ------------------------------------------------- private-net exceptions
+
+// usesTarget resolves a net.uses entry ("svc.route").
+func usesTarget(u string) (Service, Route, bool) {
+	i := strings.IndexByte(u, '.')
+	if i < 0 || inv == nil {
+		return Service{}, Route{}, false
+	}
+	t, ok := inv.Services[u[:i]]
+	if !ok {
+		return Service{}, Route{}, false
+	}
+	r, ok := t.Routes[u[i+1:]]
+	return t, r, ok
+}
+
+// netExceptions is the guest's allow list beyond internet + DNS
+// (ROUTING-PLAN §8 step 5), as ports-file "allow" lines:
+// "allow ve-<name> <ipv4> <proto> <port>". net.uses of an http route goes
+// to the nginx that serves it: this host's 10.233.0.1:443 when the callee
+// lives here (split DNS answers with the host's own overlay IP, so the
+// overlay IP too), else the callee host's overlay IP:443. A tcp/udp route
+// goes to its DNAT/host port on the callee host (overlay IP), or this
+// host's addresses when local. net.egress entries pass through as given.
+func netExceptions(s Service, host string) []string {
+	if !s.Net.Private {
+		return nil
+	}
+	ve := "ve-" + s.Name
+	var out []string
+	add := func(ip, proto string, port int) {
+		out = append(out, fmt.Sprintf("allow %s %s %s %d", ve, ip, proto, port))
+	}
+	hostIPs := func(h string) []string {
+		var ips []string
+		if h == host {
+			ips = append(ips, "10.233.0.1")
+		}
+		if inv != nil {
+			if hh, ok := inv.Hosts[h]; ok && hh.OverlayIP != nil {
+				ips = append(ips, *hh.OverlayIP)
+			}
+		}
+		return ips
+	}
+	for _, u := range s.Net.Uses {
+		t, r, ok := usesTarget(u)
+		if !ok || t.Host == "" {
+			continue
+		}
+		proto, ports := "tcp", []int{80, 443}
+		if r.Proto == "tcp" || r.Proto == "udp" {
+			proto, ports = r.Proto, []int{r.Port}
+		}
+		// Same host, both private: straight to the guest (also how local
+		// routes, which have no name or host port, are reached).
+		if t.Host == host && t.Net.Private && t.Net.IP != nil {
+			p := r.Proto
+			if p == "http" {
+				p = "tcp"
+			}
+			add(*t.Net.IP, p, r.Port)
+		}
+		if r.Exposure == "local" {
+			continue
+		}
+		for _, ip := range hostIPs(t.Host) {
+			for _, p := range ports {
+				add(ip, proto, p)
+			}
+		}
+	}
+	for _, e := range s.Net.Egress {
+		// "<ipv4>:<port>/<proto>", validated by lib.nix
+		hp, proto, _ := strings.Cut(e, "/")
+		ip, port, _ := strings.Cut(hp, ":")
+		p, err := strconv.Atoi(port)
+		if err == nil {
+			add(ip, proto, p)
+		}
+	}
+	return out
+}
+
+// callerIPs lists guest IPs of private services on the same host that
+// declare net.uses of s.<route>. Their requests reach nginx from
+// 10.233.x.2, which the tailnet/lan ACL would refuse, so the vhost gets an
+// explicit allow before the ACL include.
+func callerIPs(s Service, route string) []string {
+	if inv == nil {
+		return nil
+	}
+	var ips []string
+	for _, c := range inv.Services {
+		if !c.Net.Private || c.Net.IP == nil || c.Host != s.Host {
+			continue
+		}
+		for _, u := range c.Net.Uses {
+			if u == s.Name+"."+route {
+				ips = append(ips, *c.Net.IP)
+			}
+		}
+	}
+	sort.Strings(ips)
+	return ips
+}
+
+// hostOverlayIP is the host's tailnet IPv4 from the inventory, or "".
+func hostOverlayIP(host string) string {
+	if inv == nil {
+		return ""
+	}
+	if h, ok := inv.Hosts[host]; ok && h.OverlayIP != nil {
+		return *h.OverlayIP
+	}
+	return ""
 }

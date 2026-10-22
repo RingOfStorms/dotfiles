@@ -61,12 +61,12 @@ in
       (on "h001" (media "Kavita" "https://books.${domain}" "kavita" "Ebook Library" "public"))
       (media "Photos" "https://photos.${domain}" "immich" "Immich" "public")
 
-      (arr "Radarr" "${h001}:7878" "radarr" "Movie Automation" "tailnet")
-      (arr "Sonarr" "${h001}:8989" "sonarr" "Show Automation" "tailnet")
-      (arr "Bazarr" "${h001}:6767" "bazarr" "Subtitle Automation" "tailnet")
-      (arr "Prowlarr" "${h001}:9696" "prowlarr" "Indexer Manager" "tailnet")
-      (arr "SABnzbd" "${h001}:6336" "sabnzbd" "Usenet Downloader" "tailnet")
-      (arr "Transmission" "${h001}:9091" "transmission" "Torrent Downloader" "tailnet")
+      (arr "Radarr" "https://radarr.${domain}" "radarr" "Movie Automation" "tailnet")
+      (arr "Sonarr" "https://sonarr.${domain}" "sonarr" "Show Automation" "tailnet")
+      (arr "Bazarr" "https://bazarr.${domain}" "bazarr" "Subtitle Automation" "tailnet")
+      (arr "Prowlarr" "https://prowlarr.${domain}" "prowlarr" "Indexer Manager" "tailnet")
+      (arr "SABnzbd" "https://sabnzbd.${domain}" "sabnzbd" "Usenet Downloader" "tailnet")
+      (arr "Transmission" "https://transmission.${domain}" "transmission" "Torrent Downloader" "tailnet")
       (on "h001" (
         arr "Shelfmark" "https://shelfmark.${domain}" "shelfmark" "Books & Audiobooks" "tailnet"
       ))

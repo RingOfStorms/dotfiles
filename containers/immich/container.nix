@@ -1,18 +1,20 @@
-# Guest config. Host network: immich-server on 127.0.0.1:2283, ML on
-# *:3003, postgres on its unix socket + *:5432, redis on a unix socket.
+# Guest config (net.private, 10.233.15.2): immich-server on
+# fleetNet.bindAddress:2283, ML on *:3003, postgres on its unix socket +
+# *:5432, redis on a unix socket.
 # uids pinned to the copied data (immich 916; postgres is 71 by default).
 #
 # Tailnet access for immich_manager (~/projects/immich_manager):
 #   - postgres TCP: only role immich_ro (read-only, scram password) from
 #     100.64.0.0/10 or loopback; everything else is socket-only via pg_hba.
 #   - ML :3003 is unauthenticated; reachable on the tailnet only.
-#   Binding "*" rather than the overlay IP keeps boot independent of
-#   tailscale0 and survives `containers move`. The host firewall only admits
-#   these ports on tailscale0 (a trusted interface); the LAN is closed.
+#   Both are tailnet routes with allow = [ "lio" ] (service.nix): the host
+#   DNATs them only for its overlay IP and only from lio. DNAT keeps the
+#   source address, so pg_hba still sees 100.64.0.1.
 {
   config,
   pkgs,
   lib,
+  fleetNet,
   ...
 }:
 {
@@ -86,7 +88,7 @@
 
   services.immich = {
     enable = true;
-    host = "127.0.0.1";
+    host = fleetNet.bindAddress;
     port = 2283;
     mediaLocation = "/var/lib/immich";
     database = {
@@ -97,7 +99,7 @@
     };
     redis.enable = true; # unix socket
     machine-learning.enable = true;
-    # Module hardcodes localhost; open it to the tailnet for immich_manager.
+    # Module hardcodes localhost; open it for immich_manager (routes.ml).
     machine-learning.environment.IMMICH_HOST = lib.mkForce "0.0.0.0";
     settings = {
       server.externalDomain = "https://photos.joshuabell.xyz";

@@ -1,7 +1,7 @@
 # Guest config: ringofstorms.secrets.server copied from hosts/h001/mods/sec.nix.
 # domain = null: the module's nginx vhost is skipped; the host's nginx vhost
 # lives in service.nix.
-{ secrets_manager, ... }:
+{ secrets_manager, fleetNet, ... }:
 {
   imports = [ secrets_manager.nixosModules.server ];
   system.stateVersion = "25.05";
@@ -9,7 +9,7 @@
   ringofstorms.secrets.server = {
     enable = true;
     installCli = true;
-    listen = "127.0.0.1:8300";
+    listen = "${fleetNet.bindAddress}:8300";
     dataDir = "/var/lib/secrets_manager";
     domain = null;
     # Only ever generates on an empty dataDir; the copied db.key is kept.

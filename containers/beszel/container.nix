@@ -1,5 +1,7 @@
-# Guest config: the nixpkgs beszel-hub module, bound to h001's tailnet IP.
-{ lib, ... }:
+# Guest config: the nixpkgs beszel-hub module. Private network: 0.0.0.0 in
+# the guest netns (host DNAT from 100.64.0.13:8090); host network: h001's
+# tailnet IP as before.
+{ lib, fleetNet, ... }:
 let
   fleet = import ../../hosts/fleet.nix;
 in
@@ -8,7 +10,7 @@ in
 
   services.beszel.hub = {
     enable = true;
-    host = fleet.hosts.h001.overlayIp;
+    host = if fleetNet.private then "0.0.0.0" else fleet.hosts.h001.overlayIp;
     port = 8090;
   };
 

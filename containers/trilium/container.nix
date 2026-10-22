@@ -1,6 +1,6 @@
-# Guest config. Host network: trilium on 127.0.0.1:9111; only h001's nginx
+# Guest config. Private network: trilium on :9111; only h001's nginx
 # (the generated, oauth2-proxy-gated vhost) is reachable from outside.
-{ ... }:
+{ fleetNet, ... }:
 {
   system.stateVersion = "24.11";
 
@@ -10,7 +10,7 @@
 
   services.trilium-server = {
     enable = true;
-    host = "127.0.0.1";
+    host = fleetNet.bindAddress;
     port = 9111;
     dataDir = "/var/lib/trilium";
     # Auth is the fleet oauth2-proxy on h005 (nginx auth_request); never

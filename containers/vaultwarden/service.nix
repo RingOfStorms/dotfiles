@@ -17,8 +17,14 @@
   # on the WAL state of the stopped copy.
   backupHook = "systemctl start backup-vaultwarden.service";
 
-  # vaultwarden listens on 127.0.0.1:8222 (host network). o002 terminates TLS
+  # vaultwarden listens on :8222 in its private netns. o002 terminates TLS
   # for the public name and proxies to h001:80 over the tailnet.
+  # Private network (ROUTING-PLAN §8 step 5): guest 10.233.5.2.
+  net = {
+    private = true;
+    index = 5;
+  };
+
   routes.web = {
     group = "Identity & Security";
     icon = "https://api.iconify.design/mdi/shield-lock.svg?color=%237fb0e8";

@@ -22,6 +22,12 @@
 
   # Tailnet-only (not proxied by o002); the internal server includes
   # nginx-acl-tailnet.conf from host-module.nix (ROUTING-PLAN §2.1).
+  # Private network (ROUTING-PLAN §8 step 5): guest 10.233.9.2.
+  net = {
+    private = true;
+    index = 9;
+  };
+
   routes.web = {
     group = "Productivity";
     port = 28981;

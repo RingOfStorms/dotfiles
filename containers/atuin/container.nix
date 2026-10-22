@@ -1,6 +1,11 @@
-# Guest config. Host network: atuin on 127.0.0.1:8888; postgres on its unix
-# socket only (the host's own postgres already owns 127.0.0.1:5432).
-{ pkgs, lib, ... }:
+# Guest config. Private network (service.nix net): atuin on :8888; postgres on its unix
+# socket only.
+{
+  pkgs,
+  lib,
+  fleetNet,
+  ...
+}:
 {
   system.stateVersion = "24.11";
 
@@ -19,7 +24,7 @@
     enable = true;
     openRegistration = false;
     openFirewall = false;
-    host = "127.0.0.1";
+    host = fleetNet.bindAddress;
     port = 8888;
   };
 }

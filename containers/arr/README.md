@@ -20,17 +20,18 @@ cnt status arr
   no h001 rebuild needed).
 - Guest nixpkgs 26.05 (`guestpkgs`); extra-container's host-side eval stays
   on 25.11 (issue #40).
-- Host network: every port is unchanged (jellyfin 8096, seerr 5055, kavita
-  5000, sonarr 8989, radarr 7878, prowlarr 9696, bazarr 6767, sabnzbd 6336
-  (tailnet only), shelfmark 8087 on 127.0.0.1 (route shelfmark.joshuabell.xyz),
-  transmission 9091/51820 via the netns; no raw tcpPorts/udpPorts).
-  The host keeps the vhosts: `hosts/h001/mods/arr-nginx.nix`.
+- Private network (`net.index = 16`, 10.233.16.2). Every UI is a route in
+  `service.nix`: jellyfin/media public, books/shelfmark and the *arr UIs
+  (sonarr, radarr, prowlarr, bazarr, sabnzbd, transmission) tailnet, no
+  LAN; jellyfin `:8096` direct is a tailnet tcp route. The guest owns the
+  `wg` VPN netns; `127.0.0.1:9091` in the guest forwards into it.
+  `hosts/h001/mods/arr-nginx.nix` keeps only `/media-health/`.
 - `privateUsers = "no"`: uids are host uids (NFS + h004 check raw uids).
   The uids/gids that own migrated state are pinned in `container.nix`.
 - Binds: `/nfs/h002/nixarr/media` (rw), `/var/lib/secrets_manager_hydrated`
-  (ro, the wg conf + api keys), `/run/netns`, `/dev/dri`, `/dev/net/tun`.
+  (ro, the wg conf + api keys), `/dev/dri`, `/dev/net/tun`.
   Extra caps: NET_ADMIN, NET_RAW, SYS_ADMIN (VPN-Confinement builds the netns,
-  bridge and nat rules in the shared host namespace).
+  bridge and nat rules inside the guest netns).
 - Persist (`/srv/containers/arr/<key>`, backed up by `cnt backup arr`):
   `nixarr` (`/var/lib/nixarr`, ~8 GB), `kavita`, `media-integrity`,
   `sabnzbd-secrets`, `recyclarr`, `nixos`.

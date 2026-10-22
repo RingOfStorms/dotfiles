@@ -32,8 +32,7 @@
           service = import ./service.nix;
           config = import ./container.nix;
           guestNixpkgs = guestpkgs;
-          # Host network; idmapped persist (ext4), container uids are not host uids.
-          privateNetwork = false;
+          # Network: service.nix net (private).
           binds = [
             {
               host = envSecret;

@@ -16,9 +16,15 @@
   # Consistent SQL dump that travels with backups/moves.
   backupHook = "runuser -u postgres -- pg_dumpall > /var/lib/postgresql/dumpall.sql";
 
-  # atuin listens on 127.0.0.1:8888 (host network); only nginx is exposed.
+  # atuin listens on :8888 in its private netns; only host nginx reaches it.
   # o002 terminates TLS for the public name and proxies to h001:80 over the
   # tailnet; tailnet clients may hit h001:443 directly (wildcard cert).
+  # Private network (ROUTING-PLAN §8 step 5): guest 10.233.3.2.
+  net = {
+    private = true;
+    index = 3;
+  };
+
   routes.web = {
     group = "Personal";
     icon = "https://api.iconify.design/mdi/console.svg?color=%237ee787";

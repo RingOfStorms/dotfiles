@@ -2,6 +2,7 @@
   config,
   lib,
   constants,
+  fleetNet,
   fleet,
   ...
 }:
@@ -42,37 +43,40 @@ in
       # seerr.vpn.enable = true; # NOTE makes it not able to communicate to *arr apps
       sabnzbd = {
         enable = true; # Usenet downloader
-        # Accessed directly at http://h001.net.joshuabell.xyz:6336 (no nginx
-        # proxy). openFirewall binds the GUI to 0.0.0.0 and opens port 6336;
-        # whitelistHostnames must include the FQDN or sabnzbd refuses the
-        # connection ("Refused connection with hostname ...").
+        # Route sabnzbd.joshuabell.xyz (tailnet, host nginx -> 10.233.16.2).
+        # openFirewall binds the GUI to 0.0.0.0 (guest); whitelistHostnames
+        # must include the route FQDN or sabnzbd refuses the connection
+        # ("Refused connection with hostname ...").
         openFirewall = true;
         whitelistHostnames = [
           "h001"
           "h001.net.joshuabell.xyz"
+          "sabnzbd.joshuabell.xyz"
         ];
-        # You reach the GUI over the tailnet (h001.net.joshuabell.xyz =>
-        # 100.64.0.13). sabnzbd treats the CGNAT/tailnet range 100.64.0.0/10
-        # as "external internet" and blocks it ("External internet access
-        # denied") unless it's listed as a local range. Add tailnet + LAN.
+        # Clients arrive from the host veth (10.233.0.1, host nginx).
+        # sabnzbd blocks non-local ranges ("External internet access
+        # denied") unless they're listed.
         whitelistRanges = [
+          "10.233.0.0/16"
           "100.64.0.0/10"
-          "10.12.14.0/24"
         ];
       };
       transmission = {
         enable = true; # Torrent downloader
         vpn.enable = true;
         peerPort = c.transmissionPeerPort;
+        # rpc clients: host nginx (veth) and the guest forward (see
+        # container.nix transmission-rpc-forward).
         extraAllowedIps = [
-          "100.64.0.0/10"
+          "10.233.0.0/16"
+          "192.168.15.0/24"
         ];
         extraSettings = {
           rpc-bind-address = "0.0.0.0";
           rpc-authentication-required = false;
           rpc-host-whitelist-enabled = false;
           rpc-whitelist-enabled = false;
-          rpc-whitelist = "127.0.0.1,::1,192.168.1.71,100.64.0.0/10";
+          rpc-whitelist = "127.0.0.1,::1,10.233.0.0/16,192.168.15.0/24";
         };
       };
       prowlarr = {
@@ -200,13 +204,13 @@ in
           radarr.enable = true;
         };
       };
-      # Loopback only: reached through the host nginx route
+      # fleetNet.bindAddress (guest-only on net.private): reached through the host nginx route
       # (shelfmark.joshuabell.xyz, tailnet, containers/arr/service.nix).
       # Configure acquisition sources/destinations in its own UI.
       shelfmark = {
         enable = true;
         port = c.shelfmarkPort;
-        host = "127.0.0.1";
+        host = fleetNet.bindAddress;
         openFirewall = false;
       };
       # audiobookshelf removed (kavita is used instead). Its state stays in
@@ -365,8 +369,13 @@ in
       };
     };
 
-    # Nixarr's API synchronizers communicate over loopback. Keep Forms auth for
-    # remote UI access while bypassing it only for local service-to-service API calls.
+    # No login (ROUTING-PLAN §8 step 5): the UIs are tailnet-only routes and
+    # the guest is reachable only through host nginx, which is the gate.
+    # "External" = the app trusts its front end; "required" stays for the
+    # loopback API callers (nixarr synchronizers).
+    services.prowlarr.settings.auth.method = "External";
+    services.sonarr.settings.auth.method = "External";
+    services.radarr.settings.auth.method = "External";
     services.prowlarr.settings.auth.required = "DisabledForLocalAddresses";
     services.sonarr.settings.auth.required = "DisabledForLocalAddresses";
     services.radarr.settings.auth.required = "DisabledForLocalAddresses";

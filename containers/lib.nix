@@ -269,6 +269,12 @@ let
   # service: net = { private = true; index = N; }. The guest is
   # 10.233.<N>.2 on every host (index is fleet-wide unique, checked by
   # checkNetIndexes); the host side of every veth is netHostAddress.
+  # The host only lets a guest reach the internet and its DNS. Exceptions:
+  #   uses   = [ "svc.route" ]   another service's route: direct to the
+  #            guest IP when both are private on one host, else the
+  #            target host's overlay IP on tcp 443 (its nginx). Resolved
+  #            by the CLI at deploy time (cli/routes.go netExceptions).
+  #   egress = [ "10.12.14.181:9010/tcp" ]   a fixed LAN/tailnet endpoint.
   netHostAddress = "10.233.0.1";
   normalizeNet =
     s:
@@ -276,6 +282,8 @@ let
       n = {
         private = false;
         index = null;
+        uses = [ ];
+        egress = [ ];
       }
       // (s.net or { });
       fail = msg: throw "${s.name}: net: ${msg}";
@@ -284,17 +292,30 @@ let
         !(builtins.elem k [
           "private"
           "index"
+          "uses"
+          "egress"
         ])
       ) (builtins.attrNames n);
+      badUse = builtins.filter (u: builtins.match "[a-z0-9-]+\\.[a-z0-9-]+" u == null) n.uses;
+      badEgress = builtins.filter (
+        e: builtins.match "[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+:[0-9]+/(tcp|udp)" e == null
+      ) n.egress;
     in
     if unknown != [ ] then
       fail "unknown key(s) ${builtins.concatStringsSep ", " unknown}"
     else if !n.private then
-      {
-        private = false;
-        index = null;
-        ip = null;
-      }
+      (
+        if n.uses != [ ] || n.egress != [ ] then
+          fail "uses/egress only apply with private = true"
+        else
+          {
+            private = false;
+            index = null;
+            ip = null;
+            uses = [ ];
+            egress = [ ];
+          }
+      )
     else if s.kind != "nixos" then
       fail "private is only implemented for kind = \"nixos\" (podman has its own bridge)"
     else if !(builtins.isInt n.index) || n.index < 1 || n.index > 254 then
@@ -305,10 +326,14 @@ let
       fail "tcpPorts/udpPorts don't reach a private guest; declare tcp/udp routes instead (they get DNAT)"
     else if s.nginx != null then
       fail "nginx strings proxy to 127.0.0.1; convert to routes first"
+    else if badUse != [ ] then
+      fail "uses entry ${builtins.toJSON (builtins.head badUse)} is not \"<service>.<route>\""
+    else if badEgress != [ ] then
+      fail "egress entry ${builtins.toJSON (builtins.head badEgress)} is not \"<ipv4>:<port>/<tcp|udp>\""
     else
       {
         private = true;
-        inherit (n) index;
+        inherit (n) index uses egress;
         ip = "10.233.${toString n.index}.2";
       };
 
@@ -646,7 +671,11 @@ in
       # net.private (service.nix) is the supported switch; the legacy
       # privateNetwork argument gives a veth without addresses (unused).
       private = svc.net.private || privateNetwork;
-      exposed = builtins.filter (r: r.exposure != "local") (builtins.attrValues svc.routes);
+      # Private guests admit local routes too: only net.uses guests on this
+      # host can reach them (the host isolates every other source).
+      exposed = builtins.filter (r: r.exposure != "local" || svc.net.private) (
+        builtins.attrValues svc.routes
+      );
       portsOf = proto: map (r: r.port) (builtins.filter (r: r.proto == proto) exposed);
       idmap = if privateUsers == "no" then "" else ":idmap";
       bindFlag =
@@ -658,6 +687,7 @@ in
         hostAddress = if svc.net.private then netHostAddress else "127.0.0.1";
       };
     in
+    { pkgs, lib, ... }:
     {
       containers.${svc.name} = {
         ephemeral = true;
@@ -716,8 +746,24 @@ in
       // extraContainerConfig;
       # Don't start (and stop) when a persist/bind source's mount is missing,
       # e.g. an unmounted /drives/wd10 would otherwise be bound as an empty dir.
-      systemd.services."container@${svc.name}".unitConfig.RequiresMountsFor =
-        map (b: b.host) (persistList svc) ++ map (b: b.host) binds;
+      systemd.services."container@${svc.name}" = {
+        unitConfig.RequiresMountsFor = map (b: b.host) (persistList svc) ++ map (b: b.host) binds;
+        # net.private: host-module.nix fleet-veth@ configures ve-<name> as soon
+        # as it appears (before the guest is READY). The stock postStart
+        # (ip addr/route add, after READY) would then fail on EEXIST, so do
+        # the same with replace: still sets it up on hosts without the hook.
+        serviceConfig = lib.mkIf svc.net.private {
+          ExecStartPost = lib.mkForce [
+            (pkgs.writeShellScript "fleet-veth-poststart-${svc.name}" ''
+              set -eu
+              ifc=ve-${svc.name}
+              ${pkgs.iproute2}/bin/ip link set dev "$ifc" up
+              ${pkgs.iproute2}/bin/ip addr replace ${netHostAddress} dev "$ifc"
+              ${pkgs.iproute2}/bin/ip route replace ${svc.net.ip} dev "$ifc"
+            '')
+          ];
+        };
+      };
     };
 
   # A deployable podman service. Produces a store path with:

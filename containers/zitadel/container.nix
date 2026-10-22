@@ -1,8 +1,7 @@
 # Guest config: services.zitadel copied from hosts/h001/containers/zitadel.nix.
-# Host network: zitadel on :8085, postgres on its unix socket only.
-# Zitadel has no bind-address setting; it listens on all interfaces, but the
-# host firewall does not open 8085 (cnt only opens tcpPorts), so only nginx
-# (and trusted interfaces such as tailscale0) reach it.
+# zitadel on :8085, postgres on its unix socket only. Zitadel has no
+# bind-address setting; it listens on all interfaces. With net.private that
+# is the guest netns, whose firewall admits 8085 from the host only.
 { pkgs, lib, ... }:
 {
   system.stateVersion = "25.05";

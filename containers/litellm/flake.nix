@@ -35,8 +35,7 @@
           config = import ./container.nix;
           guestNixpkgs = guestpkgs;
           specialArgs.litellmpkgs = litellmpkgs;
-          # Host network; idmapped persist (ext4).
-          privateNetwork = false;
+          # Network: service.nix net (private).
           binds = [
             {
               host = "${fleet.global.secretsDir}/litellm-env";

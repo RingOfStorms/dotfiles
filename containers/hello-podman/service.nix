@@ -10,7 +10,9 @@
 
   # Survives restarts and travels with `move`. Unused by nginx; drop marker
   # files in /srv/containers/hello-podman/data to see them follow a move.
-  persist = { data = "/data"; };
+  persist = {
+    data = "/data";
+  };
 
   # Published on all addresses and opened in the host firewall at deploy
   # time. http://<host>:8082/

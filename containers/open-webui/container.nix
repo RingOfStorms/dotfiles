@@ -1,6 +1,11 @@
 # Guest config: settings copied verbatim from hosts/h001/mods/openwebui.nix.
 # Module + package from h001's open-webui-nixpkgs rev, as on bare metal.
-{ pkgs, openwebuipkgs, ... }:
+{
+  pkgs,
+  openwebuipkgs,
+  fleetNet,
+  ...
+}:
 let
   declaration = "services/misc/open-webui.nix";
   pkgsOpenWebui = import openwebuipkgs {
@@ -20,7 +25,9 @@ let
       })
     ];
   };
-  openaiBaseUrl = "http://127.0.0.1:8094/v1";
+  # net.uses litellm.web / searx.api: their guest IPs (service.nix net.index),
+  # direct, same host (ROUTING-PLAN §8 step 5).
+  openaiBaseUrl = "http://10.233.7.2:8094/v1";
 in
 {
   system.stateVersion = "24.11";
@@ -31,7 +38,7 @@ in
   services.open-webui = {
     enable = true;
     port = 8084;
-    host = "127.0.0.1";
+    host = fleetNet.bindAddress;
     openFirewall = false;
     package = pkgsOpenWebui.open-webui;
     environmentFile = "/var/secrets/openwebui.env";
@@ -77,11 +84,11 @@ in
       # All SSO-authorized users can select every model.
       BYPASS_MODEL_ACCESS_CONTROL = "True";
 
-      # Use the loopback-only SearXNG instance for web search.
+      # Use the private SearXNG instance (net.uses searx.api) for web search.
       ENABLE_WEB_SEARCH = "True";
       ENABLE_WEB_SEARCH_CONFIRMATION = "True";
       WEB_SEARCH_ENGINE = "searxng";
-      SEARXNG_QUERY_URL = "http://127.0.0.1:8889/search?q=<query>&format=json";
+      SEARXNG_QUERY_URL = "http://10.233.8.2:8889/search?q=<query>&format=json";
       WEB_SEARCH_RESULT_COUNT = "5";
       WEB_SEARCH_CONCURRENT_REQUESTS = "2";
       WEB_LOADER_CONCURRENT_REQUESTS = "2";

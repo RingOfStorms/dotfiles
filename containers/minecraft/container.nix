@@ -358,8 +358,7 @@ in
 
   # Mojang's vanilla server jar is marked unfree (unfreeRedistributable).
   # Allow only that single package; everything else stays restricted.
-  nixpkgs.config.allowUnfreePredicate =
-    pkg: builtins.elem (lib.getName pkg) [ "minecraft-server" ];
+  nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [ "minecraft-server" ];
 
   environment.systemPackages = [ pkgs.tmux ];
 
@@ -557,7 +556,10 @@ in
         enable = true;
         package = pkgs.paperServers.paper-26_3; # pin the release: the bare `paper` alias can point at a release candidate, which rejects release clients
         jvmOpts = "-Xms4096M -Xmx12288M"; # Matches original joe config
-        serverProperties = paperServerProperties { port = 25566; motd = "Survival"; };
+        serverProperties = paperServerProperties {
+          port = 25566;
+          motd = "Survival";
+        };
         whitelist = whitelist;
         operators = operators;
 
@@ -660,11 +662,16 @@ in
         enable = true;
         package = pkgs.paperServers.paper-26_3; # pin the release: the bare `paper` alias can point at a release candidate, which rejects release clients
         jvmOpts = "-Xms2048M -Xmx8192M";
-        serverProperties = paperServerProperties { port = 25567; motd = "Creative"; } // {
-          gamemode = "creative";
-          spawn-monsters = false;
-          spawn-animals = false;
-        };
+        serverProperties =
+          paperServerProperties {
+            port = 25567;
+            motd = "Creative";
+          }
+          // {
+            gamemode = "creative";
+            spawn-monsters = false;
+            spawn-animals = false;
+          };
         whitelist = whitelist;
         operators = operators;
 

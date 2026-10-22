@@ -58,6 +58,10 @@
         };
     in
     {
+      # `nix fmt` formats every .nix file in the repo (including sub-flakes)
+      # with the official RFC 166 style (nixfmt) via treefmt.
+      formatter = forAllSystems (system: nixpkgsFor.${system}.nixfmt-tree);
+
       apps = forAllSystems (
         system:
         let
@@ -81,7 +85,7 @@
             # Per-script tools live in their own sub-flakes so we don't drag
             # a toolchain onto every machine that just wants deploy_*.
             packages = map (mkDeployScript pkgs) deployHosts
-              ++ [ (mkAuditApp pkgs) ];
+              ++ [ (mkAuditApp pkgs) pkgs.nixfmt ];
           };
         }
       );

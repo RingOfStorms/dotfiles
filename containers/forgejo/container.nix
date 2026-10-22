@@ -1,7 +1,12 @@
-# Guest config. Host network: forgejo HTTP on 127.0.0.1:3000, builtin SSH on
-# 0.0.0.0:3032; postgres on its unix socket only (the host's postgres owns
-# 127.0.0.1:5432). uid/gid 115 pinned to match the copied data.
-{ pkgs, lib, ... }:
+# Guest config. forgejo HTTP :3000 on fleetNet.bindAddress (0.0.0.0 in the
+# private netns), builtin SSH :3032 on 0.0.0.0; postgres on its unix socket
+# only. uid/gid 115 pinned to match the copied data.
+{
+  pkgs,
+  lib,
+  fleetNet,
+  ...
+}:
 {
   system.stateVersion = "24.11";
 
@@ -30,12 +35,12 @@
         PROTOCOL = "http";
         DOMAIN = "git.joshuabell.xyz";
         ROOT_URL = "https://git.joshuabell.xyz/";
-        HTTP_ADDR = "127.0.0.1";
+        HTTP_ADDR = fleetNet.bindAddress;
         HTTP_PORT = 3000;
 
         START_SSH_SERVER = true;
         SSH_DOMAIN = "git.joshuabell.xyz";
-        SSH_LISTEN_HOST = "0.0.0.0";
+        SSH_LISTEN_HOST = "0.0.0.0"; # host network too: o002 + tailnet reach it directly
         SSH_LISTEN_PORT = 3032; # actual listen port
         SSH_PORT = 3032; # used in UI
         BUILTIN_SSH_SERVER_USER = "git";

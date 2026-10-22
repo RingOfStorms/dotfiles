@@ -34,14 +34,13 @@
           config = import ./container.nix;
           guestNixpkgs = guestpkgs;
           specialArgs = { inherit nixarr fleet constants; };
-          # Host network, so every port and stored inter-app URL
-          # (localhost:8989 etc.) stays as it was on bare metal.
-          privateNetwork = false;
+          # Network: service.nix net (private, 10.233.16.2). The apps share
+          # the guest loopback, so stored URLs (localhost:8989 etc.) still work.
           # NFS can't be idmapped and h004 checks raw uids; existing state is
           # owned by host uids. Container root is host root.
           privateUsers = "no";
           # VPN-Confinement builds the `wg` netns, bridge, wireguard link and
-          # nat rules in the (shared) host namespace; `ip netns` needs mounts.
+          # nat rules inside the guest netns; `ip netns` needs mounts.
           capabilities = [
             "CAP_NET_ADMIN"
             "CAP_NET_RAW"
@@ -57,9 +56,6 @@
               host = fleet.global.secretsDir;
               readOnly = true;
             }
-            # `ip netns add` mounts here; it must be the host's so the
-            # namespace outlives nothing and is visible to host tools.
-            { host = "/run/netns"; }
           ];
         };
       };

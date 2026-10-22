@@ -1,0 +1,59 @@
+# ip fleet-net-nat (ROUTING-PLAN §8 step 5): DNAT for net.private tcp/udp
+# routes. Loaded by host-module.nix (@EDGE4@ = nginx.edge.peers, v4) and
+# syntax-checked by natrules_test.go. The maps/sets are filled from the
+# ports files by fleet-containers-apply-ports.
+map routes {
+  comment "public/lan tcp/udp routes: proto . host port -> guest (any interface)"
+  type inet_proto . inet_service : ipv4_addr
+}
+map routes_at {
+  comment "tailnet tcp/udp routes: host overlay addr . proto . port -> guest"
+  type ipv4_addr . inet_proto . inet_service : ipv4_addr
+}
+map routes_from {
+  comment "tailnet tcp/udp routes with allow: src . host addr . proto . port -> guest"
+  type ipv4_addr . ipv4_addr . inet_proto . inet_service : ipv4_addr
+}
+set uses {
+  comment "net.uses / net.egress of local guests: ve-iface . daddr . proto . port"
+  type ifname . ipv4_addr . inet_proto . inet_service
+}
+set edge {
+  comment "public edge (o002): counts as the internet, never a tailnet client"
+  type ipv4_addr
+  elements = { @EDGE4@ }
+}
+chain prerouting {
+  type nat hook prerouting priority dstnat; policy accept;
+  fib daddr type local jump tailnet comment "tailnet routes: only real tailnet peers"
+  fib daddr type local dnat ip to meta l4proto . th dport map @routes
+}
+chain tailnet {
+  # When no tailnet map matches, control returns to prerouting so public/lan
+  # @routes (forgejo 3032) still apply to tailnet peers; only jumps are used
+  # here. A matching dnat is terminal, so nothing runs twice.
+  # Real tailnet peers: arrive on tailscale0 from the overlay range and are
+  # not the edge. A LAN packet sent to the overlay IP (h001 as next hop, or
+  # spoofed) has the wrong iif; o002 is the internet (ROUTING-PLAN §2.1).
+  iifname "tailscale0" ip saddr 100.64.0.0/10 ip saddr != @edge jump tailnet-peer
+  # Declared local guest callers (net.uses of the route).
+  iifname . ip daddr . meta l4proto . th dport @uses jump tailnet-guest
+}
+chain tailnet-peer {
+  dnat ip to ip saddr . ip daddr . meta l4proto . th dport map @routes_from
+  dnat ip to ip daddr . meta l4proto . th dport map @routes_at
+}
+chain tailnet-guest {
+  dnat ip to ip daddr . meta l4proto . th dport map @routes_at
+}
+chain output {
+  # The host itself (local tools, beszel agent on h001): trusted as before.
+  type nat hook output priority -100; policy accept;
+  ip daddr != 127.0.0.0/8 fib daddr type local dnat ip to ip saddr . ip daddr . meta l4proto . th dport map @routes_from
+  ip daddr != 127.0.0.0/8 fib daddr type local dnat ip to ip daddr . meta l4proto . th dport map @routes_at
+  ip daddr != 127.0.0.0/8 fib daddr type local dnat ip to meta l4proto . th dport map @routes
+}
+chain postrouting {
+  type nat hook postrouting priority srcnat; policy accept;
+  ip saddr 10.233.0.0/16 oifname != "ve-*" masquerade
+}

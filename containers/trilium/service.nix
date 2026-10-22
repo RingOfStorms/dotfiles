@@ -19,6 +19,12 @@
   # at sso-proxy.joshuabell.xyz, only zitadel role `notes`. Tailnet-only.
   # The desktop sync client can't do the browser login; it used the old
   # :9112 bypass, removed 2026-10-21.
+  # Private network (ROUTING-PLAN §8 step 5): guest 10.233.4.2.
+  net = {
+    private = true;
+    index = 4;
+  };
+
   routes.web = {
     port = 9111;
     name = "notes";

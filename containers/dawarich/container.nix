@@ -1,9 +1,10 @@
-# Guest config. Host network: puma on 127.0.0.1:3001 (BINDING; host nginx
+# Guest config. Private network: puma on :3001 (BINDING; host nginx
 # fronts it); postgres and redis on unix sockets only. uids pinned to match the copied data.
 {
   config,
   pkgs,
   lib,
+  fleetNet,
   ...
 }:
 {
@@ -56,8 +57,8 @@
       # The module hardcodes APPLICATION_PROTOCOL=http; behind TLS that breaks
       # login (CSRF origin mismatch) and ActionCable websockets.
       APPLICATION_PROTOCOL = "https";
-      # rails server defaults to 0.0.0.0 in production; loopback only.
-      BINDING = "127.0.0.1";
+      # 0.0.0.0 in the private netns, 127.0.0.1 on the host network.
+      BINDING = fleetNet.bindAddress;
     };
   };
 

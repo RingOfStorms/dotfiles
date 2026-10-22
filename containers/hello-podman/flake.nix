@@ -5,7 +5,10 @@
     { nixpkgs, ... }:
     let
       containersLib = import ../lib.nix;
-      forAll = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ];
+      forAll = nixpkgs.lib.genAttrs [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
     in
     {
       packages = forAll (system: {

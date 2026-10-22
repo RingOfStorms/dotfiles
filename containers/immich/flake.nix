@@ -28,8 +28,7 @@
           service = import ./service.nix;
           config = import ./container.nix;
           guestNixpkgs = guestpkgs;
-          # Host network; idmapped persist (ext4), container uids are not host uids.
-          privateNetwork = false;
+          # Network: service.nix net (private, 10.233.15.2); idmapped persist (ext4).
           # Media stays on /drives/wd10 (service.nix requires "wd10"); not in
           # persist, so `cnt backup` skips it (h001 restic covers it).
           binds = [

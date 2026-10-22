@@ -1,8 +1,7 @@
 # Forgejo (git.joshuabell.xyz) + its PostgreSQL 17, one container.
-# Was hosts/h001/containers/forgejo.nix (private-network nixos container,
-# 10.0.0.2). Host network now: HTTP on 127.0.0.1:3000 behind nginx (routes.web),
-# builtin SSH directly on 0.0.0.0:3032 (routes.ssh; o002 streams public :3032
-# here over the tailnet; replaces the old h001 nginx stream).
+# Private network (net.private, 10.233.11.2): HTTP :3000 behind host nginx
+# (routes.web), builtin SSH :3032 DNATed from the host port (routes.ssh; o002
+# streams public :3032 to h001 over the tailnet).
 {
   name = "forgejo";
   kind = "nixos";
@@ -17,6 +16,12 @@
   };
 
   backupHook = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
+
+  # Private network (ROUTING-PLAN §8 step 5). index is fleet-wide unique.
+  net = {
+    private = true;
+    index = 11;
+  };
 
   routes.web = {
 
