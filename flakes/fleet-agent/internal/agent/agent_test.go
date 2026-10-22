@@ -204,6 +204,45 @@ func TestStatusEndpointAndMetrics(t *testing.T) {
 	}
 }
 
+func TestBcachefsTabularAndSingleDeviceSysfs(t *testing.T) {
+	root := t.TempDir()
+	sysDir := filepath.Join(root, "sys")
+	stateDir := filepath.Join(root, "state")
+
+	// Single-device bcachefs in sysfs is named after the block device (e.g. mmcblk0p3),
+	// while `bcachefs fs usage` keys it by UUID and uses tabular device lines.
+	bchSys := filepath.Join(sysDir, "fs/bcachefs/mmcblk0p3")
+	os.MkdirAll(filepath.Join(bchSys, "options"), 0o755)
+	os.MkdirAll(filepath.Join(bchSys, "dev-0"), 0o755)
+	os.WriteFile(filepath.Join(bchSys, "options/data_replicas"), []byte("1\n"), 0o644)
+	os.WriteFile(filepath.Join(bchSys, "options/metadata_replicas"), []byte("1\n"), 0o644)
+	os.WriteFile(filepath.Join(bchSys, "options/version_upgrade"), []byte("[compatible] upgrade none\n"), 0o644)
+	os.WriteFile(filepath.Join(bchSys, "dev-0/label"), []byte("ssd.primary\n"), 0o644)
+	os.WriteFile(filepath.Join(bchSys, "dev-0/state"), []byte("[rw] ro evacuating spare\n"), 0o644)
+	os.WriteFile(filepath.Join(bchSys, "dev-0/durability"), []byte("1\n"), 0o644)
+	os.Symlink("/sys/class/block/mmcblk0p3", filepath.Join(bchSys, "dev-0/block"))
+
+	os.MkdirAll(stateDir, 0o755)
+	const poolUUID = "06e4079-e367-03eb-d37c-00722f5891d2"
+	bchTimer := `{"pools":{"` + poolUUID + `":{"uuid":"` + poolUUID + `","mount":"/","usageText":"Filesystem: ` + poolUUID + `\nSize:                   221320891904\nUsed:                    10294397952\nOnline reserved:          189469568\n\nData type       Required/total  Devices\n1x:                     10090424832\n\n                       Device label      Device      State          Size            Used  Use%\nssd.primary (device 0):               mmcblk0p3         rw  240731549696     10090424832    5%\n"}}}`
+	os.WriteFile(filepath.Join(stateDir, "bcachefs.json"), []byte(bchTimer), 0o644)
+
+	pools := collectBcachefsPools(sysDir, stateDir)
+	p, ok := pools["mmcblk0p3"]
+	if !ok {
+		t.Fatalf("expected pool under mmcblk0p3 key, got keys: %+v", pools)
+	}
+	if p.Degraded {
+		t.Errorf("pool with [rw] state should not be marked Degraded")
+	}
+	if p.Version != "" {
+		t.Errorf("expected empty version when version_major is absent, got %q", p.Version)
+	}
+	if len(p.Devices) != 1 || p.Devices[0].State != "rw" || p.Devices[0].CapacityBytes != 240731549696 || p.Devices[0].UsedBytes != 10090424832 {
+		t.Errorf("unexpected device parsed from tabular output: %+v", p.Devices)
+	}
+}
+
 func TestLogsEndpointGuestVsUnit(t *testing.T) {
 	root := t.TempDir()
 	oldM, oldG, oldN, oldJ := mutableUnits, gcrootDir, nspawnRootDir, runJournalctl

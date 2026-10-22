@@ -17,13 +17,13 @@ type BcachefsDevice struct {
 	Label           string `json:"label,omitempty"`           // e.g. "hdd.0"
 	State           string `json:"state,omitempty"`           // "rw", "ro", "evacuating", "spare"
 	Durability      int    `json:"durability,omitempty"`      // typically 1
-	CapacityBytes   uint64 `json:"capacityBytes"`             // bucket_size * nbuckets
-	UsedBytes       uint64 `json:"usedBytes"`                 // non-free buckets * bucket_size
+	CapacityBytes   uint64 `json:"sizeBytes"`                 // bucket_size * nbuckets (or bcachefs fs usage Size)
+	UsedBytes       uint64 `json:"usedBytes"`                 // non-free buckets * bucket_size (or bcachefs fs usage Used)
 	FreeBytes       uint64 `json:"freeBytes"`                 // free buckets * bucket_size
 	FragmentedBytes uint64 `json:"fragmentedBytes,omitempty"` // fragmented bytes
-	ReadErrors      uint64 `json:"readErrors,omitempty"`
-	WriteErrors     uint64 `json:"writeErrors,omitempty"`
-	ChecksumErrors  uint64 `json:"checksumErrors,omitempty"`
+	ReadErrors      uint64 `json:"ioErrorsRead"`
+	WriteErrors     uint64 `json:"ioErrorsWrite"`
+	ChecksumErrors  uint64 `json:"ioErrorsChecksum"`
 }
 
 // BcachefsPool holds detailed bcachefs pool metrics, separating raw device
@@ -33,13 +33,13 @@ type BcachefsPool struct {
 	Version             string           `json:"version,omitempty"`
 	DataReplicas        float64          `json:"dataReplicas"`         // e.g. 2.0 on NAS pool, 1.0 on single disk
 	MetadataReplicas    float64          `json:"metadataReplicas"`     // e.g. 2.0
-	RawTotalBytes       uint64           `json:"rawTotalBytes"`        // sum of device capacities
+	RawTotalBytes       uint64           `json:"rawCapacityBytes"`     // sum of device capacities
 	RawUsedBytes        uint64           `json:"rawUsedBytes"`         // raw allocated bytes (incl. replicas & reserved)
 	RawFreeBytes        uint64           `json:"rawFreeBytes"`         // raw free bytes
-	OnlineReservedBytes uint64           `json:"onlineReservedBytes"`  // online reserved bytes
+	OnlineReservedBytes uint64           `json:"rawReservedBytes"`     // online reserved bytes
 	UsableTotalBytes    uint64           `json:"usableTotalBytes"`     // rawTotal / dataReplicas
-	LogicalUsedBytes    uint64           `json:"logicalUsedBytes"`     // logical user data + btree bytes (or rawUsed / dataReplicas)
-	EffectiveFreeBytes  uint64           `json:"effectiveFreeBytes"`   // usableTotal - logicalUsed
+	LogicalUsedBytes    uint64           `json:"usableUsedBytes"`      // logical user data + btree bytes (or rawUsed / dataReplicas)
+	EffectiveFreeBytes  uint64           `json:"usableFreeBytes"`      // usableTotal - logicalUsed
 	BtreeBytes          uint64           `json:"btreeBytes,omitempty"` // btree metadata bytes
 	UserDataBytes       uint64           `json:"userDataBytes,omitempty"`
 	CachedBytes         uint64           `json:"cachedBytes,omitempty"`
@@ -76,7 +76,7 @@ func collectBcachefsPools(sysDir, stateDir string) map[string]BcachefsPool {
 		}
 	}
 
-	fsDirs, _ := filepath.Glob(filepath.Join(sysDir, "fs/bcachefs/*-*"))
+	fsDirs, _ := filepath.Glob(filepath.Join(sysDir, "fs/bcachefs/*"))
 	sort.Strings(fsDirs)
 	for _, dir := range fsDirs {
 		st, err := os.Stat(dir)
@@ -88,10 +88,25 @@ func collectBcachefsPools(sysDir, stateDir string) map[string]BcachefsPool {
 		if timerSnap.Pools != nil {
 			if ts, ok := timerSnap.Pools[uuid]; ok && ts.UsageText != "" {
 				ApplyBcachefsUsageText(&p, ts.UsageText)
+			} else {
+				// Single-device bcachefs pools expose /sys/fs/bcachefs/<dev> (e.g. nvme0n1p3, sde, mmcblk0p3)
+				// while `bcachefs fs usage` keys them by UUID; match by member device name.
+				for _, candTS := range timerSnap.Pools {
+					if candTS.UsageText != "" && strings.Contains(candTS.UsageText, " "+uuid+" ") {
+						if candTS.UUID != "" {
+							p.UUID = candTS.UUID
+						}
+						ApplyBcachefsUsageText(&p, candTS.UsageText)
+						break
+					}
+				}
 			}
 		}
 		recomputeBcachefsDerived(&p)
 		pools[uuid] = p
+		if p.UUID != "" && p.UUID != uuid {
+			pools[p.UUID] = p
+		}
 	}
 
 	// Also allow timer snapshot pools even if sysfs wasn't present (e.g. in tests).
@@ -119,7 +134,7 @@ func readSysfsBcachefsPool(dir, uuid string) BcachefsPool {
 		MetadataReplicas: parseFloatDefault(firstToken(readTrimmed(filepath.Join(dir, "options/metadata_replicas"))), 1.0),
 	}
 	if p.Version == "." {
-		p.Version = firstToken(readTrimmed(filepath.Join(dir, "options/version_upgrade")))
+		p.Version = activeSysfsToken(readTrimmed(filepath.Join(dir, "options/version_upgrade")))
 		if p.Version == "compatible" || p.Version == "none" {
 			p.Version = ""
 		}
@@ -128,10 +143,14 @@ func readSysfsBcachefsPool(dir, uuid string) BcachefsPool {
 	devDirs, _ := filepath.Glob(filepath.Join(dir, "dev-*"))
 	sort.Strings(devDirs)
 	for _, dd := range devDirs {
+		lbl := activeSysfsToken(readTrimmed(filepath.Join(dd, "label")))
+		if lbl == "none" || lbl == "(no" {
+			lbl = ""
+		}
 		dev := BcachefsDevice{
-			Label:      firstToken(readTrimmed(filepath.Join(dd, "label"))),
-			State:      firstToken(readTrimmed(filepath.Join(dd, "state"))),
-			Durability: int(parseUintDefault(firstToken(readTrimmed(filepath.Join(dd, "durability"))), 1)),
+			Label:      lbl,
+			State:      activeSysfsToken(readTrimmed(filepath.Join(dd, "state"))),
+			Durability: int(parseUintDefault(activeSysfsToken(readTrimmed(filepath.Join(dd, "durability"))), 1)),
 		}
 		if link, err := os.Readlink(filepath.Join(dd, "block")); err == nil {
 			dev.Name = filepath.Base(link)
@@ -225,34 +244,63 @@ func ApplyBcachefsUsageText(p *BcachefsPool, text string) {
 			}
 			// Device header: e.g. "hdd.0 (device 0):             sda              rw"
 			// or "/dev/sda (device 0): ..."
-			if strings.Contains(line, "(device ") {
-				fields := strings.Fields(line)
-				label := fields[0]
-				devName := strings.TrimPrefix(label, "/dev/")
-				state := ""
-				if len(fields) >= 4 {
-					state = fields[len(fields)-1]
-					cand := strings.TrimPrefix(fields[len(fields)-2], "/dev/")
-					if !strings.HasSuffix(cand, "):") {
-						devName = cand
-					}
+			// Device header:
+			// Format A (multi-line): "hdd.0 (device 0):             sda              rw"
+			// Format B (tabular 1-line, bcachefs-tools 1.31+):
+			//   "(no label) (device 3):  sdb     rw     11991545540608  6504431786496   56%"
+			//   "ssd.primary (device 0): mmcblk0p3 rw   240731549696    10090424832      5%"
+			if idx := strings.Index(line, "(device "); idx >= 0 {
+				rawLabel := strings.TrimSpace(line[:idx])
+				if rawLabel == "(no label)" || rawLabel == "none" {
+					rawLabel = ""
 				}
-				if existing, ok := devByName[devName]; ok {
-					curDev = existing
-					if curDev.Label == "" && !strings.HasPrefix(label, "/dev/") {
-						curDev.Label = label
+				afterParen := line[idx:]
+				colonIdx := strings.Index(afterParen, "):")
+				var restFields []string
+				if colonIdx >= 0 {
+					restFields = strings.Fields(afterParen[colonIdx+2:])
+				}
+				if len(restFields) >= 2 {
+					devName := strings.TrimPrefix(restFields[0], "/dev/")
+					state := strings.Trim(restFields[1], "[]")
+					var capB, usedB uint64
+					if len(restFields) >= 4 {
+						capB = parseByteSize(restFields[2])
+						usedB = parseByteSize(restFields[3])
 					}
-					if state != "" {
-						curDev.State = state
+					if existing, ok := devByName[devName]; ok {
+						curDev = existing
+						if curDev.Label == "" && rawLabel != "" && !strings.HasPrefix(rawLabel, "/dev/") {
+							curDev.Label = rawLabel
+						}
+						if state != "" {
+							curDev.State = state
+						}
+						if capB > 0 && curDev.CapacityBytes == 0 {
+							curDev.CapacityBytes = capB
+						}
+						if usedB > 0 {
+							curDev.UsedBytes = usedB
+							if curDev.CapacityBytes >= usedB {
+								curDev.FreeBytes = curDev.CapacityBytes - usedB
+							}
+						}
+					} else {
+						var freeB uint64
+						if capB >= usedB {
+							freeB = capB - usedB
+						}
+						p.Devices = append(p.Devices, BcachefsDevice{
+							Name:          devName,
+							Label:         rawLabel,
+							State:         state,
+							CapacityBytes: capB,
+							UsedBytes:     usedB,
+							FreeBytes:     freeB,
+						})
+						curDev = &p.Devices[len(p.Devices)-1]
+						devByName[devName] = curDev
 					}
-				} else {
-					p.Devices = append(p.Devices, BcachefsDevice{
-						Name:  devName,
-						Label: label,
-						State: state,
-					})
-					curDev = &p.Devices[len(p.Devices)-1]
-					devByName[devName] = curDev
 				}
 				continue
 			}
@@ -261,8 +309,8 @@ func ApplyBcachefsUsageText(p *BcachefsPool, text string) {
 			if ok {
 				val := parseByteSize(strings.TrimSpace(v))
 				switch strings.TrimSpace(k) {
-				case "Capacity":
-					if val > 0 {
+				case "Capacity", "Size":
+					if val > 0 && p.RawTotalBytes == 0 {
 						p.RawTotalBytes = val
 					}
 				case "Used":
@@ -329,7 +377,17 @@ func ApplyBcachefsUsageText(p *BcachefsPool, text string) {
 			k = strings.TrimSpace(k)
 			fields := strings.Fields(rest)
 			if len(fields) > 0 {
-				// First token may be "2/2" or "1/1" (replicas) or byte value
+				// Format B replicas line: "2x:  26045235479552" or "1x:  12506759168"
+				if strings.HasSuffix(k, "x") {
+					if repNum, err := strconv.ParseFloat(strings.TrimSuffix(k, "x"), 64); err == nil && repNum >= 1 {
+						if repNum > p.DataReplicas {
+							p.DataReplicas = repNum
+						}
+						p.UserDataBytes += parseByteSize(fields[len(fields)-1])
+					}
+					continue
+				}
+				// Format A replicas line: "btree: 2/2 [sda sdb] 42.0G" or "user: 2/2 [sda sdb] 18.4T"
 				if slashIdx := strings.IndexByte(fields[0], '/'); slashIdx > 0 {
 					repNum, err := strconv.ParseFloat(fields[0][:slashIdx], 64)
 					if err == nil && repNum >= 1 {
@@ -349,6 +407,8 @@ func ApplyBcachefsUsageText(p *BcachefsPool, text string) {
 					case "cached":
 						p.CachedBytes += rawBytes
 					}
+				} else if k == "cached" {
+					p.CachedBytes += parseByteSize(fields[len(fields)-1])
 				} else if strings.HasPrefix(k, "reserved") {
 					p.ReservedBytes += parseByteSize(fields[len(fields)-1])
 				}
@@ -422,6 +482,17 @@ func firstToken(s string) string {
 		return ""
 	}
 	return fields[0]
+}
+
+// activeSysfsToken extracts the bracketed active option from sysfs files like
+// "[rw] ro evacuating spare" or "[compatible] upgrade none", falling back to firstToken.
+func activeSysfsToken(s string) string {
+	for _, f := range strings.Fields(s) {
+		if strings.HasPrefix(f, "[") && strings.HasSuffix(f, "]") && len(f) > 2 {
+			return f[1 : len(f)-1]
+		}
+	}
+	return strings.Trim(firstToken(s), "[]")
 }
 
 func parseUintDefault(s string, def uint64) uint64 {

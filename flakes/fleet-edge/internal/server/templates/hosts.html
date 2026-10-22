@@ -54,7 +54,7 @@
         <div class="fs-head">
           <span class="mono"><strong>{{.Mount}}</strong>{{if .Submounts}} <span class="muted">(+{{len .Submounts}} subvols)</span>{{end}} <span class="badge">{{.FSType}}</span></span>
           {{if .Bcachefs}}
-            <span class="mono">{{formatBytes .Bcachefs.UsableUsedBytes}} / {{formatBytes .Bcachefs.UsableTotalBytes}} usable{{if gt .Bcachefs.DataReplicas 1}} ({{.Bcachefs.DataReplicas}}x){{end}}</span>
+            <span class="mono">{{formatBytes .Bcachefs.UsableUsedBytes}} / {{formatBytes .Bcachefs.UsableTotalBytes}} usable ({{printf "%.0f%%" .UsedPercent}}){{if gt .Bcachefs.DataReplicas 1.0}} · {{printf "%.0fx" .Bcachefs.DataReplicas}}{{end}}</span>
           {{else}}
             <span class="mono">{{formatBytes .UsedBytes}} / {{formatBytes .TotalBytes}} ({{printf "%.0f%%" .UsedPercent}})</span>
           {{end}}

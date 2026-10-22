@@ -168,6 +168,56 @@ func TestAPIKeyAndOIDCFlow(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 with session cookie, got %d", rec.Code)
 	}
+
+	// 7. Cross-project JWT (different aud and project-scoped role) is rejected
+	otherProjJWT := signTestJWT(t, privKey, "k1", map[string]any{
+		"iss": idpURL,
+		"sub": "user-123",
+		"aud": []string{"other-project", "other-client"},
+		"exp": now.Add(1 * time.Hour).Unix(),
+		"iat": now.Unix(),
+		"urn:zitadel:iam:org:project:other-project:roles": map[string]any{"admin": map[string]any{"org": "x"}},
+	})
+	req = httptest.NewRequest(http.MethodGet, "/api/state", nil)
+	req.Header.Set("Authorization", "Bearer "+otherProjJWT)
+	rec = httptest.NewRecorder()
+	protected.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for cross-project JWT, got %d", rec.Code)
+	}
+
+	// 8. Userinfo subject mismatch is rejected by fetchUserInfoRoles
+	badUI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/openid-configuration":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"issuer":            idpURL,
+				"userinfo_endpoint": "http://" + r.Host + "/oidc/v1/userinfo",
+			})
+		case "/oidc/v1/userinfo":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"sub":            "different-user",
+				"flatRolesClaim": []string{"admin"},
+			})
+		}
+	}))
+	defer badUI.Close()
+	authnMismatch, err := New(Config{
+		Zitadel: ZitadelConfig{
+			Issuer:      badUI.URL,
+			ProjectID:   "proj-1",
+			Claim:       "flatRolesClaim",
+			ClientID:    "client-1",
+			AllowedRole: "admin",
+		},
+		HTTPClient: badUI.Client(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if roles, err := authnMismatch.fetchUserInfoRoles(req.Context(), "tok", "user-123"); err == nil || len(roles) != 0 {
+		t.Fatalf("expected error on userinfo subject mismatch, got roles=%v err=%v", roles, err)
+	}
 }
 
 func signTestJWT(t *testing.T, priv *rsa.PrivateKey, kid string, claims map[string]any) string {

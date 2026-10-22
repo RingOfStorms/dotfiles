@@ -108,7 +108,8 @@ in
     auth.zitadel = {
       enable = true;
       issuer = "https://sso.${domain}";
-      clientId = "384856081475633155";
+      projectId = "396290770694311170";
+      clientId = "396291132042054914";
       redirectUri = "https://fleet.${domain}/auth/callback";
       allowedRole = "admin";
     };

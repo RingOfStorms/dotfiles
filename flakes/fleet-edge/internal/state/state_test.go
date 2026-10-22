@@ -233,3 +233,86 @@ func TestFormatAge(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildStoreSamplesNormalizesLegacyBcachefs(t *testing.T) {
+	st := &HostStatus{
+		Host: "o002",
+		Filesystems: []FilesystemMount{
+			{
+				Mount:      "/",
+				FSType:     "bcachefs",
+				UsedBytes:  12_920_000_000,
+				TotalBytes: 57_780_000_000,
+				Bcachefs: &BcachefsInfo{
+					RawTotalBytes:       57_780_000_000,
+					RawUsedBytes:        12_920_000_000,
+					OnlineReservedBytes: 189_000_000,
+					UsableTotalBytes:    57_780_000_000,
+					LogicalUsedBytes:    12_920_000_000,
+					EffectiveFreeBytes:  44_860_000_000,
+					Devices: []BcachefsDevice{
+						{Name: "sda3", CapacityBytes: 57_780_000_000, UsedBytes: 12_920_000_000},
+					},
+				},
+			},
+		},
+	}
+
+	_, fsSamples := buildStoreSamples("o002", time.Unix(1700000000, 0), st)
+	if len(fsSamples) != 1 {
+		t.Fatalf("expected 1 fsSample, got %d", len(fsSamples))
+	}
+	if fsSamples[0].RawCapBytes != 57_780_000_000 || fsSamples[0].RawUsedBytes != 12_920_000_000 {
+		t.Fatalf("expected normalized RawCapBytes/RawUsedBytes in store sample, got %+v", fsSamples[0])
+	}
+	bch := st.Filesystems[0].Bcachefs
+	if bch.RawCapacityBytes != 57_780_000_000 || bch.UsableUsedBytes != 12_920_000_000 || bch.UsableFreeBytes != 44_860_000_000 || bch.Devices[0].SizeBytes != 57_780_000_000 {
+		t.Fatalf("expected normalized BcachefsInfo fields, got %+v", bch)
+	}
+}
+
+func TestConcurrentCurrentAndSetPoll(t *testing.T) {
+	inv := sampleInventory()
+	inv.ContainerHosts = []string{"h001"}
+	p := NewPoller(inv, "http://127.0.0.1:1/{host}", 100*time.Millisecond)
+
+	baseStatus := &HostStatus{
+		Host: "h001",
+		Filesystems: []FilesystemMount{
+			{
+				Mount:      "/data",
+				FSType:     "bcachefs",
+				UsedBytes:  100,
+				TotalBytes: 200,
+				Bcachefs: &BcachefsInfo{
+					RawTotalBytes:      400,
+					RawUsedBytes:       200,
+					LogicalUsedBytes:   100,
+					EffectiveFreeBytes: 100,
+					Devices:            []BcachefsDevice{{Name: "sda", CapacityBytes: 400}},
+				},
+			},
+		},
+	}
+	p.setPoll("h001", HostPoll{Host: "h001", OK: true, PolledAt: time.Now(), Status: baseStatus}, nil)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 100; i++ {
+			st := cloneNormalizedHostStatus(baseStatus)
+			p.setPoll("h001", HostPoll{Host: "h001", OK: true, PolledAt: time.Now(), Status: st}, nil)
+		}
+	}()
+
+	for i := 0; i < 100; i++ {
+		m := p.Current()
+		if len(m.Hosts) != 1 || m.Hosts[0].Status == nil || len(m.Hosts[0].Status.Filesystems) != 1 {
+			t.Fatalf("unexpected merged hosts: %+v", m.Hosts)
+		}
+		if m.Hosts[0].Status.Filesystems[0].Bcachefs.RawCapacityBytes != 400 {
+			t.Fatalf("unexpected RawCapacityBytes: %d", m.Hosts[0].Status.Filesystems[0].Bcachefs.RawCapacityBytes)
+		}
+	}
+	<-done
+}

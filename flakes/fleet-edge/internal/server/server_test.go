@@ -311,7 +311,7 @@ func TestHostDetailAndBcachefsDrillDown(t *testing.T) {
 		t.Fatalf("/hosts status = %d", w.Code)
 	}
 	hostsBody := w.Body.String()
-	for _, want := range []string{"10.0 TB / 25.0 TB usable (2x)", "raw pool: 20.0 TB / 50.0 TB", "sleep / offline", "← h002"} {
+	for _, want := range []string{"10.0 TB / 25.0 TB usable (40%) · 2x", "raw pool: 20.0 TB / 50.0 TB", "sleep / offline", "← h002"} {
 		if !strings.Contains(hostsBody, want) {
 			t.Fatalf("/hosts missing %q:\n%s", want, hostsBody)
 		}

@@ -11,15 +11,17 @@ import (
 
 // FilesystemMount describes one mounted filesystem (or deduplicated bcachefs pool).
 type FilesystemMount struct {
-	Mount      string        `json:"mount"`
-	Label      string        `json:"label,omitempty"`
-	Device     string        `json:"device,omitempty"`
-	FSType     string        `json:"fstype"`
-	Subvolumes []string      `json:"subvolumes,omitempty"` // e.g. ["/", "/nix", "/persist", "/.snapshots"] on bcachefs root
-	TotalBytes uint64        `json:"totalBytes"`           // usable total bytes (for bcachefs: UsableTotalBytes; otherwise statfs blocks)
-	UsedBytes  uint64        `json:"usedBytes"`            // usable/logical used bytes
-	AvailBytes uint64        `json:"availBytes"`           // effective available bytes
-	Bcachefs   *BcachefsPool `json:"bcachefs,omitempty"`   // non-nil when fstype == "bcachefs"
+	Mount       string        `json:"mount"`
+	Label       string        `json:"label,omitempty"`
+	Device      string        `json:"device,omitempty"`
+	FSType      string        `json:"fstype"`
+	Subvolumes  []string      `json:"submounts,omitempty"` // e.g. ["/", "/nix", "/persist", "/.snapshots"] on bcachefs root
+	UUID        string        `json:"uuid,omitempty"`
+	TotalBytes  uint64        `json:"totalBytes"` // usable total bytes (for bcachefs: UsableTotalBytes; otherwise statfs blocks)
+	UsedBytes   uint64        `json:"usedBytes"`  // usable/logical used bytes
+	AvailBytes  uint64        `json:"availBytes"` // effective available bytes
+	UsedPercent float64       `json:"usedPercent"`
+	Bcachefs    *BcachefsPool `json:"bcachefs,omitempty"` // non-nil when fstype == "bcachefs"
 }
 
 type rawMountEntry struct {
@@ -59,6 +61,7 @@ func shouldSkipMount(mount, fstype string, explicit map[string]string) bool {
 		return true
 	}
 	if mount == "/boot" || strings.HasPrefix(mount, "/boot/") ||
+		mount == "/tmp" || mount == "/var/tmp" ||
 		strings.HasPrefix(mount, "/var/lib/nixos-containers/") ||
 		strings.HasPrefix(mount, "/var/lib/containers/") ||
 		strings.HasPrefix(mount, "/run/") ||
@@ -151,39 +154,64 @@ func collectFilesystems(procDir, sysDir, stateDir string, configuredMounts []str
 				pool = &cp
 			}
 
-			fsm := FilesystemMount{
-				Mount:      rm.mount,
-				Label:      mountLabel(rm.mount, explicit),
-				Device:     rm.device,
-				FSType:     "bcachefs",
-				Subvolumes: []string{rm.mount},
-				TotalBytes: total,
-				UsedBytes:  used,
-				AvailBytes: avail,
-				Bcachefs:   pool,
-			}
+			var usedPct float64
 			if pool != nil && pool.UsableTotalBytes > 0 {
-				fsm.TotalBytes = pool.UsableTotalBytes
-				fsm.UsedBytes = pool.LogicalUsedBytes
-				fsm.AvailBytes = pool.EffectiveFreeBytes
+				total = pool.UsableTotalBytes
+				used = pool.LogicalUsedBytes
+				avail = pool.EffectiveFreeBytes
+			}
+			if total > 0 {
+				usedPct = (float64(used) / float64(total)) * 100
+			}
+			fsm := FilesystemMount{
+				Mount:       rm.mount,
+				Label:       mountLabel(rm.mount, explicit),
+				Device:      rm.device,
+				FSType:      "bcachefs",
+				UUID:        poolUUID,
+				Subvolumes:  []string{rm.mount},
+				TotalBytes:  total,
+				UsedBytes:   used,
+				AvailBytes:  avail,
+				UsedPercent: usedPct,
+				Bcachefs:    pool,
 			}
 			bchGroupIdx[groupKey] = len(out)
 			out = append(out, fsm)
 			continue
 		}
 
+		if rm.device != "" && strings.HasPrefix(rm.device, "/dev/") {
+			if idx, exists := bchGroupIdx["dev:"+rm.device]; exists {
+				out[idx].Subvolumes = append(out[idx].Subvolumes, rm.mount)
+				if rm.mount == "/" {
+					out[idx].Mount = "/"
+					out[idx].Label = mountLabel("/", explicit)
+				}
+				continue
+			}
+		}
+
 		total, used, avail, ok := statfsFunc(rm.mount)
-		if !ok {
+		if !ok || total == 0 {
 			continue
 		}
+		var usedPct float64
+		if total > 0 {
+			usedPct = (float64(used) / float64(total)) * 100
+		}
+		if rm.device != "" && strings.HasPrefix(rm.device, "/dev/") {
+			bchGroupIdx["dev:"+rm.device] = len(out)
+		}
 		out = append(out, FilesystemMount{
-			Mount:      rm.mount,
-			Label:      mountLabel(rm.mount, explicit),
-			Device:     rm.device,
-			FSType:     rm.fstype,
-			TotalBytes: total,
-			UsedBytes:  used,
-			AvailBytes: avail,
+			Mount:       rm.mount,
+			Label:       mountLabel(rm.mount, explicit),
+			Device:      rm.device,
+			FSType:      rm.fstype,
+			TotalBytes:  total,
+			UsedBytes:   used,
+			AvailBytes:  avail,
+			UsedPercent: usedPct,
 		})
 	}
 

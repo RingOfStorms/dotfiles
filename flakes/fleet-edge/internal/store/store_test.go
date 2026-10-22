@@ -102,8 +102,8 @@ CREATE TABLE systems (id TEXT PRIMARY KEY, name TEXT);
 CREATE TABLE system_stats (id TEXT PRIMARY KEY, system TEXT, type TEXT, created TEXT, stats TEXT);
 INSERT INTO systems VALUES ('sys1', 'h002');
 INSERT INTO systems VALUES ('sys2', 'h004');
-INSERT INTO system_stats VALUES ('st1', 'sys1', '10m', '2026-10-01 10:00:00.000Z', '{"cpu":14.2,"cpum":28.0,"mem":32,"mu":16,"d":1000,"du":400,"dr":1.5,"dw":2.5,"ns":0.5,"nr":1.2,"la":[0.3,0.2,0.1],"t":{"coretemp":45}}');
-INSERT INTO system_stats VALUES ('st2', 'sys2', '1m', '2026-10-20 10:00:00.000Z', '{"cpu":8.4,"cpum":12.0,"mem":64,"mu":10,"d":25000,"du":10000}');
+INSERT INTO system_stats VALUES ('st1', 'sys1', '10m', '2026-10-01 10:00:00.000Z', '{"cpu":14.2,"cpum":28.0,"m":32,"mu":16,"s":4,"su":0.5,"d":1000,"du":400,"dr":1.5,"dw":2.5,"ns":0.5,"nr":1.2,"la":[0.3,0.2,0.1],"t":{"coretemp":45}}');
+INSERT INTO system_stats VALUES ('st2', 'sys2', '1m', '2026-10-20 10:00:00.000Z', '{"cpu":8.4,"cpum":12.0,"m":64,"mu":10,"d":25000,"du":10000}');
 `)
 	if out, err := setupCmd.CombinedOutput(); err != nil {
 		t.Fatalf("create synthetic beszel db: %v (%s)", err, string(out))
@@ -126,6 +126,9 @@ INSERT INTO system_stats VALUES ('st2', 'sys2', '1m', '2026-10-20 10:00:00.000Z'
 	}
 	if allSamples[0].RecordedHost != "h002" || allSamples[0].Host != "h004" {
 		t.Fatalf("expected first sample to be h002 merged into h004, got %+v", allSamples[0])
+	}
+	if allSamples[0].MemTotal == 0 || allSamples[0].MemUsed == 0 {
+		t.Fatalf("expected non-zero MemTotal/MemUsed on imported sample, got %+v", allSamples[0])
 	}
 
 	events, err := st.QueryEvents(ctx, "h004", []string{"h002"})

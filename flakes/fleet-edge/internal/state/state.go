@@ -53,6 +53,7 @@ type BcachefsDevice struct {
 	Label         string `json:"label"`
 	State         string `json:"state"`
 	SizeBytes     uint64 `json:"sizeBytes"`
+	CapacityBytes uint64 `json:"capacityBytes,omitempty"`
 	UsedBytes     uint64 `json:"usedBytes"`
 	FreeBytes     uint64 `json:"freeBytes"`
 	BucketSize    uint64 `json:"bucketSize,omitempty"`
@@ -78,24 +79,30 @@ type BcachefsDataTypeBreakdown struct {
 
 // BcachefsInfo holds detailed bcachefs pool health and capacity metrics.
 type BcachefsInfo struct {
-	RawCapacityBytes uint64                      `json:"rawCapacityBytes"`
-	RawUsedBytes     uint64                      `json:"rawUsedBytes"`
-	RawReservedBytes uint64                      `json:"rawReservedBytes"`
-	UsableTotalBytes uint64                      `json:"usableTotalBytes"`
-	UsableUsedBytes  uint64                      `json:"usableUsedBytes"`
-	UsableFreeBytes  uint64                      `json:"usableFreeBytes"`
-	DataReplicas     uint                        `json:"dataReplicas"`
-	MetadataReplicas uint                        `json:"metadataReplicas"`
-	Compression      *BcachefsCompression        `json:"compression,omitempty"`
-	DataTypes        []BcachefsDataTypeBreakdown `json:"dataTypes,omitempty"`
-	Devices          []BcachefsDevice            `json:"devices,omitempty"`
+	UUID                string                      `json:"uuid,omitempty"`
+	Version             string                      `json:"version,omitempty"`
+	Degraded            bool                        `json:"degraded,omitempty"`
+	RawCapacityBytes    uint64                      `json:"rawCapacityBytes"`
+	RawTotalBytes       uint64                      `json:"rawTotalBytes,omitempty"`
+	RawUsedBytes        uint64                      `json:"rawUsedBytes"`
+	RawReservedBytes    uint64                      `json:"rawReservedBytes"`
+	OnlineReservedBytes uint64                      `json:"onlineReservedBytes,omitempty"`
+	UsableTotalBytes    uint64                      `json:"usableTotalBytes"`
+	UsableUsedBytes     uint64                      `json:"usableUsedBytes"`
+	LogicalUsedBytes    uint64                      `json:"logicalUsedBytes,omitempty"`
+	UsableFreeBytes     uint64                      `json:"usableFreeBytes"`
+	EffectiveFreeBytes  uint64                      `json:"effectiveFreeBytes,omitempty"`
+	DataReplicas        float64                     `json:"dataReplicas"`
+	MetadataReplicas    float64                     `json:"metadataReplicas"`
+	Compression         *BcachefsCompression        `json:"compression,omitempty"`
+	DataTypes           []BcachefsDataTypeBreakdown `json:"dataTypes,omitempty"`
+	Devices             []BcachefsDevice            `json:"devices,omitempty"`
 }
 
 // FilesystemMount describes one mounted filesystem (or deduplicated bcachefs pool).
 type FilesystemMount struct {
 	Mount       string        `json:"mount"`
 	Submounts   []string      `json:"submounts,omitempty"`
-	Label       string        `json:"label"`
 	Device      string        `json:"device"`
 	FSType      string        `json:"fstype"`
 	UUID        string        `json:"uuid,omitempty"`
@@ -284,6 +291,7 @@ func (p *Poller) SetStore(st *store.Store) {
 		for host, ls := range loaded {
 			var doc HostStatus
 			if err := json.Unmarshal(ls.StatusRaw, &doc); err == nil {
+				normalizeHostStatus(&doc)
 				p.lastStates[host] = lastKnownHost{
 					LastSeen: ls.LastSeen,
 					Status:   &doc,
@@ -393,12 +401,85 @@ func (p *Poller) pollHost(ctx context.Context, name string, h inventory.Host) {
 		p.setPoll(name, poll, nil)
 		return
 	}
+	normalizeHostStatus(&st)
 	poll.OK = true
 	poll.Status = &st
 	p.setPoll(name, poll, body)
 }
 
+// normalizeHostStatus canonicalizes legacy bcachefs/filesystem fields in-place
+// before a HostStatus is published to Poller state or converted into store samples.
+func normalizeHostStatus(st *HostStatus) {
+	if st == nil {
+		return
+	}
+	for i := range st.Filesystems {
+		fs := &st.Filesystems[i]
+		if fs.Bcachefs != nil {
+			bch := fs.Bcachefs
+			if bch.RawCapacityBytes == 0 && bch.RawTotalBytes > 0 {
+				bch.RawCapacityBytes = bch.RawTotalBytes
+			}
+			if bch.RawReservedBytes == 0 && bch.OnlineReservedBytes > 0 {
+				bch.RawReservedBytes = bch.OnlineReservedBytes
+			}
+			if bch.UsableUsedBytes == 0 && bch.LogicalUsedBytes > 0 {
+				bch.UsableUsedBytes = bch.LogicalUsedBytes
+			}
+			if bch.UsableFreeBytes == 0 && bch.EffectiveFreeBytes > 0 {
+				bch.UsableFreeBytes = bch.EffectiveFreeBytes
+			}
+			for j := range bch.Devices {
+				d := &bch.Devices[j]
+				if d.SizeBytes == 0 && d.CapacityBytes > 0 {
+					d.SizeBytes = d.CapacityBytes
+				}
+			}
+		}
+		if fs.UsedPercent == 0 && fs.TotalBytes > 0 {
+			fs.UsedPercent = (float64(fs.UsedBytes) / float64(fs.TotalBytes)) * 100
+		}
+	}
+}
+
+// cloneNormalizedHostStatus returns a deep copy of st with normalized fields so
+// callers of Current()/Merge() never mutate shared pointers or alias slices.
+func cloneNormalizedHostStatus(st *HostStatus) *HostStatus {
+	if st == nil {
+		return nil
+	}
+	cp := *st
+	if len(st.Filesystems) > 0 {
+		cp.Filesystems = make([]FilesystemMount, len(st.Filesystems))
+		for i, fs := range st.Filesystems {
+			if len(fs.Submounts) > 0 {
+				fs.Submounts = append([]string(nil), fs.Submounts...)
+			}
+			if fs.Bcachefs != nil {
+				bch := *fs.Bcachefs
+				if bch.Compression != nil {
+					comp := *bch.Compression
+					bch.Compression = &comp
+				}
+				if len(bch.DataTypes) > 0 {
+					bch.DataTypes = append([]BcachefsDataTypeBreakdown(nil), bch.DataTypes...)
+				}
+				if len(bch.Devices) > 0 {
+					bch.Devices = append([]BcachefsDevice(nil), bch.Devices...)
+				}
+				fs.Bcachefs = &bch
+			}
+			cp.Filesystems[i] = fs
+		}
+	}
+	normalizeHostStatus(&cp)
+	return &cp
+}
+
 func (p *Poller) setPoll(name string, poll HostPoll, rawJSON []byte) {
+	if poll.Status != nil {
+		normalizeHostStatus(poll.Status)
+	}
 	p.mu.Lock()
 	p.polls[name] = poll
 	if poll.OK && poll.Status != nil {
@@ -417,6 +498,7 @@ func (p *Poller) setPoll(name string, poll HostPoll, rawJSON []byte) {
 }
 
 func buildStoreSamples(host string, polledAt time.Time, st *HostStatus) (store.Sample, []store.FSSample) {
+	normalizeHostStatus(st)
 	ts := polledAt.Unix()
 	s := store.Sample{
 		Host:         host,
@@ -604,12 +686,12 @@ func mergeWithLast(inv *inventory.Inventory, polls map[string]HostPoll, last map
 				hv.StateBadge = "online"
 				hv.LastSeen = poll.PolledAt
 				hv.LastSeenAge = FormatAge(now.Sub(poll.PolledAt))
-				hv.Status = poll.Status
+				hv.Status = cloneNormalizedHostStatus(poll.Status)
 			}
 		}
 		if hv.Status == nil && last != nil {
 			if lk, ok := last[name]; ok && lk.Status != nil {
-				hv.Status = lk.Status
+				hv.Status = cloneNormalizedHostStatus(lk.Status)
 				hv.LastSeen = lk.LastSeen
 				if !lk.LastSeen.IsZero() {
 					hv.LastSeenAge = FormatAge(now.Sub(lk.LastSeen))

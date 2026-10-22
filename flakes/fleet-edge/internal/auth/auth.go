@@ -4,6 +4,7 @@
 package auth
 
 import (
+	"context"
 	"crypto"
 	"crypto/hmac"
 	"crypto/rand"
@@ -94,6 +95,7 @@ type oidcDiscovery struct {
 	JWKSURI               string `json:"jwks_uri"`
 	AuthorizationEndpoint string `json:"authorization_endpoint"`
 	TokenEndpoint         string `json:"token_endpoint"`
+	UserinfoEndpoint      string `json:"userinfo_endpoint"`
 	EndSessionEndpoint    string `json:"end_session_endpoint"`
 }
 
@@ -211,7 +213,7 @@ func (a *Authenticator) Wrap(next http.Handler) http.Handler {
 		case "/auth/login":
 			a.handleLogin(w, r)
 			return
-		case "/auth/callback":
+		case "/auth/callback", "/callback":
 			a.handleCallback(w, r)
 			return
 		case "/auth/logout":
@@ -482,6 +484,12 @@ func (a *Authenticator) handleCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no verifiable JWT returned by OIDC provider", http.StatusUnauthorized)
 		return
 	}
+	// Fallback to /oidc/v1/userinfo when roles aren't embedded in the ID/access JWT
+	if !a.roleAllowed(verified.Roles) && tokens.AccessToken != "" {
+		if uiRoles, err := a.fetchUserInfoRoles(r.Context(), tokens.AccessToken, verified.Subject); err == nil && len(uiRoles) > 0 {
+			verified.Roles = appendUniqueStrings(verified.Roles, uiRoles...)
+		}
+	}
 	if !a.roleAllowed(verified.Roles) {
 		http.Error(w, fmt.Sprintf("user %s lacks required role %q", verified.Subject, a.cfg.Zitadel.AllowedRole), http.StatusForbidden)
 		return
@@ -593,6 +601,52 @@ func (a *Authenticator) exchangeCode(r *http.Request, code, verifier string) (to
 	}
 	return tr, nil
 }
+func (a *Authenticator) fetchUserInfoRoles(ctx context.Context, accessToken, expectedSub string) ([]string, error) {
+	disc, err := a.getDiscovery()
+	if err != nil {
+		return nil, err
+	}
+	uiEndpoint := disc.UserinfoEndpoint
+	if uiEndpoint == "" {
+		uiEndpoint = strings.TrimRight(a.cfg.Zitadel.Issuer, "/") + "/oidc/v1/userinfo"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uiEndpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/json")
+	resp, err := a.cfg.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("userinfo HTTP %d", resp.StatusCode)
+	}
+	var claims map[string]any
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&claims); err != nil {
+		return nil, err
+	}
+	if expectedSub != "" && extractSubject(claims) != expectedSub {
+		return nil, errors.New("userinfo subject mismatch")
+	}
+	return extractRoles(claims, a.cfg.Zitadel.Claim, a.cfg.Zitadel.ProjectID), nil
+}
+
+func appendUniqueStrings(base []string, extra ...string) []string {
+	seen := make(map[string]bool, len(base))
+	for _, s := range base {
+		seen[s] = true
+	}
+	for _, s := range extra {
+		if s != "" && !seen[s] {
+			seen[s] = true
+			base = append(base, s)
+		}
+	}
+	return base
+}
 
 // VerifiedToken holds the verified subject and roles from a Zitadel JWT.
 type VerifiedToken struct {
@@ -672,10 +726,11 @@ func (a *Authenticator) VerifyZitadelToken(raw string) (VerifiedToken, error) {
 			return VerifiedToken{}, errors.New("unexpected JWT issuer")
 		}
 	}
-	if a.cfg.Zitadel.ProjectID != "" {
+	if a.cfg.Zitadel.ProjectID != "" || a.cfg.Zitadel.ClientID != "" {
 		foundAud := false
 		for _, aud := range jsonStringList(claims, "aud") {
-			if aud == a.cfg.Zitadel.ProjectID || aud == a.cfg.Zitadel.ClientID {
+			if (a.cfg.Zitadel.ProjectID != "" && aud == a.cfg.Zitadel.ProjectID) ||
+				(a.cfg.Zitadel.ClientID != "" && aud == a.cfg.Zitadel.ClientID) {
 				foundAud = true
 				break
 			}
@@ -684,14 +739,13 @@ func (a *Authenticator) VerifyZitadelToken(raw string) (VerifiedToken, error) {
 			return VerifiedToken{}, errors.New("JWT audience does not include project or client ID")
 		}
 	}
-
 	sub := extractSubject(claims)
 	if sub == "" {
 		return VerifiedToken{}, errors.New("JWT missing subject")
 	}
 	return VerifiedToken{
 		Subject: sub,
-		Roles:   extractRoles(claims, a.cfg.Zitadel.Claim),
+		Roles:   extractRoles(claims, a.cfg.Zitadel.Claim, a.cfg.Zitadel.ProjectID),
 	}, nil
 }
 
@@ -857,7 +911,7 @@ func extractSubject(claims map[string]any) string {
 	return ""
 }
 
-func extractRoles(claims map[string]any, claimName string) []string {
+func extractRoles(claims map[string]any, claimName, projectID string) []string {
 	seen := map[string]bool{}
 	var out []string
 	add := func(r string) {
@@ -866,7 +920,11 @@ func extractRoles(claims map[string]any, claimName string) []string {
 			out = append(out, r)
 		}
 	}
-	for _, cand := range []string{claimName, "flatRolesClaim", "urn:zitadel:iam:org:project:roles", "roles"} {
+	cands := []string{claimName, "flatRolesClaim", "urn:zitadel:iam:org:project:roles", "roles"}
+	if projectID != "" {
+		cands = append(cands, "urn:zitadel:iam:org:project:"+projectID+":roles")
+	}
+	for _, cand := range cands {
 		if cand == "" {
 			continue
 		}

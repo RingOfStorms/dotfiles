@@ -576,19 +576,21 @@ ORDER BY st.created ASC;
 	}
 
 	type beszelStats struct {
-		CPU   float64            `json:"cpu"`
-		CPUM  float64            `json:"cpum"`
-		Mem   float64            `json:"mem"` // GB
-		MemU  float64            `json:"mu"`  // GB
-		SwapU float64            `json:"su"`  // GB
-		Disk  float64            `json:"d"`   // GB total
-		DiskU float64            `json:"du"`  // GB used
-		DiskR float64            `json:"dr"`  // MB/s read
-		DiskW float64            `json:"dw"`  // MB/s write
-		NetS  float64            `json:"ns"`  // MB/s sent
-		NetR  float64            `json:"nr"`  // MB/s recv
-		Load  []float64          `json:"la"`  // [load1, load5, load15]
-		Temps map[string]float64 `json:"t"`
+		CPU       float64            `json:"cpu"`
+		CPUM      float64            `json:"cpum"`
+		Mem       float64            `json:"m"`   // GB total (Beszel key "m")
+		MemLegacy float64            `json:"mem"` // GB total fallback
+		MemU      float64            `json:"mu"`  // GB used
+		SwapTotal float64            `json:"s"`   // GB swap total
+		SwapU     float64            `json:"su"`  // GB swap used
+		Disk      float64            `json:"d"`   // GB total
+		DiskU     float64            `json:"du"`  // GB used
+		DiskR     float64            `json:"dr"`  // MB/s read
+		DiskW     float64            `json:"dw"`  // MB/s write
+		NetS      float64            `json:"ns"`  // MB/s sent
+		NetR      float64            `json:"nr"`  // MB/s recv
+		Load      []float64          `json:"la"`  // [load1, load5, load15]
+		Temps     map[string]float64 `json:"t"`
 	}
 
 	const gbBytes = 1024 * 1024 * 1024
@@ -634,7 +636,11 @@ ORDER BY st.created ASC;
 			}
 		}
 
-		memTotal := uint64(bs.Mem * gbBytes)
+		memGB := bs.Mem
+		if memGB == 0 {
+			memGB = bs.MemLegacy
+		}
+		memTotal := uint64(memGB * gbBytes)
 		memUsed := uint64(bs.MemU * gbBytes)
 		swapUsed := uint64(bs.SwapU * gbBytes)
 		netRx := uint64(bs.NetR * mbBytes)
