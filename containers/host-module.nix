@@ -218,6 +218,91 @@ let
       ) g.units;
     }) cfg.guards
   );
+
+  # Per-host restic backup of every floating service here (ROUTING-PLAN §9.1).
+  # Each service is its own snapshot tagged `fleet` + `svc:<name>`, so parent
+  # selection and retention group by tags only, not host: after `cnt move`
+  # the new host continues the same service history (the snapshot's
+  # hostname field records where it ran).
+  bcfg = cfg.backup;
+  fleetServices = builtins.listToAttrs (
+    map (s: lib.nameValuePair s.name s) ((import ./lib.nix).allServices ./.)
+  );
+  hookCase =
+    s:
+    let
+      run =
+        if s.kind == "podman" then
+          "${pkgs.podman}/bin/podman exec ${s.name} sh -c ${lib.escapeShellArg s.backupHook}"
+        else
+          "${pkgs.nixos-container}/bin/nixos-container run ${s.name} -- bash -lc ${lib.escapeShellArg s.backupHook}";
+    in
+    "    ${s.name}) ${run} ;;\n";
+  withHook = builtins.filter (s: (s.backupHook or null) != null) (builtins.attrValues fleetServices);
+  backupScript = pkgs.writeShellScript "fleet-backup" ''
+    set -u
+    PATH=${
+      lib.makeBinPath [
+        pkgs.coreutils
+        pkgs.findutils
+        pkgs.systemd
+        pkgs.sqlite
+        pkgs.restic
+      ]
+    }
+    root=/srv/containers
+    staging=/var/lib/fleet-backup/staging
+    host=$(${pkgs.hostname}/bin/hostname)
+    runHook() {
+      case "$1" in
+    ${lib.concatMapStrings hookCase withHook}    *) return 0 ;;
+      esac
+    }
+    failed=""
+    for dir in "$root"/*/; do
+      svc=$(basename "$dir")
+      case "$svc" in *.*) continue ;; esac # <svc>.moved-<date> leftovers
+      # Only services installed here (unit file from `cnt deploy`); data left
+      # behind without a unit is stale and not backed up.
+      if [ -e ${mutable}/container@$svc.service ]; then unit=container@$svc.service
+      elif [ -e ${mutable}/fleet-$svc.service ]; then unit=fleet-$svc.service
+      else echo "$svc: not installed on $host, skipped" >&2; continue; fi
+      echo "== $svc ($unit)" >&2
+      (
+        set -eu -o pipefail
+        if [ "$(systemctl is-active "$unit" || true)" = active ]; then
+          runHook "$svc" || exit 1
+        else
+          echo "$svc: not running, hook skipped (data is at rest)" >&2
+        fi
+        # Consistent SQLite copies via the online backup API (host side, any
+        # container kind); the live db/-wal/-shm files are excluded.
+        st=$staging/$svc
+        rm -rf "$st"
+        install -d -m700 "$st/sqlite" || exit 1
+        ex=$staging/$svc.excludes
+        : > "$ex" || exit 1
+        find "$dir" -xdev -type f \( -name '*.db' -o -name '*.sqlite' -o -name '*.sqlite3' \) \
+          -not -path '*/postgres/*' -not -path '*/postgresql/*' -print0 |
+        while IFS= read -r -d "" db; do
+          [ "$(head -c 15 "$db")" = "SQLite format 3" ] || continue
+          out="$st/sqlite''${db#$root}"
+          install -d -m700 "$(dirname "$out")"
+          sqlite3 "$db" ".timeout 30000" ".backup '$out'" || exit 1
+          printf '%s\n' "$db" "$db-wal" "$db-shm" "$db-journal" >> "$ex"
+          # opening an idle WAL db creates -wal/-shm; keep the app's owner
+          for f in "$db-wal" "$db-shm"; do [ ! -e "$f" ] || chown --reference="$db" "$f"; done
+        done || exit 1
+        restic backup --retry-lock 2h --host "$host" --tag fleet --tag "svc:$svc" \
+          --group-by tags --exclude-caches --exclude-file="$ex" \
+          --exclude-file=${excludeFile} "$root/$svc" "$st" || exit 1
+      ) || { echo "$svc: BACKUP FAILED" >&2; failed="$failed $svc"; }
+    done
+    restic forget --retry-lock 2h --prune --tag fleet --group-by tags ${lib.escapeShellArgs bcfg.pruneOpts} ||
+      failed="$failed (forget)"
+    if [ -n "$failed" ]; then echo "failed:$failed" >&2; exit 1; fi
+  '';
+  excludeFile = pkgs.writeText "fleet-backup-excludes" (lib.concatLines bcfg.exclude);
 in
 {
   options.ringofstorms.containers = {
@@ -386,6 +471,68 @@ in
           };
         }
       );
+    };
+    backup = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Nightly restic backup of every floating service installed on this
+          host: backupHook (if running), SQLite online copies, then one
+          snapshot of /srv/containers/<svc> per service, tagged `fleet` and
+          `svc:<name>` (hostname = this host). Unit: fleet-backup.service.
+        '';
+      };
+      environmentFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "EnvironmentFile with RESTIC_REPOSITORY, RESTIC_PASSWORD and backend credentials (usually set by sec-agent configChanges). The unit only starts once it exists.";
+      };
+      repository = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "RESTIC_REPOSITORY, if not in environmentFile.";
+      };
+      passwordFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "RESTIC_PASSWORD_FILE, if the password is not in environmentFile.";
+      };
+      schedule = lib.mkOption {
+        type = lib.types.str;
+        default = "03:00";
+        description = "systemd OnCalendar (with up to 15 min random delay, Persistent).";
+      };
+      exclude = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [
+          # live DB clusters: the hooks' dumps are what gets restored
+          "/srv/containers/*/postgres"
+          "/srv/containers/*/postgresql/[0-9]*"
+          # regenerable
+          "/srv/containers/immich/mlcache"
+          "/srv/containers/open-webui/data/hf_home"
+          "/srv/containers/open-webui/data/transformers_home"
+          "/srv/containers/open-webui/data/xet"
+          "/srv/containers/open-webui/data/models--*"
+          "/srv/containers/paperless/data/index"
+        ];
+        description = "restic exclude patterns.";
+      };
+      pruneOpts = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [
+          "--keep-daily"
+          "7"
+          "--keep-weekly"
+          "5"
+          "--keep-monthly"
+          "12"
+          "--keep-yearly"
+          "3"
+        ];
+        description = "restic forget options (applied per svc tag, across hosts).";
+      };
     };
     guards = lib.mkOption {
       default = { };
@@ -703,7 +850,52 @@ in
         systemd.services.nginx.serviceConfig.ReadOnlyPaths = [ "${stateDir}/nginx" ];
         # `containers deploy` validates new sites with `nginx -t` before reloading.
         environment.systemPackages = [ config.services.nginx.package ];
+
+        # `cnt expose` (ROUTING-PLAN §8 step 7): the CLI arms an exact
+        # transient timer per override; this sweep is the backstop. It runs
+        # at boot before nginx (an override that expired while the host was
+        # down never serves again) and every minute (a lost transient timer
+        # delays a revert by at most that). See cli/expose.go.
+        systemd.tmpfiles.rules = [ "d ${stateDir}/overrides 0755 root root -" ];
+        systemd.services.fleet-containers-expose-expire = {
+          description = "Revert expired cnt expose overrides";
+          wantedBy = [ "multi-user.target" ];
+          before = [ "nginx.service" ];
+          after = [ "local-fs.target" ];
+          path = [
+            config.services.nginx.package
+            pkgs.systemd
+            pkgs.util-linux
+          ];
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "${lib.getExe cfg.package} expose-expire --all";
+            # Never hang a boot or the minute timer (it only edits files and queues a reload).
+            TimeoutStartSec = "2min";
+          };
+        };
+        systemd.timers.fleet-containers-expose-expire = {
+          wantedBy = [ "timers.target" ];
+          timerConfig = {
+            OnBootSec = "1min";
+            OnUnitActiveSec = "1min";
+            AccuracySec = "5s";
+          };
+        };
       })
+
+      # Host daemons this module declares, for `cnt audit` (cli/routes.go
+      # hostListenersFile): "<proto> <addr> <port> <owner>".
+      # The status endpoint's listen is asserted to be IP:PORT below.
+      {
+        environment.etc."fleet-containers/host-listeners".text =
+          let
+            m = builtins.match "\\[?([0-9a-fA-F:.]+)]?:([0-9]+)" cfg.statusEndpoint.listen;
+          in
+          lib.optionalString (cfg.statusEndpoint.enable && m != null) ''
+            tcp ${builtins.elemAt m 0} ${builtins.elemAt m 1} host (status endpoint)
+          '';
+      }
 
       # Runs unprivileged: `systemctl show` reads unit properties over the
       # system D-Bus, which systemd allows to any user, and the unit dir and
@@ -768,6 +960,55 @@ in
               "AF_INET6"
             ];
             UMask = "0077";
+          };
+        };
+      })
+      (lib.mkIf bcfg.enable {
+        environment.systemPackages = [
+          (pkgs.writeShellScriptBin "fleet-restic" ''
+            # restic with this host's fleet-backup credentials (root only)
+            ${lib.optionalString (bcfg.environmentFile != null) "set -a; . ${bcfg.environmentFile}; set +a"}
+            ${lib.optionalString (bcfg.repository != null) "export RESTIC_REPOSITORY=${bcfg.repository}"}
+            ${lib.optionalString (bcfg.passwordFile != null) "export RESTIC_PASSWORD_FILE=${bcfg.passwordFile}"}
+            export RESTIC_CACHE_DIR=/var/cache/fleet-backup
+            exec ${pkgs.restic}/bin/restic "$@"
+          '')
+        ];
+        systemd.services.fleet-backup = {
+          description = "restic backup of floating containers (ROUTING-PLAN §9.1)";
+          after = [ "network-online.target" ];
+          wants = [ "network-online.target" ];
+          unitConfig = {
+            RequiresMountsFor = [ "/srv/containers" ];
+          }
+          // lib.optionalAttrs (bcfg.environmentFile != null) {
+            ConditionPathExists = bcfg.environmentFile;
+          };
+          environment = {
+            RESTIC_CACHE_DIR = "/var/cache/fleet-backup";
+          }
+          // lib.optionalAttrs (bcfg.repository != null) { RESTIC_REPOSITORY = bcfg.repository; }
+          // lib.optionalAttrs (bcfg.passwordFile != null) { RESTIC_PASSWORD_FILE = bcfg.passwordFile; };
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = backupScript;
+            StateDirectory = "fleet-backup";
+            StateDirectoryMode = "0700";
+            CacheDirectory = "fleet-backup";
+            CacheDirectoryMode = "0700";
+            Nice = 10;
+            IOSchedulingClass = "idle";
+          }
+          // lib.optionalAttrs (bcfg.environmentFile != null) {
+            EnvironmentFile = bcfg.environmentFile;
+          };
+        };
+        systemd.timers.fleet-backup = {
+          wantedBy = [ "timers.target" ];
+          timerConfig = {
+            OnCalendar = bcfg.schedule;
+            Persistent = true;
+            RandomizedDelaySec = "15m";
           };
         };
       })

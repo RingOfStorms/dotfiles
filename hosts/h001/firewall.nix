@@ -2,9 +2,9 @@
 # the ports below. Global allows (22/80/443, 41641/udp, icmp, temp-ports from
 # `containers` ports files) still apply on every interface, LAN included.
 # The arr UIs are tailnet http routes (containers/arr/service.nix).
-# net.private tcp/udp routes (forgejo ssh, beszel hub, immich pg/ML for lio,
-# jellyfin :8096 direct on the overlay IP) are DNATed by the containers host
-# module (fleet-net-nat), not here.
+# net.private tcp/udp routes (forgejo ssh, beszel hub, immich pg/ML for lio)
+# are DNATed by the containers host module (fleet-net-nat), not here.
+# jellyfin's old :8096 direct DNAT was removed 2026-10-22.
 { fleet, ... }:
 let
   h005 = fleet.hosts.h005.overlayIp; # fleet-edge / containers-status poller

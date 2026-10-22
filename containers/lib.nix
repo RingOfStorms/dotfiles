@@ -432,6 +432,7 @@ in
     nginxSnippets
     netHostAddress
     checkNetIndexes
+    allServices
     ;
 
   # services.nginx.virtualHosts for the public edge (o002), generated from

@@ -95,9 +95,10 @@ must be able to fetch that ref, so pair it with `deploy --local`).
 | `containers destroy <svc>` | uninstall (data kept; `--purge` deletes it) |
 | `containers check-idmap <host>` | the idmap test above |
 | `containers routes [svc]` | declared routes from the inventory: fqdn, proto, port, exposure, auth, via, host (no network). Unconverted services show as `nginx string` |
-| `containers audit [host...] [--stdin]` | read-only: runs `ss -ltnupH` on each host (default: all container hosts) and lists every non-loopback listener as `declared` (a route, `tcpPorts`/`udpPorts` of a service declared on that host), `host` (small allowlist in `cli/routes.go`: 22, 80, 443, 53, tailscale 41641/udp, dhcp, mdns; plus, matched by process name rather than port, tailscaled's dynamic sockets on tailnet/wildcard addresses and systemd-resolved LLMNR on 5355) or `UNDECLARED` (incl. ports of `exposure = "local"` routes, and `proto = "http"` backend ports found on a non-loopback address — those must stay on `127.0.0.1`, nginx is the only thing allowed to expose them). Needs root on the remote host to see process names; non-root users get `sudo -n` (fails fast instead of hanging if it needs a password). If sudo there needs a password, plain ssh can't prompt (no TTY): run it on the host itself and feed the file in with `--stdin` (exactly one host): `sudo ss -ltnupH > /tmp/<host>.ss && cnt audit <host> --stdin < /tmp/<host>.ss`, or collect the file with `ssh -t`. Empty `--stdin` input (or input with no listeners) is an error, so a failed collection never looks like a clean host. Otherwise exits 0 |
+| `containers audit [host...] [--stdin]` | read-only: runs `ss -ltnupH` on each host (default: all container hosts) and lists every non-loopback listener as `declared` (a route, `tcpPorts`/`udpPorts` of a service declared on that host), `host` (small allowlist in `cli/routes.go`: 22, 80, 443, 53, tailscale 41641/udp, dhcp, mdns; plus host daemons the host module declares in `/etc/fleet-containers/host-listeners`, e.g. the status endpoint at its configured address; plus, matched by process name rather than port, tailscaled's dynamic sockets on tailnet/wildcard addresses and systemd-resolved LLMNR on 5355) or `UNDECLARED` (incl. ports of `exposure = "local"` routes, and `proto = "http"` backend ports found on a non-loopback address — those must stay on `127.0.0.1`, nginx is the only thing allowed to expose them). Needs root on the remote host to see process names; non-root users get `sudo -n` (fails fast instead of hanging if it needs a password). If sudo there needs a password, plain ssh can't prompt (no TTY): run it on the host itself and feed the file in with `--stdin` (exactly one host): `sudo ss -ltnupH > /tmp/<host>.ss && cnt audit <host> --stdin < /tmp/<host>.ss`, or collect the file with `ssh -t`. Empty `--stdin` input (or input with no listeners) is an error, so a failed collection never looks like a clean host. Otherwise exits 0 |
 | `containers port open <svc> <port>/<tcp\|udp> --for <dur> [--from <host\|cidr>]... [--iface tailnet\|lan\|any] [--host h]` | open a port temporarily (see [Temporary ports](#temporary-ports-cnt-port)) |
 | `containers port ls [host...]` / `port close <svc> <port>/<proto> [--from ...] [--iface ...]` | list / close them early |
+| `containers expose <svc>[.<route>] --exposure tailnet\|lan --for DUR [--reason T]` | widen one http route on its host for a while (max 24h; ROUTING-PLAN §8 step 7). The host reverts it at expiry (transient timer, plus `fleet-containers-expose-expire` at boot and every minute). `public` is refused until fleet-edge/o002 can do it at runtime. `expose --list [host...]` / `expose --revoke <svc>`; `deploy` drops an override; `routes` and `audit` show them |
 
 The host module adds the shell alias `cnt` for `containers`.
 
@@ -283,6 +284,24 @@ Notes:
   Never `chown` them on the host to a host user.
 - Secrets: put them in a persist dir (generated on first boot, as minecraft
   does) or copy them in once with `nixos-container run`.
+
+## Nightly restic (fleet-backup)
+
+With `ringofstorms.containers.backup.enable = true` and an `environmentFile`
+(RESTIC_REPOSITORY, RESTIC_PASSWORD, backend creds; normally a sec-agent
+secret wired through `configChanges`), the host runs `fleet-backup.service`
+nightly (`backup.schedule`, default 03:00). For every service installed on
+that host it runs the `backupHook` (if running), makes SQLite `.backup`
+copies, and snapshots `/srv/containers/<svc>` with tags `fleet` and
+`svc:<name>`. History and retention follow the tag, not the host, so a
+moved service continues its series. Enabled on: h001. Not on h003 (no
+services) or joe (no restic secret yet). See ROUTING-PLAN §9.1.
+
+```sh
+sudo systemctl start fleet-backup                 # run now
+sudo fleet-restic snapshots --tag svc:puzzles     # restic with the host's creds
+sudo fleet-restic restore latest --tag svc:puzzles --target /tmp/r
+```
 
 ## Backup
 

@@ -47,8 +47,9 @@ never print it.
    - log in via life, open-webui, trilium
 6. Run restic once (`systemctl start restic-backups-h001`). Check that the
    zitadel hook ran and that `staging/sqlite/sec/data/sec.db` exists.
-7. After a week, archive `/var/lib/zitadel` and `/var/lib/secrets_manager`
-   to `/home/luser/backups`, then delete them.
+7. **Done 2026-10-22.** Archived `/var/lib/zitadel` and
+   `/var/lib/secrets_manager` to
+   `/root/retired-2026-10-22-zitadel-sec.tar.zst` on h001, then deleted them.
 
 **Rollback** (order matters):
 1. `cnt destroy sec`, then `cnt destroy zitadel`. Do not pass `--purge`.
@@ -61,5 +62,7 @@ never print it.
    switch first and stop afterwards, you also stop the restored old
    `container@zitadel`, because it has the same unit name.
 
-The old dirs (`/var/lib/zitadel`, `/var/lib/secrets_manager`) stay untouched
-until step 7. Data written since the cutover lives only in `/srv/containers`.
+The old dirs (`/var/lib/zitadel`, `/var/lib/secrets_manager`) were archived
+to `/root/retired-2026-10-22-zitadel-sec.tar.zst` on h001 and deleted on
+2026-10-22 (step 7 above). `secrets_manager_hydrated` is unrelated and was
+not touched.

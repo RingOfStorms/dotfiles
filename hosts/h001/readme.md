@@ -20,14 +20,15 @@ Everything else runs as floating containers (`cnt ls`). That includes sec
 (`containers/sec/README.md` has the runbook and rollback). Their irreplaceable
 keys live in persist: `/srv/containers/sec/data/db.key` and
 `/srv/containers/zitadel/keys/masterkey`. Break-glass copies are offline
-(`containers/ROUTING-PLAN.md` §9.3). Until about 2026-10-24, the
-pre-cutover data stays in `/var/lib/zitadel` and `/var/lib/secrets_manager`
-for rollback.
+(`containers/ROUTING-PLAN.md` §9.3). The pre-cutover data
+(`/var/lib/zitadel`, `/var/lib/secrets_manager`) was archived to
+`/root/retired-2026-10-22-zitadel-sec.tar.zst` on h001 and deleted on
+2026-10-22.
 
 | Service | Notes |
 |---|---|
 | nginx + ACME | Wildcard `*.joshuabell.xyz` (bunny DNS-01); floating sites in `/var/lib/fleet-containers/nginx`. ACME moves to h005 (`containers/ROUTING-PLAN.md`). |
-| restic backup | `mods/restic-backup.nix`, nightly. |
+| restic backup | Containers: `fleet-backup` (`ringofstorms.containers.backup` in `floating-containers.nix`, one snapshot per `svc:<name>`). Host data (wd10 media, ~luser/backups): `mods/restic-backup.nix`. Both nightly at 03:00, same repo. |
 | homepage-dashboard | Replaced by fleet-edge on h005; no redirect is left behind. |
 | autofs NFS client, storage guard `fleet-guard-h004` | Host plumbing for `arr`. |
 | Per-host agents | sec-agent, beszel-agent, fail2ban, tailscaled. |

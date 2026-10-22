@@ -438,7 +438,7 @@ func portsFileLines(s Service, host string) []string {
 // ---------------------------------------------------------------- cnt routes
 
 func cmdRoutes(args []string) error {
-	f := parse(args)
+	f := parse(args, "no-overrides")
 	loadInventory()
 	var svcs []Service
 	if len(f.pos) > 0 {
@@ -449,19 +449,46 @@ func cmdRoutes(args []string) error {
 		}
 		sort.Slice(svcs, func(i, j int) bool { return svcs[i].Name < svcs[j].Name })
 	}
-	fmt.Print(routesTable(svcs))
+	var ovs []override
+	if !dryRun && !f.bools["no-overrides"] {
+		hosts := map[string]bool{}
+		for _, s := range svcs {
+			if s.Host != "" && needsHostVhost(s) {
+				hosts[s.Host] = true
+			}
+		}
+		var hs []string
+		for h := range hosts {
+			hs = append(hs, h)
+		}
+		sort.Strings(hs)
+		ovs = fetchOverrides(hs)
+	}
+	fmt.Print(routesTableWith(svcs, ovs, time.Now()))
 	return nil
 }
 
-func routesTable(svcs []Service) string {
+func routesTable(svcs []Service) string { return routesTableWith(svcs, nil, time.Now()) }
+
+// routesTableWith shows declared exposure, and the effective one where a
+// `cnt expose` override is active (ROUTING-PLAN §5.3: "overridden").
+func routesTableWith(svcs []Service, ovs []override, now time.Time) string {
+	ov := map[string]override{}
+	for _, o := range ovs {
+		ov[o.Service+"."+o.Route] = o
+	}
 	var b strings.Builder
 	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "SERVICE\tROUTE\tFQDN\tPROTO\tPORT\tEXPOSURE\tAUTH\tVIA\tHOST")
 	for _, s := range svcs {
 		for _, n := range sortedRouteNames(s) {
 			r := s.Routes[n]
+			exp := r.Exposure
+			if o, ok := ov[s.Name+"."+n]; ok {
+				exp = fmt.Sprintf("%s (OVERRIDDEN from %s, %s left)", o.Exposure, r.Exposure, o.left(now))
+			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", s.Name, n, dash(str(r.FQDN)), r.Proto, r.Port,
-				r.Exposure, dash(str(r.Auth)), dash(strings.Join(r.Via, ",")), dash(s.Host))
+				exp, dash(str(r.Auth)), dash(strings.Join(r.Via, ",")), dash(s.Host))
 		}
 		if len(s.Routes) == 0 && s.Nginx != nil {
 			fmt.Fprintf(w, "%s\t(nginx string, not converted)\t-\t-\t-\t-\t-\t-\t%s\n", s.Name, dash(s.Host))
@@ -580,7 +607,7 @@ type auditRow struct {
 // guest's netns, so a *host* listener on one, loopback included, is STALE
 // (an old host-network instance or a leak), unless a host-network service
 // on the same host declares that port too.
-func auditListeners(ls []listener, svcs []Service, host string) []auditRow {
+func auditListeners(ls []listener, svcs []Service, host string, hostDecl ...hostListener) []auditRow {
 	declared := map[string]string{}
 	localOnly := map[string]string{} // exposure = local: must not be on the network
 	private := map[string]string{}
@@ -641,6 +668,8 @@ func auditListeners(ls []listener, svcs []Service, host string) []auditRow {
 		row := auditRow{listener: l, Status: "UNDECLARED"}
 		if o, ok := hostAllowlist[key]; ok {
 			row.Status, row.Owner = "host", o
+		} else if o := matchHostListener(l, hostDecl); o != "" {
+			row.Status, row.Owner = "declared", o
 		} else if o := hostProcessOwner(l); o != "" {
 			row.Status, row.Owner = "host", o
 		} else if o, ok := declared[key]; ok {
@@ -707,21 +736,23 @@ func cmdAudit(args []string) error {
 			if err != nil {
 				return fmt.Errorf("%s: reading stdin: %v", h, err)
 			}
-			ls := parseSS(string(b))
+			ssOut, hl, ov := splitAudit(string(b))
+			ls := parseSS(ssOut)
 			if len(ls) == 0 {
 				return errors.New("no ss output on stdin; collection failed?")
 			}
 			fmt.Printf("== %s\n", h)
-			fmt.Print(auditTable(auditListeners(ls, svcs, h)))
+			fmt.Print(auditTable(auditListeners(ls, svcs, h, parseHostListeners(hl)...)))
+			printAuditOverrides(parseOverrides(ov, h))
 			continue
 		}
 		fmt.Printf("== %s\n", h)
 		if dryRun {
-			fmt.Printf("[%s (root)] ss -ltnupH\n", h)
+			fmt.Printf("[%s (root)] %s\n", h, auditCollectScript)
 			continue
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		out, err := remoteOut(ctx, h, true, "ss -ltnupH")
+		out, err := remoteOut(ctx, h, true, auditCollectScript)
 		cancel()
 		if err != nil {
 			if sudoNeedsPassword(err) {
@@ -731,7 +762,9 @@ func cmdAudit(args []string) error {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", h, err)
 			continue
 		}
-		fmt.Print(auditTable(auditListeners(parseSS(out), svcs, h)))
+		ssOut, hl, ov := splitAudit(out)
+		fmt.Print(auditTable(auditListeners(parseSS(ssOut), svcs, h, parseHostListeners(hl)...)))
+		printAuditOverrides(parseOverrides(ov, h))
 	}
 	return nil
 }
@@ -868,4 +901,80 @@ func hostOverlayIP(host string) string {
 		return *h.OverlayIP
 	}
 	return ""
+}
+
+// ------------------------------------------------- declared host listeners
+
+// hostListenersFile is written by host-module.nix: host daemons the module
+// itself declares (the status endpoint today), one per line:
+//
+//	<tcp|udp> <addr|*> <port> <owner...>
+//
+// audit reads it over the same ssh as ss, so the allowlist stays data-driven
+// (the address and port come from the host's config, not from the CLI).
+const hostListenersFile = "/etc/fleet-containers/host-listeners"
+
+type hostListener struct {
+	Proto, Addr, Port, Owner string
+}
+
+func parseHostListeners(s string) []hostListener {
+	var out []hostListener
+	for _, l := range strings.Split(s, "\n") {
+		l = strings.TrimSpace(l)
+		if l == "" || strings.HasPrefix(l, "#") {
+			continue
+		}
+		f := strings.Fields(l)
+		if len(f) < 4 || (f[0] != "tcp" && f[0] != "udp") {
+			continue
+		}
+		if p, err := strconv.Atoi(f[2]); err != nil || p < 1 || p > 65535 {
+			continue
+		}
+		addr := strings.TrimSuffix(strings.TrimPrefix(f[1], "["), "]")
+		out = append(out, hostListener{Proto: f[0], Addr: addr, Port: f[2], Owner: strings.Join(f[3:], " ")})
+	}
+	return out
+}
+
+// matchHostListener: same proto and port, and the same address (a declared
+// "*" matches any). An undeclared address on that port stays UNDECLARED.
+func matchHostListener(l listener, hs []hostListener) string {
+	for _, h := range hs {
+		if h.Proto == l.Proto && h.Port == l.Port && (h.Addr == "*" || h.Addr == l.Addr) {
+			return h.Owner
+		}
+	}
+	return ""
+}
+
+// auditCollectScript gathers ss, the declared host listeners and the
+// active expose overrides in one root ssh, separated by marker lines.
+const (
+	auditMarkHost = "#### fleet host-listeners"
+	auditMarkOv   = "#### fleet overrides"
+)
+
+var auditCollectScript = "ss -ltnupH\necho '" + auditMarkHost + "'\ncat " + hostListenersFile + " 2>/dev/null || true\necho '" + auditMarkOv + "'\n" + overridesListScript + "\n"
+
+// splitAudit splits collected output into ss, host-listeners and overrides.
+// Plain `ss` output (no markers, e.g. --stdin) is all ss.
+func splitAudit(out string) (ss, hostL, ovs string) {
+	ss, rest, ok := strings.Cut(out, auditMarkHost+"\n")
+	if !ok {
+		return out, "", ""
+	}
+	hostL, ovs, _ = strings.Cut(rest, auditMarkOv+"\n")
+	return ss, hostL, ovs
+}
+
+// printAuditOverrides lists active `cnt expose` overrides under the audit
+// table: they are intended, but a reviewer must see them.
+func printAuditOverrides(ovs []override) {
+	if len(ovs) == 0 {
+		return
+	}
+	fmt.Printf("\n%d active expose override(s):\n", len(ovs))
+	fmt.Print(overridesTable(ovs, time.Now()))
 }

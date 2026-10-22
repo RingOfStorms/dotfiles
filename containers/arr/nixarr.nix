@@ -130,8 +130,6 @@ in
               sort_name = "limetorrents";
               priority = 25;
               fields = {
-                downloadlink = 1;
-                downloadlink2 = 0;
                 sort = 0;
               };
             }

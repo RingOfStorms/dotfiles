@@ -110,14 +110,6 @@
       group = "Media Automation";
       maxBody = "100m"; # .torrent uploads
     };
-    # Jellyfin direct (TV/mobile apps configured with h001:8096): DNAT on
-    # h001's overlay IP only, until the apps use jellyfin.joshuabell.xyz.
-    jellyfin-direct = {
-      port = 8096;
-      proto = "tcp";
-      exposure = "tailnet";
-      auth = "native";
-    };
   };
   # /media-health/ on h001.net stays in hosts/h001/mods/arr-nginx.nix (a
   # static alias of the persist dir, not a backend).

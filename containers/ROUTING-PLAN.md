@@ -879,28 +879,116 @@ Taken 2026-10-16:
    - **Deployed**: h005 switched (oauth2-proxy + DNS); `cnt deploy trilium`;
      `deploy --vhost-only` for every other h001 service (cookie strip).
      h003/lio generated vhosts get the strip on their next deploy.
-7. `cnt expose` overrides with expiry.
+7. `cnt expose` overrides with expiry. **Built 2026-10-22, host-local
+   (tailnet/lan only).** Code: `cli/expose.go`, host module
+   `fleet-containers-expose-expire` (service + timer).
+   - **CLI**: `cnt expose <svc>[.<route>] --exposure tailnet|lan --for DUR
+     [--reason TEXT]` (max 24h; the route may be omitted when the service has
+     one http route), `cnt expose --list [host...]`, `cnt expose --revoke
+     <svc>`. One override per service. Only http routes that the host's nginx
+     serves: not `local` (that's a decision, not a default), widening only
+     (narrowing would cut current clients; change service.nix), not tcp/udp
+     (their DNAT/allow shape depends on exposure and is a later batch), not
+     `zone = "private"` (h005 serves those).
+   - **What changes**: only the host vhost. The CLI renders the route with
+     the new exposure (the same `routesVhost`, so the ACL include and edge
+     server follow the usual rules) and installs it with the usual
+     `nginx -t`/rollback. lib.nix's auth rules are re-checked
+     (`validateRoutes`, and public + `auth = none` without
+     `publicWithoutAuth` is refused before anything else).
+   - **State** on the service's host: `/var/lib/fleet-containers/overrides/<svc>/`
+     `override.json` (service, route, exposure, baseline, at, until, by,
+     reason) and `baseline.conf` (the service.nix vhost). It's written
+     **before** the wider site, so a failure partway still gets reverted.
+   - **Expiry, enforced by the host, fail closed**: a transient
+     `systemd-run --on-active` timer `fleet-expose-<svc>` starts
+     `fleet-containers-expose-expire.service` 1 s after the deadline. That
+     unit (`containers expose-expire --all`) also runs **at boot before
+     nginx** and every minute from a timer, so a reboot or a lost transient
+     timer delays a revert by at most a minute, and an override that expired
+     while the host was down never serves again. Revert = put
+     `baseline.conf` back, `nginx -t`, reload, delete the dir. If the
+     baseline no longer validates, the site is **removed** (kept as
+     `.broken`), never left wide. An unreadable `override.json` counts as
+     expired.
+     The nginx reload is queued (`--no-block`): the unit is `Before=nginx`,
+     so a blocking reload deadlocks (seen in the first h001 test).
+   - **service.nix wins**: `cnt deploy` (also `--vhost-only`) and `destroy`
+     drop the service's override first.
+   - **Visibility**: `cnt routes` shows `lan (OVERRIDDEN from tailnet, 2m
+     left)`. `cnt audit` lists active overrides below the listener table
+     (same ssh call). Every apply/revert is logged (`logger -t cnt-expose`).
+   - **Not done: `public`.** It needs the public CNAME (bunny, via
+     fleet-edge on h005) and an o002 vhost at runtime. Both are build-time
+     today (§8 step 4), and `lib.nix edgeVirtualHosts` only knows declared
+     public routes. So `--exposure public` is refused with a pointer here.
+     To add it: a fleet-edge API that accepts an override (checked against
+     the declared route, §5.2), adds the CNAME and tells o002 to include a
+     runtime vhost, and h005 as the authority (§5.3). The host part
+     (edge server on `:8443`) already falls out of `routesVhost`.
+   - **LAN DNS**: also build-time (`dnsRecords`). A tailnet → lan
+     override admits LAN sources at nginx, but LAN-only clients only resolve
+     the name if it already has a LAN record (or they use the host's LAN IP
+     with the name as SNI/Host). The CLI prints a note.
+   - **Tested 2026-10-22 on h001** (gen 844): `trilium.web` tailnet → lan
+     for 3m; from h003 over the LAN (`10.12.14.10`) 403 → 302 (oauth2 gate,
+     so auth still applies) → 403 two seconds after expiry; tailnet unchanged;
+     `cnt audit h001` clean.
+   - **Not yet**: h005 as the authority, `cnt move` carrying overrides,
+     `--reset` for several overrides (one per service today).
 8. Read-only dashboard in fleet-edge; homepage-dashboard retired.
-9. Then `cnt move` for real. Needs §9.1 first.
+9. Then `cnt move` for real. Needs §9.1 first: the per-host `fleet-backup`
+   job is in place (svc-tagged history follows the service); the `move`
+   hooks (first backup on target, restore check) are still open.
 
 ## 9. Carried over from the migration plan
 
 The migration plan was deleted once every service was floating (sec and
 zitadel last, 2026-10-17; history in git). These items are still open.
 
+The pre-migration data copies (`/var/lib/zitadel`, `/var/lib/secrets_manager`
+on h001) were archived to `/root/retired-2026-10-22-zitadel-sec.tar.zst` on
+h001 and deleted on 2026-10-22; see `hosts/h001/readme.md` and
+`containers/sec/README.md`.
+
 ### 9.1 Backup continuity across moves (required before any off-host `move`)
 
-`hosts/h001/mods/restic-backup.nix` runs only on h001. It runs the
-`backupHook` of every service active there, then snapshots h001's
-`/srv/containers`, excluding live PG clusters and caches; SQLite gets a
-`.backup` copy first. After a move it would keep backing up the stale
-source copy. Needed:
+**Done (2026-10-22): per-host job in the host module.**
+`ringofstorms.containers.backup.{enable, environmentFile, repository,
+passwordFile, schedule, exclude, pruneOpts}` (host-module.nix) adds
+`fleet-backup.service` + a nightly timer. For each `/srv/containers/<svc>`
+whose unit is installed on that host (`cnt deploy` unit in
+`/etc/systemd-mutable/system`; `*.moved-*` leftovers and uninstalled data
+are skipped) it runs the service's `backupHook` if the unit is active, makes
+SQLite `.backup` copies (live db/-wal/-shm excluded), then takes **one
+snapshot per service** tagged `fleet` + `svc:<name>`, hostname = the host.
+Parent selection and `forget` group by **tags only**, so after `cnt move`
+the target continues the same `svc:<name>` series (retention included);
+the hostname field shows where each snapshot was taken. Live PG clusters and
+caches are excluded (hooks' dumps are restored instead). One failing service
+does not stop the others, but the unit fails. Root helper `fleet-restic` wraps
+restic with the host's credentials: `fleet-restic snapshots --tag svc:puzzles`.
 
-- a restic job on **every** container host, generated by the host module
-  from the services deployed there (hooks + persist dirs), with per-host
-  repos/tags;
+h001 uses the existing repo (sec `restic_h001_env_2026-10-01`, via
+configChanges, same 03:00 schedule). `hosts/h001/mods/restic-backup.nix` now
+backs up only the host data (wd10 immich/paperless media, ~luser/backups)
+under tag `h001`; its `forget` is restricted to `--tag h001`. Pre-2026-10-22
+`h001` snapshots still contain `/srv/containers` and age out per policy.
+Verified on h001: manual run, `restic snapshots --tag svc:puzzles`, restore of
+puzzles to /tmp diffed clean against the live dir.
+
+Other hosts: h003 has no services, so nothing is enabled. joe runs `localai`
+(models are large and regenerable) but has no restic credentials. To enable
+it, put an env secret (same repo vars as h001's, or a grant of the same one)
+on joe through sec-agent, set
+`ringofstorms.containers.backup = { enable = true; environmentFile = …; }`,
+and probably exclude `/srv/containers/localai/{models,backends}`. All hosts
+should share **one repository** so `svc:` history follows moves.
+
+Still open:
+
 - `move` removes the source copy (or marks it stale and excluded) once the
-  target is verified;
+  target is verified (today: renamed `.moved-<date>`, which fleet-backup skips);
 - the first backup on the target runs as part of `move`, and a restore check
   (`restic restore` to a scratch dir, PG/SQLite integrity) runs before the
   source copy goes;
@@ -913,7 +1001,7 @@ h001's `sec-agent.nix` grants them by hand (`cnt restart <svc>` after
 rotation). Declare them in `service.nix` so `deploy`/`move` can refuse
 early when the target host lacks a grant.
 
-### 9.3 Identity core: break-glass and a cold-restore test
+### 9.3 Identity core: break-glass and a cold-restore test — **done 2026-10-22**
 
 Kept outside the fleet, in the password manager. These are **keys only**:
 
@@ -926,12 +1014,15 @@ Kept outside the fleet, in the password manager. These are **keys only**:
 
 The keys decrypt data but don't contain it. `sec.db` and zitadel's
 PostgreSQL state exist only on h001 and in the one restic repo, so a
-damaged repo with h001 lost means **key recovery only, no restore**. To do:
+damaged repo with h001 lost means **key recovery only, no restore**, unless
+the independent copy below exists.
+
+Both steps below are done (confirmed by the user 2026-10-22):
 
 1. **Independent data copy**: a second backup of `/srv/containers/sec/data`
    and `/srv/containers/zitadel/{pgdumps,keys}` that doesn't share the restic
    repo or its credentials (e.g. a second restic repo on h004, or a periodic
-   encrypted export). Without it the path below can't work.
+   encrypted export).
 2. **Cold-restore test** on a spare host, twice: once from a restic
    snapshot, once from the independent copy plus the password-manager keys
    alone. Pass = zitadel login works and a sec-agent fetches its secrets.

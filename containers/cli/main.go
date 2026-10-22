@@ -131,6 +131,11 @@ commands:
   port ls [host...]            temporarily open ports, their service and time left
   port close <svc> <port>/<proto> [--from ...] [--iface ...] [--host h]
                                close one early (same --from/--iface as the open)
+  expose <svc>[.<route>] --exposure tailnet|lan --for DUR [--reason TEXT] [--host h]
+                               widen an http route for a while (max 24h) on its host; the host
+                               reverts it at expiry (timer + boot/minute sweep). public: not yet
+  expose --list [host...]      active overrides (also shown by routes and audit)
+  expose --revoke <svc>        drop the override now (deploy drops it too)
   status-server --listen ADDR [--host NAME]
                                read-only GET /status.json for fleet-edge (run by the host module)
   check-idmap <host>           test idmapped mounts on /srv/containers and /nix
@@ -208,6 +213,10 @@ func main() {
 		err = cmdAudit(rest)
 	case "port":
 		err = cmdPort(rest)
+	case "expose":
+		err = cmdExpose(rest)
+	case "expose-expire":
+		err = cmdExposeExpire(rest)
 	case "status-server":
 		err = cmdStatusServer(rest)
 	case "check-idmap":
@@ -913,6 +922,8 @@ func prepareScript(s Service, host string) string {
 		b.WriteString(fmt.Sprintf("nft list table ip fleet-net-nat >/dev/null 2>&1 || { echo '%s has net.private but %s lacks ringofstorms.containers.privateNetwork.enable' >&2; exit 1; }\n", s.Name, host))
 	}
 	b.WriteString("install -d -m755 /var/lib/fleet-containers/nginx /var/lib/fleet-containers/ports\n")
+	// The cnt expose override is dropped only after the new site is live
+	// (end of this script), never before: see dropOverrideScript.
 	b.WriteString(fmt.Sprintf("install -d -m755 %s\n", q(dataDir(s))))
 	keys := make([]string, 0, len(s.Persist))
 	for k := range s.Persist {
@@ -931,6 +942,7 @@ func prepareScript(s Service, host string) string {
 	b.WriteString(fmt.Sprintf("printf %%s %s > /var/lib/fleet-containers/ports/%s\n", q(ports.String()), s.Name))
 	b.WriteString("systemctl reload-or-restart fleet-containers-ports.service || true\n")
 	b.WriteString(siteScript(s, host))
+	b.WriteString(dropOverrideScript(s.Name))
 	return b.String()
 }
 
@@ -957,8 +969,8 @@ func siteScript(s Service, host string) string {
 		conf = "# managed by containers, service " + s.Name + "\n" + conf
 		b.WriteString(nginxSiteScript(nginxDir, s.Name, conf))
 	} else {
-		b.WriteString(fmt.Sprintf("rm -f /var/lib/fleet-containers/nginx/%[1]s.conf.broken\n", s.Name))
-		b.WriteString(fmt.Sprintf("if [ -e /var/lib/fleet-containers/nginx/%[1]s.conf ]; then rm -f /var/lib/fleet-containers/nginx/%[1]s.conf /var/lib/fleet-containers/nginx/%[1]s.conf.prev; systemctl reload nginx; fi\n", s.Name))
+		b.WriteString(fmt.Sprintf("rm -f %s/%s.conf.broken\n", nginxDir, s.Name))
+		b.WriteString(fmt.Sprintf("if [ -e %[1]s/%[2]s.conf ]; then rm -f %[1]s/%[2]s.conf %[1]s/%[2]s.conf.prev; systemctl reload nginx; fi\n", nginxDir, s.Name))
 	}
 	return b.String()
 }
@@ -976,11 +988,14 @@ func needsHostVhost(s Service) bool {
 	return false
 }
 
+// cleanupScript removes the service's host state. The site goes (and nginx
+// reloads) before the expose override is dropped, so an interruption can
+// never leave a widened site without its expiry state.
 func cleanupScript(s Service) string {
 	return fmt.Sprintf(`rm -f /var/lib/fleet-containers/ports/%[1]s
 systemctl restart fleet-containers-ports.service nftables.service 2>/dev/null || true
-if [ -e /var/lib/fleet-containers/nginx/%[1]s.conf ]; then rm -f /var/lib/fleet-containers/nginx/%[1]s.conf; systemctl reload nginx || true; fi
-`, s.Name)
+if [ -e %[2]s/%[1]s.conf ]; then rm -f %[2]s/%[1]s.conf; systemctl reload nginx || true; fi
+`, s.Name, nginxDir) + dropOverrideScript(s.Name)
 }
 
 func cmdDeploy(args []string) error {
@@ -994,7 +1009,7 @@ func cmdDeploy(args []string) error {
 			return err
 		}
 		info("rewriting the nginx site of %s on %s", s.Name, h)
-		return remote(h, true, "set -euo pipefail\n"+siteScript(s, h))
+		return remote(h, true, "set -euo pipefail\n"+siteScript(s, h)+dropOverrideScript(s.Name))
 	}
 	ref := withRev(flakeRef(s.Dir), f.vals["rev"])
 	return deploy(s, h, ref, f.bools["local"])
