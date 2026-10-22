@@ -100,8 +100,14 @@ in
 lib.mkIf (tokenFile != null) {
   systemd.services.ddns-update = {
     description = "Dynamic DNS update for ${c.hostname}.${c.domain} via bunny.net API";
-    wants = [ "network-online.target" "sec-secrets-ready.service" ];
-    after = [ "network-online.target" "sec-secrets-ready.service" ];
+    wants = [
+      "network-online.target"
+      "sec-secrets-ready.service"
+    ];
+    after = [
+      "network-online.target"
+      "sec-secrets-ready.service"
+    ];
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "${updateScript} ${tokenFile}";

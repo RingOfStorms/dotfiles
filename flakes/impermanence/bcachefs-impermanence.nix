@@ -19,7 +19,8 @@ let
   # ── Impermanence tools (gc, ls, diff) ────────────────────────────────────
   persistence = config.environment.persistence or { };
 
-  normalizePath = v:
+  normalizePath =
+    v:
     if builtins.isString v then
       v
     else if v ? dirPath then
@@ -31,45 +32,41 @@ let
 
   pathsFromList = f: xs: lib.filter (p: p != null) (map f xs);
 
-  userPersistencePaths = users:
+  userPersistencePaths =
+    users:
     lib.flatten (
       lib.mapAttrsToList (
         userName: userCfg:
         let
           home = (config.users.users.${userName} or { }).home or "/home/${userName}";
-          normalizeUserPath = v:
-            if builtins.isString v then
-              if lib.hasPrefix "/" v then v else "${home}/${v}"
-            else
-              normalizePath v;
+          normalizeUserPath =
+            v:
+            if builtins.isString v then if lib.hasPrefix "/" v then v else "${home}/${v}" else normalizePath v;
         in
         (pathsFromList normalizeUserPath (userCfg.directories or [ ]))
         ++ (pathsFromList normalizeUserPath (userCfg.files or [ ]))
       ) users
     );
 
-  ignorePaths =
-    lib.unique (
-      lib.filter (p: p != null && p != "" && p != "/") (
-        lib.flatten (
-          lib.mapAttrsToList (
-            persistRoot: persistCfg:
-            [ persistRoot ]
-            ++ (pathsFromList normalizePath (persistCfg.directories or [ ]))
-            ++ (pathsFromList normalizePath (persistCfg.files or [ ]))
-            ++ (userPersistencePaths (persistCfg.users or { }))
-          ) persistence
-        )
+  ignorePaths = lib.unique (
+    lib.filter (p: p != null && p != "" && p != "/") (
+      lib.flatten (
+        lib.mapAttrsToList (
+          persistRoot: persistCfg:
+          [ persistRoot ]
+          ++ (pathsFromList normalizePath (persistCfg.directories or [ ]))
+          ++ (pathsFromList normalizePath (persistCfg.files or [ ]))
+          ++ (userPersistencePaths (persistCfg.users or { }))
+        ) persistence
       )
-    );
+    )
+  );
 
   ignoreFile = pkgs.writeText "bcache-impermanence-ignore-paths" (
     lib.concatStringsSep "\n" ignorePaths + "\n"
   );
 
-  scriptFile = pkgs.writeText "bcache-impermanence.sh" (
-    builtins.readFile ./impermanence-tools.sh
-  );
+  scriptFile = pkgs.writeText "bcache-impermanence.sh" (builtins.readFile ./impermanence-tools.sh);
 
   bcacheImpermanenceBin = pkgs.writeShellScriptBin "bcache-impermanence" ''
     export BCACHE_IMPERMANENCE_IGNORE_FILE="${ignoreFile}"
@@ -285,13 +282,15 @@ in
         after = [
           "initrd-root-device.target"
           "cryptsetup.target"
-        ] ++ lib.optionals cfg.encrypted [
+        ]
+        ++ lib.optionals cfg.encrypted [
           "unlock-bcachefs-custom.service"
         ];
 
         requires = [
           primaryDeviceUnit
-        ] ++ lib.optionals cfg.encrypted [
+        ]
+        ++ lib.optionals cfg.encrypted [
           "unlock-bcachefs-custom.service"
         ];
 
@@ -648,7 +647,11 @@ in
       systemd.services.fix-var-run-symlink = {
         description = "Ensure /var/run is a symlink to /run";
         wantedBy = [ "sysinit.target" ];
-        before = [ "sysinit.target" "dbus.socket" "dbus.service" ];
+        before = [
+          "sysinit.target"
+          "dbus.socket"
+          "dbus.service"
+        ];
         after = [ "local-fs.target" ];
         unitConfig.DefaultDependencies = false;
         serviceConfig = {

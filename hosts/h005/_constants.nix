@@ -57,25 +57,85 @@
       # Core managed switch (Omada SG3210X-M2). Mgmt IP is ALSO set statically
       # on the switch itself (interface vlan 10 -> 10.12.16.2); this reservation
       # documents it and keeps dnsmasq from ever handing 10.12.16.2 to anything.
-      { mac = "a8:29:48:e9:b2:ec"; name = "SG3210X-M2"; ip = "10.12.16.2"; }
+      {
+        mac = "a8:29:48:e9:b2:ec";
+        name = "SG3210X-M2";
+        ip = "10.12.16.2";
+      }
       # VLAN20 (lan)
       # Easy Smart PoE switch, factory-reset -> flat/untagged, extends VLAN 20
       # off SG3210X Te1/0/10. Reservation only takes effect if DHCP is enabled
       # in the SG1428PE web UI (Easy Smart switches default to static 192.168.0.1).
-      { mac = "a8:29:48:94:23:dd"; name = "TL-SG1428PE"; ip = "10.12.14.4"; }
-      { mac = "80:cc:9c:9e:e3:97"; name = "RAX70"; ip = "10.12.14.2"; }
-      { mac = "94:83:C4:3C:AD:A0"; name = "AXT1800"; ip = "10.12.14.3"; }
-      { mac = "00:be:43:b9:f4:e0"; name = "H001"; ip = "10.12.14.10"; }
-      { mac = "30:56:0f:4f:52:5f"; name = "H004"; ip = "10.12.14.184"; }
-      { mac = "c8:c9:a3:2b:7b:19"; name = "PRUSA-MK4"; ip = "10.12.14.21"; }
-      { mac = "24:e8:53:73:a3:c6"; name = "LGWEBOSTV"; ip = "10.12.14.30"; }
-      { mac = "2c:cf:67:6a:45:47"; name = "HOMEASSISTANT"; ip = "10.12.14.22"; }
-      { mac = "2a:d0:ec:fa:b9:7e"; name = "PIXEL-6"; ip = "10.12.14.31"; }
-      { mac = "38:18:68:49:3c:48"; name = "ellawork-w"; ip = "10.12.14.122"; }
-      { mac = "d4:a2:cd:39:4e:f0"; name = "ellawork-e"; ip = "10.12.14.132"; }
-      { mac = "00:23:a4:0b:3b:be"; name = "TMREM"; ip = "10.12.14.181"; }
-      { mac = "04:0e:3c:3a:0e:d1"; name = "JOE"; ip = "10.12.14.126"; }
-      { mac = "01:ca:0c:47:ab:d7:4d"; name = "Jos_Mac"; ip = "10.12.14.159"; }
+      {
+        mac = "a8:29:48:94:23:dd";
+        name = "TL-SG1428PE";
+        ip = "10.12.14.4";
+      }
+      {
+        mac = "80:cc:9c:9e:e3:97";
+        name = "RAX70";
+        ip = "10.12.14.2";
+      }
+      {
+        mac = "94:83:C4:3C:AD:A0";
+        name = "AXT1800";
+        ip = "10.12.14.3";
+      }
+      {
+        mac = "00:be:43:b9:f4:e0";
+        name = "H001";
+        ip = "10.12.14.10";
+      }
+      {
+        mac = "30:56:0f:4f:52:5f";
+        name = "H004";
+        ip = "10.12.14.184";
+      }
+      {
+        mac = "c8:c9:a3:2b:7b:19";
+        name = "PRUSA-MK4";
+        ip = "10.12.14.21";
+      }
+      {
+        mac = "24:e8:53:73:a3:c6";
+        name = "LGWEBOSTV";
+        ip = "10.12.14.30";
+      }
+      {
+        mac = "2c:cf:67:6a:45:47";
+        name = "HOMEASSISTANT";
+        ip = "10.12.14.22";
+      }
+      {
+        mac = "2a:d0:ec:fa:b9:7e";
+        name = "PIXEL-6";
+        ip = "10.12.14.31";
+      }
+      {
+        mac = "38:18:68:49:3c:48";
+        name = "ellawork-w";
+        ip = "10.12.14.122";
+      }
+      {
+        mac = "d4:a2:cd:39:4e:f0";
+        name = "ellawork-e";
+        ip = "10.12.14.132";
+      }
+      {
+        mac = "00:23:a4:0b:3b:be";
+        name = "TMREM";
+        ip = "10.12.14.181";
+      }
+      {
+        mac = "04:0e:3c:3a:0e:d1";
+        name = "JOE";
+        ip = "10.12.14.126";
+      }
+      {
+        mac = "01:ca:0c:47:ab:d7:4d";
+        name = "Jos_Mac";
+        ip = "10.12.14.159";
+      }
     ];
 
     # Devices that may talk on their VLAN but must never reach the internet
@@ -85,7 +145,10 @@
     # L2 and never hits this chain, so LAN control is unaffected.
     wanDenied = [
       # LG 75UN9070AUD: telemetry/ACR/ads/OTA. HA controls it locally (ssap :3001).
-      { mac = "24:e8:53:73:a3:c6"; name = "LGWEBOSTV"; }
+      {
+        mac = "24:e8:53:73:a3:c6";
+        name = "LGWEBOSTV";
+      }
     ];
 
     # ── Shared DNS upstreams (single source of truth) ──────────────────
@@ -163,9 +226,18 @@
       # Confirm sustained capacity after deployment and replace candidates that
       # cannot saturate the WAN link.
       servers = [
-        { id = 50826; name = "Highline — Chicago, IL"; }
-        { id = 14228; name = "Frontier — Chicago, IL"; }
-        { id = 71947; name = "EZEE Fiber — Chicago, IL"; }
+        {
+          id = 50826;
+          name = "Highline — Chicago, IL";
+        }
+        {
+          id = 14228;
+          name = "Frontier — Chicago, IL";
+        }
+        {
+          id = 71947;
+          name = "EZEE Fiber — Chicago, IL";
+        }
       ];
     };
 
@@ -203,8 +275,18 @@
 
       # Remote hosts to shut down on critical battery
       remoteShutdownHosts = [
-        { name = "h001"; host = "10.12.14.10"; user = "luser"; keyFile = "/var/lib/secrets_manager_hydrated/nix2nix_2026-03-15"; }
-        { name = "h004"; host = "10.12.14.184"; user = "luser"; keyFile = "/var/lib/secrets_manager_hydrated/nix2nix_2026-03-15"; }
+        {
+          name = "h001";
+          host = "10.12.14.10";
+          user = "luser";
+          keyFile = "/var/lib/secrets_manager_hydrated/nix2nix_2026-03-15";
+        }
+        {
+          name = "h004";
+          host = "10.12.14.184";
+          user = "luser";
+          keyFile = "/var/lib/secrets_manager_hydrated/nix2nix_2026-03-15";
+        }
       ];
     };
   };

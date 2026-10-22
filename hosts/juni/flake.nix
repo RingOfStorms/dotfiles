@@ -71,8 +71,8 @@
           (
             { pkgs, lib, ... }:
             {
-              programs.plasma.configFile.kwinrc.Wayland.InputMethod = lib.mkForce
-                "${pkgs.maliit-keyboard}/share/applications/com.github.maliit.keyboard.desktop";
+              programs.plasma.configFile.kwinrc.Wayland.InputMethod =
+                lib.mkForce "${pkgs.maliit-keyboard}/share/applications/com.github.maliit.keyboard.desktop";
 
               # Watch the stable built-in keyboard device. The keyboard is
               # disabled/inaccessible in tablet mode, so virtual keyboard
@@ -142,14 +142,12 @@
           # ~/.config/kdedefaults/fcitx5. A file at ~/.config/fcitx5/conf/... is
           # never opened — confirmed by strace. So the suppression must live
           # under kdedefaults/fcitx5, not fcitx5.
-          (
-            {
-              xdg.configFile."kdedefaults/fcitx5/conf/notifications.conf".text = ''
-                HiddenNotifications=
-                HiddenNotifications/0=wayland-diagnose-kde
-              '';
-            }
-          )
+          ({
+            xdg.configFile."kdedefaults/fcitx5/conf/notifications.conf".text = ''
+              HiddenNotifications=
+              HiddenNotifications/0=wayland-diagnose-kde
+            '';
+          })
         ];
 
         nixosModules = [

@@ -168,7 +168,13 @@
                       '';
                     };
                     exposure = lib.mkOption {
-                      type = lib.types.enum [ "" "public" "tailnet" "lan" "local" ];
+                      type = lib.types.enum [
+                        ""
+                        "public"
+                        "tailnet"
+                        "lan"
+                        "local"
+                      ];
                       default = "";
                       description = ''
                         Exposure badge for this link. Ignored when the url

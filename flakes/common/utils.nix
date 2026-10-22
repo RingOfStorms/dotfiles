@@ -16,7 +16,8 @@
     - default.nix and flake.nix (common entry points)
     - Itself (utils.nix)
   */
-  importAll = path:
+  importAll =
+    path:
     let
       # Read all entries in the given path
       entries = builtins.readDir path;
@@ -25,7 +26,8 @@
       entryNames = builtins.attrNames entries;
 
       # Filter for entries we want to import
-      filteredNames = builtins.filter (name:
+      filteredNames = builtins.filter (
+        name:
         let
           entryType = entries.${name};
           isDotfile = builtins.substring 0 1 name == ".";
@@ -40,11 +42,14 @@
       createAttr = name: {
         # The key for the final attribute set
         name =
-          if builtins.match ".*\\.nix$" name != null
+          if
+            builtins.match ".*\\.nix$" name != null
           # If it's a .nix file, strip the extension for the key name
-          then builtins.elemAt (builtins.match "(.*)\\.nix$" name) 0
+          then
+            builtins.elemAt (builtins.match "(.*)\\.nix$" name) 0
           # Otherwise, use the directory name
-          else name;
+          else
+            name;
 
         # The value is the imported file/directory
         value = import (path + "/${name}");

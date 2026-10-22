@@ -10,7 +10,12 @@
 #     MagicDNS (which headscale serves) — otherwise a headscale restart would
 #     take out o002's DNS and break ACME / everything.
 #   - systemd ordering so headscale starts before tailscaled-autoconnect.
-{ pkgs, constants, fleet, ... }:
+{
+  pkgs,
+  constants,
+  fleet,
+  ...
+}:
 let
   hs = constants.services.headscale;
   # The router's tailnet dnsmasq listener (h005 since the 2026-10-15 cutover

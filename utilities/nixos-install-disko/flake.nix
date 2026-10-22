@@ -4,7 +4,7 @@
   inputs = {
     stable.url = "github:nixos/nixpkgs/nixos-26.05";
     unstable.url = "github:nixos/nixpkgs/nixos-unstable";
-    
+
     impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
     disko.url = "github:nix-community/disko/latest";
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";

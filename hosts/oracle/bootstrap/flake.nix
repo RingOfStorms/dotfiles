@@ -58,29 +58,32 @@
         };
 
       impermanenceModules =
-        if enableImpermanence then [
-          inputs.impermanence.nixosModules.default
-          ({
-            ringofstorms.impermanence = {
-              enable = true;
-              encrypted = false;
-              # disko's deterministic GPT partition labels (disk-main-<key>).
-              disk = {
-                boot = "/dev/disk/by-partlabel/disk-main-ESP";
-                primary = "/dev/disk/by-partlabel/disk-main-primary";
-                swap = "/dev/disk/by-partlabel/disk-main-swap";
+        if enableImpermanence then
+          [
+            inputs.impermanence.nixosModules.default
+            ({
+              ringofstorms.impermanence = {
+                enable = true;
+                encrypted = false;
+                # disko's deterministic GPT partition labels (disk-main-<key>).
+                disk = {
+                  boot = "/dev/disk/by-partlabel/disk-main-ESP";
+                  primary = "/dev/disk/by-partlabel/disk-main-primary";
+                  swap = "/dev/disk/by-partlabel/disk-main-swap";
+                };
               };
-            };
-          })
-          (import ./impermanence.nix {
-            inherit primaryUser;
-            impermanence_mod = inputs.impermanence;
-          })
-          # Serial console (ttyAMA0) + initrd ssh: recovery aids for this
-          # headless impermanence box. Needs /persist/initrd/ssh_host_ed25519_key
-          # on the target (see readme).
-          ./debug-boot.nix
-        ] else [ ];
+            })
+            (import ./impermanence.nix {
+              inherit primaryUser;
+              impermanence_mod = inputs.impermanence;
+            })
+            # Serial console (ttyAMA0) + initrd ssh: recovery aids for this
+            # headless impermanence box. Needs /persist/initrd/ssh_host_ed25519_key
+            # on the target (see readme).
+            ./debug-boot.nix
+          ]
+        else
+          [ ];
     in
     {
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
@@ -94,13 +97,17 @@
           inputs.common.nixosModules.hardening
           inputs.common.nixosModules.nix_options
           inputs.common.nixosModules.tailnet
-          (import ../../sec-agent.nix { inherit inputs constants; role = "machines-hightrust"; })
+          (import ../../sec-agent.nix {
+            inherit inputs constants;
+            role = "machines-hightrust";
+          })
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.backup
 
           diskoModule
           ./hardware-configuration.nix
-        ] ++ impermanenceModules;
+        ]
+        ++ impermanenceModules;
       };
     };
 }

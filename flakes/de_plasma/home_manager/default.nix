@@ -222,9 +222,14 @@ in
           hiding = "dodgewindows";
           widgets = [
             "org.kde.plasma.kickoff"
-            (if cfg.defaultBrowser == null then "org.kde.plasma.icontasks" else {
-              iconTasks.launchers = [ "applications:${cfg.defaultBrowser}" ];
-            })
+            (
+              if cfg.defaultBrowser == null then
+                "org.kde.plasma.icontasks"
+              else
+                {
+                  iconTasks.launchers = [ "applications:${cfg.defaultBrowser}" ];
+                }
+            )
           ];
         }
       ];
@@ -238,7 +243,8 @@ in
           powerButtonAction = "turnOffScreen";
           powerProfile = "performance";
           whenLaptopLidClosed = "turnOffScreen";
-        } // lib.optionalAttrs cfg.noScreenOff {
+        }
+        // lib.optionalAttrs cfg.noScreenOff {
           turnOffDisplay.idleTimeout = "never";
         };
         battery = {
@@ -249,7 +255,8 @@ in
           powerButtonAction = "turnOffScreen";
           powerProfile = "balanced";
           whenLaptopLidClosed = "sleep";
-        } // lib.optionalAttrs cfg.noScreenOff {
+        }
+        // lib.optionalAttrs cfg.noScreenOff {
           turnOffDisplay.idleTimeout = "never";
         };
         batteryLevels = {
@@ -302,7 +309,8 @@ in
         lookAndFeel = "org.kde.breezedark.desktop";
         theme = "breeze-dark";
         cursor.theme = "breeze_cursors";
-      } // optionalAttrs ((builtins.length cfg.wallpapers) > 0) {
+      }
+      // optionalAttrs ((builtins.length cfg.wallpapers) > 0) {
         # Interpolate (not toString) so each image is copied into the store
         # WITH context and lands in the system closure. plasma-manager uses
         # `toString`, which drops context: the path exists on the build host
@@ -329,7 +337,8 @@ in
             "exclude folders" = "$HOME";
           };
         };
-      } // optionalAttrs (cfg.defaultBrowser != null) {
+      }
+      // optionalAttrs (cfg.defaultBrowser != null) {
         kdeglobals.General.BrowserApplication = cfg.defaultBrowser;
       };
     };

@@ -51,27 +51,30 @@
         };
 
       impermanenceModules =
-        if enableImpermanence then [
-          inputs.impermanence.nixosModules.default
-          ({
-            ringofstorms.impermanence = {
-              enable = true;
-              encrypted = false;
-              disk = {
-                boot = "/dev/disk/by-partlabel/disk-main-ESP";
-                primary = "/dev/disk/by-partlabel/disk-main-primary";
-                swap = "/dev/disk/by-partlabel/disk-main-swap";
+        if enableImpermanence then
+          [
+            inputs.impermanence.nixosModules.default
+            ({
+              ringofstorms.impermanence = {
+                enable = true;
+                encrypted = false;
+                disk = {
+                  boot = "/dev/disk/by-partlabel/disk-main-ESP";
+                  primary = "/dev/disk/by-partlabel/disk-main-primary";
+                  swap = "/dev/disk/by-partlabel/disk-main-swap";
+                };
               };
-            };
-          })
-          (import ./impermanence.nix {
-            inherit primaryUser;
-            impermanence_mod = inputs.impermanence;
-          })
-          # Debug aids: serial console output + initrd ssh so we can SEE and
-          # RECOVER if the impermanence root-reset hangs in initrd.
-          ./debug-boot.nix
-        ] else [ ];
+            })
+            (import ./impermanence.nix {
+              inherit primaryUser;
+              impermanence_mod = inputs.impermanence;
+            })
+            # Debug aids: serial console output + initrd ssh so we can SEE and
+            # RECOVER if the impermanence root-reset hangs in initrd.
+            ./debug-boot.nix
+          ]
+        else
+          [ ];
     in
     {
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
@@ -86,7 +89,10 @@
           inputs.common.nixosModules.hardening
           inputs.common.nixosModules.nix_options
           inputs.common.nixosModules.tailnet
-          (import ../../sec-agent.nix { inherit inputs constants; role = "machines-hightrust"; })
+          (import ../../sec-agent.nix {
+            inherit inputs constants;
+            role = "machines-hightrust";
+          })
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.backup
 
@@ -96,7 +102,8 @@
           ./nginx.nix
           ../../wildcard-cert-receiver.nix
           ./headscale.nix
-        ] ++ impermanenceModules;
+        ]
+        ++ impermanenceModules;
       };
     };
 }

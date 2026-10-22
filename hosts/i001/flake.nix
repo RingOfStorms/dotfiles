@@ -29,7 +29,10 @@
         authMethod = "hashedPassword";
         authValue = "$y$j9T$gEfQmnTUrDRwmBHl5F9Jy/$s6UJyVizYX6kci7MgkG4uk/LesEfOPT56m.rQaeHtcB";
         mutableUsers = false;
-        extraGroups = [ "wheel" "networkmanager" ];
+        extraGroups = [
+          "wheel"
+          "networkmanager"
+        ];
 
         hmModules = [
           inputs.common.homeManagerModules.kitty
@@ -90,7 +93,8 @@
           ({ pkgs, ... }: {
             networking.networkmanager.enable = true;
             environment.systemPackages = with pkgs; [
-              qdirstat google-chrome
+              qdirstat
+              google-chrome
               jellyfin-media-player
               libva-utils # vainfo: verify Intel hardware decode
             ];
@@ -112,7 +116,10 @@
                 comment = "Request new movies and shows";
                 exec = "google-chrome-stable --app=https://media.joshuabell.xyz";
                 icon = "folder-download";
-                categories = [ "AudioVideo" "Video" ];
+                categories = [
+                  "AudioVideo"
+                  "Video"
+                ];
               })
             ];
             programs.firefox.enable = true;
@@ -146,50 +153,110 @@
             # plasma-bigscreen favslistmodel.cpp ([Favs][<index>] groups,
             # launched by storageId). ~/.config outranks Bigscreen's own
             # ~/.config/plasma-bigscreen defaults (XDG_CONFIG_DIRS).
-            home-manager.users.${primaryUser} = { lib, ... }:
+            home-manager.users.${primaryUser} =
+              { lib, ... }:
               let
                 apps = "/run/current-system/sw/share/applications";
                 favs = [
-                  { id = "org.jellyfin.JellyfinDesktop"; name = "Jellyfin"; icon = "org.jellyfin.JellyfinDesktop"; exec = "jellyfin-desktop"; cats = "AudioVideo,Video,Player,TV"; }
-                  { id = "jellyseerr"; name = "Jellyseerr"; icon = "folder-download"; exec = "google-chrome-stable --app=https://media.joshuabell.xyz"; cats = "AudioVideo,Video"; }
-                  { id = "spotify"; name = "Spotify"; icon = "spotify-client"; exec = "spotify %U"; cats = "Audio,Music,Player,AudioVideo"; }
-                  { id = "google-chrome"; name = "Google Chrome"; icon = "google-chrome"; exec = "google-chrome-stable %U"; cats = "Network,WebBrowser"; }
-                  { id = "firefox"; name = "Firefox"; icon = "firefox"; exec = "firefox --name firefox %U"; cats = "Network,WebBrowser"; }
+                  {
+                    id = "org.jellyfin.JellyfinDesktop";
+                    name = "Jellyfin";
+                    icon = "org.jellyfin.JellyfinDesktop";
+                    exec = "jellyfin-desktop";
+                    cats = "AudioVideo,Video,Player,TV";
+                  }
+                  {
+                    id = "jellyseerr";
+                    name = "Jellyseerr";
+                    icon = "folder-download";
+                    exec = "google-chrome-stable --app=https://media.joshuabell.xyz";
+                    cats = "AudioVideo,Video";
+                  }
+                  {
+                    id = "spotify";
+                    name = "Spotify";
+                    icon = "spotify-client";
+                    exec = "spotify %U";
+                    cats = "Audio,Music,Player,AudioVideo";
+                  }
+                  {
+                    id = "google-chrome";
+                    name = "Google Chrome";
+                    icon = "google-chrome";
+                    exec = "google-chrome-stable %U";
+                    cats = "Network,WebBrowser";
+                  }
+                  {
+                    id = "firefox";
+                    name = "Firefox";
+                    icon = "firefox";
+                    exec = "firefox --name firefox %U";
+                    cats = "Network,WebBrowser";
+                  }
                 ];
-                favsFile = pkgs.writeText "bigscreen-favs" (lib.concatImapStrings (i: f: ''
-                  [Favs][${toString (i - 1)}]
-                  categories=${f.cats}
-                  comment=
-                  desktopPath=${apps}/${f.id}.desktop
-                  entryPath=${f.exec}
-                  icon=${f.icon}
-                  name=${f.name}
-                  startupNotify=true
-                  storageId=${f.id}.desktop
+                favsFile = pkgs.writeText "bigscreen-favs" (
+                  lib.concatImapStrings (i: f: ''
+                    [Favs][${toString (i - 1)}]
+                    categories=${f.cats}
+                    comment=
+                    desktopPath=${apps}/${f.id}.desktop
+                    entryPath=${f.exec}
+                    icon=${f.icon}
+                    name=${f.name}
+                    startupNotify=true
+                    storageId=${f.id}.desktop
 
-                '') favs);
+                  '') favs
+                );
                 # Desktop-only clutter hidden from the TV launcher (desktop entry names).
                 hidden = [
-                  "org.kde.konsole" "kitty" "gvim" "org.gnome.Meld" "qdirstat"
-                  "org.kde.kate" "org.kde.kwrite" "org.kde.akonadiconsole"
-                  "org.kde.akonadiimportwizard" "org.kde.kmail2" "org.kde.kontact"
-                  "org.kde.ktnef" "org.kde.merkuro.calendar" "org.kde.merkuro.contact"
-                  "org.kde.merkuro.mail" "org.kde.kmenuedit" "org.kde.kwalletmanager"
-                  "org.kde.plasma-systemmonitor" "org.kde.khelpcenter" "org.kde.kinfocenter"
-                  "org.kde.ark" "org.kde.okular" "org.kde.spectacle" "org.kde.qrca"
-                  "org.kde.plasma.emojier" "org.kde.discover" "org.kde.dolphin"
-                  "kbd-layout-viewer5" "fcitx5-configtool" "org.fcitx.fcitx5-migrator"
-                  "nixos-manual" "kdesystemsettings" "org.kde.kdeconnect.nonplasma"
-                  "org.kde.plasma.bigscreen.uvcviewer" "com.google.Chrome"
+                  "org.kde.konsole"
+                  "kitty"
+                  "gvim"
+                  "org.gnome.Meld"
+                  "qdirstat"
+                  "org.kde.kate"
+                  "org.kde.kwrite"
+                  "org.kde.akonadiconsole"
+                  "org.kde.akonadiimportwizard"
+                  "org.kde.kmail2"
+                  "org.kde.kontact"
+                  "org.kde.ktnef"
+                  "org.kde.merkuro.calendar"
+                  "org.kde.merkuro.contact"
+                  "org.kde.merkuro.mail"
+                  "org.kde.kmenuedit"
+                  "org.kde.kwalletmanager"
+                  "org.kde.plasma-systemmonitor"
+                  "org.kde.khelpcenter"
+                  "org.kde.kinfocenter"
+                  "org.kde.ark"
+                  "org.kde.okular"
+                  "org.kde.spectacle"
+                  "org.kde.qrca"
+                  "org.kde.plasma.emojier"
+                  "org.kde.discover"
+                  "org.kde.dolphin"
+                  "kbd-layout-viewer5"
+                  "fcitx5-configtool"
+                  "org.fcitx.fcitx5-migrator"
+                  "nixos-manual"
+                  "kdesystemsettings"
+                  "org.kde.kdeconnect.nonplasma"
+                  "org.kde.plasma.bigscreen.uvcviewer"
+                  "com.google.Chrome"
                   # Bigscreen's own defaults (this file replaces its list):
-                  "org.kde.drkonqi.coredump.gui" "org.kde.kdeconnect.app"
-                  "org.kde.kdeconnect.sms" "plasma-bigscreen-swap-session"
+                  "org.kde.drkonqi.coredump.gui"
+                  "org.kde.kdeconnect.app"
+                  "org.kde.kdeconnect.sms"
+                  "plasma-bigscreen-swap-session"
                 ];
                 blacklistFile = pkgs.writeText "applications-blacklistrc" ''
                   [Applications]
                   blacklist=${lib.concatStringsSep "," hidden}
                 '';
-              in {
+              in
+              {
                 # Default browser (Bigscreen ships aura-browser in its kdeglobals defaults;
                 # ~/.config/kdeglobals outranks it).
                 programs.plasma.configFile.kdeglobals.General.BrowserApplication = "google-chrome.desktop";

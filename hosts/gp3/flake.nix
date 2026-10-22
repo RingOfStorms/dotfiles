@@ -34,7 +34,12 @@
         authMethod = "hashedPassword";
         authValue = "$y$j9T$b66ZAxtTo75paZx.mnXyK.$ej0eKS3Wx4488qDfjUJSP0nsUe5TBzw31VbXR19XrQ4"; # same as juni
         mutableUsers = false;
-        extraGroups = [ "wheel" "networkmanager" "video" "input" ];
+        extraGroups = [
+          "wheel"
+          "networkmanager"
+          "video"
+          "input"
+        ];
 
         hmModules = [
           inputs.common.homeManagerModules.kitty
@@ -74,7 +79,12 @@
           # medium.en 13.8s, large-v3-turbo 23.8s. Only small.en is faster than
           # real time, so it is the largest model that stays responsive.
           inputs.stt_ime.nixosModules.default
-          ({ ringofstorms.sttIme = { enable = true; model = "small.en"; }; })
+          ({
+            ringofstorms.sttIme = {
+              enable = true;
+              model = "small.en";
+            };
+          })
 
           inputs.ros_neovim.nixosModules.default
           ({ ringofstorms-nvim.includeAllRuntimeDependencies = true; })

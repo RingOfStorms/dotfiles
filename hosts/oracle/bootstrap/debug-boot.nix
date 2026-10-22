@@ -13,7 +13,12 @@
 # To reach the initrd if a boot hangs:
 #   ssh -i <nix2nix-or-personal-key> root@<o002-ip>
 # (you'll land in the initrd shell environment before pivot).
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 {
   # Serial console on the Oracle UART (kernel auto-detects via ACPI SPCR,
   # but make it explicit so initrd + early boot definitely log there).
@@ -40,5 +45,8 @@
   };
 
   # Ensure the virtio NIC driver is in initrd so networking comes up early.
-  boot.initrd.availableKernelModules = [ "virtio_net" "virtio_pci" ];
+  boot.initrd.availableKernelModules = [
+    "virtio_net"
+    "virtio_pci"
+  ];
 }

@@ -19,23 +19,20 @@
 
       # Generate a deploy script for a host from the fleet registry.
       # Hosts with lanIp or specific deploy targets use NIX_SSHOPTS for SSH key auth.
-      mkDeployScript = pkgs: name:
+      mkDeployScript =
+        pkgs: name:
         let
           hostDef = fleet.hosts.${name};
           flakePath = hostDef.flakePath or "hosts/${name}";
 
           # Determine deploy target: prefer lanIp for local hosts, else hostname
-          target =
-            if hostDef ? lanIp then "root@${hostDef.lanIp}"
-            else name;
+          target = if hostDef ? lanIp then "root@${hostDef.lanIp}" else name;
 
           # Hosts accessed by name (on tailnet) that already have SSH keys configured
           # don't need NIX_SSHOPTS. Hosts accessed by raw IP do.
           needsKey = hostDef ? lanIp;
           sshOpts =
-            if needsKey
-            then ''NIX_SSHOPTS="-i ${fleet.global.secretsDir}/nix2nix_2026-03-15" ''
-            else "";
+            if needsKey then ''NIX_SSHOPTS="-i ${fleet.global.secretsDir}/nix2nix_2026-03-15" '' else "";
         in
         pkgs.writeShellScriptBin "deploy_${name}" ''
           ${sshOpts}nixos-rebuild --flake $(git rev-parse --show-toplevel)'/${flakePath}#${name}' --target-host ${target} --use-substitutes --no-reexec switch
@@ -50,10 +47,16 @@
       # at scripts/audit/audit.sh; this just wraps it with its runtime deps so
       # the toolchain stays scoped to `nix run .#audit` / the devShell and never
       # lands on every machine. See scripts/audit/audit.sh for usage.
-      mkAuditApp = pkgs:
+      mkAuditApp =
+        pkgs:
         pkgs.writeShellApplication {
           name = "nixos-audit";
-          runtimeInputs = [ pkgs.vulnix pkgs.jq pkgs.git pkgs.findutils ];
+          runtimeInputs = [
+            pkgs.vulnix
+            pkgs.jq
+            pkgs.git
+            pkgs.findutils
+          ];
           text = builtins.readFile ./scripts/audit/audit.sh;
         };
     in
@@ -84,8 +87,10 @@
           default = pkgs.mkShell {
             # Per-script tools live in their own sub-flakes so we don't drag
             # a toolchain onto every machine that just wants deploy_*.
-            packages = map (mkDeployScript pkgs) deployHosts
-              ++ [ (mkAuditApp pkgs) pkgs.nixfmt ];
+            packages = map (mkDeployScript pkgs) deployHosts ++ [
+              (mkAuditApp pkgs)
+              pkgs.nixfmt
+            ];
           };
         }
       );

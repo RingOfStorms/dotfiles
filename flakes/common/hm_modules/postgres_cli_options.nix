@@ -4,4 +4,3 @@
     \pset pager off
   '';
 }
-

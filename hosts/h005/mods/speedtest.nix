@@ -155,9 +155,20 @@ in
 {
   systemd.services.h005-isp-speedtest = {
     description = "Measure ISP throughput from h005 and publish to Home Assistant";
-    wants = [ "network-online.target" "sec-secrets-ready.service" ];
-    after = [ "network-online.target" "sec-secrets-ready.service" ];
-    path = [ pkgs.coreutils pkgs.curl pkgs.jq pkgs.ookla-speedtest ];
+    wants = [
+      "network-online.target"
+      "sec-secrets-ready.service"
+    ];
+    after = [
+      "network-online.target"
+      "sec-secrets-ready.service"
+    ];
+    path = [
+      pkgs.coreutils
+      pkgs.curl
+      pkgs.jq
+      pkgs.ookla-speedtest
+    ];
 
     serviceConfig = {
       Type = "oneshot";

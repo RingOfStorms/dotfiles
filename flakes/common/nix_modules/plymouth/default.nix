@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.ringofstorms.plymouth;
@@ -9,14 +14,23 @@ let
   # most for AMD / NVIDIA hosts: missing the right module here is the #1
   # cause of "the splash sometimes drops to text logs" in this repo.
   resolvedEarlyKms =
-    if cfg.earlyKms != null then cfg.earlyKms
+    if cfg.earlyKms != null then
+      cfg.earlyKms
     else
-      let v = config.services.xserver.videoDrivers or [ ];
+      let
+        v = config.services.xserver.videoDrivers or [ ];
       in
-        if builtins.elem "amdgpu" v then [ "amdgpu" ]
-        else if builtins.elem "nvidia" v then
-          [ "nvidia" "nvidia_modeset" "nvidia_uvm" "nvidia_drm" ]
-        else [ "i915" ];
+      if builtins.elem "amdgpu" v then
+        [ "amdgpu" ]
+      else if builtins.elem "nvidia" v then
+        [
+          "nvidia"
+          "nvidia_modeset"
+          "nvidia_uvm"
+          "nvidia_drm"
+        ]
+      else
+        [ "i915" ];
 
   # ---------------------------------------------------------------------------
   # Neon snowflake frame generator.
@@ -78,113 +92,123 @@ let
   # The output is a directory of frame-XXXX.png files which the theme
   # derivation copies into the Plymouth theme dir alongside the .script.
   # ---------------------------------------------------------------------------
-  infiniteFrames = pkgs.runCommand "infinite-frames"
-    {
-      nativeBuildInputs = [ pkgs.resvg pkgs.imagemagick pkgs.pngquant pkgs.gawk ];
-      passAsFile = [ "maxWidth" "frameCount" ];
-      maxWidth   = toString cfg.maxWidth;
-      frameCount = toString cfg.frameCount;
-    } ''
-      set -euo pipefail
-      mkdir -p $out
-      maxw=$(cat $maxWidthPath)
-      maxh=$(( maxw * 5 / 8 ))
-      nframes=$(cat $frameCountPath)
+  infiniteFrames =
+    pkgs.runCommand "infinite-frames"
+      {
+        nativeBuildInputs = [
+          pkgs.resvg
+          pkgs.imagemagick
+          pkgs.pngquant
+          pkgs.gawk
+        ];
+        passAsFile = [
+          "maxWidth"
+          "frameCount"
+        ];
+        maxWidth = toString cfg.maxWidth;
+        frameCount = toString cfg.frameCount;
+      }
+      ''
+        set -euo pipefail
+        mkdir -p $out
+        maxw=$(cat $maxWidthPath)
+        maxh=$(( maxw * 5 / 8 ))
+        nframes=$(cat $frameCountPath)
 
-      # The source composition is 16:10. Plymouth crops it centrally to
-      # cover the active framebuffer, so the logo remains prominent on
-      # 16:9, 16:10, ultrawide, and narrower displays.
-      sw=$(( maxh * 62 / 100 ))
+        # The source composition is 16:10. Plymouth crops it centrally to
+        # cover the active framebuffer, so the logo remains prominent on
+        # 16:9, 16:10, ultrawide, and narrower displays.
+        sw=$(( maxh * 62 / 100 ))
 
-      # ---------- 1. Rasterize SVGs ----------
-      resvg --width "$maxw" ${./assets/circuits.svg}  circuits.png
-      resvg --width "$sw"   ${./assets/snowflake.svg} snowflake.png
+        # ---------- 1. Rasterize SVGs ----------
+        resvg --width "$maxw" ${./assets/circuits.svg}  circuits.png
+        resvg --width "$sw"   ${./assets/snowflake.svg} snowflake.png
 
-      # Pad the official logo to the canvas, centered, so it shares
-      # dimensions with the circuit background and glow.
-      magick snowflake.png -background none -gravity center -extent "''${maxw}x''${maxh}" logo-c.png
-      magick logo-c.png -alpha extract logo-alpha.png
+        # Pad the official logo to the canvas, centered, so it shares
+        # dimensions with the circuit background and glow.
+        magick snowflake.png -background none -gravity center -extent "''${maxw}x''${maxh}" logo-c.png
+        magick logo-c.png -alpha extract logo-alpha.png
 
-      # ---------- 2. Background (transparent + circuits) ----------
-      # Frames are transparent outside the lit areas. The Plymouth
-      # script paints the window true black (0,0,0), and Plymouth
-      # itself paints true black behind the frame on the rest of the
-      # screen — using a transparent frame canvas instead of a
-      # near-black one (#0a0a0c) avoids the visible darker-than-true-
-      # black square around the snowflake that appears on real
-      # displays at low brightness.
-      #
-      # `-compose over` is the default but we name it explicitly
-      # because the rest of the pipeline switches between operators.
-      magick -size "''${maxw}x''${maxh}" canvas:none \
-        circuits.png -gravity center -compose over -composite \
-        background.png
+        # ---------- 2. Background (transparent + circuits) ----------
+        # Frames are transparent outside the lit areas. The Plymouth
+        # script paints the window true black (0,0,0), and Plymouth
+        # itself paints true black behind the frame on the rest of the
+        # screen — using a transparent frame canvas instead of a
+        # near-black one (#0a0a0c) avoids the visible darker-than-true-
+        # black square around the snowflake that appears on real
+        # displays at low brightness.
+        #
+        # `-compose over` is the default but we name it explicitly
+        # because the rest of the pipeline switches between operators.
+        magick -size "''${maxw}x''${maxh}" canvas:none \
+          circuits.png -gravity center -compose over -composite \
+          background.png
 
-      # ---------- 3. Logo glow ----------
-      # Keep the official logo’s two-color geometry intact.  A restrained
-      # amber halo gives the reference image its illuminated edge without
-      # turning the snowflake into a fuzzy sticker.
-      magick logo-alpha.png \
-        -filter Gaussian -blur 0x12 \
-        -evaluate Multiply 0.38 \
-        halo-alpha.png
-      magick -size "''${maxw}x''${maxh}" canvas:'#FF5A00' \
-        halo-alpha.png \
-        -compose CopyOpacity -composite \
-        -define png:color-type=6 \
-        halo.png
+        # ---------- 3. Logo glow ----------
+        # Keep the official logo’s two-color geometry intact.  A restrained
+        # amber halo gives the reference image its illuminated edge without
+        # turning the snowflake into a fuzzy sticker.
+        magick logo-alpha.png \
+          -filter Gaussian -blur 0x12 \
+          -evaluate Multiply 0.38 \
+          halo-alpha.png
+        magick -size "''${maxw}x''${maxh}" canvas:'#FF5A00' \
+          halo-alpha.png \
+          -compose CopyOpacity -composite \
+          -define png:color-type=6 \
+          halo.png
 
-      magick -size "''${maxw}x''${maxh}" canvas:none \
-        halo.png       -compose screen -composite \
-        logo-c.png     -compose over   -composite \
-        neon.png
+        magick -size "''${maxw}x''${maxh}" canvas:none \
+          halo.png       -compose screen -composite \
+          logo-c.png     -compose over   -composite \
+          neon.png
 
-      # ---------- 4. Generate per-frame brightness schedule ----------
-      # Deterministic PRNG (linear congruential, seeded with 1) so the
-      # output is reproducible across rebuilds.
-      awk -v n="$nframes" 'BEGIN{
-        srand(1);
-        # Bias toward 1.0 (steady). Each frame independently picks a
-        # multiplier; consecutive low values naturally form short
-        # "buzz" bursts. Tweaking these probabilities here changes the
-        # whole feel — keep dim events RARE.
-        for (i = 0; i < n; i++) {
-          r = rand();
-          if      (r < 0.005) m = 0.25;   # near-blackout, very rare
-          else if (r < 0.025) m = 0.55;   # hard dim
-          else if (r < 0.060) m = 0.70;   # noticeable dim
-          else if (r < 0.110) m = 0.85;   # subtle flicker
-          else                m = 1.00;   # steady
-          printf "%.3f\n", m;
-        }
-      }' > schedule.txt
+        # ---------- 4. Generate per-frame brightness schedule ----------
+        # Deterministic PRNG (linear congruential, seeded with 1) so the
+        # output is reproducible across rebuilds.
+        awk -v n="$nframes" 'BEGIN{
+          srand(1);
+          # Bias toward 1.0 (steady). Each frame independently picks a
+          # multiplier; consecutive low values naturally form short
+          # "buzz" bursts. Tweaking these probabilities here changes the
+          # whole feel — keep dim events RARE.
+          for (i = 0; i < n; i++) {
+            r = rand();
+            if      (r < 0.005) m = 0.25;   # near-blackout, very rare
+            else if (r < 0.025) m = 0.55;   # hard dim
+            else if (r < 0.060) m = 0.70;   # noticeable dim
+            else if (r < 0.110) m = 0.85;   # subtle flicker
+            else                m = 1.00;   # steady
+            printf "%.3f\n", m;
+          }
+        }' > schedule.txt
 
-      # ---------- 5. Render frames ----------
-      i=0
-      while IFS= read -r m; do
-        printf -v fname "frame-%04d.png" "$i"
-        # Multiply neon RGB by m, keep alpha unchanged, then composite
-        # over the background. `-channel RGB` scopes the multiply to
-        # color channels only (otherwise alpha would also dim, which
-        # would let the dark background bleed through and the snowflake
-        # would shrink rather than just dim — the wrong perceptual
-        # effect for a flickering sign).
-        magick neon.png \
-          -channel RGB -evaluate Multiply "$m" +channel \
-          \( background.png \) +swap \
-          -compose over -composite \
-          "$fname"
-        i=$((i + 1))
-      done < schedule.txt
+        # ---------- 5. Render frames ----------
+        i=0
+        while IFS= read -r m; do
+          printf -v fname "frame-%04d.png" "$i"
+          # Multiply neon RGB by m, keep alpha unchanged, then composite
+          # over the background. `-channel RGB` scopes the multiply to
+          # color channels only (otherwise alpha would also dim, which
+          # would let the dark background bleed through and the snowflake
+          # would shrink rather than just dim — the wrong perceptual
+          # effect for a flickering sign).
+          magick neon.png \
+            -channel RGB -evaluate Multiply "$m" +channel \
+            \( background.png \) +swap \
+            -compose over -composite \
+            "$fname"
+          i=$((i + 1))
+        done < schedule.txt
 
-      # ---------- 6. Quantize ----------
-      pngquant --ext .png --force --quality=60-90 --strip frame-*.png || true
+        # ---------- 6. Quantize ----------
+        pngquant --ext .png --force --quality=60-90 --strip frame-*.png || true
 
-      mv frame-*.png "$out/"
+        mv frame-*.png "$out/"
 
-      echo "infinite-frames: rendered $i frames at ''${maxw}x''${maxh}" >&2
-      du -sh "$out" >&2
-    '';
+        echo "infinite-frames: rendered $i frames at ''${maxw}x''${maxh}" >&2
+        du -sh "$out" >&2
+      '';
 
   infiniteTheme = pkgs.runCommand "plymouth-theme-infinite" { } ''
     mkdir -p $out/share/plymouth/themes/infinite
@@ -296,32 +320,31 @@ in
     #
     # We deliberately do NOT set `rd.systemd.show_status=false` or
     # `systemd.show_status=false` — those would disable the Esc toggle.
-    boot.kernelParams =
-      [
-        # Don't let fbcon scroll on the framebuffer between simpledrm
-        # coming up and plymouth attaching. Without this, the kernel can
-        # paint text on the very same FB Plymouth is about to claim,
-        # which on some boots leaves the splash invisible behind a wall
-        # of journal lines.
-        "fbcon=nodefer"
-        # Prefer the simpledrm renderer. simpledrm works the moment any
-        # framebuffer exists (efifb / firmware GOP), instead of waiting
-        # for the real KMS driver to probe. Combined with DeviceTimeout
-        # above, this is the single most effective fix for "the splash
-        # sometimes drops to logs".
-        "plymouth.use-simpledrm"
-      ]
-      ++ lib.optionals cfg.quiet [
-        "quiet"
-        "loglevel=3"
-        "rd.udev.log_level=3"
-        "udev.log_level=3"
-        "vt.global_cursor_default=0"
-        # `splash` is added by boot.plymouth automatically.
-      ];
+    boot.kernelParams = [
+      # Don't let fbcon scroll on the framebuffer between simpledrm
+      # coming up and plymouth attaching. Without this, the kernel can
+      # paint text on the very same FB Plymouth is about to claim,
+      # which on some boots leaves the splash invisible behind a wall
+      # of journal lines.
+      "fbcon=nodefer"
+      # Prefer the simpledrm renderer. simpledrm works the moment any
+      # framebuffer exists (efifb / firmware GOP), instead of waiting
+      # for the real KMS driver to probe. Combined with DeviceTimeout
+      # above, this is the single most effective fix for "the splash
+      # sometimes drops to logs".
+      "plymouth.use-simpledrm"
+    ]
+    ++ lib.optionals cfg.quiet [
+      "quiet"
+      "loglevel=3"
+      "rd.udev.log_level=3"
+      "udev.log_level=3"
+      "vt.global_cursor_default=0"
+      # `splash` is added by boot.plymouth automatically.
+    ];
 
     boot.consoleLogLevel = lib.mkIf cfg.quiet 0;
-    boot.initrd.verbose  = lib.mkIf cfg.quiet false;
+    boot.initrd.verbose = lib.mkIf cfg.quiet false;
 
     # ---- Force-load the GPU driver in initrd ----
     # Without this Plymouth's framebuffer fallback can lose the race

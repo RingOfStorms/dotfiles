@@ -14,7 +14,7 @@ let
     with impermanence_mod.sharedPersistence;
     [
       essentials # /var/log, /var/lib/nixos, /machine-key.json, /etc/machine-id, ...
-      tailscale  # /var/lib/tailscale node identity
+      tailscale # /var/lib/tailscale node identity
     ]
   );
 in

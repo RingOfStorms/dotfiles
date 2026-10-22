@@ -6,7 +6,8 @@
     disko.url = "github:nix-community/disko/latest";
   };
 
-  outputs = { impermanence, disko, ... }:
+  outputs =
+    { impermanence, disko, ... }:
     let
       # ── Auto-import shared persistence sets ────────────────────────────
       # Every `*.nix` file under ./shared_persistence/ is loaded and
@@ -21,24 +22,21 @@
       # attribute-existence checks.
       sharedDir = ./shared_persistence;
       sharedEntries = builtins.readDir sharedDir;
-      sharedNames =
-        builtins.filter
-          (name:
-            let
-              entry = sharedEntries.${name};
-              isNix = entry == "regular" && builtins.match ".*\\.nix$" name != null;
-            in
-            isNix
-          )
-          (builtins.attrNames sharedEntries);
+      sharedNames = builtins.filter (
+        name:
+        let
+          entry = sharedEntries.${name};
+          isNix = entry == "regular" && builtins.match ".*\\.nix$" name != null;
+        in
+        isNix
+      ) (builtins.attrNames sharedEntries);
       stripNix = name: builtins.elemAt (builtins.match "(.*)\\.nix$" name) 0;
-      sharedPersistence =
-        builtins.listToAttrs (
-          map (name: {
-            name = stripNix name;
-            value = import (sharedDir + "/${name}");
-          }) sharedNames
-        );
+      sharedPersistence = builtins.listToAttrs (
+        map (name: {
+          name = stripNix name;
+          value = import (sharedDir + "/${name}");
+        }) sharedNames
+      );
 
       # ── Merge helper ───────────────────────────────────────────────────
       # Takes a list of shared-persistence sets (each shaped like the
@@ -46,39 +44,47 @@
       # duplicates removed in each list. Hosts splat the result into
       # their own `environment.persistence."/persist"` block alongside
       # any host-specific entries.
-      mergeSharedPersistence = sets:
+      mergeSharedPersistence =
+        sets:
         let
-          concatUnique = lists:
+          concatUnique =
+            lists:
             let
               # Tiny order-preserving unique. Avoids depending on
               # nixpkgs.lib here so the flake stays self-contained.
-              go = acc: xs:
-                if xs == [ ] then acc
+              go =
+                acc: xs:
+                if xs == [ ] then
+                  acc
                 else
                   let
                     head = builtins.head xs;
                     tail = builtins.tail xs;
                   in
-                  if builtins.elem head acc then go acc tail
-                  else go (acc ++ [ head ]) tail;
+                  if builtins.elem head acc then go acc tail else go (acc ++ [ head ]) tail;
             in
             go [ ] (builtins.concatLists lists);
         in
         {
           system = {
             directories = concatUnique (map (s: s.system.directories) sets);
-            files       = concatUnique (map (s: s.system.files) sets);
+            files = concatUnique (map (s: s.system.files) sets);
           };
           user = {
             directories = concatUnique (map (s: s.user.directories) sets);
-            files       = concatUnique (map (s: s.user.files) sets);
+            files = concatUnique (map (s: s.user.files) sets);
           };
         };
     in
     {
       nixosModules = {
         default =
-          { config, lib, pkgs, ... }:
+          {
+            config,
+            lib,
+            pkgs,
+            ...
+          }:
           {
             imports = [
               impermanence.nixosModules.impermanence
@@ -108,10 +114,11 @@
             # root-level path.
             nixpkgs.overlays = [
               (_final: prev: {
-                lib = prev.lib.extend (_self: super: {
-                  take = count: list:
-                    if count <= 0 then [ ] else super.take count list;
-                });
+                lib = prev.lib.extend (
+                  _self: super: {
+                    take = count: list: if count <= 0 then [ ] else super.take count list;
+                  }
+                );
               })
             ];
           };

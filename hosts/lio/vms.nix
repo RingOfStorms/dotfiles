@@ -3,7 +3,10 @@
   options = { };
 
   config = {
-    users.users.josh.extraGroups = [ "libvirtd" "kvm" ];
+    users.users.josh.extraGroups = [
+      "libvirtd"
+      "kvm"
+    ];
 
     environment.systemPackages = with pkgs; [
       virt-manager

@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cacheDir = "/var/lib/timezone-cache";
   cacheFile = "${cacheDir}/last-timezone";
@@ -16,10 +21,18 @@ in
   services.automatic-timezoned.enable = true;
 
   systemd.services.automatic-timezoned = {
-    after = [ "dbus.socket" "systemd-timedated.service" "geoclue.service" ]
-      ++ lib.optionals hasImpermanence [ "fix-var-run-symlink.service" ];
-    wants = [ "dbus.socket" "systemd-timedated.service" "geoclue.service" ]
-      ++ lib.optionals hasImpermanence [ "fix-var-run-symlink.service" ];
+    after = [
+      "dbus.socket"
+      "systemd-timedated.service"
+      "geoclue.service"
+    ]
+    ++ lib.optionals hasImpermanence [ "fix-var-run-symlink.service" ];
+    wants = [
+      "dbus.socket"
+      "systemd-timedated.service"
+      "geoclue.service"
+    ]
+    ++ lib.optionals hasImpermanence [ "fix-var-run-symlink.service" ];
     serviceConfig = {
       Restart = "on-failure";
       RestartSec = "10s";
@@ -40,7 +53,11 @@ in
   systemd.services.restore-timezone = lib.mkIf hasImpermanence {
     description = "Restore timezone from cache";
     wantedBy = [ "sysinit.target" ];
-    before = [ "sysinit.target" "systemd-timedated.service" "automatic-timezoned.service" ];
+    before = [
+      "sysinit.target"
+      "systemd-timedated.service"
+      "automatic-timezoned.service"
+    ];
     after = [ "local-fs.target" ];
     unitConfig.DefaultDependencies = false;
     unitConfig.ConditionPathExists = cacheFile;

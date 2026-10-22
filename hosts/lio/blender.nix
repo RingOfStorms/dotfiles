@@ -24,7 +24,14 @@ let
     pyproject = true;
     sourceRoot = "${src.name}/mcp";
     build-system = [ pkgs.python3Packages.setuptools ];
-    dependencies = with pkgs.python3Packages; [ docutils mcp pyyaml ] ++ mcp.optional-dependencies.cli or [ ];
+    dependencies =
+      with pkgs.python3Packages;
+      [
+        docutils
+        mcp
+        pyyaml
+      ]
+      ++ mcp.optional-dependencies.cli or [ ];
     pythonImportsCheck = [ "blmcp" ];
     meta = {
       description = "Official Blender Lab MCP server";
@@ -55,17 +62,31 @@ let
   mcpCommand = lib.getExe blenderMcpServer;
 in
 {
-  environment.systemPackages = [ blender blenderMcpServer ];
+  environment.systemPackages = [
+    blender
+    blenderMcpServer
+  ];
 
   # opencode merges $OPENCODE_CONFIG over ~/.config/opencode/opencode.json, so the
   # user's own (stateful) config stays untouched.
-  environment.variables.OPENCODE_CONFIG = toString (pkgs.writeText "opencode-blender-mcp.json" (builtins.toJSON {
-    "$schema" = "https://opencode.ai/config.json";
-    mcp.blender = { type = "local"; command = [ mcpCommand ]; enabled = true; };
-  }));
+  environment.variables.OPENCODE_CONFIG = toString (
+    pkgs.writeText "opencode-blender-mcp.json" (
+      builtins.toJSON {
+        "$schema" = "https://opencode.ai/config.json";
+        mcp.blender = {
+          type = "local";
+          command = [ mcpCommand ];
+          enabled = true;
+        };
+      }
+    )
+  );
 
   # omp user-level MCP config. Read-only symlink: manage servers here, not via `/mcp add`.
   home-manager.users.josh.home.file.".omp/agent/mcp.json".text = builtins.toJSON {
-    mcpServers.blender = { command = mcpCommand; args = [ ]; };
+    mcpServers.blender = {
+      command = mcpCommand;
+      args = [ ];
+    };
   };
 }

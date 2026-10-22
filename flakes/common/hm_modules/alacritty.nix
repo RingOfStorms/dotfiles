@@ -26,10 +26,12 @@
         };
       };
       font = {
-        normal = { family = "JetBrainsMonoNL Nerd Font"; style = "Regular"; };
+        normal = {
+          family = "JetBrainsMonoNL Nerd Font";
+          style = "Regular";
+        };
         size = 12.0;
       };
     };
   };
 }
-

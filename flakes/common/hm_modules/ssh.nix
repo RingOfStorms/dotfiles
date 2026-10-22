@@ -1,12 +1,12 @@
-{ fleet ? null, ... }:
+{
+  fleet ? null,
+  ...
+}:
 let
   # When fleet data is available (passed via extraSpecialArgs from mkHost),
   # generate settings blocks from the fleet registry. Otherwise, fall back to
   # a minimal static config.
-  fleetBlocks =
-    if fleet != null
-    then fleet.mkSshMatchBlocks
-    else {};
+  fleetBlocks = if fleet != null then fleet.mkSshMatchBlocks else { };
 in
 {
   programs.ssh = {
@@ -38,6 +38,7 @@ in
       "git.joshuabell.xyz" = {
         User = "git";
       };
-    } // fleetBlocks;
+    }
+    // fleetBlocks;
   };
 }

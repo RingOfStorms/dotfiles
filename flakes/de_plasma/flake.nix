@@ -6,7 +6,12 @@
   outputs = { plasma-manager, ... }: {
     nixosModules = {
       default =
-        { config, lib, pkgs, ... }:
+        {
+          config,
+          lib,
+          pkgs,
+          ...
+        }:
         {
           imports = [
             ./de_plasma.nix

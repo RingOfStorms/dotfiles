@@ -246,7 +246,6 @@ in
       '';
     })
 
-
     # GPU blocks
     (mkIf cfg.gpu.amd.enable {
       services.xserver.videoDrivers = [ "amdgpu" ];

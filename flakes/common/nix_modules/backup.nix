@@ -55,7 +55,10 @@ in
       type = types.listOf types.str;
       default = [ ];
       description = "Absolute paths to back up.";
-      example = [ "/var/lib/vaultwarden" "/var/lib/acme" ];
+      example = [
+        "/var/lib/vaultwarden"
+        "/var/lib/acme"
+      ];
     };
 
     exclude = mkOption {
@@ -131,14 +134,16 @@ in
         User = "root";
       };
 
-      path = with pkgs; [ rsync openssh coreutils ];
+      path = with pkgs; [
+        rsync
+        openssh
+        coreutils
+      ];
 
       script =
         let
           pathsLine = concatStringsSep " " (map escapeShellArg cfg.paths);
-          excludeArgs = concatStringsSep " " (
-            map (e: "--exclude=${escapeShellArg e}") cfg.exclude
-          );
+          excludeArgs = concatStringsSep " " (map (e: "--exclude=${escapeShellArg e}") cfg.exclude);
           remote = "${cfg.targetUser}@${cfg.targetHost}";
           base = "${cfg.targetDir}/${hostName}";
         in

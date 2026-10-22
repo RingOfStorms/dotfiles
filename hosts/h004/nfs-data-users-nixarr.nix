@@ -1,4 +1,9 @@
-{ lib, config, constants, ... }:
+{
+  lib,
+  config,
+  constants,
+  ...
+}:
 # This file sets up perms for MEDIA only (not state dirs) on this system since we are running nixarr on another host but NFS mounting the data drive from here.
 let
   globals = config.util-nixarr.globals;

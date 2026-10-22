@@ -23,7 +23,12 @@
 #
 # schema_version is supplied by the module from the adguardhome package
 # (nixpkgs 26.05 ships 0.107.77 / schema 34, matching the exported config).
-{ config, lib, constants, ... }:
+{
+  config,
+  lib,
+  constants,
+  ...
+}:
 let
   dns = constants.network.dnsUpstreams;
   mng = constants.network.vlans.management;
@@ -74,7 +79,8 @@ in
             "127.0.0.1"
             mng.ipv4
             lan.ipv4
-          ] ++ lib.optionals config.networking.enableIPv6 [
+          ]
+          ++ lib.optionals config.networking.enableIPv6 [
             mng.ipv6
             lan.ipv6
           ];

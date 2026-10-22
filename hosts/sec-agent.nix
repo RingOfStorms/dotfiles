@@ -19,19 +19,31 @@ let
   # match blocks automatically; sec-agent keeps that behavior without
   # depending on the old input.
   nix2nixMatchBlockHosts = [
-    "lio" "lio_"
+    "lio"
+    "lio_"
     "oren"
-    "juni" "juni_"
-    "gp3" "gp3_"
-    "joe" "joe_"
-    "i001" "i001_"
-    "t" "t_"
-    "h001" "h001_"
-    "h003" "h003_"
-    "h004" "h004_"
-    "h005" "h005_"
-    "l002" "l002_"
-    "o002" "o002_"
+    "juni"
+    "juni_"
+    "gp3"
+    "gp3_"
+    "joe"
+    "joe_"
+    "i001"
+    "i001_"
+    "t"
+    "t_"
+    "h001"
+    "h001_"
+    "h003"
+    "h003_"
+    "h004"
+    "h004_"
+    "h005"
+    "h005_"
+    "l002"
+    "l002_"
+    "o002"
+    "o002_"
   ];
 
   isHighTrust = role == "machines-hightrust";
@@ -39,7 +51,9 @@ let
 
   commonSecrets = {
     "headscale_auth_${if isHighTrust then "2026-03-15" else "lowtrust_2026-03-15"}" = {
-      remotePath = "machines/${trustPath}/headscale_auth_${if isHighTrust then "2026-03-15" else "lowtrust_2026-03-15"}";
+      remotePath = "machines/${trustPath}/headscale_auth_${
+        if isHighTrust then "2026-03-15" else "lowtrust_2026-03-15"
+      }";
       softDepend = [ "tailscaled" ];
       # First boot: tailscaled-autoconnect runs (and fails) before this key is
       # fetched, and nothing retries it. Start it once the key lands. Only
@@ -57,7 +71,9 @@ let
       hmChanges.programs.ssh.settings = builtins.listToAttrs (
         map (host: {
           name = host;
-          value = { IdentityFile = "$SECRET_PATH"; };
+          value = {
+            IdentityFile = "$SECRET_PATH";
+          };
         }) nix2nixMatchBlockHosts
       );
     };

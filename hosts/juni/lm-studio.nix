@@ -70,8 +70,7 @@ let
   };
 in
 {
-  nixpkgs.config.allowUnfreePredicate =
-    pkg: builtins.elem (lib.getName pkg) [ "lm-studio" ];
+  nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [ "lm-studio" ];
 
   environment.systemPackages = [ lm-studio ];
 }

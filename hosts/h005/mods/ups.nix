@@ -17,7 +17,16 @@ let
   remoteHosts = ups.remoteShutdownHosts;
 
   shutdownScript = pkgs.writeShellScript "ups-shutdown" ''
-    export PATH="${lib.makeBinPath (with pkgs; [ openssh coreutils systemd ])}:$PATH"
+    export PATH="${
+      lib.makeBinPath (
+        with pkgs;
+        [
+          openssh
+          coreutils
+          systemd
+        ]
+      )
+    }:$PATH"
 
     log() {
       echo "$(date '+%Y-%m-%d %H:%M:%S') [ups-shutdown] $1"
@@ -121,15 +130,42 @@ in
         FINALDELAY = 5;
 
         NOTIFYFLAG = [
-          [ "ONLINE" "SYSLOG+EXEC" ]
-          [ "ONBATT" "SYSLOG+EXEC" ]
-          [ "LOWBATT" "SYSLOG+EXEC" ]
-          [ "FSD" "SYSLOG+EXEC" ]
-          [ "COMMOK" "SYSLOG+EXEC" ]
-          [ "COMMBAD" "SYSLOG+EXEC" ]
-          [ "SHUTDOWN" "SYSLOG+EXEC" ]
-          [ "REPLBATT" "SYSLOG+EXEC" ]
-          [ "NOCOMM" "SYSLOG+EXEC" ]
+          [
+            "ONLINE"
+            "SYSLOG+EXEC"
+          ]
+          [
+            "ONBATT"
+            "SYSLOG+EXEC"
+          ]
+          [
+            "LOWBATT"
+            "SYSLOG+EXEC"
+          ]
+          [
+            "FSD"
+            "SYSLOG+EXEC"
+          ]
+          [
+            "COMMOK"
+            "SYSLOG+EXEC"
+          ]
+          [
+            "COMMBAD"
+            "SYSLOG+EXEC"
+          ]
+          [
+            "SHUTDOWN"
+            "SYSLOG+EXEC"
+          ]
+          [
+            "REPLBATT"
+            "SYSLOG+EXEC"
+          ]
+          [
+            "NOCOMM"
+            "SYSLOG+EXEC"
+          ]
         ];
       };
     };
@@ -168,10 +204,19 @@ in
 
   # Ensure NUT can access the USB devices. Rules are per vendor/product pair,
   # not per serial, so identical models collapse to a single rule.
-  services.udev.extraRules = lib.concatMapStringsSep "\n" (pair:
-    ''SUBSYSTEM=="usb", ATTR{idVendor}=="${pair.vendorId}", ATTR{idProduct}=="${pair.productId}", MODE="0660", GROUP="nut"''
-  ) (lib.unique (map (dev: {
-    vendorId = lib.toLower dev.vendorId;
-    productId = lib.toLower dev.productId;
-  }) (lib.attrValues devices))) + "\n";
+  services.udev.extraRules =
+    lib.concatMapStringsSep "\n"
+      (
+        pair:
+        ''SUBSYSTEM=="usb", ATTR{idVendor}=="${pair.vendorId}", ATTR{idProduct}=="${pair.productId}", MODE="0660", GROUP="nut"''
+      )
+      (
+        lib.unique (
+          map (dev: {
+            vendorId = lib.toLower dev.vendorId;
+            productId = lib.toLower dev.productId;
+          }) (lib.attrValues devices)
+        )
+      )
+    + "\n";
 }

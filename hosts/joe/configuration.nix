@@ -1,4 +1,9 @@
-{ pkgs, lib, constants, ... }:
+{
+  pkgs,
+  lib,
+  constants,
+  ...
+}:
 {
   # 1 GB /boot and ~210 MB NVIDIA initrds: keep at most 3 generations.
   boot.loader.systemd-boot.configurationLimit = lib.mkForce 3;
@@ -84,8 +89,8 @@
   };
 
   environment.systemPackages = with pkgs; [
-    mangohud     # Performance overlay (MANGOHUD=1 %command% or mangohud %command%)
-    protonup-qt  # GUI for managing custom Proton versions
+    mangohud # Performance overlay (MANGOHUD=1 %command% or mangohud %command%)
+    protonup-qt # GUI for managing custom Proton versions
     vulkan-tools # vulkaninfo for diagnostics
   ];
 
