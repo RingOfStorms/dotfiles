@@ -13,8 +13,9 @@
 //	    "<svc>": {
 //	      "unit": "container@x",
 //	      "active": "active|inactive|failed",
-//	      "enabled": true
-//	    }
+//	      "enabled": true,
+//	      "lastBackup": "2026-10-17T03:05:00Z"  // optional: last successful
+//	    }                                      // fleet-backup on that host
 //	  }
 //	}
 //
@@ -41,7 +42,14 @@ type ServiceStatus struct {
 	Unit    string `json:"unit"`
 	Active  string `json:"active"`
 	Enabled bool   `json:"enabled"`
+	// LastBackup is RFC3339; empty if the host has no successful
+	// fleet-backup of the service (or no backups at all).
+	LastBackup string `json:"lastBackup,omitempty"`
 }
+
+// BackupStaleAfter: a service whose last successful backup is older than
+// this is flagged stale (the nightly job missed at least one run).
+const BackupStaleAfter = 36 * time.Hour
 
 // HostStatus is the full JSON document a host's status endpoint returns.
 type HostStatus struct {
@@ -70,6 +78,11 @@ type ServiceView struct {
 	Enabled      *bool             `json:"enabled,omitempty"`
 	Unit         string            `json:"unit,omitempty"`
 	Routes       []inventory.Route `json:"routes"`
+	// Backup: "ok", "stale" (older than BackupStaleAfter), "none" (the host
+	// reports the service but no backup) or "unknown" (no data).
+	Backup     string     `json:"backup"`
+	LastBackup *time.Time `json:"lastBackup,omitempty"`
+	BackupAge  string     `json:"backupAge,omitempty"` // e.g. "5h", "2d 3h"
 }
 
 // HostView is one row of the /hosts page.
@@ -224,7 +237,12 @@ func (p *Poller) Current() Merged {
 // into the dashboard view. Exported standalone for testing without a
 // running Poller.
 func Merge(inv *inventory.Inventory, polls map[string]HostPoll) Merged {
-	m := Merged{GeneratedAt: time.Now().UTC()}
+	return MergeAt(inv, polls, time.Now())
+}
+
+// MergeAt is Merge with an explicit clock (backup ages).
+func MergeAt(inv *inventory.Inventory, polls map[string]HostPoll, now time.Time) Merged {
+	m := Merged{GeneratedAt: now.UTC()}
 
 	for name, svc := range inv.Services {
 		view := ServiceView{
@@ -233,6 +251,7 @@ func Merge(inv *inventory.Inventory, polls map[string]HostPoll) Merged {
 			Description:  svc.Description,
 			DeclaredHost: svc.Host,
 			Active:       "unknown",
+			Backup:       "unknown",
 		}
 		for _, rt := range svc.Routes {
 			view.Routes = append(view.Routes, rt)
@@ -243,6 +262,15 @@ func Merge(inv *inventory.Inventory, polls map[string]HostPoll) Merged {
 				enabled := ss.Enabled
 				view.Enabled = &enabled
 				view.Unit = ss.Unit
+				view.Backup = "none"
+				if t, err := time.Parse(time.RFC3339, ss.LastBackup); err == nil {
+					t = t.UTC()
+					age := now.Sub(t)
+					view.LastBackup, view.BackupAge, view.Backup = &t, FormatAge(age), "ok"
+					if age > BackupStaleAfter {
+						view.Backup = "stale"
+					}
+				}
 			}
 		}
 		m.Services = append(m.Services, view)
@@ -270,4 +298,23 @@ func Merge(inv *inventory.Inventory, polls map[string]HostPoll) Merged {
 	}
 
 	return m
+}
+
+// FormatAge renders a duration coarsely: "<1m", "42m", "5h", "2d 3h".
+// Negative ages (clock skew) count as zero.
+func FormatAge(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "<1m"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d/time.Minute))
+	case d < 48*time.Hour:
+		return fmt.Sprintf("%dh", int(d/time.Hour))
+	}
+	days := int(d / (24 * time.Hour))
+	h := int((d % (24 * time.Hour)) / time.Hour)
+	if h == 0 {
+		return fmt.Sprintf("%dd", days)
+	}
+	return fmt.Sprintf("%dd %dh", days, h)
 }

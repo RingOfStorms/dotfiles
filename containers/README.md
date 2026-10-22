@@ -91,7 +91,9 @@ must be able to fetch that ref, so pair it with `deploy --local`).
 | `containers attach <svc>` | the service console (`attach` in service.nix); `shell` for root shell |
 | `containers backup <svc>` | asks where to save (default `~/backups`) and, if running, whether to stop it; then hook, stop, tar `/srv/containers/<svc>` to this machine, start again (`-o file\|dir`, `--live`, `-y`) |
 | `containers restore <svc> <file> --host h` | unpack a backup on a host (`--force` renames existing data) |
-| `containers move <svc> --to h` | stop, stream data, deploy on target, remove from source |
+| `containers move <svc> --to h` | final restic backup on the source, restore on the target, deploy + route health, restore check, first backup on the target, then retire the source |
+| `containers restore-check <svc> [--snapshot ID]` | restore a `svc:<svc>` snapshot to a scratch dir on its host: SQLite `integrity_check`, PG dumps complete |
+| `containers health <svc>` | every route answers on its host (backend and nginx) |
 | `containers destroy <svc>` | uninstall (data kept; `--purge` deletes it) |
 | `containers check-idmap <host>` | the idmap test above |
 | `containers routes [svc]` | declared routes from the inventory: fqdn, proto, port, exposure, auth, via, host (no network). Unconverted services show as `nginx string` |
@@ -297,8 +299,17 @@ copies, and snapshots `/srv/containers/<svc>` with tags `fleet` and
 moved service continues its series. Enabled on: h001. Not on h003 (no
 services) or joe (no restic secret yet). See ROUTING-PLAN §9.1.
 
+On success each service gets a stamp
+`/var/lib/fleet-containers/backup-last/<svc>`
+(`time=<RFC3339> snapshot=<id> host=<h>`). The status endpoint reports it as
+`lastBackup` and fleet-edge shows the age per service, flagged **stale** after
+36h. SQLite `.backup` copies keep the live file's owner and mode (they replace
+it on restore). One run per service at a time (flock in the staging dir).
+
 ```sh
-sudo systemctl start fleet-backup                 # run now
+sudo systemctl start fleet-backup                 # run now (all, then prune)
+sudo systemctl start fleet-backup-svc@puzzles     # one service, no prune (what move uses)
+cnt restore-check puzzles                         # latest svc:puzzles snapshot, scratch dir
 sudo fleet-restic snapshots --tag svc:puzzles     # restic with the host's creds
 sudo fleet-restic restore latest --tag svc:puzzles --target /tmp/r
 ```
@@ -348,34 +359,49 @@ than deleting it. By hand: stop, move `/srv/containers/<svc>` aside,
 
 ## Moving a service to another host
 
-Downtime is the stop + copy + first boot.
+Data goes through the shared restic repository (ROUTING-PLAN §9.1), so the
+service keeps its `svc:<name>` history and every move is also a restore test.
+Downtime is the stop + backup + restore + first boot.
 
-1. The target has the host module and passes `containers check-idmap <target>`.
-2. `containers move minecraft --to h001`
-   - checks the target is free (no running unit, no existing data dir)
-   - runs the backupHook, then a blocking stop on the source
-   - streams `/srv/containers/minecraft` source → target over ssh (through
-     this machine; numeric owners kept)
-   - verifies the copy: a digest of every path, type, owner and mode (plus
-     regular-file sizes and symlink targets)
-     must match on both hosts. A failure on either side (read, compress,
-     decompress, extract) or a mismatch stops here, before deploy and
-     before anything on the source is touched
-   - deploys on the target (writes nginx site, opens ports, starts)
-   - uninstalls on the source and renames its data to `minecraft.moved-<date>`
+1. Both hosts have `ringofstorms.containers.backup` enabled (same repo); the
+   target passes `containers check-idmap <target>` and offers the service's
+   `requires` capabilities.
+2. `containers --dry-run move minecraft --to h001` prints the plan (every
+   remote script, in order). Then `containers move minecraft --to h001`:
+   1. **preflight**: target has the host module, `fleet-backup` and the
+      capabilities, and no running unit or data of the service; the source
+      has fleet-backup and the data. A refusal here changes nothing.
+   2. **final backup** on the source: backupHook, blocking stop,
+      `fleet-backup-svc@<svc>`; the snapshot id comes from the fresh stamp
+      (an old stamp is never accepted).
+   3. **restore** that snapshot onto the target (the SQLite `.backup` copies
+      replace the excluded live files), then the live PostgreSQL cluster
+      dirs (excluded from restic) are copied from the stopped source and
+      verified by manifest (paths, types, owners, modes, sizes).
+   4. **deploy** on the target, then **health**: every route answers on the
+      backend (2xx/3xx on its `health` path, otherwise any status below 500)
+      and, for http routes with an fqdn, through the target's nginx.
+   5. **restore check**: the same snapshot restored to a scratch dir on the
+      target; every SQLite db must pass `PRAGMA integrity_check`, every PG
+      dump must be non-empty, valid gzip and a complete pg_dump (custom format:
+      `PGDMP` header). A service whose hook runs pg_dump must have one.
+   6. **first backup** on the target (its stamp must be from the target).
+   7. **switch**: uninstall on the source, data renamed
+      `<svc>.moved-<date>` (fleet-backup skips names with a dot).
+
+   A failure in 2-6 uninstalls the target, moves its data aside as
+   `<svc>.failed-move-<time>` and starts the source again if it was running
+   (a stopped service stays stopped). Re-running is safe: the target is
+   marked (`/var/lib/fleet-containers/move-<svc>`) until step 6 finishes, and
+   a re-run clears such leftovers first; data on the target without that
+   marker is refused, never overwritten. The source remembers it was running
+   (`move-<svc>.was-running`) across an interrupted run.
 3. Set `host = "h001";` in `service.nix`, commit, push. Until then, commands
    for the service without `--host` refuse to run.
 4. Point any outside routing at the new host (e.g. the `computerboyz` vhost
    in `hosts/oracle/o002/nginx.nix` proxies to h003's overlay IP; WAN
    port-forwards on the router).
 5. When happy, delete `/srv/containers/<svc>.moved-*` on the old host.
-
-If step 2 fails during the copy, the service is stopped on the source with its
-data untouched: `containers start <svc> --host <source>`. If it fails during
-the **deploy**, the target may already have started before the error (e.g.
-ssh dropped): check `containers ls` first and, if it is up on the target,
-`containers stop <svc> --host <target>` before starting the source, or you
-will have two writable copies.
 
 ## Start, stop and reboots
 

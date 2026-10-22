@@ -239,37 +239,68 @@ let
     in
     "    ${s.name}) ${run} ;;\n";
   withHook = builtins.filter (s: (s.backupHook or null) != null) (builtins.attrValues fleetServices);
+  # `fleet-backup` backs up every installed service, then prunes.
+  # `fleet-backup <svc>...` (fleet-backup-svc@<svc>.service, used by `cnt
+  # move`) backs up only those, even if their unit is not running, and does
+  # not prune. On success each service gets a stamp in ${backupStampDir}/<svc>:
+  #   time=<RFC3339 UTC> snapshot=<restic id> host=<hostname>
+  # read by `cnt status-server` (backup age on fleet-edge) and `cnt move`.
+  backupStampDir = "${stateDir}/backup-last";
   backupScript = pkgs.writeShellScript "fleet-backup" ''
     set -u
     PATH=${
       lib.makeBinPath [
         pkgs.coreutils
         pkgs.findutils
+        pkgs.gnugrep
         pkgs.systemd
         pkgs.sqlite
         pkgs.restic
+        pkgs.util-linux
       ]
     }
     root=/srv/containers
     staging=/var/lib/fleet-backup/staging
+    stamps=${backupStampDir}
     host=$(${pkgs.hostname}/bin/hostname)
+    install -d -m755 "$stamps" "$staging"
     runHook() {
       case "$1" in
     ${lib.concatMapStrings hookCase withHook}    *) return 0 ;;
       esac
     }
+    if [ $# -gt 0 ]; then
+      only=1
+      dirs=()
+      for svc in "$@"; do
+        case "$svc" in "" | .* | *.* | */*) echo "bad service name: $svc" >&2; exit 2 ;; esac
+        [ -d "$root/$svc" ] || { echo "$svc: no $root/$svc on $host" >&2; exit 1; }
+        dirs+=("$root/$svc/")
+      done
+    else
+      only=0
+      dirs=("$root"/*/)
+    fi
     failed=""
-    for dir in "$root"/*/; do
+    for dir in "''${dirs[@]}"; do
+      [ -d "$dir" ] || continue
       svc=$(basename "$dir")
       case "$svc" in *.*) continue ;; esac # <svc>.moved-<date> leftovers
       # Only services installed here (unit file from `cnt deploy`); data left
       # behind without a unit is stale and not backed up.
       if [ -e ${mutable}/container@$svc.service ]; then unit=container@$svc.service
       elif [ -e ${mutable}/fleet-$svc.service ]; then unit=fleet-$svc.service
-      else echo "$svc: not installed on $host, skipped" >&2; continue; fi
+      else
+        echo "$svc: not installed on $host, skipped" >&2
+        [ "$only" = 0 ] || failed="$failed $svc"
+        continue
+      fi
       echo "== $svc ($unit)" >&2
       (
         set -eu -o pipefail
+        # One run per service at a time (nightly vs `cnt move`).
+        exec 9>"$staging/$svc.lock"
+        flock 9
         if [ "$(systemctl is-active "$unit" || true)" = active ]; then
           runHook "$svc" || exit 1
         else
@@ -289,20 +320,58 @@ let
           out="$st/sqlite''${db#$root}"
           install -d -m700 "$(dirname "$out")"
           sqlite3 "$db" ".timeout 30000" ".backup '$out'" || exit 1
+          # the copy replaces the live file on restore: keep owner and mode
+          chown --reference="$db" "$out"
+          chmod --reference="$db" "$out"
           printf '%s\n' "$db" "$db-wal" "$db-shm" "$db-journal" >> "$ex"
           # opening an idle WAL db creates -wal/-shm; keep the app's owner
           for f in "$db-wal" "$db-shm"; do [ ! -e "$f" ] || chown --reference="$db" "$f"; done
         done || exit 1
-        restic backup --retry-lock 2h --host "$host" --tag fleet --tag "svc:$svc" \
+        snap=$(restic backup --json --retry-lock 2h --host "$host" --tag fleet --tag "svc:$svc" \
           --group-by tags --exclude-caches --exclude-file="$ex" \
-          --exclude-file=${excludeFile} "$root/$svc" "$st" || exit 1
+          --exclude-file=${excludeFile} "$root/$svc" "$st" |
+          grep -o '"snapshot_id":"[0-9a-f]*"' | tail -n1 | cut -d'"' -f4) || exit 1
+        [ -n "$snap" ] || { echo "$svc: restic printed no snapshot id" >&2; exit 1; }
+        printf 'time=%s snapshot=%s host=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$snap" "$host" > "$stamps/.$svc.new"
+        chmod 644 "$stamps/.$svc.new"
+        mv -f "$stamps/.$svc.new" "$stamps/$svc"
+        echo "$svc: snapshot $snap" >&2
       ) || { echo "$svc: BACKUP FAILED" >&2; failed="$failed $svc"; }
     done
-    restic forget --retry-lock 2h --prune --tag fleet --group-by tags ${lib.escapeShellArgs bcfg.pruneOpts} ||
-      failed="$failed (forget)"
+    if [ "$only" = 0 ]; then
+      restic forget --retry-lock 2h --prune --tag fleet --group-by tags ${lib.escapeShellArgs bcfg.pruneOpts} ||
+        failed="$failed (forget)"
+    fi
     if [ -n "$failed" ]; then echo "failed:$failed" >&2; exit 1; fi
   '';
   excludeFile = pkgs.writeText "fleet-backup-excludes" (lib.concatLines bcfg.exclude);
+  backupUnit = {
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    unitConfig = {
+      RequiresMountsFor = [ "/srv/containers" ];
+    }
+    // lib.optionalAttrs (bcfg.environmentFile != null) {
+      ConditionPathExists = bcfg.environmentFile;
+    };
+    environment = {
+      RESTIC_CACHE_DIR = "/var/cache/fleet-backup";
+    }
+    // lib.optionalAttrs (bcfg.repository != null) { RESTIC_REPOSITORY = bcfg.repository; }
+    // lib.optionalAttrs (bcfg.passwordFile != null) { RESTIC_PASSWORD_FILE = bcfg.passwordFile; };
+    serviceConfig = {
+      Type = "oneshot";
+      StateDirectory = "fleet-backup";
+      StateDirectoryMode = "0700";
+      CacheDirectory = "fleet-backup";
+      CacheDirectoryMode = "0700";
+      Nice = 10;
+      IOSchedulingClass = "idle";
+    }
+    // lib.optionalAttrs (bcfg.environmentFile != null) {
+      EnvironmentFile = bcfg.environmentFile;
+    };
+  };
 in
 {
   options.ringofstorms.containers = {
@@ -974,33 +1043,19 @@ in
             exec ${pkgs.restic}/bin/restic "$@"
           '')
         ];
-        systemd.services.fleet-backup = {
+        # `cnt move` checks this marker on the target (fleet-restic present).
+        environment.etc."fleet-containers/backup".text = "fleet-backup stamps: ${backupStampDir}\n";
+        systemd.services.fleet-backup = backupUnit // {
           description = "restic backup of floating containers (ROUTING-PLAN §9.1)";
-          after = [ "network-online.target" ];
-          wants = [ "network-online.target" ];
-          unitConfig = {
-            RequiresMountsFor = [ "/srv/containers" ];
-          }
-          // lib.optionalAttrs (bcfg.environmentFile != null) {
-            ConditionPathExists = bcfg.environmentFile;
-          };
-          environment = {
-            RESTIC_CACHE_DIR = "/var/cache/fleet-backup";
-          }
-          // lib.optionalAttrs (bcfg.repository != null) { RESTIC_REPOSITORY = bcfg.repository; }
-          // lib.optionalAttrs (bcfg.passwordFile != null) { RESTIC_PASSWORD_FILE = bcfg.passwordFile; };
-          serviceConfig = {
-            Type = "oneshot";
+          serviceConfig = backupUnit.serviceConfig // {
             ExecStart = backupScript;
-            StateDirectory = "fleet-backup";
-            StateDirectoryMode = "0700";
-            CacheDirectory = "fleet-backup";
-            CacheDirectoryMode = "0700";
-            Nice = 10;
-            IOSchedulingClass = "idle";
-          }
-          // lib.optionalAttrs (bcfg.environmentFile != null) {
-            EnvironmentFile = bcfg.environmentFile;
+          };
+        };
+        # One service now, no prune (`cnt move`): systemctl start fleet-backup-svc@puzzles
+        systemd.services."fleet-backup-svc@" = backupUnit // {
+          description = "restic backup of floating container %i (ROUTING-PLAN §9.1)";
+          serviceConfig = backupUnit.serviceConfig // {
+            ExecStart = "${backupScript} %i";
           };
         };
         systemd.timers.fleet-backup = {

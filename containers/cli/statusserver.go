@@ -7,7 +7,12 @@ package main
 // Contract (GET /status.json, consumed by flakes/fleet-edge):
 //
 //	{"host":"h001","time":"<RFC3339>","services":{
-//	  "<svc>":{"unit":"container@x.service","active":"active|inactive|failed","enabled":true}}}
+//	  "<svc>":{"unit":"container@x.service","active":"active|inactive|failed","enabled":true,
+//	           "lastBackup":"<RFC3339>"}}}   // omitted if never backed up here
+//
+// lastBackup is the last successful fleet-backup of the service on this host
+// (ROUTING-PLAN §9.1), from the stamp fleet-backup writes on success
+// (backupStampDir/<svc>); restic is never run here.
 //
 // Requests have no input: the handler takes no query, body or path
 // parameters, and only reads the filesystem and `systemctl show`. Unit
@@ -36,6 +41,8 @@ type statusService struct {
 	Unit    string `json:"unit"`
 	Active  string `json:"active"`
 	Enabled bool   `json:"enabled"`
+	// LastBackup: RFC3339 UTC of the last successful fleet-backup here.
+	LastBackup string `json:"lastBackup,omitempty"`
 }
 
 type statusDoc struct {
@@ -125,12 +132,38 @@ func parseShow(out string) map[string]string {
 }
 
 // buildStatus is the pure part: units + systemd states + link check -> doc.
-func buildStatus(host string, now time.Time, units map[string]string, states map[string]string, linked func(string) bool) statusDoc {
+func buildStatus(host string, now time.Time, units map[string]string, states map[string]string, linked func(string) bool, backups map[string]time.Time) statusDoc {
 	d := statusDoc{Host: host, Time: now.UTC().Format(time.RFC3339), Services: map[string]statusService{}}
 	for n, u := range units {
-		d.Services[n] = statusService{Unit: u, Active: normActive(states[u]), Enabled: linked(bootLink(u))}
+		ss := statusService{Unit: u, Active: normActive(states[u]), Enabled: linked(bootLink(u))}
+		if t, ok := backups[n]; ok {
+			ss.LastBackup = t.UTC().Format(time.RFC3339)
+		}
+		d.Services[n] = ss
 	}
 	return d
+}
+
+// readBackupStamps reads dir/<svc> for the given services. Missing,
+// unreadable, oversized or malformed stamps are skipped (reported as never).
+func readBackupStamps(dir string, names map[string]string) map[string]time.Time {
+	out := map[string]time.Time{}
+	for n := range names {
+		if !svcNameRe.MatchString(n) {
+			continue
+		}
+		f, err := os.Open(filepath.Join(dir, n))
+		if err != nil {
+			continue
+		}
+		b := make([]byte, 512)
+		k, _ := f.Read(b)
+		f.Close()
+		if st, err := parseStamp(string(b[:k])); err == nil {
+			out[n] = st.Time
+		}
+	}
+	return out
 }
 
 var systemctlShow = func(ctx context.Context, units []string) (string, error) {
@@ -158,7 +191,7 @@ func currentStatus(ctx context.Context, host string) (statusDoc, error) {
 		states = parseShow(out)
 	}
 	linked := func(p string) bool { _, err := os.Lstat(p); return err == nil }
-	return buildStatus(host, time.Now(), units, states, linked), nil
+	return buildStatus(host, time.Now(), units, states, linked, readBackupStamps(backupStampDir, units)), nil
 }
 
 func statusHandler(host string) http.Handler {

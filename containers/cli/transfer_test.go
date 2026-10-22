@@ -50,12 +50,19 @@ func newRig(t *testing.T) *rig {
 	// its data root via sed so src and dst are separate dirs.
 	ssh := "#!" + realPath(t, "bash") + `
 target=""; for a in "$@"; do last="$a"; done
-for a in "$@"; do case "$a" in -o|-t) ;; *@*) target="${a#*@}";; esac; done
+for a in "$@"; do case "$a" in -o|-t) ;; *@*) target="${a#*@}"; break;; esac; done
 echo "ssh $target: $last" >> ` + r.log + `
 host="$target"
 script="$last"
 script="${script//test -d \/etc\/systemd-mutable\/system/test -d \/}"
-if [ "$host" = dst ]; then s='` + r.root + `'; d='` + r.dst + `'; script="${script//"$s"/"$d"}"; fi
+st='` + r.root + `.state'
+script="${script//\/var\/lib\/fleet-containers/$st/vlfc}"
+script="${script//\/etc\/fleet-containers/$st/efc}"
+script="${script//\/var\/lib\/fleet-backup/$st/vlfb}"
+script="${script//\/var\/tmp/$st/tmp}"
+export FAKE_HOST="$host" FAKE_ROOT='` + r.root + `' FAKE_STATE="$st" FAKE_REPO='` + filepath.Join(d, "repo") + `'
+if [ "$host" = dst ]; then s='` + r.root + `'; d='` + r.dst + `'; script="${script//"$s"/"$d"}"; FAKE_ROOT="$d"; FAKE_STATE="$d.state"; fi
+mkdir -p "$FAKE_STATE/vlfc" "$FAKE_STATE/efc" "$FAKE_STATE/tmp"
 brk="BREAK_$host"; extra="${!brk:-}"
 PATH="${extra:+$extra:}` + r.bin + `:$PATH" eval "$script"
 `
@@ -172,131 +179,6 @@ func assertNoArchive(t *testing.T, out string) {
 	m, _ := filepath.Glob(filepath.Join(filepath.Dir(out), ".*partial*"))
 	if len(m) > 0 {
 		t.Errorf("partial temp files left behind: %v", m)
-	}
-}
-
-// For move, a failure anywhere in the transfer must stop before deploy and
-// before the source data is renamed/removed.
-func assertSourceKept(t *testing.T, r *rig) {
-	t.Helper()
-	if !strings.Contains(r.calls(), "ssh dst: bash -c 'set -euo pipefail\n'\\''zstd -d") && !strings.Contains(r.calls(), "zstd -d -q -c | tar") {
-		t.Fatalf("copy step never ran; test is vacuous:\n%s", r.calls())
-	}
-	if _, err := os.Stat(filepath.Join(r.root, "svc/data/b")); err != nil {
-		t.Fatalf("source data was touched: %v", err)
-	}
-	if m, _ := filepath.Glob(filepath.Join(r.root, "svc.moved-*")); len(m) > 0 {
-		t.Fatalf("source was retired: %v", m)
-	}
-	s := inv.Services["svc"]
-	c := r.calls()
-	for what, marker := range map[string]string{
-		"deploy on target":  firstLine(prepareScript(s, "dst")),
-		"uninstall on src":  firstLine(uninstallScript(s)),
-		"cleanup on source": firstLine(cleanupScript(s)),
-	} {
-		if marker != "" && strings.Contains(c, marker) {
-			t.Fatalf("move ran %s after a failed copy (%q):\n%s", what, marker, c)
-		}
-	}
-}
-
-func firstLine(s string) string {
-	for _, l := range strings.Split(s, "\n") {
-		if l = strings.TrimSpace(l); l != "" && !strings.HasPrefix(l, "set ") {
-			// the log holds the shell-quoted script; stop before any quote
-			if i := strings.IndexAny(l, "'\""); i > 0 {
-				l = l[:i]
-			}
-			return l
-		}
-	}
-	return ""
-}
-
-func runMove(t *testing.T) error {
-	return cmdMove([]string{"svc", "--to", "dst", "--from", "src"})
-}
-
-func TestMoveStopsOnSourceReadError(t *testing.T) {
-	r := newRig(t)
-	r.breakTool("src", "tar", "#!/bin/sh\n"+realPath(t, "tar")+" \"$@\" | head -c 2000\nexit 2\n")
-	if err := runMove(t); err == nil {
-		t.Fatal("move succeeded with a failing source tar")
-	}
-	assertSourceKept(t, r)
-}
-
-func TestMoveStopsOnCompressionError(t *testing.T) {
-	r := newRig(t)
-	r.breakTool("src", "zstd", "#!/bin/sh\nhead -c 10 >/dev/null; exit 1\n")
-	if err := runMove(t); err == nil {
-		t.Fatal("move succeeded with a failing compressor")
-	}
-	assertSourceKept(t, r)
-}
-
-func TestMoveStopsOnExtractionError(t *testing.T) {
-	r := newRig(t)
-	r.breakTool("dst", "tar", "#!/bin/sh\ncat >/dev/null\necho 'tar: No space left on device' >&2\nexit 2\n")
-	if err := runMove(t); err == nil {
-		t.Fatal("move succeeded with a failing extract")
-	}
-	assertSourceKept(t, r)
-}
-
-// Extraction that "succeeds" but drops a file is caught by the manifest.
-func TestMoveStopsOnSilentlyIncompleteCopy(t *testing.T) {
-	r := newRig(t)
-	r.breakTool("dst", "tar", "#!/bin/sh\n"+realPath(t, "tar")+" \"$@\" && rm -f "+r.dst+"/svc/data/b\n")
-	if err := runMove(t); err == nil {
-		t.Fatal("move succeeded although a file went missing")
-	}
-	assertSourceKept(t, r)
-}
-
-// Positive control: with a good copy, move verifies and proceeds to deploy,
-// so the markers used by assertSourceKept really do appear in the log.
-func TestMoveProceedsAfterGoodCopy(t *testing.T) {
-	r := newRig(t)
-	t.Log(runMove(t)) // deploy itself fails (no nix on the fake host); fine
-	marker := firstLine(prepareScript(inv.Services["svc"], "dst"))
-	if !strings.Contains(r.calls(), marker) {
-		t.Fatalf("expected deploy marker %q after a good copy:\n%s", marker, r.calls())
-	}
-	got, err := os.ReadFile(filepath.Join(r.dst, "svc/data/b"))
-	must(t, err)
-	if len(got) != 100000 {
-		t.Fatalf("copy incomplete: %d bytes", len(got))
-	}
-}
-
-// Regression: a source dir enlarged by files that were later deleted keeps a
-// larger st_size than its freshly extracted copy. That must not fail the move.
-func TestMoveIgnoresDirectorySizeHistory(t *testing.T) {
-	r := newRig(t)
-	big := filepath.Join(r.root, "svc/data/sub")
-	for i := range 2000 {
-		must(t, os.WriteFile(filepath.Join(big, "tmp-"+strings.Repeat("x", 40)+string(rune('a'+i%26))+itoa(i)), nil, 0o644))
-	}
-	for i := range 2000 {
-		must(t, os.Remove(filepath.Join(big, "tmp-"+strings.Repeat("x", 40)+string(rune('a'+i%26))+itoa(i))))
-	}
-	st, err := os.Stat(big)
-	must(t, err)
-	fresh := t.TempDir()
-	fst, err := os.Stat(fresh)
-	must(t, err)
-	if st.Size() == fst.Size() {
-		t.Skipf("filesystem does not keep grown directory sizes (%d); regression not exercised", st.Size())
-	}
-	err = runMove(t)
-	if err != nil && strings.Contains(err.Error(), "mismatch") {
-		t.Fatalf("copy verification failed on directory size: %v", err)
-	}
-	marker := firstLine(prepareScript(inv.Services["svc"], "dst"))
-	if !strings.Contains(r.calls(), marker) {
-		t.Fatalf("move did not reach deploy after a complete copy: %v\n%s", err, r.calls())
 	}
 }
 

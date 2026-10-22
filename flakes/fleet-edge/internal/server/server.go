@@ -61,8 +61,10 @@ type IndexData struct {
 	TotalServices int
 	ActiveCount   int
 	FailedCount   int
-	HostsTotal    int
-	HostsUp       int
+	// BackupStale: services whose last backup is older than 36h.
+	BackupStale int
+	HostsTotal  int
+	HostsUp     int
 }
 
 // HostsData is the view model for hosts.html.
@@ -186,6 +188,9 @@ func (s *Server) handleServices(w http.ResponseWriter, r *http.Request) {
 			data.ActiveCount++
 		case "failed":
 			data.FailedCount++
+		}
+		if svc.Backup == "stale" {
+			data.BackupStale++
 		}
 	}
 	data.HostsTotal, data.HostsUp = hostCounts(m)

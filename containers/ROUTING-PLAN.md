@@ -9,9 +9,11 @@ Status: **being implemented**; see §8 for per-step status. Done: step 1
 (`routes` schema, generated host vhost + ports, `cnt routes`, `cnt audit`),
 step 3 (internal/edge listener split), step 6 (fleet oauth2-proxy),
 step 7 (`cnt expose` overrides with expiry, tailnet/lan only), step 8
-(read-only dashboard in fleet-edge, homepage-dashboard retired), step 2
-(firewall: no reachable host trusts `tailscale0`, 2026-10-22).
-Partial: step 4 (DNS/bunny and wildcard certs done; router forwards code
+(read-only dashboard in fleet-edge, homepage-dashboard retired).
+Partial: step 2 (`cnt port open|ls|close` and no-`tailscale0`-trust rolled
+out on h001/h003/h004/h005/i001/joe/lio/o002; juni, oren, gp3, l002, t
+still trust `tailscale0`), step 4 (DNS/bunny and wildcard certs done;
+router forwards code
 done, off by decision), step 5 (private networking mechanism built, rollout
 service-by-service), step 9 (`cnt move`, blocked on §9.1). Decisions are
 in §7; §6 lists
@@ -235,11 +237,10 @@ adding protection.
   h001 `:80`. An eval assertion refuses a name that is both hand-kept and
   generated. Test: `nix eval --impure --expr 'import
   ./containers/tests/edge-vhosts.nix'`.
-- **TLS on o002: unchanged, per-name http-01.** o002 has no bunny key (its
-  sec grants are join/git tokens only), and §5.2 gives the key to h005
-  alone. The wildcard for o002 comes in step 4 (issued on h005, distributed
-  via sec). Names stay in CT logs, which is fine for public names. Per-name
-  certs keep working for new routes because http-01 needs only the CNAME.
+- **TLS on o002: now the h005-pushed wildcard.** o002 has no bunny key (its
+  sec grants are join/git tokens only); the wildcard is issued on h005 and
+  pushed via `wildcard-push` (deployed 2026-10-21, §8 step 4, Certificates
+  bullet). Per-name http-01 is no longer used on o002.
 - **`blockInternal` is on for h001** (2026-10-20, generation 818,
   `hosts/h001/floating-containers.nix`). It only fills
   `$fleet_edge_block_internal`, which only generated (routes) vhosts check.
@@ -445,14 +446,14 @@ at the pinned version before relying on it):
 | Router forwards | none (h005 has no forwards) | `fleet-edge` on h005 | nft map |
 | Public DNS | hand edits in bunny, h005 `ddns.nix` (`home`) | `fleet-edge` on h005 | bunny, CNAMEs per §2.2; DDNS folds in |
 | Public edge (o002) | `o002/nginx.nix` | `cnt deploy`/`move`/`expose` | o002 runtime include dir (o002 gets the host module with `nginx.enable`) |
-| Certificates | h001 DNS-01, o002 per-name http-01 | `fleet-edge` on h005 | wildcards issued on h005, distributed via sec to the hosts that terminate TLS |
+| Certificates | h005-issued wildcard, pushed to h001 + o002 (§8 step 4) | `fleet-edge` on h005 | wildcards issued on h005, distributed via sec to the hosts that terminate TLS |
 
 **`fleet-edge` on h005.** h005 is the always-on networking box, so it owns
 everything that touches the bunny key or the WAN:
 
 - It's the **only** holder of the bunny API key: DDNS, public records and
-  DNS-01 for the wildcards. h001's `security.acme` and its copy of the key go
-  away.
+  DNS-01 for the wildcards. h001's `security.acme` and its copy of the key
+  are gone (§8 step 4, done 2026-10-21/22).
 - It manages tailnet/LAN DNS records, router forwards and DDNS names for
   `via = "router"` routes.
 - It also manages **standalone DNS records** in `joshuabell.xyz` that
@@ -649,7 +650,7 @@ Taken 2026-10-16:
    firewall, keeping the `nginx` string as an escape hatch while services
    are converted. `cnt routes` and `cnt audit` (read-only) exist
    (`containers/cli/routes.go`).
-2. **Done 2026-10-22.** `cnt port open|ls|close` exists (`containers/cli/port.go`):
+2. **Partial.** `cnt port open|ls|close` exists (`containers/cli/port.go`):
    it opens a port on a host for a limited time without a rebuild, by
    adding elements to three nft sets (`cnt-tmp`, `cnt-tmp4`, `cnt-tmp6`)
    that the host module's firewall rules match and the kernel expires;
@@ -667,13 +668,15 @@ Taken 2026-10-16:
    - lio (gen 1231): 22 on tailscale0; nix-serve 5000 from juni/gp3/oren.
      Verified by store path only (no root here).
    - o002 (gen 64): none (80/443/3032, 3478/udp are public).
-   - Unreachable: juni, oren, gp3, l002, t. They still trust `tailscale0`
-     if they use the module.
+   - **Open: juni, oren, gp3, l002, t.** Never rolled out; they still trust
+     `tailscale0` if they use the module. §5.1 requires no host trust it,
+     so this is the outstanding item for this step.
    - The edge hop o002 → host is plain `http://<overlayIp>:8443` with the
      route `Host`; https or no `Host` fails by design.
 3. Internal/edge listener split (§2.3, §2.3.1), o002 generated vhosts and
-   a wildcard. This retires the hand-kept o002 list. **Done 2026-10-20**,
-   except: the o002 wildcard waits for step 4 (no bunny key on o002).
+   a wildcard. This retires the hand-kept o002 list. **Done 2026-10-20**;
+   the o002 wildcard has been deployed since 2026-10-21 (§8 step 4,
+   Certificates bullet).
    `blockInternal` is on for h001 (generated vhosts only; see §2.3.1).
 4. `flakes/fleet-edge` on h005: tailnet/LAN DNS records (retires
    `h001Subdomains` and the hand host records), bunny import (diff only,
@@ -983,9 +986,12 @@ Taken 2026-10-16:
 8. **Done.** Read-only dashboard in `fleet-edge` on h005 (`hosts/h005/fleet-edge.nix`,
    `flakes/fleet-edge`); `homepage-dashboard` retired (h001 and joe), no
    redirects left behind.
-9. Then `cnt move` for real. Needs §9.1 first: the per-host `fleet-backup`
-   job is in place (svc-tagged history follows the service); the `move`
-   hooks (first backup on target, restore check) are still open.
+9. **Built (2026-10-22), not yet run for real.** `cnt move` goes through
+   restic (§9.1): final backup on the source, restore on the target, deploy
+   and route health, restore check, first backup on the target, then the
+   source becomes `.moved-<date>`. Any earlier failure undoes the target and
+   restarts the source. A real move waits for a second host with
+   `ringofstorms.containers.backup` (only h001 has it today).
 
 ## 9. Carried over from the migration plan
 
@@ -1031,14 +1037,44 @@ on joe through sec-agent, set
 and probably exclude `/srv/containers/localai/{models,backends}`. All hosts
 should share **one repository** so `svc:` history follows moves.
 
+**Done (2026-10-22): `move` through restic, restore check, backup age.**
+
+- `fleet-backup <svc>` / `fleet-backup-svc@<svc>.service`: one service, even
+  if stopped, no prune; per-service flock. Every success writes
+  `/var/lib/fleet-containers/backup-last/<svc>`
+  (`time=… snapshot=<id> host=…`). SQLite copies keep the live file's
+  owner/mode. `/etc/fleet-containers/backup` marks hosts with backups.
+- `cnt move` (cli/move.go): 1 preflight (target and source have fleet-backup,
+  target has the capabilities and is free) → 2 final backup on the source
+  (hook, stop, `fleet-backup-svc@`, fresh stamp required) → 3 restore of
+  that snapshot on the target (SQLite copies in place; live PG cluster dirs,
+  which restic excludes, copied from the stopped source and checked by
+  manifest) → 4 deploy and route health (`cnt health`) → 5 restore check
+  (`cnt restore-check`: scratch restore, SQLite `PRAGMA integrity_check`,
+  PG dumps non-empty, valid gzip, complete, `PGDMP` for custom format) → 6
+  first backup on the target → 7 switch: uninstall the source and rename it
+  to `.moved-<date>`. A failure in 2-6 undoes the target (data kept as
+  `.failed-move-<time>`) and restarts the source if it was running.
+  Re-runs are safe (`move-<svc>` marker on the target, `.was-running` on
+  the source). `--dry-run` prints the whole plan.
+- Status endpoint: `lastBackup` per service, read from the stamp (no restic).
+  fleet-edge `/services` has a backup column (age, **stale** after 36h, `never`)
+  and a stale count. h005 is deployed with `--override-input fleet-edge`
+  from the working tree, so after the push run `nix flake update fleet-edge`
+  in hosts/h005.
+- Verified 2026-10-22 on h001: the full run stamped all 17 services, and
+  `/status.json` and fleet-edge show their ages. `restore-check` passed for
+  puzzles (2 SQLite) and forgejo (3 PG dumps). `cnt --dry-run move puzzles
+  --to h003` printed all 7 steps; the real move would stop at step 1
+  because h003 has no fleet-backup.
+
 Still open:
 
-- `move` removes the source copy (or marks it stale and excluded) once the
-  target is verified (today: renamed `.moved-<date>`, which fleet-backup skips);
-- the first backup on the target runs as part of `move`, and a restore check
-  (`restic restore` to a scratch dir, PG/SQLite integrity) runs before the
-  source copy goes;
-- backup age per service on the dashboard (§5.4), alert when stale.
+- A real off-host move needs a second host with backups. Enable
+  `ringofstorms.containers.backup` on h003/joe (repo secret via sec-agent),
+  then do a test move of `hello-nixos` or puzzles.
+- Stale backups are only flagged on the dashboard. Nothing sends an alert
+  yet (left for the monitoring work).
 
 ### 9.2 Secret grants in service.nix
 

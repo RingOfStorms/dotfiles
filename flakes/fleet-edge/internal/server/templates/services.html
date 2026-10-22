@@ -6,6 +6,7 @@
   <strong>{{.TotalServices}}</strong> services ·
   <strong>{{.ActiveCount}}</strong> active ·
   <strong>{{.FailedCount}}</strong> failed ·
+  {{if .BackupStale}}<strong class="warn">{{.BackupStale}}</strong> backups stale (&gt;36h) ·{{end}}
   <strong>{{.HostsUp}}</strong>/<strong>{{.HostsTotal}}</strong> hosts reachable
 </p>
 </header>
@@ -13,7 +14,7 @@
 <table>
 <thead>
 <tr>
-  <th>name</th><th>kind</th><th>host</th><th>state</th>
+  <th>name</th><th>kind</th><th>host</th><th>state</th><th>backup</th>
   <th>routes</th><th>description</th>
 </tr>
 </thead>
@@ -21,7 +22,7 @@
 {{$lastHost := ""}}
 {{range .Services}}
 {{if ne .DeclaredHost $lastHost}}
-<tr class="host-group"><td colspan="6">{{.DeclaredHost}}</td></tr>
+<tr class="host-group"><td colspan="7">{{.DeclaredHost}}</td></tr>
 {{$lastHost = .DeclaredHost}}
 {{end}}
 <tr>
@@ -29,6 +30,7 @@
   <td class="muted">{{.Kind}}</td>
   <td class="mono">{{.DeclaredHost}}</td>
   <td>{{template "status-pill" .Active}}</td>
+  <td>{{template "backup-pill" .}}</td>
   <td>
     {{if .Routes}}
       <ul class="routes-list">

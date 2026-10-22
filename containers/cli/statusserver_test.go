@@ -15,7 +15,8 @@ func TestBuildStatusJSON(t *testing.T) {
 	units := map[string]string{"zitadel": "container@zitadel.service", "searx": "fleet-searx.service", "sec": "container@sec.service"}
 	states := map[string]string{"container@zitadel.service": "active", "fleet-searx.service": "failed", "container@sec.service": "deactivating"}
 	linked := func(p string) bool { return p == mutableUnits+"/machines.target.wants/container@zitadel.service" }
-	d := buildStatus("h001", time.Date(2026, 10, 17, 12, 0, 0, 0, time.FixedZone("x", 3600)), units, states, linked)
+	d := buildStatus("h001", time.Date(2026, 10, 17, 12, 0, 0, 0, time.FixedZone("x", 3600)), units, states, linked,
+		map[string]time.Time{"zitadel": time.Date(2026, 10, 17, 3, 5, 0, 0, time.FixedZone("y", -5*3600))})
 	b, err := json.Marshal(d)
 	if err != nil {
 		t.Fatal(err)
@@ -23,11 +24,11 @@ func TestBuildStatusJSON(t *testing.T) {
 	want := `{"host":"h001","time":"2026-10-17T11:00:00Z","services":{` +
 		`"searx":{"unit":"fleet-searx.service","active":"failed","enabled":false},` +
 		`"sec":{"unit":"container@sec.service","active":"inactive","enabled":false},` +
-		`"zitadel":{"unit":"container@zitadel.service","active":"active","enabled":true}}}`
+		`"zitadel":{"unit":"container@zitadel.service","active":"active","enabled":true,"lastBackup":"2026-10-17T08:05:00Z"}}}`
 	if string(b) != want {
 		t.Fatalf("got  %s\nwant %s", b, want)
 	}
-	empty, _ := json.Marshal(buildStatus("h", time.Unix(0, 0), nil, nil, linked))
+	empty, _ := json.Marshal(buildStatus("h", time.Unix(0, 0), nil, nil, linked, nil))
 	if string(empty) != `{"host":"h","time":"1970-01-01T00:00:00Z","services":{}}` {
 		t.Errorf("empty: %s", empty)
 	}
@@ -48,10 +49,10 @@ func TestParseShow(t *testing.T) {
 
 func TestStatusEndpoint(t *testing.T) {
 	root := t.TempDir()
-	oldM, oldG, oldS := mutableUnits, gcrootDir, systemctlShow
-	t.Cleanup(func() { mutableUnits, gcrootDir, systemctlShow = oldM, oldG, oldS })
-	mutableUnits, gcrootDir = filepath.Join(root, "m"), filepath.Join(root, "g")
-	for _, d := range []string{mutableUnits + "/machines.target.wants", mutableUnits + "/multi-user.target.wants", gcrootDir} {
+	oldM, oldG, oldS, oldB := mutableUnits, gcrootDir, systemctlShow, backupStampDir
+	t.Cleanup(func() { mutableUnits, gcrootDir, systemctlShow, backupStampDir = oldM, oldG, oldS, oldB })
+	mutableUnits, gcrootDir, backupStampDir = filepath.Join(root, "m"), filepath.Join(root, "g"), filepath.Join(root, "b")
+	for _, d := range []string{mutableUnits + "/machines.target.wants", mutableUnits + "/multi-user.target.wants", gcrootDir, backupStampDir} {
 		os.MkdirAll(d, 0o755)
 	}
 	os.WriteFile(mutableUnits+"/container@atuin.service", nil, 0o644)
@@ -59,6 +60,8 @@ func TestStatusEndpoint(t *testing.T) {
 	os.WriteFile(mutableUnits+"/container@bad name.service", nil, 0o644) // bad name: skipped
 	os.Symlink("../container@atuin.service", mutableUnits+"/machines.target.wants/container@atuin.service")
 	os.Symlink("/nix/store/x", gcrootDir+"/searx")
+	os.WriteFile(backupStampDir+"/atuin", []byte("time=2026-10-22T08:00:00Z snapshot=abc123 host=h001\n"), 0o644)
+	os.WriteFile(backupStampDir+"/searx", []byte("garbage\n"), 0o644) // malformed: reported as never
 	var asked []string
 	systemctlShow = func(_ context.Context, units []string) (string, error) {
 		asked = units
@@ -75,8 +78,8 @@ func TestStatusEndpoint(t *testing.T) {
 	json.NewDecoder(res.Body).Decode(&d)
 	res.Body.Close()
 	if res.Header.Get("Content-Type") != "application/json" || d.Host != "h001" || len(d.Services) != 2 ||
-		d.Services["atuin"] != (statusService{"container@atuin.service", "active", true}) ||
-		d.Services["searx"] != (statusService{"fleet-searx.service", "inactive", false}) {
+		d.Services["atuin"] != (statusService{Unit: "container@atuin.service", Active: "active", Enabled: true, LastBackup: "2026-10-22T08:00:00Z"}) ||
+		d.Services["searx"] != (statusService{Unit: "fleet-searx.service", Active: "inactive", Enabled: false}) {
 		t.Errorf("doc: %+v", d)
 	}
 	if len(asked) != 2 || asked[0] != "container@atuin.service" || asked[1] != "fleet-searx.service" {

@@ -284,6 +284,7 @@ code, .mono {
 .pill-reachable { color: var(--green); background: var(--green-bg); }
 .pill-none { color: var(--muted); background: transparent; border: 1px solid var(--muted); }
 .pill-unreachable { color: var(--red); background: var(--red-bg); }
+.warn { color: var(--red); }
 
 .badge {
   display: inline-block;

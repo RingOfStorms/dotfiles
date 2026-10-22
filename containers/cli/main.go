@@ -114,7 +114,15 @@ commands:
                                stop, tar data to this machine, start again
   restore <svc> <file> --host h [--force]
                                unpack a backup into /srv/containers/<svc> on a host
-  move <svc> --to h [--from h] move data and deployment to another host
+  move <svc> --to h [--from h] move through the restic repo: final backup on the source,
+                               restore on h, deploy + route health, restore check, first
+                               backup on h, then retire the source (<svc>.moved-<date>).
+                               Any failure before that undoes h and restarts the source.
+                               Needs ringofstorms.containers.backup on both hosts
+  restore-check <svc> [--host h] [--snapshot ID]
+                               restore a svc:<svc> snapshot (default latest) to a scratch
+                               dir: SQLite integrity_check, PG dumps complete
+  health <svc> [--host h]      check every route answers on its host (backend and nginx)
   destroy <svc> [--host h] [--purge]
                                remove from a host (data kept unless --purge)
   routes [svc]                 declared routes (fqdn, port, exposure, auth, host)
@@ -205,6 +213,10 @@ func main() {
 		err = cmdRestore(rest)
 	case "move":
 		err = cmdMove(rest)
+	case "restore-check":
+		err = cmdRestoreCheck(rest)
+	case "health":
+		err = cmdHealth(rest)
 	case "destroy", "rm":
 		err = cmdDestroy(rest)
 	case "routes":
@@ -1245,75 +1257,6 @@ fi
 		return err
 	}
 	info("restored. deploy with: containers deploy %s --host %s", s.Name, h)
-	return nil
-}
-
-// ---------------------------------------------------------------- move
-
-func cmdMove(args []string) error {
-	f := parse(args)
-	s := f.svc()
-	to := f.vals["to"]
-	if to == "" {
-		return errors.New("usage: containers move <svc> --to <host> [--from <host>]")
-	}
-	from := f.vals["from"]
-	if from == "" && !dryRun {
-		var err error
-		if from, err = moveSource(s, locate(s, probe)); err != nil {
-			return err
-		}
-	}
-	if from == "" {
-		from = s.Host
-	}
-	if !slices.Contains(containerHosts(), to) {
-		return fmt.Errorf("%s is not a container host; add it to containerHosts in containers/flake.nix (and import the host module there) so discovery can see it", to)
-	}
-	if from == to {
-		return fmt.Errorf("%s is already on %s", s.Name, to)
-	}
-	dst := dataDir(s)
-
-	info("1/5 checking %s", to)
-	if err := remote(to, true, fmt.Sprintf(`set -e
-test -d /etc/systemd-mutable/system || { echo "%[3]s lacks the containers host module"; exit 1; }
-if systemctl is-active -q %[1]s; then echo "%[2]s already running on %[3]s"; exit 1; fi
-if [ -e %[4]s ] && [ -n "$(ls -A %[4]s)" ]; then echo "%[4]s already exists on %[3]s; move it away first"; exit 1; fi
-install -d -m755 %[5]s
-`, unitOf(s), s.Name, to, q(dst), q(inv.DataRoot))+requiresScript(s, to)); err != nil {
-		return err
-	}
-
-	info("2/5 stopping %s on %s (blocking)", s.Name, from)
-	if err := remote(from, true, hookScript(s)+disableScript(s)+"systemctl stop "+unitOf(s)); err != nil {
-		return err
-	}
-
-	info("3/5 copying %s:%s -> %s (numeric owners kept)", from, dst, to)
-	if !dryRun {
-		src := hostCmd(context.Background(), from, false, true, packScript(inv.DataRoot, s.Name))
-		sink := hostCmd(context.Background(), to, false, true, unpackScript("zstd -d -q -c", inv.DataRoot))
-		sum := manifestScript(inv.DataRoot, s.Name)
-		err := copyVerified(src, sink,
-			func() (string, error) { return remoteOut(context.Background(), from, true, sum) },
-			func() (string, error) { return remoteOut(context.Background(), to, true, sum) })
-		if err != nil {
-			return fmt.Errorf("%w\n%s is stopped on %s with its data intact (containers start %s --host %s); partial data may be on %s", err, s.Name, from, s.Name, from, to)
-		}
-	}
-
-	info("4/5 deploying on %s", to)
-	if err := deploy(s, to, flakeRef(s.Dir), false); err != nil {
-		return fmt.Errorf("%w\n%s is stopped on %s with data intact; start it again ONLY after checking %s is not running there (the deploy may have started it before failing): containers ls (and, if it is up there, containers stop %s --host %s), then containers start %s --host %s", err, s.Name, from, to, s.Name, to, s.Name, from)
-	}
-
-	info("5/5 removing %s from %s (data kept as %s.moved-<date>)", s.Name, from, dst)
-	rm := uninstallScript(s) + cleanupScript(s) + fmt.Sprintf("mv %s %s.moved-$(date +%%F)\n", q(dst), q(dst))
-	if err := remote(from, true, rm); err != nil {
-		return fmt.Errorf("cleanup on %s: %w", from, err)
-	}
-	fmt.Print(moveWarning(s, to))
 	return nil
 }
 

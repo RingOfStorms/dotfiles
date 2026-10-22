@@ -39,4 +39,12 @@
 {{end}}
 {{end}}
 
+{{define "backup-pill"}}
+{{if eq .Backup "ok"}}<span class="pill pill-active" title="last fleet-backup {{.LastBackup.Format "2006-01-02 15:04 MST"}}">{{.BackupAge}} ago</span>
+{{else if eq .Backup "stale"}}<span class="pill pill-failed" title="STALE: last fleet-backup {{.LastBackup.Format "2006-01-02 15:04 MST"}} (older than 36h)">stale · {{.BackupAge}}</span>
+{{else if eq .Backup "none"}}<span class="pill pill-none" title="no successful fleet-backup recorded on this host">never</span>
+{{else}}<span class="pill pill-unknown">unknown</span>
+{{end}}
+{{end}}
+
 {{define "status-dot"}}{{if .}}<span class="dot dot-{{.}}" title="{{.}}"></span>{{end}}{{end}}

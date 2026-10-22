@@ -172,3 +172,64 @@ func TestPollOnceOnlyPolledHosts(t *testing.T) {
 		t.Fatal("h001 must be polled")
 	}
 }
+
+func TestMergeBackupAge(t *testing.T) {
+	inv := sampleInventory()
+	inv.Services["old"] = inventory.Service{Name: "old", Kind: "nixos", Host: "h001"}
+	inv.Services["never"] = inventory.Service{Name: "never", Kind: "nixos", Host: "h001"}
+	inv.Services["bad"] = inventory.Service{Name: "bad", Kind: "nixos", Host: "h001"}
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	polls := map[string]HostPoll{"h001": {Host: "h001", OK: true, Status: &HostStatus{Services: map[string]ServiceStatus{
+		"jellyfin": {Active: "active", LastBackup: "2026-10-22T03:05:00-05:00"}, // 08:05Z: 3h55m
+		"old":      {Active: "active", LastBackup: "2026-10-20T23:59:00Z"},      // 36h01m: stale
+		"never":    {Active: "active"},
+		"bad":      {Active: "active", LastBackup: "yesterday"},
+	}}}}
+	m := MergeAt(inv, polls, now)
+	got := map[string]ServiceView{}
+	for _, s := range m.Services {
+		got[s.Name] = s
+	}
+	if v := got["jellyfin"]; v.Backup != "ok" || v.BackupAge != "3h" || v.LastBackup == nil || !v.LastBackup.Equal(time.Date(2026, 10, 22, 8, 5, 0, 0, time.UTC)) {
+		t.Errorf("jellyfin: %+v", v)
+	}
+	if v := got["old"]; v.Backup != "stale" || v.BackupAge != "36h" {
+		t.Errorf("old: %+v", v)
+	}
+	if got["never"].Backup != "none" || got["bad"].Backup != "none" {
+		t.Errorf("never/bad: %q %q", got["never"].Backup, got["bad"].Backup)
+	}
+	if got["photos"].Backup != "unknown" { // host does not report it
+		t.Errorf("photos: %q", got["photos"].Backup)
+	}
+	// exactly 36h is not stale yet
+	polls["h001"].Status.Services["old"] = ServiceStatus{LastBackup: "2026-10-21T00:00:00Z"}
+	if v := MergeAt(inv, polls, now); func() string {
+		for _, s := range v.Services {
+			if s.Name == "old" {
+				return s.Backup
+			}
+		}
+		return ""
+	}() != "ok" {
+		t.Error("36h exactly flagged stale")
+	}
+	// unreachable host: unknown
+	m = MergeAt(inv, map[string]HostPoll{"h001": {Host: "h001", OK: false}}, now)
+	for _, s := range m.Services {
+		if s.Backup != "unknown" {
+			t.Errorf("%s: %q with the host down", s.Name, s.Backup)
+		}
+	}
+}
+
+func TestFormatAge(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		-time.Hour: "<1m", 30 * time.Second: "<1m", 42 * time.Minute: "42m", 5 * time.Hour: "5h",
+		47 * time.Hour: "47h", 48 * time.Hour: "2d", 51 * time.Hour: "2d 3h",
+	} {
+		if got := FormatAge(d); got != want {
+			t.Errorf("%v: %q, want %q", d, got, want)
+		}
+	}
+}

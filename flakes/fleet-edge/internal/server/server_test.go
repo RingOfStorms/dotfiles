@@ -207,3 +207,35 @@ func TestBackgroundFile(t *testing.T) {
 		t.Fatalf("/assets/bg = %d %s", w.Code, w.Body.String())
 	}
 }
+
+func TestServicesShowBackupAge(t *testing.T) {
+	inv := &inventory.Inventory{
+		Services: map[string]inventory.Service{
+			"fresh": {Name: "fresh", Kind: "nixos", Host: "h001"},
+			"old":   {Name: "old", Kind: "nixos", Host: "h001"},
+			"never": {Name: "never", Kind: "nixos", Host: "h001"},
+		},
+		Hosts: map[string]inventory.Host{"h001": {User: "root"}},
+	}
+	now := time.Now().UTC()
+	polls := map[string]state.HostPoll{"h001": {Host: "h001", OK: true, PolledAt: now, Status: &state.HostStatus{Services: map[string]state.ServiceStatus{
+		"fresh": {Active: "active", LastBackup: now.Add(-5 * time.Hour).Format(time.RFC3339)},
+		"old":   {Active: "active", LastBackup: now.Add(-50 * time.Hour).Format(time.RFC3339)},
+		"never": {Active: "active"},
+	}}}}
+	srv := New(fakeSource{m: state.Merge(inv, polls)}, Config{})
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
+	body := w.Body.String()
+	for _, want := range []string{"5h ago", "stale · 2d 2h", ">never<", "1</strong> backups stale"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("services page lacks %q", want)
+		}
+	}
+	// state API carries it too
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/state.json", nil))
+	if !strings.Contains(w.Body.String(), `"backup": "stale"`) {
+		t.Errorf("state.json lacks backup state: %s", w.Body.String())
+	}
+}
