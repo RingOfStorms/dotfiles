@@ -1,347 +1,91 @@
 # Infrastructure Resilience & Failover
 
-## Overview
-
-This document covers strategies for eliminating single points of failure and improving infrastructure resilience.
-
-## Current Architecture
+## Current Fleet Architecture (2026-10)
 
 ```
-                    INTERNET
-                        │
-              ┌─────────┴─────────┐
-              │                   │
-        ┌─────▼─────┐      ┌──────▼──────┐
-        │   O001    │      │    L001     │
-        │  (Oracle) │      │   (Linode)  │
-        │  nginx    │      │  Headscale  │
-        │  +vault   │      │   (SPOF!)   │
-        │  +atuin   │      └──────┬──────┘
-        │  (SPOF!)  │             │
-        └─────┬─────┘             │
-              │         Tailscale Mesh
-              │       ┌───────────┴───────────┐
-              │       │                       │
-        ┌─────▼───────▼─────┐          ┌──────▼──────┐
-        │       H001        │          │    H003     │
-        │  (Service Host)   │          │   (Router)  │
-        │  Forgejo,Zitadel, │          │  AdGuard,   │
-        │  LiteLLM,Trilium, │          │  DHCP,NAT   │
-        │  NixArr,OpenWebUI │          │   (SPOF!)   │
-        └─────────┬─────────┘          └─────────────┘
-                  │ NFS
-        ┌─────────▼─────────┐
-        │       H004        │
-        │   (NAS - bcachefs)│
-        │  Media, Data      │
-        └───────────────────┘
+                         INTERNET
+                             │
+                     ┌───────▼───────┐
+                     │     o002      │
+                     │ (Oracle ARM)  │
+                     │ nginx public  │
+                     │ + Headscale   │
+                     └───────┬───────┘
+                             │ Tailscale Mesh
+        ┌────────────────────┼────────────────────┐
+        │                    │                    │
+┌───────▼───────┐    ┌───────▼───────┐    ┌───────▼───────┐
+│     h005      │    │     h001      │    │     h003      │
+│   (Router)    │    │ (Primary Svc) │    │ (Warm/2nd Svc)│
+│ DHCP, NAT,    │    │ Floating      │◄──►│ Floating      │
+│ Split-DNS,    │    │ Containers    │cnt │ Containers    │
+│ Wildcard ACME,│    │ + /drives/wd10│move│ (32GB, NVMe)  │
+│ fleet-edge    │    └───────┬───────┘    └───────────────┘
+└───────────────┘            │ NFS (/nfs/h002/nixarr)
+                     ┌───────▼───────┐
+                     │     h004      │
+                     │ (NAS bcachefs)│
+                     │ 5× 12TB rep=2 │
+                     └───────────────┘
 ```
 
-## Critical Single Points of Failure
-
-| Host | Service | Impact if Down | Recovery Time |
-|------|---------|----------------|---------------|
-| **L001** | Headscale | ALL mesh connectivity | HIGH - must restore SQLite exactly |
-| **O001** | nginx/Vaultwarden | All public access, password manager | MEDIUM |
-| **H003** | DNS/DHCP/NAT | Entire LAN offline | MEDIUM |
-| **H001** | All services | Services down but recoverable | MEDIUM |
-| **H004** | NFS | Media unavailable | LOW - bcachefs has replication |
+### Resilience Measures Already Deployed
+- **Wildcard DNS-01 Certificates (`hosts/h005/wildcard-cert.nix`):** `h005` mints `*.joshuabell.xyz` via Bunny DNS-01 and pushes certs to `h001` and `o002` (`hosts/wildcard-cert-receiver.nix`).
+- **UPS Shutdown Coordination (`hosts/ups-shutdown-receiver.nix`):** `h005` monitors the workshop UPS via NUT and triggers clean shutdowns on `h001` and `h004`.
+- **NFS Guard (`hosts/h001/floating-containers.nix`):** `guards.h004` watches `/nfs/h002/nixarr/.h004-online` and automatically stops/starts the `arr` container when `h004` goes down or returns.
+- **Floating Containers + B2 Restic (`containers/`):** All self-hosted apps (`zitadel`, `sec`, `vaultwarden`, `forgejo`, `immich`, `paperless`, `matrix`, etc.) are encapsulated in `/srv/containers/<svc>` with nightly per-service `svc:<name>` snapshots to Backblaze B2 (`fleet-backup.service`).
+- **Identity Break-Glass (`containers/ROUTING-PLAN.md` §9.3):** Cold-restore tested 2026-10-22; `sec` and `zitadel` keys + restic credentials + `root_fleet_backup` SSH key live in the password manager alongside an independent backup copy.
 
 ---
 
-## Reverse Proxy Resilience (O001)
+## Remaining Gaps & High-Value Improvements
 
-### Current Problem
+### 1. `o002` (Headscale + Public Edge) Backup & Recovery Gap
 
-O001 is a single point of failure for all public traffic:
-- No public access to any service if it dies
-- DNS still points to it after failure
-- ACME certs are only on that host
+`o002` runs both the public nginx edge and the **Headscale control plane** (`hosts/oracle/o002/headscale.nix`), with state in `/persist/var/lib/headscale/db.sqlite`.
+- **Impact if `o002` dies:** Existing tailnet peers stay connected briefly via cached keys, but no node can re-authenticate on reboot, no new nodes can join, and all public ingress (`*.joshuabell.xyz`) drops.
+- **Current gap:** When the old `flakes/common/nix_modules/backup.nix` rsync module was retired, `o002` lost its automated backup of `/var/lib/headscale`.
 
-### Solution Options
-
-#### Option A: Cloudflare Tunnel (Recommended Quick Win)
-
-**Pros:**
-- No single server dependency
-- Run `cloudflared` on multiple hosts (H001 as backup)
-- Automatic failover between tunnel replicas
-- Built-in DDoS protection
-- No inbound ports needed
-
-**Cons:**
-- Cannot stream media (Jellyfin) - violates Cloudflare ToS
-- Adds latency
-- Vendor dependency
-
-**Implementation:**
-
-```nix
-# On BOTH O001 (primary) AND H001 (backup)
-services.cloudflared = {
-  enable = true;
-  tunnels."joshuabell" = {
-    credentialsFile = config.age.secrets.cloudflared.path;
-    ingress = {
-      "chat.joshuabell.xyz" = "http://100.64.0.13:80";
-      "git.joshuabell.xyz" = "http://100.64.0.13:80";
-      "notes.joshuabell.xyz" = "http://100.64.0.13:80";
-      "sec.joshuabell.xyz" = "http://100.64.0.13:80";
-      "sso.joshuabell.xyz" = "http://100.64.0.13:80";
-      "n8n.joshuabell.xyz" = "http://100.64.0.13:80";
-      "blog.joshuabell.xyz" = "http://100.64.0.13:80";
-    };
-  };
-};
-```
-
-Cloudflare automatically load balances across all active tunnel replicas.
-
-#### Option B: DNS Failover with Health Checks
-
-Use Cloudflare DNS with health checks:
-- Point `joshuabell.xyz` to both O001 and a backup
-- Cloudflare removes unhealthy IPs automatically
-- Requires Cloudflare paid plan for load balancing
-
-#### Option C: Tailscale Funnel
-
-Expose services directly without O001:
-
-```bash
-# On H001
-tailscale funnel 443
-```
-
-Exposes H001 directly at `https://h001.net.joshuabell.xyz`
-
-**Pros:**
-- No proxy needed
-- Per-service granularity
-- Automatic HTTPS
-
-**Cons:**
-- Uses `ts.net` domain (no custom domain)
-- Limited to ports 443, 8443, 10000
-
-#### Option D: Manual Failover with Shared Config
-
-Keep H001 ready to take over O001's role:
-1. Same nginx config via shared NixOS module
-2. Use DNS-01 ACME challenge (certs work on any host)
-3. Update DNS when O001 fails
-
-### Recommended Hybrid Approach
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                   RECOMMENDED TOPOLOGY                       │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│   Cloudflare DNS (health-checked failover)                 │
-│          │                                                  │
-│   ┌──────┴──────┐                                          │
-│   │             │                                          │
-│   ▼             ▼                                          │
-│  O001   ──OR── H001 (via Cloudflare Tunnel)               │
-│  nginx         cloudflared backup                          │
-│                                                             │
-│   Jellyfin: Direct via Tailscale Funnel (bypasses O001)   │
-│   Vaultwarden: Cloudflare Tunnel (survives O001 failure)  │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Key Changes:**
-1. Move Vaultwarden to Cloudflare Tunnel (survives O001 outage)
-2. Jellyfin via Tailscale Funnel (no Cloudflare ToS issues)
-3. Other services via Cloudflare Tunnel with H001 as backup
+#### Fix: Automated Headscale SQLite Backup + Warm Rebuild Path
+1. **Back up `/var/lib/headscale` nightly to B2 (or `h001`):**
+   - Add a `services.restic.backups.o002` job on `o002` using a `backupPrepareCommand` that runs:
+     ```sh
+     sqlite3 /var/lib/headscale/db.sqlite ".backup '/var/lib/headscale/db.sqlite.backup'"
+     ```
+   - Back up `/var/lib/headscale/db.sqlite.backup` and `/var/lib/headscale/noise_private.key` to B2 (tagged `o002-headscale`).
+2. **Fast Recovery Procedure (`hosts/oracle/readme.md`):**
+   - Oracle Always Free gives room for a second 2 OCPU / 12 GB ARM instance (`hosts/oracle/bootstrap/`).
+   - If `o002` fails or needs migration:
+     1. Provision new VM from `hosts/oracle/bootstrap` via `nixos-anywhere` (`hosts/oracle/readme.md`).
+     2. Restore `/persist/var/lib/headscale/{db.sqlite,noise_private.key}` and `/persist/machine-key.json` from backup.
+     3. Start `headscale` and `nginx`, then update the public IP in Bunny DNS (`headscale.joshuabell.xyz` and public vhosts) and `hosts/fleet.nix`.
 
 ---
 
-## Headscale HA (L001)
+### 2. `h003` as Warm Container Host (`h001` Failover & Maintenance Target)
 
-### The Problem
+`h003` (Ryzen 7 5825U, 32 GB RAM, encrypted NVMe bcachefs + impermanence) was re-imaged on 2026-10-15 as a dedicated secondary floating-container host (`hosts/h003/readme.md`) when `h005` took over routing.
 
-L001 running Headscale is the MOST CRITICAL SPOF:
-- If Headscale dies, existing connections keep working temporarily
-- NO NEW devices can connect
-- Devices that reboot cannot rejoin the mesh
-- Eventually all mesh connectivity degrades
+Currently `h003` has `inputs.containers.nixosModules.default` enabled (`hosts/h003/containers.nix`), but it is **missing two pieces** to be a turnkey warm target for `cnt move <svc> --to h003` or `cnt restore <svc> --host h003`:
 
-### Solution Options
+1. **Enable `ringofstorms.containers.backup` on `h003`:**
+   - `cnt move` refuses to move a service unless both source and target hosts have `ringofstorms.containers.backup.enable = true` (`ROUTING-PLAN.md` §9.1).
+   - Add `restic_h001_env_2026-10-01` to `hosts/h003/sec-agent.nix` with:
+     ```nix
+     configChanges.ringofstorms.containers.backup.environmentFile = "$SECRET_PATH";
+     ```
+   - Set `ringofstorms.containers.backup = { enable = true; schedule = "03:00"; };` in `hosts/h003/containers.nix`.
+2. **Receive Wildcard TLS Certs on `h003`:**
+   - Import `../wildcard-cert-receiver.nix` in `hosts/h003/flake.nix` and add `"h003"` to `hosts/h005/wildcard-cert.nix` push targets so internal HTTPS container vhosts (`nginx.tls.certDir = "/var/lib/fleet-cert/joshuabell.xyz/current"`) work immediately when a service is moved to `h003`.
+   - Set `nginx.acl.lan = [ "10.12.14.0/24" ];` and `nginx.edge.blockInternal = true;` in `hosts/h003/containers.nix` to match `h001/floating-containers.nix`.
 
-#### Option 1: Frequent Backups (Minimum Viable)
-
-```nix
-my.backup = {
-  enable = true;
-  paths = [ "/var/lib/headscale" "/var/lib/acme" ];
-};
-```
-
-**Recovery time:** ~30 minutes to spin up new VPS + restore
-
-#### Option 2: Warm Standby
-
-- Run second Linode/VPS with Headscale configured but stopped
-- Daily rsync of `/var/lib/headscale/` to standby
-- Update DNS to point to standby if primary fails
-
-```bash
-# Daily sync to standby
-rsync -avz l001:/var/lib/headscale/ standby:/var/lib/headscale/
-```
-
-**Recovery time:** ~5 minutes (start service, update DNS)
-
-#### Option 3: Headscale HA with LiteFS
-
-Headscale doesn't natively support HA, but you can use:
-- **LiteFS** for SQLite replication
-- **Consul** for leader election and failover
-
-See: https://gawsoft.com/blog/headscale-litefs-consul-replication-failover/
-
-**Recovery time:** ~15 seconds automatic failover
-
-#### Option 4: Use Tailscale Commercial
-
-Let Tailscale handle the control plane HA:
-- They manage availability
-- Keep Headscale for learning/experimentation
-- Critical services use Tailscale commercial
-
-### Recommendation
-
-Start with Option 1 (backups) immediately, work toward Option 2 (warm standby) within a month.
+Once those two items are in place:
+- **Planned maintenance on `h001` (e.g., impermanence re-image):** `cnt move <svc> --to h003` evacuates services cleanly in minutes.
+- **Unplanned `h001` hardware failure:** Any non-`wd10` service (`vaultwarden`, `zitadel`, `sec`, `forgejo`, `trilium`, `atuin`, `matrix`, `life`, etc.) can be restored straight from B2 onto `h003` and served immediately once `host = "h003"` is flipped in `containers/<svc>/service.nix` and `h005`/`o002` are updated.
 
 ---
 
-## Router HA (H003)
+### 3. Alerting on Silent Backup / Service Failures
 
-### The Problem
-
-H003 is the network gateway:
-- AdGuard Home (DNS filtering)
-- dnsmasq (DHCP)
-- NAT firewall
-- If it dies, entire LAN loses connectivity
-
-### Solution Options
-
-#### Option 1: Secondary DNS/DHCP
-
-Run backup DNS on another host (H001 or H004):
-- Secondary AdGuard Home instance
-- Clients configured with both DNS servers
-- DHCP failover is trickier (consider ISC DHCP with failover)
-
-#### Option 2: Keepalived for Router Failover
-
-If you have two devices that could be routers:
-
-```nix
-services.keepalived = {
-  enable = true;
-  vrrpInstances.router = {
-    state = "MASTER";  # or "BACKUP" on secondary
-    interface = "eth0";
-    virtualRouterId = 1;
-    priority = 255;  # Lower on backup
-    virtualIps = [{ addr = "10.12.14.1/24"; }];
-  };
-};
-```
-
-#### Option 3: Router Redundancy via ISP
-
-- Use ISP router as fallback gateway
-- Clients get two gateways via DHCP
-- Less control but automatic failover
-
-### Recommendation
-
-Run secondary AdGuard Home on H001/H004 as minimum redundancy. Full router HA is complex for homelab.
-
----
-
-## NFS HA (H004)
-
-### Current State
-
-H004 uses bcachefs with 2x replication across 5 disks. Single host failure still causes data unavailability.
-
-### Options
-
-#### Option 1: NFS Client Resilience
-
-Configure NFS clients to handle server unavailability gracefully:
-
-```nix
-fileSystems."/nfs/h002" = {
-  device = "100.64.0.3:/data";
-  fsType = "nfs4";
-  options = [
-    "soft"           # Don't hang forever
-    "timeo=50"       # 5 second timeout
-    "retrans=3"      # 3 retries
-    "nofail"         # Don't fail boot if unavailable
-  ];
-};
-```
-
-#### Option 2: Second NAS with GlusterFS
-
-For true HA, run two NAS nodes with GlusterFS replication:
-
-```
-H004 (bcachefs) ◄──── GlusterFS ────► H00X (bcachefs)
-```
-
-**Overkill for homelab**, but an option for critical data.
-
-### Recommendation
-
-Current bcachefs replication is adequate. Focus on offsite backups for truly irreplaceable data.
-
----
-
-## Recommended Implementation Order
-
-### Phase 1: Quick Wins (This Week)
-1. [ ] Set up Cloudflare Tunnel on O001 AND H001
-2. [ ] Enable Tailscale Funnel for Jellyfin
-3. [ ] Automated backups for L001 Headscale
-
-### Phase 2: Core Resilience (This Month)
-4. [ ] DNS-01 ACME for shared certs
-5. [ ] Warm standby for Headscale
-6. [ ] Secondary AdGuard Home
-
-### Phase 3: Full Resilience (Next Quarter)
-7. [ ] Headscale HA with LiteFS (if needed)
-8. [ ] Automated failover testing
-9. [ ] Runbook documentation
-
----
-
-## Monitoring & Alerting
-
-Essential for knowing when to failover:
-
-```nix
-# Uptime monitoring for critical services
-services.uptime-kuma = {
-  enable = true;
-  # Monitor: Headscale, nginx, Vaultwarden, AdGuard
-};
-
-# Or use external monitoring (BetterStack, Uptime Robot)
-```
-
-Alert on:
-- Headscale API unreachable
-- nginx health check fails
-- DNS resolution fails
-- NFS mount fails
+`fleet-edge` on `h005` polls `fleet-agent` (`:9101`) across all hosts and displays service health and stale backup counts (>36h), and Beszel monitors host disk/CPU metrics, but **nothing pushes an alert** when a timer or unit fails:
+- Add a lightweight `OnFailure = [ "notify-failure@%n.service" ]` hook or a periodic check on `h005` that alerts when `fleet-edge` detects a down service or a stale backup (>36h).
