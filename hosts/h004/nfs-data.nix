@@ -40,7 +40,8 @@ let
   # permissions, and an AUTH_SYS client asserting uid 1000/gid 100
   # (matching backups' 0700 luser:users owner) could use a forged handle
   # to read it straight through the /data/nixarr export -- confirmed live
-  # 2026-10-22 (see ideas/security_remediation_plan_2026-10-22.md, C2):
+  # 2026-10-22 (see ideas/restic_backups.md and the bcachefs subvolume
+  # fix below, C2):
   # splicing the real f_handle bytes of /data/backups/.c2-canary-test into
   # a valid /data/nixarr wire filehandle and calling open_by_handle_at()
   # from h001 as uid 1000 succeeded and read the canary's contents with
@@ -108,5 +109,34 @@ lib.mkMerge [
       ip saddr { ${lib.concatStringsSep ", " nfsClients} } meta l4proto { tcp, udp } th dport { ${nfsPorts} } accept comment "NFS: h001 only"
     '';
 
+  })
+  ({
+    # C2 (closed): /data/backups must be its own bcachefs subvolume, not a
+    # plain directory on the same filesystem as the /data/nixarr NFS
+    # export root, and must stay 0700 luser:users (not world-readable) so
+    # that even a same-filesystem NFS handle-forge attempt (or an
+    # AUTH_SYS request asserting an arbitrary non-root uid) can't read
+    # fleet host backups. Re-asserted on every boot/activation.
+    systemd.services.ensure-backups-subvolume = {
+      description = "Ensure /data/backups is a bcachefs subvolume";
+      after = [ "data.mount" ];
+      requires = [ "data.mount" ];
+      wantedBy = [ "multi-user.target" ];
+      before = [ "nfs-server.service" ];
+      unitConfig.RequiresMountsFor = "/data";
+      serviceConfig.Type = "oneshot";
+      path = [ pkgs.gawk ];
+      script = ''
+        set -euo pipefail
+        if [ ! -d /data/backups ]; then
+          ${pkgs.bcachefs-tools}/bin/bcachefs subvolume create /data/backups
+        elif ! ${pkgs.bcachefs-tools}/bin/bcachefs subvolume list /data | awk '{print $1}' | grep -qx backups; then
+          echo "ensure-backups-subvolume: /data/backups exists but is not a bcachefs subvolume; refusing to auto-migrate live data, fix manually" >&2
+          exit 1
+        fi
+        chown luser:users /data/backups
+        chmod 0700 /data/backups
+      '';
+    };
   })
 ]

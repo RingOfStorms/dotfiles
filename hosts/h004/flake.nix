@@ -109,7 +109,6 @@
         ++ lib.optionals constants.dataPool.enable [
           ./nfs-data.nix
           ./nfs-data-users-nixarr.nix
-          ./backup-receiver.nix
           ({
             ringofstorms.fleetAgent.extraFilesystems = [ "/data" ];
           })

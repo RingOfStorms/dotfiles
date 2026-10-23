@@ -34,7 +34,6 @@ rec {
     wildcardCertPushPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOaTzdbHJRre5CjJFRJH4V12sNdfnAXF5seRq+AKGfA5 josh@lio";
     upsShutdownPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA0zalrea9G+zd3iosRzuyo40xFKDv3Gjp/mPzHphO+d josh@lio";
     remoteLioBuildsPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKfWqX9cDfe3KdLDWRV6bOPIac97MwIS3Cx+aJzJgHA3 josh@lio";
-    backupToH004PubKey = null;
 
     secretsDir = "/var/lib/secrets_manager_hydrated";
     gitUrl = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
