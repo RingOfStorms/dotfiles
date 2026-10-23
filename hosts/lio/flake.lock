@@ -584,38 +584,6 @@
         "type": "github"
       }
     },
-    "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1775325282,
-        "narHash": "sha256-UsfhWgOJ+SpqyA8D6Pckq5w1n+qVjK51K0rXYQvjqMw=",
-        "owner": "JoosepAlviste",
-        "repo": "nvim-ts-context-commentstring",
-        "rev": "6141a40173c6efa98242dc951ed4b6f892c97027",
-        "type": "github"
-      },
-      "original": {
-        "owner": "JoosepAlviste",
-        "repo": "nvim-ts-context-commentstring",
-        "type": "github"
-      }
-    },
-    "nvim_plugin-MunifTanjim/nui.nvim": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1749392788,
-        "narHash": "sha256-41slmnvt1z7sCxvpiVuFmQ9g7eCaxQi1dDCL3AxSL1A=",
-        "owner": "MunifTanjim",
-        "repo": "nui.nvim",
-        "rev": "de740991c12411b663994b2860f1a4fd0937c130",
-        "type": "github"
-      },
-      "original": {
-        "owner": "MunifTanjim",
-        "repo": "nui.nvim",
-        "type": "github"
-      }
-    },
     "nvim_plugin-Saecki/crates.nvim": {
       "flake": false,
       "locked": {
@@ -824,22 +792,6 @@
         "type": "github"
       }
     },
-    "nvim_plugin-j-hui/fidget.nvim": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1775067099,
-        "narHash": "sha256-LQIqkEf6mH7LViyHKTFXm6y28/tLjxMGDP1oIHq8LkI=",
-        "owner": "j-hui",
-        "repo": "fidget.nvim",
-        "rev": "889e2e96edef4e144965571d46f7a77bcc4d0ddf",
-        "type": "github"
-      },
-      "original": {
-        "owner": "j-hui",
-        "repo": "fidget.nvim",
-        "type": "github"
-      }
-    },
     "nvim_plugin-johmsalas/text-case.nvim": {
       "flake": false,
       "locked": {
@@ -885,38 +837,6 @@
       "original": {
         "owner": "lnc3l0t",
         "repo": "glow.nvim",
-        "type": "github"
-      }
-    },
-    "nvim_plugin-m4xshen/hardtime.nvim": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1757738091,
-        "narHash": "sha256-Jy9ARUHU1ySpSxxoS3hLRjxp5Lqt7juWN5Jnbdo0rg0=",
-        "owner": "m4xshen",
-        "repo": "hardtime.nvim",
-        "rev": "b4e431934af1fe224a3a801f632c008278cb7628",
-        "type": "github"
-      },
-      "original": {
-        "owner": "m4xshen",
-        "repo": "hardtime.nvim",
-        "type": "github"
-      }
-    },
-    "nvim_plugin-mbbill/undotree": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1772947405,
-        "narHash": "sha256-0fSCkozz9UWkkV1PsCCnIimOHsmXw9jLd9/oF9dLjMk=",
-        "owner": "mbbill",
-        "repo": "undotree",
-        "rev": "6fa6b57cda8459e1e4b2ca34df702f55242f4e4d",
-        "type": "github"
-      },
-      "original": {
-        "owner": "mbbill",
-        "repo": "undotree",
         "type": "github"
       }
     },
@@ -1064,22 +984,6 @@
         "type": "github"
       }
     },
-    "nvim_plugin-ron-rs/ron.vim": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1660904719,
-        "narHash": "sha256-8/xJmymtVGVz2avzlamgK1cNflZ3NRL+B3c7xxbI964=",
-        "owner": "ron-rs",
-        "repo": "ron.vim",
-        "rev": "f749e543975a82e8dd9a6e7df9600a1c098ae800",
-        "type": "github"
-      },
-      "original": {
-        "owner": "ron-rs",
-        "repo": "ron.vim",
-        "type": "github"
-      }
-    },
     "nvim_plugin-sindrets/diffview.nvim": {
       "flake": false,
       "locked": {
@@ -1125,22 +1029,6 @@
       "original": {
         "owner": "tpope",
         "repo": "vim-sleuth",
-        "type": "github"
-      }
-    },
-    "nvim_plugin-uga-rosa/ccc.nvim": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1746537659,
-        "narHash": "sha256-3TZ8VmvdgQ9n63m78C3r4OIUkVQHTHBvC24ixBdhTig=",
-        "owner": "uga-rosa",
-        "repo": "ccc.nvim",
-        "rev": "9d1a256e006decc574789dfc7d628ca11644d4c2",
-        "type": "github"
-      },
-      "original": {
-        "owner": "uga-rosa",
-        "repo": "ccc.nvim",
         "type": "github"
       }
     },
@@ -1285,8 +1173,6 @@
     "ros_neovim": {
       "inputs": {
         "nixpkgs": "nixpkgs_9",
-        "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring": "nvim_plugin-JoosepAlviste/nvim-ts-context-commentstring",
-        "nvim_plugin-MunifTanjim/nui.nvim": "nvim_plugin-MunifTanjim/nui.nvim",
         "nvim_plugin-Saecki/crates.nvim": "nvim_plugin-Saecki/crates.nvim",
         "nvim_plugin-b0o/schemastore.nvim": "nvim_plugin-b0o/schemastore.nvim",
         "nvim_plugin-catppuccin/nvim": "nvim_plugin-catppuccin/nvim",
@@ -1300,12 +1186,9 @@
         "nvim_plugin-folke/which-key.nvim": "nvim_plugin-folke/which-key.nvim",
         "nvim_plugin-ggml-org/llama.vim": "nvim_plugin-ggml-org/llama.vim",
         "nvim_plugin-ivov/lisette": "nvim_plugin-ivov/lisette",
-        "nvim_plugin-j-hui/fidget.nvim": "nvim_plugin-j-hui/fidget.nvim",
         "nvim_plugin-johmsalas/text-case.nvim": "nvim_plugin-johmsalas/text-case.nvim",
         "nvim_plugin-lewis6991/gitsigns.nvim": "nvim_plugin-lewis6991/gitsigns.nvim",
         "nvim_plugin-lnc3l0t/glow.nvim": "nvim_plugin-lnc3l0t/glow.nvim",
-        "nvim_plugin-m4xshen/hardtime.nvim": "nvim_plugin-m4xshen/hardtime.nvim",
-        "nvim_plugin-mbbill/undotree": "nvim_plugin-mbbill/undotree",
         "nvim_plugin-mfussenegger/nvim-lint": "nvim_plugin-mfussenegger/nvim-lint",
         "nvim_plugin-mrcjkb/rustaceanvim": "nvim_plugin-mrcjkb/rustaceanvim",
         "nvim_plugin-neovim/nvim-lspconfig": "nvim_plugin-neovim/nvim-lspconfig",
@@ -1315,20 +1198,18 @@
         "nvim_plugin-nvim-treesitter/nvim-treesitter-context": "nvim_plugin-nvim-treesitter/nvim-treesitter-context",
         "nvim_plugin-rafamadriz/friendly-snippets": "nvim_plugin-rafamadriz/friendly-snippets",
         "nvim_plugin-rmagatti/auto-session": "nvim_plugin-rmagatti/auto-session",
-        "nvim_plugin-ron-rs/ron.vim": "nvim_plugin-ron-rs/ron.vim",
         "nvim_plugin-sindrets/diffview.nvim": "nvim_plugin-sindrets/diffview.nvim",
         "nvim_plugin-stevearc/conform.nvim": "nvim_plugin-stevearc/conform.nvim",
         "nvim_plugin-tpope/vim-sleuth": "nvim_plugin-tpope/vim-sleuth",
-        "nvim_plugin-uga-rosa/ccc.nvim": "nvim_plugin-uga-rosa/ccc.nvim",
         "nvim_plugin-windwp/nvim-ts-autotag": "nvim_plugin-windwp/nvim-ts-autotag",
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1792107580,
-        "narHash": "sha256-ttAzmk4s9rG8IsosHU4UJQHdkPoVuLLxojVu9+OOWdI=",
+        "lastModified": 1792733334,
+        "narHash": "sha256-gAgGB/iXmE4GuXW+aHj2VHTmxfZabhU+6WEkcLw8uuk=",
         "ref": "refs/heads/master",
-        "rev": "7bbfa50478a34c326f716e319be1fd0fbf3da205",
-        "revCount": 355,
+        "rev": "60b577b505c1836fc6308ac35b9ca496ce6b476c",
+        "revCount": 357,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/nvim"
       },

@@ -24,10 +24,11 @@ Impermanence (`flakes/impermanence`, `ringofstorms.impermanence` on bcachefs wit
 
 Because all stateful services on `h001` now live in floating containers (`containers/*`) managed by `cnt` (`fleet containers`), `h001` no longer has sprawling `/var/lib/<service>` host state. The only non-container data on `h001` is on the separate `/drives/wd10` disk (`immich/media`, `paperless`, etc.), which stays untouched during a root NVMe re-image.
 
-### Step 0: Prerequisites on `h003`
-1. Enable `ringofstorms.containers.backup` on `h003` (wire `restic_h001_env_2026-10-01` in `hosts/h003/sec-agent.nix` so `cnt move` preflight passes).
-2. Ensure `h003` has enough disk space on `/persist/srv/containers` for the services being evacuated.
-
+### Step 0: Prerequisites on `h003` (see `ideas/resilience.md` §2)
+1. Enable `ringofstorms.containers.privateNetwork.enable = true` in `hosts/h003/containers.nix` (required for `net.private` containers like `sec`, `vaultwarden`, `zitadel`).
+2. Enable `ringofstorms.containers.backup` on `h003` (wire `restic_h001_env_2026-10-01` in `hosts/h003/sec-agent.nix` so `cnt move` preflight passes).
+3. Wire `wildcard-cert-receiver.nix` on `h003` + add `"h003"` to `hosts/h005/wildcard-cert.nix` (`nginx.acl.lan` + `nginx.edge.blockInternal = true`).
+4. Ensure `h003` has enough disk space on `/persist/srv/containers` for the services being evacuated.
 ### Step 1: Evacuate Services to `h003`
 1. Move portable floating containers (`zitadel`, `sec`, `forgejo`, `vaultwarden`, `atuin`, `trilium`, `matrix`, `dawarich`, `life`, `puzzles`, `searx`, `opengist`, `open-webui`, `litellm`, etc.) to `h003` using `cnt move <svc> --to h003`.
    - Note: Services requiring `h001`-only hardware capabilities (`wd10` for `immich`/`paperless`, or `nfs-h004`/`intel-qsv` for `arr` unless temporarily mounted on `h003`) can either be stopped during the maintenance window (`cnt stop <svc>`) after a fresh `fleet-backup` run + local backup on `/drives/wd10`, or temporarily given an NFS mount on `h003`.

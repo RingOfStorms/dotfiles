@@ -66,16 +66,18 @@
 
 `h003` (Ryzen 7 5825U, 32 GB RAM, encrypted NVMe bcachefs + impermanence) was re-imaged on 2026-10-15 as a dedicated secondary floating-container host (`hosts/h003/readme.md`) when `h005` took over routing.
 
-Currently `h003` has `inputs.containers.nixosModules.default` enabled (`hosts/h003/containers.nix`), but it is **missing two pieces** to be a turnkey warm target for `cnt move <svc> --to h003` or `cnt restore <svc> --host h003`:
+Currently `h003` has `inputs.containers.nixosModules.default` enabled (`hosts/h003/containers.nix`), but it is **missing three pieces** to be a turnkey warm target for `cnt move <svc> --to h003` or `cnt restore <svc> --host h003`:
 
-1. **Enable `ringofstorms.containers.backup` on `h003`:**
+1. **Enable `ringofstorms.containers.privateNetwork.enable = true` on `h003`:**
+   - It defaults to `false` (`containers/host-module.nix:496-503`) and `hosts/h003/containers.nix` does not set it, whereas services like `sec`, `vaultwarden`, `zitadel`, and `immich` require the `net.private` (`10.233.1.0/24`) bridge.
+2. **Enable `ringofstorms.containers.backup` on `h003`:**
    - `cnt move` refuses to move a service unless both source and target hosts have `ringofstorms.containers.backup.enable = true` (`ROUTING-PLAN.md` §9.1).
    - Add `restic_h001_env_2026-10-01` to `hosts/h003/sec-agent.nix` with:
      ```nix
      configChanges.ringofstorms.containers.backup.environmentFile = "$SECRET_PATH";
      ```
    - Set `ringofstorms.containers.backup = { enable = true; schedule = "03:00"; };` in `hosts/h003/containers.nix`.
-2. **Receive Wildcard TLS Certs on `h003`:**
+3. **Receive Wildcard TLS Certs on `h003`:**
    - Import `../wildcard-cert-receiver.nix` in `hosts/h003/flake.nix` and add `"h003"` to `hosts/h005/wildcard-cert.nix` push targets so internal HTTPS container vhosts (`nginx.tls.certDir = "/var/lib/fleet-cert/joshuabell.xyz/current"`) work immediately when a service is moved to `h003`.
    - Set `nginx.acl.lan = [ "10.12.14.0/24" ];` and `nginx.edge.blockInternal = true;` in `hosts/h003/containers.nix` to match `h001/floating-containers.nix`.
 

@@ -298,7 +298,8 @@ echo "source data kept as $d"
 // is confirmed down (rolled back, or never touched) and it was running.
 func restartSourceAfterUndo(targetDown, wasRunning bool) bool { return targetDown && wasRunning }
 
-// rollbackFailedMsg: both hosts left stopped; what to do by hand.
+// rollbackFailedMsg: the source is not restarted (stays stopped) and the
+// target may still be running; what to do by hand.
 func rollbackFailedMsg(s Service, from, to string, err error) string {
 	return fmt.Sprintf(`
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
