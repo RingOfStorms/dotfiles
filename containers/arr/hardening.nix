@@ -1,11 +1,12 @@
-# C1: the container runs with privateUsers = "identity" (its own user
-# namespace) and keeps only CAP_NET_ADMIN (flake.nix), which the firewall
-# needs to load arr-lo-guard below. The VPN (VPN-Confinement/wg) and
-# torrents are gone. No app needs NET_ADMIN. jellyfin, sonarr, radarr
-# and recyclarr already get an empty bounding set and
-# NoNewPrivileges from their NixOS modules; these are the units that ran with
-# the full inherited set. No ProtectSystem=strict: they write state and the
-# NFS media tree.
+# C1: the container runs with privateUsers = "identity", so systemd-nspawn
+# retains its default guest-userns capability set (incl. userns-scoped
+# CAP_SYS_ADMIN for the guest systemd's own mounts/sandboxing) plus
+# CAP_NET_ADMIN (flake.nix), which the firewall needs to load arr-lo-guard
+# below, minus CAP_NET_RAW (dropped in flake.nix: the VPN (VPN-Confinement/wg)
+# and torrents are gone, and no app needs raw sockets). jellyfin, sonarr,
+# radarr and recyclarr already get an empty bounding set and NoNewPrivileges
+# from their NixOS modules; the units below get the same via `noCaps`. No
+# ProtectSystem=strict: they write state and the NFS media tree.
 { lib, ... }:
 let
   # Loopback guard (C1). The *arr APIs trust local addresses
@@ -116,6 +117,7 @@ in
         "kavita"
         "prowlarr"
         "seerr"
+        "shelfmark"
         "media-integrity-scan"
       ]
       (_: {

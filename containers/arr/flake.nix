@@ -41,10 +41,15 @@
           # runs the guest in its own user namespace (C1): container root is
           # not host root and the capabilities below are not host capabilities.
           privateUsers = "identity";
-          # CAP_NET_ADMIN only: the guest firewall loads arr-lo-guard
-          # (hardening.nix) with iptables/ip6tables in the guest netns. Held
-          # only in the guest user namespace (identity, above).
+          # With privateUsers = "identity", systemd-nspawn retains its
+          # default guest-userns capability set (including userns-scoped
+          # CAP_SYS_ADMIN, needed by the guest's own systemd PID 1 to mount
+          # /proc, /tmp, cgroups, and run unit sandboxing like PrivateTmp /
+          # RestrictNamespaces), plus CAP_NET_ADMIN (below, for
+          # arr-lo-guard), minus CAP_NET_RAW (dropped below: no VPN/ping
+          # checks remain in this container, so nothing needs raw sockets).
           capabilities = [ "CAP_NET_ADMIN" ];
+          dropCapabilities = [ "CAP_NET_RAW" ];
           devices = [ "/dev/dri" ];
           binds = [
             { host = constants.services.nixarr.mediaDir; }

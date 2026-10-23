@@ -652,6 +652,8 @@ in
   #   devices                device nodes to pass through, e.g. [ "/dev/dri" ]
   #                          (bound and allowed rw in the container's cgroup)
   #   capabilities           extra nspawn capabilities, e.g. [ "CAP_NET_ADMIN" ]
+  #   dropCapabilities       nspawn capabilities to drop from the default set,
+  #                          e.g. [ "CAP_NET_RAW" ]
   mkNixosContainer =
     {
       service,
@@ -663,6 +665,7 @@ in
       binds ? [ ],
       devices ? [ ],
       capabilities ? [ ],
+      dropCapabilities ? [ ],
       extraContainerConfig ? { },
     }:
     let
@@ -709,7 +712,8 @@ in
           map (b: "--bind=${b.host}:${b.container}${idmap}") (persistList svc)
           ++ map bindFlag binds
           ++ map (d: "--bind=${d}") devices
-          ++ map (c: "--capability=${c}") capabilities;
+          ++ map (c: "--capability=${c}") capabilities
+          ++ map (c: "--drop-capability=${c}") dropCapabilities;
         allowedDevices = map (d: {
           node = if d == "/dev/dri" then "char-drm" else d;
           modifier = "rw";
