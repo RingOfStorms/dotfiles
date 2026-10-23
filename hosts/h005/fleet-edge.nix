@@ -66,7 +66,6 @@ in
       (arr "Bazarr" "https://bazarr.${domain}" "bazarr" "Subtitle Automation" "tailnet")
       (arr "Prowlarr" "https://prowlarr.${domain}" "prowlarr" "Indexer Manager" "tailnet")
       (arr "SABnzbd" "https://sabnzbd.${domain}" "sabnzbd" "Usenet Downloader" "tailnet")
-      (arr "Transmission" "https://transmission.${domain}" "transmission" "Torrent Downloader" "tailnet")
       (on "h001" (
         arr "Shelfmark" "https://shelfmark.${domain}" "shelfmark" "Books & Audiobooks" "tailnet"
       ))

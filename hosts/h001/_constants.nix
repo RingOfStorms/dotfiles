@@ -76,7 +76,6 @@
       jellyseerrPort = 5055;
       shelfmarkPort = 8087;
       kavitaPort = 5000;
-      transmissionPeerPort = 51820;
       mediaDir = "/nfs/h002/nixarr/media";
       stateDir = "/var/lib/nixarr/state";
       jellyfinDomain = "jellyfin.joshuabell.xyz";

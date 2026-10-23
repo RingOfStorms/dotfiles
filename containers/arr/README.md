@@ -1,7 +1,7 @@
 # arr: the h001 media stack as one container
 
 nixarr (jellyfin, seerr, sonarr, radarr, prowlarr, bazarr, sabnzbd,
-transmission in the `wg` VPN netns, shelfmark, recyclarr),
+shelfmark, recyclarr),
 kavita and media-integrity in one nixos-kind container on h001.
 
 ```
@@ -22,16 +22,17 @@ cnt status arr
   on 25.11 (issue #40).
 - Private network (`net.index = 16`, 10.233.16.2). Every UI is a route in
   `service.nix`: jellyfin/media public, books/shelfmark and the *arr UIs
-  (sonarr, radarr, prowlarr, bazarr, sabnzbd, transmission) tailnet, no
-  LAN; jellyfin `:8096` direct is a tailnet tcp route. The guest owns the
-  `wg` VPN netns; `127.0.0.1:9091` in the guest forwards into it.
+  (sonarr, radarr, prowlarr, bazarr, sabnzbd) tailnet, no
+  LAN; jellyfin `:8096` direct is a tailnet tcp route. No VPN, no torrents
+  (transmission and VPN-Confinement were removed; usenet only).
   `hosts/h001/mods/arr-nginx.nix` keeps only `/media-health/`.
-- `privateUsers = "no"`: uids are host uids (NFS + h004 check raw uids).
+- `privateUsers = "identity"`: uids are host uids 1:1 (NFS + h004 check raw
+  uids), but guest root is not host root.
   The uids/gids that own migrated state are pinned in `container.nix`.
 - Binds: `/nfs/h002/nixarr/media` (rw), `/var/lib/secrets_manager_hydrated`
-  (ro, the wg conf + api keys), `/dev/dri`, `/dev/net/tun`.
-  Extra caps: NET_ADMIN, NET_RAW, SYS_ADMIN (VPN-Confinement builds the netns,
-  bridge and nat rules inside the guest netns).
+  (ro, the api keys), `/dev/dri`.
+  Extra caps: NET_ADMIN only (the guest firewall loads `arr-lo-guard`,
+  `hardening.nix`).
 - Persist (`/srv/containers/arr/<key>`, backed up by `cnt backup arr`):
   `nixarr` (`/var/lib/nixarr`, ~8 GB), `kavita`, `media-integrity`,
   `sabnzbd-secrets`, `recyclarr`, `nixos`.

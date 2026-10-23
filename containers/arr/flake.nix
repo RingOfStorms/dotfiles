@@ -41,24 +41,13 @@
           # runs the guest in its own user namespace (C1): container root is
           # not host root and the capabilities below are not host capabilities.
           privateUsers = "identity";
-          # VPN-Confinement builds the `wg` netns, bridge, wireguard link and
-          # nat rules inside the guest netns; `ip netns` needs mounts. Held
+          # CAP_NET_ADMIN only: the guest firewall loads arr-lo-guard
+          # (hardening.nix) with iptables/ip6tables in the guest netns. Held
           # only in the guest user namespace (identity, above).
-          capabilities = [
-            "CAP_NET_ADMIN"
-            "CAP_NET_RAW"
-            "CAP_SYS_ADMIN"
-          ];
-          devices = [
-            "/dev/dri"
-            "/dev/net/tun"
-          ];
+          capabilities = [ "CAP_NET_ADMIN" ];
+          devices = [ "/dev/dri" ];
           binds = [
             { host = constants.services.nixarr.mediaDir; }
-            {
-              host = "${fleet.global.secretsDir}/us_chi_wg_2026-03-15";
-              readOnly = true;
-            }
             {
               host = "${fleet.global.secretsDir}/sabnzbd_api_key_2026-07-15";
               readOnly = true;

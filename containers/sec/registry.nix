@@ -161,16 +161,6 @@
       }
     ];
   };
-  "machines/high-trust/us_chi_wg_2026-03-15" = {
-    fields = [ "value" ];
-    description = "WireGuard config for US-Chicago exit node (nixarr VPN).";
-    access = [
-      {
-        type = "role";
-        value = "device_high_trust";
-      }
-    ];
-  };
   "machines/high-trust/oauth2_proxy_key_file_2026-03-15" = {
     fields = [ "value" ];
     description = "oauth2-proxy session key file.";

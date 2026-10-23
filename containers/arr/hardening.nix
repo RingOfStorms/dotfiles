@@ -1,23 +1,22 @@
-# C1: the container keeps CAP_SYS_ADMIN/NET_ADMIN (flake.nix) for
-# VPN-Confinement (wg.service, `ip netns`), and its root is host root
-# (privateUsers = "no"). No app needs any of that. jellyfin, sonarr, radarr,
-# transmission and recyclarr already get an empty bounding set and
+# C1: the container runs with privateUsers = "identity" (its own user
+# namespace) and keeps only CAP_NET_ADMIN (flake.nix), which the firewall
+# needs to load arr-lo-guard below. The VPN (VPN-Confinement/wg) and
+# torrents are gone. No app needs NET_ADMIN. jellyfin, sonarr, radarr
+# and recyclarr already get an empty bounding set and
 # NoNewPrivileges from their NixOS modules; these are the units that ran with
 # the full inherited set. No ProtectSystem=strict: they write state and the
 # NFS media tree.
 { lib, ... }:
 let
   # Loopback guard (C1). The *arr APIs trust local addresses
-  # (DisabledForLocalAddresses), transmission has no rpc auth and sabnzbd
-  # whitelists 10.233/16, so any process in the guest could drive them.
-  # New TCP connections from this guest to its own addresses (127/8, ::1,
-  # 10.233.16.2, wg-br) or to the wg netns (192.168.15.0/24) on these ports
+  # (DisabledForLocalAddresses) and sabnzbd whitelists 10.233/16, so any
+  # process in the guest could drive them. New TCP connections from this
+  # guest to its own addresses (127/8, ::1, 10.233.16.2) on these ports
   # are allowed only for the listed uids; everyone else (jellyfin, kavita,
   # shelfmark, media-integrity, and seerr outside 8989/7878) gets a reset.
   # Host nginx arrives via the veth (INPUT), so it is unaffected.
   # uids: 0 root (*-api oneshots), 38 sabnzbd, 232 bazarr, 262 seerr,
-  # 269 recyclarr, 274 sonarr, 275 radarr, 293 prowlarr,
-  # 960 transmission-rpc-fwd (container.nix).
+  # 269 recyclarr, 274 sonarr, 275 radarr, 293 prowlarr.
   guarded = {
     "8989" = [
       0
@@ -51,12 +50,6 @@ let
       274
       275
     ]; # sabnzbd
-    "9091" = [
-      0
-      274
-      275
-      960
-    ]; # transmission rpc (socat + wg netns)
   };
   chain = "arr-lo-guard";
   rulesFor =
@@ -110,11 +103,9 @@ in
   networking.firewall.extraCommands =
     setup "iptables" [
       "-m addrtype --dst-type LOCAL"
-      "-d 192.168.15.0/24"
     ]
     + setup "ip6tables" [
       "-m addrtype --dst-type LOCAL"
-      "-d fd93:9701:1d00::/64"
     ];
   networking.firewall.extraStopCommands = teardown "iptables" + teardown "ip6tables";
 
@@ -125,7 +116,6 @@ in
         "kavita"
         "prowlarr"
         "seerr"
-        "transmission-rpc-forward"
         "media-integrity-scan"
       ]
       (_: {

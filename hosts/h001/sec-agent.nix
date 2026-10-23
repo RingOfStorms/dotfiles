@@ -23,12 +23,6 @@ import ../sec-agent.nix {
       hardDepend = [ "atuin-autologin" ];
     };
 
-    # Read by the arr container (containers/arr/container.nix) through the
-    # secrets bind mount.
-    us_chi_wg_2026-03-15 = {
-      remotePath = "machines/high-trust/us_chi_wg_2026-03-15";
-    };
-
     openwebui_env_2026-03-15 = {
       remotePath = "machines/high-trust/openwebui_env_2026-03-15";
       softDepend = [ "container@open-webui" ];

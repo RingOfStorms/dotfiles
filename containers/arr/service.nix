@@ -1,6 +1,5 @@
 # The h001 media stack (nixarr: jellyfin, sonarr, radarr, prowlarr, bazarr,
-# sabnzbd, transmission behind the wg VPN netns, seerr, shelfmark,
-# recyclarr) plus kavita and the media-integrity scanner,
+# sabnzbd, seerr, shelfmark, recyclarr) plus kavita and the media-integrity scanner,
 # as one container: `containers stop arr` / `start arr` takes it all down/up.
 # See README.md (cutover runbook, NAS guard).
 {
@@ -22,9 +21,8 @@
     recyclarr = "/var/lib/recyclarr";
     nixos = "/var/lib/nixos";
   };
-  # Private network (ROUTING-PLAN §8 step 5): guest 10.233.16.2. The guest
-  # owns the `wg` VPN netns (transmission); 51820 is reached over the VPN
-  # tunnel only. No raw ports: every UI is a route below.
+  # Private network (ROUTING-PLAN §8 step 5): guest 10.233.16.2.
+  # No raw ports: every UI is a route below.
   net = {
     private = true;
     index = 16;
@@ -101,14 +99,6 @@
       auth = "none";
       group = "Media Automation";
       maxBody = "100m"; # nzb uploads
-    };
-    transmission = {
-      name = "transmission";
-      port = 9091; # guest DNATs it into the wg netns (192.168.15.1)
-      exposure = "tailnet";
-      auth = "none";
-      group = "Media Automation";
-      maxBody = "100m"; # .torrent uploads
     };
   };
   # /media-health/ on h001.net stays in hosts/h001/mods/arr-nginx.nix (a
