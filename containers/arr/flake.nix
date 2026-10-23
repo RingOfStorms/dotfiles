@@ -37,10 +37,13 @@
           # Network: service.nix net (private, 10.233.16.2). The apps share
           # the guest loopback, so stored URLs (localhost:8989 etc.) still work.
           # NFS can't be idmapped and h004 checks raw uids; existing state is
-          # owned by host uids. Container root is host root.
-          privateUsers = "no";
+          # owned by host uids. "identity" keeps uids 1:1 (plain binds) but
+          # runs the guest in its own user namespace (C1): container root is
+          # not host root and the capabilities below are not host capabilities.
+          privateUsers = "identity";
           # VPN-Confinement builds the `wg` netns, bridge, wireguard link and
-          # nat rules inside the guest netns; `ip netns` needs mounts.
+          # nat rules inside the guest netns; `ip netns` needs mounts. Held
+          # only in the guest user namespace (identity, above).
           capabilities = [
             "CAP_NET_ADMIN"
             "CAP_NET_RAW"

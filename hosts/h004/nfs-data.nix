@@ -16,11 +16,17 @@ let
   # 10.12.14.184:/ at /nfs/h002/nixarr, so the /nfs/h002/nixarr/media
   # paths stored in the arr apps don't change. The guard sentinel is now
   # /data/nixarr/.h004-online (created below).
-  # Caveat: /data/nixarr is a directory on the same bcachefs filesystem, and
-  # no_subtree_check + no_root_squash means a malicious root client that
-  # forges file handles could still get outside it. That is far harder than
-  # mounting `/` and reading backups/, but the real boundary is backups on
-  # another filesystem (or exported subvolumes).
+  # C2 (closed): root_squash is now enabled below. /data/backups was moved
+  # into its own bcachefs subvolume (mode 0700 luser:users) and is not part
+  # of this export at all, so a root client on h001 forging a raw NFS
+  # handle can no longer reach it even in principle (wrong fsid), and even
+  # a legitimate handle inside /data/nixarr can no longer write/chown as
+  # uid 0 thanks to root_squash (client root is mapped to the anonymous
+  # uid/gid, default nobody:nogroup). The `arr` app directories under
+  # /data/nixarr/media/{library,...} are pre-created with correct
+  # root:media ownership directly on h004 (hosts/h004/nfs-data-users-nixarr.nix),
+  # not by the NFS client, so arr's own tmpfiles rules for those paths only
+  # need to find them already present/correct, not chown them as root.
   exportRoot = nfs.exportRoot;
 
   nfsClients = [
@@ -44,7 +50,7 @@ lib.mkMerge [
       # root filesystem to media clients.
       exports = ''
         ${exportRoot} ${
-          lib.concatMapStringsSep " " (ip: "${ip}(rw,sync,no_subtree_check,no_root_squash,fsid=0)") nfsClients
+          lib.concatMapStringsSep " " (ip: "${ip}(rw,sync,no_subtree_check,root_squash,fsid=0)") nfsClients
         }
       '';
     };

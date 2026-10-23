@@ -639,6 +639,11 @@ in
   #                          Needed when the container writes to NFS (idmapped
   #                          mounts don't work there and the NAS checks raw
   #                          uids). Container root is host root; pin uids.
+  #   privateUsers = "identity"  user namespace mapping uids 0..65535 1:1 to
+  #                          the host. Files/NFS behave as with "no" (plain
+  #                          binds, pin uids), but nspawn capabilities (even
+  #                          CAP_SYS_ADMIN) only count inside the container's
+  #                          own user namespace, never in the host's.
   #   guestNixpkgs           evaluate the guest with another nixpkgs (e.g.
   #                          26.05) while extra-container's host-side eval
   #                          stays on the flake's nixpkgs (25.11, issue #40).
@@ -678,7 +683,9 @@ in
         builtins.attrValues svc.routes
       );
       portsOf = proto: map (r: r.port) (builtins.filter (r: r.proto == proto) exposed);
-      idmap = if privateUsers == "no" then "" else ":idmap";
+      # "no" and "identity" see host uids 1:1: plain binds (works on NFS,
+      # which has no FS_ALLOW_IDMAP).
+      idmap = if privateUsers == "no" || privateUsers == "identity" then "" else ":idmap";
       bindFlag =
         b: "--bind${if b.readOnly or false then "-ro" else ""}=${b.host}:${b.container or b.host}${idmap}";
       # Passed to the guest (specialArgs.fleetNet): what to bind, where the host is.
