@@ -53,7 +53,15 @@
           binds = [
             { host = constants.services.nixarr.mediaDir; }
             {
-              host = fleet.global.secretsDir;
+              host = "${fleet.global.secretsDir}/us_chi_wg_2026-03-15";
+              readOnly = true;
+            }
+            {
+              host = "${fleet.global.secretsDir}/sabnzbd_api_key_2026-07-15";
+              readOnly = true;
+            }
+            {
+              host = "${fleet.global.secretsDir}/nzbgeek_api_key_2026-07-15";
               readOnly = true;
             }
           ];

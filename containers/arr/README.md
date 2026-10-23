@@ -56,7 +56,7 @@ nft add table inet t; nft add chain inet t o '{type filter hook output priority 
 nft add rule inet t o ip daddr 10.12.14.184 drop   # arr goes down (up to ~100 s)
 nft delete table inet t                            # arr back within ~90 s
 ```
-Also with the sentinel renamed on h004 (`mv /data/.h004-online{,.x}`), and
+Also with the sentinel renamed on h004 (`mv /data/nixarr/.h004-online{,.x}`), and
 after `cnt stop arr` (arr must stay down through the cycle).
 
 The cutover from bare-metal h001 was done 2026-10-12 (git history has the

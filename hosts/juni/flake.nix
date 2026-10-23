@@ -238,7 +238,6 @@
           )
           ./nono.nix
 
-
           ./hardware-configuration.nix
           ./firewall.nix
           ./lm-studio.nix

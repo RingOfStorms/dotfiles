@@ -31,9 +31,11 @@
 
   services.zitadel = {
     enable = true;
-    # zitadel reads this path directly as its own user: keep the file 0444
-    # (as on h001 today) or chown it to the guest zitadel user.
+    # Masterkey tightened to 0400 owned by zitadel:zitadel (finding M7):
+    # only the zitadel service user can read it inside the container, not
+    # every other process sharing the container's root.
     masterKeyFile = "/var/lib/zitadel-keys/masterkey";
+
     settings = {
       Port = 8085;
       Database.postgres = {
@@ -72,6 +74,14 @@
       LoginPolicy.AllowRegister = false;
     };
   };
+
+  # Finding M7: tighten masterkey from a previous world-readable 0444 to
+  # 0400 owned by zitadel:zitadel. tmpfiles runs as root before the
+  # zitadel service starts, so this re-asserts ownership/mode on every
+  # boot even if the file was restored from backup with different perms.
+  systemd.tmpfiles.rules = [
+    "z /var/lib/zitadel-keys/masterkey 0400 zitadel zitadel - -"
+  ];
 
   systemd.services.zitadel = {
     requires = [ "postgresql.service" ];

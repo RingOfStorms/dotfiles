@@ -17,6 +17,8 @@
     private = true;
     index = 2;
   };
+  # Finding M2: puzzles uses local auth only, no external APIs needed.
+  internet = false;
 
   # maxBody 500m = h001's http-level client_max_body_size, which the old
   # vhost (no own limit) inherited.

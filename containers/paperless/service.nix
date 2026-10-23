@@ -27,6 +27,9 @@
     private = true;
     index = 9;
   };
+  # Finding M2: paperless runs local Tika/Gotenberg/classifier; no outbound
+  # internet needed.
+  internet = false;
 
   routes.web = {
     group = "Productivity";

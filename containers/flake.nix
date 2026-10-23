@@ -51,7 +51,9 @@
         { pkgs, ... }:
         {
           imports = [ ../flakes/fleet-agent/agent-module.nix ];
-          ringofstorms.fleetAgent.package = nixpkgs.lib.mkDefault (pkgs.callPackage ../flakes/fleet-agent/default.nix { });
+          ringofstorms.fleetAgent.package = nixpkgs.lib.mkDefault (
+            pkgs.callPackage ../flakes/fleet-agent/default.nix { }
+          );
         };
 
       # Hosts import this once: inputs.containers.nixosModules.default

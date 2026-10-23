@@ -30,7 +30,7 @@
       mountdPort = 892;
       lockdPort = 32803;
       statdPort = 662;
-      exportRoot = "/data";
+      exportRoot = "/data/nixarr"; # hosts/h004/nfs-data.nix (C2)
     };
 
     pinchflat = {

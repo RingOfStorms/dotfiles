@@ -7,6 +7,11 @@
   inputs,
   constants,
   role,
+  # Fleet SSH identities (nix2nix root-to-every-host, nix2github,
+  # nix2gitforgejo). Off on hosts that never initiate fleet SSH or git pushes
+  # (o002, the public edge): a compromise there must not yield root on the
+  # rest of the fleet.
+  includeFleetSshKeys ? true,
   extraSecrets ? { },
   secretsDir ? "/var/lib/secrets_manager_hydrated",
 }:
@@ -59,7 +64,7 @@ let
       configChanges.services.tailscale.authKeyFile = "$SECRET_PATH";
     };
   }
-  // lib.optionalAttrs isHighTrust {
+  // lib.optionalAttrs (isHighTrust && includeFleetSshKeys) {
     "nix2nix_2026-03-15" = {
       remotePath = "machines/high-trust/nix2nix_2026-03-15";
       inherit group;
@@ -90,7 +95,8 @@ let
       ensureNewline = true;
       hmChanges.programs.ssh.settings."git.joshuabell.xyz".IdentityFile = "$SECRET_PATH";
     };
-
+  }
+  // lib.optionalAttrs isHighTrust {
     "github_read_token_2026-03-15" = {
       remotePath = "machines/high-trust/github_read_token_2026-03-15";
       configChanges.nix.extraOptions = "!include $SECRET_PATH";

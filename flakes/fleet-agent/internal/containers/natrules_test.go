@@ -18,7 +18,8 @@ func natRules(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return strings.ReplaceAll(string(b), "@EDGE4@", "100.64.0.5, 0.0.0.0")
+	s := strings.ReplaceAll(string(b), "@EDGE4@", "100.64.0.5, 0.0.0.0")
+	return strings.ReplaceAll(s, "@LAN4@", "10.12.14.0/24, 0.0.0.0/32")
 }
 
 func TestNatRulesGuards(t *testing.T) {
@@ -27,6 +28,7 @@ func TestNatRulesGuards(t *testing.T) {
 		`fib daddr type local jump tailnet`,
 		`iifname "tailscale0" ip saddr 100.64.0.0/10 ip saddr != @edge jump tailnet-peer`,
 		`iifname . ip daddr . meta l4proto . th dport @uses jump tailnet-guest`,
+		`iifname != "ve-*" iifname != "podman*" fib daddr type local dnat ip to meta l4proto . th dport map @routes`,
 	} {
 		if !strings.Contains(r, want) {
 			t.Errorf("missing guard %q", want)
@@ -71,6 +73,7 @@ func TestNatRulesLoad(t *testing.T) {
 		"add element ip fleet-net-nat routes_at { 100.64.0.13 . tcp . 8090 : 10.233.12.2 }\n" +
 		"add element ip fleet-net-nat routes_from { 100.64.0.1 . 100.64.0.13 . tcp . 5432 : 10.233.15.2 }\n" +
 		"add element ip fleet-net-nat routes { tcp . 3032 : 10.233.11.2 }\n" +
+		"add element ip fleet-net-nat routes_lan { tcp . 25565 : 10.233.11.2 }\n" +
 		"add element ip fleet-net-nat uses { \"ve-x\" . 100.64.0.13 . tcp . 8090 }\n"
 	if err := os.WriteFile(f, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -97,5 +100,26 @@ func TestNatRulesTailnetFallsThrough(t *testing.T) {
 	j, p := strings.Index(pre, "jump tailnet"), strings.Index(pre, "map @routes")
 	if j < 0 || p < 0 || j > p {
 		t.Fatalf("prerouting must jump tailnet, then fall through to @routes:\n%s", pre)
+	}
+}
+
+// H4: lan tcp/udp routes are not in the any-interface @routes; they match
+// only LAN sources (not tailscale0, not guests) in prerouting, and real
+// tailnet peers behind the tailnet guards.
+func TestNatRulesLanScoped(t *testing.T) {
+	r := natRules(t)
+	pre := between(r, "chain prerouting {", "}")
+	want := `iifname != "ve-*" iifname != "podman*" iifname != "tailscale0" ip saddr @lan_src fib daddr type local dnat ip to meta l4proto . th dport map @routes_lan`
+	if !strings.Contains(pre, want) {
+		t.Fatalf("prerouting lacks the scoped lan rule:\n%s", pre)
+	}
+	if strings.Count(pre, "@routes_lan") != 1 {
+		t.Fatalf("@routes_lan must only appear behind the lan_src guard in prerouting:\n%s", pre)
+	}
+	if !strings.Contains(between(r, "chain tailnet-peer {", "}"), "map @routes_lan") {
+		t.Fatalf("tailnet peers should still reach lan routes")
+	}
+	if strings.Contains(between(r, "chain tailnet-guest {", "}"), "@routes_lan") {
+		t.Fatalf("guests must not reach lan routes via the host")
 	}
 }

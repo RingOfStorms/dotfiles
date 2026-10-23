@@ -91,6 +91,8 @@
           (import ../../sec-agent.nix {
             inherit inputs constants;
             role = "machines-hightrust";
+            # Public edge: never SSHes into fleet hosts or pushes to git.
+            includeFleetSshKeys = false;
           })
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.backup

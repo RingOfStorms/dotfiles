@@ -105,6 +105,9 @@ in
     locations."/" = {
       proxyPass = "http://${overlayIp}:${toString port}";
       extraConfig = ''
+        # o002 (public edge) counts as the internet
+        deny 100.64.0.5;
+        deny fd7a:115c:a1e0::5;
         allow 100.64.0.0/10;
         allow fd7a:115c:a1e0::/48;
         deny all;

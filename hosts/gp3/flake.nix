@@ -122,7 +122,6 @@
 
           (import ./sec-agent.nix { inherit inputs constants; })
 
-
           ./hardware-configuration.nix
           ./firewall.nix
           (import ./impermanence.nix {

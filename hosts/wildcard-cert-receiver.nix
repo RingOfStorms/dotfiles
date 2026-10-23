@@ -117,10 +117,24 @@ in
       sslCertificateKey = "${current}/key.pem";
     };
   };
+  options.fleet.wildcardCertPushPubKey = lib.mkOption {
+    type = lib.types.nullOr lib.types.str;
+    default = null;
+    description = ''
+      Dedicated SSH public key for h005's wildcard-push
+      (hosts/h005/wildcard-cert.nix), restricted to fleet-cert-receive.
+      Set this (instead of relying on the shared nix2nix root key) once a
+      dedicated `wildcard_push` key exists in sec, so a compromise of this
+      narrow command can never be used for anything but pushing a cert pair.
+    '';
+  };
 
   config = {
     environment.systemPackages = [ receive ];
     systemd.tmpfiles.rules = [ "d ${dir} 0750 root nginx -" ];
+    users.users.root.openssh.authorizedKeys.keys =
+      lib.optional (config.fleet.wildcardCertPushPubKey != null)
+        ''command="/run/current-system/sw/bin/fleet-cert-receive",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-user-rc ${config.fleet.wildcardCertPushPubKey}'';
     # One-time migration of the flat pre-versioning layout. It runs during
     # activation, before nginx is reloaded with the current/ paths. The flat
     # files stay so an older generation still finds them.

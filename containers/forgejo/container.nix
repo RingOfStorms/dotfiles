@@ -69,7 +69,7 @@
       };
       migrations = {
         ALLOWED_DOMAINS = "*.github.com,github.com,codeberg.org,*.codeberg.org";
-        ALLOW_LOCALNETWORKS = true;
+        ALLOW_LOCALNETWORKS = false;
       };
       # Map file extensions to Chroma lexers for syntax highlighting.
       # Lisette (.lis) has no Chroma lexer; its syntax is Rust-derived

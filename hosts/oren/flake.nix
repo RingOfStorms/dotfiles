@@ -164,7 +164,6 @@
           # explicit consumer paths below point there as well.
           (import ./sec-agent.nix { inherit inputs constants; })
 
-
           ./hardware-configuration.nix
           ./firewall.nix
           ./nono.nix

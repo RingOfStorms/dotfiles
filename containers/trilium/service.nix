@@ -24,6 +24,9 @@
     private = true;
     index = 4;
   };
+  # Finding M2: trilium auth is via the fleet oauth2-proxy on h005; the
+  # guest itself makes no outbound calls.
+  internet = false;
 
   routes.web = {
     port = 9111;

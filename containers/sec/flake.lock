@@ -142,6 +142,7 @@
         "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/secrets_manager.git"
       },
       "original": {
+        "rev": "72a1e3b7080d7f4fa22bbc03787755393d503721",
         "type": "git",
         "url": "ssh://git@git.joshuabell.xyz:3032/ringofstorms/secrets_manager.git"
       }

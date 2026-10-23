@@ -29,19 +29,21 @@
     privateNetwork.enable = true;
     # Checked by `containers deploy/move` against service.nix `requires`.
     capabilities = [
-      "nfs-h004" # /nfs/h002 autofs mount of the h004 NAS (path name kept: stored in arr app state)
+      "nfs-h004" # /nfs/h002/nixarr autofs mount of the h004 NAS (path name kept: stored in arr app state)
       "intel-qsv" # /dev/dri, 11th gen iGPU (hardware-transcoding.nix)
       "wd10" # /drives/wd10 local 10T ext4 (immich, paperless media)
     ];
     # The media stack only runs while the NAS is reachable: take h004 down
     # and `arr` stops within ~a minute; bring it back and the guard starts
     # `arr` again (unless it was stopped with `containers stop arr`).
-    # Create the sentinel once on h004: touch /data/.h004-online
+    # h004 creates the sentinel (/data/nixarr/.h004-online) whenever its NFS
+    # server starts (hosts/h004/nfs-data.nix). /nfs/h002/nixarr is the autofs
+    # mount of h004's only export (C2: /data/nixarr, not all of /data).
     guards.h004 = {
       mounts = [
         {
-          path = "/nfs/h002";
-          sentinel = "/nfs/h002/.h004-online";
+          path = "/nfs/h002/nixarr";
+          sentinel = "/nfs/h002/nixarr/.h004-online";
         }
       ];
       units.${constants.services.nixarr.containerName} =

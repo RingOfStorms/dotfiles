@@ -18,7 +18,7 @@
   # time. http://<host>:8082/
   tcpPorts = [ 8082 ];
   podman = {
-    image = "docker.io/library/nginx:1.29-alpine";
+    image = "docker.io/library/nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de";
     ports = [ "0.0.0.0:8082:80" ];
   };
 }

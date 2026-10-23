@@ -88,6 +88,8 @@ let
   #   <tcp|udp> <port>                    open on every interface (temp-ports)
   #   <tcp|udp> <port> dnat <guest ipv4>  private-network route: DNAT host
   #                                       port -> guest (fleet-net-nat @routes)
+  #   <tcp|udp> <port> dnat <guest ipv4> lan   lan route: only from nginx.acl.lan
+  #                                       sources and tailnet peers (@routes_lan)
   #   <tcp|udp> <port> dnat <guest ipv4> <host ipv4>   same, only for that
   #                                       destination (tailnet routes: overlay IP,
   #                                       fleet-net-nat @routes_at)
@@ -96,7 +98,7 @@ let
   #   guest <ve-iface>                    net.private guest (isolated, fleet-net @guests)
   #   noinet <ve-iface>                   private guest with internet = false
   #   allow <ve-iface> <ipv4> <tcp|udp> <port>   net.uses / net.egress exception
-  # @routes, @routes_at, @routes_from, @guests, @noinet and @egress are flushed and refilled on every
+  # @routes, @routes_lan, @routes_at, @routes_from, @guests, @noinet and @egress are flushed and refilled on every
   # run, so a redeploy or a removed ports file drops stale entries.
   applyPorts = pkgs.writeShellScript "fleet-containers-apply-ports" ''
     set -u
@@ -106,6 +108,7 @@ let
     if $nft list table ip fleet-net-nat >/dev/null 2>&1; then
       fleetnet=1
       $nft flush map ip fleet-net-nat routes
+      $nft flush map ip fleet-net-nat routes_lan
       $nft flush map ip fleet-net-nat routes_at
       $nft flush map ip fleet-net-nat routes_from
       $nft flush set ip fleet-net-nat uses
@@ -149,6 +152,11 @@ let
           # is shared, e.g. with agnos).
           $nft delete element inet nixos-fw temp-ports "{ $proto . $port }" 2>/dev/null || true
           if [ "$fleetnet" = 1 ]; then
+            if [ "''${rest:-}" = lan ]; then
+              $nft add element ip fleet-net-nat routes_lan "{ $proto . $port : $ip }" \
+                || echo "containers: could not DNAT lan $proto/$port to $ip (from $f)" >&2
+              continue
+            fi
             if [ -n "''${rest:-}" ]; then
               read -r at src extra <<< "$rest"
               case "$at" in ""|*[!0-9.]*) echo "containers: bad dnat address '$at' (from $f)" >&2; continue ;; esac
@@ -415,11 +423,13 @@ in
       };
       blockInternal = lib.mkOption {
         type = lib.types.bool;
-        default = false;
+        default = true;
         description = ''
           Drop edge peers on the internal :80/:443 listener (generated vhosts
           return 444 when $fleet_edge_peer is 1). Turn on only once the edge
           proxies to the edge listener, or public names break.
+          On by default: o002 proxies all public routes to the edge listener
+          (ROUTING-PLAN §8 step 3).
         '';
       };
     };
@@ -1059,10 +1069,14 @@ in
           # range, not the edge); see fleet-net-nat.nft.
           content =
             builtins.replaceStrings
-              [ "@EDGE4@" ]
+              [ "@EDGE4@" "@LAN4@" ]
               [
                 (lib.concatStringsSep ", " (
                   builtins.filter (p: !(lib.hasInfix ":" p)) cfg.nginx.edge.peers ++ [ "0.0.0.0" ]
+                ))
+                # lan tcp/udp routes (H4): only these sources; none -> nothing.
+                (lib.concatStringsSep ", " (
+                  builtins.filter (p: !(lib.hasInfix ":" p)) cfg.nginx.acl.lan ++ [ "0.0.0.0/32" ]
                 ))
               ]
               (builtins.readFile ../flakes/fleet-agent/internal/containers/fleet-net-nat.nft);

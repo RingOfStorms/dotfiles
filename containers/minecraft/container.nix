@@ -715,7 +715,7 @@ in
     };
     script = ''
       echo "FORWARDING_SECRET=$(cat ${secretPath})" > /var/lib/minecraft-secrets/env
-      chmod 644 /var/lib/minecraft-secrets/env
+      chmod 600 /var/lib/minecraft-secrets/env
     '';
   };
 

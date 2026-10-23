@@ -34,8 +34,11 @@
   # tailnet-only DNS). h005's nginx terminates TLS with *.ts.joshuabell.xyz
   # and proxies to joe's overlay IP:8080 (hosts/h005/private-zone.nix).
   # auth = "none": LocalAI has no login (only an optional API_KEY, which
-  # would break the existing Open WebUI / agent clients); the tailnet is the
-  # boundary, same as the raw port before this route.
+  # would break the existing Open WebUI / agent clients). M6: instead of the
+  # whole tailnet, h005 only admits the known callers (allow -> nginx
+  # allow <overlayIp>; deny all): h001 (Open WebUI, masqueraded to h001's
+  # overlay IP) and the high-trust workstations running coding agents.
+  # Low-trust hosts (joe, i001), o002 and phones/unlisted nodes get 403.
   routes.web = {
     group = "AI";
     icon = "https://api.iconify.design/fluent-emoji-flat/llama.svg";
@@ -43,6 +46,13 @@
     zone = "private";
     exposure = "tailnet";
     auth = "none";
+    allow = [
+      "h001"
+      "lio"
+      "oren"
+      "juni"
+      "gp3"
+    ];
     # Image generation can take minutes; uploads are small.
     timeouts = "600s";
   };
@@ -51,7 +61,7 @@
   # tailscale0 from h005's private-zone proxy only; the socket is bound to the
   # overlay IP (below).
   podman = {
-    image = "docker.io/localai/localai:v4.11.0-gpu-nvidia-cuda-12";
+    image = "docker.io/localai/localai:v4.11.0-gpu-nvidia-cuda-12@sha256:1ee31dce19426ce7948e003bd2143bc88289db984369bdc53179c184d5ad07f9";
     # Tailnet only (joe overlay IP); not reachable from the LAN.
     ports = [ "100.64.0.12:8080:8080" ];
     environment = {

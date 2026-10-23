@@ -38,9 +38,10 @@ func TestPortsFileLines(t *testing.T) {
 		"web": httpRoute("forgejo", 3000, "public", "native"),
 		"ssh": {Port: 3032, Proto: "tcp", Exposure: "public"},
 		"ml":  {Port: 3003, Proto: "tcp", Exposure: "local"},
+		"mc":  {Port: 25565, Proto: "tcp", Exposure: "lan"},
 	}
 	got := strings.Join(portsFileLines(s, "h001"), "\n")
-	want := "guest ve-forgejo\ntcp 3032 dnat 10.233.3.2\nnoinet ve-forgejo"
+	want := "guest ve-forgejo\ntcp 25565 dnat 10.233.3.2 lan\ntcp 3032 dnat 10.233.3.2\nnoinet ve-forgejo"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}

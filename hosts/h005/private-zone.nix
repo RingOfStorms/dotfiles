@@ -33,6 +33,27 @@ let
     else
       "http://${fleet.hosts.${h}.overlayIp}:${toString r.port}";
 
+  # route allow = [ hosts ]: only those hosts' overlay IPs (v4; fleet.nix
+  # has no v6 overlay addresses, so v6 is denied). Unknown or off-tailnet
+  # hosts fail the build rather than silently widening/narrowing the ACL.
+  # Empty allow: the whole tailnet, as before.
+  sourceAcl =
+    r:
+    if r.allow == [ ] then
+      ''
+        allow 100.64.0.0/10;
+        allow fd7a:115c:a1e0::/48;''
+    else
+      lib.concatMapStringsSep "\n" (
+        a:
+        let
+          ip = (fleet.hosts.${a} or { }).overlayIp or null;
+        in
+        if ip == null then
+          throw "private route ${r.fqdn}: allow host ${a} has no overlayIp in fleet.nix"
+        else
+          "allow ${ip}; # ${a}"
+      ) r.allow;
   vhost = r: {
     name = r.fqdn;
     value = {
@@ -57,8 +78,10 @@ let
         proxyPass = backend r;
         proxyWebsockets = r.websockets;
         extraConfig = ''
-          allow 100.64.0.0/10;
-          allow fd7a:115c:a1e0::/48;
+          # o002 (public edge) counts as the internet
+          deny 100.64.0.5;
+          deny fd7a:115c:a1e0::5;
+          ${sourceAcl r}
           deny all;
           proxy_buffering ${if r.buffering then "on" else "off"};
           proxy_read_timeout ${r.timeouts};

@@ -53,7 +53,7 @@
     automaticMigrations = true;
     sidekiqThreads = 5;
     environment = {
-      DISABLE_REGISTRATION = "false";
+      DISABLE_REGISTRATION = "true";
       # The module hardcodes APPLICATION_PROTOCOL=http; behind TLS that breaks
       # login (CSRF origin mismatch) and ActionCable websockets.
       APPLICATION_PROTOCOL = "https";

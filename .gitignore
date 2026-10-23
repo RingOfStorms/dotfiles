@@ -6,3 +6,4 @@ modules/
 *.qcow
 **/target
 hosts/h001/_scripts/sms-backfill/sms-backfill
+ideas/security_remediation_plan_2026-10-22.md

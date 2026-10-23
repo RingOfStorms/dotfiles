@@ -125,28 +125,30 @@ in
       useACMEHost = if constants.network.routerEnable then domain else null;
       forceSSL = constants.network.routerEnable;
       extraConfig = nginxSnippets.cookieStrip;
-      listen =
-        [
-          {
-            addr = overlayIp;
-            port = 80;
-          }
-        ]
-        ++ (
-          if constants.network.routerEnable then
-            [
-              {
-                addr = overlayIp;
-                port = 443;
-                ssl = true;
-              }
-            ]
-          else
-            [ ]
-        );
+      listen = [
+        {
+          addr = overlayIp;
+          port = 80;
+        }
+      ]
+      ++ (
+        if constants.network.routerEnable then
+          [
+            {
+              addr = overlayIp;
+              port = 443;
+              ssl = true;
+            }
+          ]
+        else
+          [ ]
+      );
       locations."/" = {
         proxyPass = "http://127.0.0.1:8099";
         extraConfig = ''
+          # o002 (public edge) counts as the internet
+          deny 100.64.0.5;
+          deny fd7a:115c:a1e0::5;
           allow 100.64.0.0/10;
           allow fd7a:115c:a1e0::/48;
           deny all;

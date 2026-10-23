@@ -32,8 +32,7 @@
           service = import ./service.nix;
           config = import ./container.nix;
           guestNixpkgs = guestpkgs;
-          # Host network; idmapped persist (ext4).
-          privateNetwork = false;
+          # Private network from service.nix net; idmapped persist (ext4).
           specialArgs = { inherit life; };
           binds = [
             {

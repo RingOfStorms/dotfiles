@@ -16,6 +16,7 @@
     ./nixarr.nix
     ./kavita.nix
     ./media-integrity.nix
+    ./hardening.nix
     ../../hosts/h001/mods/hardware-transcoding.nix
   ];
 

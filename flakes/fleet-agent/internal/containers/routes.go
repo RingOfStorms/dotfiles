@@ -425,6 +425,12 @@ func portsFileLines(s Service, host string) []string {
 				// allow is only implemented for tailnet tcp/udp routes.
 				continue
 			}
+			// lan (H4): not on every interface like public; apply-ports puts
+			// it in @routes_lan (nginx.acl.lan sources + tailnet peers). An
+			// older apply-ports rejects "lan" as a bad address (fails closed).
+			if r.Exposure == "lan" {
+				l += " lan"
+			}
 		}
 		out = append(out, l)
 	}

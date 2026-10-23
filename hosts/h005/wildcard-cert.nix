@@ -38,6 +38,21 @@ let
   knownHosts = pkgs.writeText "wildcard-push-known-hosts" (
     lib.concatMapStrings (t: "${t.ip} ${t.hostKey}\n") (builtins.attrValues targets)
   );
+  # H2 (key minimisation): this currently rides on the shared nix2nix root
+  # key, which also unlocks every other fleet host -- more reach than
+  # "push a cert pair to two receivers" needs. Swap-in path once a
+  # dedicated key exists in sec:
+  #   1. Generate an ed25519 keypair; store the private half in sec as
+  #      `wildcard_push_2026-XX-XX` (machines/high-trust), the public half
+  #      goes in each receiver's `fleet.wildcardCertPushPubKey`
+  #      (hosts/wildcard-cert-receiver.nix) -- never the shared
+  #      nix2nixMatchBlockHosts set.
+  #   2. Add a `wildcard_push_2026-XX-XX` secret here (hosts/h005/sec-agent.nix)
+  #      with a `configChanges` or local secretFile pointing sshKey below at
+  #      its rendered path instead of nix2nix's.
+  #   3. Flip the line below to the new path; the command= restriction on
+  #      each receiver's authorized_keys entry means this key can only ever
+  #      invoke fleet-cert-receive, so losing it exposes nothing else.
   sshKey = "/var/lib/secrets_manager_hydrated/nix2nix_2026-03-15";
   push = pkgs.writeShellApplication {
     name = "wildcard-push";

@@ -10,7 +10,7 @@
     # ... the guest runs the nixpkgs rev h001 runs today.
     guestpkgs.url = "github:nixos/nixpkgs/6fcc160353f63555b560f25588925133c8f61f2a";
     # Locked to the rev h001 runs today (72a1e3b); bump with `nix flake update secrets_manager`.
-    secrets_manager.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/secrets_manager.git";
+    secrets_manager.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/secrets_manager.git?rev=72a1e3b7080d7f4fa22bbc03787755393d503721";
   };
 
   outputs =

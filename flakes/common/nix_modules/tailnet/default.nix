@@ -53,7 +53,7 @@ in
 
     trustInterface = lib.mkOption {
       type = lib.types.bool;
-      default = true;
+      default = false;
       description = ''
         Put tailscale0 in `networking.firewall.trustedInterfaces`, so every
         listening port is reachable from the whole tailnet. Set to `false` on

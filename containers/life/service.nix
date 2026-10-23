@@ -1,5 +1,5 @@
 # Life server (life.joshuabell.xyz): Rust server + PostgreSQL 18 +
-# pgBackRest + nightly restic, in one container on 127.0.0.1:8080.
+# pgBackRest + nightly restic, in one private-network container (guest :8080).
 # Was hosts/h001/containers/life.nix (private-network nixos container).
 #
 # APK releases: publish to root@h001:/srv/containers/life/state/releases
@@ -19,6 +19,15 @@
 
   # Logical dump that travels with cnt backups/moves (pgBackRest repo too).
   backupHook = "mkdir -p /var/lib/life/backups && runuser -u postgres -- pg_dumpall > /var/lib/life/backups/cnt-dumpall.sql";
+
+  # Private network (ROUTING-PLAN §8 step 5): guest 10.233.17.2. Life
+  # validates Zitadel tokens (issuer sso.joshuabell.xyz) through the host
+  # nginx; restic/pgBackRest offsite targets are on the internet.
+  net = {
+    private = true;
+    index = 17;
+    uses = [ "zitadel.web" ];
+  };
 
   # Client IP: public traffic is client -> o002 nginx -> (tailnet) here; trust
   # only o002 (100.64.0.5) for X-Forwarded-For, Life takes the last entry.

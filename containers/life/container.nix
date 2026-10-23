@@ -1,7 +1,12 @@
 # Guest config: services.life copied from hosts/h001/containers/life.nix.
-# Host network: life on 127.0.0.1:8080; postgres on its unix socket only (the
-# host's own postgres owns 127.0.0.1:5432).
-{ lib, life, ... }:
+# Private network (net.private): life on fleetNet.bindAddress:8080 (0.0.0.0
+# in its netns); postgres on its unix socket only.
+{
+  lib,
+  life,
+  fleetNet,
+  ...
+}:
 {
   imports = [ life.nixosModules.default ];
   system.stateVersion = "26.05";
@@ -16,7 +21,7 @@
   services.life = {
     enable = true;
     publicOrigin = "https://life.joshuabell.xyz";
-    listen = "127.0.0.1:8080";
+    listen = "${fleetNet.bindAddress}:8080";
     # h001's nginx sets X-Forwarded-For (see service.nix).
     trustForwardedFor = true;
 
