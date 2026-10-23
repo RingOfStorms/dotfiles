@@ -94,6 +94,7 @@
           })
 
           (import ./sec-agent.nix { inherit inputs constants; })
+          ../ups-shutdown-receiver.nix
 
           ./hardware-configuration.nix
           ./firewall.nix
@@ -108,6 +109,7 @@
         ++ lib.optionals constants.dataPool.enable [
           ./nfs-data.nix
           ./nfs-data-users-nixarr.nix
+          ./backup-receiver.nix
           ({
             ringofstorms.fleetAgent.extraFilesystems = [ "/data" ];
           })

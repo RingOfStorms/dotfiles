@@ -95,7 +95,6 @@
             includeFleetSshKeys = false;
           })
           inputs.common.nixosModules.zsh
-          inputs.common.nixosModules.backup
 
           diskoModule
           ./hardware-configuration.nix

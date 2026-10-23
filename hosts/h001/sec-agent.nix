@@ -8,6 +8,9 @@
 import ../sec-agent.nix {
   inherit inputs constants;
   role = "machines-hightrust";
+  # H2: h001 backs up to B2 via restic_h001_env, imports neither backup.nix
+  # nor remote_lio_builds.nix, and never initiates SSH or git pushes.
+  includeFleetSshKeys = false;
   extraSecrets = {
     # Credentials of the shared `josh` atuin account, readable by the local
     # primary user's atuin-autologin.

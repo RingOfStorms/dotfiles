@@ -4,9 +4,12 @@
   ...
 }:
 let
+  keyName = "remote_lio_builds_2026-10-22";
+  # sec-agent (current); secretsBao is legacy and kept only as a fallback.
+  secSecrets = config.ringofstorms.secrets.agent.secrets or { };
   baoSecrets = config.ringofstorms.secretsBao.secrets or { };
-  hasNix2Nix = baoSecrets ? "nix2nix_2026-03-15";
-  secretPath = if hasNix2Nix then baoSecrets."nix2nix_2026-03-15".path else "";
+  hasNix2Nix = secSecrets ? ${keyName} || baoSecrets ? ${keyName};
+  secretPath = "/var/lib/secrets_manager_hydrated/${keyName}";
 in
 {
   nix = lib.mkIf hasNix2Nix {
@@ -33,6 +36,7 @@ in
           "recursive-nix"
         ];
         mandatoryFeatures = [ ];
+        sshUser = "nix-builder";
         sshKey = secretPath;
       }
     ];

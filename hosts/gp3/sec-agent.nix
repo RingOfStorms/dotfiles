@@ -12,5 +12,11 @@ import ../sec-agent.nix {
       mode = "0400";
       hardDepend = [ "atuin-autologin" ];
     };
+
+    # Restricted key for nix-builder@lio (remote_lio_builds.nix).
+    remote_lio_builds_2026-10-22 = {
+      remotePath = "machines/high-trust/remote_lio_builds_2026-10-22";
+      ensureNewline = true;
+    };
   };
 }

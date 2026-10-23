@@ -25,8 +25,9 @@
 # up, it enables services.postgresqlBackup (or equivalent) itself and
 # adds the dump directory (e.g. /var/backup/postgresql) to `paths`.
 #
-# Requires: the host is on the tailnet and has the nix2nix SSH key at
-# `sshKeyFile` (default /var/lib/secrets_manager_hydrated/nix2nix_2026-03-15),
+# Requires: the host is on the tailnet and has the dedicated backup_to_h004
+# SSH key at `sshKeyFile` (default
+# /var/lib/secrets_manager_hydrated/backup_to_h004_2026-10-22),
 # i.e. a machines-hightrust secrets-bao host.
 {
   config,
@@ -92,7 +93,7 @@ in
 
     sshKeyFile = mkOption {
       type = types.str;
-      default = "/var/lib/secrets_manager_hydrated/nix2nix_2026-03-15";
+      default = "/var/lib/secrets_manager_hydrated/backup_to_h004_2026-10-22";
       description = "Private SSH key used to authenticate to the NAS.";
     };
 

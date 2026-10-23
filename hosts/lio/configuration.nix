@@ -2,10 +2,33 @@
   pkgs,
   lib,
   constants,
+  fleet,
   ...
 }:
 let
   nixServe = constants.services.nixServe;
+  nixBuildReceive = pkgs.writeShellApplication {
+    name = "fleet-nix-build-receive";
+    text = ''
+      set -f
+      cmd="''${SSH_ORIGINAL_COMMAND:-}"
+      case "$cmd" in
+        "nix-daemon --stdio")
+          exec /run/current-system/sw/bin/nix-daemon --stdio
+          ;;
+        "nix-store --serve")
+          exec /run/current-system/sw/bin/nix-store --serve
+          ;;
+        "nix-store --serve --write")
+          exec /run/current-system/sw/bin/nix-store --serve --write
+          ;;
+        *)
+          echo "fleet-nix-build-receive: command rejected" >&2
+          exit 1
+          ;;
+      esac
+    '';
+  };
 in
 {
   # Close port 22 on the global allow-list set by hardening.nix and re-open
@@ -72,10 +95,14 @@ in
   '';
 
   services = {
-    # system76-power (via hardware.system76.enableAll) manages power profiles;
-    # it conflicts with power-profiles-daemon. The earlier jet-engine fan fix
-    # (https://discourse.nixos.org/t/very-high-fan-noises-on-nixos-using-a-system76-thelio/23875/10)
-    # used TLP; if fans get loud, run `system76-power profile balanced`.
+    # system76-power (via hardware.system76.enableAll) manages power profiles
+    # and the Thelio fan curve (driven by k10temp Tctl); it conflicts with
+    # power-profiles-daemon. Its "balanced" profile sets amd-pstate-epp EPP to
+    # balance_performance, which makes the 9950X boost single cores to ~5.7 GHz
+    # on tiny background wakeups -> Tctl spikes to 75-90°C -> fans ramp up and
+    # down constantly. `epp-balance-power` (below) overrides EPP afterwards.
+    # NOTE: running `system76-power profile ...` re-applies its own EPP; rerun
+    # `systemctl restart epp-balance-power` afterwards.
     power-profiles-daemon.enable = false;
 
     # Binary cache server (drop-in nix-serve replacement)
@@ -88,7 +115,39 @@ in
     };
   };
 
+  # Apply EPP=balance_power after system76-power has set its profile.
+  systemd.services.epp-balance-power = {
+    description = "Set amd-pstate EPP to balance_power (quieter Thelio fans)";
+    after = [ "system76-power.service" ];
+    wants = [ "system76-power.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      # system76-power applies the profile asynchronously after startup.
+      ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
+    };
+    script = ''
+      for f in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/energy_performance_preference; do
+        echo balance_power > "$f"
+      done
+    '';
+  };
+
   nix.distributedBuilds = true;
+
+  # Dedicated remote-build user for juni/gp3/oren (remote_lio_builds.nix).
+  # Its key may only speak the nix daemon / store protocol.
+  users.groups.nix-builder = { };
+  users.users.nix-builder = {
+    isSystemUser = true;
+    group = "nix-builder";
+    useDefaultShell = true;
+    openssh.authorizedKeys.keys =
+      lib.optional (fleet.global.remoteLioBuildsPubKey != null)
+        ''command="/run/current-system/sw/bin/fleet-nix-build-receive",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-user-rc ${fleet.global.remoteLioBuildsPubKey}'';
+  };
+  nix.settings.trusted-users = [ "nix-builder" ];
   # Allow emulation of aarch64-linux binaries for cross compiling
   boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
 
@@ -102,5 +161,6 @@ in
     mpv
     firefox
     google-chrome
+    nixBuildReceive
   ];
 }

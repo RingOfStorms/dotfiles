@@ -44,7 +44,7 @@ let
             -o UserKnownHostsFile=/root/.ssh/known_hosts \
             -i ${remote.keyFile} \
             ${remote.user}@${remote.host} \
-            "sudo /run/current-system/sw/bin/shutdown -h now 'UPS battery critical'" \
+            "fleet-ups-shutdown" \
           && log "${remote.name} shutdown command sent" \
           || log "${remote.name} shutdown failed (may already be down)"
       ) &

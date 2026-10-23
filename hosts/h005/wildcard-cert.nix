@@ -53,7 +53,7 @@ let
   #   3. Flip the line below to the new path; the command= restriction on
   #      each receiver's authorized_keys entry means this key can only ever
   #      invoke fleet-cert-receive, so losing it exposes nothing else.
-  sshKey = "/var/lib/secrets_manager_hydrated/nix2nix_2026-03-15";
+  sshKey = "/var/lib/secrets_manager_hydrated/wildcard_push_2026-10-22";
   push = pkgs.writeShellApplication {
     name = "wildcard-push";
     runtimeInputs = [

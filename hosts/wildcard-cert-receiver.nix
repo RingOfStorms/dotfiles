@@ -119,7 +119,7 @@ in
   };
   options.fleet.wildcardCertPushPubKey = lib.mkOption {
     type = lib.types.nullOr lib.types.str;
-    default = null;
+    default = fleet.global.wildcardCertPushPubKey or null;
     description = ''
       Dedicated SSH public key for h005's wildcard-push
       (hosts/h005/wildcard-cert.nix), restricted to fleet-cert-receive.

@@ -47,6 +47,36 @@
       }
     ];
   };
+  "machines/by-host/h005/wildcard_push_2026-10-22" = {
+    fields = [ "value" ];
+    description = "Dedicated SSH private key for h005 wildcard-push (restricted to fleet-cert-receive on h001 and o002).";
+    access = [
+      {
+        type = "sub";
+        value = "395294573078773763";
+      }
+    ];
+  };
+  "machines/by-host/h005/ups_shutdown_2026-10-22" = {
+    fields = [ "value" ];
+    description = "Dedicated SSH private key for h005 NUT ups-shutdown (restricted to fleet-ups-shutdown on h001 and h004).";
+    access = [
+      {
+        type = "sub";
+        value = "395294573078773763";
+      }
+    ];
+  };
+  "machines/high-trust/remote_lio_builds_2026-10-22" = {
+    fields = [ "value" ];
+    description = "Dedicated SSH private key for remote_lio_builds distributed Nix builds on lio (restricted to nix-daemon/nix-store).";
+    access = [
+      {
+        type = "role";
+        value = "device_high_trust";
+      }
+    ];
+  };
 
   # ── high-trust: tailnet ───────────────────────────────────────
   "machines/high-trust/headscale_auth_2026-03-15" = {

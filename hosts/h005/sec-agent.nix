@@ -3,6 +3,10 @@
 import ../sec-agent.nix {
   inherit inputs constants;
   role = "machines-hightrust";
+  # H2: h005 is the router; it never initiates arbitrary root SSH or git
+  # pushes. It only runs wildcard-push and ups-shutdown, each with its own
+  # dedicated restricted key below.
+  includeFleetSshKeys = false;
   extraSecrets = {
     # Credentials of the shared `josh` atuin account; owned by the local
     # primary user (luser) so its atuin-autologin can read it.
@@ -16,6 +20,17 @@ import ../sec-agent.nix {
     };
   }
   // inputs.nixpkgs.lib.optionalAttrs constants.network.routerEnable {
+    # Dedicated keys (H2), forced to fleet-cert-receive / fleet-ups-shutdown
+    # on the receivers (wildcard-cert-receiver.nix, ups-shutdown-receiver.nix).
+    wildcard_push_2026-10-22 = {
+      remotePath = "machines/by-host/h005/wildcard_push_2026-10-22";
+      ensureNewline = true;
+    };
+    ups_shutdown_2026-10-22 = {
+      remotePath = "machines/by-host/h005/ups_shutdown_2026-10-22";
+      ensureNewline = true;
+    };
+
     hass_isp_speedtest_token = {
       remotePath = "machines/by-host/h005/hass_isp_speedtest_token";
       softDepend = [ "h005-isp-speedtest" ];
