@@ -106,14 +106,14 @@ type ChartEventMarker struct {
 // RenderHistoryChartSVG renders a full-width responsive SVG chart with axis labels,
 // optional secondary series, and vertical dashed markers for host cutover events.
 func RenderHistoryChartSVG(points []ChartPoint, sinceTS, untilTS int64, maxFixed float64, unit string, color1, color2 string, events []store.Event) template.HTML {
-	const w, h = 640.0, 145.0
-	const padL, padR, padT, padB = 48.0, 12.0, 14.0, 24.0
+	const w, h = 640.0, 210.0
+	const padL, padR, padT, padB = 54.0, 14.0, 16.0, 26.0
 	plotW := w - padL - padR
 	plotH := h - padT - padB
 
 	if len(points) == 0 {
 		return template.HTML(fmt.Sprintf(
-			`<svg class="history-chart" viewBox="0 0 %.0f %.0f"><text x="%.0f" y="%.0f" fill="var(--muted)" font-size="12" text-anchor="middle">No samples in selected window</text></svg>`,
+			`<svg class="history-chart" viewBox="0 0 %.0f %.0f"><text x="%.0f" y="%.0f" fill="var(--muted)" font-size="13" text-anchor="middle">No samples in selected window</text></svg>`,
 			w, h, w/2, h/2,
 		))
 	}
@@ -176,7 +176,7 @@ func RenderHistoryChartSVG(points []ChartPoint, sinceTS, untilTS int64, maxFixed
 		y := padT + plotH*(1.0-frac)
 		val := maxVal * frac
 		fmt.Fprintf(&b, `<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="var(--border)" stroke-dasharray="3,3" stroke-width="1"/>`, padL, y, w-padR, y)
-		fmt.Fprintf(&b, `<text x="%.1f" y="%.1f" fill="var(--muted)" font-size="10" text-anchor="end">%s</text>`, padL-5, y+3, formatAxisVal(val, unit))
+		fmt.Fprintf(&b, `<text x="%.1f" y="%.1f" fill="var(--muted)" font-size="11" text-anchor="end">%s</text>`, padL-6, y+4, formatAxisVal(val, unit))
 	}
 
 	// Area + polyline for series 1
@@ -186,12 +186,12 @@ func RenderHistoryChartSVG(points []ChartPoint, sinceTS, untilTS int64, maxFixed
 	poly1 := strings.Join(pts1, " ")
 	area1 := fmt.Sprintf("%.1f,%.1f %s %.1f,%.1f", firstX, baseY, poly1, lastX, baseY)
 	fmt.Fprintf(&b, `<polygon points="%s" fill="%s" fill-opacity="0.16"/>`, area1, color1)
-	fmt.Fprintf(&b, `<polyline points="%s" fill="none" stroke="%s" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`, poly1, color1)
+	fmt.Fprintf(&b, `<polyline points="%s" fill="none" stroke="%s" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`, poly1, color1)
 
 	// Optional series 2
 	if hasVal2 && color2 != "" {
 		poly2 := strings.Join(pts2, " ")
-		fmt.Fprintf(&b, `<polyline points="%s" fill="none" stroke="%s" stroke-width="1.5" stroke-dasharray="3,2" stroke-linecap="round" stroke-linejoin="round"/>`, poly2, color2)
+		fmt.Fprintf(&b, `<polyline points="%s" fill="none" stroke="%s" stroke-width="1.8" stroke-dasharray="4,3" stroke-linecap="round" stroke-linejoin="round"/>`, poly2, color2)
 	}
 
 	// Host replacement / lineage event markers
@@ -219,7 +219,7 @@ func RenderHistoryChartSVG(points []ChartPoint, sinceTS, untilTS int64, maxFixed
 	} {
 		x := xOf(item.ts)
 		lbl := time.Unix(item.ts, 0).UTC().Format(timeLayout)
-		fmt.Fprintf(&b, `<text x="%.1f" y="%.1f" fill="var(--muted)" font-size="10" text-anchor="%s">%s</text>`, x, h-5, item.anchor, lbl)
+		fmt.Fprintf(&b, `<text x="%.1f" y="%.1f" fill="var(--muted)" font-size="11" text-anchor="%s">%s</text>`, x, h-6, item.anchor, lbl)
 	}
 
 	b.WriteString(`</svg>`)

@@ -330,3 +330,82 @@ func TestConcurrentCurrentAndSetPoll(t *testing.T) {
 	}
 	<-done
 }
+
+func TestMaxPrimaryTempC(t *testing.T) {
+	cases := []struct {
+		name  string
+		temps []TempSensor
+		want  float64
+	}{
+		{
+			name: "k10temp Tctl ignored when Tccd present",
+			temps: []TempSensor{
+				{Sensor: "k10temp:Tctl", Celsius: 87.8},
+				{Sensor: "k10temp:Tccd1", Celsius: 74.5},
+				{Sensor: "k10temp:Tccd2", Celsius: 61.9},
+			},
+			want: 74.5,
+		},
+		{
+			name: "k10temp Tctl fallback when sole sensor",
+			temps: []TempSensor{
+				{Sensor: "k10temp:Tctl", Celsius: 65.0},
+			},
+			want: 65.0,
+		},
+		{
+			name: "amdgpu edge used over junction and mem",
+			temps: []TempSensor{
+				{Sensor: "amdgpu:edge", Celsius: 62},
+				{Sensor: "amdgpu:junction", Celsius: 86},
+				{Sensor: "amdgpu:mem", Celsius: 84},
+			},
+			want: 62,
+		},
+		{
+			name: "nvme composite used over secondary sensor",
+			temps: []TempSensor{
+				{Sensor: "nvme:Composite", Celsius: 46.9},
+				{Sensor: "nvme:Sensor 2", Celsius: 73.9},
+			},
+			want: 46.9,
+		},
+		{
+			name: "full lio-like mix",
+			temps: []TempSensor{
+				{Sensor: "nvme:Composite", Celsius: 46.9},
+				{Sensor: "nvme:Sensor 2", Celsius: 73.9},
+				{Sensor: "mt7921_phy0", Celsius: 56},
+				{Sensor: "amdgpu:edge", Celsius: 62},
+				{Sensor: "amdgpu:junction", Celsius: 86},
+				{Sensor: "amdgpu:mem", Celsius: 84},
+				{Sensor: "k10temp:Tctl", Celsius: 87.8},
+				{Sensor: "k10temp:Tccd1", Celsius: 74.5},
+				{Sensor: "k10temp:Tccd2", Celsius: 61.9},
+				{Sensor: "spd5118", Celsius: 53.3},
+			},
+			want: 74.5,
+		},
+		{
+			name:  "empty falls back to zero",
+			temps: nil,
+			want:  0,
+		},
+		{
+			name: "all filtered falls back to max of all",
+			temps: []TempSensor{
+				{Sensor: "amdgpu:junction", Celsius: 86},
+				{Sensor: "amdgpu:mem", Celsius: 84},
+			},
+			want: 86,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := MaxPrimaryTempC(tc.temps)
+			if got != tc.want {
+				t.Errorf("got %v want %v", got, tc.want)
+			}
+		})
+	}
+}

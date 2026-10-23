@@ -132,6 +132,56 @@ type TempSensor struct {
 	Celsius float64 `json:"celsius"`
 }
 
+// MaxPrimaryTempC returns the headline host temperature from a set of hwmon
+// sensor readings, filtering out known secondary hotspot / VRAM / auxiliary
+// controller sensors that otherwise run hotter than the primary package
+// reading and would make the headline number misleadingly alarming:
+//
+//   - amdgpu: only "amdgpu:edge" (or an unlabeled "amdgpu") is considered;
+//     "amdgpu:junction" and "amdgpu:mem" are internal hotspot/VRAM readings.
+//   - nvme: only "nvme:Composite" (or an unlabeled "nvme") is considered;
+//     "nvme:Sensor 1/2/3" are auxiliary controller sensors.
+//   - k10temp: if any Tccd*/Tdie reading is present, "k10temp:Tctl" (a
+//     fan-control target, not actual die temp) is ignored. If Tctl is the
+//     only k10temp sensor present, it is used as a fallback.
+//
+// If filtering would leave no sensors at all, it falls back to the max of
+// all readings so a host is never reported with zero temperature.
+func MaxPrimaryTempC(temps []TempSensor) float64 {
+	hasK10DieTemp := false
+	for _, t := range temps {
+		if strings.HasPrefix(t.Sensor, "k10temp:Tccd") || t.Sensor == "k10temp:Tdie" {
+			hasK10DieTemp = true
+			break
+		}
+	}
+
+	var max float64
+	found := false
+	for _, t := range temps {
+		switch {
+		case t.Sensor == "amdgpu:junction" || t.Sensor == "amdgpu:mem":
+			continue
+		case strings.HasPrefix(t.Sensor, "nvme:") && t.Sensor != "nvme:Composite":
+			continue
+		case t.Sensor == "k10temp:Tctl" && hasK10DieTemp:
+			continue
+		}
+		found = true
+		if t.Celsius > max {
+			max = t.Celsius
+		}
+	}
+	if !found {
+		for _, t := range temps {
+			if t.Celsius > max {
+				max = t.Celsius
+			}
+		}
+	}
+	return max
+}
+
 // SmartDrive holds normalized drive health attributes from `smartctl -j -a`.
 type SmartDrive struct {
 	Device              string `json:"device"`
@@ -521,11 +571,7 @@ func buildStoreSamples(host string, polledAt time.Time, st *HostStatus) (store.S
 		s.DiskRBps += dr.ReadBytesPerSec
 		s.DiskWBps += dr.WriteBytesPerSec
 	}
-	for _, t := range st.Temps {
-		if t.Celsius > s.TempMaxC {
-			s.TempMaxC = t.Celsius
-		}
-	}
+	s.TempMaxC = MaxPrimaryTempC(st.Temps)
 
 	var fsOut []store.FSSample
 	for _, fs := range st.Filesystems {
@@ -701,11 +747,7 @@ func mergeWithLast(inv *inventory.Inventory, polls map[string]HostPoll, last map
 			}
 		}
 		if hv.Status != nil {
-			for _, t := range hv.Status.Temps {
-				if t.Celsius > hv.MaxTempC {
-					hv.MaxTempC = t.Celsius
-				}
-			}
+			hv.MaxTempC = MaxPrimaryTempC(hv.Status.Temps)
 			for _, d := range hv.Status.Smart {
 				hv.SmartTotal++
 				if d.Healthy {

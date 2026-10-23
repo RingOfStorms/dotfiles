@@ -38,7 +38,13 @@
     <div class="charts-grid">
       <div class="chart-card">
         <div class="chart-head">
-          <span>CPU Usage (%) &amp; Peak</span>
+          <div class="chart-title-row">
+            <span class="chart-title">CPU Usage</span>
+            <span class="chart-legend">
+              <span class="legend-item"><span class="legend-swatch" style="--swatch: var(--accent)"></span>Avg %</span>
+              <span class="legend-item"><span class="legend-swatch legend-dashed" style="--swatch: var(--amber)"></span>Peak %</span>
+            </span>
+          </div>
           {{if .Host.Status}}{{if .Host.Status.System}}<strong class="mono">{{printf "%.1f%%" .Host.Status.System.CPUPercent}} · load {{printf "%.2f / %.2f / %.2f" .Host.Status.System.Load1 .Host.Status.System.Load5 .Host.Status.System.Load15}}</strong>{{end}}{{end}}
         </div>
         {{.CPUChart}}
@@ -46,7 +52,13 @@
 
       <div class="chart-card">
         <div class="chart-head">
-          <span>Memory &amp; Swap Used</span>
+          <div class="chart-title-row">
+            <span class="chart-title">Memory &amp; Swap</span>
+            <span class="chart-legend">
+              <span class="legend-item"><span class="legend-swatch" style="--swatch: var(--green)"></span>RAM Used</span>
+              <span class="legend-item"><span class="legend-swatch legend-dashed" style="--swatch: var(--amber)"></span>Swap Used</span>
+            </span>
+          </div>
           {{if .Host.MemSummary}}<strong class="mono">{{.Host.MemSummary}}</strong>{{end}}
         </div>
         {{.MemChart}}
@@ -54,21 +66,40 @@
 
       <div class="chart-card">
         <div class="chart-head">
-          <span>Network Throughput (RX solid / TX dashed)</span>
+          <div class="chart-title-row">
+            <span class="chart-title">Network Throughput</span>
+            <span class="chart-legend">
+              <span class="legend-item"><span class="legend-swatch" style="--swatch: var(--accent)"></span>RX (in)</span>
+              <span class="legend-item"><span class="legend-swatch legend-dashed" style="--swatch: var(--green)"></span>TX (out)</span>
+            </span>
+          </div>
+          {{if or (gt .Host.NetRxBps 0) (gt .Host.NetTxBps 0)}}<strong class="mono">rx {{formatRate .Host.NetRxBps}} · tx {{formatRate .Host.NetTxBps}}</strong>{{end}}
         </div>
         {{.NetChart}}
       </div>
 
       <div class="chart-card">
         <div class="chart-head">
-          <span>Disk I/O Throughput (Read solid / Write dashed)</span>
+          <div class="chart-title-row">
+            <span class="chart-title">Disk I/O Throughput</span>
+            <span class="chart-legend">
+              <span class="legend-item"><span class="legend-swatch" style="--swatch: var(--amber)"></span>Read</span>
+              <span class="legend-item"><span class="legend-swatch legend-dashed" style="--swatch: var(--red)"></span>Write</span>
+            </span>
+          </div>
+          {{if or (gt .Host.DiskReadBps 0) (gt .Host.DiskWriteBps 0)}}<strong class="mono">r {{formatRate .Host.DiskReadBps}} · w {{formatRate .Host.DiskWriteBps}}</strong>{{end}}
         </div>
         {{.DiskChart}}
       </div>
 
       <div class="chart-card">
         <div class="chart-head">
-          <span>Temperature (°C)</span>
+          <div class="chart-title-row">
+            <span class="chart-title">Temperature</span>
+            <span class="chart-legend">
+              <span class="legend-item"><span class="legend-swatch" style="--swatch: var(--red)"></span>Max Sensor (°C)</span>
+            </span>
+          </div>
           {{if gt .Host.MaxTempC 0.0}}<strong class="mono">{{printf "%.1f°C" .Host.MaxTempC}}</strong>{{end}}
         </div>
         {{.TempChart}}

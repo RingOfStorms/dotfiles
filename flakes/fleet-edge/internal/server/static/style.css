@@ -557,23 +557,65 @@ footer {
 
 .charts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
-  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(32rem, 100%), 1fr));
+  gap: 1rem;
 }
 
 .chart-head {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  font-size: 0.82rem;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
   color: var(--muted);
-  gap: 0.5rem;
+  gap: 0.5rem 0.75rem;
+}
+
+.chart-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.85rem;
+}
+
+.chart-title {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.chart-legend {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 1.1rem;
+  height: 0;
+  border-top: 2.5px solid var(--swatch, var(--accent));
+  border-radius: 2px;
+}
+
+.legend-swatch.legend-dashed {
+  border-top-style: dashed;
 }
 
 .chart-head strong { color: var(--text); }
 
 .history-chart {
   width: 100%;
+  min-height: 11.5rem;
   height: auto;
   display: block;
 }

@@ -223,11 +223,12 @@ void SttEngine::activate(const fcitx::InputMethodEntry& entry,
         startProcess();
     }
 
-    // In continuous mode, start recording automatically
-    if (mode_ == SttMode::Continuous && ready_) {
+    // Oneshot/Continuous: arm the backend so speech auto-starts a recording
+    // while (and only while) this input method is active. Commands written
+    // before the backend is ready are buffered in the pipe. The recording
+    // indicator is driven by the backend's recording_started event.
+    if (mode_ == SttMode::Oneshot || mode_ == SttMode::Continuous) {
         sendCommand("start");
-        auto* state = ic->propertyFor(&factory_);
-        state->setRecording(true);
     }
 }
 
@@ -237,11 +238,11 @@ void SttEngine::deactivate(const fcitx::InputMethodEntry& entry,
     auto* ic = event.inputContext();
     auto* state = ic->propertyFor(&factory_);
 
-    // Stop recording if active
-    if (state->isRecording()) {
-        sendCommand("cancel");
-        state->setRecording(false);
-    }
+    // Always cancel: the backend may be armed (oneshot/continuous) or have
+    // auto-started recording without our UI state knowing. This disarms it
+    // so it stays idle while the STT input method is not active.
+    sendCommand("cancel");
+    state->setRecording(false);
     state->clear();
 
     activeIc_ = nullptr;

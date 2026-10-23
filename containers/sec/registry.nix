@@ -22,8 +22,20 @@
     description = "Inter-machine SSH key (nix2nix).";
     access = [
       {
-        type = "role";
-        value = "device_high_trust";
+        type = "sub";
+        value = "344412093056811011"; # lio
+      }
+      {
+        type = "sub";
+        value = "353557018709065731"; # juni
+      }
+      {
+        type = "sub";
+        value = "364267179626987523"; # gp3
+      }
+      {
+        type = "sub";
+        value = "364267099884879875"; # oren
       }
     ];
   };
@@ -32,8 +44,20 @@
     description = "External GitHub SSH key (nix2github).";
     access = [
       {
-        type = "role";
-        value = "device_high_trust";
+        type = "sub";
+        value = "344412093056811011"; # lio
+      }
+      {
+        type = "sub";
+        value = "353557018709065731"; # juni
+      }
+      {
+        type = "sub";
+        value = "364267179626987523"; # gp3
+      }
+      {
+        type = "sub";
+        value = "364267099884879875"; # oren
       }
     ];
   };
@@ -42,8 +66,20 @@
     description = "External Forgejo SSH key (nix2gitforgejo).";
     access = [
       {
-        type = "role";
-        value = "device_high_trust";
+        type = "sub";
+        value = "344412093056811011"; # lio
+      }
+      {
+        type = "sub";
+        value = "353557018709065731"; # juni
+      }
+      {
+        type = "sub";
+        value = "364267179626987523"; # gp3
+      }
+      {
+        type = "sub";
+        value = "364267099884879875"; # oren
       }
     ];
   };
@@ -72,8 +108,20 @@
     description = "Dedicated SSH private key for remote_lio_builds distributed Nix builds on lio (restricted to nix-daemon/nix-store).";
     access = [
       {
-        type = "role";
-        value = "device_high_trust";
+        type = "sub";
+        value = "344412093056811011"; # lio
+      }
+      {
+        type = "sub";
+        value = "353557018709065731"; # juni
+      }
+      {
+        type = "sub";
+        value = "364267179626987523"; # gp3
+      }
+      {
+        type = "sub";
+        value = "364267099884879875"; # oren
       }
     ];
   };

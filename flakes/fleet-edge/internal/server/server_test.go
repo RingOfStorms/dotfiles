@@ -338,7 +338,19 @@ func TestHostDetailAndBcachefsDrillDown(t *testing.T) {
 		t.Fatalf("/hosts/h004 status = %d: %s", w.Code, w.Body.String())
 	}
 	detailBody := w.Body.String()
-	for _, want := range []string{"ST12000NT001", "hdd.0", "sshd", "history-chart", "Systemd &amp; Container Logs"} {
+	for _, want := range []string{
+		"ST12000NT001",
+		"hdd.0",
+		"sshd",
+		"history-chart",
+		`viewBox="0 0 640 210"`,
+		"chart-legend",
+		"RX (in)",
+		"TX (out)",
+		"RAM Used",
+		"Swap Used",
+		"Systemd &amp; Container Logs",
+	} {
 		if !strings.Contains(detailBody, want) {
 			t.Fatalf("/hosts/h004 missing %q:\n%s", want, detailBody)
 		}

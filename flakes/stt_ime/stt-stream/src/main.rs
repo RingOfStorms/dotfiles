@@ -14,8 +14,8 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 use whisper_rs::{
-    FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperVadContext,
-    WhisperVadContextParams, WhisperVadParams,
+    FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperState,
+    WhisperVadContext, WhisperVadContextParams, WhisperVadParams,
 };
 
 mod postprocess;
@@ -367,11 +367,16 @@ struct AudioState {
     last_partial: std::time::Instant,
     /// Manual mode: stop requested, finalize next tick
     pending_finalize: bool,
+    /// Oneshot/Continuous: whether speech may auto-start a recording.
+    /// Oneshot disarms after one utterance (or on cancel) so room noise can
+    /// never re-trigger the GPU while the input method is inactive.
+    armed: bool,
 }
 
 impl AudioState {
-    fn new() -> Self {
+    fn new(armed: bool) -> Self {
         Self {
+            armed,
             buffer: Vec::with_capacity(16000 * 30), // 30 seconds max
             is_recording: false,
             speech_detected: false,
@@ -514,7 +519,17 @@ async fn main() -> Result<()> {
     let whisper_ctx = WhisperContext::new_with_params(&model_path, ctx_params)
         .context("Failed to load Whisper model")?;
 
-    let whisper_ctx = Arc::new(Mutex::new(whisper_ctx));
+    // Create the inference state exactly once. `create_state()` re-initialises
+    // the GPU backend and reallocates the compute/KV buffers (~250 MB on
+    // ROCm), so doing it per call (every partial!) is very expensive.
+    // `WhisperState` is Send + Sync and keeps the context alive via an Arc.
+    let whisper_state = whisper_ctx
+        .create_state()
+        .context("Failed to create Whisper state")?;
+    drop(whisper_ctx);
+    let whisper_state = Arc::new(Mutex::new(whisper_state));
+    // Only one partial transcription in flight at a time.
+    let partial_busy = Arc::new(AtomicBool::new(false));
 
     // Set up Silero VAD if requested. Built parameters are reused per finalize.
     let vad_ctx: Option<Arc<Mutex<WhisperVadContext>>> = if args.vad == VadKind::Silero {
@@ -581,7 +596,7 @@ async fn main() -> Result<()> {
     };
 
     // Shared state
-    let audio_state = Arc::new(Mutex::new(AudioState::new()));
+    let audio_state = Arc::new(Mutex::new(AudioState::new(args.mode != Mode::Manual)));
     let running = Arc::new(AtomicBool::new(true));
     let mode = Arc::new(Mutex::new(args.mode));
 
@@ -712,15 +727,23 @@ async fn main() -> Result<()> {
 
             match cmd {
                 SttCommand::Start => {
+                    let m = mode_stdin.lock().map(|m| *m).unwrap_or(Mode::Manual);
                     if let Ok(mut state) = audio_state_stdin.lock() {
-                        state.is_recording = true;
                         state.clear();
-                        emit_event(&SttEvent::RecordingStarted);
+                        if m == Mode::Manual {
+                            state.is_recording = true;
+                            emit_event(&SttEvent::RecordingStarted);
+                        } else {
+                            // Arm: recording auto-starts on detected speech.
+                            state.is_recording = false;
+                            state.armed = true;
+                        }
                     }
                 }
                 SttCommand::Stop => {
                     if let Ok(mut state) = audio_state_stdin.lock() {
                         state.is_recording = false;
+                        state.armed = false;
                         state.pending_finalize = true;
                         emit_event(&SttEvent::RecordingStopped);
                     }
@@ -728,6 +751,7 @@ async fn main() -> Result<()> {
                 SttCommand::Cancel => {
                     if let Ok(mut state) = audio_state_stdin.lock() {
                         state.is_recording = false;
+                        state.armed = false;
                         state.clear();
                         emit_event(&SttEvent::RecordingStopped);
                     }
@@ -737,13 +761,17 @@ async fn main() -> Result<()> {
                     break;
                 }
                 SttCommand::SetMode { mode: m } => {
+                    let new_mode = match m.as_str() {
+                        "oneshot" => Mode::Oneshot,
+                        "continuous" => Mode::Continuous,
+                        "manual" => Mode::Manual,
+                        _ => continue,
+                    };
                     if let Ok(mut current_mode) = mode_stdin.lock() {
-                        *current_mode = match m.as_str() {
-                            "oneshot" => Mode::Oneshot,
-                            "continuous" => Mode::Continuous,
-                            "manual" => Mode::Manual,
-                            _ => continue,
-                        };
+                        *current_mode = new_mode;
+                    }
+                    if let Ok(mut state) = audio_state_stdin.lock() {
+                        state.armed = new_mode != Mode::Manual;
                     }
                 }
             }
@@ -787,17 +815,14 @@ async fn main() -> Result<()> {
                 }
             }
             Mode::Oneshot | Mode::Continuous => {
-                // Auto-start on speech detection
-                let has_speech = simple_vad(&samples, vad_threshold);
-
-                if !state.is_recording && has_speech {
+                // Auto-start on speech detection, but only while armed.
+                if !state.is_recording {
+                    if !state.armed || !simple_vad(&samples, vad_threshold) {
+                        continue;
+                    }
                     state.is_recording = true;
                     state.clear();
                     emit_event(&SttEvent::RecordingStarted);
-                }
-
-                if !state.is_recording {
-                    continue;
                 }
             }
         }
@@ -814,34 +839,57 @@ async fn main() -> Result<()> {
             state.silence_samples += samples.len();
         }
 
-        // Emit partial transcript if enabled
+        // Emit partial transcript if enabled. Partials are gated on Silero VAD
+        // (CPU, <1 ms) so energy-gate false positives (fans, keyboard, room
+        // noise) never cost a GPU pass.
         if emit_partials
             && state.speech_detected
             && state.last_partial.elapsed() > partial_interval
             && state.buffer.len() > 16000 // At least 1 second
+            && !partial_busy.load(Ordering::Acquire)
         {
             state.last_partial = std::time::Instant::now();
             let buffer_copy = state.buffer.clone();
-            let ctx = whisper_ctx.clone();
-            let lang = language.clone();
-            let threads = partial_threads;
-            let partial_prompt = prompt.clone();
+            let real_speech = match &vad_ctx {
+                Some(v) => silero_has_speech(v, vad_params, &buffer_copy),
+                None => true,
+            };
 
-            // Transcribe in background. Partials always use greedy (fast) and
-            // are emitted raw (no post-processing) for low latency.
-            tokio::task::spawn_blocking(move || {
-                let cfg = TranscribeConfig {
-                    is_final: false,
-                    threads,
-                    beam_search: false,
-                    prompt: &partial_prompt,
-                };
-                if let Ok(text) = transcribe(&ctx, &buffer_copy, &lang, &cfg) {
-                    if !text.is_empty() {
-                        emit_event(&SttEvent::Partial { text });
+            if real_speech {
+                partial_busy.store(true, Ordering::Release);
+                let busy = partial_busy.clone();
+                let wstate = whisper_state.clone();
+                let lang = language.clone();
+                let threads = partial_threads;
+                let partial_prompt = prompt.clone();
+
+                // Transcribe in background. Partials always use greedy (fast)
+                // and are emitted raw (no post-processing) for low latency.
+                tokio::task::spawn_blocking(move || {
+                    let cfg = TranscribeConfig {
+                        is_final: false,
+                        threads,
+                        beam_search: false,
+                        prompt: &partial_prompt,
+                    };
+                    if let Ok(text) = transcribe(&wstate, &buffer_copy, &lang, &cfg) {
+                        if !text.is_empty() {
+                            emit_event(&SttEvent::Partial { text });
+                        }
                     }
-                }
-            });
+                    busy.store(false, Ordering::Release);
+                });
+            } else if current_mode != Mode::Manual
+                && state.silence_samples > silence_samples_threshold
+            {
+                // Energy gate fired but Silero hears no speech and we've
+                // been "silent" long enough: drop the noise and go idle
+                // (still armed, so real speech can start a recording).
+                state.clear();
+                state.is_recording = false;
+                emit_event(&SttEvent::RecordingStopped);
+                continue;
+            }
         }
 
         // Check for end of utterance
@@ -854,7 +902,7 @@ async fn main() -> Result<()> {
 
         if should_finalize && !state.buffer.is_empty() {
             let buffer_copy = state.buffer.clone();
-            let ctx = whisper_ctx.clone();
+            let wstate = whisper_state.clone();
             let lang = language.clone();
 
             // If Silero VAD is enabled, verify the buffer actually contains
@@ -873,7 +921,7 @@ async fn main() -> Result<()> {
                     prompt: &prompt,
                 };
                 // Final transcription
-                match transcribe(&ctx, &buffer_copy, &lang, &cfg) {
+                match transcribe(&wstate, &buffer_copy, &lang, &cfg) {
                     Ok(text) => {
                         let text = postprocess::clean(&text, remove_fillers);
                         if !text.is_empty() {
@@ -889,7 +937,16 @@ async fn main() -> Result<()> {
             }
 
             state.clear();
-            state.is_recording = current_mode == Mode::Continuous;
+            if current_mode == Mode::Continuous {
+                state.is_recording = true;
+            } else {
+                // Oneshot (and manual): one utterance, then go idle. A buffer
+                // Silero rejected as noise doesn't consume the oneshot arm.
+                state.is_recording = false;
+                if has_real_speech {
+                    state.armed = false;
+                }
+            }
 
             if current_mode == Mode::Oneshot {
                 emit_event(&SttEvent::RecordingStopped);
@@ -926,15 +983,15 @@ struct TranscribeConfig<'a> {
 
 /// Transcribe audio buffer using Whisper
 fn transcribe(
-    ctx: &Arc<Mutex<WhisperContext>>,
+    wstate: &Arc<Mutex<WhisperState>>,
     samples: &[f32],
     language: &str,
     cfg: &TranscribeConfig,
 ) -> Result<String> {
     let start_time = std::time::Instant::now();
 
-    let ctx = ctx.lock().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
-    let mut state = ctx.create_state()?;
+    // Reuse the single long-lived state; the mutex also serialises GPU access.
+    let mut state = wstate.lock().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
 
     // Beam search (final pass) trades speed for accuracy; greedy is used for
     // partials and for the final pass on slower (CPU) hosts.
@@ -957,11 +1014,14 @@ fn transcribe(
         params.set_single_segment(false);
     } else {
         // Partial transcription: optimize for speed
-        params.set_no_context(true);
         params.set_single_segment(true);      // Faster for streaming
         params.set_no_timestamps(true);       // We don't use timestamps for partials
         params.set_temperature_inc(0.0);      // Disable fallback retries for speed
     }
+
+    // The state is reused across calls; never condition on the previous
+    // (possibly unrelated or partial) transcription's tokens.
+    params.set_no_context(true);
 
     // Custom vocabulary bias (applies to both passes when set).
     if !cfg.prompt.is_empty() {
