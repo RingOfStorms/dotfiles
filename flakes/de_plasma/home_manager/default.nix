@@ -345,15 +345,21 @@ in
 
     # plasma-manager's login script pushes our desktop panels/widgets into
     # whatever shell is running. Plasma Bigscreen (DESKTOP_SESSION
-    # plasma-bigscreen-wayland) has its own homescreen and no panels, so skip
-    # the script there; regular Plasma sessions behave as before.
+    # plasma-bigscreen-wayland) has its own homescreen and no panels, so only
+    # run the wallpaper script there; regular Plasma sessions run everything.
     xdg.configFile."autostart/plasma-manager-autostart.desktop".text = lib.mkForce ''
       [Desktop Entry]
       Type=Application
       Name=Plasma Manager theme application
       Exec=${pkgs.writeShellScript "plasma-manager-autostart" ''
         case "''${DESKTOP_SESSION:-}" in
-          plasma-bigscreen*) exit 0 ;;
+          plasma-bigscreen*)
+            for script in ${config.xdg.dataHome}/plasma-manager/scripts/0_script_reset_lastrun_desktopscripts.sh \
+                          ${config.xdg.dataHome}/plasma-manager/scripts/*wallpaper*.sh; do
+              [ -x "$script" ] && "$script"
+            done
+            exit 0
+            ;;
         esac
         exec ${config.xdg.dataHome}/plasma-manager/run_all.sh
       ''}

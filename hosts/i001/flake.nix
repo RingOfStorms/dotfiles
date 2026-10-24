@@ -63,6 +63,9 @@
               enable = true;
               gpu.intel.enable = true;
               sddm.autologinUser = "luser";
+              wallpapers = [
+                ../../hosts/_shared_assets/wallpapers/pixel_cat_garage.png
+              ];
             };
           })
 
@@ -126,6 +129,65 @@
             ];
             programs.firefox.enable = true;
 
+            # TV audio: disable the mini PC's unused internal USB 3.5mm codec so HDMI
+            # (`alsa_card.pci-0000_00_1f.3`) is the only built-in sink (Bluetooth
+            # headphones still take over when connected). Also ensure WirePlumber never
+            # restores a persisted muted route on boot/login.
+            services.pipewire.wireplumber.extraConfig."50-tv-hdmi-audio" = {
+              "wireplumber.settings" = {
+                "device.routes.default-sink-volume" = 1.0;
+              };
+              "monitor.alsa.rules" = [
+                {
+                  matches = [
+                    { "device.name" = "alsa_card.usb-CSCTEK_USB_Audio_and_HID_A34004801402-00"; }
+                  ];
+                  actions.update-props = {
+                    "device.disabled" = true;
+                  };
+                }
+              ];
+            };
+            # Scrub any persisted `"mute":true` from default-routes BEFORE
+            # WirePlumber starts, since state-routes.lua loads default-routes
+            # into its in-memory state_table once at startup.
+            systemd.user.services.wireplumber.serviceConfig.ExecStartPre = [
+              (pkgs.writeShellScript "wireplumber-scrub-mute" ''
+                routes="$HOME/.local/state/wireplumber/default-routes"
+                if [ -f "$routes" ]; then
+                  ${pkgs.gnused}/bin/sed -i 's/"mute":true/"mute":false/g' "$routes"
+                fi
+              '')
+            ];
+            systemd.user.services.tv-audio-unmute = {
+              description = "Ensure TV HDMI audio sink is unmuted";
+              wantedBy = [
+                "pipewire.service"
+                "default.target"
+              ];
+              after = [
+                "pipewire.service"
+                "wireplumber.service"
+              ];
+              path = [
+                pkgs.wireplumber
+                pkgs.coreutils
+              ];
+              serviceConfig = {
+                Type = "oneshot";
+                RemainAfterExit = true;
+              };
+              script = ''
+                for _ in $(seq 1 20); do
+                  if wpctl inspect @DEFAULT_AUDIO_SINK@ >/dev/null 2>&1; then
+                    wpctl set-mute @DEFAULT_AUDIO_SINK@ 0 || true
+                    break
+                  fi
+                  sleep 0.25
+                done
+              '';
+            };
+
             # Bluetooth (controllers, headphones). Pairings persist via the shared
             # `bluetooth` impermanence set (/var/lib/bluetooth).
             hardware.bluetooth = {
@@ -156,9 +218,17 @@
             # launched by storageId). ~/.config outranks Bigscreen's own
             # ~/.config/plasma-bigscreen defaults (XDG_CONFIG_DIRS).
             home-manager.users.${primaryUser} =
-              { lib, ... }:
+              { config, lib, ... }:
               let
                 apps = "/run/current-system/sw/share/applications";
+                wallpaper = "${../../hosts/_shared_assets/wallpapers/pixel_cat_garage.png}";
+                plasmashellrcFile = pkgs.writeText "plasmashellrc" ''
+                  [Applets][1]
+                  wallpaperplugin=org.kde.image
+
+                  [Applets][1][Wallpaper][org.kde.image][General]
+                  Image=file://${wallpaper}
+                '';
                 favs = [
                   {
                     id = "org.jellyfin.JellyfinDesktop";
@@ -262,9 +332,38 @@
                 # Default browser (Bigscreen ships aura-browser in its kdeglobals defaults;
                 # ~/.config/kdeglobals outranks it).
                 programs.plasma.configFile.kdeglobals.General.BrowserApplication = "google-chrome.desktop";
+                # Plasma Bigscreen has no mute indicator or unmute toggle in its
+                # audio settings KCM (and its QML volume slider is broken in 6.7),
+                # so unbind the remote's Mute key to prevent global sink mute from
+                # locking audio off.
+                programs.plasma.shortcuts.kmix.mute = [ ];
+                # Ensure plasma-manager's wallpaper script still runs on Bigscreen
+                # login while skipping the desktop panel/layout scripts.
+                xdg.configFile."autostart/plasma-manager-autostart.desktop".text = lib.mkOverride 40 ''
+                  [Desktop Entry]
+                  Type=Application
+                  Name=Plasma Manager theme application
+                  Exec=${pkgs.writeShellScript "plasma-manager-autostart" ''
+                    case "''${DESKTOP_SESSION:-}" in
+                      plasma-bigscreen*)
+                        for script in ${config.xdg.dataHome}/plasma-manager/scripts/0_script_reset_lastrun_desktopscripts.sh \
+                                      ${config.xdg.dataHome}/plasma-manager/scripts/*wallpaper*.sh; do
+                          [ -x "$script" ] && "$script"
+                        done
+                        exit 0
+                        ;;
+                    esac
+                    exec ${config.xdg.dataHome}/plasma-manager/run_all.sh
+                  ''}
+                  X-KDE-autostart-condition=ksmserver
+                '';
                 home.activation.bigscreenSeed = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
                   install -Dm644 ${favsFile} "$HOME/.config/bigscreen-favs"
                   install -Dm644 ${blacklistFile} "$HOME/.config/applications-blacklistrc"
+                  install -Dm600 ${plasmashellrcFile} "$HOME/.config/plasmashellrc"
+                  if [ -f "$HOME/.local/state/wireplumber/default-routes" ]; then
+                    ${pkgs.gnused}/bin/sed -i 's/"mute":true/"mute":false/g' "$HOME/.local/state/wireplumber/default-routes"
+                  fi
                 '';
               };
           })
