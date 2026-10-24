@@ -23,11 +23,11 @@
       },
       "locked": {
         "dir": "flakes/de_plasma",
-        "lastModified": 1791931350,
-        "narHash": "sha256-RGKBetcoAVVmc93p+nXoKFvsV1FCpBkk136by7s4hl4=",
+        "lastModified": 1792822285,
+        "narHash": "sha256-XdTntnv30vN1sue2YSkMhDs4pWX3yszhcj3bbwC8Bc4=",
         "ref": "refs/heads/master",
-        "rev": "ccb9c17bf4eb41725b72f5981d6e60ffe9133c06",
-        "revCount": 2297,
+        "rev": "a1490608738e353dad2c132607f3b380fb6550b3",
+        "revCount": 2417,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -941,10 +941,10 @@
         "de_plasma": "de_plasma",
         "fleet-agent": "fleet-agent",
         "home-manager": "home-manager_2",
+        "impermanence": "impermanence",
         "nixpkgs": "nixpkgs_6",
         "ros_neovim": "ros_neovim",
-        "secrets_manager": "secrets_manager",
-        "impermanence": "impermanence"
+        "secrets_manager": "secrets_manager"
       }
     },
     "ros_neovim": {
