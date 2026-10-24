@@ -42,7 +42,8 @@ in
                   type = "btrfs";
                   extraArgs = [
                     "-f"
-                    "--label NIXROOT"
+                    "-L"
+                    "NIXROOT"
                   ];
                   subvolumes =
                     let

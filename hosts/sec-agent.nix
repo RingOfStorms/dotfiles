@@ -20,33 +20,12 @@ let
   primaryUser = constants.host.primaryUser;
   group = if primaryUser == "root" then "root" else "users";
 
-  # Must match hosts/fleet.nix. The old OpenBao module generated these SSH
-  # match blocks automatically; sec-agent keeps that behavior without
-  # depending on the old input.
-  nix2nixMatchBlockHosts = [
-    "lio"
-    "lio_"
-    "oren"
-    "juni"
-    "juni_"
-    "gp3"
-    "joe"
-    "joe_"
-    "i001"
-    "i001_"
-    "t"
-    "t_"
-    "h001"
-    "h001_"
-    "h003"
-    "h003_"
-    "h004"
-    "h004_"
-    "h005"
-    "h005_"
-    "o002"
-    "o002_"
-  ];
+  # Derived from the fleet registry (hosts/fleet.nix `sshMatchBlockHosts`):
+  # every registered host plus a `<name>_` variant where it has a direct IP
+  # (lanIp/publicIp). This is exactly the set of HM ssh matchBlocks fleet
+  # generates, so the nix2nix IdentityFile can't drift and retired hosts
+  # (h002) drop out automatically.
+  nix2nixMatchBlockHosts = (import ./fleet.nix).sshMatchBlockHosts;
 
   isHighTrust = role == "machines-hightrust";
   trustPath = if isHighTrust then "high-trust" else "low-trust";

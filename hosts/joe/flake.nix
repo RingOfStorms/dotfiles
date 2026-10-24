@@ -6,14 +6,13 @@
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # beszel.url = "path:../../flakes/beszel";
-    # beszel.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/beszel";
+    fleet-agent.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/fleet-agent";
     # de_plasma.url = "path:../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     # sec-agent replaces secrets-bao on this host.
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
-    # impermanence_mod.url = "path:../../flakes/impermanence";
-    impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
+    # impermanence.url = "path:../../flakes/impermanence";
+    impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
 
@@ -63,7 +62,7 @@
         ];
 
         nixosModules = [
-          inputs.impermanence_mod.nixosModules.default
+          inputs.impermanence.nixosModules.default
           ({
             ringofstorms.impermanence = {
               enable = true;
@@ -119,15 +118,6 @@
             role = "machines-lowtrust";
           })
 
-          # TODO beszel agent -- needs overlay IP assigned first
-          # beszel.nixosModules.agent
-          # ({
-          #   beszelAgent = {
-          #     listen = "${overlayIp}:45876";
-          #     token = "TODO"; # Generate and assign a beszel agent token
-          #   };
-          # })
-
           ./configuration.nix
           ./hardware-configuration.nix
           ./nixld.nix
@@ -136,7 +126,7 @@
           ./firewall.nix
           (import ./impermanence.nix {
             inherit primaryUser;
-            impermanence_mod = inputs.impermanence_mod;
+            impermanence = inputs.impermanence;
           })
 
           # Host-specific config

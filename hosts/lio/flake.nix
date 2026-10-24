@@ -184,7 +184,6 @@
           ./configuration.nix
           ./firewall.nix
           ./hardware-configuration.nix
-          (import ./containers.nix { inherit inputs; })
           ./vms.nix
           ./nono.nix
           ./blender.nix

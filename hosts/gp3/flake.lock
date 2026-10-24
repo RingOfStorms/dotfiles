@@ -286,7 +286,7 @@
     "home-manager_3": {
       "inputs": {
         "nixpkgs": [
-          "impermanence_mod",
+          "impermanence",
           "impermanence",
           "nixpkgs"
         ]
@@ -306,25 +306,6 @@
       }
     },
     "impermanence": {
-      "inputs": {
-        "home-manager": "home-manager_3",
-        "nixpkgs": "nixpkgs_5"
-      },
-      "locked": {
-        "lastModified": 1769548169,
-        "narHash": "sha256-03+JxvzmfwRu+5JafM0DLbxgHttOQZkUtDWBmeUkN8Y=",
-        "owner": "nix-community",
-        "repo": "impermanence",
-        "rev": "7b1d382faf603b6d264f58627330f9faa5cba149",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nix-community",
-        "repo": "impermanence",
-        "type": "github"
-      }
-    },
-    "impermanence_mod": {
       "inputs": {
         "disko": "disko",
         "impermanence": "impermanence"
@@ -1216,13 +1197,13 @@
         "de_plasma": "de_plasma",
         "fleet-agent": "fleet-agent",
         "home-manager": "home-manager_2",
-        "impermanence_mod": "impermanence_mod",
         "nixos-hardware": "nixos-hardware",
         "nixpkgs": "nixpkgs_7",
         "omp-flake": "omp-flake",
         "ros_neovim": "ros_neovim",
         "secrets_manager": "secrets_manager",
-        "stt_ime": "stt_ime"
+        "stt_ime": "stt_ime",
+        "impermanence": "impermanence"
       }
     },
     "ros_neovim": {

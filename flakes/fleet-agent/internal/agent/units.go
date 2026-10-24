@@ -217,5 +217,10 @@ func collectUnits(ctx context.Context, extraUnits []string) (map[string]StatusSe
 			Kind:    "host",
 		}
 	}
+	for k, v := range collectSupervisorUnits(ctx) {
+		if _, exists := hostUnits[k]; !exists {
+			hostUnits[k] = v
+		}
+	}
 	return svcs, hostUnits, nil
 }

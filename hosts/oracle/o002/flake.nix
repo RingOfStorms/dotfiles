@@ -66,7 +66,7 @@
             })
             (import ./impermanence.nix {
               inherit primaryUser;
-              impermanence_mod = inputs.impermanence;
+              impermanence = inputs.impermanence;
             })
             # Debug aids: serial console output + initrd ssh so we can SEE and
             # RECOVER if the impermanence root-reset hangs in initrd.

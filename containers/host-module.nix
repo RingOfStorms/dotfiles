@@ -12,6 +12,7 @@
 {
   config,
   lib,
+  options,
   pkgs,
   ...
 }:
@@ -662,10 +663,54 @@ in
         }
       );
     };
+    nginx.openFirewall = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Open TCP 80/443 on every interface when nginx.enable is set. The
+        generated vhosts gate access themselves (nginx.acl exposure ACLs,
+        edge.blockInternal), so the firewall only needs to let them in.
+        Turn off to scope the ports per interface in the host config instead.
+      '';
+    };
+    persist = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = config.ringofstorms.impermanence.enable or false;
+        defaultText = lib.literalExpression "config.ringofstorms.impermanence.enable or false";
+        description = ''
+          Add the container state directories to
+          environment.persistence."/persist".directories (needs the
+          impermanence module; ignored when it is not imported).
+        '';
+      };
+      directories = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [
+          "/srv/containers"
+          "/etc/systemd-mutable"
+          stateDir
+          "/var/lib/containers"
+          "/var/lib/nixos-containers"
+          # extra-container <name>.conf links, read via EnvironmentFile by container@ units.
+          "/etc/nixos-containers"
+        ];
+        description = "Directories persisted when persist.enable is set.";
+      };
+    };
   };
 
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
+      # Impermanent root: keep container data, runtime unit links, runtime
+      # firewall ports/nginx includes and podman's image store across reboots.
+      # Only when the impermanence module is imported (the option exists).
+      (lib.optionalAttrs (options ? environment && options.environment ? persistence) {
+        environment.persistence = lib.mkIf cfg.persist.enable {
+          "/persist".directories = cfg.persist.directories;
+        };
+      })
+
       {
         programs.extra-container.enable = true;
         boot.enableContainers = true;
@@ -862,6 +907,32 @@ in
       # dir, runs `nginx -t` (restoring the previous file and keeping the rejected one
       # as .broken on failure) and then
       # `systemctl reload nginx`. No rebuild is needed for new sites.
+      (lib.mkIf cfg.nginx.enable {
+        # Per-service sites (written by `containers deploy`) listen on the
+        # tailscale overlay IP, which may not exist yet when nginx starts at
+        # boot. Ordering after tailscaled-autoconnect is not enough (the
+        # address can come later), so also allow binding addresses not (yet)
+        # assigned to any interface.
+        boot.kernel.sysctl = {
+          "net.ipv4.ip_nonlocal_bind" = lib.mkDefault 1;
+          "net.ipv6.ip_nonlocal_bind" = lib.mkDefault 1;
+        };
+        systemd.services.nginx = {
+          wants = [
+            "network-online.target"
+            "tailscaled-autoconnect.service"
+          ];
+          after = [
+            "network-online.target"
+            "tailscaled-autoconnect.service"
+          ];
+        };
+        networking.firewall.allowedTCPPorts = lib.mkIf cfg.nginx.openFirewall [
+          80
+          443
+        ];
+      })
+
       (lib.mkIf cfg.nginx.enable {
         services.nginx = {
           enable = true;

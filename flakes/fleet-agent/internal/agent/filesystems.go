@@ -65,7 +65,8 @@ func shouldSkipMount(mount, fstype string, explicit map[string]string) bool {
 		strings.HasPrefix(mount, "/var/lib/nixos-containers/") ||
 		strings.HasPrefix(mount, "/var/lib/containers/") ||
 		strings.HasPrefix(mount, "/run/") ||
-		strings.HasPrefix(mount, "/nix/store") {
+		strings.HasPrefix(mount, "/nix/store") ||
+		mount == "/etc/hosts" || mount == "/etc/hostname" || mount == "/etc/resolv.conf" {
 		return true
 	}
 	return false
@@ -184,9 +185,9 @@ func collectFilesystems(procDir, sysDir, stateDir string, configuredMounts []str
 		if rm.device != "" && strings.HasPrefix(rm.device, "/dev/") {
 			if idx, exists := bchGroupIdx["dev:"+rm.device]; exists {
 				out[idx].Subvolumes = append(out[idx].Subvolumes, rm.mount)
-				if rm.mount == "/" {
-					out[idx].Mount = "/"
-					out[idx].Label = mountLabel("/", explicit)
+				if rm.mount == "/" || (rm.mount == "/data" && out[idx].Mount != "/") {
+					out[idx].Mount = rm.mount
+					out[idx].Label = mountLabel(rm.mount, explicit)
 				}
 				continue
 			}
@@ -208,6 +209,7 @@ func collectFilesystems(procDir, sysDir, stateDir string, configuredMounts []str
 			Label:       mountLabel(rm.mount, explicit),
 			Device:      rm.device,
 			FSType:      rm.fstype,
+			Subvolumes:  []string{rm.mount},
 			TotalBytes:  total,
 			UsedBytes:   used,
 			AvailBytes:  avail,

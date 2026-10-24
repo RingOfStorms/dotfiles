@@ -4,8 +4,8 @@
     home-manager.url = "github:rycee/home-manager/master";
 
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
-    # impermanence_mod.url = "path:../../flakes/impermanence";
-    impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
+    # impermanence.url = "path:../../flakes/impermanence";
+    impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
 
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
@@ -32,6 +32,8 @@
     {
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
+        # Atuin autologin into the shared `josh` account (fleet.nix enableAtuin).
+        enableAtuin = true;
         authMethod = "hashedPassword";
         authValue = "$y$j9T$b66ZAxtTo75paZx.mnXyK.$ej0eKS3Wx4488qDfjUJSP0nsUe5TBzw31VbXR19XrQ4"; # same as juni
         mutableUsers = false;
@@ -50,7 +52,7 @@
 
         nixosModules = [
           inputs.nixos-hardware.nixosModules.gpd-pocket-3
-          inputs.impermanence_mod.nixosModules.default
+          inputs.impermanence.nixosModules.default
           ({
             ringofstorms.impermanence = {
               enable = true;
@@ -107,18 +109,6 @@
           inputs.omp-flake.nixosModules.default
           inputs.common.nixosModules.remote_lio_builds
 
-          inputs.common.nixosModules.atuin
-          ({
-            ringofstorms.atuin = {
-              enable = true;
-              autologin = {
-                enable = true;
-                user = primaryUser;
-                secretFile = "/var/lib/secrets_manager_hydrated/atuin-key-josh_2026-03-15";
-                afterUnits = [ "sec-secrets-ready.service" ];
-              };
-            };
-          })
 
           (import ./sec-agent.nix { inherit inputs constants; })
 
@@ -126,7 +116,7 @@
           ./firewall.nix
           (import ./impermanence.nix {
             inherit primaryUser;
-            impermanence_mod = inputs.impermanence_mod;
+            impermanence = inputs.impermanence;
           })
           ./configuration.nix
 

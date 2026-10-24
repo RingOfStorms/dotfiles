@@ -23,7 +23,7 @@ Container state lives under `/persist` (`containers.nix`).
 ## Bare-metal services
 
 None besides host plumbing: nginx (for floating sites), sec-agent,
-beszel-agent, fail2ban, tailscaled. Floating containers: `cnt ls`.
+fleet-agent, fail2ban, tailscaled. Floating containers: `cnt ls`.
 ## Re-image procedure
 
 Follow `utilities/nixos-install-disko/readme.md`.
@@ -44,6 +44,6 @@ Follow `utilities/nixos-install-disko/readme.md`.
 6. Seed the existing Zitadel machine user's **new** key into
    `/mnt/persist/machine-key.json` (step 7) and reboot.
 7. Verify: sec-agent hydrates, `tailscale ip -4` (update `overlayIp` here and
-   in `hosts/fleet.nix` if it changed), Beszel reports, reboot twice (root
+   in `hosts/fleet.nix` if it changed), fleet-edge reports, reboot twice (root
    wipes, `/persist` keeps), then once without the stick for the prompt.
 8. `cnt` sanity: deploy `hello-nixos` to h003, check, remove.

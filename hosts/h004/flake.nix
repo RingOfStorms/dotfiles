@@ -4,8 +4,8 @@
     home-manager.url = "github:rycee/home-manager/release-26.05";
 
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    # impermanence_mod.url = "path:../../flakes/impermanence";
-    impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
+    # impermanence.url = "path:../../flakes/impermanence";
+    impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     fleet-agent.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/fleet-agent";
 
@@ -26,6 +26,8 @@
     {
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
+        # Atuin autologin into the shared `josh` account (fleet.nix enableAtuin).
+        enableAtuin = true;
         # Same login as h002 (`mkpasswd -m yescrypt`).
         authMethod = "hashedPassword";
         authValue = "$y$j9T$iM1fEKZQH9NGQd39OTUJI.$uxPdQ7EDf4wANcFs7QDSjDC8tV5ZW4cAuNXBdqibSX4";
@@ -36,7 +38,7 @@
         ];
 
         nixosModules = [
-          inputs.impermanence_mod.nixosModules.default
+          inputs.impermanence.nixosModules.default
           ({
             ringofstorms.impermanence = {
               enable = true;
@@ -58,7 +60,7 @@
           })
           (import ./impermanence.nix {
             inherit primaryUser;
-            impermanence_mod = inputs.impermanence_mod;
+            impermanence = inputs.impermanence;
           })
 
           inputs.ros_neovim.nixosModules.default
@@ -77,21 +79,6 @@
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.tailnet
 
-          # Atuin history sync. Logs the local user (luser) into the shared
-          # `josh` atuin account: the account comes from the secret's
-          # contents, not from the local username.
-          inputs.common.nixosModules.atuin
-          ({
-            ringofstorms.atuin = {
-              enable = true;
-              autologin = {
-                enable = true;
-                user = primaryUser;
-                secretFile = "/var/lib/secrets_manager_hydrated/atuin-key-josh_2026-03-15";
-                afterUnits = [ "sec-secrets-ready.service" ];
-              };
-            };
-          })
 
           (import ./sec-agent.nix { inherit inputs constants; })
           ../ups-shutdown-receiver.nix

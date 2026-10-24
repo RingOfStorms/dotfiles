@@ -7,8 +7,8 @@
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
     # de_plasma.url = "path:../../../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
-    # impermanence_mod.url = "path:../../flakes/impermanence";
-    impermanence_mod.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
+    # impermanence.url = "path:../../flakes/impermanence";
+    impermanence.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/impermanence";
     # sec-agent replaces secrets-bao on this host.
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
 
@@ -40,7 +40,7 @@
         ];
 
         nixosModules = [
-          inputs.impermanence_mod.nixosModules.default
+          inputs.impermanence.nixosModules.default
           ({
             ringofstorms.impermanence = {
               enable = true;
@@ -88,7 +88,7 @@
           ./hardware-configuration.nix
           ./firewall.nix
           (import ./impermanence.nix {
-            impermanence_mod = inputs.impermanence_mod;
+            impermanence = inputs.impermanence;
           })
 
           # Host-specific config

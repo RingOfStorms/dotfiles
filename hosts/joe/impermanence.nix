@@ -2,11 +2,11 @@
 # gaming rig). Most state comes from the shared persistence sets in
 # `flakes/impermanence/shared_persistence/`. Only host-specific
 # entries live inline below.
-{ primaryUser, impermanence_mod }:
+{ primaryUser, impermanence }:
 { ... }:
 let
-  shared = impermanence_mod.lib.mergeSharedPersistence (
-    with impermanence_mod.sharedPersistence;
+  shared = impermanence.lib.mergeSharedPersistence (
+    with impermanence.sharedPersistence;
     [
       essentials
       xdg_user_dirs

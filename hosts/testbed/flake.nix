@@ -1,123 +1,121 @@
+# testbed — a VM of the general fleet config (see readme.md).
+#
+#   nix run ./hosts/testbed#vm            fast VM (nixos-rebuild build-vm style)
+#   nix run ./hosts/testbed#vm-desktop    same with the Plasma desktop
+#   nix run ./hosts/testbed#vm-disko      VM on the real disko layout
+#
+# Like every host it pins `common`/`de_plasma` via flake.lock; to run it on the
+# working tree instead: hosts/local-host.sh testbed build-vm
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     home-manager.url = "github:rycee/home-manager/release-26.05";
+    home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
-    # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
+    # de_plasma.url = "path:../../flakes/de_plasma";
+    de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
 
     disko.url = "github:nix-community/disko/latest";
     disko.inputs.nixpkgs.follows = "nixpkgs";
-    # impermanence.url = "github:nix-community/impermanence";
 
     ros_neovim.url = "git+https://git.joshuabell.xyz/ringofstorms/nvim";
   };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      home-manager,
-      common,
-      ros_neovim,
-      disko,
-      # impermanence,
-      ...
-    }:
+    { self, ... }@inputs:
     let
-      configurationName = "testbed";
-      stateVersion = "25.05";
-      primaryUser = "luser";
-      lib = nixpkgs.lib;
+      fleet = import ../fleet.nix;
+      constants = import ./_constants.nix;
+      primaryUser = constants.host.primaryUser;
+
+      mkTestbed =
+        { desktop }:
+        fleet.mkHost {
+          inherit inputs constants;
+          # Test-only password; this VM is never deployed or networked
+          # beyond QEMU's user-mode NAT. (The old public `password1` hash is
+          # rejected by fleet.mkHost, pentest C2.)
+          authMethod = "initialPassword";
+          authValue = "testbed";
+
+          nixosModules = [
+            inputs.disko.nixosModules.disko
+            ./disko-config.nix
+            ./hardware-configuration.nix
+
+            inputs.ros_neovim.nixosModules.default
+
+            inputs.common.nixosModules.essentials
+            inputs.common.nixosModules.git
+            inputs.common.nixosModules.tmux
+            inputs.common.nixosModules.boot_systemd
+            inputs.common.nixosModules.hardening
+            inputs.common.nixosModules.nix_options
+            inputs.common.nixosModules.podman
+            inputs.common.nixosModules.timezone_auto
+            inputs.common.nixosModules.zsh
+
+            (
+              { pkgs, ... }:
+              {
+                users.users.${primaryUser}.shell = pkgs.zsh;
+                users.users.root.initialPassword = "testbed";
+                security.sudo.wheelNeedsPassword = false;
+                networking.networkmanager.enable = true;
+
+                # build-vm / vm-disko sizing.
+                virtualisation.vmVariant.virtualisation = {
+                  memorySize = 4096;
+                  cores = 4;
+                  diskSize = 16384;
+                  graphics = desktop;
+                  forwardPorts = [
+                    {
+                      from = "host";
+                      host.port = 2222;
+                      guest.port = 22;
+                    }
+                  ];
+                };
+                virtualisation.vmVariantWithDisko.virtualisation = {
+                  memorySize = 4096;
+                  cores = 4;
+                  graphics = desktop;
+                };
+                # Hardening disables password SSH; for the VM allow it.
+                services.openssh.settings.PasswordAuthentication = pkgs.lib.mkForce true;
+
+                environment.systemPackages = with pkgs; [
+                  cowsay
+                  lolcat
+                ];
+              }
+            )
+          ]
+          ++ inputs.nixpkgs.lib.optionals desktop [
+            inputs.de_plasma.nixosModules.default
+            {
+              ringofstorms.dePlasma = {
+                enable = true;
+                sddm.autologinUser = primaryUser;
+              };
+            }
+          ];
+        };
     in
     {
-      packages = {
-        x86_64-linux.vm = self.nixosConfigurations.${configurationName}.config.system.build.vmWithDisko;
-      };
       nixosConfigurations = {
-        "${configurationName}" = (
-          lib.nixosSystem {
-            modules = [
-              home-manager.nixosModules.default
+        testbed = mkTestbed { desktop = false; };
+        testbed-desktop = mkTestbed { desktop = true; };
+      };
 
-              disko.nixosModules.disko
-              ros_neovim.nixosModules.default
-              # impermanence.nixosModules.impermanence
-
-              common.nixosModules.essentials
-              common.nixosModules.git
-              common.nixosModules.boot_systemd
-              common.nixosModules.hardening
-              common.nixosModules.nix_options
-              common.nixosModules.podman
-              common.nixosModules.timezone_auto
-              common.nixosModules.zsh
-
-              ./hardware-configuration.nix
-              ./disko-config.nix
-              (
-                { config, pkgs, ... }:
-                rec {
-                  # Home Manager
-                  home-manager = {
-                    useUserPackages = true;
-                    useGlobalPkgs = true;
-                    backupFileExtension = "bak";
-                    # add all normal users to home manager so it applies to them
-                    users = lib.mapAttrs (name: user: {
-                      home.stateVersion = stateVersion;
-                      programs.home-manager.enable = true;
-                    }) (lib.filterAttrs (name: user: user.isNormalUser or false) users.users);
-
-                    sharedModules = [
-                      common.homeManagerModules.tmux
-                      common.homeManagerModules.atuin
-                      common.homeManagerModules.direnv
-                      common.homeManagerModules.git
-                      common.homeManagerModules.postgres_cli_options
-                      common.homeManagerModules.starship
-                      common.homeManagerModules.zoxide
-                      common.homeManagerModules.zsh
-                    ];
-                  };
-
-                  # System configuration
-                  system.stateVersion = stateVersion;
-                  networking.hostName = configurationName;
-                  programs.nh.flake = "/home/${primaryUser}/.config/nixos-config/hosts/${configurationName}";
-                  nixpkgs.config.allowUnfree = true;
-                  users.users = {
-                    "${primaryUser}" = {
-                      isNormalUser = true;
-                      # `password1`
-                      hashedPassword = "$y$j9T$ACmz/g0EK1bTXuCbsGH1Z/$DeTpNoP2DclAW7cDKNBU8CxLhU06WXvmgVAA2sKdwQ1";
-                      shell = pkgs.zsh;
-                      extraGroups = [
-                        "wheel"
-                        "networkmanager"
-                        "video"
-                        "input"
-                      ];
-                      openssh.authorizedKeys.keys = [
-                      ];
-                    };
-                    root = {
-                      shell = pkgs.zsh;
-                      openssh.authorizedKeys.keys = [
-                      ];
-                    };
-                  };
-
-                  environment.systemPackages = with pkgs; [
-                    cowsay
-                    lolcat
-                  ];
-                }
-              )
-            ];
-          }
-        );
+      packages.x86_64-linux = {
+        vm = self.nixosConfigurations.testbed.config.system.build.vm;
+        vm-desktop = self.nixosConfigurations.testbed-desktop.config.system.build.vm;
+        vm-disko = self.nixosConfigurations.testbed.config.system.build.vmWithDisko;
+        default = self.packages.x86_64-linux.vm;
       };
     };
 }

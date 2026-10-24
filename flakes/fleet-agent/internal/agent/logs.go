@@ -75,6 +75,10 @@ func queryLogs(ctx context.Context, host, target, kind string, lines int, priori
 	} else if lines > 1000 {
 		lines = 1000
 	}
+	if res, handled, err := querySupervisorLogs(ctx, host, target, lines, grepStr); handled {
+		return res, err
+	}
+
 
 	units := installedUnits()
 	allowedExtra := map[string]string{}

@@ -25,6 +25,8 @@
     {
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
+        # Atuin autologin into the shared `josh` account (fleet.nix enableAtuin).
+        enableAtuin = true;
         # h001 reads its rendered values from sec-agent and runs the
         # secrets_manager server (containers/sec; floating container).
 
@@ -57,20 +59,6 @@
           })
           ./hardware-configuration.nix
           ./mods
-          # Atuin history sync: the local primary user logs into the shared `josh`
-          # atuin account (the account comes from the secret, not the local user).
-          inputs.common.nixosModules.atuin
-          ({
-            ringofstorms.atuin = {
-              enable = true;
-              autologin = {
-                enable = true;
-                user = constants.host.primaryUser;
-                secretFile = "/var/lib/secrets_manager_hydrated/atuin-key-josh_2026-03-15";
-                afterUnits = [ "sec-secrets-ready.service" ];
-              };
-            };
-          })
 
           (import ./sec-agent.nix { inherit inputs constants; })
           ./nginx.nix

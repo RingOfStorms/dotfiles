@@ -297,3 +297,80 @@ func TestLogsEndpointGuestVsUnit(t *testing.T) {
 		t.Fatalf("expected 400 for disallowed unit, got %d", res.StatusCode)
 	}
 }
+
+func TestSupervisorIntegrationAndDataMountDeduplication(t *testing.T) {
+	root := t.TempDir()
+	oldM, oldG, oldP, oldSys, oldStatfs, oldSup := mutableUnits, gcrootDir, procRoot, sysRoot, statfsFunc, supervisorBaseURL
+	t.Cleanup(func() {
+		mutableUnits, gcrootDir, procRoot, sysRoot, statfsFunc, supervisorBaseURL = oldM, oldG, oldP, oldSys, oldStatfs, oldSup
+	})
+	mutableUnits = filepath.Join(root, "m")
+	gcrootDir = filepath.Join(root, "g")
+	procRoot = filepath.Join(root, "proc")
+	sysRoot = filepath.Join(root, "sys")
+	os.MkdirAll(procRoot, 0o755)
+	os.MkdirAll(sysRoot, 0o755)
+
+	// Simulate HAOS container mounts where /homeassistant appears before /data on /dev/nvme0n1p1
+	os.WriteFile(procRoot+"/mounts", []byte(
+		"overlay / overlay rw 0 0\n"+
+			"/dev/nvme0n1p1 /homeassistant ext4 rw 0 0\n"+
+			"/dev/nvme0n1p1 /data ext4 rw 0 0\n"+
+			"/dev/nvme0n1p1 /backup ext4 rw 0 0\n",
+	), 0o644)
+	statfsFunc = func(path string) (uint64, uint64, uint64, bool) {
+		return 1000_000_000_000, 80_000_000_000, 920_000_000_000, true
+	}
+
+	supSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer test-sup-token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		switch r.URL.Path {
+		case "/addons":
+			w.Write([]byte(`{"result":"ok","data":{"addons":[{"slug":"a0d7b954_tailscale","state":"started"},{"slug":"core_ssh","state":"started"}]}}`))
+		case "/core/logs":
+			w.Write([]byte("2026-10-23 09:00:00.123 ERROR (MainThread) [homeassistant.components.zha] Failed to deliver packet\n"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer supSrv.Close()
+
+	supervisorBaseURL = supSrv.URL
+	t.Setenv("SUPERVISOR_TOKEN", "test-sup-token")
+
+	srv := httptest.NewServer(Handler(Config{Host: "hass", EnableMetrics: true}, NewSampler()))
+	defer srv.Close()
+
+	res, err := http.Get(srv.URL + "/status.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var d StatusDoc
+	if err := json.NewDecoder(res.Body).Decode(&d); err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+
+	if len(d.Filesystems) != 1 || d.Filesystems[0].Mount != "/data" || len(d.Filesystems[0].Subvolumes) != 3 {
+		t.Fatalf("expected 1 deduplicated /data mount with 3 submounts, got %+v", d.Filesystems)
+	}
+	if d.HostUnits["homeassistant"].Active != "active" || d.HostUnits["addon_a0d7b954_tailscale"].Active != "active" {
+		t.Fatalf("expected supervisor hostUnits, got %+v", d.HostUnits)
+	}
+
+	lres, err := http.Get(srv.URL + "/logs.json?target=homeassistant.service&lines=10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lr LogsResponse
+	if err := json.NewDecoder(lres.Body).Decode(&lr); err != nil {
+		t.Fatal(err)
+	}
+	lres.Body.Close()
+	if len(lr.Entries) != 1 || lr.Entries[0].Priority != 3 || lr.Entries[0].Unit != "homeassistant.components.zha" {
+		t.Fatalf("unexpected supervisor logs: %+v", lr)
+	}
+}

@@ -5,13 +5,13 @@
 # data dirs (vaultwarden, postgres, acme, ...) are added when services are
 # ported on top.
 #
-# Takes the impermanence flake as `impermanence_mod` and the primary user
+# Takes the impermanence flake as `impermanence` and the primary user
 # (root on cloud boxes) so the merged shared sets resolve user paths.
-{ primaryUser, impermanence_mod }:
+{ primaryUser, impermanence }:
 { ... }:
 let
-  shared = impermanence_mod.lib.mergeSharedPersistence (
-    with impermanence_mod.sharedPersistence;
+  shared = impermanence.lib.mergeSharedPersistence (
+    with impermanence.sharedPersistence;
     [
       essentials # /var/log, /var/lib/nixos, /machine-key.json, /etc/machine-id, ...
       tailscale # /var/lib/tailscale node identity

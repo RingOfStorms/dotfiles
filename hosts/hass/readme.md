@@ -99,3 +99,4 @@ Each backup is about 7 GB. Restore by uploading the `.tar` during onboarding or 
 
 - HACS: the HA-MCP custom component / add-on
 - Built-in **Model Context Protocol Server** integration (enabled)
+- **Fleet Agent** (`local_fleet_agent`, in `./fleet-agent/`): local Home Assistant OS app serving `/status.json` and `/logs.json` on `:9101` (for `fleet-edge` on `h005`). Includes NVMe SMART telemetry (`/dev/nvme0`), `/data` disk usage, CPU/RAM/network/disk I/O, thermal sensors, and Supervisor add-on/core/host status + logs. Rebuild and deploy after changes to `flakes/fleet-agent` with `./fleet-agent/deploy.sh`.

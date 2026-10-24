@@ -41,6 +41,8 @@
     {
       nixosConfigurations.${constants.host.name} = fleet.mkHost {
         inherit inputs constants;
+        # Atuin autologin into the shared `josh` account (fleet.nix enableAtuin).
+        enableAtuin = true;
         nixpkgsUnstable = nixpkgs-unstable;
         # secrets-bao disabled — juni is cut over to sec-agent.
         authMethod = "hashedPassword";
@@ -204,21 +206,6 @@
           inputs.omp-flake.nixosModules.default
           inputs.common.nixosModules.remote_lio_builds
 
-          inputs.common.nixosModules.atuin
-          ({
-            ringofstorms.atuin = {
-              enable = true;
-              autologin = {
-                enable = true;
-                user = primaryUser;
-                secretFile = "/var/lib/secrets_manager_hydrated/atuin-key-josh_2026-03-15";
-                # Order after sec-agent has rendered the secret. Without this
-                # the oneshot races the hydration and fails on switch/boot with
-                # "Missing atuin secret" (self-heals via the secret .path unit).
-                afterUnits = [ "sec-secrets-ready.service" ];
-              };
-            };
-          })
 
           (import ./sec-agent.nix { inherit inputs constants; })
 
@@ -243,7 +230,7 @@
           ./lm-studio.nix
           (import ./impermanence.nix {
             inherit primaryUser;
-            impermanence_mod = inputs.impermanence;
+            impermanence = inputs.impermanence;
           })
 
           # Host-specific config

@@ -1,11 +1,11 @@
 # Impermanence persistence for h004 (headless NAS). Most state comes from
 # the shared sets in `flakes/impermanence/shared_persistence/`. SSH host keys
 # are already persisted by the impermanence module (/persist/etc/ssh).
-{ primaryUser, impermanence_mod }:
+{ primaryUser, impermanence }:
 { ... }:
 let
-  shared = impermanence_mod.lib.mergeSharedPersistence (
-    with impermanence_mod.sharedPersistence;
+  shared = impermanence.lib.mergeSharedPersistence (
+    with impermanence.sharedPersistence;
     [
       essentials
       network_manager

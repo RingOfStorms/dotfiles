@@ -19,5 +19,12 @@ import ../sec-agent.nix {
       mode = "0400";
       hardDepend = [ "atuin-autologin" ];
     };
+
+    # fleet-backup credentials (ringofstorms.containers.backup), shared with
+    # h001/lio: RESTIC_REPOSITORY, RESTIC_PASSWORD and backend credentials.
+    restic_h001_env_2026-10-01 = {
+      remotePath = "machines/high-trust/restic_h001_env_2026-10-01";
+      configChanges.ringofstorms.containers.backup.environmentFile = "$SECRET_PATH";
+    };
   };
 }

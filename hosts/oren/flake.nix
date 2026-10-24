@@ -169,7 +169,7 @@
           ./nono.nix
           (import ./impermanence.nix {
             inherit primaryUser;
-            impermanence_mod = inputs.impermanence;
+            impermanence = inputs.impermanence;
           })
 
           # Host-specific config

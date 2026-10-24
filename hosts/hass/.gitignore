@@ -1,1 +1,2 @@
 *.local
+fleet-agent/bin/fleet

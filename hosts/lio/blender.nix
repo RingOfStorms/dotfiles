@@ -60,11 +60,56 @@ let
     inherit (pkgs.pkgsRocm.blender) meta;
   };
   mcpCommand = lib.getExe blenderMcpServer;
+
+  # Esfor ai3d (Tripo3D image-to-3D). The API key is a runtime secret: it is read from
+  # ~/.config/esfor/tripo_api_key (mode 0600) when the wrapper runs and is exported only
+  # to the wrapped command. It never enters the Nix store or the global environment.
+  # Usage: tripo-env ai3d balance   |   tripo-env <cmd> ...
+  tripoEnv = pkgs.writeShellApplication {
+    name = "tripo-env";
+    runtimeInputs = [ pkgs.coreutils ];
+    text = ''
+      key_file="''${TRIPO_API_KEY_FILE:-$HOME/.config/esfor/tripo_api_key}"
+      if [ -z "''${TRIPO_API_KEY:-}" ]; then
+        if [ ! -r "$key_file" ]; then
+          echo "tripo-env: $key_file not found (create it with chmod 600)" >&2
+          exit 1
+        fi
+        mode="$(stat -c %a "$key_file")"
+        if [ "$mode" != "600" ] && [ "$mode" != "400" ]; then
+          echo "tripo-env: $key_file must be mode 0600 (is $mode)" >&2
+          exit 1
+        fi
+        TRIPO_API_KEY="$(tr -d '[:space:]' < "$key_file")"
+        export TRIPO_API_KEY
+      fi
+      if [ "$#" -eq 0 ]; then
+        echo "usage: tripo-env <command> [args...]" >&2
+        exit 2
+      fi
+      exec "$@"
+    '';
+  };
+
+  # `ai3d` on PATH: runs the repo's tools/ai3d (stdlib-only Python) from the current checkout.
+  ai3dCli = pkgs.writeShellApplication {
+    name = "ai3d";
+    runtimeInputs = [ pkgs.python3 pkgs.git ];
+    text = ''
+      root="''${ESFOR_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/projects/esfor")}"
+      exec python3 "$root/tools/ai3d/ai3d.py" "$@"
+    '';
+  };
 in
 {
   environment.systemPackages = [
     blender
     blenderMcpServer
+    tripoEnv
+    ai3dCli
+    # Mesh cleanup / inspection for ai3d outputs. Instant Meshes is not packaged in
+    # nixpkgs (26.05 or unstable); quad remeshing uses Blender's QuadriFlow until it is.
+    pkgs.meshlab
   ];
 
   # opencode merges $OPENCODE_CONFIG over ~/.config/opencode/opencode.json, so the

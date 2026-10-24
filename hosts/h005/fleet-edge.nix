@@ -103,6 +103,11 @@ in
       # icon from the route (containers/puzzles)
       (personal "Puzzles" "https://puzzles.${domain}" "" "Puzzles" "public")
       (personal "Location" "https://location.${domain}" "dawarich" "Dawarich" "public")
+      (on "hass" (
+        personal "Home Assistant" "http://hass.net.${domain}:8123" "home-assistant"
+          "Smart Home (HA Yellow)"
+          "tailnet"
+      ))
     ];
     auth.zitadel = {
       enable = true;

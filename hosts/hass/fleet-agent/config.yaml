@@ -1,0 +1,24 @@
+name: Fleet Agent
+version: "0.1.0"
+slug: fleet_agent
+description: Read-only fleet-agent status, metrics, SMART, and log server for fleet-edge
+arch:
+  - aarch64
+  - amd64
+init: false
+startup: services
+boot: auto
+host_network: true
+hassio_api: true
+hassio_role: manager
+devices:
+  - /dev/nvme0
+privileged:
+  - SYS_RAWIO
+  - SYS_ADMIN
+options:
+  host: hass
+  listen: ":9101"
+schema:
+  host: str
+  listen: str

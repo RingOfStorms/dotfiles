@@ -147,12 +147,21 @@ rec {
       user = "joshua.bell";
       lanIp = "10.12.14.181";
     };
+    hass = {
+      user = "root";
+      overlayIp = "100.64.0.10";
+      lanIp = "10.12.14.22";
+      trust = "low";
+      role = "appliance";
+      alwaysOn = true;
+    };
   };
 
   # ─── DEPLOY TARGETS ───────────────────────────────────────────────
   # Hosts that can be deployed to from the root flake devShell.
   deployableHosts = builtins.removeAttrs hosts [
     "t"
+    "hass"
   ];
 
   # ─── SSH MATCH BLOCK HOSTS ────────────────────────────────────────
@@ -246,6 +255,14 @@ rec {
   #   - User creation with SSH authorized key
   #   - specialArgs passing (inputs, constants, fleet)
   #
+  # DESIGN DECISION: Do NOT fold standard NixOS modules (`essentials`, `git`,
+  # `tmux`, `boot_systemd`, `hardening`, `ssh_root`, `nix_options`, `tailnet`,
+  # `zsh`, etc.) into `mkHost`. Each host flake intentionally lists all NixOS
+  # modules it uses explicitly so that `mkHost` can still produce a
+  # minimal/lean machine with almost no modules when needed.
+  # (Opt-in flags like `enableAtuin` are fine: off by default, so a bare
+  # mkHost call stays lean.)
+  #
   mkHost =
     {
       # Required
@@ -286,6 +303,12 @@ rec {
 
       # Unstable overlay — pass the nixpkgs-unstable input to get pkgs.unstable
       nixpkgsUnstable ? null,
+
+      # Atuin history sync: imports inputs.common.nixosModules.atuin and logs
+      # the primary user into the shared `josh` atuin account via the
+      # sec-agent-rendered `atuin-key-josh_2026-03-15` secret. The host's
+      # sec-agent must declare that secret.
+      enableAtuin ? false,
     }:
     let
       lib = inputs.nixpkgs.lib;
@@ -301,6 +324,13 @@ rec {
       # impossible to reintroduce: any secretsRole host using a password
       # authMethod must pass an explicit authValue (a real hash, or "!"/"*" to
       # disable password login and rely on SSH keys).
+      #
+      # Also rejects the old public `password1` (plaintext or its well-known
+      # yescrypt hash) if it is ever passed explicitly.
+      compromisedAuthValues = [
+        "password1"
+        "$y$j9T$ACmz/g0EK1bTXuCbsGH1Z/$DeTpNoP2DclAW7cDKNBU8CxLhU06WXvmgVAA2sKdwQ1"
+      ];
       _authGuard =
         if (!isCloudUser) && authValue == null then
           throw (
@@ -309,8 +339,31 @@ rec {
             + "password. Set a `mkpasswd`-generated hash, or authValue = \"!\" "
             + "to disable password login (keys-only). See pentest C2."
           )
+        else if builtins.elem authValue compromisedAuthValues then
+          throw (
+            "fleet.mkHost: host '${hostName}' passes the compromised public "
+            + "`password1` credential (plaintext or its known hash) as authValue. "
+            + "It is published in this repo's history and must never be used "
+            + "(pentest C2). Generate a fresh one with `mkpasswd -m yescrypt`, "
+            + "or use authValue = \"!\" for keys-only login."
+          )
         else
           null;
+
+      atuinModules = lib.optionals enableAtuin [
+        inputs.common.nixosModules.atuin
+        {
+          ringofstorms.atuin = {
+            enable = true;
+            autologin = {
+              enable = true;
+              user = primaryUser;
+              secretFile = "/var/lib/secrets_manager_hydrated/atuin-key-josh_2026-03-15";
+              afterUnits = [ "sec-secrets-ready.service" ];
+            };
+          };
+        }
+      ];
 
       fleetData = {
         inherit
@@ -466,6 +519,9 @@ rec {
         # Low-trust hosts must not accept the tailnet-wide Headscale DNS
         # split; their normal LAN/public DNS provides the service records.
         ++ lowTrustTailnetDnsModule
+
+        # Opt-in atuin autologin (enableAtuin)
+        ++ atuinModules
 
         # Host-specific modules
         ++ nixosModules;
