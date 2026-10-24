@@ -99,6 +99,17 @@ in
           "This dashboard: routes + host health"
           "tailnet"
       ))
+      # PiKVMs (appliances, tag:lowtrust; not in fleet.nix). Self-signed certs.
+      (net "PiKVM" "https://pikvm.net.${domain}"
+        "https://api.iconify.design/mdi/monitor-share.svg?color=%237fb0e8"
+        "KVM over IP (V4 Mini)"
+        "tailnet"
+      )
+      (net "FleetKVM" "https://fleetkvm.net.${domain}"
+        "https://api.iconify.design/mdi/monitor-share.svg?color=%237fb0e8"
+        "Rack KVM over IP (V4 Plus)"
+        "tailnet"
+      )
 
       # icon from the route (containers/puzzles)
       (personal "Puzzles" "https://puzzles.${domain}" "" "Puzzles" "public")

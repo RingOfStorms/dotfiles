@@ -1,0 +1,5 @@
+# Disables the virtual mass storage drive.
+# Managed by kvmctl — do not edit by hand.
+kvmd:
+    msd:
+        type: disabled

@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+# kvmctl — toggle PiKVM optional features on/off from the terminal.
+# Installed by apply-identity.sh — re-run that script to update.
+#
+# Usage:
+#   kvmctl status              — show current state of all features
+#   kvmctl enable  <feature>   — enable a feature (writes override, restarts kvmd)
+#   kvmctl disable <feature>   — disable a feature (removes override, restarts kvmd)
+#
+# Features:
+#   msd     — virtual mass storage drive (ISO/flash mounting in Web UI)
+#   audio   — USB microphone emulation (outgoing audio to target host)
+
+set -euo pipefail
+
+OVERRIDE_D="/etc/kvmd/override.d"
+MSD_FILE="${OVERRIDE_D}/0200-feature-msd.yaml"
+AUDIO_FILE="${OVERRIDE_D}/0200-feature-audio.yaml"
+
+die()  { echo "ERROR: $*" >&2; exit 1; }
+log()  { echo "==> $*"; }
+info() { echo "    $*"; }
+
+[[ $EUID -eq 0 ]] || die "kvmctl must be run as root"
+
+rw_guard() {
+    rw
+    trap 'ro' EXIT
+}
+
+restart_kvmd() {
+    log "Restarting kvmd..."
+    systemctl restart kvmd
+    sleep 1
+    if systemctl is-active --quiet kvmd; then
+        log "kvmd restarted successfully."
+    else
+        die "kvmd failed to start — check: journalctl -u kvmd -n 30"
+    fi
+}
+
+validate_config() {
+    kvmd -M >/dev/null || die "Config validation failed. Changes not applied."
+}
+
+# --- msd --------------------------------------------------------------------
+
+msd_enabled() { [[ ! -f "$MSD_FILE" ]]; }
+
+msd_enable() {
+    log "Enabling mass storage (msd)..."
+    if ! msd_enabled; then
+        rw_guard
+        rm -f "$MSD_FILE"
+        validate_config
+        restart_kvmd
+        log "Mass storage enabled. Use the Drive menu in the Web UI."
+    else
+        log "Already enabled, nothing to change."
+    fi
+}
+
+msd_disable() {
+    log "Disabling mass storage (msd)..."
+    if msd_enabled; then
+        rw_guard
+        mkdir -p "$OVERRIDE_D"
+        cat > "$MSD_FILE" << 'YAML'
+# Disables the virtual mass storage drive.
+# Managed by kvmctl — do not edit by hand.
+kvmd:
+    msd:
+        type: disabled
+YAML
+        validate_config
+        restart_kvmd
+        log "Mass storage disabled."
+        info "Re-enable with: kvmctl enable msd"
+    else
+        log "Already disabled, nothing to change."
+    fi
+}
+
+# --- audio ------------------------------------------------------------------
+
+audio_enabled() { [[ -f "$AUDIO_FILE" ]]; }
+
+audio_enable() {
+    log "Enabling USB microphone audio..."
+    if ! audio_enabled; then
+        rw_guard
+        mkdir -p "$OVERRIDE_D"
+        cat > "$AUDIO_FILE" << 'YAML'
+# Enables USB microphone emulation (outgoing audio to target host).
+# Managed by kvmctl — do not edit by hand.
+# Note: consumes one USB endpoint — may conflict with other extras.
+otg:
+    devices:
+        audio:
+            enabled: true
+YAML
+        validate_config
+        restart_kvmd
+        log "USB microphone enabled."
+        info "Switch to WebRTC mode in the Web UI System menu to use it."
+        info "Re-enumerate USB on the target host if the mic doesn't appear:"
+        info "  Web UI -> System -> Connect Main USB (toggle off then on)"
+    else
+        log "Already enabled, nothing to change."
+    fi
+}
+
+audio_disable() {
+    log "Disabling USB microphone audio..."
+    if audio_enabled; then
+        rw_guard
+        rm -f "$AUDIO_FILE"
+        validate_config
+        restart_kvmd
+        log "USB microphone disabled."
+    else
+        log "Already disabled, nothing to change."
+    fi
+}
+
+# --- status -----------------------------------------------------------------
+
+feature_line() {
+    local name="$1" enabled="$2" note="$3" state
+    [[ "$enabled" == "true" ]] && state="ON " || state="OFF"
+    printf "  %-10s  [%s]  %s\n" "$name" "$state" "$note"
+}
+
+cmd_status() {
+    echo ""
+    echo "  PiKVM feature status"
+    echo "  ──────────────────────────────────────────────────────"
+    msd_enabled   && feature_line "msd"   "true"  "Virtual ISO/flash drive (Web UI Drive menu)" \
+                  || feature_line "msd"   "false" "Virtual ISO/flash drive (Web UI Drive menu)"
+    audio_enabled && feature_line "audio" "true"  "USB microphone to target host (WebRTC mode)" \
+                  || feature_line "audio" "false" "USB microphone to target host (WebRTC mode)"
+    echo "  ──────────────────────────────────────────────────────"
+    echo ""
+    echo "  kvmctl enable  <feature>   turn on"
+    echo "  kvmctl disable <feature>   turn off"
+    echo ""
+}
+
+# --- dispatch ---------------------------------------------------------------
+
+COMMAND="${1:-status}"
+FEATURE="${2:-}"
+
+case "$COMMAND" in
+    status)  cmd_status ;;
+    enable)
+        case "$FEATURE" in
+            msd)   msd_enable ;;
+            audio) audio_enable ;;
+            *)     die "Unknown feature '${FEATURE}'. Valid: msd, audio" ;;
+        esac ;;
+    disable)
+        case "$FEATURE" in
+            msd)   msd_disable ;;
+            audio) audio_disable ;;
+            *)     die "Unknown feature '${FEATURE}'. Valid: msd, audio" ;;
+        esac ;;
+    *)
+        echo "Usage: kvmctl {status|enable|disable} [feature]"
+        echo "Features: msd, audio"
+        exit 1 ;;
+esac

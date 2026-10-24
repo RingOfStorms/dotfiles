@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# connectpro-switch — switch ConnectPRO KVM active port from PiKVM.
+#
+# Supports two switching backends:
+#   1. USB DDM Hotkey (default, zero extra cables):
+#      Sends [Hotkey, Hotkey, <Port>] over PiKVM's main USB OTG keyboard
+#      connected to the ConnectPRO's rear DDM console port.
+#   2. Serial RS-232 (optional, if a serial cable is attached):
+#      Writes the port-switch command to the serial device configured in
+#      /etc/kvmd/connectpro.conf (e.g. /dev/ttyUSB0 or /dev/ttyAMA0).
+#
+# Usage:
+#   connectpro-switch port <1..4>       — switch KVM to port 1..4
+#   connectpro-switch usb-sync          — bind USB 3.0 hub ports to follow KVM port
+#   connectpro-switch usb-lock <1..4>   — lock USB 3.0 hub ports to port 1..4
+#   connectpro-switch beep-toggle       — toggle ConnectPRO confirmation buzzer
+#   connectpro-switch sniff [baud]      — listen on SERIAL_DEV and print hex/ASCII (press front buttons 1..4)
+
+set -euo pipefail
+
+# Default settings (override via /etc/kvmd/connectpro.conf)
+MODE="${MODE:-serial}"                    # "serial" or "hotkey"
+HOTKEY="${HOTKEY:-ControlLeft}"           # ConnectPRO default is Ctrl ("ControlLeft"); can be "ScrollLock", "ShiftLeft", "CapsLock"
+SERIAL_DEV="${SERIAL_DEV:-/dev/ttyUSB0}"  # Or /dev/ttyAMA0 if using the V4 Plus front RJ45 console port
+SERIAL_BAUD="${SERIAL_BAUD:-}"            # Must be set in /etc/kvmd/connectpro.conf for MODE="serial"
+SERIAL_CMD_FMT="${SERIAL_CMD_FMT:-}"      # Must be set in /etc/kvmd/connectpro.conf for MODE="serial" (printf format for port 1..8)
+KVMD_SOCK="${KVMD_SOCK:-/run/kvmd/kvmd.sock}"
+
+if [[ -f /etc/kvmd/connectpro.conf ]]; then
+    # shellcheck disable=SC1091
+    source /etc/kvmd/connectpro.conf
+fi
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+# Send a sequence of Web key names via KVMD's local UNIX socket.
+# Note: kvmd runs `cmd` GPIO drivers as the `kvmd` user, which is in the
+# `kvmd-selfauth` group and is pre-authorized on /run/kvmd/kvmd.sock.
+send_keys() {
+    local key
+    for key in "$@"; do
+        curl --unix-socket "$KVMD_SOCK" --fail -sS -X POST \
+            "http://localhost/hid/events/send_key?key=${key}&state=true" >/dev/null
+        sleep 0.05
+        curl --unix-socket "$KVMD_SOCK" --fail -sS -X POST \
+            "http://localhost/hid/events/send_key?key=${key}&state=false" >/dev/null
+        sleep 0.08
+    done
+}
+
+send_serial() {
+    local payload="$1"
+    [[ -n "$SERIAL_BAUD" ]] || die "MODE=serial requires SERIAL_BAUD to be set in /etc/kvmd/connectpro.conf"
+    [[ -c "$SERIAL_DEV" ]] || die "Serial device $SERIAL_DEV not found"
+    stty -F "$SERIAL_DEV" "$SERIAL_BAUD" cs8 -cstopb -parenb -crtscts raw -echo
+    printf "%b" "$payload" > "$SERIAL_DEV"
+}
+
+ACTION="${1:-}"
+ARG="${2:-}"
+
+case "$ACTION" in
+    port)
+        [[ "$ARG" =~ ^[1-8]$ ]] || die "Usage: connectpro-switch port <1..8>"
+        if [[ "$MODE" == "serial" ]]; then
+            [[ -n "$SERIAL_CMD_FMT" ]] || die "MODE=serial requires SERIAL_CMD_FMT to be set in /etc/kvmd/connectpro.conf"
+            # shellcheck disable=SC2059
+            cmd_str="$(printf "$SERIAL_CMD_FMT" "$ARG")"
+            send_serial "$cmd_str"
+        else
+            send_keys "$HOTKEY" "$HOTKEY" "Digit${ARG}"
+        fi
+        ;;
+    usb-sync)
+        # ConnectPRO Hotkey: [Hotkey, Hotkey, H, 0, P, 0] -> sync USB hub port with KVM selection
+        send_keys "$HOTKEY" "$HOTKEY" "KeyH" "Digit0" "KeyP" "Digit0"
+        ;;
+    usb-lock)
+        [[ "$ARG" =~ ^[1-8]$ ]] || die "Usage: connectpro-switch usb-lock <1..8>"
+        # ConnectPRO Hotkey: [Hotkey, Hotkey, H, 1, P, <N>] -> lock USB hub #1 to port N
+        send_keys "$HOTKEY" "$HOTKEY" "KeyH" "Digit1" "KeyP" "Digit${ARG}"
+        ;;
+    beep-toggle)
+        # ConnectPRO Hotkey: [Hotkey, Hotkey, Z] -> toggle buzzer sound
+        send_keys "$HOTKEY" "$HOTKEY" "KeyZ"
+        ;;
+    sniff)
+        baud="${ARG:-115200}"
+        [[ -c "$SERIAL_DEV" ]] || die "Serial device $SERIAL_DEV not found"
+        echo "Listening on $SERIAL_DEV at ${baud} baud (8N1)... Press front-panel buttons 1..4 on ConnectPRO (Ctrl+C to stop):"
+        stty -F "$SERIAL_DEV" "$baud" cs8 -cstopb -parenb -crtscts raw -echo
+        xxd -g 1 "$SERIAL_DEV"
+        ;;
+    *)
+        die "Usage: connectpro-switch {port <1..8>|sniff [baud]|usb-sync|usb-lock <1..8>|beep-toggle}"
+        ;;
+esac

@@ -1,0 +1,10 @@
+# USB OTG identity override (TEMPLATE — real values are not kept in the repo).
+# Makes the PiKVM enumerate on the target as some ordinary USB HID device
+# instead of "PiKVM". Fill in the values on the device only; see
+# hosts/pikvm/pikvm_v4mini.md "Filling in identity values".
+otg:
+    vendor_id: 0xVVVV       # USB vendor ID of the device being imitated
+    product_id: 0xPPPP      # USB product ID of that device
+    manufacturer: CHANGEME  # iManufacturer string
+    product: CHANGEME       # iProduct string
+    serial: CHANGEME        # iSerial string; unique per PiKVM
