@@ -103,6 +103,16 @@
       }
     ];
   };
+  "machines/by-host/h005/edge_vhost_push_2026-10-24" = {
+    fields = [ "value" ];
+    description = "Dedicated SSH private key for h005 fleet-edge-overrides vhost push (restricted to fleet-vhost-receive on o002).";
+    access = [
+      {
+        type = "sub";
+        value = "395294573078773763";
+      }
+    ];
+  };
   "machines/high-trust/remote_lio_builds_2026-10-22" = {
     fields = [ "value" ];
     description = "Dedicated SSH private key for remote_lio_builds distributed Nix builds on lio (restricted to nix-daemon/nix-store).";

@@ -30,6 +30,10 @@ import ../_shared_assets/utilities/sec-agent.nix {
       remotePath = "machines/by-host/h005/ups_shutdown_2026-10-22";
       ensureNewline = true;
     };
+    edge_vhost_push_2026-10-24 = {
+      remotePath = "machines/by-host/h005/edge_vhost_push_2026-10-24";
+      ensureNewline = true;
+    };
 
     hass_isp_speedtest_token = {
       remotePath = "machines/by-host/h005/hass_isp_speedtest_token";

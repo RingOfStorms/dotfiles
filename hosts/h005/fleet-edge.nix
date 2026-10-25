@@ -54,13 +54,16 @@ in
 
   services.fleet-edge = {
     enable = true;
-    # Public expose authority (ROUTING-PLAN §8 step 7). No keys yet: writes
-    # return 503 until rollout step 4 sets bunnyKeyFile/pushKeyFile/devices.
+    # Public expose authority (ROUTING-PLAN §8 step 7). Both keys are now
+    # set, so writes go live on deploy (no devices yet: no lio token, so
+    # writes stay refused per device until one is added).
     overrides = {
       enable = true;
       specFile = publicSpecFile;
       target = "o002.${fleet.global.domain}";
       pushTarget = "root@o002";
+      bunnyKeyFile = "/var/lib/secrets_manager_hydrated/bunny_rw_dns_2026-03-15";
+      pushKeyFile = "/var/lib/secrets_manager_hydrated/edge_vhost_push_2026-10-24";
       devices = { };
     };
     inventoryFile = pkgs.writeText "fleet-inventory.json" (builtins.toJSON inputs.containers.inventory);
@@ -128,8 +131,7 @@ in
       (personal "Puzzles" "https://puzzles.${domain}" "" "Puzzles" "public")
       (personal "Location" "https://location.${domain}" "dawarich" "Dawarich" "public")
       (on "hass" (
-        personal "Home Assistant" "http://hass.net.${domain}:8123" "home-assistant"
-          "Smart Home (HA Yellow)"
+        personal "Home Assistant" "http://hass.net.${domain}:8123" "home-assistant" "Smart Home (HA Yellow)"
           "tailnet"
       ))
     ];

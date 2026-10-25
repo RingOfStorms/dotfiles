@@ -35,7 +35,7 @@ rec {
     #   null until the edge_vhost_push key exists in sec (rollout step 4).
     wildcardCertPushPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOaTzdbHJRre5CjJFRJH4V12sNdfnAXF5seRq+AKGfA5 josh@lio";
     upsShutdownPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA0zalrea9G+zd3iosRzuyo40xFKDv3Gjp/mPzHphO+d josh@lio";
-    edgeVhostPushPubKey = null;
+    edgeVhostPushPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN+i6zNcEnqG4cirgBJAqR1snZNMTGa6CchAK7jmGnJP edge_vhost_push";
     remoteLioBuildsPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKfWqX9cDfe3KdLDWRV6bOPIac97MwIS3Cx+aJzJgHA3 josh@lio";
 
     secretsDir = "/var/lib/secrets_manager_hydrated";
