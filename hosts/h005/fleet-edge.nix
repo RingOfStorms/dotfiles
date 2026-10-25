@@ -25,7 +25,7 @@ let
   inherit (import ../../containers/lib.nix) nginxSnippets;
   # Same spec `fleet-edge dns-plan` reconciles (dns-records.nix publicSpec).
   publicSpecFile = pkgs.writeText "fleet-public-spec.json" (
-    builtins.toJSON (import ./dns-records.nix { inherit fleet; }).public
+    builtins.toJSON (import ./dns-records.nix { inherit fleet; }).publicSpec
   );
   domain = fleet.global.domain;
   h001 = "http://h001.net.${domain}";

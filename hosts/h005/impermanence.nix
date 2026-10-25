@@ -38,6 +38,12 @@ in
         # DynamicUser owns the private directory; systemd creates the public
         # /var/lib/fleet-edge symlink for SQLite metrics.db at service startup.
         "/var/lib/private/fleet-edge"
+        # Expose authority rows (fleet-edge-overrides). Losing them on reboot
+        # would orphan the public CNAMEs and o002 vhosts they own.
+        {
+          directory = "/var/lib/private/fleet-edge-overrides";
+          mode = "0700";
+        }
         # *.ts.joshuabell.xyz wildcard (private-zone.nix); avoid re-issuing
         # on every boot (Let's Encrypt rate limits).
         {
