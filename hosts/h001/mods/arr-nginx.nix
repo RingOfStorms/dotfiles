@@ -7,7 +7,7 @@ let
   mi = constants.services.mediaIntegrity;
   tls = {
     addSSL = true;
-    # Wildcard pushed by h005 (hosts/wildcard-cert-receiver.nix).
+    # Wildcard pushed by h005 (hosts/_shared_assets/utilities/wildcard-cert-receiver.nix).
     sslCertificate = "/var/lib/fleet-cert/${fleet.global.domain}/current/fullchain.pem";
     sslCertificateKey = "/var/lib/fleet-cert/${fleet.global.domain}/current/key.pem";
   };

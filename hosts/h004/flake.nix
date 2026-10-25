@@ -79,9 +79,8 @@
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.tailnet
 
-
           (import ./sec-agent.nix { inherit inputs constants; })
-          ../ups-shutdown-receiver.nix
+          ../_shared_assets/utilities/ups-shutdown-receiver.nix
 
           ./hardware-configuration.nix
           ./firewall.nix

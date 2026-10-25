@@ -27,7 +27,7 @@ Because all stateful services on `h001` now live in floating containers (`contai
 ### Step 0: Prerequisites on `h003` (see `ideas/resilience.md` §2)
 1. Enable `ringofstorms.containers.privateNetwork.enable = true` in `hosts/h003/containers.nix` (required for `net.private` containers like `sec`, `vaultwarden`, `zitadel`).
 2. Enable `ringofstorms.containers.backup` on `h003` (wire `restic_h001_env_2026-10-01` in `hosts/h003/sec-agent.nix` so `cnt move` preflight passes).
-3. Wire `wildcard-cert-receiver.nix` on `h003` + add `"h003"` to `hosts/h005/wildcard-cert.nix` (`nginx.acl.lan` + `nginx.edge.blockInternal = true`).
+3. Wire `_shared_assets/utilities/wildcard-cert-receiver.nix` on `h003` + add `"h003"` to `hosts/h005/wildcard-cert.nix` (`nginx.acl.lan` + `nginx.edge.blockInternal = true`).
 4. Ensure `h003` has enough disk space on `/persist/srv/containers` for the services being evacuated.
 ### Step 1: Evacuate Services to `h003`
 1. Move portable floating containers (`zitadel`, `sec`, `forgejo`, `vaultwarden`, `atuin`, `trilium`, `matrix`, `dawarich`, `life`, `puzzles`, `searx`, `opengist`, `open-webui`, `litellm`, etc.) to `h003` using `cnt move <svc> --to h003`.

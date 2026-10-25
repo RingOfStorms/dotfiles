@@ -31,8 +31,11 @@ rec {
     # - wildcardCertPushPubKey: h005 -> h001, o002 (command=fleet-cert-receive)
     # - upsShutdownPubKey:      h005 -> h001, h004 (command=fleet-ups-shutdown)
     # - remoteLioBuildsPubKey:  juni/gp3/oren -> lio (command=nix-daemon/nix-store)
+    # - edgeVhostPushPubKey:    h005 -> o002 (command=fleet-vhost-receive);
+    #   null until the edge_vhost_push key exists in sec (rollout step 4).
     wildcardCertPushPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOaTzdbHJRre5CjJFRJH4V12sNdfnAXF5seRq+AKGfA5 josh@lio";
     upsShutdownPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA0zalrea9G+zd3iosRzuyo40xFKDv3Gjp/mPzHphO+d josh@lio";
+    edgeVhostPushPubKey = null;
     remoteLioBuildsPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKfWqX9cDfe3KdLDWRV6bOPIac97MwIS3Cx+aJzJgHA3 josh@lio";
 
     secretsDir = "/var/lib/secrets_manager_hydrated";

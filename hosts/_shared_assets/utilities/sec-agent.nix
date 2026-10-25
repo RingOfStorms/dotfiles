@@ -25,7 +25,7 @@ let
   # (lanIp/publicIp). This is exactly the set of HM ssh matchBlocks fleet
   # generates, so the nix2nix IdentityFile can't drift and retired hosts
   # (h002) drop out automatically.
-  nix2nixMatchBlockHosts = (import ./fleet.nix).sshMatchBlockHosts;
+  nix2nixMatchBlockHosts = (import ../../fleet.nix).sshMatchBlockHosts;
 
   isHighTrust = role == "machines-hightrust";
   trustPath = if isHighTrust then "high-trust" else "low-trust";

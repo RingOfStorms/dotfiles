@@ -96,7 +96,7 @@
           inputs.common.nixosModules.hardening
           inputs.common.nixosModules.nix_options
           inputs.common.nixosModules.tailnet
-          (import ../../sec-agent.nix {
+          (import ../../_shared_assets/utilities/sec-agent.nix {
             inherit inputs constants;
             role = "machines-hightrust";
           })

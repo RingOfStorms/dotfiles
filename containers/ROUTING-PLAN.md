@@ -732,7 +732,7 @@ Taken 2026-10-16:
      issues `joshuabell.xyz` + `*.joshuabell.xyz` (DNS-01, bunny key from
      sec-agent) and `wildcard-push` sends the pair over root SSH (nix2nix
      key, pinned host keys) to o002 and h001 after each issue/renew + daily.
-     `hosts/wildcard-cert-receiver.nix` validates (expiry, key matches cert),
+     `hosts/_shared_assets/utilities/wildcard-cert-receiver.nix` validates (expiry, key matches cert),
      swaps the files under `/var/lib/fleet-cert/<domain>/` and reloads nginx.
      Vhosts opt in with `config.fleet.wildcardTls` (lib `edgeVirtualHosts`
      already takes `tls`). Not §9.2: no container grant involved. Then
@@ -928,7 +928,8 @@ Taken 2026-10-16:
      h003/lio generated vhosts get the strip on their next deploy.
 7. `cnt expose` overrides with expiry. **Built 2026-10-22, host-local
    (tailnet/lan only).** Code: `cli/expose.go`, host module
-   `fleet-containers-expose-expire` (service + timer).
+   `fleet-containers-expose-boot` + `fleet-containers-expose-expire`
+   (service + timer).
    - **CLI**: `cnt expose <svc>[.<route>] --exposure tailnet|lan --for DUR
      [--reason TEXT]` (max 24h; the route may be omitted when the service has
      one http route), `cnt expose --list [host...]`, `cnt expose --revoke
@@ -947,19 +948,27 @@ Taken 2026-10-16:
      `override.json` (service, route, exposure, baseline, at, until, by,
      reason) and `baseline.conf` (the service.nix vhost). It's written
      **before** the wider site, so a failure partway still gets reverted.
-   - **Expiry, enforced by the host, fail closed**: a transient
-     `systemd-run --on-active` timer `fleet-expose-<svc>` starts
-     `fleet-containers-expose-expire.service` 1 s after the deadline. That
-     unit (`containers expose-expire --all`) also runs **at boot before
-     nginx** and every minute from a timer, so a reboot or a lost transient
-     timer delays a revert by at most a minute, and an override that expired
-     while the host was down never serves again. Revert = put
-     `baseline.conf` back, `nginx -t`, reload, delete the dir. If the
-     baseline no longer validates, the site is **removed** (kept as
-     `.broken`), never left wide. An unreadable `override.json` counts as
-     expired.
-     The nginx reload is queued (`--no-block`): the unit is `Before=nginx`,
-     so a blocking reload deadlocks (seen in the first h001 test).
+   - **Expiry, enforced by the host, fail closed** (split 2026-10-25):
+     - `fleet-containers-expose-boot` (`expose-expire --boot --all`,
+       `Before=nginx`) reverts expired files only and **never reloads**;
+       nginx starts with them, so an override that expired while the host
+       was down never serves again.
+     - `fleet-containers-expose-expire` (`expose-expire --all`) is the
+       runtime sweep: **not ordered against nginx**, started every minute
+       by its timer and by the transient `systemd-run --on-active` timer
+       `fleet-expose-<svc>` 1 s after the deadline. `--revoke` runs the
+       same path over ssh. It does a checked, blocking `nginx -t` +
+       reload (no deadlock: nothing waits on it before nginx).
+     - Revert = write `overrides/.reload-pending` (atomic), put
+       `baseline.conf` back, `nginx -t`, delete the dir, then reload. The
+       marker is cleared **only after a successful reload**; every sweep
+       and revoke retries it first and fails while it's pending (`forever`
+       overrides are untouched, but a pending reload is still retried).
+       `/status.json` (`exposeReloadPending`) and `cnt expose --list` /
+       `routes` / `audit` show "reload pending".
+     - If the baseline no longer validates, the site is **removed** (kept
+       as `.broken`), never left wide. An unreadable `override.json`
+       counts as expired.
    - **service.nix wins**: `cnt deploy` (also `--vhost-only`), full
      `deploy` and `destroy` drop the service's override **last**, only
      after the new site has passed `nginx -t` and been reloaded (or, for
@@ -994,195 +1003,162 @@ Taken 2026-10-16:
      `cnt audit h001` clean.
    - **Not yet**: h005 as the authority, `cnt move` carrying overrides,
      `--reset` for several overrides (one per service today).
-   - **Public expose design (draft, 2026-10-23, not approved).** State read
-     from the code at `509d4047` (the CLI now lives in
+   - **Public expose design (approved 2026-10-24; code built, not deployed).**
+     State read from the code at `509d4047` (the CLI lives in
      `flakes/fleet-agent/internal/containers/`).
-     - **Today**: fleet-edge (`flakes/fleet-edge`) is a dashboard. It is a
-       DynamicUser on `127.0.0.1:8099` behind h005 nginx on the overlay IP,
-       which denies o002 and admits `100.64.0.0/10`. `internal/auth` accepts
-       **shared** API keys (`apiKeysFile`, no identity), a Zitadel JWT, or
-       the session cookie (`admin` role). It has no write API and no bunny
-       key. `dns-plan --apply` is a manual CLI run with `--key-file`. h005
-       reaches o002 only through the restricted `wildcardCertPushPubKey`
-       (`command=fleet-cert-receive`, H2), not root.
-     1. **Authority and API.** Add a new `internal/overrides` package. It
-        runs as a **separate unit** `fleet-edge-overrides` (own DynamicUser,
-        `127.0.0.1:8098`, bunny key via `LoadCredential`), so the dashboard
-        process never holds the key. nginx on h005 exposes only
-        `location /api/overrides` → 8098, with the same deny o002 / allow
-        overlay rules, and sets `X-Fleet-Peer $realip_remote_addr`
-        (overwritten on every request).
-        - **Auth: per-device tokens**, a new scope separate from the read
-          keys. `services.fleet-edge.overrides.devices = { lio = { peer =
-          [ "100.64.0.x" "fd7a:…" ]; tokenSha256 = "…"; }; }` lives in
-          `hosts/h005/fleet-edge.nix` (only hashes are in git). A request
-          passes only if the token hash **and** the peer IP match the same
-          device. To revoke a device, delete its entry and rebuild h005.
-          Each device gets its token from sec under
-          `machines/<host>/fleet_edge_expose_<date>`, root-only, read by
-          `cnt`. Rejected alternatives: headscale whois, because headscale
-          runs on o002, the box that counts as internet; and the shared
-          `apiKeysFile`, because one lost laptop can't be revoked on its own.
+     - **Before**: fleet-edge was a dashboard only (DynamicUser on
+       `127.0.0.1:8099`, h005 nginx on the overlay IP, deny o002, allow
+       `100.64.0.0/10`). `internal/auth` takes **shared** API keys, a Zitadel
+       JWT or the session cookie. No write API, no bunny key; `dns-plan
+       --apply` is a manual run. h005 reaches o002 only via the restricted
+       `wildcardCertPushPubKey` (H2).
+     1. **Authority and API.** Package `internal/overrides`, run as
+        `fleet-edge overrides` in its **own unit** `fleet-edge-overrides`
+        (own DynamicUser, `127.0.0.1:8098`, keys via `LoadCredential`), so
+        the dashboard process never holds the bunny or push key.
+        - **Separate state**: its own `StateDirectory=fleet-edge-overrides`
+          (0700, UMask 0077) with its own SQLite DB (`overrides.db`) and
+          audit log. fleet-edge's state is another DynamicUser's 0750 dir;
+          shared write access would let a compromised dashboard edit
+          override and expiry state. The dashboard and `dns-plan` see
+          overrides only through the read-only `GET
+          /internal/overrides.json` on the loopback port (nginx doesn't
+          proxy `/internal`).
+        - nginx on h005 proxies only `location /api/overrides` → 8098 (deny
+          o002, allow overlay) and sets `X-Fleet-Peer $remote_addr`
+          (trusted only from loopback).
+        - **Auth: per-device tokens.** `services.fleet-edge.overrides.devices
+          = { lio = { peers = [ v4 v6 ]; tokenSha256 = "…"; }; }` in
+          `hosts/h005/fleet-edge.nix`; only hashes in git. A request passes
+          only if the token hash **and** the peer IP belong to the same
+          device. Revoke = delete the entry, rebuild h005. The CLI reads its
+          token from `$FLEET_EDGE_TOKEN_FILE` (default
+          `/var/lib/secrets_manager_hydrated/fleet_edge_expose`). Rejected:
+          headscale whois (headscale is on o002), the shared `apiKeysFile`.
         - **Endpoints**: `POST /api/overrides/prepare`, `POST
-          /api/overrides/commit`, `DELETE /api/overrides/<svc>`, and `GET
-          /api/overrides` (also readable with the read scope).
-        - **Validation** runs in `overrides.Check`, against h005's built-in
-          inventory. That is the same JSON as the dashboard and the same
-          rules as `lib.nix` `validateRoutes` and `expose.go` `exposeCheck`.
-          The route must exist, be http, `zone = main`, not `local`, not
-          already public, and `via` edge. The inventory host must equal the
-          host the CLI names (a stale h005 inventory refuses, which fails
-          closed). `auth = none` is refused without `publicWithoutAuth`.
-          `auth = oauth2-proxy` is refused while sso-proxy is tailnet-only
-          (lib.nix line ~199); lift both checks together. The name must
-          not be a hand name, be in `publicSpec.retire`, or have any bunny
-          record (that would be a conflict). Limits: `--for` up to 8h
-          (public is tighter than the 24h host cap), at most 3 active
-          public overrides, and 10 writes per minute per device.
-        - **Expiry is owned by h005**. The overrides table in the existing
-          SQLite store holds svc, route, fqdn, host, until, by (device +
-          `SUDO_USER`), reason, bunny record id and the o002 state. A
-          30-second sweep, which also runs at startup, removes expired
-          overrides (o002, then DNS). The host and o002 also expire on
-          their own (points 3 and 4).
-        - **Audit log**: append-only `/var/lib/fleet-edge/overrides.log`
-          (JSON lines) plus the journal. Every request is logged, refusals
-          included, with device, peer, user, action, target, until, result
-          and the bunny/o002 outcome.
-     2. **DNS.** On commit, create `CNAME <name> → o002.joshuabell.xyz`
-        with **TTL 60**. Ownership is the bunny record id stored in the
-        overrides table. Delete by id only, and only while the name, type
-        and value still match; otherwise leave the record and flag it.
-        - **dns-plan stays safe**: `bunny.Plan` gets an `Overrides` input
-          (the active rows, read from the store or a
-          `/var/lib/fleet-edge/overrides.json` export). Matching zone
-          records get a new action, `override`. They are never retired,
-          updated or counted as conflicts, and `Ops` skips them. The
-          refusal of retire-listed names above covers the case where
-          `notes`/`sso-proxy`/`books` would otherwise be deleted.
-          `dns-plan --apply` and the overrides service share a `flock` on
-          `/run/fleet-edge/bunny.lock`.
-        - If `publicSpec` later declares the same record (the route is made
-          public in service.nix), expiry **releases** ownership instead of
-          deleting.
-        - Bunny 429s back off, and the request fails closed (rollback).
-          Negative caching: a client that looked the name up before the
-          create keeps NXDOMAIN for the SOA minimum. Check the bunny SOA
-          before rollout; the CLI prints it.
-     3. **o002.** A runtime include dir `/var/lib/fleet-edge-vhosts/`
-        (`appendHttpConfig = "include /var/lib/fleet-edge-vhosts/*.conf;"`
-        in `hosts/oracle/o002/nginx.nix`; tmpfiles creates it empty).
+          /api/overrides/commit`, `DELETE /api/overrides/<svc>`, `GET
+          /api/overrides[?verify=1]` (`verify` adds live bunny and o002
+          state for `cnt audit`).
+        - **Validation** (`overrides.Check`, against h005's built-in
+          inventory, same rules as `lib.nix` and `exposeCheck`): route
+          exists, http, `zone = main`, not `local`, not already public, via
+          edge; the inventory host equals the host the CLI names (stale h005
+          inventory refuses: fail closed); `auth = none` needs
+          `publicWithoutAuth`; `auth = oauth2-proxy` refused while sso-proxy
+          is tailnet-only (lift together with lib.nix ~199). The name must
+          not be declared, external or retire-listed in `publicSpec`
+          (`/etc/fleet-edge/public-spec.json`), and must have no bunny
+          record we don't own.
+        - **Limits are not caps.** No limit on the number of active
+          overrides. `--for` defaults to **8h**; any duration is allowed, and
+          `--for forever` means no expiry (`until = 0` on host, h005 and
+          o002). The only throttle is a soft per-device rate limit (30 writes
+          per 10 min, then 429 with `Retry-After`; reads never limited).
+        - **Expiry is owned by h005**: a 30 s sweep (also at startup)
+          removes expired rows (o002, then DNS), retries `removing` rows,
+          drops `prepared` reservations after 5 min, and removes a committed
+          row whose host stops reporting the override (deploy/revoke there)
+          after a 2 min grace. Host and o002 also expire on their own.
+        - **Audit log**: `/var/lib/fleet-edge-overrides/audit.log` (JSON
+          lines) plus the journal: every request, refusals included, with
+          device, peer, user, action, target, until, result.
+     2. **DNS.** Commit creates `CNAME <name> → o002.joshuabell.xyz`, **TTL
+        60**, and stores the bunny record id. Delete by id only, and only
+        while name, type and value still match; otherwise the row is kept
+        and flagged (`dns = mismatch`).
+        - **dns-plan stays safe**: `bunny.PlanWith(spec, zone, owned)` marks
+          zone records owned by an active override as `override`: never
+          retired, updated or counted as conflicts, and `Ops` skips them.
+          `dns-plan` reads the owned list from `--overrides-url` (default
+          the loopback export) and refuses `--apply` if that fails
+          (`--no-overrides` only for read-only plans). Both writers hold
+          `flock` on `/run/fleet-edge-bunny/lock`.
+        - If `publicSpec` later declares the name (made public in
+          service.nix), removal **releases** ownership instead of deleting.
+        - Bunny errors fail the request closed (rollback). Negative caching:
+          a lookup before the create keeps NXDOMAIN for the SOA minimum.
+     3. **o002.** Runtime include dir `/var/lib/fleet-edge-vhosts/*.conf`
+        (`hosts/_shared_assets/utilities/edge-vhost-receiver.nix`, `appendHttpConfig`), not
+        persisted: a reboot closes them (h005's sweep re-pushes live rows;
+        audit shows gaps).
         - **Push from h005 over a second restricted key**
-          (`fleet.global.edgeVhostPushPubKey`,
-          `command="fleet-vhost-receive"`, no pty or forwarding). It is
-          *not* the cert key and *not* root. Pull is rejected because o002
-          would need a credential into h005.
-        - New module `hosts/edge-vhost-receiver.nix`. stdin is **JSON, not
-          nginx text**: `{op: add|remove|list, fqdn, host, until, maxBody,
-          websockets, buffering, requestBuffering, timeouts}`. The receiver
-          renders the server block itself from a template matching lib.nix
-          `edgeVirtualHosts`: `proxy_pass http://<overlayIp>:8443`, TLS
-          from `/var/lib/fleet-cert/<domain>/current/`, and a default
-          `limit_req`. It refuses anything that isn't a single label under
-          the domain, a host that isn't in its build-time map of fleet
-          overlay IPs, and names o002 already serves (hand or generated,
-          listed at build time).
-        - Each add or remove writes `<fqdn>.conf.new`, runs `nginx -t`
-          (same `-c` trick as the cert receiver), then swaps the file and
-          reloads. On failure it restores the previous file (or none) and
-          exits non-zero.
-        - `until` is written into the file header. A local
-          `fleet-edge-vhost-expire` timer (every minute, and at boot before
-          nginx) deletes expired files. So o002 closes even if h005 dies
-          after an add.
-        - Blast radius of a stolen key: it can point a `joshuabell.xyz`
-          name at some fleet host's `:8443`, and the host still returns 444
-          unless it serves that route publicly.
-     4. **The service host.** No new mechanism. `exposeCheck` drops the
-        `public` refusal (keeping the auth checks), and `routesVhost`
-        already renders the `:8443` edge server for public routes. That
-        server is the actual gate, enforced by host-local expiry as today:
-        transient timer, minute sweep, and boot sweep before nginx. The
-        host never needs h005 to close. Changes:
-        - `override.json` gains `"public": true`.
-        - The status endpoint (`cnt status-server`, :9101) reports active
-          overrides, so h005 can see them.
-        - `cnt move` refuses while a public override exists until step 9
-          carries overrides.
-     5. **Ordering** (`cmdExpose` → new `exposePublic` in `expose.go`,
-        client in a new `edgeapi.go`):
-        - **Add**: (a) `prepare` on h005. It validates and reserves the
-          name for 5 minutes, with no external writes. If h005 is down,
-          nothing is touched. (b) The host vhost, the existing
-          `exposeScript` path. (c) `commit`. h005 checks the host's status
-          endpoint for the override, creates the DNS record, pushes to
-          o002, and returns. If (c) fails, h005 undoes its own steps
-          (o002, then DNS), and the CLI runs `revokeScript` on the host and
-          exits non-zero.
-        - **Remove** (revoke or expiry): `DELETE` on h005 (o002, then DNS),
-          then the host. At expiry the three sides time out independently
-          at `until`. That's acceptable: any side closing is a closed
-          state, since o002 and the CNAME without the host edge server
-          give 444.
-        - **Idempotent**: a repeat prepare or commit for the same
-          svc/route/until returns the current state. An o002 `add` of an
-          identical file is a no-op. Deleting a missing record or file
-          counts as success.
-        - **Failure cases**:
-          - h005 down: add is refused. Revoke still closes the host;
-            DNS/o002 leftovers stay until o002's own timer and h005's
-            startup sweep, and audit flags them.
-          - o002 down: commit rolls back. On remove, DNS is deleted anyway
-            and the o002 cleanup is retried every sweep (plus o002's own
-            timer).
-          - Host down: add fails before commit, and the reservation lapses.
-            An expiry during downtime is handled by the boot sweep.
-     6. **Visibility.**
-        - `cnt routes`: `public (OVERRIDDEN from tailnet, 1h left;
-          dns ok, edge ok)`, merging the host's `override.json` with `GET
-          /api/overrides`.
-        - `cnt expose --list`: one row per override, with host, h005 and
-          o002 columns and a `MISMATCH` marker.
-        - Dashboard: an overridden badge plus until/by/reason on
-          `/services`, and a section of active overrides with the audit log
-          tail.
-        - `cnt audit` flags each kind of leftover: a host override missing
-          on h005; an h005 row missing on the host; an o002 file with no
-          h005 row or past `until` (via a read-only `fleet-vhost-receive
-          list`); and a bunny CNAME owned by an expired row (`override`
-          rows from `dns-plan`).
-     7. **Tests, then rollout.**
-        - Tests:
-          - `internal/overrides`: a table test of `Check`, covering every
-            refusal above, plus the limits.
-          - `internal/auth`: token/peer binding, a wrong peer, a revoked
-            device.
-          - `internal/bunny`: an override on a retire-listed or declared
-            name is never deleted or counted as a conflict, and `Ops` skips
-            it.
-          - A fake bunny + fake o002 test of commit rollback and of the
-            sweep.
-          - `expose_test.go`: `TestExposePublicOrder`,
-            `TestExposePublicCommitFailRevokesHost`,
-            `TestExposePublicH005DownTouchesNothing`, and
-            `TestExposePublicAuthRules`.
-          - The receiver: a render test plus `nix eval` of the o002
-            include, like `tests/edge-vhosts.nix`.
-        - Rollout:
-          1. h005 with the override-aware `dns-plan` and read-only `GET
-             /api/overrides`. Re-plan to confirm no diff.
-          2. o002 with the receiver, the empty include dir and the key,
-             under the 5-minute `systemd-run` auto-revert used before.
-          3. Bump fleet-agent/containers on the hosts (status endpoint
-             overrides; the CLI still refuses public).
-          4. Enable writes and give one device a token.
-          5. Trial on one native-auth tailnet route for 5 minutes. Check
-             from off the tailnet (o002 curl / a phone on LTE):
-             DNS → 200 → expiry → host 444, file gone, record gone,
-             `cnt audit` clean.
-          6. Then lift the CLI refusal for everyone.
-        - Rollback: `overrides.enable = false` on h005 (the sweep still
-          runs once at startup to clean up), drop o002's key line.
+          (`fleet.global.edgeVhostPushPubKey`, root with
+          `command="fleet-vhost-receive"`, no pty/forwarding; root because it
+          writes nginx files and reloads, like the cert receiver). Not the
+          cert key. Pull rejected: o002 would need a credential into h005.
+        - `fleet-vhost-receive` reads **JSON, not nginx text**: `{op:
+          add|remove|list, fqdn, host, until, maxBody, websockets,
+          buffering, requestBuffering, timeouts}` and renders the server
+          block itself like `edgeVirtualHosts`: `proxy_pass
+          http://<overlayIp>:8443` (host → IP map built in), the pushed
+          wildcard, `limit_req`. It refuses names outside the zone or not a
+          single label, unknown hosts, bad values, and names o002 already
+          serves (its declared vhosts).
+        - add/remove: write, `nginx -t` (same `-c` trick as the cert
+          receiver), reload; on failure restore the previous file (or none)
+          and exit non-zero.
+        - `until` is in the file header; `fleet-vhost-expire` (every
+          minute, and at boot before nginx) deletes expired files. `until =
+          0` never expires locally.
+        - Stolen key blast radius: point a `joshuabell.xyz` name at a fleet
+          host's `:8443`, which still returns 444 unless that host serves the
+          route publicly.
+     4. **The service host.** `exposeCheck` allows `public` (auth rules
+        kept, via edge, oauth2 refused); `routesVhost` renders the `:8443`
+        edge server, which is the real gate and closes on host-local expiry
+        as before. `override.json` gains `"public"`; `until = 0` = forever:
+        no transient timer, never swept (revoke or deploy only). fleet-agent's
+        `/status.json` reports active overrides (`overrides`), which h005
+        checks on commit and in its sweep. `cnt move` refuses while a public
+        override exists.
+     5. **Ordering** (`cmdExpose` → `exposePublic`, client in `edgeapi.go`):
+        - **Add**: (a) `prepare` on h005 (validate + reserve 5 min, no
+          external writes; h005 down → nothing touched); (b) the host vhost
+          (`exposeScript`); (c) `commit`: h005 confirms the host's status
+          reports the public override, creates the CNAME, pushes to o002. On
+          a (c) failure h005 undoes its steps (o002, then DNS) and the CLI
+          revokes the host and exits non-zero.
+        - **Remove** (revoke/expiry): `DELETE` on h005 (o002, then DNS),
+          then the host. At expiry each side closes independently; any one
+          side closed is a closed state (444).
+        - **Idempotent**: repeated prepare/commit on the same svc/route
+          returns current state (and may change `until`); an identical o002
+          add is a no-op; a missing record/file on delete = success.
+        - **Down**: h005 → add refused, revoke still closes the host, h005
+          and o002 leftovers expire on their own and audit flags them. o002
+          → commit rolls back; on remove DNS is still deleted and the o002
+          remove retried each sweep. Host → add fails before commit; expiry
+          while down is the boot sweep.
+     6. **Visibility.** `cnt routes`: `public (OVERRIDDEN from tailnet, 1h
+        left; dns ok, edge ok)`. `cnt expose --list`: host rows merged with
+        h005 (`H005`, `DNS`, `EDGE` columns, `MISMATCH`). Dashboard
+        `/services`: an "Expose overrides" section from the export. `cnt
+        audit`: leftovers (host public override missing on h005, h005 row
+        missing on its host, o002 file without a row, row whose DNS/edge
+        isn't live).
+     7. **Tests and rollout**: unit tests, no live services: fleet-edge
+        `internal/overrides` (auth by token + peer, route validation,
+        ordering, partial-failure rollback, sweep incl. `until = 0`,
+        rate limit, audit), `internal/bunny` (owned records never retired,
+        delete-by-id only if unchanged), `internal/edgevhost` (render,
+        `nginx -t` rollback, expiry), `internal/server` (`/services`
+        "Expose overrides" section, export down, `forever` shown);
+        fleet-agent `expose_test.go` (public check, `--for forever`,
+        host-local expiry), agent status export.
+        - **Rollout**:
+          1. h005: overrides unit with no push key / bunny credential
+             configured → writes return 503; override-aware `dns-plan`;
+             re-plan shows no diff.
+          2. o002: receiver + empty include dir + key line, under the
+             5-minute `systemd-run` auto-revert.
+          3. Push/bump fleet-agent + containers on the hosts (status reports
+             overrides).
+          4. Create the sec items, set the key paths and one device on h005.
+          5. 5-minute trial on one native-auth tailnet route from off the
+             tailnet: DNS → 200 → expiry → host 444, file gone, record gone,
+             `cnt audit` clean. Then `--for forever` + `--revoke`.
+        - Rollback: `overrides.enable = false` on h005, drop o002's key line;
+          host-local expiry still closes the host side.
 8. **Done.** Read-only dashboard in `fleet-edge` on h005 (`hosts/h005/fleet-edge.nix`,
    `flakes/fleet-edge`); `homepage-dashboard` retired (h001 and joe), no
    redirects left behind.

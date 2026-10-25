@@ -41,7 +41,7 @@ in
       #   rsync -aH /var/lib/acme/ /persist/var/lib/acme/
       # so the bind-mount surfaces real certs, never an empty dir.
       "/var/lib/acme"
-      # Wildcard pushed by h005 (hosts/wildcard-cert-receiver.nix).
+      # Wildcard pushed by h005 (hosts/_shared_assets/utilities/wildcard-cert-receiver.nix).
       "/var/lib/fleet-cert"
     ];
     files = shared.system.files ++ [ ];

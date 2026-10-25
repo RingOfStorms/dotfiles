@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -354,5 +355,42 @@ func TestHostDetailAndBcachefsDrillDown(t *testing.T) {
 		if !strings.Contains(detailBody, want) {
 			t.Fatalf("/hosts/h004 missing %q:\n%s", want, detailBody)
 		}
+	}
+}
+
+func TestServicesExposeSection(t *testing.T) {
+	now := time.Now().Unix()
+	var method string
+	exp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method = r.Method
+		_, _ = w.Write([]byte(`{"rows":[{"service":"app","route":"web","host":"h001","fqdn":"app.example.com","until":0,"state":"committed","dns":"ok","edge":true,"device":"lio"},{"service":"b","route":"web","host":"h001","fqdn":"b.example.com","until":` + strconv.FormatInt(now+3600, 10) + `,"state":"removing","dns":"mismatch","edge":false,"lastError":"boom"}],"owned":[]}`))
+	}))
+	defer exp.Close()
+	inv := &inventory.Inventory{Services: map[string]inventory.Service{}, Hosts: map[string]inventory.Host{}}
+	srv := New(fakeSource{m: state.Merge(inv, nil)}, Config{OverridesURL: exp.URL})
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
+	body := w.Body.String()
+	for _, want := range []string{"Expose overrides", "app.example.com", "forever (no expiry)", "removing", "mismatch", ">missing<", "lio"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("services page lacks %q", want)
+		}
+	}
+	if method != http.MethodGet {
+		t.Errorf("export called with %s", method)
+	}
+	// Export down: page still renders, with the error.
+	exp.Close()
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "unreachable") {
+		t.Errorf("down: %d", w.Code)
+	}
+	// Unset: no section.
+	srv = New(fakeSource{m: state.Merge(inv, nil)}, Config{})
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
+	if strings.Contains(w.Body.String(), "Expose overrides") {
+		t.Error("section shown without OverridesURL")
 	}
 }

@@ -22,7 +22,7 @@ in
   ];
 
   # TLS: no ACME here. The *.joshuabell.xyz wildcard is issued on h005 and
-  # pushed to /var/lib/fleet-cert (hosts/wildcard-cert-receiver.nix); the
+  # pushed to /var/lib/fleet-cert (hosts/_shared_assets/utilities/wildcard-cert-receiver.nix); the
   # generated vhosts include /etc/fleet-containers/nginx-tls.conf and the
   # hand vhosts (mods/arr-nginx.nix) name it directly. ROUTING-PLAN §8 step 4.
 

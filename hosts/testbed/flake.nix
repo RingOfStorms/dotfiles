@@ -5,7 +5,7 @@
 #   nix run ./hosts/testbed#vm-disko      VM on the real disko layout
 #
 # Like every host it pins `common`/`de_plasma` via flake.lock; to run it on the
-# working tree instead: hosts/local-host.sh testbed build-vm
+# working tree instead: hosts/_shared_assets/utilities/local-host.sh testbed build-vm
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";

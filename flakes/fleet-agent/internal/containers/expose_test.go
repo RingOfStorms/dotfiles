@@ -1,6 +1,7 @@
 package containers
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,8 +76,7 @@ func TestExposeCheck(t *testing.T) {
 	}
 	bad := []struct{ route, level, want string }{
 		{"web", "tailnet", "already"},
-		{"web", "public", "fleet-edge"},
-		{"web", "internet", "want tailnet or lan"},
+		{"web", "internet", "want tailnet, lan or public"},
 		{"raw", "lan", "only http"},
 		{"loc", "lan", "exposure = local"},
 		{"pub", "lan", "only widens"},
@@ -91,6 +91,131 @@ func TestExposeCheck(t *testing.T) {
 	na.Routes = map[string]Route{"web": httpRoute("app", 8000, "tailnet", "none")}
 	if _, err := exposeCheck(na, "web", "public"); err == nil || !strings.Contains(err.Error(), "publicWithoutAuth") {
 		t.Errorf("auth none public: %v", err)
+	}
+}
+
+func TestExposeCheckPublic(t *testing.T) {
+	s := exposeSvc()
+	o, err := exposeCheck(s, "web", "public")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := o.Routes["web"]; r.Exposure != "public" || len(r.Via) != 1 || r.Via[0] != "edge" {
+		t.Fatalf("route %+v", r)
+	}
+	if v := routesVhost(o); !strings.Contains(v, "8443") {
+		t.Errorf("no edge server:\n%s", v)
+	}
+	g := s
+	g.Routes = map[string]Route{"web": httpRoute("app", 8000, "tailnet", "oauth2-proxy")}
+	if _, err := exposeCheck(g, "web", "public"); err == nil || !strings.Contains(err.Error(), "oauth2-proxy") {
+		t.Errorf("gated public: %v", err)
+	}
+	r := httpRoute("app", 8000, "tailnet", "native")
+	r.Via = []string{"router"}
+	g.Routes = map[string]Route{"web": r}
+	if _, err := exposeCheck(g, "web", "public"); err == nil || !strings.Contains(err.Error(), "edge") {
+		t.Errorf("router via: %v", err)
+	}
+}
+
+func TestExposeFor(t *testing.T) {
+	for _, c := range []struct {
+		level, v string
+		want     time.Duration
+		bad      bool
+	}{
+		{"public", "", publicDefaultFor, false},
+		{"public", "forever", 0, false},
+		{"public", "720h", 720 * time.Hour, false},
+		{"public", "10s", 0, true},
+		{"lan", "48h", 0, true},
+		{"lan", "forever", 0, true},
+		{"lan", "", 0, true},
+		{"lan", "1h", time.Hour, false},
+	} {
+		d, err := exposeFor(c.level, c.v)
+		if (err != nil) != c.bad || !c.bad && d != c.want {
+			t.Errorf("%s %q: %v %v", c.level, c.v, d, err)
+		}
+	}
+}
+
+func TestExposeScriptForever(t *testing.T) {
+	inv = &Inventory{DataRoot: "/srv/containers", Hosts: map[string]Host{}}
+	sc := exposeScript(exposeSvc(), override{Service: "app", Route: "web", Exposure: "public", Baseline: "tailnet"}, 0, "B", "C")
+	if strings.Contains(sc, "systemd-run") || !strings.Contains(sc, "until=0") {
+		t.Errorf("forever script:\n%s", sc)
+	}
+}
+
+type fakeEdgeAPI struct {
+	log       []string
+	prepErr   error
+	commitErr error
+}
+
+func (f *fakeEdgeAPI) prepare(edgeReq) error { f.log = append(f.log, "prepare"); return f.prepErr }
+func (f *fakeEdgeAPI) commit(edgeReq) (edgeRow, error) {
+	f.log = append(f.log, "commit")
+	return edgeRow{FQDN: "app.example.com", DNS: "ok", Edge: true}, f.commitErr
+}
+func (f *fakeEdgeAPI) revoke(string) error { f.log = append(f.log, "revoke"); return nil }
+
+func TestExposePublicOrder(t *testing.T) {
+	run := func(f *fakeEdgeAPI, hostErr error) (string, error) {
+		err := exposePublic(f, exposeSvc(), "web", "h001", time.Hour, "",
+			func() error { f.log = append(f.log, "host"); return hostErr },
+			func() error { f.log = append(f.log, "host-revoke"); return nil })
+		return strings.Join(f.log, ","), err
+	}
+	if l, err := run(&fakeEdgeAPI{}, nil); err != nil || l != "prepare,host,commit" {
+		t.Errorf("ok: %s %v", l, err)
+	}
+	if l, err := run(&fakeEdgeAPI{prepErr: errors.New("no")}, nil); err == nil || l != "prepare" {
+		t.Errorf("prepare refused must touch nothing: %s", l)
+	}
+	if l, err := run(&fakeEdgeAPI{}, errors.New("nginx")); err == nil || l != "prepare,host,revoke" {
+		t.Errorf("host fail: %s", l)
+	}
+	if l, err := run(&fakeEdgeAPI{commitErr: errors.New("bunny")}, nil); err == nil || l != "prepare,host,commit,host-revoke,revoke" {
+		t.Errorf("commit fail: %s", l)
+	}
+}
+
+func TestExpireForeverOnlyPublic(t *testing.T) {
+	dir := t.TempDir()
+	oldO, oldN, oldR := overridesDir, nginxDir, runCmd
+	overridesDir, nginxDir = dir+"/ov", dir+"/nginx"
+	runCmd = func(string, ...string) error { return nil }
+	defer func() { overridesDir, nginxDir, runCmd = oldO, oldN, oldR }()
+	for svc, exp := range map[string]string{"pub": "public", "lan": "lan"} {
+		_ = os.MkdirAll(filepath.Join(overridesDir, svc), 0o755)
+		_ = os.WriteFile(filepath.Join(overridesDir, svc, "override.json"), []byte(`{"service":"`+svc+`","route":"web","exposure":"`+exp+`","until":0}`), 0o644)
+		_ = os.WriteFile(filepath.Join(overridesDir, svc, "baseline.conf"), []byte("B"), 0o644)
+	}
+	_ = os.MkdirAll(nginxDir, 0o755)
+	_ = cmdExposeExpire([]string{"--all"})
+	if _, err := os.Stat(filepath.Join(overridesDir, "pub")); err != nil {
+		t.Error("public forever expired")
+	}
+	if _, err := os.Stat(filepath.Join(overridesDir, "lan")); !os.IsNotExist(err) {
+		t.Error("lan without deadline kept (must fail closed)")
+	}
+}
+
+func TestEdgeLeftovers(t *testing.T) {
+	host := []override{{Service: "a", Route: "web", Exposure: "public", Host: "h001"}, {Service: "b", Route: "web", Exposure: "public", Host: "h001"}}
+	rows := []edgeRow{{Service: "a", Route: "web", State: "committed", FQDN: "a.x"}, {Service: "c", Route: "web", State: "committed", FQDN: "c.x", Host: "h003"}}
+	v := &edgeVerify{DNS: map[string]string{"a": "ok", "c": "mismatch"}, Edge: map[string]string{"a": "ok", "c": "missing"}, EdgeExtra: []string{"z.x"}}
+	got := strings.Join(edgeLeftovers(host, rows, v), "\n")
+	for _, w := range []string{"c.web: h005 row", "c.web: DNS mismatch", "c.web: o002 vhost missing", "b.web: public on h001 but no h005 row", "z.x without"} {
+		if !strings.Contains(got, w) {
+			t.Errorf("missing %q in\n%s", w, got)
+		}
+	}
+	if strings.Contains(got, "a.web") {
+		t.Errorf("clean row flagged:\n%s", got)
 	}
 }
 
@@ -123,7 +248,7 @@ func TestExposeScript(t *testing.T) {
 	o, _ := exposeCheck(s, "web", "lan")
 	sc := exposeScript(s, override{Service: "app", Route: "web", Exposure: "lan", Baseline: "tailnet", Reason: `it's "x"`}, 180, "BASE", routesVhost(o))
 	for _, w := range []string{
-		"[ -e /etc/systemd/system/fleet-containers-expose-expire.service ]", // module check
+		"[ -e /etc/systemd/system/fleet-containers-expose-boot.service ]", // module check
 		"/var/lib/fleet-containers/overrides/app",
 		`"exposure":"lan","baseline":"tailnet"`,
 		"--unit=fleet-expose-app --on-active=181s",
@@ -199,8 +324,11 @@ func TestExpireOne(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(overridesDir, "app")); !os.IsNotExist(err) {
 		t.Error("override dir left")
 	}
-	if !strings.Contains(strings.Join(ran, "\n"), "--no-block try-reload-or-restart nginx.service") {
+	if j := strings.Join(ran, "\n"); !strings.Contains(j, "systemctl try-reload-or-restart nginx.service") || strings.Contains(j, "--no-block") {
 		t.Errorf("ran %v", ran)
+	}
+	if reloadPending() {
+		t.Error("marker left after a good reload")
 	}
 	// --now revokes early.
 	setup(time.Now().Unix() + 3600)
@@ -409,5 +537,160 @@ func TestReexposeFailureKeepsOldOverride(t *testing.T) {
 	r.assertSafe()
 	if b, _ := os.ReadFile(filepath.Join(r.ovDir, "override.json")); !strings.Contains(string(b), "9999999999") {
 		t.Errorf("old override not restored: %s", b)
+	}
+}
+
+// expireRig: one override dir + site, stubbed nginx/systemctl.
+type expireRig struct {
+	t                *testing.T
+	ran              []string
+	testOK, reloadOK bool
+}
+
+func newExpireRig(t *testing.T) *expireRig {
+	t.Helper()
+	dir := t.TempDir()
+	oldO, oldN, oldR := overridesDir, nginxDir, runCmd
+	t.Cleanup(func() { overridesDir, nginxDir, runCmd = oldO, oldN, oldR })
+	overridesDir, nginxDir = filepath.Join(dir, "ov"), filepath.Join(dir, "nginx")
+	r := &expireRig{t: t, testOK: true, reloadOK: true}
+	runCmd = func(n string, a ...string) error {
+		c := n + " " + strings.Join(a, " ")
+		r.ran = append(r.ran, c)
+		if n == "nginx" && !r.testOK || n == "systemctl" && strings.Contains(c, "reload") && !r.reloadOK {
+			return os.ErrInvalid
+		}
+		return nil
+	}
+	must(t, os.MkdirAll(nginxDir, 0o755))
+	return r
+}
+
+func (r *expireRig) setup(svc, exposure string, until int64) {
+	d := filepath.Join(overridesDir, svc)
+	must(r.t, os.MkdirAll(d, 0o755))
+	must(r.t, os.WriteFile(filepath.Join(d, "baseline.conf"), []byte("BASE"), 0o644))
+	must(r.t, os.WriteFile(filepath.Join(d, "override.json"), []byte(`{"service":"`+svc+`","route":"web","exposure":"`+exposure+`","baseline":"tailnet","until":`+strconv.FormatInt(until, 10)+`}`), 0o644))
+	must(r.t, os.WriteFile(filepath.Join(nginxDir, svc+".conf"), []byte("WIDE"), 0o644))
+}
+
+func (r *expireRig) reloads() int {
+	n := 0
+	for _, c := range r.ran {
+		if strings.HasPrefix(c, "systemctl") && strings.Contains(c, "reload") {
+			n++
+		}
+	}
+	return n
+}
+
+func TestExpireReloadFailureRetriedBySweep(t *testing.T) {
+	r := newExpireRig(t)
+	r.setup("app", "lan", 1)
+	r.reloadOK = false
+	if err := cmdExposeExpire([]string{"--all"}); err == nil || !strings.Contains(err.Error(), "reload pending") {
+		t.Fatalf("want reload pending error, got %v", err)
+	}
+	if !reloadPending() {
+		t.Fatal("marker not kept")
+	}
+	// Next sweep: no override dirs left, still retries and fails.
+	if err := cmdExposeExpire([]string{"--all"}); err == nil {
+		t.Fatal("sweep returned nil while reload still fails")
+	}
+	r.reloadOK = true
+	r.ran = nil
+	if err := cmdExposeExpire([]string{"--all"}); err != nil {
+		t.Fatal(err)
+	}
+	if reloadPending() || r.reloads() != 1 {
+		t.Fatalf("pending %v ran %v", reloadPending(), r.ran)
+	}
+	// Clean: a sweep with nothing to do runs nothing.
+	r.ran = nil
+	must(t, cmdExposeExpire([]string{"--all"}))
+	if len(r.ran) != 0 {
+		t.Fatalf("idle sweep ran %v", r.ran)
+	}
+}
+
+func TestRevokeReloadFailureThenRetry(t *testing.T) {
+	r := newExpireRig(t)
+	r.setup("app", "lan", time.Now().Unix()+3600)
+	r.reloadOK = false
+	if err := cmdExposeExpire([]string{"--now", "app"}); err == nil {
+		t.Fatal("revoke with failed reload returned nil")
+	}
+	// Site file already reverted, but the revoke is not done.
+	if b, _ := os.ReadFile(filepath.Join(nginxDir, "app.conf")); string(b) != "BASE" {
+		t.Fatalf("site %q", b)
+	}
+	// The revoke script still runs while only the marker is left.
+	if sc := revokeScript("app"); !strings.Contains(sc, ".reload-pending") {
+		t.Fatalf("revoke script ignores the marker:\n%s", sc)
+	}
+	r.reloadOK = true
+	if err := cmdExposeExpire([]string{"--now", "app"}); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	if reloadPending() {
+		t.Fatal("marker left")
+	}
+}
+
+func TestExpireBootNeverReloads(t *testing.T) {
+	r := newExpireRig(t)
+	r.setup("app", "lan", 1)
+	must(t, cmdExposeExpire([]string{"--boot", "--all"}))
+	if r.reloads() != 0 {
+		t.Fatalf("boot reloaded: %v", r.ran)
+	}
+	if b, _ := os.ReadFile(filepath.Join(nginxDir, "app.conf")); string(b) != "BASE" {
+		t.Fatalf("site %q", b)
+	}
+	if !reloadPending() {
+		t.Fatal("boot must leave the marker for the runtime sweep")
+	}
+	// A pending marker alone: boot still doesn't reload.
+	must(t, cmdExposeExpire([]string{"--boot", "--all"}))
+	if r.reloads() != 0 {
+		t.Fatalf("boot reloaded on marker: %v", r.ran)
+	}
+	must(t, cmdExposeExpire([]string{"--all"}))
+	if r.reloads() != 1 || reloadPending() {
+		t.Fatalf("runtime sweep: %v pending %v", r.ran, reloadPending())
+	}
+}
+
+func TestExpireForeverSurvivesButPendingRetried(t *testing.T) {
+	r := newExpireRig(t)
+	r.setup("app", "public", 0)
+	must(t, cmdExposeExpire([]string{"--all"}))
+	if b, _ := os.ReadFile(filepath.Join(nginxDir, "app.conf")); string(b) != "WIDE" || len(r.ran) != 0 {
+		t.Fatalf("forever touched: %q %v", b, r.ran)
+	}
+	// An unrelated pending reload is still retried alongside it.
+	must(t, setReloadPending("test"))
+	must(t, cmdExposeExpire([]string{"--all"}))
+	if r.reloads() != 1 || reloadPending() {
+		t.Fatalf("pending not flushed: %v", r.ran)
+	}
+	if _, err := os.Stat(filepath.Join(overridesDir, "app", "override.json")); err != nil {
+		t.Fatal("forever override removed")
+	}
+	// Non-public without a deadline is garbage: reverted.
+	r.setup("bad", "lan", 0)
+	must(t, cmdExposeExpire([]string{"--all"}))
+	if b, _ := os.ReadFile(filepath.Join(nginxDir, "bad.conf")); string(b) != "BASE" {
+		t.Fatalf("garbage kept: %q", b)
+	}
+}
+
+func TestListReportsReloadPending(t *testing.T) {
+	if !hasReloadPending("{\"service\":\"a\"}\nRELOAD-PENDING\n") || hasReloadPending("{}\n") {
+		t.Fatal("marker line")
+	}
+	if !strings.Contains(overridesListScript, ".reload-pending") {
+		t.Fatal("list script ignores the marker")
 	}
 }

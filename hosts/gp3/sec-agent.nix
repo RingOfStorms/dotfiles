@@ -1,6 +1,6 @@
 # Host-specific sec-agent additions for gp3.
 { inputs, constants, ... }:
-import ../sec-agent.nix {
+import ../_shared_assets/utilities/sec-agent.nix {
   inherit inputs constants;
   role = "machines-hightrust";
   extraSecrets = {

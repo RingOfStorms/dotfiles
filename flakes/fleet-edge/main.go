@@ -22,7 +22,9 @@ import (
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/auth"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/bunny"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/dash"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/edgevhost"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/overrides"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/server"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/state"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/store"
@@ -46,6 +48,10 @@ func dnsPlan(args []string) {
 	keyFile := fs.String("key-file", "", "file holding the bunny API key")
 	zoneFile := fs.String("zone-json", "", "use this saved zone JSON instead of the API (offline)")
 	apply := fs.Bool("apply", false, "execute creates, updates and exact-match retires")
+	overridesURL := fs.String("overrides-url", "http://127.0.0.1:8098/internal/overrides.json",
+		"loopback export of active expose overrides (records they own are never touched)")
+	noOverrides := fs.Bool("no-overrides", false, "skip the overrides export (read-only plans only)")
+	lockPath := fs.String("lock", "/run/fleet-edge-bunny/lock", "flock shared with fleet-edge overrides (--apply)")
 	_ = fs.Parse(args)
 	var client *bunny.Client
 	spec, err := bunny.LoadSpec(*specFile)
@@ -75,7 +81,18 @@ func dnsPlan(args []string) {
 			log.Fatal(err)
 		}
 	}
-	plan := bunny.Plan(spec, z)
+	var owned []bunny.Owned
+	if *noOverrides {
+		if *apply {
+			log.Fatal("--apply refuses --no-overrides: it could retire an active override's record")
+		}
+	} else {
+		var err error
+		if owned, err = fetchOwned(*overridesURL); err != nil {
+			log.Fatalf("overrides export %s: %v (pass --no-overrides for a read-only plan)", *overridesURL, err)
+		}
+	}
+	plan := bunny.PlanWith(spec, z, owned)
 	bunny.Render(os.Stdout, spec.Zone, plan)
 	ops, err := bunny.Ops(z.ID, plan)
 	if err != nil {
@@ -92,6 +109,11 @@ func dnsPlan(args []string) {
 	if client == nil {
 		log.Fatal("--apply needs the API (no --zone-json)")
 	}
+	unlock, err := bunny.Lock(*lockPath)
+	if err != nil {
+		log.Fatalf("lock %s: %v", *lockPath, err)
+	}
+	defer unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	err = client.Apply(ctx, ops, func(op bunny.Op) { fmt.Printf("done   %s %s\n", op.Method, op.Path) })
@@ -99,6 +121,87 @@ func dnsPlan(args []string) {
 		log.Fatal(err)
 	}
 	fmt.Printf("applied %d operations\n", len(ops))
+}
+
+func fetchOwned(url string) ([]bunny.Owned, error) {
+	c := &http.Client{Timeout: 10 * time.Second}
+	resp, err := c.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("%s", resp.Status)
+	}
+	var e overrides.Export
+	if err := json.NewDecoder(resp.Body).Decode(&e); err != nil {
+		return nil, err
+	}
+	return e.Owned, nil
+}
+
+// runOverrides: the public expose authority (own unit, ROUTING-PLAN §8 step 7).
+func runOverrides(args []string) {
+	fs := flag.NewFlagSet("overrides", flag.ExitOnError)
+	listen := fs.String("listen", "127.0.0.1:8098", "address (loopback; h005 nginx proxies /api/overrides)")
+	invFile := fs.String("inventory", "", "inventory JSON")
+	specFile := fs.String("spec", "", "public DNS spec JSON (dns-records.nix publicSpec)")
+	devicesFile := fs.String("devices", "", "JSON {name: {peers, tokenSha256}}")
+	stateDir := fs.String("state-dir", envDefault("STATE_DIRECTORY", "/var/lib/fleet-edge-overrides"), "state dir")
+	target := fs.String("target", "", "CNAME target (o002's name)")
+	keyFile := fs.String("bunny-key-file", "", "bunny API key (empty: writes return 503)")
+	pushKey := fs.String("push-key-file", "", "ssh key for o002 fleet-vhost-receive (empty: writes return 503)")
+	pushTarget := fs.String("push-target", "", "user@host of the edge")
+	knownHosts := fs.String("known-hosts", "", "known_hosts for the edge")
+	statusTmpl := fs.String("status-url-template", "http://{overlayIp}:9101/status.json", "host status url")
+	lockPath := fs.String("lock", "/run/fleet-edge-bunny/lock", "flock shared with dns-plan --apply")
+	every := fs.Duration("sweep", 30*time.Second, "sweep interval")
+	_ = fs.Parse(args)
+	inv, err := inventory.Load(*invFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	spec, err := bunny.LoadSpec(*specFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	devs := map[string]overrides.Device{}
+	if *devicesFile != "" {
+		b, err := os.ReadFile(*devicesFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := json.Unmarshal(b, &devs); err != nil {
+			log.Fatal(err)
+		}
+	}
+	cfg := overrides.Config{Inventory: inv, Spec: spec, Domain: spec.Zone, Target: *target, StateDir: *stateDir,
+		LockPath: *lockPath, Devices: devs}
+	if *keyFile != "" && *pushKey != "" {
+		k, err := os.ReadFile(*keyFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		cfg.DNS = &overrides.BunnyDNS{Client: &bunny.Client{Key: strings.TrimSpace(string(k))}, Domain: spec.Zone}
+		cfg.Edge = &overrides.SSHEdge{Target: *pushTarget, KeyFile: *pushKey, KnownHosts: *knownHosts}
+	} else {
+		log.Print("overrides: no bunny or push key; writes return 503")
+	}
+	poller := state.NewPoller(inv, *statusTmpl, 5*time.Second)
+	cfg.Status = overrides.HTTPStatus(poller.StatusURLFor)
+	svc, err := overrides.New(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go svc.Run(ctx, *every)
+	srv := &http.Server{Addr: *listen, Handler: svc.Handler(), ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 3 * time.Minute}
+	go func() { <-ctx.Done(); _ = srv.Close() }()
+	log.Printf("fleet-edge overrides on %s", *listen)
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
 }
 
 // importBeszel: `fleet-edge import-beszel --beszel-db /path/to/data.db --db /var/lib/fleet-edge/metrics.db [--map h002=h004]`.
@@ -134,6 +237,35 @@ func main() {
 		case "dns-plan":
 			dnsPlan(os.Args[2:])
 			return
+		case "overrides":
+			runOverrides(os.Args[2:])
+			return
+		case "vhost-receive":
+			fs := flag.NewFlagSet("vhost-receive", flag.ExitOnError)
+			cfgPath := fs.String("config", "/etc/fleet-edge-vhost/config.json", "receiver config")
+			_ = fs.Parse(os.Args[2:])
+			if err := edgevhost.Receive(*cfgPath, os.Stdin, os.Stdout); err != nil {
+				fmt.Fprintln(os.Stderr, "fleet-vhost-receive:", err)
+				os.Exit(1)
+			}
+			return
+		case "vhost-expire":
+			fs := flag.NewFlagSet("vhost-expire", flag.ExitOnError)
+			cfgPath := fs.String("config", "/etc/fleet-edge-vhost/config.json", "receiver config")
+			noReload := fs.Bool("no-reload", false, "only delete files (boot, before nginx)")
+			_ = fs.Parse(os.Args[2:])
+			c, err := edgevhost.LoadConfig(*cfgPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			gone, err := c.Expire(time.Now(), !*noReload)
+			for _, g := range gone {
+				fmt.Println("expired", g)
+			}
+			if err != nil {
+				log.Fatal(err)
+			}
+			return
 		case "import-beszel":
 			importBeszel(os.Args[2:])
 			return
@@ -160,6 +292,8 @@ func main() {
 	zitadelRedirectURI := flag.String("zitadel-redirect-uri", envDefault("FLEET_EDGE_ZITADEL_REDIRECT_URI", ""), "Zitadel OIDC redirect URI")
 	zitadelRole := flag.String("zitadel-role", envDefault("FLEET_EDGE_ZITADEL_ROLE", ""), "required Zitadel role (empty allows any project user)")
 	apiKeysFile := flag.String("api-keys-file", envDefault("FLEET_EDGE_API_KEYS_FILE", ""), "file holding newline-delimited plain API keys")
+	overridesURL := flag.String("overrides-url", envDefault("FLEET_EDGE_OVERRIDES_URL", ""),
+		"read-only export of fleet-edge-overrides for the /services section (empty hides it)")
 	sessionKeyFile := flag.String("session-key-file", envDefault("FLEET_EDGE_SESSION_KEY_FILE", ""), "file holding HMAC session key (optional)")
 	flag.Parse()
 
@@ -220,10 +354,11 @@ func main() {
 	go poller.Run(ctx, *pollInterval)
 
 	srv := server.New(poller, server.Config{
-		Title:      *title,
-		Background: *background,
-		IconBase:   *iconBase,
-		Links:      links,
+		Title:        *title,
+		Background:   *background,
+		IconBase:     *iconBase,
+		Links:        links,
+		OverridesURL: *overridesURL,
 	})
 	httpServer := &http.Server{
 		Addr:              *listen,

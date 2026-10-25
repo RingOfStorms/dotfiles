@@ -2,7 +2,7 @@
 # step 4): DNS-01 via bunny, whose key h005 already holds (sec-agent.nix).
 # Pushed to the TLS terminators (o002 edge, h001 internal listener) over
 # SSH after every issue/renew, plus a daily retry. Receivers:
-# hosts/wildcard-cert-receiver.nix.
+# hosts/_shared_assets/utilities/wildcard-cert-receiver.nix.
 #
 # Why push and not sec: sec only lets the `admin` role write, and only to
 # existing paths (secrets_manager README "Authorization"), so a machine
@@ -45,7 +45,7 @@ let
   #   1. Generate an ed25519 keypair; store the private half in sec as
   #      `wildcard_push_2026-XX-XX` (machines/high-trust), the public half
   #      goes in each receiver's `fleet.wildcardCertPushPubKey`
-  #      (hosts/wildcard-cert-receiver.nix) -- never the shared
+  #      (hosts/_shared_assets/utilities/wildcard-cert-receiver.nix) -- never the shared
   #      nix2nixMatchBlockHosts set.
   #   2. Add a `wildcard_push_2026-XX-XX` secret here (hosts/h005/sec-agent.nix)
   #      with a `configChanges` or local secretFile pointing sshKey below at

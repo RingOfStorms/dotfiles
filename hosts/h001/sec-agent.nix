@@ -5,7 +5,7 @@
 # the two stores and rendered directories separate is what makes that
 # dual-run safe.
 { inputs, constants, ... }:
-import ../sec-agent.nix {
+import ../_shared_assets/utilities/sec-agent.nix {
   inherit inputs constants;
   role = "machines-hightrust";
   # H2: h001 backs up to B2 via restic_h001_env, imports neither backup.nix

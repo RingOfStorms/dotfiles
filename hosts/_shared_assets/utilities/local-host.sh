@@ -7,7 +7,7 @@
 #   fleet-agent, ...) to a git URL + flake.lock revision on purpose: a machine
 #   keeps building from the version it last locked, so breaking changes in the
 #   latest `common` never reach it until you run
-#   `./hosts/update-all-host-flakes.sh common` (or `nix flake update common`
+#   `./hosts/_shared_assets/utilities/update-all-host-flakes.sh common` (or `nix flake update common`
 #   in that host). That pinning is the design; this script does not change it.
 #
 #   To try uncommitted/unpushed changes before you push and update locks, this
@@ -18,8 +18,8 @@
 #   (`--no-write-lock-file`).
 #
 # USAGE
-#   hosts/local-host.sh <host>  <cmd> [extra args passed through]
-#   hosts/local-host.sh --all   <cmd> [extra args]      (every host flake)
+#   hosts/_shared_assets/utilities/local-host.sh <host>  <cmd> [extra args passed through]
+#   hosts/_shared_assets/utilities/local-host.sh --all   <cmd> [extra args]      (every host flake)
 #
 #   <host> is a fleet name (h001, lio, ...) or a path to the host flake dir
 #   (hosts/oracle/o002). Commands:
@@ -32,11 +32,11 @@
 #             sudo nixos-rebuild <cmd> --flake <dir>#<host> with the overrides
 #
 # EXAMPLES
-#   hosts/local-host.sh h003 eval              # does h003 evaluate with my edits?
-#   hosts/local-host.sh --all eval             # catch breakage across the fleet
-#   hosts/local-host.sh lio switch             # run lio on the working tree
-#   nix build $(hosts/local-host.sh lio flags) ./hosts/lio#nixosConfigurations.lio.config.system.build.toplevel
-#   nh os switch ./hosts/lio -- $(hosts/local-host.sh lio flags)
+#   hosts/_shared_assets/utilities/local-host.sh h003 eval              # does h003 evaluate with my edits?
+#   hosts/_shared_assets/utilities/local-host.sh --all eval             # catch breakage across the fleet
+#   hosts/_shared_assets/utilities/local-host.sh lio switch             # run lio on the working tree
+#   nix build $(hosts/_shared_assets/utilities/local-host.sh lio flags) ./hosts/lio#nixosConfigurations.lio.config.system.build.toplevel
+#   nh os switch ./hosts/lio -- $(hosts/_shared_assets/utilities/local-host.sh lio flags)
 #
 # NOTES
 #   - `path:` copies the sub-flake dir into the store as-is, so uncommitted
@@ -49,7 +49,7 @@
 
 set -uo pipefail
 
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
+REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOSTS="$REPO/hosts"
 REPO_URL_RE='ringofstorms\/dotfiles'
 

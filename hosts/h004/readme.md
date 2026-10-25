@@ -129,7 +129,7 @@
 | NFS server | Exports `/data/nixarr` only (C2; not backups);
 | NFS server | Exports `/data/nixarr` only (C2; not backups);## Retirement of h002 (done)
 | NFS server | Exports `/data/nixarr` only (C2; not backups);
-| NFS server | Exports `/data/nixarr` only (C2; not backups);Removed from `hosts/fleet.nix`, `hosts/sec-agent.nix`, `containers/flake.nix` `containerHosts`,
+| NFS server | Exports `/data/nixarr` only (C2; not backups);Removed from `hosts/fleet.nix`, `hosts/_shared_assets/utilities/sec-agent.nix`, `containers/flake.nix` `containerHosts`,
 | NFS server | Exports `/data/nixarr` only (C2; not backups);h003 DHCP + `remoteShutdownHosts`; `hosts/h002/` deleted (last at `c1b72f9e`). The backup
 | NFS server | Exports `/data/nixarr` only (C2; not backups);module's default target is h004 (`100.64.0.17`).
 | NFS server | Exports `/data/nixarr` only (C2; not backups);

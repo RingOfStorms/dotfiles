@@ -137,15 +137,15 @@
     "impermanence": {
       "inputs": {
         "disko": "disko",
-        "impermanence": "impermanence"
+        "impermanence": "impermanence_2"
       },
       "locked": {
         "dir": "flakes/impermanence",
-        "lastModified": 1792191482,
-        "narHash": "sha256-hQMx1M6bJGjWMb8khI9zCcbCRzPk5yF0YYQYqwvlSvw=",
+        "lastModified": 1792865070,
+        "narHash": "sha256-aJ0zr1RmKMlnlZwMqJ4y70jBo3hm4Wf6PcTmCWnV+W8=",
         "ref": "refs/heads/master",
-        "rev": "eda991fe360f94bd88201d9dfe4d69c455540a8c",
-        "revCount": 2323,
+        "rev": "7b31742b9a70544c78848631d9fd2e625238fbb9",
+        "revCount": 2420,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -153,6 +153,25 @@
         "dir": "flakes/impermanence",
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
+      }
+    },
+    "impermanence_2": {
+      "inputs": {
+        "home-manager": "home-manager_2",
+        "nixpkgs": "nixpkgs_4"
+      },
+      "locked": {
+        "lastModified": 1769548169,
+        "narHash": "sha256-03+JxvzmfwRu+5JafM0DLbxgHttOQZkUtDWBmeUkN8Y=",
+        "owner": "nix-community",
+        "repo": "impermanence",
+        "rev": "7b1d382faf603b6d264f58627330f9faa5cba149",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "impermanence",
+        "type": "github"
       }
     },
     "nixarr": {
@@ -885,11 +904,11 @@
         "common": "common",
         "fleet-agent": "fleet-agent",
         "home-manager": "home-manager",
+        "impermanence": "impermanence",
         "nixarr": "nixarr",
         "nixpkgs": "nixpkgs_6",
         "ros_neovim": "ros_neovim",
-        "secrets_manager": "secrets_manager",
-        "impermanence": "impermanence"
+        "secrets_manager": "secrets_manager"
       }
     },
     "ros_neovim": {

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +29,53 @@ type StatusDoc struct {
 	Temps       []TempReading            `json:"temps,omitempty"`
 	Smart       []SmartDrive             `json:"smart,omitempty"`
 	Fail2ban    *Fail2banSummary         `json:"fail2ban,omitempty"`
+	// Overrides lists active `cnt expose` overrides on this host. h005's
+	// fleet-edge-overrides checks it on commit and in its sweep
+	// (ROUTING-PLAN §8 step 7, public expose). Always present (maybe
+	// empty) in the served doc so "none" and "old agent" differ; nil only
+	// in buildStatus (compat shape).
+	Overrides *[]ExposeOverride `json:"overrides,omitempty"`
+	// ExposeReloadPending: a reverted override's nginx reload hasn't
+	// succeeded yet (overrides/.reload-pending), so nginx may still serve
+	// the wider vhost. The minute sweep retries.
+	ExposeReloadPending bool `json:"exposeReloadPending,omitempty"`
+}
+
+// ExposeOverride is one host override (override.json, written by cnt expose).
+type ExposeOverride struct {
+	Service  string `json:"service"`
+	Route    string `json:"route"`
+	Exposure string `json:"exposure"`
+	Baseline string `json:"baseline"`
+	Until    int64  `json:"until"`
+}
+
+// overridesRoot is where cnt expose keeps per-service override state
+// (var for tests).
+var overridesRoot = "/var/lib/fleet-containers/overrides"
+
+// exposeReloadPending reports the cnt expose revert-reload marker.
+func exposeReloadPending() bool {
+	_, err := os.Stat(filepath.Join(overridesRoot, ".reload-pending"))
+	return err == nil
+}
+
+// readOverrides returns the active overrides (unreadable files skipped).
+func readOverrides() []ExposeOverride {
+	out := []ExposeOverride{}
+	m, _ := filepath.Glob(filepath.Join(overridesRoot, "*", "override.json"))
+	sort.Strings(m)
+	for _, p := range m {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		var o ExposeOverride
+		if json.Unmarshal(b, &o) == nil && o.Service != "" {
+			out = append(out, o)
+		}
+	}
+	return out
 }
 
 // Config configures the per-host fleet-agent server.
@@ -83,10 +132,12 @@ func Handler(cfg Config, sampler *Sampler) http.Handler {
 			return
 		}
 		d := StatusDoc{
-			Host:      cfg.Host,
-			Time:      time.Now().UTC().Format(time.RFC3339),
-			Services:  svcs,
-			HostUnits: hostUnits,
+			Host:                cfg.Host,
+			Time:                time.Now().UTC().Format(time.RFC3339),
+			Services:            svcs,
+			HostUnits:           hostUnits,
+			Overrides:           ptr(readOverrides()),
+			ExposeReloadPending: exposeReloadPending(),
 		}
 		if len(d.HostUnits) == 0 {
 			d.HostUnits = nil
@@ -224,3 +275,5 @@ func Run(args []string) error {
 	fmt.Fprintf(os.Stderr, "fleet-agent: %s on http://%s/status.json\n", cfg.Host, cfg.Listen)
 	return srv.ListenAndServe()
 }
+
+func ptr[T any](v T) *T { return &v }

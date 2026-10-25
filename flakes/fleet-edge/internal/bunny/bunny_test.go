@@ -88,7 +88,7 @@ func TestRender(t *testing.T) {
 	var b bytes.Buffer
 	Render(&b, "example.com", Plan(spec(), zone()))
 	out := b.String()
-	for _, s := range []string{"create    new", "1 create, 1 update, 0 retire, 1 conflict, 0 retire-mismatch, 2 keep, 1 external, 1 unmanaged", "unmanaged @"} {
+	for _, s := range []string{"create    new", "1 create, 1 update, 0 retire, 1 conflict, 0 retire-mismatch, 2 keep, 0 override, 1 external, 1 unmanaged", "unmanaged @"} {
 		if !strings.Contains(out, s) {
 			t.Errorf("missing %q in\n%s", s, out)
 		}

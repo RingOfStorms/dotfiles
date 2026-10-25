@@ -15,6 +15,8 @@
     # sec-agent replaces secrets-bao on this host.
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     fleet-agent.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/fleet-agent";
+    # vhost-receive / vhost-expire for runtime public vhosts (edge-vhost-receiver.nix).
+    fleet-edge.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/fleet-edge";
   };
 
   outputs =
@@ -88,7 +90,7 @@
           inputs.common.nixosModules.hardening
           inputs.common.nixosModules.nix_options
           inputs.common.nixosModules.tailnet
-          (import ../../sec-agent.nix {
+          (import ../../_shared_assets/utilities/sec-agent.nix {
             inherit inputs constants;
             role = "machines-hightrust";
             # Public edge: never SSHes into fleet hosts or pushes to git.
@@ -101,7 +103,14 @@
           ./firewall.nix
           ./configuration.nix
           ./nginx.nix
-          ../../wildcard-cert-receiver.nix
+          ../../_shared_assets/utilities/wildcard-cert-receiver.nix
+          ../../_shared_assets/utilities/edge-vhost-receiver.nix
+          (
+            { pkgs, ... }:
+            {
+              fleet.edgeVhost.package = inputs.fleet-edge.packages.${pkgs.stdenv.hostPlatform.system}.default;
+            }
+          )
           ./headscale.nix
         ]
         ++ impermanenceModules;

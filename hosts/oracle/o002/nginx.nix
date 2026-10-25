@@ -24,7 +24,7 @@ let
 
   # TLS (ROUTING-PLAN §8 step 4): names listed here serve the
   # *.joshuabell.xyz + apex wildcard that h005 issues and pushes
-  # (hosts/wildcard-cert-receiver.nix) instead of their own http-01 cert.
+  # (hosts/_shared_assets/utilities/wildcard-cert-receiver.nix) instead of their own http-01 cert.
   # Moved over one name at a time; "all" switches every joshuabell.xyz
   # vhost.
   wildcardNames = [ "all" ];

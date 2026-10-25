@@ -3,7 +3,7 @@
 Minimal steps to get a new machine from zero to a working NixOS host with
 encrypted bcachefs, impermanence, and sec-agent secrets.
 
-> **Hosts on sec-agent** (`hosts/sec-agent.nix`, i.e. every current host):
+> **Hosts on sec-agent** (`hosts/_shared_assets/utilities/sec-agent.nix`, i.e. every current host):
 > The legacy Step 7 documents the retired secrets-bao/OpenBao flow. Use
 > [Step 7 (sec-agent)](#step-7-sec-agent-first-boot) instead.
 
@@ -411,7 +411,7 @@ bind mount fail with permission errors. Check the uid with
 
 ## Step 7 (sec-agent): first boot
 
-For hosts that import `hosts/sec-agent.nix`. The agent authenticates to
+For hosts that import `hosts/_shared_assets/utilities/sec-agent.nix`. The agent authenticates to
 `https://secrets.joshuabell.xyz` with a Zitadel machine key and reaches it
 publicly via o002, so this works before the host is on the tailnet.
 
@@ -434,7 +434,7 @@ publicly via o002, so this works before the host is on the tailnet.
    An early `lookup sso.joshuabell.xyz ... server misbehaving` error is
    harmless: DNS wasn't up yet, and the agent retries.
 4. **Tailscale.** sec-agent starts `tailscaled-autoconnect` when the headscale
-   key lands (`hardDepend` in `hosts/sec-agent.nix`). If `tailscale status`
+   key lands (`hardDepend` in `hosts/_shared_assets/utilities/sec-agent.nix`). If `tailscale status`
    still says `Logged out` (e.g. the host was built before that fix), run:
    ```sh
    systemctl restart tailscaled-autoconnect && tailscale status

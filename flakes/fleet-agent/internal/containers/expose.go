@@ -3,10 +3,11 @@ package containers
 // `cnt expose` (ROUTING-PLAN.md §5.3, §8 step 7): change one http route's
 // exposure on its host for a while, without a commit or a rebuild.
 //
-// Host-local, so only what the host itself enforces can change: the
-// generated vhost (ACL include, edge server). Targets are tailnet and lan.
-// public is refused until fleet-edge on h005 can add the public CNAME and
-// o002 its vhost at runtime (both are build-time today); see the plan.
+// tailnet and lan are host-local: only the generated vhost (ACL include)
+// changes. public also needs h005 (fleet-edge-overrides: public CNAME) and
+// o002 (runtime vhost); the order and the API are in edgeapi.go and the
+// plan's "Public expose design". until = 0 means forever (public only): no
+// timer, never swept; --revoke or a deploy ends it.
 //
 // State, per service, on the service's host:
 //
@@ -18,10 +19,14 @@ package containers
 //
 //   - a transient timer (systemd-run --on-active, unit fleet-expose-<svc>)
 //     starts the sweep unit one second after the deadline;
-//   - fleet-containers-expose-expire.service (host module) runs
-//     `containers expose-expire --all` at boot, before nginx, and every
-//     minute from a timer, so a reboot or a lost transient timer can delay
-//     a revert by at most a minute.
+//   - fleet-containers-expose-boot.service (host module) runs
+//     `containers expose-expire --boot --all` before nginx: files only, no
+//     reload (nginx starts with them);
+//   - fleet-containers-expose-expire.service (NOT ordered before nginx)
+//     runs `containers expose-expire --all` every minute and from the
+//     deadline timer: checked, blocking nginx -t + reload. A reverted file
+//     sets overrides/.reload-pending first; it is cleared only after that
+//     reload, and every sweep/revoke retries it (fails while pending).
 //
 // expose-expire puts baseline.conf back (nginx -t; on failure the site is
 // removed: fail closed), reloads nginx and deletes the override. `cnt
@@ -38,6 +43,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -51,7 +57,11 @@ var svcNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$`)
 const exposeMaxFor = 24 * time.Hour
 
 // exposeLevels a route may be overridden to (host-local only).
-var exposeLevels = map[string]bool{"tailnet": true, "lan": true}
+var exposeLevels = map[string]bool{"tailnet": true, "lan": true, "public": true}
+
+// publicDefaultFor is --for when omitted for public (any duration or
+// "forever" is allowed there; h005 owns the expiry).
+const publicDefaultFor = 8 * time.Hour
 
 var exposeRank = map[string]int{"local": 0, "tailnet": 1, "lan": 2, "public": 3}
 
@@ -97,8 +107,8 @@ func pickRoute(s Service, route string) (string, error) {
 
 // exposeCheck validates an override and returns the service as it would be
 // with it applied. Same safety rules as lib.nix: no public without auth
-// unless publicWithoutAuth (kept here although public is refused for now,
-// so lifting that refusal can't skip it).
+// unless publicWithoutAuth, no oauth2-proxy route in public while the
+// sign-in host is tailnet-only. h005 re-checks all of it (overrides.Check).
 func exposeCheck(s Service, route, level string) (Service, error) {
 	r, ok := s.Routes[route]
 	if !ok {
@@ -114,14 +124,20 @@ func exposeCheck(s Service, route, level string) (Service, error) {
 	if str(r.Zone) == "private" {
 		return s, fmt.Errorf("%s is in the private zone (served by h005), not by its host", where)
 	}
+	if !exposeLevels[level] {
+		return s, fmt.Errorf("exposure %q: want tailnet, lan or public", level)
+	}
 	if level == "public" {
 		if str(r.Auth) == "none" && !r.PublicWithoutAuth {
 			return s, fmt.Errorf("%s: public with auth none needs publicWithoutAuth in service.nix", where)
 		}
-		return s, errors.New("expose to public needs fleet-edge (public DNS on h005) and o002 (edge vhost) at runtime; not built yet (ROUTING-PLAN §8 step 7). Use tailnet or lan")
-	}
-	if !exposeLevels[level] {
-		return s, fmt.Errorf("exposure %q: want tailnet or lan", level)
+		// Lift together with lib.nix (~199) once sso-proxy is public.
+		if str(r.Auth) == "oauth2-proxy" {
+			return s, fmt.Errorf("%s: auth oauth2-proxy is tailnet/lan only until the sign-in host is published (ROUTING-PLAN §8 step 6)", where)
+		}
+		if len(r.Via) > 0 && !(len(r.Via) == 1 && r.Via[0] == "edge") {
+			return s, fmt.Errorf("%s: via %v; public expose only goes through the edge", where, r.Via)
+		}
 	}
 	if level == r.Exposure {
 		return s, fmt.Errorf("%s is already %s in service.nix (cnt expose --revoke %s drops an override)", where, level, s.Name)
@@ -135,6 +151,9 @@ func exposeCheck(s Service, route, level string) (Service, error) {
 		o.Routes[k] = v
 	}
 	r.Exposure = level
+	if level == "public" {
+		r.Via = []string{"edge"} // lib.nix default for public http
+	}
 	o.Routes[route] = r
 	if err := validateRoutes(o); err != nil {
 		return s, err
@@ -153,12 +172,16 @@ func exposeScript(s Service, o override, secs int, baseline, conf string) string
 	d := overridesDir + "/" + s.Name
 	b.WriteString("set -eu\n")
 	b.WriteString(installedCheck(s))
-	b.WriteString("[ -e /etc/systemd/system/fleet-containers-expose-expire.service ] || { echo 'this host lacks cnt expose support (rebuild with the current containers host module)' >&2; exit 1; }\n")
+	b.WriteString("[ -e /etc/systemd/system/fleet-containers-expose-boot.service ] || { echo 'this host lacks cnt expose support (rebuild with the current containers host module)' >&2; exit 1; }\n")
 	fmt.Fprintf(&b, "d=%s\n", q(d))
 	fmt.Fprintf(&b, "if [ -e \"$d/override.json\" ] && ! grep -q %s \"$d/override.json\"; then echo %s >&2; exit 1; fi\n",
 		q(`"route":"`+o.Route+`"`), q(s.Name+" already has an override on another route; cnt expose --revoke "+s.Name+" first"))
 	b.WriteString("install -d -m755 " + q(overridesDir) + " \"$d\"\n")
-	fmt.Fprintf(&b, "now=$(date +%%s); until=$((now + %d)); by=${SUDO_USER:-$(id -un)}\n", secs)
+	if secs == 0 {
+		b.WriteString("now=$(date +%s); until=0; by=${SUDO_USER:-$(id -un)}\n")
+	} else {
+		fmt.Fprintf(&b, "now=$(date +%%s); until=$((now + %d)); by=${SUDO_USER:-$(id -un)}\n", secs)
+	}
 	fmt.Fprintf(&b, "printf %%s %s > \"$d/baseline.conf\"\n", q(baseline))
 	// JSON by hand: every field except by/at/until is CLI-validated
 	// (names, enum, reason via json.Marshal).
@@ -174,6 +197,11 @@ func exposeScript(s Service, o override, secs int, baseline, conf string) string
 	b.WriteString("rm -f \"$d/override.json.old\"\n")
 	u := overrideUnit(s.Name)
 	fmt.Fprintf(&b, "systemctl stop %[1]s.timer %[1]s.service 2>/dev/null || true\nsystemctl reset-failed %[1]s.timer %[1]s.service 2>/dev/null || true\n", u)
+	if secs == 0 {
+		fmt.Fprintf(&b, "logger -t cnt-expose \"expose %s.%s %s (baseline %s) forever by=$by\"\n", s.Name, o.Route, o.Exposure, o.Baseline)
+		fmt.Fprintf(&b, "echo \"%s.%s is %s with no expiry (baseline %s; cnt expose --revoke %s ends it)\"\n", s.Name, o.Route, o.Exposure, o.Baseline, s.Name)
+		return b.String()
+	}
 	fmt.Fprintf(&b, "systemd-run --quiet --unit=%s --on-active=%ds --timer-property=AccuracySec=1s /run/current-system/sw/bin/systemctl start fleet-containers-expose-expire.service\n", u, secs+1)
 	fmt.Fprintf(&b, "logger -t cnt-expose \"expose %s.%s %s (baseline %s) for %ds by=$by\"\n", s.Name, o.Route, o.Exposure, o.Baseline, secs)
 	fmt.Fprintf(&b, "echo \"%s.%s is %s until $(date -d @$until '+%%F %%T %%Z') (baseline %s)\"\n", s.Name, o.Route, o.Exposure, o.Baseline)
@@ -182,8 +210,8 @@ func exposeScript(s Service, o override, secs int, baseline, conf string) string
 
 // revokeScript runs expose-expire now (it ignores the deadline with --now).
 func revokeScript(svc string) string {
-	return fmt.Sprintf("set -eu\n[ -e %s ] || { echo 'no override for %s'; exit 0; }\n/run/current-system/sw/bin/containers expose-expire --now %s\n",
-		q(overridesDir+"/"+svc+"/override.json"), svc, svc)
+	return fmt.Sprintf("set -eu\n[ -e %s ] || [ -e %s ] || [ -e %s ] || { echo 'no override for %s'; exit 0; }\n/run/current-system/sw/bin/containers expose-expire --now %s\n",
+		q(overridesDir+"/"+svc+"/override.json"), q(overridesDir+"/"+svc), q(overridesDir+"/.reload-pending"), svc, svc)
 }
 
 // dropOverrideScript is used by deploy/destroy: service.nix wins. It must
@@ -195,7 +223,10 @@ func dropOverrideScript(svc string) string {
 `, q(overridesDir+"/"+svc), svc, overrideUnit(svc))
 }
 
-const overridesListScript = `for f in /var/lib/fleet-containers/overrides/*/override.json; do [ -e "$f" ] && { cat "$f"; echo; }; done; true`
+const overridesListScript = `for f in /var/lib/fleet-containers/overrides/*/override.json; do [ -e "$f" ] && { cat "$f"; echo; }; done; [ ! -e /var/lib/fleet-containers/overrides/.reload-pending ] || echo RELOAD-PENDING; true`
+
+// reloadPendingLine marks a host whose nginx still owes the revert reload.
+const reloadPendingLine = "RELOAD-PENDING"
 
 func parseOverrides(out, host string) []override {
 	var ovs []override
@@ -214,6 +245,9 @@ func parseOverrides(out, host string) []override {
 }
 
 func (o override) left(now time.Time) string {
+	if o.Until == 0 {
+		return "forever"
+	}
 	d := time.Unix(o.Until, 0).Sub(now).Round(time.Second)
 	if d <= 0 {
 		return "expired (revert pending)"
@@ -228,16 +262,31 @@ func overridesTable(ovs []override, now time.Time) string {
 	sort.SliceStable(ovs, func(i, j int) bool { return ovs[i].Host+ovs[i].Service < ovs[j].Host+ovs[j].Service })
 	for _, o := range ovs {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", o.Host, o.Service, o.Route, o.Exposure, o.Baseline,
-			time.Unix(o.Until, 0).Local().Format("2006-01-02 15:04:05"), o.left(now), dash(o.By), dash(o.Reason))
+			untilStr(o.Until), o.left(now), dash(o.By), dash(o.Reason))
 	}
 	w.Flush()
 	return b.String()
 }
 
+func untilStr(u int64) string {
+	if u == 0 {
+		return "never"
+	}
+	return time.Unix(u, 0).Local().Format("2006-01-02 15:04:05")
+}
+
 // fetchOverrides reads active overrides from hosts (best effort: an
 // unreachable host is reported on stderr and skipped).
 func fetchOverrides(hosts []string) []override {
+	ovs, _ := fetchOverridesState(hosts)
+	return ovs
+}
+
+// fetchOverridesState also returns hosts whose nginx still owes a revert
+// reload (warned on stderr for every caller: routes, audit, move).
+func fetchOverridesState(hosts []string) ([]override, []string) {
 	var all []override
+	var pending []string
 	for _, h := range hosts {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		out, err := remoteOut(ctx, h, false, overridesListScript)
@@ -247,8 +296,21 @@ func fetchOverrides(hosts []string) []override {
 			continue
 		}
 		all = append(all, parseOverrides(out, h)...)
+		if hasReloadPending(out) {
+			pending = append(pending, h)
+			fmt.Fprintf(os.Stderr, "%s: reload pending: nginx may still serve a reverted (wider) vhost; the minute sweep retries (journalctl -u fleet-containers-expose-expire)\n", h)
+		}
 	}
-	return all
+	return all, pending
+}
+
+func hasReloadPending(out string) bool {
+	for _, l := range strings.Split(out, "\n") {
+		if strings.TrimSpace(l) == reloadPendingLine {
+			return true
+		}
+	}
+	return false
 }
 
 func cmdExpose(args []string) error {
@@ -259,20 +321,46 @@ func cmdExpose(args []string) error {
 		if len(hosts) == 0 {
 			hosts = containerHosts()
 		}
-		ovs := fetchOverrides(hosts)
+		ovs, pending := fetchOverridesState(hosts)
 		if len(ovs) == 0 {
-			fmt.Println("no active overrides")
-			return nil
+			fmt.Println("no active host overrides")
+		} else {
+			fmt.Print(overridesTable(ovs, time.Now()))
 		}
-		fmt.Print(overridesTable(ovs, time.Now()))
+		for _, h := range pending {
+			fmt.Printf("%s: reload pending (reverted files not yet live in nginx)\n", h)
+		}
+		if c, err := newEdgeClient(); err == nil {
+			rows, v, err := c.list(true)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "h005: public overrides unknown: %v\n", err)
+			} else if len(rows) > 0 {
+				fmt.Println()
+				fmt.Print(edgeTable(rows, v, time.Now()))
+			}
+			if err == nil {
+				for _, l := range edgeLeftovers(ovs, rows, v) {
+					fmt.Println("LEFTOVER " + l)
+				}
+			}
+		}
 		return nil
 	}
 	if v := f.vals["revoke"]; v != "" {
 		s := service(v)
+		// h005 first (o002, then DNS), then the host. h005 down: the host
+		// still closes (444 at :8443) and h005/o002 expire on their own.
+		if c, err := newEdgeClient(); err == nil {
+			if err := c.revoke(s.Name); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: h005: %v (its sweep and o002's expiry clean up; check cnt expose --list)\n", err)
+			}
+		} else if !errors.Is(err, errNoToken) {
+			fmt.Fprintf(os.Stderr, "warning: h005: %v\n", err)
+		}
 		return remote(hostFor(s, f), true, revokeScript(s.Name))
 	}
 	if len(f.pos) < 1 {
-		return errors.New("usage: cnt expose <svc>[.<route>] --exposure tailnet|lan --for DUR [--reason TEXT] | --list [host...] | --revoke <svc>")
+		return errors.New("usage: cnt expose <svc>[.<route>] --exposure tailnet|lan|public --for DUR|forever [--reason TEXT] | --list [host...] | --revoke <svc>")
 	}
 	svcName, route := splitTarget(f.pos[0])
 	s := service(svcName)
@@ -285,14 +373,11 @@ func cmdExpose(args []string) error {
 		level = f.pos[1]
 	}
 	if level == "" {
-		return errors.New("--exposure tailnet|lan is required")
+		return errors.New("--exposure tailnet|lan|public is required")
 	}
-	d, err := parseFor(f.vals["for"])
+	d, err := exposeFor(level, f.vals["for"])
 	if err != nil {
 		return err
-	}
-	if d > exposeMaxFor {
-		return errors.New("--for: at most 24h")
 	}
 	o, err := exposeCheck(s, route, level)
 	if err != nil {
@@ -309,8 +394,47 @@ func cmdExpose(args []string) error {
 	if level == "lan" {
 		fmt.Fprintln(os.Stderr, "note: LAN DNS (h005) is build-time; LAN clients without tailnet DNS need the host's LAN IP for this name")
 	}
-	info("%s.%s on %s: %s -> %s for %s", s.Name, route, h, ov.Baseline, level, d)
-	return remote(h, true, exposeScript(s, ov, int(d.Seconds()), baseline, conf))
+	forStr := d.String()
+	if d == 0 {
+		forStr = "ever (no expiry)"
+	}
+	info("%s.%s on %s: %s -> %s for %s", s.Name, route, h, ov.Baseline, level, forStr)
+	script := exposeScript(s, ov, int(d.Seconds()), baseline, conf)
+	if level != "public" {
+		return remote(h, true, script)
+	}
+	c, err := newEdgeClient()
+	if err != nil {
+		return err
+	}
+	return exposePublic(c, s, route, h, d, f.vals["reason"], func() error { return remote(h, true, script) },
+		func() error { return remote(h, true, revokeScript(s.Name)) })
+}
+
+// exposeFor parses --for. tailnet/lan: required, at most 24h. public:
+// default 8h, any duration, or "forever" (0).
+func exposeFor(level, v string) (time.Duration, error) {
+	if level != "public" {
+		d, err := parseFor(v)
+		if err == nil && d > exposeMaxFor {
+			err = errors.New("--for: at most 24h for tailnet/lan")
+		}
+		return d, err
+	}
+	switch v {
+	case "":
+		return publicDefaultFor, nil
+	case "forever":
+		return 0, nil
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return 0, fmt.Errorf("--for %q: %v (or forever)", v, err)
+	}
+	if d < time.Minute {
+		return 0, fmt.Errorf("--for %q: at least 1m for public", v)
+	}
+	return d, nil
 }
 
 // ------------------------------------------------- host side: expose-expire
@@ -322,26 +446,102 @@ var runCmd = func(name string, args ...string) error {
 	return c.Run()
 }
 
-// cmdExposeExpire runs on the host (timer, boot/minute sweep, revoke):
-// `expose-expire [--now] <svc>` or `expose-expire --all`.
+// reloadPendingFile is set (atomically) before a sweep or revoke touches
+// any site file and removed only after a checked nginx -t + reload. While
+// it exists nginx may still serve a wider vhost than the files say, so
+// every runtime sweep/revoke retries the reload first and fails while it
+// is pending. A sibling of the per-service dirs (the */override.json glob
+// never sees it), so it survives the svc dir being removed.
+func reloadPendingFile() string { return filepath.Join(overridesDir, ".reload-pending") }
+
+func reloadPending() bool {
+	_, err := os.Stat(reloadPendingFile())
+	return err == nil
+}
+
+func setReloadPending(why string) error {
+	if err := os.MkdirAll(overridesDir, 0o755); err != nil {
+		return err
+	}
+	p := reloadPendingFile()
+	if err := os.WriteFile(p+".new", []byte(time.Now().UTC().Format(time.RFC3339)+" "+why+"\n"), 0o644); err != nil {
+		return fmt.Errorf("writing reload marker: %w", err)
+	}
+	if err := os.Rename(p+".new", p); err != nil {
+		return fmt.Errorf("writing reload marker: %w", err)
+	}
+	return nil
+}
+
+// flushReload runs the owed, checked reload. Blocking: it must only run
+// from the runtime unit (not ordered before nginx) or an ssh revoke, never
+// from the boot unit. try-reload-or-restart is a no-op (success) while
+// nginx is stopped: then nothing serves the old site.
+func flushReload() error {
+	if !reloadPending() {
+		return nil
+	}
+	if err := runCmd("nginx", "-t", "-c", "/etc/nginx/nginx.conf"); err != nil {
+		return fmt.Errorf("reload pending: nginx -t: %v", err)
+	}
+	if err := runCmd("systemctl", "try-reload-or-restart", "nginx.service"); err != nil {
+		return fmt.Errorf("reload pending: nginx reload: %v", err)
+	}
+	if err := os.Remove(reloadPendingFile()); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("reload pending: clearing marker: %v", err)
+	}
+	return nil
+}
+
+// cmdExposeExpire runs on the host:
+//
+//	expose-expire --boot --all       boot unit, Before=nginx: files only, never reloads
+//	                                 (nginx starts with them; the marker stays for the runtime sweep)
+//	expose-expire --all              runtime sweep (minute timer, transient deadline timer)
+//	expose-expire [--now] <svc>      one service; --now = revoke
+//
+// Runtime mode retries an owed reload first, reverts what is due, then
+// reloads (checked, blocking) and fails while the reload is still owed.
 func cmdExposeExpire(args []string) error {
-	f := parse(args, "all", "now")
+	f := parse(args, "all", "now", "boot")
 	now := time.Now()
+	boot := f.bools["boot"]
 	var svcs []string
 	if f.bools["all"] {
 		m, _ := filepath.Glob(filepath.Join(overridesDir, "*", "override.json"))
 		for _, p := range m {
 			svcs = append(svcs, filepath.Base(filepath.Dir(p)))
 		}
+		// Dirs without override.json (interrupted apply) are due too.
+		ds, _ := filepath.Glob(filepath.Join(overridesDir, "*"))
+		for _, d := range ds {
+			if fi, err := os.Stat(d); err == nil && fi.IsDir() && !slices.Contains(svcs, filepath.Base(d)) {
+				svcs = append(svcs, filepath.Base(d))
+			}
+		}
+		sort.Strings(svcs)
 	} else if len(f.pos) == 1 && svcNameRe.MatchString(f.pos[0]) {
 		svcs = f.pos
 	} else {
-		return errors.New("usage: containers expose-expire [--now] <svc> | --all")
+		return errors.New("usage: containers expose-expire [--now] <svc> | [--boot] --all")
 	}
 	var errs []string
+	if !boot {
+		if err := flushReload(); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
 	for _, s := range svcs {
+		if !svcNameRe.MatchString(s) {
+			continue
+		}
 		if err := expireOne(s, now, f.bools["now"]); err != nil {
 			errs = append(errs, s+": "+err.Error())
+		}
+	}
+	if !boot && reloadPending() {
+		if err := flushReload(); err != nil && !slices.Contains(errs, err.Error()) {
+			errs = append(errs, err.Error())
 		}
 	}
 	if len(errs) > 0 {
@@ -350,19 +550,27 @@ func cmdExposeExpire(args []string) error {
 	return nil
 }
 
-// expireOne reverts svc's override if it is due (or force). A missing or
-// unreadable override.json counts as due: the dir only exists while an
-// override is being applied or is active, so garbage fails closed.
+// expireOne reverts svc's override files if it is due (or force). A
+// missing or unreadable override.json counts as due: the dir only exists
+// while an override is being applied or is active, so garbage fails
+// closed. It never reloads: it sets the reload marker before touching the
+// site, and the caller flushes it (runtime) or leaves it (boot).
 func expireOne(svc string, now time.Time, force bool) error {
 	d := filepath.Join(overridesDir, svc)
 	if _, err := os.Stat(d); err != nil {
 		return nil
 	}
 	var o override
-	if b, err := os.ReadFile(filepath.Join(d, "override.json")); err == nil && json.Unmarshal(b, &o) == nil && o.Until > 0 {
-		if !force && now.Unix() < o.Until {
+	// until = 0 is forever, but only for a well-formed public override:
+	// anything else without a deadline is garbage and fails closed.
+	if b, err := os.ReadFile(filepath.Join(d, "override.json")); err == nil && json.Unmarshal(b, &o) == nil && o.Service != "" {
+		live := o.Until > 0 && now.Unix() < o.Until || o.Until == 0 && o.Exposure == "public"
+		if !force && live {
 			return nil
 		}
+	}
+	if err := setReloadPending("revert " + svc); err != nil {
+		return err
 	}
 	site := filepath.Join(nginxDir, svc+".conf")
 	base, err := os.ReadFile(filepath.Join(d, "baseline.conf"))
@@ -385,13 +593,7 @@ func expireOne(svc string, now time.Time, force bool) error {
 	if err := os.RemoveAll(d); err != nil {
 		return err
 	}
-	// --no-block: this runs inside fleet-containers-expose-expire.service,
-	// which is ordered Before=nginx (boot), so a blocking reload would wait
-	// on a job that waits for us (deadlock, seen on h001 2026-10-22). Queued,
-	// the reload runs right after; at boot try-reload is a no-op and nginx
-	// starts with the reverted file.
-	_ = runCmd("systemctl", "--no-block", "try-reload-or-restart", "nginx.service")
-	_ = runCmd("logger", "-t", "cnt-expose", "reverted "+svc+"."+o.Route+" to "+dash(o.Baseline)+" (until "+strconv.FormatInt(o.Until, 10)+")")
+	_ = runCmd("logger", "-t", "cnt-expose", "reverted "+svc+"."+o.Route+" to "+dash(o.Baseline)+" (until "+strconv.FormatInt(o.Until, 10)+"); reload pending")
 	fmt.Printf("%s: override reverted to service.nix (%s.%s %s)\n", svc, svc, dash(o.Route), dash(o.Baseline))
 	return ret
 }

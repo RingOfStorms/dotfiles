@@ -23,6 +23,10 @@ let
   overlayIp = constants.host.overlayIp;
   # oauth2-proxy cookie/identity hygiene (containers/lib.nix, shared with routes.go).
   inherit (import ../../containers/lib.nix) nginxSnippets;
+  # Same spec `fleet-edge dns-plan` reconciles (dns-records.nix publicSpec).
+  publicSpecFile = pkgs.writeText "fleet-public-spec.json" (
+    builtins.toJSON (import ./dns-records.nix { inherit fleet; }).public
+  );
   domain = fleet.global.domain;
   h001 = "http://h001.net.${domain}";
   link = group: name: url: icon: description: exposure: {
@@ -50,6 +54,15 @@ in
 
   services.fleet-edge = {
     enable = true;
+    # Public expose authority (ROUTING-PLAN §8 step 7). No keys yet: writes
+    # return 503 until rollout step 4 sets bunnyKeyFile/pushKeyFile/devices.
+    overrides = {
+      enable = true;
+      specFile = publicSpecFile;
+      target = "o002.${fleet.global.domain}";
+      pushTarget = "root@o002";
+      devices = { };
+    };
     inventoryFile = pkgs.writeText "fleet-inventory.json" (builtins.toJSON inputs.containers.inventory);
     title = "Josh's Homelab";
     background = "https://w.wallhaven.cc/full/k9/wallhaven-k912lq.png";
@@ -158,6 +171,24 @@ in
         else
           [ ]
       );
+      # Public expose API (fleet-edge-overrides, ROUTING-PLAN §8 step 7).
+      # /internal/* is never proxied; the export is loopback-only.
+      locations."/api/overrides" = {
+        proxyPass = "http://127.0.0.1:8098";
+        extraConfig = ''
+          deny 100.64.0.5;
+          deny fd7a:115c:a1e0::5;
+          allow 100.64.0.0/10;
+          allow fd7a:115c:a1e0::/48;
+          deny all;
+          # The only peer identity the service trusts (it ignores this
+          # header unless the TCP peer is loopback).
+          proxy_set_header X-Fleet-Peer $remote_addr;
+          client_max_body_size 16k;
+          proxy_read_timeout 180s;
+          ${nginxSnippets.identityClear}
+        '';
+      };
       locations."/" = {
         proxyPass = "http://127.0.0.1:8099";
         extraConfig = ''

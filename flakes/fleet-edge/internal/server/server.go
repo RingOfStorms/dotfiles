@@ -60,6 +60,62 @@ type Config struct {
 	Links []dash.Link
 	// HTTPClient is used for proxying /api/hosts/{name}/logs.json to fleet-agent.
 	HTTPClient *http.Client
+	// OverridesURL is fleet-edge-overrides' read-only loopback export
+	// (/internal/overrides.json). "" hides the section. The dashboard has
+	// no token and no write path: it only GETs this URL.
+	OverridesURL string
+}
+
+// ExposeRow is one public expose override on /services (from the export).
+type ExposeRow struct {
+	Service   string `json:"service"`
+	Route     string `json:"route"`
+	Host      string `json:"host"`
+	FQDN      string `json:"fqdn"`
+	Until     int64  `json:"until"`
+	State     string `json:"state"`
+	DNS       string `json:"dns"`
+	Edge      bool   `json:"edge"`
+	Device    string `json:"device"`
+	User      string `json:"user"`
+	LastError string `json:"lastError"`
+	Left      string `json:"-"`
+}
+
+// fetchOverrides GETs the export (short timeout; errors shown, not fatal).
+func (s *Server) fetchOverrides(ctx context.Context, now time.Time) ([]ExposeRow, string) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.cfg.OverridesURL, nil)
+	if err != nil {
+		return nil, err.Error()
+	}
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, "fleet-edge-overrides unreachable"
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, "fleet-edge-overrides: " + resp.Status
+	}
+	var e struct {
+		Rows []ExposeRow `json:"rows"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&e); err != nil {
+		return nil, "bad export: " + err.Error()
+	}
+	for i := range e.Rows {
+		r := &e.Rows[i]
+		switch d := time.Unix(r.Until, 0).Sub(now).Round(time.Second); {
+		case r.Until == 0:
+			r.Left = "forever (no expiry)"
+		case d <= 0:
+			r.Left = "expired (removal pending)"
+		default:
+			r.Left = d.String()
+		}
+	}
+	return e.Rows, ""
 }
 
 // Common is embedded in every page's view model.
@@ -89,6 +145,10 @@ type IndexData struct {
 	BackupStale   int
 	HostsTotal    int
 	HostsUp       int
+	// Expose overrides (public cnt expose), when OverridesURL is set.
+	ExposeEnabled bool
+	Expose        []ExposeRow
+	ExposeError   string
 }
 
 // HostCardView wraps state.HostView with pre-rendered sparklines and formatted summary fields.
@@ -292,6 +352,10 @@ func (s *Server) handleServices(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	data.HostsTotal, data.HostsUp = hostCounts(m)
+	if s.cfg.OverridesURL != "" {
+		data.ExposeEnabled = true
+		data.Expose, data.ExposeError = s.fetchOverrides(r.Context(), time.Now())
+	}
 	s.render(w, "services.html", data)
 }
 

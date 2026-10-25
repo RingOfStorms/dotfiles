@@ -1,6 +1,6 @@
 # Host-specific sec-agent additions for h003.
 { inputs, constants, ... }:
-import ../sec-agent.nix {
+import ../_shared_assets/utilities/sec-agent.nix {
   inherit inputs constants;
   role = "machines-hightrust";
   # H2: h003 is a floating-containers host (nginx + podman); it never

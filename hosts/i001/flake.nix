@@ -83,7 +83,7 @@
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.tailnet
 
-          (import ../sec-agent.nix {
+          (import ../_shared_assets/utilities/sec-agent.nix {
             inherit inputs constants;
             role = "machines-lowtrust";
           })

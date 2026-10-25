@@ -53,6 +53,31 @@
 </tbody>
 </table>
 </div>
+{{if .ExposeEnabled}}
+<section class="expose">
+<h2>Expose overrides</h2>
+<p class="summary">Public <code>cnt expose</code> overrides held by fleet-edge-overrides on h005 (read-only; change with <code>cnt expose</code>).</p>
+{{if .ExposeError}}<p class="warn">{{.ExposeError}}</p>
+{{else if not .Expose}}<p>none active</p>
+{{else}}
+<div class="scroll table-wrap">
+<table>
+<thead><tr><th>service</th><th>route</th><th>name</th><th>host</th><th>state</th><th>left</th><th>dns</th><th>edge</th><th>by</th></tr></thead>
+<tbody>
+{{range .Expose}}
+<tr>
+  <td>{{.Service}}</td><td>{{.Route}}</td><td><a href="https://{{.FQDN}}">{{.FQDN}}</a></td><td>{{.Host}}</td>
+  <td>{{.State}}{{if .LastError}} <span class="warn" title="{{.LastError}}">⚠</span>{{end}}</td>
+  <td>{{.Left}}</td><td>{{if .DNS}}{{.DNS}}{{else}}-{{end}}</td><td>{{if .Edge}}ok{{else}}<span class="warn">missing</span>{{end}}</td>
+  <td>{{.Device}}{{if .User}} ({{.User}}){{end}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+</div>
+{{end}}
+</section>
+{{end}}
 <footer>generated at {{.GeneratedAt}}</footer>
 </main>
 {{template "foot" .}}{{end}}

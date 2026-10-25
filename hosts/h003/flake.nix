@@ -79,13 +79,12 @@
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.tailnet
 
-
           (import ./sec-agent.nix { inherit inputs constants; })
 
           ./hardware-configuration.nix
 
           inputs.containers.nixosModules.default
-          ../wildcard-cert-receiver.nix
+          ../_shared_assets/utilities/wildcard-cert-receiver.nix
           ./containers.nix
           ./firewall.nix
         ]

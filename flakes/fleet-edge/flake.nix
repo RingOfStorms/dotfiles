@@ -156,6 +156,55 @@
               };
             };
 
+            overrides = {
+              enable = lib.mkEnableOption "the public `cnt expose` authority (fleet-edge-overrides, own unit and state)";
+              listen = lib.mkOption {
+                type = lib.types.str;
+                default = "127.0.0.1:8098";
+              };
+              specFile = lib.mkOption {
+                type = lib.types.path;
+                description = "Public DNS spec JSON (the same file dns-plan reads).";
+              };
+              target = lib.mkOption {
+                type = lib.types.str;
+                example = "o002.joshuabell.xyz";
+                description = "CNAME target for override records.";
+              };
+              devices = lib.mkOption {
+                default = { };
+                description = "CLI devices: a request needs the token hash AND a peer IP of the same device.";
+                type = lib.types.attrsOf (
+                  lib.types.submodule {
+                    options = {
+                      peers = lib.mkOption { type = lib.types.listOf lib.types.str; };
+                      tokenSha256 = lib.mkOption { type = lib.types.strMatching "[0-9a-f]{64}"; };
+                    };
+                  }
+                );
+              };
+              bunnyKeyFile = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "bunny API key (LoadCredential). Both keys null = writes return 503.";
+              };
+              pushKeyFile = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "ssh key for the edge's fleet-vhost-receive (LoadCredential).";
+              };
+              pushTarget = lib.mkOption {
+                type = lib.types.str;
+                default = "";
+                example = "root@o002";
+              };
+              knownHosts = lib.mkOption {
+                type = lib.types.lines;
+                default = "";
+                description = "known_hosts lines for pushTarget.";
+              };
+            };
+
             package = lib.mkOption {
               type = lib.types.package;
               default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
@@ -253,7 +302,84 @@
             # parent directories with 0755 for /var/lib/private/fleet-edge.
             systemd.tmpfiles.rules = [
               "z /var/lib/private 0700 root root -"
+              # Shared flock for dns-plan --apply and fleet-edge-overrides.
+              "d /run/fleet-edge-bunny 1777 root root -"
             ];
+
+            systemd.services.fleet-edge-overrides = lib.mkIf cfg.overrides.enable (
+              let
+                o = cfg.overrides;
+                live = o.bunnyKeyFile != null && o.pushKeyFile != null;
+                devices = pkgs.writeText "fleet-edge-devices.json" (builtins.toJSON o.devices);
+                knownHosts = pkgs.writeText "fleet-edge-edge-known-hosts" o.knownHosts;
+              in
+              {
+                description = "fleet-edge public expose overrides (ROUTING-PLAN §8 step 7)";
+                wantedBy = [ "multi-user.target" ];
+                after = [ "network-online.target" ];
+                wants = [ "network-online.target" ];
+                path = [ pkgs.openssh ];
+                serviceConfig = {
+                  ExecStart = lib.concatStringsSep " " (
+                    [
+                      (lib.getExe fleetEdgePkg)
+                      "overrides"
+                      "--listen ${o.listen}"
+                      "--inventory ${cfg.inventoryFile}"
+                      "--spec ${o.specFile}"
+                      "--devices ${devices}"
+                      "--target ${lib.escapeShellArg o.target}"
+                      "--status-url-template ${lib.escapeShellArg cfg.statusUrlTemplate}"
+                    ]
+                    ++ lib.optionals live [
+                      "--bunny-key-file %d/bunny"
+                      "--push-key-file %d/push"
+                      "--push-target ${lib.escapeShellArg o.pushTarget}"
+                      "--known-hosts ${knownHosts}"
+                    ]
+                  );
+                  LoadCredential = lib.optionals live [
+                    "bunny:${o.bunnyKeyFile}"
+                    "push:${o.pushKeyFile}"
+                  ];
+                  Restart = "on-failure";
+                  RestartSec = "5s";
+                  StateDirectory = "fleet-edge-overrides";
+                  StateDirectoryMode = "0700";
+                  ReadWritePaths = [ "/run/fleet-edge-bunny" ];
+                  DynamicUser = true;
+                  UMask = "0077";
+                  ProtectSystem = "strict";
+                  ProtectHome = true;
+                  PrivateTmp = true;
+                  PrivateDevices = true;
+                  ProtectKernelTunables = true;
+                  ProtectKernelModules = true;
+                  ProtectKernelLogs = true;
+                  ProtectControlGroups = true;
+                  ProtectClock = true;
+                  ProtectHostname = true;
+                  ProtectProc = "invisible";
+                  ProcSubset = "pid";
+                  RestrictNamespaces = true;
+                  RestrictRealtime = true;
+                  RestrictSUIDSGID = true;
+                  LockPersonality = true;
+                  MemoryDenyWriteExecute = true;
+                  RemoveIPC = true;
+                  CapabilityBoundingSet = [ "" ];
+                  AmbientCapabilities = [ "" ];
+                  SystemCallFilter = [ "@system-service" ];
+                  SystemCallErrorNumber = "EPERM";
+                  SystemCallArchitectures = "native";
+                  RestrictAddressFamilies = [
+                    "AF_INET"
+                    "AF_INET6"
+                    "AF_UNIX"
+                  ];
+                };
+              }
+            );
 
             systemd.services.fleet-edge = {
               description = "fleet-edge read-only dashboard";
@@ -276,6 +402,10 @@
               // lib.optionalAttrs (cfg.background != null) {
                 FLEET_EDGE_BACKGROUND =
                   if builtins.isPath cfg.background then "${cfg.background}" else cfg.background;
+              }
+              // lib.optionalAttrs cfg.overrides.enable {
+                # Read-only loopback export; the dashboard holds no token or key.
+                FLEET_EDGE_OVERRIDES_URL = "http://${cfg.overrides.listen}/internal/overrides.json";
               }
               // lib.optionalAttrs (cfg.auth.apiKeysFile != null) {
                 FLEET_EDGE_API_KEYS_FILE = cfg.auth.apiKeysFile;

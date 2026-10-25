@@ -10,7 +10,7 @@ if [ $# -eq 0 ]; then
   exit 2
 fi
 
-cd "$(dirname "$0")" || exit 1
+cd "$(dirname "$0")/../.." || exit 1
 
 mapfile -t HOST_DIRS < <(find . -type f -name 'flake.nix' -not -path '*/.*' -printf '%h\n' | sort -u)
 

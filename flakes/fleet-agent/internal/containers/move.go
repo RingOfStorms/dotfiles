@@ -341,6 +341,13 @@ func cmdMove(args []string) error {
 	if err := validateRoutes(s); err != nil {
 		return err
 	}
+	if !dryRun {
+		for _, o := range fetchOverrides([]string{from}) {
+			if o.Service == s.Name && o.Exposure == "public" {
+				return fmt.Errorf("%s has a public expose override on %s; cnt expose --revoke %s first (DNS/edge point at %s)", s.Name, from, s.Name, from)
+			}
+		}
+	}
 	if dryRun {
 		fmt.Printf("plan: move %s %s -> %s through the restic repo (svc:%s)\n", s.Name, from, to, s.Name)
 	}

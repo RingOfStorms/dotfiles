@@ -14,7 +14,7 @@
     # LAN subnet for `exposure = "lan"` routes (nginx-acl-lan.conf).
     nginx.acl.lan = [ "10.12.14.0/24" ];
     # Internal :443 listeners use the wildcard pushed by h005
-    # (hosts/wildcard-cert-receiver.nix), not this host's ACME.
+    # (hosts/_shared_assets/utilities/wildcard-cert-receiver.nix), not this host's ACME.
     nginx.tls.certDir = "/var/lib/fleet-cert/joshuabell.xyz/current";
     # Nightly restic of every service here, one snapshot per svc:<name>
     # (ROUTING-PLAN §9.1). Repo + credentials: restic_h001_env_2026-10-01

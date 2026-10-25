@@ -1,6 +1,6 @@
 # Host-specific sec-agent additions for h004.
 { inputs, constants, ... }:
-import ../sec-agent.nix {
+import ../_shared_assets/utilities/sec-agent.nix {
   inherit inputs constants;
   role = "machines-hightrust";
   # H2: h004 is an SSH/NFS target only (NAS + rsync-over-ssh backup

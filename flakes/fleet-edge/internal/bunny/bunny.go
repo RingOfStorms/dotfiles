@@ -19,6 +19,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -93,7 +94,18 @@ const (
 	// RetireMismatch: a Retire entry's name exists with another type or
 	// value. Never deleted; blocks Apply until the list is fixed.
 	RetireMismatch = "retire-mismatch"
+	// Override: a record created by an active `cnt expose` public override
+	// (internal/overrides, ROUTING-PLAN §8 step 7). Owned by that service:
+	// never retired, updated or counted as a conflict here; Ops skips it.
+	Override = "override"
 )
+
+// Owned is one zone record held by an active expose override, by bunny id.
+type Owned struct {
+	ID      int64  `json:"recordId"`
+	Name    string `json:"name"`
+	Service string `json:"service"`
+}
 
 // Change is one line of the plan.
 type Change struct {
@@ -170,7 +182,20 @@ func norm(v string) string { return strings.TrimSuffix(strings.ToLower(v), ".") 
 func fmtVal(v string, ttl int) string { return fmt.Sprintf("%s ttl=%d", v, ttl) }
 
 // Plan compares the spec with a live zone. Pure; no I/O.
-func Plan(spec *Spec, z *Zone) []Change {
+func Plan(spec *Spec, z *Zone) []Change { return PlanWith(spec, z, nil) }
+
+// PlanWith is Plan plus the records owned by active expose overrides
+// (matched by record id). An owned record whose name the spec doesn't
+// declare is reported as Override, even if it's on the retire list. A
+// declared name wins over an override (the route became public in
+// service.nix): it's planned normally and the override releases it.
+func PlanWith(spec *Spec, z *Zone, owned []Owned) []Change {
+	ownedBy := map[int64]Owned{}
+	for _, o := range owned {
+		if o.ID != 0 {
+			ownedBy[o.ID] = o
+		}
+	}
 	var out []Change
 	external := map[string]bool{}
 	for _, n := range spec.External {
@@ -226,6 +251,10 @@ func Plan(spec *Spec, z *Zone) []Change {
 			a = External
 		}
 		src := ""
+		if o, ok := ownedBy[r.ID]; ok && strings.EqualFold(o.Name, r.Name) {
+			out = append(out, Change{Action: Override, Name: r.Name, Type: TypeName(r.Type), Old: fmtVal(r.Value, r.TTL), ID: r.ID, Source: "cnt expose " + o.Service})
+			continue
+		}
 		if rt, ok := retire[name]; ok {
 			src = "retire list"
 			if rt.Type == TypeName(r.Type) && norm(rt.Value) == norm(r.Value) {
@@ -237,7 +266,7 @@ func Plan(spec *Spec, z *Zone) []Change {
 		}
 		out = append(out, Change{Action: a, Name: r.Name, Type: TypeName(r.Type), Old: fmtVal(r.Value, r.TTL), ID: r.ID, Source: src})
 	}
-	order := map[string]int{Conflict: 0, RetireMismatch: 0, Create: 1, Update: 2, Retire: 3, Keep: 4, External: 5, Unmanaged: 6}
+	order := map[string]int{Conflict: 0, RetireMismatch: 0, Create: 1, Update: 2, Retire: 3, Keep: 4, Override: 5, External: 6, Unmanaged: 7}
 	sort.SliceStable(out, func(i, j int) bool {
 		if order[out[i].Action] != order[out[j].Action] {
 			return order[out[i].Action] < order[out[j].Action]
@@ -273,11 +302,11 @@ func Render(w io.Writer, zone string, plan []Change) {
 		}
 		fmt.Fprintln(w, strings.TrimRight(line, " "))
 	}
-	fmt.Fprintf(w, "\n%s: %d create, %d update, %d retire, %d conflict, %d retire-mismatch, %d keep, %d external, %d unmanaged (never deleted)\n",
-		zone, counts[Create], counts[Update], counts[Retire], counts[Conflict], counts[RetireMismatch], counts[Keep], counts[External], counts[Unmanaged])
+	fmt.Fprintf(w, "\n%s: %d create, %d update, %d retire, %d conflict, %d retire-mismatch, %d keep, %d override, %d external, %d unmanaged (never deleted)\n",
+		zone, counts[Create], counts[Update], counts[Retire], counts[Conflict], counts[RetireMismatch], counts[Keep], counts[Override], counts[External], counts[Unmanaged])
 }
 
-// Client talks to the bunny API. Only Apply writes.
+// Client talks to the bunny API. Apply, CreateRecord and DeleteRecord write.
 type Client struct {
 	Key  string
 	Base string // default https://api.bunny.net
@@ -438,4 +467,79 @@ func (c *Client) Apply(ctx context.Context, ops []Op, done func(Op)) error {
 		}
 	}
 	return nil
+}
+
+// CreateRecord adds one record and returns its bunny id (expose overrides).
+func (c *Client) CreateRecord(ctx context.Context, zoneID int64, name, typ, value string, ttl int) (int64, error) {
+	t, err := typeNumber(typ)
+	if err != nil {
+		return 0, err
+	}
+	hc := c.HTTP
+	if hc == nil {
+		hc = &http.Client{Timeout: 20 * time.Second}
+	}
+	b, _ := json.Marshal(map[string]any{"Type": t, "Name": name, "Value": value, "Ttl": ttl})
+	path := fmt.Sprintf("/dnszone/%d/records", zoneID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.base()+path, bytes.NewReader(b))
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("AccessKey", c.Key)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := hc.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("bunny PUT %s: %s", path, resp.Status)
+	}
+	var rec Record
+	if err := json.NewDecoder(resp.Body).Decode(&rec); err != nil || rec.ID == 0 {
+		return 0, fmt.Errorf("bunny PUT %s: no record id in reply", path)
+	}
+	return rec.ID, nil
+}
+
+// DeleteRecord removes one record by id. A record that is already gone
+// counts as deleted.
+func (c *Client) DeleteRecord(ctx context.Context, zoneID, id int64) error {
+	err := c.do(ctx, http.MethodDelete, fmt.Sprintf("/dnszone/%d/records/%d", zoneID, id), nil, http.StatusNoContent)
+	if err != nil && strings.Contains(err.Error(), "404") {
+		return nil
+	}
+	return err
+}
+
+// FindRecord returns the live record with id (nil if gone).
+func (z *Zone) FindRecord(id int64) *Record {
+	for i := range z.Records {
+		if z.Records[i].ID == id {
+			return &z.Records[i]
+		}
+	}
+	return nil
+}
+
+// Lock takes an exclusive flock on path (created if missing) so dns-plan
+// --apply and the overrides service never write the zone at the same time.
+// The returned func releases it.
+func Lock(path string) (func(), error) {
+	// Read-only + world-readable: root (dns-plan) and the DynamicUser
+	// unit must both be able to open it whoever created it; flock
+	// works on a read-only fd.
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDONLY, 0o644)
+	if err != nil {
+		return nil, err
+	}
+	if st, err := f.Stat(); err == nil && st.Mode().Perm()&0o044 != 0o044 {
+		_ = f.Chmod(0o644) // best effort (umask 0077 units)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN); f.Close() }, nil
 }

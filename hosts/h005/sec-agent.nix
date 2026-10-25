@@ -1,6 +1,6 @@
 # Host-specific sec-agent additions for h005.
 { inputs, constants, ... }:
-import ../sec-agent.nix {
+import ../_shared_assets/utilities/sec-agent.nix {
   inherit inputs constants;
   role = "machines-hightrust";
   # H2: h005 is the router; it never initiates arbitrary root SSH or git

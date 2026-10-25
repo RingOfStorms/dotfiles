@@ -23,7 +23,7 @@
     # LAN subnet for `exposure = "lan"` routes (nginx-acl-lan.conf).
     nginx.acl.lan = [ "10.12.14.0/24" ];
     # Internal :443 listeners use the wildcard pushed by h005
-    # (hosts/wildcard-cert-receiver.nix). h005's wildcard-cert.nix must list
+    # (hosts/_shared_assets/utilities/wildcard-cert-receiver.nix). h005's wildcard-cert.nix must list
     # h003 as a push target (with its pinned host key) before this exists.
     nginx.tls.certDir = "/var/lib/fleet-cert/joshuabell.xyz/current";
     # Host side for service.nix net.private (ROUTING-PLAN §8 step 5).

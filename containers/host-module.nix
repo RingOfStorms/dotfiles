@@ -402,7 +402,7 @@ in
         Directory holding fullchain.pem and key.pem for the generated
         internal :443 listeners, written to
         /etc/fleet-containers/nginx-tls.conf. Set to the wildcard pushed by
-        h005 (hosts/wildcard-cert-receiver.nix) to drop the host's own ACME.
+        h005 (hosts/_shared_assets/utilities/wildcard-cert-receiver.nix) to drop the host's own ACME.
       '';
     };
     # Internal/edge listener split (ROUTING-PLAN §2.3). Generated vhosts put
@@ -1001,17 +1001,36 @@ in
         # `containers deploy` validates new sites with `nginx -t` before reloading.
         environment.systemPackages = [ config.services.nginx.package ];
 
-        # `cnt expose` (ROUTING-PLAN §8 step 7): the CLI arms an exact
-        # transient timer per override; this sweep is the backstop. It runs
-        # at boot before nginx (an override that expired while the host was
-        # down never serves again) and every minute (a lost transient timer
-        # delays a revert by at most that). See cli/expose.go.
+        # `cnt expose` (ROUTING-PLAN §8 step 7). Two units, so nothing that
+        # blocks on nginx is ordered before it (deadlock, h001 2026-10-22):
+        # - fleet-containers-expose-boot: Before=nginx, `--boot`: reverts
+        #   expired files only, never reloads; nginx starts with them.
+        # - fleet-containers-expose-expire: the runtime sweep (minute timer,
+        #   and the CLI's exact transient timer starts it). Not ordered
+        #   against nginx; does a checked, blocking nginx -t + reload. A
+        #   revert sets overrides/.reload-pending first and only a
+        #   successful reload clears it; every run retries it and fails
+        #   while it is pending. See fleet-agent internal/containers/expose.go.
         systemd.tmpfiles.rules = [ "d ${stateDir}/overrides 0755 root root -" ];
-        systemd.services.fleet-containers-expose-expire = {
-          description = "Revert expired cnt expose overrides";
+        systemd.services.fleet-containers-expose-boot = {
+          description = "Revert expired cnt expose overrides before nginx (files only)";
           wantedBy = [ "multi-user.target" ];
           before = [ "nginx.service" ];
           after = [ "local-fs.target" ];
+          path = [
+            config.services.nginx.package
+            pkgs.util-linux
+          ];
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "${lib.getExe cfg.package} expose-expire --boot --all";
+            TimeoutStartSec = "2min";
+          };
+        };
+        systemd.services.fleet-containers-expose-expire = {
+          description = "Revert expired cnt expose overrides and reload nginx (runtime sweep)";
+          # No before/after nginx and no wantedBy: started by its timer and
+          # the per-override transient timers only.
           path = [
             config.services.nginx.package
             pkgs.systemd
@@ -1020,7 +1039,6 @@ in
           serviceConfig = {
             Type = "oneshot";
             ExecStart = "${lib.getExe cfg.package} expose-expire --all";
-            # Never hang a boot or the minute timer (it only edits files and queues a reload).
             TimeoutStartSec = "2min";
           };
         };
@@ -1029,6 +1047,8 @@ in
           timerConfig = {
             OnBootSec = "1min";
             OnUnitActiveSec = "1min";
+            # Keeps firing after a failed run (reload still pending).
+            OnUnitInactiveSec = "1min";
             AccuracySec = "5s";
           };
         };

@@ -983,4 +983,10 @@ func printAuditOverrides(ovs []override) {
 	}
 	fmt.Printf("\n%d active expose override(s):\n", len(ovs))
 	fmt.Print(overridesTable(ovs, time.Now()))
+	for _, o := range ovs {
+		if o.Exposure == "public" {
+			fmt.Println("public overrides: run cnt expose --list for h005/DNS/o002 state and leftovers")
+			break
+		}
+	}
 }

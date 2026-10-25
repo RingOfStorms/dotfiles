@@ -81,7 +81,7 @@ the bench DHCP identity with a newly generated one. Do not seed it from h003.
 ### Things that reference h003 elsewhere
 
 - `hosts/fleet.nix`: h005 already exists (`overlayIp 100.64.0.3`, bench `lanIp 10.12.14.183`). At cutover move `lanIp 10.12.14.1` from h003 to h005; keep h003's overlay identity.
-- `hosts/sec-agent.nix`: per-host secret mapping.
+- `hosts/_shared_assets/utilities/sec-agent.nix`: per-host secret mapping.
 - `containers/sec/registry.nix` (was `hosts/h001/mods/sec.nix`) and `hosts/h001/mods/homepage-dashboard.nix`: references to h003 (dashboard links, Beszel, etc.).
 - `hosts/oracle/o002/headscale.nix` and `hosts/oracle/o002/nginx.nix`: tailnet DNS/routes and the l001 proxy pointing at h003's overlay IP.
 - Search again before cutover: `grep -rn 'h003\|100.64.0.14' hosts flakes`.
