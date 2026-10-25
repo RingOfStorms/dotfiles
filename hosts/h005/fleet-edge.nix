@@ -61,7 +61,10 @@ in
       enable = true;
       specFile = publicSpecFile;
       target = "o002.${fleet.global.domain}";
-      pushTarget = "root@o002";
+      # By overlay IP so the pinned known_hosts line matches (ssh uses
+      # StrictHostKeyChecking=yes with only this file).
+      pushTarget = "root@${fleet.hosts.o002.overlayIp}";
+      knownHosts = "${fleet.hosts.o002.overlayIp} ${constants.pinnedHostKeys.o002}";
       bunnyKeyFile = "/var/lib/secrets_manager_hydrated/bunny_rw_dns_2026-03-15";
       pushKeyFile = "/var/lib/secrets_manager_hydrated/edge_vhost_push_2026-10-24";
       devices = { };

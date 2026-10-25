@@ -16,6 +16,7 @@
   lib,
   pkgs,
   fleet,
+  constants,
   ...
 }:
 let
@@ -23,16 +24,15 @@ let
   certDir = config.security.acme.certs.${domain}.directory;
   # Same path on every receiver (wildcard-cert-receiver.nix).
   remoteDir = "/var/lib/fleet-cert/${domain}/current";
-  # Pinned host keys (ssh-keyscan over the tailnet, 2026-10-21). A
-  # rebuilt target needs its new key here before pushes work again.
+  # Pinned host keys (_constants.nix pinnedHostKeys).
   targets = {
     o002 = {
       ip = fleet.hosts.o002.overlayIp;
-      hostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAf4Tfw9fhqQ2oUwM7jGSkpvxdTCsFVlThVVpf8FoU08";
+      hostKey = constants.pinnedHostKeys.o002;
     };
     h001 = {
       ip = fleet.hosts.h001.overlayIp;
-      hostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGTAz6n35c3r8kSuWJM1JzMVx6jK+0EBwpJA5eTIvy3N";
+      hostKey = constants.pinnedHostKeys.h001;
     };
   };
   knownHosts = pkgs.writeText "wildcard-push-known-hosts" (
