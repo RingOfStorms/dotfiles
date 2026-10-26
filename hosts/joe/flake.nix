@@ -6,7 +6,9 @@
     # Use relative to get current version for testing
     # common.url = "path:../../flakes/common";
     common.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/common";
-    fleet-agent.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/fleet-agent";
+    # fleet-agent module is pulled in via `containers` (host-module.nix) for
+    # container hosts; declaring this input too double-imports the module
+    # (hosts/fleet.nix baseNixModules auto-includes it when present).
     # de_plasma.url = "path:../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     # sec-agent replaces secrets-bao on this host.

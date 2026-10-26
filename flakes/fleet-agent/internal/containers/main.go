@@ -986,12 +986,13 @@ func siteScript(s Service, host string) string {
 }
 
 // needsHostVhost reports whether some route must be served by nginx on the
-// service's own host: an http route that leaves the host (exposure != local)
-// and is not in the private zone (h005's private-zone.nix serves those from
-// the inventory). tcp/udp routes go through the ports file, not nginx.
+// service's own host: an http route that leaves the host (exposure !=
+// local). Every container host terminates TLS for its own routes
+// (FLOWS-AUDIT target design (a)); tcp/udp routes go through the ports
+// file, not nginx.
 func needsHostVhost(s Service) bool {
 	for _, r := range s.Routes {
-		if r.Proto == "http" && r.Exposure != "local" && (r.Zone == nil || *r.Zone != "private") {
+		if r.Proto == "http" && r.Exposure != "local" {
 			return true
 		}
 	}

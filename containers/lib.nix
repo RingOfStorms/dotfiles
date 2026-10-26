@@ -57,10 +57,6 @@ let
       "edge"
       "router"
     ];
-    zone = [
-      "main"
-      "private"
-    ];
   };
   commonRouteKeys = [
     "port"
@@ -76,7 +72,6 @@ let
   ];
   httpRouteKeys = [
     "name"
-    "zone"
     "websockets"
     "maxBody"
     "buffering"
@@ -109,7 +104,6 @@ let
       exposure = oneOf "exposure" (r.exposure or "local");
       isPublic = exposure == "public";
       auth = if r ? auth then oneOf "auth" r.auth else null;
-      zone = oneOf "zone" (r.zone or "main");
       via =
         if r ? via then
           (
@@ -127,7 +121,7 @@ let
         else
           [ ];
       name = r.name or (if routeName == "web" then svcName else "${svcName}-${routeName}");
-      fqdn = if zone == "private" then "${name}.ts.${domain}" else "${name}.${domain}";
+      fqdn = "${name}.${domain}";
       checks = [
         {
           bad = unknown != [ ];
@@ -152,10 +146,6 @@ let
           msg = "exposure = \"public\" with auth = \"none\" needs publicWithoutAuth = true";
         }
         {
-          bad = isPublic && zone == "private";
-          msg = "zone = \"private\" names can't be public";
-        }
-        {
           bad = (r ? icon) && !(builtins.isString r.icon);
           msg = "icon must be a string (URL or icon name)";
         }
@@ -166,6 +156,13 @@ let
         {
           bad = !(builtins.isList (r.allow or [ ])) || !(builtins.all builtins.isString (r.allow or [ ]));
           msg = "allow must be a list of host names";
+        }
+        {
+          # The serving host's nginx renders allow as per-host `allow
+          # <overlayIp>;` lines in place of the tailnet ACL (cli/routes.go
+          # writeExposureACL).
+          bad = isHttp && (r.allow or [ ]) != [ ] && exposure != "tailnet";
+          msg = "allow on http routes is only implemented for exposure = \"tailnet\"";
         }
         {
           bad = isHttp && (builtins.match "[a-z0-9]([a-z0-9-]*[a-z0-9])?" name == null);
@@ -190,10 +187,6 @@ let
               r.bypass or [ ]
             ));
           msg = "bypass must be a list of path prefixes like \"/api/\"";
-        }
-        {
-          bad = auth == "oauth2-proxy" && zone == "private";
-          msg = "auth = \"oauth2-proxy\" isn't supported in the private zone yet (h005 private-zone.nix has no auth_request)";
         }
         {
           # The sign-in host (sso-proxy, h005) is tailnet-only; internet
@@ -226,7 +219,7 @@ let
       // (
         if isHttp then
           {
-            inherit name zone fqdn;
+            inherit name fqdn;
             url = "https://${fqdn}";
             websockets = r.websockets or true;
             maxBody = r.maxBody or "100m";
@@ -242,7 +235,6 @@ let
         else
           {
             name = null;
-            zone = null;
             fqdn = null;
             url = null;
           }
@@ -482,24 +474,25 @@ in
       ) (edgeRoutes dir)
     );
 
-  # Every exposed http route with zone = "private" across all services in
-  # `dir` (the containers directory). Each item is the normalized route plus
-  # `service` (normalized service.nix). Read by h005 for the private zone's
-  # DNS records and TLS-terminating vhosts (ROUTING-PLAN §2.2).
-  privateRoutes =
+  # TLS names per serving host: every exposed (non-local) http route's fqdn,
+  # grouped by its service's host, each list sorted. Each host's own nginx
+  # terminates TLS for these names. h005's cert push
+  # (hosts/h005/wildcard-cert.nix) derives its targets and the per-host
+  # SANs of low-trust hosts from this. Services without a host are skipped.
+  routeNamesByHost =
     dir:
     let
-      entries = builtins.readDir dir;
-      dirs = builtins.filter (
-        d: entries.${d} == "directory" && builtins.pathExists (dir + "/${d}/service.nix")
-      ) (builtins.attrNames entries);
-      services = map (d: normalize (import (dir + "/${d}/service.nix"))) dirs;
+      routes = builtins.filter (r: r.proto == "http" && r.exposure != "local") (
+        builtins.concatMap (s: map (r: r // { inherit (s) host; }) (builtins.attrValues s.routes)) (
+          builtins.filter (s: s.host != null) (allServices dir)
+        )
+      );
     in
-    builtins.filter (r: r.proto == "http" && r.zone == "private" && r.exposure != "local") (
-      builtins.concatMap (s: map (r: r // { service = s; }) (builtins.attrValues s.routes)) services
+    builtins.mapAttrs (_: rs: builtins.sort builtins.lessThan (map (r: r.fqdn) rs)) (
+      builtins.groupBy (r: r.host) routes
     );
 
-  # DNS records for every exposed main-zone route, from service.nix
+  # DNS records for every exposed route, from service.nix
   # (ROUTING-PLAN §2.1, §8 step 4). Build-time: h005 (tailnet + LAN
   # dnsmasq) and the bunny reconciler read this, so a record changes when
   # h005 is rebuilt from a tree with the new service.nix.
@@ -510,12 +503,11 @@ in
   #   lan      lan + public routes -> its host's LAN IP (hosts without a
   #            lanIp get no LAN record: LAN clients fall through to public)
   #   public   public routes -> CNAME o002 (via edge) or home (via router)
-  # Private-zone routes are handled by privateRoutes (h005 terminates them).
   # Services without a host are skipped (nothing answers there).
   dnsRecords =
     { dir, hosts }:
     let
-      routes = builtins.filter (r: r.exposure != "local" && r.fqdn != null && r.zone != "private") (
+      routes = builtins.filter (r: r.exposure != "local" && r.fqdn != null) (
         builtins.concatMap (
           s:
           map (

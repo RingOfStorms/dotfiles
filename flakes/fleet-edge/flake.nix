@@ -171,14 +171,30 @@
                 example = "o002.joshuabell.xyz";
                 description = "CNAME target for override records.";
               };
-              devices = lib.mkOption {
+              zitadel = {
+                issuer = lib.mkOption {
+                  type = lib.types.str;
+                  example = "https://sso.joshuabell.xyz";
+                  description = "Issuer of the writers' machine tokens (the sec-agent login).";
+                };
+                projectId = lib.mkOption {
+                  type = lib.types.str;
+                  example = "344379162166820867";
+                  description = "Project the machine tokens' audience must include (sec-agent's projectId).";
+                };
+              };
+              writers = lib.mkOption {
                 default = { };
-                description = "CLI devices: a request needs the token hash AND a peer IP of the same device.";
+                description = ''
+                  Hosts allowed to write, keyed by host name: a request needs a
+                  valid Zitadel token whose sub is the host's machine user AND
+                  must come from the host's overlay IP. Roles/trust are ignored.
+                '';
                 type = lib.types.attrsOf (
                   lib.types.submodule {
                     options = {
-                      peers = lib.mkOption { type = lib.types.listOf lib.types.str; };
-                      tokenSha256 = lib.mkOption { type = lib.types.strMatching "[0-9a-f]{64}"; };
+                      sub = lib.mkOption { type = lib.types.strMatching "[0-9]+"; };
+                      peer = lib.mkOption { type = lib.types.str; };
                     };
                   }
                 );
@@ -310,7 +326,7 @@
               let
                 o = cfg.overrides;
                 live = o.bunnyKeyFile != null && o.pushKeyFile != null;
-                devices = pkgs.writeText "fleet-edge-devices.json" (builtins.toJSON o.devices);
+                writers = pkgs.writeText "fleet-edge-writers.json" (builtins.toJSON o.writers);
                 knownHosts = pkgs.writeText "fleet-edge-edge-known-hosts" o.knownHosts;
               in
               {
@@ -327,7 +343,9 @@
                       "--listen ${o.listen}"
                       "--inventory ${cfg.inventoryFile}"
                       "--spec ${o.specFile}"
-                      "--devices ${devices}"
+                      "--writers ${writers}"
+                      "--zitadel-issuer ${lib.escapeShellArg o.zitadel.issuer}"
+                      "--zitadel-project-id ${lib.escapeShellArg o.zitadel.projectId}"
                       "--target ${lib.escapeShellArg o.target}"
                       "--status-url-template ${lib.escapeShellArg cfg.statusUrlTemplate}"
                     ]

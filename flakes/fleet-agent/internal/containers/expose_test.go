@@ -153,6 +153,9 @@ type fakeEdgeAPI struct {
 	log       []string
 	prepErr   error
 	commitErr error
+	revokeErr error
+	listRows  []edgeRow
+	listErr   error
 }
 
 func (f *fakeEdgeAPI) prepare(edgeReq) error { f.log = append(f.log, "prepare"); return f.prepErr }
@@ -160,7 +163,11 @@ func (f *fakeEdgeAPI) commit(edgeReq) (edgeRow, error) {
 	f.log = append(f.log, "commit")
 	return edgeRow{FQDN: "app.example.com", DNS: "ok", Edge: true}, f.commitErr
 }
-func (f *fakeEdgeAPI) revoke(string) error { f.log = append(f.log, "revoke"); return nil }
+func (f *fakeEdgeAPI) revoke(string) error { f.log = append(f.log, "revoke"); return f.revokeErr }
+func (f *fakeEdgeAPI) list(bool) ([]edgeRow, *edgeVerify, error) {
+	f.log = append(f.log, "list")
+	return f.listRows, nil, f.listErr
+}
 
 func TestExposePublicOrder(t *testing.T) {
 	run := func(f *fakeEdgeAPI, hostErr error) (string, error) {

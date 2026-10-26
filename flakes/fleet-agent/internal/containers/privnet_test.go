@@ -108,7 +108,7 @@ func TestNetExceptionsAndCallers(t *testing.T) {
 		t.Fatalf("got\n%s\nwant\n%s", got, want)
 	}
 	v := routesVhost(lit)
-	if !strings.Contains(v, "allow 10.233.6.2; # net.uses\n  include /etc/fleet-containers/nginx-acl-tailnet.conf;") {
+	if !strings.Contains(v, "allow 10.233.6.2; # net.uses open-webui\n  include /etc/fleet-containers/nginx-acl-tailnet.conf;") {
 		t.Fatalf("caller allow missing or after the ACL:\n%s", v)
 	}
 	if strings.Contains(routesVhost(rem), "allow 10.233.") {

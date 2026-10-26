@@ -162,10 +162,9 @@ routes.web = {
 
 `lib.nix` fills defaults and throws on: unknown keys, http knobs or `name`
 on tcp/udp, missing auth on a non-local route, public + `auth = "none"`
-without `publicWithoutAuth`, `zone = "private"` + public, `via` on a
-non-public route, duplicate names. The inventory also carries computed
-`fqdn` (`<name>.joshuabell.xyz`, `<name>.ts.joshuabell.xyz` for the private
-zone) and `url` per http route.
+without `publicWithoutAuth`, `via` on a non-public route, duplicate names.
+The inventory also carries computed `fqdn` (`<name>.joshuabell.xyz`) and
+`url` per http route.
 
 On deploy, every http route with exposure != `local` becomes one `server {}`
 in `<svc>.conf` (:80/:443 v4+v6, wildcard cert, proxy to

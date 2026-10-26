@@ -79,7 +79,6 @@
           inputs.common.nixosModules.zsh
           inputs.common.nixosModules.tailnet
 
-
           (import ./sec-agent.nix { inherit inputs constants; })
 
           ./hardware-configuration.nix
@@ -89,7 +88,6 @@
         ++ lib.optionals constants.network.routerEnable [
           ./mods
           # Needs the bunny key, which sec-agent only fetches in router mode.
-          ./private-zone.nix
           ./wildcard-cert.nix
           # Fleet oauth2-proxy; uses the wildcard above for its sign-in host.
           ./oauth2-proxy.nix

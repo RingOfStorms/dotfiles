@@ -204,158 +204,160 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable (
-    let
-      m = builtins.match "\\[?([0-9a-fA-F:.]+)]?:([0-9]+)" cfg.listen;
-      listenPort = if m != null then builtins.elemAt m 1 else "9101";
-      allMounts = cfg.mounts ++ cfg.extraFilesystems;
-      mountFlags = lib.concatMapStringsSep " " (x: "--mount ${lib.escapeShellArg x}") allMounts;
-      unitFlags = lib.concatMapStringsSep " " (x: "--unit ${lib.escapeShellArg x}") cfg.extraUnits;
-    in
-    lib.mkMerge [
-      {
-        assertions = [
-          {
-            assertion =
-              builtins.match "(\\[[0-9a-fA-F:]+]|[0-9.]+):[0-9]+" cfg.listen != null
-              && !(lib.hasPrefix "0.0.0.0:" cfg.listen)
-              && !(lib.hasPrefix "[::]:" cfg.listen);
-            message = "ringofstorms.fleetAgent.listen must be an explicit IP:PORT (e.g. the overlay IP \"100.64.0.13:9101\"), not empty or a wildcard.";
-          }
-        ];
-
-        systemd.tmpfiles.rules = [
-          "d ${stateDir} 0755 root root -"
-        ];
-
-        # Register listener for `cnt audit` (cli/internal/containers/routes.go).
-        environment.etc."fleet-containers/host-listeners".text = lib.optionalString (m != null) ''
-          tcp ${builtins.elemAt m 0} ${builtins.elemAt m 1} host (status endpoint)
-        '';
-
-        networking.firewall.extraInputRules = lib.concatMapStrings (
-          poller:
-          let
-            fam = if lib.hasInfix ":" poller then "ip6" else "ip";
-          in
-          ''
-            iifname "tailscale0" ${fam} saddr ${poller} tcp dport ${listenPort} accept comment "fleet-agent status endpoint"
-          ''
-        ) cfg.allowedPollers;
-
-        systemd.services.fleet-agent = {
-          description = "Read-only fleet-agent status, metrics, and log server (fleet-edge)";
-          wantedBy = [ "multi-user.target" ];
-          wants = [ "network-online.target" ];
-          after = [
-            "network-online.target"
-            "tailscaled.service"
+  config = lib.mkMerge [
+    (lib.mkIf cfg.enable (
+      let
+        m = builtins.match "\\[?([0-9a-fA-F:.]+)]?:([0-9]+)" cfg.listen;
+        listenPort = if m != null then builtins.elemAt m 1 else "9101";
+        allMounts = cfg.mounts ++ cfg.extraFilesystems;
+        mountFlags = lib.concatMapStringsSep " " (x: "--mount ${lib.escapeShellArg x}") allMounts;
+        unitFlags = lib.concatMapStringsSep " " (x: "--unit ${lib.escapeShellArg x}") cfg.extraUnits;
+      in
+      lib.mkMerge [
+        {
+          assertions = [
+            {
+              assertion =
+                builtins.match "(\\[[0-9a-fA-F:]+]|[0-9.]+):[0-9]+" cfg.listen != null
+                && !(lib.hasPrefix "0.0.0.0:" cfg.listen)
+                && !(lib.hasPrefix "[::]:" cfg.listen);
+              message = "ringofstorms.fleetAgent.listen must be an explicit IP:PORT (e.g. the overlay IP \"100.64.0.13:9101\"), not empty or a wildcard.";
+            }
           ];
-          path = [ pkgs.systemd ];
-          serviceConfig = {
-            ExecStart = "${lib.getExe cfg.package} agent --listen ${cfg.listen} --host ${config.networking.hostName} --state-dir ${stateDir} ${mountFlags} ${unitFlags}";
-            Restart = "always";
-            RestartSec = 5;
-            DynamicUser = true;
-            # Allow reading host and nspawn guest journal files without root/CAP_SYS_ADMIN.
-            SupplementaryGroups = [ "systemd-journal" ];
-            CapabilityBoundingSet = "";
-            AmbientCapabilities = "";
-            NoNewPrivileges = true;
-            ProtectSystem = "strict";
-            ProtectHome = true;
-            PrivateTmp = true;
-            PrivateDevices = true;
-            ProtectKernelTunables = true;
-            ProtectKernelModules = true;
-            ProtectKernelLogs = true;
-            ProtectControlGroups = true;
-            ProtectClock = true;
-            ProtectHostname = true;
-            # ProtectProc=invisible hides other users' PIDs while ProcSubset=all
-            # keeps /proc/stat, /proc/meminfo, /proc/diskstats, /proc/net/dev,
-            # /proc/loadavg, /proc/uptime, and /proc/mounts readable.
-            ProtectProc = "invisible";
-            ProcSubset = "all";
-            RestrictNamespaces = true;
-            RestrictRealtime = true;
-            RestrictSUIDSGID = true;
-            LockPersonality = true;
-            MemoryDenyWriteExecute = true;
-            SystemCallArchitectures = "native";
-            SystemCallFilter = [
-              "@system-service"
-              "~@privileged @resources"
+
+          systemd.tmpfiles.rules = [
+            "d ${stateDir} 0755 root root -"
+          ];
+
+          # Register listener for `cnt audit` (cli/internal/containers/routes.go).
+          environment.etc."fleet-containers/host-listeners".text = lib.optionalString (m != null) ''
+            tcp ${builtins.elemAt m 0} ${builtins.elemAt m 1} host (status endpoint)
+          '';
+
+          networking.firewall.extraInputRules = lib.concatMapStrings (
+            poller:
+            let
+              fam = if lib.hasInfix ":" poller then "ip6" else "ip";
+            in
+            ''
+              iifname "tailscale0" ${fam} saddr ${poller} tcp dport ${listenPort} accept comment "fleet-agent status endpoint"
+            ''
+          ) cfg.allowedPollers;
+
+          systemd.services.fleet-agent = {
+            description = "Read-only fleet-agent status, metrics, and log server (fleet-edge)";
+            wantedBy = [ "multi-user.target" ];
+            wants = [ "network-online.target" ];
+            after = [
+              "network-online.target"
+              "tailscaled.service"
             ];
-            RestrictAddressFamilies = [
-              "AF_UNIX"
-              "AF_INET"
-              "AF_INET6"
-            ];
-            UMask = "0077";
+            path = [ pkgs.systemd ];
+            serviceConfig = {
+              ExecStart = "${lib.getExe cfg.package} agent --listen ${cfg.listen} --host ${config.networking.hostName} --state-dir ${stateDir} ${mountFlags} ${unitFlags}";
+              Restart = "always";
+              RestartSec = 5;
+              DynamicUser = true;
+              # Allow reading host and nspawn guest journal files without root/CAP_SYS_ADMIN.
+              SupplementaryGroups = [ "systemd-journal" ];
+              CapabilityBoundingSet = "";
+              AmbientCapabilities = "";
+              NoNewPrivileges = true;
+              ProtectSystem = "strict";
+              ProtectHome = true;
+              PrivateTmp = true;
+              PrivateDevices = true;
+              ProtectKernelTunables = true;
+              ProtectKernelModules = true;
+              ProtectKernelLogs = true;
+              ProtectControlGroups = true;
+              ProtectClock = true;
+              ProtectHostname = true;
+              # ProtectProc=invisible hides other users' PIDs while ProcSubset=all
+              # keeps /proc/stat, /proc/meminfo, /proc/diskstats, /proc/net/dev,
+              # /proc/loadavg, /proc/uptime, and /proc/mounts readable.
+              ProtectProc = "invisible";
+              ProcSubset = "all";
+              RestrictNamespaces = true;
+              RestrictRealtime = true;
+              RestrictSUIDSGID = true;
+              LockPersonality = true;
+              MemoryDenyWriteExecute = true;
+              SystemCallArchitectures = "native";
+              SystemCallFilter = [
+                "@system-service"
+                "~@privileged @resources"
+              ];
+              RestrictAddressFamilies = [
+                "AF_UNIX"
+                "AF_INET"
+                "AF_INET6"
+              ];
+              UMask = "0077";
+            };
           };
-        };
-      }
+        }
 
-      (lib.mkIf cfg.smart.enable {
-        systemd.services.fleet-agent-smart = {
-          description = "Collect SMART drive health snapshot for fleet-agent";
-          after = [ "local-fs.target" ];
-          serviceConfig = {
-            Type = "oneshot";
-            ExecStart = smartScript;
-            TimeoutStartSec = "2min";
+        (lib.mkIf cfg.smart.enable {
+          systemd.services.fleet-agent-smart = {
+            description = "Collect SMART drive health snapshot for fleet-agent";
+            after = [ "local-fs.target" ];
+            serviceConfig = {
+              Type = "oneshot";
+              ExecStart = smartScript;
+              TimeoutStartSec = "2min";
+            };
           };
-        };
-        systemd.timers.fleet-agent-smart = {
-          wantedBy = [ "timers.target" ];
-          timerConfig = {
-            OnBootSec = "30s";
-            OnUnitActiveSec = "15min";
-            AccuracySec = "30s";
+          systemd.timers.fleet-agent-smart = {
+            wantedBy = [ "timers.target" ];
+            timerConfig = {
+              OnBootSec = "30s";
+              OnUnitActiveSec = "15min";
+              AccuracySec = "30s";
+            };
           };
-        };
-      })
+        })
 
-      (lib.mkIf cfg.bcachefs.enable {
-        systemd.services.fleet-agent-bcachefs = {
-          description = "Collect bcachefs pool usage snapshot for fleet-agent";
-          after = [ "local-fs.target" ];
-          serviceConfig = {
-            Type = "oneshot";
-            ExecStart = bcachefsScript;
-            TimeoutStartSec = "1min";
+        (lib.mkIf cfg.bcachefs.enable {
+          systemd.services.fleet-agent-bcachefs = {
+            description = "Collect bcachefs pool usage snapshot for fleet-agent";
+            after = [ "local-fs.target" ];
+            serviceConfig = {
+              Type = "oneshot";
+              ExecStart = bcachefsScript;
+              TimeoutStartSec = "1min";
+            };
           };
-        };
-        systemd.timers.fleet-agent-bcachefs = {
-          wantedBy = [ "timers.target" ];
-          timerConfig = {
-            OnBootSec = "15s";
-            OnUnitActiveSec = "2min";
-            AccuracySec = "15s";
+          systemd.timers.fleet-agent-bcachefs = {
+            wantedBy = [ "timers.target" ];
+            timerConfig = {
+              OnBootSec = "15s";
+              OnUnitActiveSec = "2min";
+              AccuracySec = "15s";
+            };
           };
-        };
-      })
+        })
 
-      (lib.mkIf cfg.fail2ban.enable {
-        systemd.services.fleet-agent-fail2ban = {
-          description = "Collect fail2ban jail and ban snapshot for fleet-agent";
-          after = [ "fail2ban.service" ];
-          serviceConfig = {
-            Type = "oneshot";
-            ExecStart = fail2banScript;
-            TimeoutStartSec = "30s";
+        (lib.mkIf cfg.fail2ban.enable {
+          systemd.services.fleet-agent-fail2ban = {
+            description = "Collect fail2ban jail and ban snapshot for fleet-agent";
+            after = [ "fail2ban.service" ];
+            serviceConfig = {
+              Type = "oneshot";
+              ExecStart = fail2banScript;
+              TimeoutStartSec = "30s";
+            };
           };
-        };
-        systemd.timers.fleet-agent-fail2ban = {
-          wantedBy = [ "timers.target" ];
-          timerConfig = {
-            OnBootSec = "20s";
-            OnUnitActiveSec = "1min";
-            AccuracySec = "10s";
+          systemd.timers.fleet-agent-fail2ban = {
+            wantedBy = [ "timers.target" ];
+            timerConfig = {
+              OnBootSec = "20s";
+              OnUnitActiveSec = "1min";
+              AccuracySec = "10s";
+            };
           };
-        };
-      })
-    ]
-  );
+        })
+      ]
+    ))
+  ];
 }

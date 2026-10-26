@@ -11,14 +11,15 @@
 //	delete   o002 vhost -> CNAME (by id, exact match) -> row
 //	sweep    every 30 s: expiry, retries, stale reservations, host drift
 //
-// Every request (refusals too) goes to audit.log as one JSON line.
+// Callers are hosts authenticating with their own Zitadel machine identity
+// (the sec-agent machine key): a verified token whose sub is in an explicit
+// allowlist, sent from that host's overlay IP. Roles and trust levels are
+// never consulted. Every request (refusals too) goes to audit.log as one
+// JSON line carrying the caller's sub and host.
 package overrides
 
 import (
 	"context"
-	"crypto/sha256"
-	"crypto/subtle"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,6 +35,7 @@ import (
 	"sync"
 	"time"
 
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/auth"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/bunny"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/edgevhost"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
@@ -65,9 +67,9 @@ type Row struct {
 	Until    int64  `json:"until"` // 0 = forever
 	State    string `json:"state"`
 	RecordID int64  `json:"recordId,omitempty"`
-	Edge     bool   `json:"edge"` // o002 file pushed
-	DNS      string `json:"dns"`  // "", ok, mismatch, released
-	Device   string `json:"device"`
+	Edge     bool   `json:"edge"`   // o002 file pushed
+	DNS      string `json:"dns"`    // "", ok, mismatch, released
+	Device   string `json:"device"` // calling host (Writers key)
 	User     string `json:"user,omitempty"`
 	Reason   string `json:"reason,omitempty"`
 	Created  int64  `json:"created"`
@@ -78,10 +80,17 @@ type Row struct {
 	LastError        string `json:"lastError,omitempty"`
 }
 
-// Device is one CLI device allowed to call the API.
-type Device struct {
-	Peers       []string `json:"peers"`
-	TokenSha256 string   `json:"tokenSha256"`
+// Writer is one host allowed to call the API: its Zitadel machine user and
+// the overlay IP its requests must come from.
+type Writer struct {
+	Sub  string `json:"sub"`
+	Peer string `json:"peer"`
+}
+
+// TokenVerifier checks a Zitadel JWT's signature, issuer, project audience
+// and expiry (auth.Authenticator).
+type TokenVerifier interface {
+	VerifyZitadelToken(raw string) (auth.VerifiedToken, error)
 }
 
 // DNS is the bunny side (interface for tests).
@@ -115,9 +124,10 @@ type Config struct {
 	Target    string // CNAME value, e.g. o002.joshuabell.xyz
 	StateDir  string
 	LockPath  string // shared with dns-plan --apply
-	Devices   map[string]Device
-	DNS       DNS  // nil: writes return 503
-	Edge      Edge // nil: writes return 503
+	Verifier  TokenVerifier
+	Writers   map[string]Writer // host -> machine user + overlay IP
+	DNS       DNS               // nil: writes return 503
+	Edge      Edge              // nil: writes return 503
 	Status    HostStatus
 	Now       func() time.Time
 }
@@ -125,6 +135,7 @@ type Config struct {
 // Service is the running authority.
 type Service struct {
 	cfg   Config
+	bySub map[string]string // Writers sub -> host
 	mu    sync.Mutex
 	rows  map[string]*Row // key: service
 	rate  map[string][]time.Time
@@ -141,7 +152,19 @@ func New(cfg Config) (*Service, error) {
 	if cfg.Spec == nil || cfg.Inventory == nil || cfg.Domain == "" || cfg.Target == "" || cfg.StateDir == "" {
 		return nil, errors.New("overrides: inventory, spec, domain, target and state dir are required")
 	}
-	s := &Service{cfg: cfg, rows: map[string]*Row{}, rate: map[string][]time.Time{}}
+	if cfg.Verifier == nil {
+		return nil, errors.New("overrides: a token verifier is required")
+	}
+	s := &Service{cfg: cfg, bySub: map[string]string{}, rows: map[string]*Row{}, rate: map[string][]time.Time{}}
+	for host, w := range cfg.Writers {
+		if w.Sub == "" || net.ParseIP(w.Peer) == nil {
+			return nil, fmt.Errorf("overrides: writer %s needs a sub and a peer IP", host)
+		}
+		if other, dup := s.bySub[w.Sub]; dup {
+			return nil, fmt.Errorf("overrides: writers %s and %s share sub %s", other, host, w.Sub)
+		}
+		s.bySub[w.Sub] = host
+	}
 	b, err := os.ReadFile(s.statePath())
 	if err == nil {
 		var rows []*Row
@@ -188,7 +211,8 @@ func (s *Service) sortedRows() []*Row {
 // auditEntry is one audit.log line.
 type auditEntry struct {
 	TS      string `json:"ts"`
-	Device  string `json:"device,omitempty"`
+	Host    string `json:"host,omitempty"`
+	Sub     string `json:"sub,omitempty"`
 	Peer    string `json:"peer,omitempty"`
 	User    string `json:"user,omitempty"`
 	Action  string `json:"action"`
@@ -211,9 +235,9 @@ func (s *Service) logAudit(e auditEntry) {
 
 // Request is the prepare/commit body.
 type Request struct {
-	Service string `json:"service"`
-	Route   string `json:"route"`
-	Host    string `json:"host"`
+	Service string `json:"service,omitempty"`
+	Route   string `json:"route,omitempty"`
+	Host    string `json:"host,omitempty"`
 	Until   int64  `json:"until"` // 0 = forever
 	Reason  string `json:"reason,omitempty"`
 	User    string `json:"user,omitempty"`
@@ -291,50 +315,63 @@ func Check(inv *inventory.Inventory, spec *bunny.Spec, domain string, req Reques
 
 // ---------------------------------------------------------------- auth / http
 
-func (s *Service) device(r *http.Request) (string, string, error) {
+// caller is who made a request; fields are filled as far as auth got, for
+// the audit log.
+type caller struct {
+	Host, Sub, Peer string
+}
+
+// authenticate accepts a request only if its bearer token is a valid
+// Zitadel token (signature, issuer, project audience, expiry), its sub is a
+// configured writer, and it came from that writer's overlay IP. The peer is
+// X-Fleet-Peer when the TCP peer is loopback (h005 nginx sets it), else the
+// TCP peer. Token roles are ignored.
+func (s *Service) authenticate(r *http.Request) (caller, error) {
+	var c caller
 	peer, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return "", "", errors.New("no peer")
+		return c, errors.New("no peer")
 	}
 	if ip := net.ParseIP(peer); ip != nil && ip.IsLoopback() {
 		if p := strings.TrimSpace(r.Header.Get("X-Fleet-Peer")); p != "" {
 			peer = p
 		}
 	}
+	c.Peer = peer
 	tok, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if !ok || strings.TrimSpace(tok) == "" {
-		return "", peer, errors.New("missing bearer token")
+		return c, errors.New("missing bearer token")
 	}
-	sum := sha256.Sum256([]byte(strings.TrimSpace(tok)))
-	hexSum := hex.EncodeToString(sum[:])
-	pip := net.ParseIP(peer)
-	for name, d := range s.cfg.Devices {
-		if subtle.ConstantTimeCompare([]byte(hexSum), []byte(strings.ToLower(d.TokenSha256))) != 1 {
-			continue
-		}
-		for _, p := range d.Peers {
-			if q := net.ParseIP(p); q != nil && pip != nil && q.Equal(pip) {
-				return name, peer, nil
-			}
-		}
-		return "", peer, fmt.Errorf("token of device %s used from %s", name, peer)
+	id, err := s.cfg.Verifier.VerifyZitadelToken(tok)
+	if err != nil {
+		return c, fmt.Errorf("token: %w", err)
 	}
-	return "", peer, errors.New("unknown token")
+	c.Sub = id.Subject
+	host, ok := s.bySub[id.Subject]
+	if !ok {
+		return c, errors.New("sub is not an override writer")
+	}
+	c.Host = host
+	want := net.ParseIP(s.cfg.Writers[host].Peer)
+	if got := net.ParseIP(peer); got == nil || !got.Equal(want) {
+		return c, fmt.Errorf("token of %s used from %s", host, peer)
+	}
+	return c, nil
 }
 
-func (s *Service) allowWrite(dev string) (bool, time.Duration) {
+func (s *Service) allowWrite(host string) (bool, time.Duration) {
 	now := s.cfg.Now()
 	var keep []time.Time
-	for _, t := range s.rate[dev] {
+	for _, t := range s.rate[host] {
 		if now.Sub(t) < RateWindow {
 			keep = append(keep, t)
 		}
 	}
 	if len(keep) >= RateMaxWrites {
-		s.rate[dev] = keep
+		s.rate[host] = keep
 		return false, RateWindow - now.Sub(keep[0])
 	}
-	s.rate[dev] = append(keep, now)
+	s.rate[host] = append(keep, now)
 	return true, 0
 }
 
@@ -392,9 +429,9 @@ func (s *Service) export() Export {
 }
 
 func (s *Service) handleAPI(w http.ResponseWriter, r *http.Request) {
-	dev, peer, err := s.device(r)
+	c, err := s.authenticate(r)
 	if err != nil {
-		s.logAudit(auditEntry{Peer: peer, Action: r.Method + " " + r.URL.Path, Result: "denied", Message: err.Error()})
+		s.logAudit(auditEntry{Host: c.Host, Sub: c.Sub, Peer: c.Peer, Action: r.Method + " " + r.URL.Path, Result: "denied", Message: err.Error()})
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -427,22 +464,22 @@ func (s *Service) handleAPI(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", 404)
 		return
 	}
-	if ok, wait := s.allowWrite(dev); !ok {
+	if ok, wait := s.allowWrite(c.Host); !ok {
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
-		s.logAudit(auditEntry{Device: dev, Peer: peer, User: req.User, Action: act, Target: req.Service, Result: "rate-limited"})
+		s.logAudit(auditEntry{Host: c.Host, Sub: c.Sub, Peer: c.Peer, User: req.User, Action: act, Target: req.Service, Result: "rate-limited"})
 		http.Error(w, "rate limited", http.StatusTooManyRequests)
 		return
 	}
 	var row *Row
 	switch act {
 	case "prepare":
-		row, err = s.prepare(req, dev)
+		row, err = s.prepare(req, c.Host)
 	case "commit":
-		row, err = s.commit(r.Context(), req, dev)
+		row, err = s.commit(r.Context(), req, c.Host)
 	case "delete":
 		row, err = s.remove(r.Context(), req.Service, "revoke")
 	}
-	e := auditEntry{Device: dev, Peer: peer, User: req.User, Action: act, Target: req.Service + "." + req.Route, Until: req.Until, Result: "ok"}
+	e := auditEntry{Host: c.Host, Sub: c.Sub, Peer: c.Peer, User: req.User, Action: act, Target: req.Service + "." + req.Route, Until: req.Until, Result: "ok"}
 	if err != nil {
 		code := 500
 		var he *httpErr
@@ -749,7 +786,7 @@ func (s *Service) Sweep(ctx context.Context) {
 		why := ""
 		switch {
 		case o.State == Removing:
-			if o.DNS == "mismatch" {
+			if o.DNS == "mismatch" && !o.Edge { // edge gone: only the DNS record is left, for a human
 				continue
 			}
 			why = "retry"
@@ -776,7 +813,7 @@ func (s *Service) Sweep(ctx context.Context) {
 			continue
 		}
 		_, err := s.remove(ctx, o.Service, why)
-		e := auditEntry{Device: "h005", Action: "sweep", Target: o.Service + "." + o.Route, Result: "ok", Message: why}
+		e := auditEntry{Host: "h005", Action: "sweep", Target: o.Service + "." + o.Route, Result: "ok", Message: why}
 		if err != nil {
 			e.Result, e.Message = "error", why+": "+err.Error()
 		}
@@ -810,7 +847,7 @@ func (s *Service) reconcileEdge(ctx context.Context) {
 			if err := s.pushEdge(ctx, o); err != nil {
 				o.LastError = "re-push: " + err.Error()
 			} else {
-				s.logAudit(auditEntry{Device: "h005", Action: "sweep", Target: o.Service + "." + o.Route, Result: "ok", Message: "re-pushed to o002"})
+				s.logAudit(auditEntry{Host: "h005", Action: "sweep", Target: o.Service + "." + o.Route, Result: "ok", Message: "re-pushed to o002"})
 			}
 		}
 	}

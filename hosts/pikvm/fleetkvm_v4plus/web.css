@@ -1,0 +1,67 @@
+/* Inline the ConnectPRO KVM port buttons directly into the PiKVM top navbar.
+ * Installed to /etc/kvmd/web.css (served by nginx at /share/css/user.css).
+ */
+
+#gpio-dropdown {
+	display: flex;
+	align-items: center;
+}
+
+#gpio-dropdown.feature-disabled {
+	display: none !important;
+}
+
+/* Hide the "GPIO" dropdown toggle button */
+#gpio-menu-button {
+	display: none !important;
+}
+
+/* Flatten #gpio-menu into the 50px top bar instead of a floating popup */
+ul#navbar li #gpio-menu,
+ul#navbar li #gpio-menu.hidden {
+	display: flex !important;
+	visibility: visible !important;
+	opacity: 1 !important;
+	position: static !important;
+	height: 50px !important;
+	max-height: 50px !important;
+	background: transparent !important;
+	border: none !important;
+	box-shadow: none !important;
+	padding: 0 8px !important;
+	margin: 0 !important;
+	align-items: center !important;
+	overflow: visible !important;
+}
+
+ul#navbar li #gpio-menu table.kv {
+	margin: 0 !important;
+	padding: 0 !important;
+	border-spacing: 3px 0 !important;
+}
+
+ul#navbar li #gpio-menu table.kv td {
+	padding: 0 !important;
+	vertical-align: middle !important;
+	white-space: nowrap !important;
+}
+
+ul#navbar li #gpio-menu table.kv table {
+	margin: 0 !important;
+	border-spacing: 0 !important;
+}
+
+ul#navbar li #gpio-menu img.__gpio-led {
+	height: 14px !important;
+	width: 14px !important;
+	vertical-align: middle !important;
+	margin: 0 2px 0 6px !important;
+}
+
+ul#navbar li #gpio-menu button.__gpio-button {
+	height: 30px !important;
+	line-height: 28px !important;
+	padding: 0 10px !important;
+	font-size: 13px !important;
+	border-radius: 4px !important;
+}

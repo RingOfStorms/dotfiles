@@ -11,7 +11,7 @@ func sp(s string) *string { return &s }
 
 func httpRoute(name string, port int, exposure, auth string) Route {
 	return Route{Port: port, Proto: "http", Exposure: exposure, Auth: sp(auth), Via: []string{"edge"},
-		Name: sp(name), Zone: sp("main"), FQDN: sp(name + ".joshuabell.xyz"), URL: sp("https://" + name + ".joshuabell.xyz"),
+		Name: sp(name), FQDN: sp(name + ".joshuabell.xyz"), URL: sp("https://" + name + ".joshuabell.xyz"),
 		Websockets: true, MaxBody: "100m", Buffering: true, Timeouts: "60s", ForwardedProto: "https"}
 }
 
@@ -378,8 +378,7 @@ udp 9000
 
 func TestPrepareScriptNginxGating(t *testing.T) {
 	inv = &Inventory{DataRoot: "/srv/containers", Hosts: map[string]Host{}}
-	priv := httpRoute("localai", 8080, "tailnet", "none")
-	priv.Zone = sp("private")
+	tailnetRoute := httpRoute("localai", 8080, "tailnet", "none")
 	pub := httpRoute("chat", 8084, "public", "native")
 	tcp := Route{Port: 3032, Proto: "tcp", Exposure: "tailnet", Auth: sp("native")}
 	cases := []struct {
@@ -387,12 +386,12 @@ func TestPrepareScriptNginxGating(t *testing.T) {
 		routes map[string]Route
 		vhost  bool
 	}{
-		{"private only (localai on joe)", map[string]Route{"web": priv}, false},
+		{"tailnet only (localai on joe)", map[string]Route{"web": tailnetRoute}, true},
 		{"tcp only", map[string]Route{"hub": tcp}, false},
 		{"no routes", nil, false},
-		{"private + tcp", map[string]Route{"web": priv, "raw": tcp}, false},
+		{"tailnet + tcp", map[string]Route{"web": tailnetRoute, "raw": tcp}, true},
 		{"public", map[string]Route{"web": pub}, true},
-		{"public + private", map[string]Route{"web": pub, "p": priv}, true},
+		{"public + tailnet", map[string]Route{"web": pub, "p": tailnetRoute}, true},
 	}
 	for _, c := range cases {
 		ps := prepareScript(Service{Name: "svc", Routes: c.routes}, "joe")
@@ -420,7 +419,6 @@ func TestValidateRoutes(t *testing.T) {
 			return r
 		}()}}, ""},
 		"no auth":      {Service{Name: "a", Routes: map[string]Route{"web": func() Route { r := ok; r.Auth = nil; return r }()}}, "auth is required"},
-		"private":      {Service{Name: "a", Routes: map[string]Route{"web": func() Route { r := ok; r.Zone = sp("private"); return r }()}}, "private zone"},
 		"injection":    {Service{Name: "a", Routes: map[string]Route{"web": func() Route { r := ok; r.MaxBody = "1m; evil"; return r }()}}, "not allowed"},
 		"bad port":     {Service{Name: "a", Routes: map[string]Route{"web": func() Route { r := ok; r.Port = 0; return r }()}}, "bad port"},
 		"local noauth": {Service{Name: "a", Routes: map[string]Route{"ml": {Port: 3003, Proto: "http", Exposure: "local", FQDN: sp("x")}}}, ""},

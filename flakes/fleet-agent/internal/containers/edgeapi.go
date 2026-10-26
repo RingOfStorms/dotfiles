@@ -3,12 +3,13 @@ package containers
 // Client for h005's fleet-edge-overrides API (public `cnt expose`,
 // ROUTING-PLAN §8 step 7, "Public expose design" items 1 and 5).
 //
-// Auth is per device: a bearer token from $FLEET_EDGE_TOKEN_FILE (default
-// below) that h005 only accepts from that device's overlay IPs.
+// Auth: this host's Zitadel machine token (machinetoken.go, the sec-agent
+// login), which h005 accepts only for allowlisted subs from their overlay IP.
 
 import (
 	"bytes"
 	"context"
+	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,14 +21,16 @@ import (
 	"time"
 )
 
-const defaultEdgeTokenFile = "/var/lib/secrets_manager_hydrated/fleet_edge_expose"
-
-var errNoToken = errors.New("no fleet-edge token")
+var errNoToken = errors.New("no fleet-edge credentials")
 
 type edgeClient struct {
-	base  string
-	token string
-	http  *http.Client
+	base    string
+	http    *http.Client
+	key     machineKey
+	priv    *rsa.PrivateKey
+	issuer  string
+	project string
+	token   string // fetched on first request
 }
 
 // edgeRow mirrors overrides.Row (the fields the CLI shows).
@@ -54,25 +57,19 @@ type edgeVerify struct {
 	EdgeReloadPending bool `json:"edgeReloadPending"`
 }
 
-// newEdgeClient reads the device token; errNoToken if the file is missing.
+// newEdgeClient loads the machine key; errNoToken if the host has none.
+// The token itself is fetched on the first request.
 func newEdgeClient() (*edgeClient, error) {
-	tf := os.Getenv("FLEET_EDGE_TOKEN_FILE")
-	if tf == "" {
-		tf = defaultEdgeTokenFile
-	}
-	b, err := os.ReadFile(tf)
+	k, priv, err := loadMachineKey(machineKeyPath())
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("%w (%s): public expose needs this device registered on h005 (services.fleet-edge.overrides.devices)", errNoToken, tf)
-		}
 		return nil, err
 	}
 	base := os.Getenv("FLEET_EDGE_URL")
 	if base == "" {
 		base = "https://fleet." + fleetDomain()
 	}
-	return &edgeClient{base: strings.TrimRight(base, "/"), token: strings.TrimSpace(string(b)),
-		http: &http.Client{Timeout: 3 * time.Minute}}, nil
+	return &edgeClient{base: strings.TrimRight(base, "/"), http: &http.Client{Timeout: 3 * time.Minute},
+		key: k, priv: priv, issuer: zitadelIssuer(), project: secProjectID}, nil
 }
 
 func fleetDomain() string {
@@ -108,6 +105,13 @@ func (c *edgeClient) do(method, path string, body any, out any) error {
 	req, err := http.NewRequestWithContext(ctx, method, c.base+path, rd)
 	if err != nil {
 		return err
+	}
+	if c.token == "" {
+		tok, err := fetchMachineToken(ctx, c.http, c.key, c.priv, c.issuer, c.project)
+		if err != nil {
+			return err
+		}
+		c.token = tok
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	if body != nil {
@@ -179,6 +183,7 @@ type edgeAPI interface {
 	prepare(edgeReq) error
 	commit(edgeReq) (edgeRow, error)
 	revoke(string) error
+	list(verify bool) ([]edgeRow, *edgeVerify, error)
 }
 
 // exposePublic runs the add order: prepare on h005 (validate + reserve, no

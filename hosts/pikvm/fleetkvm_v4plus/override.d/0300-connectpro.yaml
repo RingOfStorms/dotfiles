@@ -1,74 +1,71 @@
-# ConnectPRO KVM port-switching UI buttons and DDM HID compatibility.
+# ConnectPRO KVM switch serial driver, active-port LEDs, and 1-click buttons.
 # Copy to /etc/kvmd/override.d/0300-connectpro.yaml on fleetkvm.
+#
+# Port mapping:
+#   Port 1 (pin 0) -> h001
+#   Port 2 (pin 1) -> h005
+#   Port 3 (pin 2) -> h003
+#   Port 4 (pin 3) -> h004
 
 kvmd:
     auth:
         usc:
-            # Allow the `kvmd` user (which runs `cmd` GPIO drivers) to call
-            # /run/kvmd/kvmd.sock without a password when clicking UI buttons.
-            users: [kvmd]
-
-    # Note: Because PiKVM's USB OTG cable is plugged into the ConnectPRO's
-    # shared USB 3.0 hub port (USB 1 / USB 2) rather than the rear DDM port,
-    # PiKVM's default absolute + relative mouse and virtual media (MSD) can stay
-    # enabled. (If you ever try the rear DDM port again, uncomment the hid block
-    # below AND disable MSD via `0200-feature-msd.yaml`, as DDM rejects USB
-    # composite devices that include a Mass Storage interface.)
-    # hid:
-    #     mouse:
-    #         absolute: false
-    #         horizontal_wheel: false
-    #     mouse_alt:
-    #         device: ""
+            users: [root, kvmd]
 
     gpio:
         drivers:
-            cp_port1:
-                type: cmd
-                cmd: [/usr/local/bin/connectpro-switch, port, "1"]
-            cp_port2:
-                type: cmd
-                cmd: [/usr/local/bin/connectpro-switch, port, "2"]
-            cp_port3:
-                type: cmd
-                cmd: [/usr/local/bin/connectpro-switch, port, "3"]
-            cp_port4:
-                type: cmd
-                cmd: [/usr/local/bin/connectpro-switch, port, "4"]
-            # Note: usb-sync and beep-toggle use DDM keyboard hotkeys; only
-            # active if plugged into the DDM port or if serial equivalents are added.
+            connectpro:
+                type: connectpro
+                device: /dev/ttyUSB0
+                speed: 115200
+                default_channel: 0
 
         scheme:
+            cp_port1_led:
+                driver: connectpro
+                pin: 0
+                mode: input
+            cp_port2_led:
+                driver: connectpro
+                pin: 1
+                mode: input
+            cp_port3_led:
+                driver: connectpro
+                pin: 2
+                mode: input
+            cp_port4_led:
+                driver: connectpro
+                pin: 3
+                mode: input
+
             cp_port1_btn:
-                driver: cp_port1
+                driver: connectpro
                 pin: 0
                 mode: output
                 switch: false
             cp_port2_btn:
-                driver: cp_port2
-                pin: 0
+                driver: connectpro
+                pin: 1
                 mode: output
                 switch: false
             cp_port3_btn:
-                driver: cp_port3
-                pin: 0
+                driver: connectpro
+                pin: 2
                 mode: output
                 switch: false
             cp_port4_btn:
-                driver: cp_port4
-                pin: 0
+                driver: connectpro
+                pin: 3
                 mode: output
                 switch: false
-            # Optional DDM-only buttons omitted when using the USB 3.0 hub port
 
         view:
             header:
-                title: KVM Switch
+                title: KVM
             table:
-                - ["#ConnectPRO Port"]
-                - []
-                - ["#Port 1 (h001):", "cp_port1_btn|hide|Switch"]
-                - ["#Port 2 (h003):", "cp_port2_btn|hide|Switch"]
-                - ["#Port 3 (h004):", "cp_port3_btn|hide|Switch"]
-                - ["#Port 4 (h005):", "cp_port4_btn|hide|Switch"]
-                # (Add utility rows here if needed)
+                - [
+                    "cp_port1_led|green", "cp_port1_btn|1: h001",
+                    "cp_port2_led|green", "cp_port2_btn|2: h005",
+                    "cp_port3_led|green", "cp_port3_btn|3: h003",
+                    "cp_port4_led|green", "cp_port4_btn|4: h004"
+                  ]

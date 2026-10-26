@@ -32,11 +32,8 @@ A stock PiKVM with Tailscale (headscale). Unlike `pikvm` (see `pikvm_v4mini.md`)
    - **PiKVM V4 Plus side:** Rear **USB 3.0 port 2** — the blue USB-A port **directly above the RJ45 ATX port** (or front USB 3.0 port 1). Appears as `/dev/ttyUSB0`.
    - **ConnectPRO side:** Rear **Serial/Control** RJ45 port (next to the 5V DC barrel jack).
    - **Cable:** USB-to-RJ45 RS-232 console cable (`FT232RL` Cisco-pinout cable) or `CRJ45-DB9F` + USB-to-RS232 adapter.
-   - *Capturing the serial command once the cable arrives:* ConnectPRO switches broadcast port-change frames out the `Serial/Control` port when you press the physical front-panel buttons (used by their `CSYNC-RJ45` dual-switch stacking feature). Once the cable is plugged in, run:
-     ```sh
-     connectpro-switch sniff 115200   # also try 9600, 19200, 38400, 57600 if bytes look garbled
-     ```
-     Press front buttons `1`–`4` on the ConnectPRO, note the baud rate and byte string for each port, and set `SERIAL_BAUD` and `SERIAL_CMD_FMT` in `/etc/kvmd/connectpro.conf`.
+   - **Serial protocol (verified on hardware):** `115200` baud, `8N1`, no flow control. Port switching frames are `CH1\r\n` (`43 48 31 0d 0a`) through `CH4\r\n` (`43 48 34 0d 0a`).
+   - To sniff serial frames from the ConnectPRO front panel at any time, run `connectpro-switch sniff 115200`.
 
 2. **USB Keyboard / Mouse / Virtual Media (`fleetkvm` → ConnectPRO)**
    - **PiKVM V4 Plus side:** Rear **USB 2.0 OTG** port (USB-C, between the ATX port and HDMI input).
@@ -49,28 +46,41 @@ A stock PiKVM with Tailscale (headscale). Unlike `pikvm` (see `pikvm_v4mini.md`)
    - **PiKVM side:** Rear **HDMI video input** port.
    - **Adapter:** Requires an **Active** DisplayPort 1.4-to-HDMI 2.0 converter (ConnectPRO console DP ports do not support passive `DP++` cables). Power on `fleetkvm` first, attach the active converter + HDMI cable to the ConnectPRO console port, then cold-boot (or press the front `Reset` pinhole on) the ConnectPRO so it caches the PiKVM's EDID.
 
-### Installing the custom UI buttons (`hosts/pikvm/fleetkvm_v4plus/`)
+### Installing the top-bar UI buttons & active-port LEDs (`hosts/pikvm/fleetkvm_v4plus/`)
+
+- `connectpro.py` (`/usr/lib/python3.*/site-packages/kvmd/plugins/ugpio/connectpro.py`): Native KVMD `ugpio` driver that keeps `/dev/ttyUSB0` open at `115200` 8N1, sends `CH1\r\n`..`CH4\r\n` when a button is clicked, and listens for `CH1\r\n`..`CH4\r\n` broadcasts if someone presses the physical buttons on the ConnectPRO front panel — lighting up the active machine's green LED indicator in the Web UI.
+- `web.css` (`/etc/kvmd/web.css`, served as `/share/css/user.css`): Flattens the GPIO menu directly into the 50px top navigation bar so all 4 hosts (`1: h001`, `2: h005`, `3: h003`, `4: h004`) are 1-click buttons in the top bar without opening a dropdown.
+- `override.d/0300-connectpro.yaml` (`/etc/kvmd/override.d/0300-connectpro.yaml`): Wires the 4 input LEDs and 4 output buttons for `1: h001`, `2: h005`, `3: h003`, `4: h004`.
 
 From this repo on your workstation, copy the files to `fleetkvm` and activate them:
 
 ```sh
-scp hosts/pikvm/fleetkvm_v4plus/connectpro-switch root@fleetkvm:/tmp/
-scp hosts/pikvm/fleetkvm_v4plus/connectpro.conf root@fleetkvm:/tmp/
-scp hosts/pikvm/fleetkvm_v4plus/override.d/0300-connectpro.yaml root@fleetkvm:/tmp/
+scp hosts/pikvm/fleetkvm_v4plus/connectpro.py \
+    hosts/pikvm/fleetkvm_v4plus/web.css \
+    hosts/pikvm/fleetkvm_v4plus/connectpro-switch \
+    hosts/pikvm/fleetkvm_v4plus/connectpro.conf \
+    hosts/pikvm/fleetkvm_v4plus/override.d/0300-connectpro.yaml \
+    root@fleetkvm:/tmp/
 
 ssh root@fleetkvm '
   set -euo pipefail
   rw
   trap ro EXIT
   mkdir -p /etc/kvmd/override.d /usr/local/bin
+  PY_UGPIO_DIR="$(python3 -c "import os, kvmd.plugins.ugpio as u; print(os.path.dirname(u.__file__))")"
+  install -m 0644 /tmp/connectpro.py "${PY_UGPIO_DIR}/connectpro.py"
+  python3 -m py_compile "${PY_UGPIO_DIR}/connectpro.py"
+  install -m 0644 /tmp/web.css /etc/kvmd/web.css
   install -m 0755 /tmp/connectpro-switch /usr/local/bin/connectpro-switch
   install -m 0644 /tmp/connectpro.conf /etc/kvmd/connectpro.conf
   install -m 0644 /tmp/0300-connectpro.yaml /etc/kvmd/override.d/0300-connectpro.yaml
-  rm -f /tmp/connectpro-switch /tmp/connectpro.conf /tmp/0300-connectpro.yaml
+  rm -f /tmp/connectpro.py /tmp/web.css /tmp/connectpro-switch /tmp/connectpro.conf /tmp/0300-connectpro.yaml
   kvmd -M >/dev/null
   systemctl restart kvmd
 '
 ```
+
+*(Note: After running `pikvm-update` in the future, if Python is upgraded to a new minor version, re-copy `connectpro.py` into `${PY_UGPIO_DIR}`.)*
 
 ## V4 Plus differences to remember
 

@@ -11,12 +11,4 @@
     "nvidia" # RTX 3080, CDI device nvidia.com/gpu (toolkit above)
   ];
 
-  # joe has an impermanent root: keep container data, runtime unit links,
-  # runtime firewall ports and podman's image store across reboots.
-  environment.persistence."/persist".directories = [
-    "/srv/containers"
-    "/etc/systemd-mutable"
-    "/var/lib/fleet-containers"
-    "/var/lib/containers"
-  ];
 }

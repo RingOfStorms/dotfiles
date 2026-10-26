@@ -26,6 +26,7 @@ import (
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/overrides"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/server"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/shareserve"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/state"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/store"
 )
@@ -146,7 +147,9 @@ func runOverrides(args []string) {
 	listen := fs.String("listen", "127.0.0.1:8098", "address (loopback; h005 nginx proxies /api/overrides)")
 	invFile := fs.String("inventory", "", "inventory JSON")
 	specFile := fs.String("spec", "", "public DNS spec JSON (dns-records.nix publicSpec)")
-	devicesFile := fs.String("devices", "", "JSON {name: {peers, tokenSha256}}")
+	writersFile := fs.String("writers", "", "JSON {host: {sub, peer}}: Zitadel machine users allowed to write, and their overlay IPs")
+	zitadelIssuer := fs.String("zitadel-issuer", "", "Zitadel issuer the writers' machine tokens come from")
+	zitadelProjectID := fs.String("zitadel-project-id", "", "Zitadel project the machine tokens' audience must include")
 	stateDir := fs.String("state-dir", envDefault("STATE_DIRECTORY", "/var/lib/fleet-edge-overrides"), "state dir")
 	target := fs.String("target", "", "CNAME target (o002's name)")
 	keyFile := fs.String("bunny-key-file", "", "bunny API key (empty: writes return 503)")
@@ -165,18 +168,27 @@ func runOverrides(args []string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	devs := map[string]overrides.Device{}
-	if *devicesFile != "" {
-		b, err := os.ReadFile(*devicesFile)
+	if *zitadelIssuer == "" || *zitadelProjectID == "" {
+		log.Fatal("overrides: --zitadel-issuer and --zitadel-project-id are required")
+	}
+	writers := map[string]overrides.Writer{}
+	if *writersFile != "" {
+		b, err := os.ReadFile(*writersFile)
 		if err != nil {
 			log.Fatal(err)
 		}
-		if err := json.Unmarshal(b, &devs); err != nil {
+		if err := json.Unmarshal(b, &writers); err != nil {
 			log.Fatal(err)
 		}
 	}
+	// No ClientID: the audience must be the project itself. AllowedRole
+	// stays empty; overrides authorizes by sub alone.
+	verifier, err := auth.New(auth.Config{Zitadel: auth.ZitadelConfig{Issuer: *zitadelIssuer, ProjectID: *zitadelProjectID}})
+	if err != nil {
+		log.Fatal(err)
+	}
 	cfg := overrides.Config{Inventory: inv, Spec: spec, Domain: spec.Zone, Target: *target, StateDir: *stateDir,
-		LockPath: *lockPath, Devices: devs}
+		LockPath: *lockPath, Verifier: verifier, Writers: writers}
 	if *keyFile != "" && *pushKey != "" {
 		k, err := os.ReadFile(*keyFile)
 		if err != nil {
@@ -268,6 +280,58 @@ func main() {
 			return
 		case "import-beszel":
 			importBeszel(os.Args[2:])
+			return
+		case "share-serve":
+			fs := flag.NewFlagSet("share-serve", flag.ExitOnError)
+			cfgPath := fs.String("config", "/etc/fleet-share/config.json", "receiver config")
+			_ = fs.Parse(os.Args[2:])
+			c, err := shareserve.LoadConfig(*cfgPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			hup := make(chan struct{})
+			sig := make(chan os.Signal, 1)
+			signal.Notify(sig, syscall.SIGHUP)
+			go func() {
+				<-sig
+				close(hup)
+			}()
+			if err := shareserve.Serve(c, os.Getenv("SSH_ORIGINAL_COMMAND"), os.Stdin, hup, os.Stdout); err != nil {
+				fmt.Fprintln(os.Stderr, "fleet-share-serve:", err)
+				os.Exit(1)
+			}
+			return
+		case "share-sweep":
+			fs := flag.NewFlagSet("share-sweep", flag.ExitOnError)
+			cfgPath := fs.String("config", "/etc/fleet-share/config.json", "receiver config")
+			_ = fs.Parse(os.Args[2:])
+			c, err := shareserve.LoadConfig(*cfgPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			gone, err := c.Sweep()
+			for _, g := range gone {
+				fmt.Println("swept", g)
+			}
+			if err != nil {
+				log.Fatal(err)
+			}
+			return
+		case "share-apply":
+			fs := flag.NewFlagSet("share-apply", flag.ExitOnError)
+			cfgPath := fs.String("config", "/etc/fleet-share/config.json", "receiver config")
+			_ = fs.Parse(os.Args[2:])
+			c, err := shareserve.LoadConfig(*cfgPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			processed, err := c.Apply()
+			for _, p := range processed {
+				fmt.Println("applied", p)
+			}
+			if err != nil {
+				log.Fatal(err)
+			}
 			return
 		}
 	}

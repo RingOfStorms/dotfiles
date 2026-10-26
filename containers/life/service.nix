@@ -22,11 +22,15 @@
 
   # Private network (ROUTING-PLAN §8 step 5): guest 10.233.17.2. Life
   # validates Zitadel tokens (issuer sso.joshuabell.xyz) through the host
+  # nginx and calls LocalAI (recognition, localai.joshuabell.xyz) on joe's
   # nginx; restic/pgBackRest offsite targets are on the internet.
   net = {
     private = true;
     index = 17;
-    uses = [ "zitadel.web" ];
+    uses = [
+      "zitadel.web"
+      "localai.web"
+    ];
   };
 
   # Client IP: public traffic is client -> o002 nginx -> (tailnet) here; trust

@@ -105,10 +105,15 @@
           ./nginx.nix
           ../../_shared_assets/utilities/wildcard-cert-receiver.nix
           ../../_shared_assets/utilities/edge-vhost-receiver.nix
+          ../../_shared_assets/utilities/share-receiver.nix
           (
-            { pkgs, ... }:
+            { pkgs, fleet, ... }:
             {
               fleet.edgeVhost.package = inputs.fleet-edge.packages.${pkgs.stdenv.hostPlatform.system}.default;
+              fleet.shareVhost.package = inputs.fleet-edge.packages.${pkgs.stdenv.hostPlatform.system}.default;
+              # *.share.joshuabell.xyz (FLOWS-AUDIT.md §c): pushed by h005,
+              # terminated on o002 only.
+              fleet.wildcardExtraCertNames = [ "share.${fleet.global.domain}" ];
             }
           )
           ./headscale.nix

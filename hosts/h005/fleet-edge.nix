@@ -14,8 +14,10 @@
 # inventory routes appear under their route `group` (containers/<svc>/service.nix).
 {
   inputs,
+  config,
   constants,
   fleet,
+  lib,
   pkgs,
   ...
 }:
@@ -54,9 +56,9 @@ in
 
   services.fleet-edge = {
     enable = true;
-    # Public expose authority (ROUTING-PLAN §8 step 7). Both keys are now
-    # set, so writes go live on deploy (no devices yet: no lio token, so
-    # writes stay refused per device until one is added).
+    # Public expose authority (ROUTING-PLAN §8 step 7). Callers authenticate
+    # as their own Zitadel machine user (the sec-agent login, same issuer
+    # and project), allowed only by explicit sub from their overlay IP.
     overrides = {
       enable = true;
       specFile = publicSpecFile;
@@ -67,7 +69,13 @@ in
       knownHosts = "${fleet.hosts.o002.overlayIp} ${constants.pinnedHostKeys.o002}";
       bunnyKeyFile = "/var/lib/secrets_manager_hydrated/bunny_rw_dns_2026-03-15";
       pushKeyFile = "/var/lib/secrets_manager_hydrated/edge_vhost_push_2026-10-24";
-      devices = { };
+      zitadel = {
+        inherit (config.ringofstorms.secrets.agent.zitadel) issuer projectId;
+      };
+      writers = lib.mapAttrs (host: sub: {
+        inherit sub;
+        peer = fleet.hosts.${host}.overlayIp;
+      }) fleet.global.overrideWriters;
     };
     inventoryFile = pkgs.writeText "fleet-inventory.json" (builtins.toJSON inputs.containers.inventory);
     title = "Josh's Homelab";

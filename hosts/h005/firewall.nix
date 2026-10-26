@@ -1,7 +1,10 @@
 # h005 does not trust tailscale0 (ROUTING-PLAN §5.1). Only tailscale0 input is
 # affected: LAN/VLAN/WAN rules (mods/networking.nix, adguardhome.nix), the
 # router forward/NAT tables and fail2ban are untouched. 22 and 41641/udp stay
-# global; 443 on tailscale0 comes from private-zone.nix.
+# global; 80/443 on tailscale0 are for h005's own services (fleet-edge
+# dashboard, oauth2-proxy sso-proxy): the private zone is retired
+# (FLOWS-AUDIT target design (a); every container host now terminates its
+# own routes).
 #
 # M3: joe/i001 are low-trust LAN devices (hosts/fleet.nix, trust = "low").
 # They still need DNS/DHCP/NTP on the lan VLAN, but must never reach h005
@@ -30,7 +33,8 @@ in
     allowedUDPPorts = [ 53 ];
     allowedTCPPorts = [
       53
-      80 # nginx on the overlay IP: fleet-edge dashboard / private-zone redirects
+      80 # nginx on the overlay IP: fleet-edge dashboard / sso-proxy redirects
+      443 # nginx on the overlay IP: fleet-edge dashboard / sso-proxy (oauth2-proxy.nix)
     ];
   };
 

@@ -43,4 +43,16 @@
       };
     };
   };
+
+  # Recognition (VLM/OCR) backend: self-hosted LocalAI over Tailscale.
+  systemd.services.life.environment = {
+    LIFE_RECOGNITION_VLM_BACKEND = "openai";
+    LIFE_RECOGNITION_VLM_URL = "https://localai.joshuabell.xyz";
+    LIFE_RECOGNITION_VLM_MODEL = "qwen3.5-9b-deepseek-v4-flash";
+    LIFE_RECOGNITION_VLM_ENABLED = "1";
+    LIFE_RECOGNITION_OCR_BACKEND = "openai";
+    LIFE_RECOGNITION_OCR_URL = "https://localai.joshuabell.xyz";
+    LIFE_RECOGNITION_OCR_MODEL = "qwen3.5-9b-deepseek-v4-flash";
+    LIFE_RECOGNITION_OCR_ENABLED = "1";
+  };
 }

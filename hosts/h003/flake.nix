@@ -84,7 +84,6 @@
           ./hardware-configuration.nix
 
           inputs.containers.nixosModules.default
-          ../_shared_assets/utilities/wildcard-cert-receiver.nix
           ./containers.nix
           ./firewall.nix
         ]

@@ -151,12 +151,10 @@ Rules that make this trustworthy:
   - A route with both paths gets the `edge` CNAME; the router path then
     needs its own name (e.g. `mc.` vs `mc-web.`), since one name can't be
     two CNAMEs.
-- **Namespace chosen per route** (`zone = "main"` default, or `"private"`):
-  - `main`: `<name>.joshuabell.xyz`, covered by the existing wildcard.
-  - `private`: `<name>.ts.joshuabell.xyz`, with its own wildcard (DNS-01)
-    and never a public record. Use it for names you'd rather not reveal even
-    in public DNS. `public` routes can't use it.
-  Either way the name is a single label under its wildcard, so no per-name
+- **Namespace** (retired the `zone = "private"` option; FLOWS-AUDIT target
+  design (a)): every route is `<name>.joshuabell.xyz`, covered by the
+  zone wildcard, which every container host now holds a pushed copy of
+  and terminates locally (hosts/h005/wildcard-cert.nix). So no per-name
   certificates are needed.
 - The app must know its external URL (immich `IMMICH_SERVER_URL`, forgejo
   `ROOT_URL`, paperless `PAPERLESS_URL`, open-webui `WEBUI_URL`,
@@ -701,7 +699,7 @@ Taken 2026-10-16:
      `via = router`). `hosts/h005/dns-records.nix` adds the few hand names
      (unconverted trilium/arr names, `secrets.h001.net`) and throws if a
      hand name is also generated. Both dnsmasq instances render them.
-     h005 reads the repo's working tree by path, like `private-zone.nix`,
+     h005 reads the repo's working tree by path, like other containers/ nix,
      so a route change takes effect on the next h005 rebuild. No runtime
      path: records only change when a service.nix changes, which is already
      a commit and a deploy. A runtime writer (hostsdir + inotify) would add
@@ -1027,14 +1025,17 @@ Taken 2026-10-16:
         - nginx on h005 proxies only `location /api/overrides` → 8098 (deny
           o002, allow overlay) and sets `X-Fleet-Peer $remote_addr`
           (trusted only from loopback).
-        - **Auth: per-device tokens.** `services.fleet-edge.overrides.devices
-          = { lio = { peers = [ v4 v6 ]; tokenSha256 = "…"; }; }` in
-          `hosts/h005/fleet-edge.nix`; only hashes in git. A request passes
-          only if the token hash **and** the peer IP belong to the same
-          device. Revoke = delete the entry, rebuild h005. The CLI reads its
-          token from `$FLEET_EDGE_TOKEN_FILE` (default
-          `/var/lib/secrets_manager_hydrated/fleet_edge_expose`). Rejected:
-          headscale whois (headscale is on o002), the shared `apiKeysFile`.
+        - **Auth: host machine identity.** The CLI (run as root) logs in to
+          Zitadel exactly like sec-agent: `/machine-key.json` signs a
+          JWT-bearer assertion, exchanged at `sso.<domain>` with the sec
+          project audience scope. h005 verifies the token (JWKS signature,
+          issuer, project audience, expiry) and allows it only if its `sub`
+          is in `global.overrideWriters` (`hosts/fleet.nix`, host → machine
+          user id) **and** the peer is that host's `overlayIp`. Roles and
+          trust level are never consulted (o002 is high trust and not a
+          writer). Revoke = delete the entry, rebuild h005. Audit lines carry
+          `host` and `sub`. Rejected: headscale whois (headscale is on o002),
+          the shared `apiKeysFile`, per-device static tokens (replaced).
         - **Endpoints**: `POST /api/overrides/prepare`, `POST
           /api/overrides/commit`, `DELETE /api/overrides/<svc>`, `GET
           /api/overrides[?verify=1]` (`verify` adds live bunny and o002

@@ -1,7 +1,11 @@
 # Public wildcard *.joshuabell.xyz + apex, issued on h005 (ROUTING-PLAN §8
 # step 4): DNS-01 via bunny, whose key h005 already holds (sec-agent.nix).
-# Pushed to the TLS terminators (o002 edge, h001 internal listener) over
-# SSH after every issue/renew, plus a daily retry. Receivers:
+# Pushed to every container-host TLS terminator (every host with container
+# routes, plus joe and lio, plus o002 the public edge; FLOWS-AUDIT target
+# design (a): each terminates TLS for its own routes) over SSH after every
+# issue/renew, plus a daily retry. Also issues
+# *.share.joshuabell.xyz (FLOWS-AUDIT.md §c, local temporary sharing),
+# pushed to o002 ONLY (`fleet-cert-receive share.joshuabell.xyz`). Receivers:
 # hosts/_shared_assets/utilities/wildcard-cert-receiver.nix.
 #
 # Why push and not sec: sec only lets the `admin` role write, and only to
@@ -21,20 +25,35 @@
 }:
 let
   domain = fleet.global.domain;
+  shareDomain = "share.${domain}";
   certDir = config.security.acme.certs.${domain}.directory;
-  # Same path on every receiver (wildcard-cert-receiver.nix).
-  remoteDir = "/var/lib/fleet-cert/${domain}/current";
-  # Pinned host keys (_constants.nix pinnedHostKeys).
-  targets = {
-    o002 = {
-      ip = fleet.hosts.o002.overlayIp;
-      hostKey = constants.pinnedHostKeys.o002;
-    };
-    h001 = {
-      ip = fleet.hosts.h001.overlayIp;
-      hostKey = constants.pinnedHostKeys.h001;
-    };
-  };
+  shareCertDir = config.security.acme.certs.${shareDomain}.directory;
+  # Push targets: every host with container routes (containers/lib.nix
+  # routeNamesByHost), plus joe and lio explicitly (FLOWS-AUDIT target
+  # design (a): every container host terminates its own TLS, including
+  # low-route-count hosts not yet carrying a non-local http route), plus
+  # o002 (the public edge). Pinned host keys: _constants.nix
+  # pinnedHostKeys.
+  routeHosts = builtins.attrNames (
+    (import ../../containers/lib.nix).routeNamesByHost ../../containers
+  );
+  targetNames = lib.unique (
+    routeHosts
+    ++ [
+      "joe"
+      "lio"
+      "o002"
+    ]
+  );
+  targets = builtins.listToAttrs (
+    map (h: {
+      name = h;
+      value = {
+        ip = fleet.hosts.${h}.overlayIp;
+        hostKey = constants.pinnedHostKeys.${h};
+      };
+    }) targetNames
+  );
   knownHosts = pkgs.writeText "wildcard-push-known-hosts" (
     lib.concatMapStrings (t: "${t.ip} ${t.hostKey}\n") (builtins.attrValues targets)
   );
@@ -54,37 +73,65 @@ let
   #      each receiver's authorized_keys entry means this key can only ever
   #      invoke fleet-cert-receive, so losing it exposes nothing else.
   sshKey = "/var/lib/secrets_manager_hydrated/wildcard_push_2026-10-22";
-  push = pkgs.writeShellApplication {
+  mkPush =
+    {
+      name,
+      certName,
+      certDir',
+      pushTargets,
+    }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = [
+        pkgs.openssh
+        pkgs.gnutar
+        pkgs.coreutils
+      ];
+      text = ''
+        # Every target is tried; the unit succeeds only if every receiver exited
+        # 0 (ssh returns the remote status), otherwise it fails and is retried
+        # daily.
+        rc=0
+        # shellcheck disable=SC2043 # pushTargets can be a single host (e.g.
+        # wildcard-share-push, o002 only); the loop still works for more.
+        for t in ${lib.concatStringsSep " " (map (t: t.ip) (builtins.attrValues pushTargets))}; do
+          # The receiver stages the pair in a new version dir, swaps the
+          # `current` symlink, runs nginx -t and reloads; on failure it restores
+          # the previous version and exits non-zero (wildcard-cert-receiver.nix).
+          if tar -C ${certDir'} -cf - fullchain.pem key.pem \
+            | timeout 60 ssh -i ${sshKey} -o BatchMode=yes -o IdentitiesOnly=yes \
+                -o UserKnownHostsFile=${knownHosts} -o StrictHostKeyChecking=yes \
+                "root@$t" "fleet-cert-receive ${certName}"; then
+            echo "pushed ${certName} to $t"
+          else
+            echo "push ${certName} to $t failed" >&2
+            rc=1
+          fi
+        done
+        exit "$rc"
+      '';
+    };
+  push = mkPush {
     name = "wildcard-push";
-    runtimeInputs = [
-      pkgs.openssh
-      pkgs.gnutar
-      pkgs.coreutils
-    ];
-    text = ''
-      # Every target is tried; the unit succeeds only if every receiver exited
-      # 0 (ssh returns the remote status), otherwise it fails and is retried
-      # daily.
-      rc=0
-      for t in ${lib.concatStringsSep " " (map (t: t.ip) (builtins.attrValues targets))}; do
-        # The receiver stages the pair in a new version dir, swaps the
-        # `current` symlink, runs nginx -t and reloads; on failure it restores
-        # the previous version and exits non-zero (wildcard-cert-receiver.nix).
-        if tar -C ${certDir} -cf - fullchain.pem key.pem \
-          | timeout 60 ssh -i ${sshKey} -o BatchMode=yes -o IdentitiesOnly=yes \
-              -o UserKnownHostsFile=${knownHosts} -o StrictHostKeyChecking=yes \
-              "root@$t" fleet-cert-receive; then
-          echo "pushed to $t"
-        else
-          echo "push to $t failed" >&2
-          rc=1
-        fi
-      done
-      exit "$rc"
-    '';
+    certName = domain;
+    certDir' = certDir;
+    pushTargets = targets;
+  };
+  # *.share.<domain> (FLOWS-AUDIT.md §c) is only ever terminated on o002.
+  sharePush = mkPush {
+    name = "wildcard-share-push";
+    certName = shareDomain;
+    certDir' = shareCertDir;
+    pushTargets = {
+      inherit (targets) o002;
+    };
   };
 in
 {
+  security.acme = {
+    acceptTerms = true;
+    defaults.email = fleet.global.acmeEmail;
+  };
   security.acme.certs.${domain} = {
     inherit domain;
     extraDomainNames = [ "*.${domain}" ];
@@ -104,8 +151,23 @@ in
     postRun = "systemctl start --no-block wildcard-push.service";
   };
 
+  security.acme.certs.${shareDomain} = {
+    domain = shareDomain;
+    extraDomainNames = [ "*.${shareDomain}" ];
+    # credentialFiles.BUNNY_API_KEY_FILE injected via sec-agent configChanges
+    # (hosts/h005/sec-agent.nix).
+    dnsProvider = "bunny";
+    dnsResolver = "1.1.1.1:53";
+    extraLegoFlags = [
+      "--dns.propagation-wait"
+      "60s"
+    ];
+    group = "acme";
+    postRun = "systemctl start --no-block wildcard-share-push.service";
+  };
+
   systemd.services.wildcard-push = {
-    description = "Push the ${domain} wildcard cert to o002 and h001";
+    description = "Push the ${domain} wildcard cert to every container-host TLS terminator";
     after = [
       "network-online.target"
       "tailscaled-autoconnect.service"
@@ -117,6 +179,28 @@ in
     serviceConfig = {
       Type = "oneshot";
       ExecStart = lib.getExe push;
+    };
+  };
+  systemd.services.wildcard-share-push = {
+    description = "Push the ${shareDomain} wildcard cert to o002 (FLOWS-AUDIT.md §c)";
+    after = [
+      "network-online.target"
+      "tailscaled-autoconnect.service"
+      "acme-${shareDomain}.service"
+    ];
+    wants = [ "network-online.target" ];
+    unitConfig.ConditionPathExists = "${shareCertDir}/key.pem";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = lib.getExe sharePush;
+    };
+  };
+  systemd.timers.wildcard-share-push = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "daily";
+      RandomizedDelaySec = "1h";
+      Persistent = true;
     };
   };
   systemd.timers.wildcard-push = {

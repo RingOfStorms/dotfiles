@@ -383,26 +383,32 @@ let
   };
 in
 {
+  # Receiver for the cert h005 pushes to every host with routes
+  # (hosts/h005/wildcard-cert.nix); nginx.tls.certDir points at it.
+  imports = [ ../hosts/_shared_assets/utilities/wildcard-cert-receiver.nix ];
+
   options.ringofstorms.containers = {
     enable = lib.mkOption {
       type = lib.types.bool;
       default = true;
       description = "Host support for floating containers managed by the `containers` CLI.";
     };
+    # Every container host terminates TLS for the routes it serves on its own
+    # bare-metal nginx (FLOWS-AUDIT target design (a)); h005 only answers DNS.
     nginx.enable = lib.mkOption {
       type = lib.types.bool;
-      default = false;
+      default = true;
       description = "Enable nginx and include ${stateDir}/nginx/*.conf in the http block.";
     };
     nginx.tls.certDir = lib.mkOption {
       type = lib.types.str;
-      default = "/var/lib/acme/joshuabell.xyz";
-      example = "/var/lib/fleet-cert/joshuabell.xyz/current";
+      default = "/var/lib/fleet-cert/joshuabell.xyz/current";
       description = ''
         Directory holding fullchain.pem and key.pem for the generated
         internal :443 listeners, written to
-        /etc/fleet-containers/nginx-tls.conf. Set to the wildcard pushed by
-        h005 (hosts/_shared_assets/utilities/wildcard-cert-receiver.nix) to drop the host's own ACME.
+        /etc/fleet-containers/nginx-tls.conf. Default: the cert h005 pushes
+        (hosts/h005/wildcard-cert.nix) to every host with routes, received
+        by wildcard-cert-receiver.nix (imported by this module).
       '';
     };
     # Internal/edge listener split (ROUTING-PLAN §2.3). Generated vhosts put
@@ -694,6 +700,9 @@ in
           "/var/lib/nixos-containers"
           # extra-container <name>.conf links, read via EnvironmentFile by container@ units.
           "/etc/nixos-containers"
+          # The pushed cert (nginx.tls.certDir): nginx has it at boot,
+          # before h005's next push.
+          "/var/lib/fleet-cert"
         ];
         description = "Directories persisted when persist.enable is set.";
       };
@@ -937,6 +946,10 @@ in
         services.nginx = {
           enable = true;
           enableReload = true;
+          recommendedGzipSettings = lib.mkDefault true;
+          recommendedOptimisation = lib.mkDefault true;
+          recommendedProxySettings = lib.mkDefault true;
+          recommendedTlsSettings = lib.mkDefault true;
           # Edge/internal split (ROUTING-PLAN §2.3), used by generated vhosts:
           #   $fleet_edge_peer          1 when the TCP peer is the edge (o002).
           #                             $realip_remote_addr is the real peer even
@@ -946,6 +959,8 @@ in
           #   /etc/fleet-containers/nginx-edge-realip.conf, included by edge
           #                             servers only: trust X-Forwarded-For from the edge.
           appendHttpConfig = ''
+            # Generated vhosts set many proxy headers (oauth2 identity clear).
+            proxy_headers_hash_max_size 1024;
             map $realip_remote_addr $fleet_edge_peer {
               default 0;
             ${lib.concatMapStrings (p: "  ${p} 1;\n") cfg.nginx.edge.peers}}
@@ -966,9 +981,12 @@ in
             }
             include ${stateDir}/nginx/*.conf;
           '';
-          # Drop anything not matched by a real vhost.
+          # Drop anything not matched by a real vhost, plain or TLS: the
+          # catch-all refuses the handshake for unknown SNI names, so they
+          # never get another route's certificate or backend.
           virtualHosts."_" = {
             default = lib.mkDefault true;
+            rejectSSL = lib.mkDefault true;
             locations."/".return = lib.mkDefault "444";
           };
         };

@@ -36,7 +36,6 @@ type Route struct {
 	PublicWithoutAuth bool     `json:"publicWithoutAuth"`
 	// http only (null for tcp/udp)
 	Name       *string `json:"name"`
-	Zone       *string `json:"zone"`
 	FQDN       *string `json:"fqdn"`
 	URL        *string `json:"url"`
 	Websockets bool    `json:"websockets"`
@@ -97,9 +96,6 @@ func validateRoutes(s Service) error {
 		}
 		if r.Exposure == "public" && str(r.Auth) == "none" && !r.PublicWithoutAuth {
 			return fmt.Errorf("%s: public with auth none needs publicWithoutAuth", where)
-		}
-		if r.Exposure == "public" && str(r.Zone) == "private" {
-			return fmt.Errorf("%s: private zone can't be public", where)
 		}
 		if r.Proto == "http" && r.FQDN == nil {
 			return fmt.Errorf("%s: http route without fqdn (old lib.nix?)", where)
@@ -188,10 +184,12 @@ func routesVhost(s Service) string {
 		// Cert paths live in one place: host-module.nix nginx.tls.certDir.
 		b.WriteString("  include /etc/fleet-containers/nginx-tls.conf;\n")
 		b.WriteString("  if ($fleet_edge_block_internal) {\n    return 444;\n  }\n")
-		// net.uses callers on this host (private guests, 10.233.x.2) come
-		// in on 10.233.0.1, which the tailnet/lan ACL would refuse.
-		for _, ip := range callerIPs(s, n) {
-			fmt.Fprintf(&b, "  allow %s; # net.uses\n", ip)
+		// net.uses callers (ROUTING-PLAN §8 step 5; FLOWS-AUDIT target
+		// design (a)): same-host private guests come in on 10.233.0.1,
+		// which the tailnet/lan ACL would refuse; cross-host callers
+		// arrive masqueraded as their host's overlay IP.
+		for _, c := range callerIPs(s, n) {
+			fmt.Fprintf(&b, "  allow %s; # %s\n", c.ip, c.comment)
 		}
 		writeExposureACL(&b, r)
 		writeRouteBody(&b, r)
@@ -875,27 +873,47 @@ func netExceptions(s Service, host string) []string {
 	return out
 }
 
-// callerIPs lists guest IPs of private services on the same host that
-// declare net.uses of s.<route>. Their requests reach nginx from
-// 10.233.x.2, which the tailnet/lan ACL would refuse, so the vhost gets an
-// explicit allow before the ACL include.
-func callerIPs(s Service, route string) []string {
+// callerEntry is one `allow <ip>; # net.uses <svc>` line: either a private
+// guest IP on this host, or a caller host's overlay IP (cross-host uses).
+type callerEntry struct {
+	ip      string
+	comment string
+}
+
+// callerIPs lists sources that reach nginx here via net.uses of
+// s.<route>, in addition to the route's own exposure ACL:
+//   - same host, private caller: its guest IP (10.233.x.2) arrives via
+//     10.233.0.1, which the tailnet/lan ACL would refuse;
+//   - a different host: the caller host's overlay IP, since a cross-host
+//     caller's packets leave masqueraded as that host (FLOWS-AUDIT target
+//     design (a): "the callee's vhost renders allow <caller host
+//     overlayIp>; # net.uses <svc>").
+func callerIPs(s Service, route string) []callerEntry {
 	if inv == nil {
 		return nil
 	}
-	var ips []string
+	var out []callerEntry
+	seenHost := map[string]bool{}
 	for _, c := range inv.Services {
-		if !c.Net.Private || c.Net.IP == nil || c.Host != s.Host {
-			continue
-		}
 		for _, u := range c.Net.Uses {
-			if u == s.Name+"."+route {
-				ips = append(ips, *c.Net.IP)
+			if u != s.Name+"."+route {
+				continue
+			}
+			if c.Net.Private && c.Net.IP != nil && c.Host == s.Host {
+				out = append(out, callerEntry{ip: *c.Net.IP, comment: "net.uses " + c.Name})
+				continue
+			}
+			if c.Host == "" || c.Host == s.Host || seenHost[c.Host] {
+				continue
+			}
+			if ip := hostOverlayIP(c.Host); ip != "" {
+				out = append(out, callerEntry{ip: ip, comment: "net.uses " + c.Name})
+				seenHost[c.Host] = true
 			}
 		}
 	}
-	sort.Strings(ips)
-	return ips
+	sort.Slice(out, func(i, j int) bool { return out[i].ip < out[j].ip })
+	return out
 }
 
 // hostOverlayIP is the host's tailnet IPv4 from the inventory, or "".

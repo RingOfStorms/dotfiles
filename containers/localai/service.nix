@@ -30,20 +30,21 @@
   # all (gallery installs and backend downloads then fail). Ports still work.
   internet = false;
 
-  # https://localai.ts.joshuabell.xyz/v1/images/generations (private zone,
-  # tailnet-only DNS). h005's nginx terminates TLS with *.ts.joshuabell.xyz
-  # and proxies to joe's overlay IP:8080 (hosts/h005/private-zone.nix).
+  # https://localai.joshuabell.xyz/v1/images/generations (tailnet route; DNS
+  # points at joe's overlay IP). joe's own nginx terminates TLS with the
+  # zone wildcard pushed from h005 (hosts/h005/wildcard-cert.nix) and
+  # proxies to 127.0.0.1:8080.
   # auth = "none": LocalAI has no login (only an optional API_KEY, which
   # would break the existing Open WebUI / agent clients). M6: instead of the
-  # whole tailnet, h005 only admits the known callers (allow -> nginx
-  # allow <overlayIp>; deny all): h001 (Open WebUI, masqueraded to h001's
-  # overlay IP) and the high-trust workstations running coding agents.
-  # Low-trust hosts (joe, i001), o002 and phones/unlisted nodes get 403.
+  # whole tailnet, joe's vhost only admits the known callers (allow -> nginx
+  # allow <overlayIp>; deny all): h001 (Open WebUI and net.uses callers such
+  # as life, masqueraded to h001's overlay IP) and the high-trust
+  # workstations running coding agents. Low-trust hosts (joe, i001), o002
+  # and phones/unlisted nodes get 403.
   routes.web = {
     group = "AI";
     icon = "https://api.iconify.design/fluent-emoji-flat/llama.svg";
     port = 8080;
-    zone = "private";
     exposure = "tailnet";
     auth = "none";
     allow = [
@@ -57,13 +58,11 @@
     timeouts = "600s";
   };
 
-  # No tcpPorts: joe's firewall (hosts/joe/firewall.nix) admits 8080 on
-  # tailscale0 from h005's private-zone proxy only; the socket is bound to the
-  # overlay IP (below).
+  # No tcpPorts: published on loopback only; joe's nginx is the way in.
   podman = {
     image = "docker.io/localai/localai:v4.11.0-gpu-nvidia-cuda-12@sha256:1ee31dce19426ce7948e003bd2143bc88289db984369bdc53179c184d5ad07f9";
-    # Tailnet only (joe overlay IP); not reachable from the LAN.
-    ports = [ "100.64.0.12:8080:8080" ];
+    # Loopback only: reached through joe's nginx (:443), never directly.
+    ports = [ "127.0.0.1:8080:8080" ];
     environment = {
       MODELS_PATH = "/models";
       LOCALAI_BACKENDS_PATH = "/backends";

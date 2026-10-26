@@ -3,10 +3,14 @@ package overrides
 import (
 	"bytes"
 	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
-	"encoding/hex"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/auth"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/bunny"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/edgevhost"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
@@ -102,15 +107,86 @@ type rig struct {
 	host   []HostOverride
 	hostEr error
 	now    time.Time
+	idp    *testIdP
 }
 
-const token = "secret-token"
+// Writers in the rig: oren (the default caller) and lio, with their real
+// subs and overlay IPs. o002's sub is a stand-in for a high-trust machine
+// user that is not a writer.
+const (
+	orenSub  = "364267099884879875"
+	orenPeer = "100.64.0.2"
+	lioSub   = "344412093056811011"
+	lioPeer  = "100.64.0.1"
+	o002Sub  = "399999999999999995"
+	o002Peer = "100.64.0.5"
+	project  = "344379162166820867"
+)
+
+// testIdP serves discovery + JWKS for one RSA key and signs tokens.
+type testIdP struct {
+	t   *testing.T
+	srv *httptest.Server
+	key *rsa.PrivateKey
+}
+
+func newTestIdP(t *testing.T) *testIdP {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &testIdP{t: t, key: key}
+	p.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/openid-configuration":
+			_ = json.NewEncoder(w).Encode(map[string]any{"issuer": p.srv.URL, "jwks_uri": p.srv.URL + "/oauth/v2/keys"})
+		case "/oauth/v2/keys":
+			_ = json.NewEncoder(w).Encode(map[string]any{"keys": []map[string]any{{
+				"kid": "k1", "kty": "RSA", "alg": "RS256", "use": "sig",
+				"n": base64.RawURLEncoding.EncodeToString(key.PublicKey.N.Bytes()),
+				"e": base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.PublicKey.E)).Bytes()),
+			}}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(p.srv.Close)
+	return p
+}
+
+// sign makes an RS256 JWT with kid k1 using key.
+func (p *testIdP) sign(key *rsa.PrivateKey, claims map[string]any) string {
+	p.t.Helper()
+	h, _ := json.Marshal(map[string]any{"alg": "RS256", "typ": "JWT", "kid": "k1"})
+	c, _ := json.Marshal(claims)
+	in := base64.RawURLEncoding.EncodeToString(h) + "." + base64.RawURLEncoding.EncodeToString(c)
+	sum := sha256.Sum256([]byte(in))
+	sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, sum[:])
+	if err != nil {
+		p.t.Fatal(err)
+	}
+	return in + "." + base64.RawURLEncoding.EncodeToString(sig)
+}
+
+// token is a valid machine token for sub at r.now; edit tweaks the claims.
+func (r *rig) token(sub string, edit func(map[string]any)) string {
+	claims := map[string]any{
+		"iss": r.idp.srv.URL, "sub": sub, "aud": []string{sub, project},
+		"iat": r.now.Unix(), "exp": r.now.Add(time.Hour).Unix(),
+	}
+	if edit != nil {
+		edit(claims)
+	}
+	return r.idp.sign(r.idp.key, claims)
+}
 
 func newRig(t *testing.T) *rig {
 	t.Helper()
 	r := &rig{t: t, now: time.Unix(1_000_000, 0),
 		dns:  &fakeDNS{zone: bunny.Zone{ID: 7, Domain: "example.com"}, next: 100},
-		edge: &fakeEdge{files: map[string]edgevhost.Request{}}}
+		edge: &fakeEdge{files: map[string]edgevhost.Request{}},
+		idp:  newTestIdP(t)}
 	tb := true
 	inv := &inventory.Inventory{Services: map[string]inventory.Service{
 		"app": {Name: "app", Host: "h001", Routes: map[string]inventory.Route{
@@ -123,12 +199,20 @@ func newRig(t *testing.T) *rig {
 		"decl": {Name: "decl", Host: "h001", Routes: map[string]inventory.Route{"web": {Proto: "http", Exposure: "tailnet", Auth: sp("native"), FQDN: sp("www.example.com"), Zone: sp("main"), MaxBody: "1m", Timeouts: "60s"}}},
 		"tcp":  {Name: "tcp", Host: "h001", Routes: map[string]inventory.Route{"ssh": {Proto: "tcp", Exposure: "tailnet", Zone: sp("main")}}},
 	}}
-	sum := sha256.Sum256([]byte(token))
+	verifier, err := auth.New(auth.Config{
+		Zitadel:    auth.ZitadelConfig{Issuer: r.idp.srv.URL, ProjectID: project},
+		HTTPClient: r.idp.srv.Client(),
+		Now:        func() time.Time { return r.now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	s, err := New(Config{
 		Inventory: inv, Spec: &bunny.Spec{Zone: "example.com", Records: []bunny.Desired{{Name: "www", Type: "CNAME", Value: "o002.example.com", Source: "hand"}}},
 		Domain: "example.com", Target: "o002.example.com", StateDir: t.TempDir(),
-		Devices: map[string]Device{"lio": {Peers: []string{"100.64.0.2"}, TokenSha256: hex.EncodeToString(sum[:])}},
-		DNS:     r.dns, Edge: r.edge,
+		Verifier: verifier,
+		Writers:  map[string]Writer{"oren": {Sub: orenSub, Peer: orenPeer}, "lio": {Sub: lioSub, Peer: lioPeer}},
+		DNS:      r.dns, Edge: r.edge,
 		Status: func(context.Context, string) ([]HostOverride, error) { return r.host, r.hostEr },
 		Now:    func() time.Time { return r.now },
 	})
@@ -143,7 +227,13 @@ func (r *rig) hostPublic(svc, route string) {
 	r.host = []HostOverride{{Service: svc, Route: route, Exposure: "public"}}
 }
 
+// call is a request through nginx (loopback + X-Fleet-Peer) as oren.
 func (r *rig) call(method, path, peer string, body any) (int, map[string]any) {
+	r.t.Helper()
+	return r.callTok(method, path, peer, r.token(orenSub, nil), body)
+}
+
+func (r *rig) callTok(method, path, peer, tok string, body any) (int, map[string]any) {
 	r.t.Helper()
 	var b []byte
 	if body != nil {
@@ -152,7 +242,9 @@ func (r *rig) call(method, path, peer string, body any) (int, map[string]any) {
 	req := httptest.NewRequest(method, path, bytes.NewReader(b))
 	req.RemoteAddr = "127.0.0.1:5555"
 	req.Header.Set("X-Fleet-Peer", peer)
-	req.Header.Set("Authorization", "Bearer "+token)
+	if tok != "" {
+		req.Header.Set("Authorization", "Bearer "+tok)
+	}
 	w := httptest.NewRecorder()
 	r.s.Handler().ServeHTTP(w, req)
 	var out map[string]any
@@ -162,41 +254,105 @@ func (r *rig) call(method, path, peer string, body any) (int, map[string]any) {
 
 func (r *rig) add(svc, route string, until int64) (int, map[string]any) {
 	req := Request{Service: svc, Route: route, Host: "h001", Until: until}
-	if c, out := r.call("POST", "/api/overrides/prepare", "100.64.0.2", req); c != 200 {
+	if c, out := r.call("POST", "/api/overrides/prepare", orenPeer, req); c != 200 {
 		return c, out
 	}
 	r.hostPublic(svc, route)
-	return r.call("POST", "/api/overrides/commit", "100.64.0.2", req)
+	return r.call("POST", "/api/overrides/commit", orenPeer, req)
 }
 
-func TestAuthTokenAndPeer(t *testing.T) {
+func (r *rig) auditLog() string {
+	b, _ := os.ReadFile(filepath.Join(r.s.cfg.StateDir, "audit.log"))
+	return string(b)
+}
+
+func TestAuthAllowedSub(t *testing.T) {
 	r := newRig(t)
-	if c, _ := r.call("GET", "/api/overrides", "100.64.0.9", nil); c != 401 {
-		t.Errorf("right token, wrong peer: %d", c)
+	if c, out := r.call("GET", "/api/overrides", orenPeer, nil); c != 200 {
+		t.Fatalf("oren: %d %v", c, out)
 	}
+	if c, out := r.callTok("GET", "/api/overrides", lioPeer, r.token(lioSub, nil), nil); c != 200 {
+		t.Fatalf("lio: %d %v", c, out)
+	}
+	if c, out := r.add("app", "web", 0); c != 200 {
+		t.Fatalf("write: %d %v", c, out)
+	}
+	if d := r.s.rows["app"].Device; d != "oren" {
+		t.Errorf("row device = %q", d)
+	}
+	if a := r.auditLog(); !strings.Contains(a, `"host":"oren","sub":"`+orenSub+`"`) || !strings.Contains(a, `"action":"commit"`) {
+		t.Errorf("audit lacks host/sub:\n%s", a)
+	}
+}
+
+func TestAuthRefusals(t *testing.T) {
+	r := newRig(t)
+	other, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, peer, tok, audit string
+	}{
+		// High trust with every role still isn't a writer: only the sub list counts.
+		{"o002 sub", o002Peer, r.token(o002Sub, func(m map[string]any) {
+			m["flatRolesClaim"] = []string{"machines-hightrust", "admin"}
+		}), `"sub":"` + o002Sub + `"`},
+		{"unknown sub", orenPeer, r.token("111111111111111111", nil), "not an override writer"},
+		{"bad signature", orenPeer, r.idp.sign(other, map[string]any{
+			"iss": r.idp.srv.URL, "sub": orenSub, "aud": []string{project},
+			"iat": r.now.Unix(), "exp": r.now.Add(time.Hour).Unix(),
+		}), "invalid JWT signature"},
+		{"expired", orenPeer, r.token(orenSub, func(m map[string]any) {
+			m["iat"], m["exp"] = r.now.Add(-2*time.Hour).Unix(), r.now.Add(-time.Hour).Unix()
+		}), "JWT expired"},
+		{"wrong source ip", lioPeer, r.token(orenSub, nil), `"host":"oren"`},
+		{"wrong audience", orenPeer, r.token(orenSub, func(m map[string]any) { m["aud"] = []string{orenSub} }), "audience"},
+		{"wrong issuer", orenPeer, r.token(orenSub, func(m map[string]any) { m["iss"] = "https://evil.example" }), "issuer"},
+		{"missing token", orenPeer, "", "missing bearer token"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := len(r.auditLog())
+			if c, _ := r.callTok("POST", "/api/overrides/prepare", tc.peer, tc.tok, Request{Service: "app", Route: "web", Host: "h001"}); c != 401 {
+				t.Fatalf("got %d, want 401", c)
+			}
+			if a := r.auditLog()[before:]; !strings.Contains(a, `"result":"denied"`) || !strings.Contains(a, tc.audit) {
+				t.Errorf("audit:\n%s", a)
+			}
+		})
+	}
+	if len(r.s.rows) != 0 {
+		t.Fatalf("a refused request reserved a row: %v", r.s.rows)
+	}
+	// Direct (not via nginx): X-Fleet-Peer from a non-loopback peer is ignored.
 	req := httptest.NewRequest("GET", "/api/overrides", nil)
-	req.RemoteAddr = "100.64.0.2:1" // direct, not via nginx: X-Fleet-Peer ignored, peer = remote
-	req.Header.Set("Authorization", "Bearer nope")
-	w := httptest.NewRecorder()
-	r.s.Handler().ServeHTTP(w, req)
-	if w.Code != 401 {
-		t.Errorf("bad token: %d", w.Code)
-	}
-	req = httptest.NewRequest("GET", "/api/overrides", nil)
 	req.RemoteAddr = "100.64.0.9:1"
-	req.Header.Set("X-Fleet-Peer", "100.64.0.2") // spoof from a non-loopback peer
-	req.Header.Set("Authorization", "Bearer "+token)
-	w = httptest.NewRecorder()
+	req.Header.Set("X-Fleet-Peer", orenPeer)
+	req.Header.Set("Authorization", "Bearer "+r.token(orenSub, nil))
+	w := httptest.NewRecorder()
 	r.s.Handler().ServeHTTP(w, req)
 	if w.Code != 401 {
 		t.Errorf("spoofed X-Fleet-Peer accepted: %d", w.Code)
 	}
-	if c, _ := r.call("GET", "/api/overrides", "100.64.0.2", nil); c != 200 {
-		t.Errorf("good: %d", c)
+}
+
+func TestNewRejectsAmbiguousWriters(t *testing.T) {
+	base := Config{Inventory: &inventory.Inventory{}, Spec: &bunny.Spec{Zone: "example.com"}, Domain: "example.com",
+		Target: "o002.example.com", StateDir: t.TempDir(), Verifier: &auth.Authenticator{}}
+	for name, w := range map[string]map[string]Writer{
+		"shared sub": {"a": {Sub: "1", Peer: "100.64.0.1"}, "b": {Sub: "1", Peer: "100.64.0.2"}},
+		"no peer":    {"a": {Sub: "1"}},
+		"no sub":     {"a": {Peer: "100.64.0.1"}},
+	} {
+		cfg := base
+		cfg.Writers = w
+		if _, err := New(cfg); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
 	}
-	b, _ := os.ReadFile(filepath.Join(r.s.cfg.StateDir, "audit.log"))
-	if strings.Count(string(b), `"result":"denied"`) != 3 {
-		t.Errorf("audit:\n%s", b)
+	base.Verifier = nil
+	if _, err := New(base); err == nil {
+		t.Error("nil verifier accepted")
 	}
 }
 
@@ -520,5 +676,46 @@ func TestEdgeReloadPendingKeepsRemoving(t *testing.T) {
 	r.s.Sweep(context.Background())
 	if len(r.s.rows) != 0 {
 		t.Fatalf("sweep left %+v", r.s.rows)
+	}
+}
+
+// DNS mismatch + o002 down: the sweep keeps retrying the edge removal
+// (never touching the changed record) until o002 is back.
+func TestSweepRetriesEdgeDespiteDNSMismatch(t *testing.T) {
+	r := newRig(t)
+	if c, out := r.add("app", "web", 0); c != 200 {
+		t.Fatal(c, out)
+	}
+	r.dns.zone.Records[0].Value = "elsewhere.example.net"
+	r.edge.removeFail = errors.New("o002 down")
+	if c, _ := r.call("DELETE", "/api/overrides/app", "100.64.0.2", nil); c == 200 {
+		t.Fatal("revoke succeeded with o002 down")
+	}
+	for i := 0; i < 3; i++ {
+		r.s.Sweep(context.Background())
+	}
+	o := r.s.rows["app"]
+	if o == nil || o.State != Removing || !o.Edge || o.DNS != "mismatch" {
+		t.Fatalf("row %+v", o)
+	}
+	if _, ok := r.edge.files["app.example.com"]; !ok {
+		t.Fatal("rig: site should still be on o002")
+	}
+	r.edge.removeFail = nil
+	r.s.Sweep(context.Background())
+	o = r.s.rows["app"]
+	if len(r.edge.files) != 0 {
+		t.Fatalf("edge not removed: %v", r.edge.files)
+	}
+	if o == nil || o.State != Removing || o.Edge || o.DNS != "mismatch" {
+		t.Fatalf("row after recovery %+v", o)
+	}
+	if len(r.dns.zone.Records) != 1 || r.dns.zone.Records[0].Value != "elsewhere.example.net" {
+		t.Fatalf("dns touched: %v", r.dns.zone.Records)
+	}
+	n := len(r.dns.log)
+	r.s.Sweep(context.Background()) // edge gone: row parked for a human
+	if len(r.dns.log) != n || r.s.rows["app"] == nil {
+		t.Fatal("parked row changed")
 	}
 }

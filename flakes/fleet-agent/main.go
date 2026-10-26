@@ -18,6 +18,8 @@ func usage() {
 usage:
   fleet containers [global flags] <command> [args...]   manage floating containers (alias: cnt)
   fleet agent --listen ADDR [--host NAME] [flags...]    run the per-host read-only status & metrics server
+  fleet share <port> [--name N] [--for DUR]             share a local port under a temporary
+                                                         subdomain via o002 (ssh reverse tunnel, no service)
 `)
 }
 
@@ -46,6 +48,11 @@ func main() {
 	switch args[0] {
 	case "containers", "cnt", "c":
 		containers.Run(args[1:])
+	case "share":
+		if err := containers.Share(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "fleet share: %v\n", err)
+			os.Exit(1)
+		}
 	case "agent", "status-server":
 		if err := agent.Run(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "fleet agent: %v\n", err)

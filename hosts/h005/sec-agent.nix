@@ -48,15 +48,19 @@ import ../_shared_assets/utilities/sec-agent.nix {
       softDepend = [ "oauth2-proxy" ];
     };
 
-    # Shared with h001's ACME DNS-01 credential. Also DNS-01 for the
-    # private-zone wildcard *.ts.joshuabell.xyz (private-zone.nix).
+    # Shared with h001's ACME DNS-01 credential (private zone retired:
+    # FLOWS-AUDIT target design (a); the only certs h005 issues now are the
+    # public wildcard and the share wildcard, both below).
     bunny_rw_dns_2026-03-15 = {
       remotePath = "machines/high-trust/bunny_rw_dns_2026-03-15";
       softDepend = [ "ddns-update" ];
-      configChanges.security.acme.certs."ts.joshuabell.xyz".credentialFiles.BUNNY_API_KEY_FILE =
-        "$SECRET_PATH";
-      # Public wildcard (wildcard-cert.nix), pushed to o002 and h001.
+      # Public wildcard (wildcard-cert.nix), pushed to every container host
+      # plus o002.
       configChanges.security.acme.certs."joshuabell.xyz".credentialFiles.BUNNY_API_KEY_FILE =
+        "$SECRET_PATH";
+      # *.share.joshuabell.xyz (wildcard-cert.nix), pushed to o002 only
+      # (FLOWS-AUDIT.md §c).
+      configChanges.security.acme.certs."share.joshuabell.xyz".credentialFiles.BUNNY_API_KEY_FILE =
         "$SECRET_PATH";
     };
   };

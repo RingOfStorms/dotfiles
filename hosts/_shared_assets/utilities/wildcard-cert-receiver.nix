@@ -1,10 +1,14 @@
 # Receiver for the public wildcard pushed by h005 (hosts/h005/wildcard-cert.nix,
-# ROUTING-PLAN §8 step 4). h005 runs `fleet-cert-receive` over root SSH with
-# a tar of fullchain.pem + key.pem on stdin.
+# ROUTING-PLAN §8 step 4). h005 runs `fleet-cert-receive [name]` over root SSH
+# with a tar of fullchain.pem + key.pem on stdin. `name` (optional, taken from
+# $SSH_ORIGINAL_COMMAND since the forced command strips argv) selects which
+# cert this pair is: the zone domain by default, or one of
+# `fleet.wildcardExtraCertNames` (e.g. `share.<domain>`, FLOWS-AUDIT.md §c).
+# Each name gets its own independent directory/current symlink.
 #
 # Layout (one directory per pushed pair, swapped by one symlink rename):
-#   /var/lib/fleet-cert/<domain>/v-<utc time>-<serial>/{fullchain,key}.pem
-#   /var/lib/fleet-cert/<domain>/current -> v-...
+#   /var/lib/fleet-cert/<name>/v-<utc time>-<serial>/{fullchain,key}.pem
+#   /var/lib/fleet-cert/<name>/current -> v-...
 # Sites only name current/fullchain.pem and current/key.pem, so they always see
 # both files from the same version. The receiver switches `current`, runs
 # `nginx -t` and reloads. If either fails it points `current` back at the
@@ -12,10 +16,11 @@
 # last 3 versions.
 #
 # Importing this does not change nginx. A host opts in per vhost with
-# `fleet.wildcardTls` / `fleet.wildcardCertDir` once `current` exists: nginx
-# refuses to start on a missing certificate file. The activation script below
-# migrates the pre-versioning flat files into a version dir, so `current`
-# exists before the switched sites are reloaded.
+# `fleet.wildcardTls` / `fleet.wildcardCertDir` (main domain) once `current`
+# exists: nginx refuses to start on a missing certificate file. The
+# activation script below migrates the pre-versioning flat files for the
+# main domain into a version dir, so `current` exists before the switched
+# sites are reloaded.
 {
   config,
   lib,
@@ -25,18 +30,20 @@
 }:
 let
   domain = fleet.global.domain;
-  dir = "/var/lib/fleet-cert/${domain}";
+  certNames = [ domain ] ++ config.fleet.wildcardExtraCertNames;
+  dirFor = name: "/var/lib/fleet-cert/${name}";
+  dir = dirFor domain;
   current = "${dir}/current";
   nginxCfg = config.services.nginx;
   # The config path differs per host (o002 has no /etc/nginx/nginx.conf):
   # test exactly what the running unit was started with.
   nginxTest = ''"${nginxCfg.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
 
-  # Point `current` at $1 (a v-* name) atomically.
+  # Point <dirFor name>/current at $2 (a v-* name) atomically.
   swap = ''
     swap() {
-      ln -sfn "$1" ${dir}/.current.tmp
-      mv -T ${dir}/.current.tmp ${current}
+      ln -sfn "$2" "/var/lib/fleet-cert/$1/.current.tmp"
+      mv -T "/var/lib/fleet-cert/$1/.current.tmp" "/var/lib/fleet-cert/$1/current"
     }
   '';
 
@@ -51,8 +58,24 @@ let
     text = ''
       ${swap}
       umask 077
-      install -d -m 0750 -o root -g nginx ${dir}
-      tmp=$(mktemp -d ${dir}/.in.XXXXXX)
+      # The forced command strips argv; the client's requested name (if any)
+      # survives in $SSH_ORIGINAL_COMMAND as the *whole* original command
+      # line (sshd does not strip the program name, only argv on our side),
+      # e.g. "fleet-cert-receive joshuabell.xyz". Strip that prefix to get
+      # just the name; falls back to the main domain for pre-multi-cert
+      # pushes (bare "fleet-cert-receive", no argument).
+      name=''${SSH_ORIGINAL_COMMAND#fleet-cert-receive}
+      name=''${name# }
+      name=''${name:-${domain}}
+      # shellcheck disable=SC2194 # certNames is Nix-interpolated, not a shell var
+      case " ${lib.concatStringsSep " " certNames} " in
+        *" $name "*) ;;
+        *) echo "fleet-cert: unknown cert name: $name" >&2; exit 1 ;;
+      esac
+      d="/var/lib/fleet-cert/$name"
+      cur="$d/current"
+      install -d -m 0750 -o root -g nginx "$d"
+      tmp=$(mktemp -d "$d/.in.XXXXXX")
       trap 'rm -rf "$tmp"' EXIT
       tar -C "$tmp" -xf - fullchain.pem key.pem
       # Refuse garbage and mismatched pairs before touching anything live.
@@ -61,10 +84,10 @@ let
         "$(openssl pkey -in "$tmp/key.pem" -pubout | sha256sum)" ]
       serial=$(openssl x509 -in "$tmp/fullchain.pem" -noout -serial | cut -d= -f2)
 
-      prev=$(readlink ${current} || true)
-      if [ -n "$prev" ] && cmp -s "$tmp/fullchain.pem" "${dir}/$prev/fullchain.pem" \
-        && cmp -s "$tmp/key.pem" "${dir}/$prev/key.pem"; then
-        echo "fleet-cert: unchanged ($prev)"
+      prev=$(readlink "$cur" || true)
+      if [ -n "$prev" ] && cmp -s "$tmp/fullchain.pem" "$d/$prev/fullchain.pem" \
+        && cmp -s "$tmp/key.pem" "$d/$prev/key.pem"; then
+        echo "fleet-cert: unchanged ($name: $prev)"
         exit 0
       fi
 
@@ -73,30 +96,32 @@ let
       chmod 0644 "$tmp/fullchain.pem"
       chmod 0640 "$tmp/key.pem"
       new="v-$(date -u +%Y%m%dT%H%M%S)-$serial"
-      mv -T "$tmp" "${dir}/$new"
+      mv -T "$tmp" "$d/$new"
       trap - EXIT
 
-      swap "$new"
+      swap "$name" "$new"
       if systemctl is-active --quiet nginx; then
         if ! ${nginxTest} || ! systemctl reload nginx; then
-          echo "fleet-cert: nginx rejected $new, rolling back to ''${prev:-nothing}" >&2
+          echo "fleet-cert: nginx rejected $name/$new, rolling back to ''${prev:-nothing}" >&2
           if [ -n "$prev" ]; then
-            swap "$prev"
+            swap "$name" "$prev"
             systemctl reload nginx || true
           else
-            rm -f ${current}
+            rm -f "$cur"
           fi
-          rm -rf "${dir}/$new"
+          # shellcheck disable=SC2115 # $d and $new are always set (install -d / mktemp above)
+          rm -rf "$d/$new"
           exit 1
         fi
       fi
 
       # Keep the last 3 versions (names sort by time); never the live one.
-      find ${dir} -mindepth 1 -maxdepth 1 -type d -name 'v-*' -printf '%f\n' \
+      find "$d" -mindepth 1 -maxdepth 1 -type d -name 'v-*' -printf '%f\n' \
         | sort -r | tail -n +4 | while read -r old; do
-          [ "$old" = "$new" ] || rm -rf "${dir}/$old"
+          # shellcheck disable=SC2115 # $d and $old are always set (find glob above)
+          [ "$old" = "$new" ] || rm -rf "$d/$old"
         done
-      echo "fleet-cert: current -> $new ($(openssl x509 -in ${current}/fullchain.pem -noout -enddate))"
+      echo "fleet-cert: $name current -> $new ($(openssl x509 -in "$cur/fullchain.pem" -noout -enddate))"
     '';
   };
 in
@@ -117,6 +142,15 @@ in
       sslCertificateKey = "${current}/key.pem";
     };
   };
+  options.fleet.wildcardExtraCertNames = lib.mkOption {
+    type = lib.types.listOf lib.types.str;
+    default = [ ];
+    description = ''
+      Extra cert names (besides the main domain) this receiver accepts from
+      h005, each getting its own /var/lib/fleet-cert/<name>/current. E.g.
+      "share.<domain>" for *.share.joshuabell.xyz (FLOWS-AUDIT.md §c).
+    '';
+  };
   options.fleet.wildcardCertPushPubKey = lib.mkOption {
     type = lib.types.nullOr lib.types.str;
     default = fleet.global.wildcardCertPushPubKey or null;
@@ -131,7 +165,7 @@ in
 
   config = {
     environment.systemPackages = [ receive ];
-    systemd.tmpfiles.rules = [ "d ${dir} 0750 root nginx -" ];
+    systemd.tmpfiles.rules = map (n: "d /var/lib/fleet-cert/${n} 0750 root nginx -") certNames;
     users.users.root.openssh.authorizedKeys.keys =
       lib.optional (config.fleet.wildcardCertPushPubKey != null)
         ''command="/run/current-system/sw/bin/fleet-cert-receive",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-user-rc ${config.fleet.wildcardCertPushPubKey}'';

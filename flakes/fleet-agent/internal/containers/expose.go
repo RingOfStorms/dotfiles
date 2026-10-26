@@ -121,9 +121,6 @@ func exposeCheck(s Service, route, level string) (Service, error) {
 	if r.Exposure == "local" {
 		return s, fmt.Errorf("%s is exposure = local in service.nix; that is a decision, not a default to widen at runtime", where)
 	}
-	if str(r.Zone) == "private" {
-		return s, fmt.Errorf("%s is in the private zone (served by h005), not by its host", where)
-	}
 	if !exposeLevels[level] {
 		return s, fmt.Errorf("exposure %q: want tailnet, lan or public", level)
 	}

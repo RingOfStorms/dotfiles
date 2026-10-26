@@ -15,44 +15,14 @@ let
   };
 in
 {
-  # Was opened by hosts/h001/containers/default.nix (old zitadel container).
-  networking.firewall.allowedTCPPorts = [
-    80
-    443
-  ];
-
-  # TLS: no ACME here. The *.joshuabell.xyz wildcard is issued on h005 and
-  # pushed to /var/lib/fleet-cert (hosts/_shared_assets/utilities/wildcard-cert-receiver.nix); the
-  # generated vhosts include /etc/fleet-containers/nginx-tls.conf and the
-  # hand vhosts (mods/arr-nginx.nix) name it directly. ROUTING-PLAN §8 step 4.
-
-  # nginx listens on overlay IP, needs tailscale interface up.
-  # tailscaled-autoconnect.service (Type=notify) only finishes once `tailscale up`
-  # has returned and tailscale0 has its address; tailscaled.service alone is just
-  # the daemon being started and races nginx's bind. IPFreeBind=true also lets
-  # nginx bind to addresses not yet on any interface as belt-and-suspenders.
-  systemd.services.nginx = {
-    wants = [
-      "network-online.target"
-      "tailscaled-autoconnect.service"
-    ];
-    after = [
-      "network-online.target"
-      "tailscaled-autoconnect.service"
-    ];
-    serviceConfig.IPFreeBind = true;
-  };
-
+  # 80/443, the nginx ordering after tailscale, the recommended settings, the
+  # 444/reject-handshake catch-all and the cert come from the containers host
+  # module (generated vhosts in /var/lib/fleet-containers/nginx). TLS: the
+  # *.joshuabell.xyz wildcard issued on h005 and pushed to /var/lib/fleet-cert
+  # (hosts/_shared_assets/utilities/wildcard-cert-receiver.nix, imported by
+  # the module); the hand vhosts (mods/arr-nginx.nix) name it directly.
   services.nginx = {
-    enable = true;
-    recommendedGzipSettings = true;
-    recommendedOptimisation = true;
-    recommendedProxySettings = true;
-    recommendedTlsSettings = true;
     clientMaxBodySize = "500m";
-    appendHttpConfig = ''
-      proxy_headers_hash_max_size 1024;
-    '';
     virtualHosts = {
       # h001.net.${domain}: /media-health/ (longer prefix, wins) is declared in
       # mods/arr-nginx.nix; everything else is retired.

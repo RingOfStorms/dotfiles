@@ -1,8 +1,8 @@
 # Tailnet + LAN DNS records served by h005's dnsmasq (ROUTING-PLAN §8 step 4).
 #
 # Container routes are generated from containers/*/service.nix by
-# containers/lib.nix `dnsRecords` (read from this repo's working tree at build
-# time, like private-zone.nix). Only names that aren't container routes yet
+# containers/lib.nix `dnsRecords` (read from this repo's working tree at
+# build time). Only names that aren't container routes yet
 # are listed here by hand. Converting a service to `routes` means deleting
 # its names below; the eval refuses a name that is both.
 { fleet }:
@@ -96,7 +96,9 @@ in
         "computerboyz"
       ]
       # minecraft: router path (step 4, router forwards).
-      ++ map (cname "home") [ "minecraft" ];
+      ++ map (cname "home") [ "minecraft" ]
+      # *.share: local temporary sharing (FLOWS-AUDIT.md §c, fleet-share-serve).
+      ++ map (cname "o002") [ "*.share" ];
       genNames = map (r: r.name) gen;
       clash = builtins.filter (r: builtins.elem r.name genNames) hand;
     in

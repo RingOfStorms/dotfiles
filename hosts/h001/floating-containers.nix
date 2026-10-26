@@ -6,16 +6,10 @@
 
   ringofstorms.containers = {
     enable = true;
-    # Runtime vhosts from service.nix `nginx` blocks (e.g. opengist).
-    nginx.enable = true;
-    # o002 proxies public routes to the :8443 edge listener; drop it on the
-    # internal :80/:443 listener (ROUTING-PLAN §2.3.1).
-    nginx.edge.blockInternal = true;
+    # nginx (:80/:443 internal, :8443 edge), the edge-peer drop on the
+    # internal listener and the pushed cert are host-module defaults.
     # LAN subnet for `exposure = "lan"` routes (nginx-acl-lan.conf).
     nginx.acl.lan = [ "10.12.14.0/24" ];
-    # Internal :443 listeners use the wildcard pushed by h005
-    # (hosts/_shared_assets/utilities/wildcard-cert-receiver.nix), not this host's ACME.
-    nginx.tls.certDir = "/var/lib/fleet-cert/joshuabell.xyz/current";
     # Nightly restic of every service here, one snapshot per svc:<name>
     # (ROUTING-PLAN §9.1). Repo + credentials: restic_h001_env_2026-10-01
     # (sec-agent.nix configChanges sets environmentFile). Same schedule and

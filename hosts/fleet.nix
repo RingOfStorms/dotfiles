@@ -40,6 +40,28 @@ rec {
 
     secretsDir = "/var/lib/secrets_manager_hydrated";
     gitUrl = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles";
+
+    # Hosts allowed to call h005's public-expose API (fleet-edge-overrides),
+    # by their Zitadel machine user id (the sec-agent machine key's userId).
+    # Explicit by sub on purpose: never derive this from trust level or roles
+    # (o002 is high trust and must not be here). Requests must also come
+    # from the host's overlayIp.
+    overrideWriters = {
+      lio = "344412093056811011";
+      juni = "353557018709065731";
+      gp3 = "364267179626987523";
+      oren = "364267099884879875";
+    };
+
+    # Public keys allowed to open the restricted `share` ssh user on o002
+    # (`fleet share`, containers/FLOWS-AUDIT.md §(c)); each entry is a
+    # laptop's own key, never the shared nix2nix key above (the `share`
+    # user can only ever run fleet-share-serve, but keeping it off the
+    # shared key still avoids widening that key's reach). Empty until a
+    # per-laptop key is provisioned.
+    shareKeys = [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKxNhtJNx/y4W54kAGmm2pF80l437z1RLWl/GTVKy0Pd josh@lio"
+    ];
   };
 
   # ─── PER-HOST REGISTRY ────────────────────────────────────────────

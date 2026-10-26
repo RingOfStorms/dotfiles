@@ -44,8 +44,9 @@ in
           directory = "/var/lib/private/fleet-edge-overrides";
           mode = "0700";
         }
-        # *.ts.joshuabell.xyz wildcard (private-zone.nix); avoid re-issuing
-        # on every boot (Let's Encrypt rate limits).
+        # *.joshuabell.xyz and *.share.joshuabell.xyz wildcards
+        # (wildcard-cert.nix); avoid re-issuing on every boot (Let's
+        # Encrypt rate limits).
         {
           directory = "/var/lib/acme";
           user = "acme";

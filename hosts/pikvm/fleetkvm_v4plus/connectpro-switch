@@ -18,18 +18,31 @@
 
 set -euo pipefail
 
-# Default settings (override via /etc/kvmd/connectpro.conf)
-MODE="${MODE:-serial}"                    # "serial" or "hotkey"
-HOTKEY="${HOTKEY:-ControlLeft}"           # ConnectPRO default is Ctrl ("ControlLeft"); can be "ScrollLock", "ShiftLeft", "CapsLock"
-SERIAL_DEV="${SERIAL_DEV:-/dev/ttyUSB0}"  # Or /dev/ttyAMA0 if using the V4 Plus front RJ45 console port
-SERIAL_BAUD="${SERIAL_BAUD:-}"            # Must be set in /etc/kvmd/connectpro.conf for MODE="serial"
-SERIAL_CMD_FMT="${SERIAL_CMD_FMT:-}"      # Must be set in /etc/kvmd/connectpro.conf for MODE="serial" (printf format for port 1..8)
+CONF_FILE="${CONNECTPRO_CONF:-/etc/kvmd/connectpro.conf}"
+_env_MODE="${MODE-}"
+_env_HOTKEY="${HOTKEY-}"
+_env_SERIAL_DEV="${SERIAL_DEV-}"
+_env_SERIAL_BAUD="${SERIAL_BAUD-}"
+_env_SERIAL_CMD_FMT="${SERIAL_CMD_FMT-}"
+
+# Default settings (override via /etc/kvmd/connectpro.conf or environment)
+MODE="serial"                    # "serial" or "hotkey"
+HOTKEY="ControlLeft"             # ConnectPRO default is Ctrl ("ControlLeft"); can be "ScrollLock", "ShiftLeft", "CapsLock"
+SERIAL_DEV="/dev/ttyUSB0"        # Or /dev/ttyAMA0 if using the V4 Plus front RJ45 console port
+SERIAL_BAUD="115200"             # ConnectPRO Serial/Control port baud rate (115200 8N1)
+SERIAL_CMD_FMT='CH%s\r\n'        # ConnectPRO serial command: CH1\r\n .. CH4\r\n (hex 43 48 31..34 0d 0a)
 KVMD_SOCK="${KVMD_SOCK:-/run/kvmd/kvmd.sock}"
 
-if [[ -f /etc/kvmd/connectpro.conf ]]; then
-    # shellcheck disable=SC1091
-    source /etc/kvmd/connectpro.conf
+if [[ -f "$CONF_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$CONF_FILE"
 fi
+
+[[ -n "$_env_MODE" ]] && MODE="$_env_MODE"
+[[ -n "$_env_HOTKEY" ]] && HOTKEY="$_env_HOTKEY"
+[[ -n "$_env_SERIAL_DEV" ]] && SERIAL_DEV="$_env_SERIAL_DEV"
+[[ -n "$_env_SERIAL_BAUD" ]] && SERIAL_BAUD="$_env_SERIAL_BAUD"
+[[ -n "$_env_SERIAL_CMD_FMT" ]] && SERIAL_CMD_FMT="$_env_SERIAL_CMD_FMT"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -49,11 +62,12 @@ send_keys() {
 }
 
 send_serial() {
-    local payload="$1"
+    local fmt="$1" arg="$2"
     [[ -n "$SERIAL_BAUD" ]] || die "MODE=serial requires SERIAL_BAUD to be set in /etc/kvmd/connectpro.conf"
     [[ -c "$SERIAL_DEV" ]] || die "Serial device $SERIAL_DEV not found"
     stty -F "$SERIAL_DEV" "$SERIAL_BAUD" cs8 -cstopb -parenb -crtscts raw -echo
-    printf "%b" "$payload" > "$SERIAL_DEV"
+    # shellcheck disable=SC2059
+    printf "$fmt" "$arg" > "$SERIAL_DEV"
 }
 
 ACTION="${1:-}"
@@ -63,24 +77,32 @@ case "$ACTION" in
     port)
         [[ "$ARG" =~ ^[1-8]$ ]] || die "Usage: connectpro-switch port <1..8>"
         if [[ "$MODE" == "serial" ]]; then
+            # If KVMD is running with the native `connectpro` GPIO plugin, pulse the
+            # channel through KVMD's UNIX socket so the Web UI active-port LED updates too.
+            if [[ -z "${_env_SERIAL_DEV}" && -S "$KVMD_SOCK" ]] && \
+               curl --unix-socket "$KVMD_SOCK" --fail -sS -X POST \
+                   "http://localhost/gpio/pulse?channel=cp_port${ARG}_btn" >/dev/null 2>&1; then
+                exit 0
+            fi
             [[ -n "$SERIAL_CMD_FMT" ]] || die "MODE=serial requires SERIAL_CMD_FMT to be set in /etc/kvmd/connectpro.conf"
-            # shellcheck disable=SC2059
-            cmd_str="$(printf "$SERIAL_CMD_FMT" "$ARG")"
-            send_serial "$cmd_str"
+            send_serial "$SERIAL_CMD_FMT" "$ARG"
         else
             send_keys "$HOTKEY" "$HOTKEY" "Digit${ARG}"
         fi
         ;;
     usb-sync)
+        [[ "$MODE" == "hotkey" ]] || die "'usb-sync' requires MODE=hotkey (USB OTG plugged into ConnectPRO DDM port, not USB hub)"
         # ConnectPRO Hotkey: [Hotkey, Hotkey, H, 0, P, 0] -> sync USB hub port with KVM selection
         send_keys "$HOTKEY" "$HOTKEY" "KeyH" "Digit0" "KeyP" "Digit0"
         ;;
     usb-lock)
+        [[ "$MODE" == "hotkey" ]] || die "'usb-lock' requires MODE=hotkey (USB OTG plugged into ConnectPRO DDM port, not USB hub)"
         [[ "$ARG" =~ ^[1-8]$ ]] || die "Usage: connectpro-switch usb-lock <1..8>"
         # ConnectPRO Hotkey: [Hotkey, Hotkey, H, 1, P, <N>] -> lock USB hub #1 to port N
         send_keys "$HOTKEY" "$HOTKEY" "KeyH" "Digit1" "KeyP" "Digit${ARG}"
         ;;
     beep-toggle)
+        [[ "$MODE" == "hotkey" ]] || die "'beep-toggle' requires MODE=hotkey (USB OTG plugged into ConnectPRO DDM port, not USB hub)"
         # ConnectPRO Hotkey: [Hotkey, Hotkey, Z] -> toggle buzzer sound
         send_keys "$HOTKEY" "$HOTKEY" "KeyZ"
         ;;
@@ -88,8 +110,18 @@ case "$ACTION" in
         baud="${ARG:-115200}"
         [[ -c "$SERIAL_DEV" ]] || die "Serial device $SERIAL_DEV not found"
         echo "Listening on $SERIAL_DEV at ${baud} baud (8N1)... Press front-panel buttons 1..4 on ConnectPRO (Ctrl+C to stop):"
-        stty -F "$SERIAL_DEV" "$baud" cs8 -cstopb -parenb -crtscts raw -echo
-        xxd -g 1 "$SERIAL_DEV"
+        stty -F "$SERIAL_DEV" "$baud" cs8 -cstopb -parenb -crtscts raw -echo min 1 time 0
+        python3 -u - "$SERIAL_DEV" <<'PY'
+import os, sys, time
+fd = os.open(sys.argv[1], os.O_RDONLY | os.O_NOCTTY)
+while True:
+    b = os.read(fd, 64)
+    if not b:
+        break
+    hex_str = " ".join(f"{x:02x}" for x in b)
+    asc_str = "".join(chr(x) if 32 <= x < 127 else "." for x in b)
+    print(f"[{time.strftime('%H:%M:%S')}] hex: {hex_str:<24} ascii: {asc_str!r}", flush=True)
+PY
         ;;
     *)
         die "Usage: connectpro-switch {port <1..8>|sniff [baud]|usb-sync|usb-lock <1..8>|beep-toggle}"

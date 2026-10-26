@@ -62,7 +62,6 @@
 
           (import ./sec-agent.nix { inherit inputs constants; })
           ./nginx.nix
-          ../_shared_assets/utilities/wildcard-cert-receiver.nix
           ../_shared_assets/utilities/ups-shutdown-receiver.nix
           ./firewall.nix
           ./autofs.nix
