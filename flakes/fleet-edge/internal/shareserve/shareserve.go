@@ -364,7 +364,7 @@ var fstatOwner = func(fi os.FileInfo) (uint32, bool) {
 // oversized file is refused outright.
 func openRequestFile(dir, name string, shareUID int) (*os.File, error) {
 	path := filepath.Join(dir, name)
-	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -377,6 +377,12 @@ func openRequestFile(dir, name string, shareUID int) (*os.File, error) {
 	if !fi.Mode().IsRegular() {
 		f.Close()
 		return nil, fmt.Errorf("%s: not a regular file", name)
+	}
+	// Regular file confirmed: O_NONBLOCK only affected opening a FIFO, so
+	// clear it to get normal blocking read semantics back.
+	if _, _, errno := syscall.Syscall(syscall.SYS_FCNTL, uintptr(fd), syscall.F_SETFL, uintptr(syscall.O_RDONLY)); errno != 0 {
+		f.Close()
+		return nil, fmt.Errorf("%s: fcntl: %w", name, errno)
 	}
 	uid, ok := fstatOwner(fi)
 	if !ok {
@@ -392,6 +398,21 @@ func openRequestFile(dir, name string, shareUID int) (*os.File, error) {
 		return nil, fmt.Errorf("%s: too large (%d bytes)", name, fi.Size())
 	}
 	return f, nil
+}
+
+// readRequestFile reads f with a hard cap of maxRequestSize bytes, so a
+// file that grows after the fstat check in openRequestFile can never get
+// more than maxRequestSize+1 bytes past this point; anything beyond the
+// cap is rejected outright instead of silently truncated.
+var readRequestFile = func(f *os.File) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(f, maxRequestSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > maxRequestSize {
+		return nil, fmt.Errorf("request grew past %d bytes after open", maxRequestSize)
+	}
+	return b, nil
 }
 
 // --- fleet-share-serve (runs as the unprivileged `share` user) ---
@@ -590,7 +611,7 @@ func (c *Config) applyOne(reqName, name string, shareUID int) error {
 		return fmt.Errorf("open request: %w", err)
 	}
 	defer f.Close()
-	b, err := io.ReadAll(f)
+	b, err := readRequestFile(f)
 	if err != nil {
 		return fmt.Errorf("read request: %w", err)
 	}

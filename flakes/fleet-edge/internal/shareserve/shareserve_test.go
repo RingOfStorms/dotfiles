@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -541,5 +542,50 @@ func TestNoRootWritePathEverInsideRequestsDir(t *testing.T) {
 	// something new); Sweep must not have created anything either.
 	if len(after) != 0 {
 		t.Fatalf("RequestsDir should be empty after apply+sweep, got %v (started with %v)", after, before)
+	}
+}
+
+// TestApplyRefusesFIFOPromptly asserts a FIFO dropped in place of a
+// request is refused quickly instead of blocking the root watcher: a
+// bare blocking open(O_RDONLY) on a FIFO with no writer would hang
+// forever, so openRequestFile must use O_NONBLOCK.
+func TestApplyRefusesFIFOPromptly(t *testing.T) {
+	c := testCfg(t)
+	fifoPath := filepath.Join(c.RequestsDir, "x.new")
+	if err := syscall.Mkfifo(fifoPath, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := openRequestFile(c.RequestsDir, "x.new", shareUID)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected an error opening a FIFO, got nil")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("openRequestFile blocked on a FIFO instead of refusing it promptly")
+	}
+}
+
+// TestReadRequestFileRejectsGrowthAfterStat covers a request file that
+// grows past maxRequestSize after openRequestFile's fstat check already
+// passed it: readRequestFile must still cap the read and reject it,
+// rather than trusting the earlier size check.
+func TestReadRequestFileRejectsGrowthAfterStat(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "grown.new")
+	if err := os.WriteFile(path, bytes.Repeat([]byte("a"), maxRequestSize+100), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := readRequestFile(f); err == nil {
+		t.Fatal("expected readRequestFile to reject a file larger than maxRequestSize")
 	}
 }

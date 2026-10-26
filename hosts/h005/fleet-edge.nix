@@ -51,8 +51,26 @@ let
   ai = link "AI";
   personal = link "Personal";
 in
+let
+  dnsPlanWrapper = pkgs.writeShellScriptBin "fleet-dns-plan" ''
+    set -euo pipefail
+    if [ "$(id -u)" -ne 0 ]; then
+      echo "fleet-dns-plan: must be run as root (reads the bunny API key file)" >&2
+      exit 1
+    fi
+    exec ${lib.getExe config.services.fleet-edge.package} dns-plan \
+      --spec ${publicSpecFile} \
+      --key-file /var/lib/secrets_manager_hydrated/bunny_rw_dns_2026-03-15 \
+      "$@"
+  '';
+in
 {
   imports = [ inputs.fleet-edge.nixosModules.default ];
+
+  environment.systemPackages = [
+    dnsPlanWrapper
+    config.services.fleet-edge.package
+  ];
 
   services.fleet-edge = {
     enable = true;
