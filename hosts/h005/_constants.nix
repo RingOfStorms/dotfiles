@@ -149,6 +149,11 @@
         name = "Jos_Mac";
         ip = "10.12.14.159";
       }
+      {
+        mac = "60:cf:84:5f:d1:3d";
+        name = "lio";
+        ip = "10.12.14.118";
+      }
     ];
 
     # Devices that may talk on their VLAN but must never reach the internet

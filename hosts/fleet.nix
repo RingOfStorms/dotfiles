@@ -145,7 +145,7 @@ rec {
     lio = {
       user = "josh";
       overlayIp = "100.64.0.1";
-      lanIp = "10.12.14.116";
+      lanIp = "10.12.14.118";
       trust = "high";
       role = "workstation";
       alwaysOn = false;

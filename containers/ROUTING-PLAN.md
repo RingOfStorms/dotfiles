@@ -682,23 +682,40 @@ Taken 2026-10-16:
      out on 22.
    - The edge hop o002 → host is plain `http://<overlayIp>:8443` with the
      route `Host`; https or no `Host` fails by design.
-   - **Explicit per-host firewall, generated from the inventory (2026-10-26,
-     source only, NOT deployed/evaluated-live).** Replaces the blanket
-     22/80/443 allows above with rules computed from `fleet.nix` +
-     `containers/lib.nix` (`firewallHighTrustIps`, `httpExposureByHost`):
-     ssh on `tailscale0` from high-trust overlay IPs only (o002 and
-     low-trust hosts excluded) on every host except o002, which keeps
-     global `:22` as a deliberate break-glass exception; LAN ssh kept
-     only where a host already needed it (h005 router, lio workstation).
-     80/443 on `tailscale0` open only for hosts with a non-local http
-     route, LAN interface added only if that host also has a lan/public
-     route; h005 additionally scopes its own 80/443 (fleet-edge,
-     sso-proxy) to the same high-trust set. oauth2-proxy's 4180 client
-     list is now generated from `inputs.containers.inventory.containerHosts`
-     instead of hand-kept. `toplevel.drvPath` evaluates clean for
-     h001/h003/h004/h005/joe/lio/i001/o002. **Not yet probed live or
-     rolled out** — do that (10-min auto-revert, probes before/after,
-     per earlier `cnt port` rollout above) before trusting this section.
+   - **Explicit per-host firewall, generated from the inventory
+     (deployed 2026-10-26/27).** Replaces the blanket 22/80/443 allows
+     above with rules computed from `fleet.nix` + `containers/lib.nix`.
+     ssh: `firewallHighTrustIps` (trust = "high" overlay IPs) only, on
+     `tailscale0`, guarded by `sshGuardAssertion` (fails eval if the list
+     is empty or excludes lio's overlay IP, so a typo can't lock out
+     lio). 80/443: `100.64.0.0/10` accept, minus an explicit drop per
+     `tailnetExcludedOverlayIps` (o002 + low-trust hosts) ahead of it so
+     the drop can't be shadowed, on every host with `cfg.nginx.enable`
+     (conservative: legacy string-config nginx vhosts can't be
+     enumerated). LAN: `fleet.global.lanSubnet` accept on 80/443 where
+     the host has a `lanIp` and a lan/public `routes` exposure (or the
+     legacy `nginx.acl.lan`). `guest-egress`: ve-* containers whose
+     packet already cleared fleet-net's egress filter get re-admitted
+     into nixos-fw by the same `inet fleet-net egress` set (guest .
+     daddr . proto . port), not a blanket `ve-*` allow. h005
+     (`hosts/h005/firewall.nix`) and lio (`hosts/lio/configuration.nix`)
+     compute the same high-trust ssh list themselves (excluding
+     o002/self) since h005 doesn't trust tailscale0 as an interface and
+     both need their own local rules; h005 additionally scopes its own
+     80/443 (fleet-edge dashboard, oauth2-proxy sso-proxy) to the
+     tailnet-minus-excluded set the same way. oauth2-proxy's 4180 client
+     list is generated from `inputs.containers.inventory.containerHosts`
+     instead of hand-kept. o002 is unchanged: global `:22` stays as a
+     deliberate break-glass exception.
+     Rolled out 2026-10-26/27 host by host (10-min `systemd-run`
+     auto-revert, full `/tmp/fw-live/probe.sh` matrix before disarming):
+     h001 (gen `...275n04s`), h003 (`...k3iskvx`), h004 (`...hcavyl7`),
+     h005 (`...h296snyg`), i001 (`...1qvpvyk`), joe (`...nqba7i4`); lio
+     (gen `20261025.1f607aa`, deployed via root@lio, verified from
+     h001/h005). Incidental fix in the same window: lio's LAN IP had
+     drifted to `10.12.14.118` with no dnsmasq reservation; `fleet.nix`
+     now matches and h005 carries a static lease for it (no lio rebuild
+     needed for that part).
 3. Internal/edge listener split (§2.3, §2.3.1), o002 generated vhosts and
    a wildcard. This retires the hand-kept o002 list. **Done 2026-10-20**;
    the o002 wildcard has been deployed since 2026-10-21 (§8 step 4,
@@ -1018,7 +1035,12 @@ Taken 2026-10-16:
      `cnt audit h001` clean.
    - **Not yet**: h005 as the authority, `cnt move` carrying overrides,
      `--reset` for several overrides (one per service today).
-   - **Public expose design (approved 2026-10-24; code built, not deployed).**
+   - **Public expose design (approved 2026-10-24; deployed; live 5-minute
+     trial (rollout step 5 below) not yet run).** `hosts/h005/fleet-edge.nix`
+     has `overrides.enable = true` with `pushTarget`/`bunnyKeyFile`/
+     `pushKeyFile` set to real credentials; o002 carries the receiver
+     (`fleet-vhost-expire.timer` active) with an empty
+     `/var/lib/fleet-edge-vhosts` (no override has been pushed yet).
      State read from the code at `509d4047` (the CLI lives in
      `flakes/fleet-agent/internal/containers/`).
      - **Before**: fleet-edge was a dashboard only (DynamicUser on
