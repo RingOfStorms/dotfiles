@@ -7,6 +7,14 @@
 }:
 let
   nixServe = constants.services.nixServe;
+  fleetLib = import ../../containers/lib.nix;
+  sshHighTrustIps = fleetLib.firewallHighTrustIps {
+    hosts = fleet.hosts;
+    exclude = [
+      "o002"
+      "lio"
+    ];
+  };
   nixBuildReceive = pkgs.writeShellApplication {
     name = "fleet-nix-build-receive";
     text = ''
@@ -32,17 +40,24 @@ let
 in
 {
   # Close port 22 on the global allow-list set by hardening.nix and re-open
-  # it only on tailscale0 + the LAN CIDR. Using nftables source-address
-  # filtering (rather than per-interface) means it keeps working regardless
-  # of whether the LAN is reached via wired or Wi-Fi.
+  # it only on tailscale0 (high-trust overlay IPs only, ROUTING-PLAN §8 step
+  # 2; o002 excluded) + the LAN CIDR (kept: lio is a workstation reached
+  # from the LAN too). Using nftables source-address filtering (rather than
+  # per-interface) means it keeps working regardless of whether the LAN is
+  # reached via wired or Wi-Fi.
   #
   # `allowedTCPPorts` has list-merge semantics across modules, and `mkForce`
   # replaces *all* contributions — so any port this host should open
   # globally must be re-listed here (currently none).
+  #
+  # No sshGuardAssertion here: lio always excludes itself from its own
+  # high-trust set (it reaches itself locally, never over tailscale0), so
+  # the "contains lio's overlayIp" check doesn't apply to this file. Every
+  # *other* host's firewall.nix carries the assertion instead.
   networking.firewall.allowedTCPPorts = lib.mkForce [ ];
-  networking.firewall.interfaces."tailscale0".allowedTCPPorts = [ 22 ];
   networking.firewall.extraInputRules = ''
-    ip saddr 10.12.14.0/24 tcp dport 22 accept
+    iifname "tailscale0" ip saddr { ${lib.concatStringsSep ", " sshHighTrustIps} } tcp dport 22 accept comment "generated: ssh, high-trust tailnet only (ROUTING-PLAN 8.2)"
+    ip saddr 10.12.14.0/24 tcp dport 22 accept comment "lio: LAN ssh kept"
   '';
 
   hardware.enableAllFirmware = true;

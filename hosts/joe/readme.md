@@ -19,4 +19,5 @@ Desktop (HP OMEN 20L)
 |---|---|
 | Per-host agents | sec-agent, fail2ban, tailscaled |
 
-Floating: `localai` (podman, `cnt ls`).
+Floating: `localai` (podman, `cnt ls`). Its generated media is swept nightly by
+the `localai-cleanup` timer (`localai-cleanup.nix`, 24 h retention).

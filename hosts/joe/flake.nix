@@ -125,6 +125,7 @@
           ./nixld.nix
           inputs.containers.nixosModules.default
           ./containers.nix
+          ./localai-cleanup.nix
           ./firewall.nix
           (import ./impermanence.nix {
             inherit primaryUser;

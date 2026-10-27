@@ -14,6 +14,7 @@
   lib,
   options,
   pkgs,
+  fleet ? { },
   ...
 }:
 let
@@ -21,6 +22,13 @@ let
   stateDir = "/var/lib/fleet-containers";
   holdDir = "/run/fleet-containers/hold";
   mutable = "/etc/systemd-mutable/system";
+  thisHost = config.networking.hostName;
+  # ROUTING-PLAN §8 step 2: explicit per-host firewall for the internal
+  # :80/:443 listener. High-trust overlay IPs, minus o002 (the edge must
+  # never satisfy a tailnet allow) and this host itself; lan routes also
+  # open the LAN interface (cfg.nginx.acl.lan / lanInterface).
+  fleetLib = import ./lib.nix;
+  httpExposure = (fleetLib.httpExposureByHost ./.).${thisHost} or null;
   # nginx allow list for nginx.acl (ROUTING-PLAN §2.1), deny-by-default.
   aclText =
     cidrs:
@@ -116,6 +124,7 @@ let
       $nft flush set inet fleet-net guests
       $nft flush set inet fleet-net noinet
       $nft flush set inet fleet-net egress
+      $nft flush set inet nixos-fw guest-egress 2>/dev/null || true
     fi
     for f in ${stateDir}/ports/*; do
       while read -r proto port mode ip rest; do
@@ -138,6 +147,8 @@ let
             if [ "$proto" = allow ]; then
               $nft add element ip fleet-net-nat uses "{ $el }" \
                 || echo "containers: could not add $el to nat @uses (from $f)" >&2
+              $nft add element inet nixos-fw guest-egress "{ $el }" 2>/dev/null \
+                || echo "containers: could not add $el to nixos-fw @guest-egress (from $f)" >&2
             fi
             $nft add element inet fleet-net $set "{ $el }" \
               || echo "containers: could not add $el to @$set (from $f)" >&2
@@ -769,6 +780,10 @@ in
             type ifname . inet_proto . inet_service . ipv6_addr
             flags interval,timeout
           }
+          set guest-egress {
+            comment "ROUTING-PLAN 8.2: mirror of fleet-net egress; admits net.uses/net.egress guest flows only"
+            type ifname . ipv4_addr . inet_proto . inet_service
+          }
         '';
 
         # Re-adds runtime ports after every firewall start or reload
@@ -936,9 +951,74 @@ in
             "tailscaled-autoconnect.service"
           ];
         };
-        networking.firewall.allowedTCPPorts = lib.mkIf cfg.nginx.openFirewall [
-          80
-          443
+        # LAN: this host's own lanIp must exist (it's physically on the
+        # LAN) and either a `routes` lan/public route or a legacy LAN ACL
+        # (nginx.acl.lan != []) says so. Matched by source subnet
+        # (fleet.global.lanSubnet), not `lanInterface` (that option is
+        # unset on every host today, left for `cnt port --iface lan`
+        # instead) -- h001 currently depends on exactly this: h005's
+        # dnsmasq hands LAN clients h001's lanIp for lan/public routes, so
+        # without this rule every LAN client would be cut off.
+        #
+        # Tailnet half: `100.64.0.0/10` (every tailnet peer, including
+        # phones and unlisted nodes -- ROUTING-PLAN 8.2 spec), minus o002
+        # (reaches routes through the edge listener, not here) and
+        # low-trust nodes (joe, i001, hass today). Generated as an
+        # explicit drop per excluded overlay IP, before the broad accept,
+        # so the drop can never be shadowed by rule order. Gated on
+        # cfg.nginx.enable, not `httpExposure != null`: httpExposureByHost
+        # only sees services on the new `routes` schema. Hosts still
+        # running the legacy `nginx` string (most of today's inventory:
+        # arr, atuin, forgejo, immich, open-webui, ...) or a bare-metal
+        # `services.nginx.virtualHosts` addition (e.g. h001's arr-nginx.nix
+        # media-health alias) share the same nginx and need 80/443 open
+        # too; there is no cheap way to enumerate every legacy vhost's
+        # exposure from here, so any host with nginx enabled gets the
+        # tailnet allow, conservatively. nginx itself still enforces the
+        # exposure ACL per vhost (nginx.acl); this is only the TCP
+        # admission. Checked against h001: no route's `allow` list
+        # includes a low-trust host as caller of a service on this host
+        # (joe's own localai route lists h001/lio/oren/juni/gp3 as
+        # callers, the reverse direction; nothing here grants joe/i001
+        # inbound to h001), so the drop cannot shadow a legitimate flow.
+        # ve-* guests whose packet already `return`ed out of fleet-net's
+        # guest-in chain (fleet-net.nft, priority -5) on an `@egress` match
+        # still have to clear nixos-fw's input-allow (priority 0); the
+        # removed global `tcp dport {22,80,443}` used to admit them
+        # incidentally. Re-admit only those exact flows here, by matching
+        # the same `inet fleet-net egress` set fleet-net.nft already
+        # filled (guest . daddr . proto . port) -- not a blanket `ve-*`
+        # allow. Covers e.g. life (ve-life) -> this host's own nginx at
+        # 10.233.0.1/<overlayIp>:443 for sso-proxy.
+        networking.firewall.extraInputRules = lib.mkMerge [
+          (lib.mkIf cfg.nginx.openFirewall (
+            let
+              excludedIps = builtins.filter (ip: ip != thisOverlayIp) (
+                fleetLib.tailnetExcludedOverlayIps (fleet.hosts or { })
+              );
+              thisOverlayIp = (fleet.hosts.${thisHost} or { }).overlayIp or null;
+            in
+            lib.concatMapStrings (
+              ip:
+              ''ip saddr ${ip} tcp dport { 80, 443 } drop comment "generated: tailnet http routes, excluded (ROUTING-PLAN 8.2)"''
+              + "\n"
+            ) excludedIps
+            + ''ip saddr 100.64.0.0/10 tcp dport { 80, 443 } accept comment "generated: tailnet http routes (ROUTING-PLAN 8.2)"''
+            + "\n"
+          ))
+          (lib.mkIf
+            (
+              cfg.nginx.openFirewall
+              && ((httpExposure.lan or false) || cfg.nginx.acl.lan != [ ])
+              && (fleet.hosts.${thisHost}.lanIp or null) != null
+            )
+            ''
+              ip saddr ${fleet.global.lanSubnet} tcp dport { 80, 443 } accept comment "generated: LAN http routes (ROUTING-PLAN 8.2)"
+            ''
+          )
+          (lib.mkIf cfg.nginx.openFirewall ''
+            iifname . ip daddr . meta l4proto . th dport @guest-egress accept comment "generated: guest net.uses/net.egress to this host's own nginx (ROUTING-PLAN 8.2)"
+          '')
         ];
       })
 

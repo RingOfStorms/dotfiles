@@ -20,6 +20,7 @@
   lib,
   fleet,
   constants,
+  inputs,
   ...
 }:
 let
@@ -27,13 +28,10 @@ let
   overlayIp = constants.host.overlayIp;
   port = 4180;
   signinHost = "sso-proxy.${domain}";
-  # Hosts whose nginx may call auth_request (ringofstorms.containers.nginx).
-  # Keep in sync when a host starts serving generated vhosts.
-  clients = map (h: fleet.hosts.${h}.overlayIp) [
-    "h001"
-    "h003"
-    "lio"
-  ];
+  # Hosts whose nginx may call auth_request (ringofstorms.containers.nginx):
+  # generated from the inventory (containers/flake.nix containerHosts),
+  # the same list the CLI probes. No hand-kept duplicate list to drift.
+  clients = map (h: fleet.hosts.${h}.overlayIp) inputs.containers.inventory.containerHosts;
   envFile = "${fleet.global.secretsDir}/oauth2_proxy_key_file_2026-03-15";
 in
 {

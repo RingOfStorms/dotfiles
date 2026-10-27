@@ -427,6 +427,19 @@ in
     allServices
     ;
 
+  # ROUTING-PLAN 8.2: tailnet 80/443 is `100.64.0.0/10` minus o002 (edge-only,
+  # uses 8443) and low-trust nodes (joe, i001, hass today). Takes fleet.nix's
+  # `hosts` attrset; returns the overlay IPs to exclude (host-module.nix drops
+  # from these, then falls through to `ip saddr 100.64.0.0/10 accept`).
+  tailnetExcludedOverlayIps =
+    hosts:
+    let
+      names = builtins.attrNames hosts;
+      excludedNames = builtins.filter (
+        name: name == "o002" || (hosts.${name}.trust or null) == "low"
+      ) names;
+    in
+    builtins.filter (ip: ip != null) (map (name: hosts.${name}.overlayIp or null) excludedNames);
   # services.nginx.virtualHosts for the public edge (o002), generated from
   # every public `via = edge` http route (ROUTING-PLAN §2.3, §8 step 3).
   # Each proxies over the tailnet to the service host's edge listener
@@ -491,6 +504,67 @@ in
     builtins.mapAttrs (_: rs: builtins.sort builtins.lessThan (map (r: r.fqdn) rs)) (
       builtins.groupBy (r: r.host) routes
     );
+
+  # Per-host summary of what the internal :80/:443 listener must allow
+  # (ROUTING-PLAN §8 step 2): every non-local http route needs the tailnet
+  # ACL; lan/public routes also need the LAN subnet. Hosts without any
+  # http route (or without a host at all) are omitted.
+  httpExposureByHost =
+    dir:
+    let
+      routes = builtins.filter (r: r.proto == "http" && r.exposure != "local") (
+        builtins.concatMap (s: map (r: r // { inherit (s) host; }) (builtins.attrValues s.routes)) (
+          builtins.filter (s: s.host != null) (allServices dir)
+        )
+      );
+      byHost = builtins.groupBy (r: r.host) routes;
+    in
+    builtins.mapAttrs (_: rs: {
+      tailnet = true;
+      lan = builtins.any (r: r.exposure == "lan" || r.exposure == "public") rs;
+    }) byHost;
+
+  # ROUTING-PLAN §8 step 2: explicit per-host firewall, generated from the
+  # inventory instead of hand-written global allows ("every host trusts
+  # tailscale0" is gone; this is what replaces the blanket 22/80/443).
+  #   hosts     fleet.nix hosts (overlayIp, trust)
+  #   exclude   host names to leave out even if high trust (o002: edge
+  #             traffic must never satisfy a tailnet http allow)
+  # v6 is not generated (no host in fleet.nix has an overlayIp6 yet); a
+  # host that gains one needs a manual addition, same as nginx.edge.peers.
+  firewallHighTrustIps =
+    {
+      hosts,
+      exclude ? [ ],
+    }:
+    builtins.filter (ip: ip != null) (
+      map (n: hosts.${n}.overlayIp or null) (
+        builtins.filter (n: (hosts.${n}.trust or null) == "high" && !(builtins.elem n exclude)) (
+          builtins.attrNames hosts
+        )
+      )
+    );
+
+  # Lockout guard (ROUTING-PLAN §8 step 2): every host's generated ssh
+  # allow-list must be non-empty and must contain lio's overlay IP, or a
+  # fleet.nix typo / scoping bug silently locks out ssh from lio. Build a
+  # NixOS `assertions` entry for the module that computes `ips` via
+  # `firewallHighTrustIps`; fails the eval instead of the deploy.
+  #   ips   the computed high-trust ssh allow-list for this host
+  #   hosts fleet.nix hosts (for lio's overlayIp)
+  #   host  this host's name, for the assertion message
+  sshGuardAssertion =
+    {
+      ips,
+      hosts,
+      host,
+    }:
+    {
+      assertion = ips != [ ] && builtins.elem (hosts.lio.overlayIp or null) ips;
+      message = "ROUTING-PLAN §8 step 2: ${host}'s generated ssh allow-list is empty or excludes lio's overlay IP (${
+        toString (hosts.lio.overlayIp or null)
+      }) -- this would lock out ssh from lio; computed list: [ ${builtins.concatStringsSep ", " ips} ]";
+    };
 
   # DNS records for every exposed route, from service.nix
   # (ROUTING-PLAN §2.1, §8 step 4). Build-time: h005 (tailnet + LAN

@@ -1,15 +1,17 @@
-# LocalAI on joe's RTX 3080 (10 GB): image generation + Kokoro TTS.
+# LocalAI on joe's RTX 3080 (10 GB): image generation, TTS, text chat and 3D.
 #
 # LocalAI: a prebuilt server with an OpenAI-compatible API
 #   POST /v1/images/generations  {"model": "...", "prompt": "...", "size": "1024x1024"}
 # plus a small web UI and model gallery at http://joe:8080/. Open WebUI
 # (Settings > Images > OpenAI, base http://joe:8080/v1) and coding agents
-# use the same endpoint. Backends (stable-diffusion.cpp, diffusers) are
+# use the same endpoint. Backends (stable-diffusion.cpp, diffusers, ...) are
 # downloaded on first use into the `backends` dir; models go in `models`.
 #
-# Models that fit 10 GB (install from the UI gallery or `podman exec localai /local-ai models install`):
-#   flux.2-klein-4b (tested), flux.1-dev-ggml. Not z-image-turbo or
-#   flux.1-schnell (full diffusers weights, OOM). See README.md.
+# Models are installed from the UI gallery or with
+# `podman exec localai /local-ai models install <name>`. Fit on 10 GB is the
+# constraint: quantized/GGUF weights work, full-size bf16 diffusers pipelines
+# OOM, and the KV cache can be quantized or the context shortened to make a
+# chat model fit. See README.md.
 {
   name = "localai";
   kind = "podman";
@@ -68,7 +70,7 @@
       LOCALAI_BACKENDS_PATH = "/backends";
       LOCALAI_GENERATED_CONTENT_PATH = "/tmp/generated";
       # One model in VRAM at a time; unload after 15 min idle so the GPU is
-      # free for games and Kokoro.
+      # free for games and other work.
       LOCALAI_SINGLE_ACTIVE_BACKEND = "true";
       LOCALAI_WATCHDOG_IDLE = "true";
       LOCALAI_WATCHDOG_IDLE_TIMEOUT = "15m";

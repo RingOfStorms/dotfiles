@@ -682,6 +682,23 @@ Taken 2026-10-16:
      out on 22.
    - The edge hop o002 → host is plain `http://<overlayIp>:8443` with the
      route `Host`; https or no `Host` fails by design.
+   - **Explicit per-host firewall, generated from the inventory (2026-10-26,
+     source only, NOT deployed/evaluated-live).** Replaces the blanket
+     22/80/443 allows above with rules computed from `fleet.nix` +
+     `containers/lib.nix` (`firewallHighTrustIps`, `httpExposureByHost`):
+     ssh on `tailscale0` from high-trust overlay IPs only (o002 and
+     low-trust hosts excluded) on every host except o002, which keeps
+     global `:22` as a deliberate break-glass exception; LAN ssh kept
+     only where a host already needed it (h005 router, lio workstation).
+     80/443 on `tailscale0` open only for hosts with a non-local http
+     route, LAN interface added only if that host also has a lan/public
+     route; h005 additionally scopes its own 80/443 (fleet-edge,
+     sso-proxy) to the same high-trust set. oauth2-proxy's 4180 client
+     list is now generated from `inputs.containers.inventory.containerHosts`
+     instead of hand-kept. `toplevel.drvPath` evaluates clean for
+     h001/h003/h004/h005/joe/lio/i001/o002. **Not yet probed live or
+     rolled out** — do that (10-min auto-revert, probes before/after,
+     per earlier `cnt port` rollout above) before trusting this section.
 3. Internal/edge listener split (§2.3, §2.3.1), o002 generated vhosts and
    a wildcard. This retires the hand-kept o002 list. **Done 2026-10-20**;
    the o002 wildcard has been deployed since 2026-10-21 (§8 step 4,

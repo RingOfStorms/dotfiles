@@ -21,6 +21,11 @@ rec {
   # ─── GLOBAL CONSTANTS ─────────────────────────────────────────────
   global = {
     domain = "joshuabell.xyz";
+    # The one physical LAN (h003's/h001's nginx.acl.lan, hardening firewalls
+    # ROUTING-PLAN §8 step 2). Derived once here instead of hand-repeating
+    # "10.12.14.0/24" per host; matches the lanIp /24 every registered host
+    # below actually uses.
+    lanSubnet = "10.12.14.0/24";
     acmeEmail = "admin@joshuabell.xyz";
 
     # SSH public key used across all hosts for authorized_keys
