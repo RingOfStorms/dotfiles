@@ -84,6 +84,16 @@
                         thinking:
                           mode: effort
                           efforts: [low, medium, high, xhigh, max]
+                      # LiteLLM advertises air-deepseek-4.1-flash-1017 as text-only
+                      # with no reasoning. Direct probes: it accepts image input and
+                      # always returns reasoning_content (effort is accepted but
+                      # ignored upstream), so declare both capabilities here.
+                      air-deepseek-4.1-flash-1017:
+                        reasoning: true
+                        input: [text, image]
+                        thinking:
+                          mode: effort
+                          efforts: [low, medium, high, xhigh, max]
               '';
               description = "YAML model catalog written to ~/.omp/agent/models.yml.";
             };
