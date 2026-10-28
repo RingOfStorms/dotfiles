@@ -4,9 +4,10 @@ import ../_shared_assets/utilities/sec-agent.nix {
   inherit inputs constants;
   role = "machines-hightrust";
   # H2: h003 is a floating-containers host (nginx + podman); it never
-  # initiates nix2nix/nix2github/nix2gitforgejo SSH itself -- `containers`
-  # deploys are run from operator workstations, and it has neither
-  # remote_lio_builds nor ringofstorms.backup.enable.
+  # initiates nix2nix (fleet root SSH) itself -- `containers` deploys are
+  # run from operator workstations, and it has neither remote_lio_builds
+  # nor ringofstorms.backup.enable. It may still fetch git+ssh flake
+  # inputs, so includeGitKeys (default true) stays on.
   includeFleetSshKeys = false;
   extraSecrets = {
     # Credentials of the shared `josh` atuin account, readable by the local

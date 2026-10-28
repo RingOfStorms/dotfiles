@@ -41,45 +41,21 @@
   };
   "machines/high-trust/nix2github_2026-03-15" = {
     fields = [ "value" ];
-    description = "External GitHub SSH key (nix2github).";
+    description = "External GitHub SSH key (nix2github). Every high-trust host gets git access; only nix2nix (fleet root SSH) stays sub-restricted to workstations/laptops.";
     access = [
       {
-        type = "sub";
-        value = "344412093056811011"; # lio
-      }
-      {
-        type = "sub";
-        value = "353557018709065731"; # juni
-      }
-      {
-        type = "sub";
-        value = "364267179626987523"; # gp3
-      }
-      {
-        type = "sub";
-        value = "364267099884879875"; # oren
+        type = "role";
+        value = "device_high_trust";
       }
     ];
   };
   "machines/high-trust/nix2gitforgejo_2026-03-15" = {
     fields = [ "value" ];
-    description = "External Forgejo SSH key (nix2gitforgejo).";
+    description = "External Forgejo SSH key (nix2gitforgejo). Every high-trust host gets git access; only nix2nix (fleet root SSH) stays sub-restricted to workstations/laptops.";
     access = [
       {
-        type = "sub";
-        value = "344412093056811011"; # lio
-      }
-      {
-        type = "sub";
-        value = "353557018709065731"; # juni
-      }
-      {
-        type = "sub";
-        value = "364267179626987523"; # gp3
-      }
-      {
-        type = "sub";
-        value = "364267099884879875"; # oren
+        type = "role";
+        value = "device_high_trust";
       }
     ];
   };

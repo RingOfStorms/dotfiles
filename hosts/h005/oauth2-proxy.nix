@@ -52,7 +52,16 @@ in
     enable = true;
     httpAddress = "http://${overlayIp}:${toString port}";
     reverseProxy = true;
-    trustedProxyIP = clients ++ [ "127.0.0.1" ];
+    # h005's own nginx connects from its overlay IP (edge listener below);
+    # h005 isn't in `clients` (not a container host), so no dedupe needed,
+    # but lib.unique keeps this safe if that ever changes.
+    trustedProxyIP = lib.unique (
+      clients
+      ++ [
+        overlayIp
+        "127.0.0.1"
+      ]
+    );
     provider = "oidc";
     oidcIssuerUrl = "https://sso.${domain}";
     redirectURL = "https://${signinHost}/oauth2/callback";
@@ -122,6 +131,13 @@ in
     ];
     locations."/" = {
       proxyPass = "http://${overlayIp}:${toString port}";
+      # h005's nginx has recommendedProxySettings = true globally
+      # (fleet-edge.nix), whose X-Forwarded-For is
+      # $proxy_add_x_forwarded_for (appends to any client-supplied
+      # value). oauth2-proxy trusts h005's overlay IP (trustedProxyIP),
+      # so a tailnet client could otherwise spoof its own client IP.
+      # Disable it here and set every header by hand.
+      recommendedProxySettings = false;
       extraConfig = ''
         # o002 (public edge) counts as the internet
         deny ${o002Ip};
@@ -129,6 +145,11 @@ in
         allow 100.64.0.0/10;
         allow fd7a:115c:a1e0::/48;
         deny all;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Forwarded-Uri $request_uri;
       '';
     };
@@ -158,8 +179,26 @@ in
     '';
     locations."/oauth2/" = {
       proxyPass = "http://${overlayIp}:${toString port}/oauth2/";
+      # h005's nginx has recommendedProxySettings = true globally
+      # (fleet-edge.nix), and the module `include`s that config AFTER
+      # extraConfig, so proxy_set_header overrides here would otherwise be
+      # clobbered by it. Disable it for this location and set every header
+      # by hand instead.
+      recommendedProxySettings = false;
       extraConfig = ''
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-Uri $request_uri;
+        # The client's real scheme is https (o002 terminates TLS; this
+        # listener itself is plain http). X-Forwarded-Host: the sign-in
+        # name, not h005's. X-Forwarded-For: real_ip above already
+        # resolved $remote_addr to the real client from o002's (trusted
+        # here only) X-Forwarded-For; set it explicitly rather than
+        # appending with $proxy_add_x_forwarded_for, which would carry
+        # o002's incoming (spoofable) X-Forwarded-For value too.
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
       '';
     };
     locations."/" = {

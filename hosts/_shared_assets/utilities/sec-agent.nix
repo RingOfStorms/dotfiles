@@ -7,11 +7,14 @@
   inputs,
   constants,
   role,
-  # Fleet SSH identities (nix2nix root-to-every-host, nix2github,
-  # nix2gitforgejo). Off on hosts that never initiate fleet SSH or git pushes
-  # (o002, the public edge): a compromise there must not yield root on the
-  # rest of the fleet.
+  # Fleet SSH identities. nix2nix is root-to-every-host (full fleet SSH);
+  # keep it off hosts that never initiate fleet SSH themselves (o002, the
+  # public edge): a compromise there must not yield root on the rest of
+  # the fleet. nix2github/nix2gitforgejo only let a host push/pull git over
+  # SSH to GitHub/Forgejo and carry no fleet access, so every host gets
+  # them by default via includeGitKeys.
   includeFleetSshKeys ? true,
+  includeGitKeys ? true,
   extraSecrets ? { },
   secretsDir ? "/var/lib/secrets_manager_hydrated",
 }:
@@ -58,7 +61,8 @@ let
         }) nix2nixMatchBlockHosts
       );
     };
-
+  }
+  // lib.optionalAttrs (isHighTrust && includeGitKeys) {
     "nix2github_2026-03-15" = {
       remotePath = "machines/high-trust/nix2github_2026-03-15";
       inherit group;

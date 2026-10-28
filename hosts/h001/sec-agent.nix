@@ -8,8 +8,11 @@
 import ../_shared_assets/utilities/sec-agent.nix {
   inherit inputs constants;
   role = "machines-hightrust";
-  # H2: h001 backs up to B2 via restic_h001_env, imports neither backup.nix
-  # nor remote_lio_builds.nix, and never initiates SSH or git pushes.
+  # H2: h001 backs up to B2 via restic_h001_env and imports neither
+  # backup.nix nor remote_lio_builds.nix, so it never needs nix2nix (root
+  # fleet SSH). It does fetch git+ssh flake inputs (e.g. the `life`
+  # container) over Forgejo/GitHub, so includeGitKeys (default true) stays
+  # on to hydrate nix2github/nix2gitforgejo.
   includeFleetSshKeys = false;
   extraSecrets = {
     # Credentials of the shared `josh` atuin account, readable by the local

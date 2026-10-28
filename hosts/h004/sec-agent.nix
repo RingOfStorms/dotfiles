@@ -4,8 +4,9 @@ import ../_shared_assets/utilities/sec-agent.nix {
   inherit inputs constants;
   role = "machines-hightrust";
   # H2: h004 is an SSH/NFS target only (NAS + rsync-over-ssh backup
-  # destination, hosts/h004/nfs-data.nix); it never initiates
-  # nix2nix/nix2github/nix2gitforgejo SSH, so it doesn't need those keys.
+  # destination, hosts/h004/nfs-data.nix); it never initiates nix2nix
+  # (fleet root SSH), so it doesn't need that key. includeGitKeys (default
+  # true) stays on in case it ever fetches git+ssh flake inputs.
   includeFleetSshKeys = false;
   extraSecrets = {
     # Credentials of the shared `josh` atuin account; owned by the local

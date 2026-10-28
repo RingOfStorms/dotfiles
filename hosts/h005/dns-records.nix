@@ -152,7 +152,6 @@ in
               "pim"
               # trilium made tailnet-only 2026-10-21.
               "notes"
-              "sso-proxy"
               # kavita made tailnet-only 2026-10-21.
               "books"
             ];

@@ -93,8 +93,11 @@
           (import ../../_shared_assets/utilities/sec-agent.nix {
             inherit inputs constants;
             role = "machines-hightrust";
-            # Public edge: never SSHes into fleet hosts or pushes to git.
+            # Public edge: never SSHes into fleet hosts (no nix2nix) and must
+            # not push to git either -- a compromise here must not leak
+            # write access to Forgejo/GitHub.
             includeFleetSshKeys = false;
+            includeGitKeys = false;
           })
           inputs.common.nixosModules.zsh
 
