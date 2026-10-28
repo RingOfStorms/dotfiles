@@ -107,8 +107,7 @@ func pickRoute(s Service, route string) (string, error) {
 
 // exposeCheck validates an override and returns the service as it would be
 // with it applied. Same safety rules as lib.nix: no public without auth
-// unless publicWithoutAuth, no oauth2-proxy route in public while the
-// sign-in host is tailnet-only. h005 re-checks all of it (overrides.Check).
+// unless publicWithoutAuth. h005 re-checks all of it (overrides.Check).
 func exposeCheck(s Service, route, level string) (Service, error) {
 	r, ok := s.Routes[route]
 	if !ok {
@@ -128,10 +127,7 @@ func exposeCheck(s Service, route, level string) (Service, error) {
 		if str(r.Auth) == "none" && !r.PublicWithoutAuth {
 			return s, fmt.Errorf("%s: public with auth none needs publicWithoutAuth in service.nix", where)
 		}
-		// Lift together with lib.nix (~199) once sso-proxy is public.
-		if str(r.Auth) == "oauth2-proxy" {
-			return s, fmt.Errorf("%s: auth oauth2-proxy is tailnet/lan only until the sign-in host is published (ROUTING-PLAN §8 step 6)", where)
-		}
+
 		if len(r.Via) > 0 && !(len(r.Via) == 1 && r.Via[0] == "edge") {
 			return s, fmt.Errorf("%s: via %v; public expose only goes through the edge", where, r.Via)
 		}

@@ -283,10 +283,7 @@ func Check(inv *inventory.Inventory, spec *bunny.Spec, domain string, req Reques
 		if !r.PublicWithoutAuth {
 			return zero, "", fmt.Errorf("%s: public with auth none needs publicWithoutAuth in service.nix", where)
 		}
-	case "oauth2-proxy":
-		// Lift together with containers/lib.nix (~199) once sso-proxy is public.
-		return zero, "", fmt.Errorf("%s: auth oauth2-proxy is tailnet/lan only until the sign-in host is published", where)
-	case "native", "native-oidc":
+	case "oauth2-proxy", "native", "native-oidc":
 	default:
 		return zero, "", fmt.Errorf("%s: unknown auth %q", where, r.AuthStr())
 	}

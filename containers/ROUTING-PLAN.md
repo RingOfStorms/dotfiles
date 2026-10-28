@@ -8,7 +8,8 @@ and shows it on one tailnet-only page.
 Status: **being implemented**; see §8 for per-step status. Done: step 1
 (`routes` schema, generated host vhost + ports, `cnt routes`, `cnt audit`),
 step 2 (`cnt port`, per-host `trustInterface = false` fleet-wide),
-step 3 (internal/edge listener split), step 6 (fleet oauth2-proxy),
+step 3 (internal/edge listener split), step 6 (fleet oauth2-proxy, sso-proxy
+now public via o002's edge listener on h005),
 step 7 (`cnt expose` overrides with expiry, tailnet/lan only), step 8
 (read-only dashboard in fleet-edge, homepage-dashboard retired).
 Partial: step 2 (`cnt port open|ls|close` and no-`tailscale0`-trust rolled
@@ -940,9 +941,9 @@ Taken 2026-10-16:
      (unauthenticated `^~` prefix locations, for clients with their own
      tokens). `allow` stays the *source host* list (§5.1), not groups.
      lib.nix and `validateRoutes` refuse groups/bypass on other auth
-     values, odd characters, gated `zone = "private"` routes (h005's
-     private-zone vhosts have no auth_request yet) and **gated `public`
-     routes** (below).
+     values, odd characters, and gated `zone = "private"` routes (h005's
+     private-zone vhosts have no auth_request yet). **Gated `public`
+     routes are allowed** (below): the sign-in host is public now.
    - **Cookie stripping**: every generated server, gated or not, rewrites
      `$http_cookie` minus every `_oauth2_proxy*` cookie into
      `$fleet_cookie` and sends that as `Cookie`. Identity headers are
@@ -950,12 +951,18 @@ Taken 2026-10-16:
      them.
    - **Edge vs tailnet**: the gate is rendered into the server block, so
      the internal and edge (`:8443`) servers of a route enforce it alike;
-     o002 doesn't need to know. **Public gated routes are refused for now**
-     because the sign-in host is tailnet-only (routes-convert dropped its
-     public CNAME and o002 vhost 2026-10-21 on the user's request). To
-     allow them: give `sso-proxy` a public CNAME → o002 plus an o002 vhost
-     → h005 (an edge listener on h005 or a hand vhost), then drop the
-     lib.nix/route check.
+     o002 doesn't need to know. **Public gated routes are allowed**,
+     done 2026-10-27: `sso-proxy.joshuabell.xyz` gets a public CNAME →
+     o002 (`dns-records.nix` `publicSpec`), and an o002 vhost that proxies
+     only `/oauth2/` to a dedicated edge listener on h005
+     (`<overlayIp>:8443`, `hosts/h005/oauth2-proxy.nix`), admitted by
+     h005's firewall from o002's overlay addresses only. o002 is excluded
+     from h005's broad tailnet 80/443 accept (firewall.nix, §8 step 2), so
+     it can't reach the tailnet sign-in vhost or 4180 directly; it also
+     never satisfies a tailnet ACL itself. The edge listener trusts
+     X-Forwarded-* only from o002 (`set_real_ip_from`), never the tailnet
+     vhost. The refusal is lifted in `lib.nix`, `cli/expose.go`
+     (`exposeCheck`), and `fleet-edge`'s `overrides.Check`.
    - **Legacy retired**: the trilium container no longer runs oauth2-proxy
      (no env bind). Its nginx string is replaced by `routes.web` (notes,
      tailnet, `groups = [ "notes" ]`), and `dns-records.nix` points

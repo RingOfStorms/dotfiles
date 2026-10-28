@@ -887,6 +887,22 @@ in
               iifname "fleet-noinet" ip saddr @online accept
               iifname "fleet-noinet" ct direction original drop
             }
+            # net.private guests/podman services are reached by nginx only
+            # (ROUTING-PLAN 8 step 5); without this, any local user/process
+            # on this host could curl 10.233.x.2 or 10.89.250.1xx directly.
+            # root stays trusted: restic/backup hooks, cnt health checks and
+            # the nat-output guest redirect (fleet-net-nat.nft) all run as
+            # root. fleet-agent's :9101 probe never dials these subnets.
+            # established/related/reply first: host-side servers a guest
+            # talks to (systemd-resolved's DNS stub on 10.233.0.1, as
+            # `systemd-resolve`) must still answer; only new connections
+            # the host itself initiates are gated by uid.
+            chain output {
+              type filter hook output priority filter; policy accept;
+              ip daddr { 10.233.0.0/16, 10.89.250.0/24 } ct state established,related accept
+              ip daddr { 10.233.0.0/16, 10.89.250.0/24 } ct direction reply accept
+              ip daddr { 10.233.0.0/16, 10.89.250.0/24 } skuid != { 0, ${toString config.users.users.nginx.uid} } drop
+            }
           '';
         };
         # See publishedPorts. Runs before netavark's dstnat (priority -100) and

@@ -29,7 +29,7 @@ The one host meant to run services on bare metal (networking only).
 | DDNS (`ddns-update` timer) | `mods/ddns.nix`; `home.joshuabell.xyz` |
 | NUT (upsd, upsmon) | `mods/ups.nix` |
 | ISP speedtest (timer) | `mods/speedtest.nix` |
-| Per-host agents | sec-agent, beszel-agent, fail2ban, tailscaled |
+| Per-host agents | sec-agent, fail2ban, tailscaled |
 
 Planned (`containers/ROUTING-PLAN.md`): `fleet-edge` (DNS records, ACME,
 router forwards, dashboard) and the fleet oauth2-proxy.

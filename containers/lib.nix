@@ -188,12 +188,6 @@ let
             ));
           msg = "bypass must be a list of path prefixes like \"/api/\"";
         }
-        {
-          # The sign-in host (sso-proxy, h005) is tailnet-only; internet
-          # clients would be sent to a name they can't resolve.
-          bad = auth == "oauth2-proxy" && isPublic;
-          msg = "auth = \"oauth2-proxy\" is tailnet/lan only until the sign-in host is published (ROUTING-PLAN §8 step 6)";
-        }
       ];
       firstBad = builtins.filter (c: c.bad) checks;
     in

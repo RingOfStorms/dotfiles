@@ -10,6 +10,9 @@ let
   c = constants;
   domain = fleet.global.domain;
   upstream = c.upstreamHost;
+  # Fleet oauth2-proxy's edge listener (ROUTING-PLAN §8 step 6): only
+  # /oauth2/ is reached here, never the tailnet sign-in vhost or 4180.
+  h005EdgeIp = fleet.hosts.h005.overlayIp;
 
   # Public `via = edge` routes of floating containers (ROUTING-PLAN §2.3,
   # §8 step 3), generated from containers/*/service.nix. Each proxies to the
@@ -125,6 +128,22 @@ in
                   ';
                 '';
               };
+            };
+          };
+
+          # ── Fleet oauth2-proxy sign-in, public (ROUTING-PLAN §8 step 6) ──
+          # Only /oauth2/ (start, callback, sign_out, auth) is public; the
+          # upstream is h005's dedicated edge listener (:8443), which is
+          # the only thing admitted there and the only place h005 trusts
+          # X-Forwarded-* from o002.
+          "sso-proxy.${domain}" = {
+            enableACME = true;
+            forceSSL = true;
+            locations."/" = {
+              return = "444";
+            };
+            locations."/oauth2/" = {
+              proxyPass = "http://${h005EdgeIp}:8443/oauth2/";
             };
           };
 

@@ -932,8 +932,14 @@ func prepareScript(s Service, host string) string {
 	b.WriteString("test -d /etc/systemd-mutable/system -o -d /var/lib/fleet-containers || { echo 'host is missing the containers host module (inputs.containers.nixosModules.default)'; exit 1; }\n")
 	b.WriteString(requiresScript(s, host))
 	if s.Net.Private {
-		// ROUTING-PLAN §8 step 5: the host side (NAT, DNAT map, DNS on the veth).
-		b.WriteString(fmt.Sprintf("nft list table ip fleet-net-nat >/dev/null 2>&1 || { echo '%s has net.private but %s lacks ringofstorms.containers.privateNetwork.enable' >&2; exit 1; }\n", s.Name, host))
+		if s.Kind == "podman" {
+			// podman net.private rides the always-present fleet-noinet table
+			// (cfg.enable), not the nixos-guest veth/NAT side.
+			b.WriteString(fmt.Sprintf("nft list table inet fleet-noinet >/dev/null 2>&1 || { echo '%s has net.private but %s lacks the fleet-noinet table (containers host module not enabled)' >&2; exit 1; }\n", s.Name, host))
+		} else {
+			// ROUTING-PLAN §8 step 5: the host side (NAT, DNAT map, DNS on the veth).
+			b.WriteString(fmt.Sprintf("nft list table ip fleet-net-nat >/dev/null 2>&1 || { echo '%s has net.private but %s lacks ringofstorms.containers.privateNetwork.enable' >&2; exit 1; }\n", s.Name, host))
+		}
 	}
 	b.WriteString("install -d -m755 /var/lib/fleet-containers/nginx /var/lib/fleet-containers/ports\n")
 	// The cnt expose override is dropped only after the new site is live

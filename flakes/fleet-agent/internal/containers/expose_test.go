@@ -106,9 +106,11 @@ func TestExposeCheckPublic(t *testing.T) {
 	if v := routesVhost(o); !strings.Contains(v, "8443") {
 		t.Errorf("no edge server:\n%s", v)
 	}
+	// ROUTING-PLAN §8 step 6: sso-proxy is public now, so a gated route can
+	// go public too.
 	g := s
 	g.Routes = map[string]Route{"web": httpRoute("app", 8000, "tailnet", "oauth2-proxy")}
-	if _, err := exposeCheck(g, "web", "public"); err == nil || !strings.Contains(err.Error(), "oauth2-proxy") {
+	if _, err := exposeCheck(g, "web", "public"); err != nil {
 		t.Errorf("gated public: %v", err)
 	}
 	r := httpRoute("app", 8000, "tailnet", "native")

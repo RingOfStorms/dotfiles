@@ -799,3 +799,30 @@ func TestRoutesVhostPodmanPrivateBackend(t *testing.T) {
 		t.Errorf("opengist vhost must not mention loopback:\n%s", v)
 	}
 }
+
+// prepareScript's net.private host-prerequisite check must match the kind:
+// nixos guests need the veth/NAT side (privateNetwork.enable ->
+// fleet-net-nat), podman services ride the always-present fleet-noinet
+// table (cfg.enable) instead and must not demand privateNetwork.enable.
+func TestPrepareScriptPrivateCheckByKind(t *testing.T) {
+	ip := "10.89.250.102"
+	nixIP := "10.233.5.2"
+	podman := Service{Name: "localai", Kind: "podman", Net: Net{Private: true, IP: &ip}}
+	nixos := Service{Name: "atuin", Kind: "nixos", Net: Net{Private: true, IP: &nixIP}}
+
+	ps := prepareScript(podman, "joe")
+	if !strings.Contains(ps, "nft list table inet fleet-noinet") {
+		t.Errorf("podman net.private must check fleet-noinet, got:\n%s", ps)
+	}
+	if strings.Contains(ps, "fleet-net-nat") || strings.Contains(ps, "privateNetwork.enable") {
+		t.Errorf("podman net.private must not require privateNetwork.enable:\n%s", ps)
+	}
+
+	ps = prepareScript(nixos, "h001")
+	if !strings.Contains(ps, "nft list table ip fleet-net-nat") || !strings.Contains(ps, "privateNetwork.enable") {
+		t.Errorf("nixos net.private must still check fleet-net-nat/privateNetwork.enable:\n%s", ps)
+	}
+	if strings.Contains(ps, "fleet-noinet") {
+		t.Errorf("nixos net.private must not check fleet-noinet:\n%s", ps)
+	}
+}

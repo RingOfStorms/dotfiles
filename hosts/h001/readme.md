@@ -31,4 +31,4 @@ keys live in persist: `/srv/containers/sec/data/db.key` and
 | restic backup | Containers: `fleet-backup` (`ringofstorms.containers.backup` in `floating-containers.nix`, one snapshot per `svc:<name>`). Host data (wd10 media, ~luser/backups): `mods/restic-backup.nix`. Both nightly at 03:00, same repo. |
 | homepage-dashboard | Replaced by fleet-edge on h005; no redirect is left behind. |
 | autofs NFS client, storage guard `fleet-guard-h004` | Host plumbing for `arr`. |
-| Per-host agents | sec-agent, beszel-agent, fail2ban, tailscaled. |
+| Per-host agents | sec-agent, fail2ban, tailscaled. |

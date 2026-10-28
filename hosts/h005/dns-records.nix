@@ -15,8 +15,9 @@ let
   };
 
   # notes is a generated route now (containers/trilium). sso-proxy is the
-  # fleet oauth2-proxy's sign-in host on h005 (oauth2-proxy.nix);
-  # tailnet-only (no public CNAME, no LAN record).
+  # fleet oauth2-proxy's sign-in host on h005 (oauth2-proxy.nix); tailnet
+  # record here, plus a public CNAME to o002 below (ROUTING-PLAN §8 step 6:
+  # o002's vhost proxies only /oauth2/ to h005's edge listener).
   handTailnet = [
     {
       fqdn = "sso-proxy.${domain}";
@@ -94,6 +95,9 @@ in
       ++ map (cname "o002") [
         "www"
         "computerboyz"
+        # Public sign-in for auth = oauth2-proxy routes (ROUTING-PLAN §8
+        # step 6); o002 proxies only /oauth2/ to h005's edge listener.
+        "sso-proxy"
       ]
       # minecraft: router path (step 4, router forwards).
       ++ map (cname "home") [ "minecraft" ]
@@ -146,7 +150,6 @@ in
               "matrix"
               "n8n"
               "pim"
-              "pkm"
               # trilium made tailnet-only 2026-10-21.
               "notes"
               "sso-proxy"

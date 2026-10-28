@@ -360,7 +360,6 @@ func TestCheckRefusals(t *testing.T) {
 	r := newRig(t)
 	for _, tc := range []struct{ svc, route, host, want string }{
 		{"app", "open", "h001", "publicWithoutAuth"},
-		{"app", "gated", "h001", "oauth2-proxy"},
 		{"pub", "web", "h001", "already public"},
 		{"priv", "web", "h001", "zone"},
 		{"decl", "web", "h001", "declared in the public spec"},
@@ -376,6 +375,15 @@ func TestCheckRefusals(t *testing.T) {
 	}
 	if len(r.dns.log)+len(r.edge.files) != 0 {
 		t.Fatal("refusal touched dns/edge")
+	}
+}
+
+// ROUTING-PLAN §8 step 6: sso-proxy is public now, so auth = oauth2-proxy
+// is no longer refused for a public override.
+func TestCheckAllowsOauth2ProxyPublic(t *testing.T) {
+	r := newRig(t)
+	if c, out := r.call("POST", "/api/overrides/prepare", "100.64.0.2", Request{Service: "app", Route: "gated", Host: "h001"}); c != 200 {
+		t.Fatalf("gated public prepare: %d %v", c, out)
 	}
 }
 

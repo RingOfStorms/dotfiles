@@ -36,7 +36,7 @@
 | NFS server | Exports `/data/nixarr` only (C2; not backups);| Service | Notes |
 | NFS server | Exports `/data/nixarr` only (C2; not backups);|---|---|
 | NFS server | Exports `/data/nixarr` only (C2; not backups);| NFS server | Exports `/data`; consumed by h001 (`nfs-h004`). |
-| NFS server | Exports `/data/nixarr` only (C2; not backups);| Per-host agents | sec-agent, beszel-agent, fail2ban, tailscaled. |
+| NFS server | Exports `/data/nixarr` only (C2; not backups);| Per-host agents | sec-agent, fail2ban, tailscaled. |
 | NFS server | Exports `/data/nixarr` only (C2; not backups);## Config layout
 | NFS server | Exports `/data/nixarr` only (C2; not backups);
 | NFS server | Exports `/data/nixarr` only (C2; not backups);| File | Role |
