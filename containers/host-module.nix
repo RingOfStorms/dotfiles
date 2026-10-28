@@ -967,14 +967,16 @@ in
         # explicit drop per excluded overlay IP, before the broad accept,
         # so the drop can never be shadowed by rule order. Gated on
         # cfg.nginx.enable, not `httpExposure != null`: httpExposureByHost
-        # only sees services on the new `routes` schema. Hosts still
-        # running the legacy `nginx` string (most of today's inventory:
-        # arr, atuin, forgejo, immich, open-webui, ...) or a bare-metal
-        # `services.nginx.virtualHosts` addition (e.g. h001's arr-nginx.nix
-        # media-health alias) share the same nginx and need 80/443 open
-        # too; there is no cheap way to enumerate every legacy vhost's
-        # exposure from here, so any host with nginx enabled gets the
-        # tailnet allow, conservatively. nginx itself still enforces the
+        # only sees services on the new `routes` schema. Every inventory
+        # service in containers/*/service.nix is already on `routes` (no
+        # service uses a legacy `nginx` string today); the conservative
+        # gate stays for bare-metal `services.nginx.virtualHosts`
+        # additions outside the inventory (e.g. h001's arr-nginx.nix
+        # media-health alias, h005's own hand vhosts) that share the same
+        # nginx and need 80/443 open too. There is no cheap way to
+        # enumerate every hand-kept vhost's exposure from here, so any
+        # host with nginx enabled gets the tailnet allow, conservatively.
+        # nginx itself still enforces the
         # exposure ACL per vhost (nginx.acl); this is only the TCP
         # admission. Checked against h001: no route's `allow` list
         # includes a low-trust host as caller of a service on this host

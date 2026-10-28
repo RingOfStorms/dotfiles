@@ -32,10 +32,20 @@
   # all (gallery installs and backend downloads then fail). Ports still work.
   internet = false;
 
+  # Static IP on the shared fleet-noinet bridge (10.89.250.101, offset past
+  # the .1 gateway and podman's dynamic-IPAM low range): joe's nginx
+  # proxies straight to it instead of a loopback publish, so other local
+  # processes/users on joe can no longer reach the unauthenticated API.
+  # index is fleet-wide unique within kind = "podman" (checkNetIndexes).
+  net = {
+    private = true;
+    index = 1;
+  };
+
   # https://localai.joshuabell.xyz/v1/images/generations (tailnet route; DNS
   # points at joe's overlay IP). joe's own nginx terminates TLS with the
   # zone wildcard pushed from h005 (hosts/h005/wildcard-cert.nix) and
-  # proxies to 127.0.0.1:8080.
+  # proxies to the bridge IP 10.89.250.101:8080 (net.private above).
   # auth = "none": LocalAI has no login (only an optional API_KEY, which
   # would break the existing Open WebUI / agent clients). M6: instead of the
   # whole tailnet, joe's vhost only admits the known callers (allow -> nginx
@@ -60,11 +70,10 @@
     timeouts = "600s";
   };
 
-  # No tcpPorts: published on loopback only; joe's nginx is the way in.
+  # No tcpPorts, no publish: reached only via the bridge IP (net.private
+  # above); joe's nginx is the way in.
   podman = {
     image = "docker.io/localai/localai:v4.11.0-gpu-nvidia-cuda-12@sha256:1ee31dce19426ce7948e003bd2143bc88289db984369bdc53179c184d5ad07f9";
-    # Loopback only: reached through joe's nginx (:443), never directly.
-    ports = [ "127.0.0.1:8080:8080" ];
     environment = {
       MODELS_PATH = "/models";
       LOCALAI_BACKENDS_PATH = "/backends";

@@ -763,3 +763,39 @@ func TestValidateRoutesRejectsLocationACL(t *testing.T) {
 		}
 	}
 }
+
+func TestBackendAddrPrivate(t *testing.T) {
+	nixIP := "10.233.5.2"
+	podIP := "10.89.250.102"
+	cases := []struct {
+		name string
+		s    Service
+		want string
+	}{
+		{"nixos private", Service{Kind: "nixos", Net: Net{Private: true, IP: &nixIP}}, "10.233.5.2"},
+		{"podman private", Service{Kind: "podman", Net: Net{Private: true, IP: &podIP}}, "10.89.250.102"},
+		{"nixos host-network", Service{Kind: "nixos", Net: Net{Private: false}}, "127.0.0.1"},
+		{"podman host-network", Service{Kind: "podman", Net: Net{Private: false}}, "127.0.0.1"},
+	}
+	for _, c := range cases {
+		if got := backendAddr(c.s); got != c.want {
+			t.Errorf("%s: backendAddr = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// Golden: opengist and localai (podman, net.private) proxy straight to the
+// static bridge IP (offset past the .1 gateway and podman's dynamic-IPAM
+// low range), no loopback involved (ROUTING-PLAN §8 step 5 podman follow-up).
+func TestRoutesVhostPodmanPrivateBackend(t *testing.T) {
+	ip := "10.89.250.102"
+	r := httpRoute("gist", 6157, "public", "native")
+	s := Service{Name: "opengist", Kind: "podman", Net: Net{Private: true, IP: &ip}, Routes: map[string]Route{"web": r}}
+	v := routesVhost(s)
+	if !strings.Contains(v, "proxy_pass http://10.89.250.102:6157;") {
+		t.Errorf("opengist vhost must proxy to the bridge IP, not loopback:\n%s", v)
+	}
+	if strings.Contains(v, "127.0.0.1") {
+		t.Errorf("opengist vhost must not mention loopback:\n%s", v)
+	}
+}

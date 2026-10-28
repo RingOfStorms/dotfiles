@@ -258,15 +258,20 @@ let
       routes;
 
   # Private container networking (ROUTING-PLAN §8 step 5). Opt-in per
-  # service: net = { private = true; index = N; }. The guest is
-  # 10.233.<N>.2 on every host (index is fleet-wide unique, checked by
-  # checkNetIndexes); the host side of every veth is netHostAddress.
-  # The host only lets a guest reach the internet and its DNS. Exceptions:
+  # service: net = { private = true; index = N; }. For kind = "nixos" the
+  # guest is 10.233.<N>.2 on every host (index is fleet-wide unique within
+  # the kind, checked by checkNetIndexes); the host side of every veth is
+  # netHostAddress. The host only lets a guest reach the internet and its
+  # DNS. Exceptions:
   #   uses   = [ "svc.route" ]   another service's route: direct to the
   #            guest IP when both are private on one host, else the
   #            target host's overlay IP on tcp 443 (its nginx). Resolved
   #            by the CLI at deploy time (cli/routes.go netExceptions).
   #   egress = [ "10.12.14.181:9010/tcp" ]   a fixed LAN/tailnet endpoint.
+  # For kind = "podman", `index` instead picks a static address on the
+  # shared fleet-noinet bridge (10.89.250.<N>, a separate fleet-wide-unique
+  # space): podman doesn't have a per-service veth, so the static --ip
+  # stands in for one. uses/egress aren't implemented for podman yet.
   netHostAddress = "10.233.0.1";
   normalizeNet =
     s:
@@ -308,8 +313,29 @@ let
             egress = [ ];
           }
       )
-    else if s.kind != "nixos" then
-      fail "private is only implemented for kind = \"nixos\" (podman has its own bridge)"
+    else if s.kind == "podman" then
+      (
+        if !(builtins.isInt n.index) || n.index < 1 || n.index > 154 then
+          fail "index must be an integer 1-154 (fleet-wide unique within kind, never reuse one)"
+        else if n.uses != [ ] || n.egress != [ ] then
+          fail "uses/egress are not implemented for kind = \"podman\""
+        else
+          {
+            private = true;
+            inherit (n) index uses egress;
+            # Static IP on the shared fleet-noinet bridge (10.89.250.0/24,
+            # containers/lib.nix mkPodmanService, host-module.nix).
+            # 10.89.250.1 is the bridge/gateway (podman network inspect
+            # fleet-noinet); podman's host-local IPAM hands out .2 upward to
+            # any container on the network without a static --ip (e.g. a
+            # future non-private podman service with internet = false).
+            # Offsetting by 100 (.101-.254) keeps every static IP clear of
+            # both the gateway and that dynamic low range. Index is a
+            # separate fleet-wide-unique space from the nixos net.index
+            # (10.233.x); checked by checkNetIndexes per kind.
+            ip = "10.89.250.${toString (100 + n.index)}";
+          }
+      )
     else if !(builtins.isInt n.index) || n.index < 1 || n.index > 254 then
       fail "index must be an integer 1-254 (fleet-wide unique, never reuse one)"
     else if builtins.stringLength s.name > 11 then
@@ -329,22 +355,31 @@ let
         ip = "10.233.${toString n.index}.2";
       };
 
-  # Throws if two services share a net.index (normalized services).
+  # Throws if two services of the same kind share a net.index (nixos and
+  # podman indices are separate address spaces: 10.233.<i>.2 vs
+  # 10.89.250.<i>, so a collision across kinds is harmless).
   checkNetIndexes =
     services:
     let
-      priv = builtins.filter (s: s.net.private) services;
-      idx = map (s: s.net.index) priv;
-      dup = builtins.filter (i: builtins.length (builtins.filter (x: x == i) idx) > 1) idx;
+      checkKind =
+        kind:
+        let
+          priv = builtins.filter (s: s.net.private && s.kind == kind) services;
+          idx = map (s: s.net.index) priv;
+          dup = builtins.filter (i: builtins.length (builtins.filter (x: x == i) idx) > 1) idx;
+        in
+        if dup != [ ] then
+          throw "net.index ${toString (builtins.head dup)} (kind ${kind}) is used by ${
+            builtins.concatStringsSep " and " (
+              map (s: s.name) (builtins.filter (s: s.net.index == builtins.head dup) priv)
+            )
+          }"
+        else
+          true;
     in
-    if dup != [ ] then
-      throw "net.index ${toString (builtins.head dup)} is used by ${
-        builtins.concatStringsSep " and " (
-          map (s: s.name) (builtins.filter (s: s.net.index == builtins.head dup) priv)
-        )
-      }"
-    else
-      services;
+    assert checkKind "nixos";
+    assert checkKind "podman";
+    services;
 
   # Defaults so service.nix files can stay short.
   normalize =
@@ -866,13 +901,25 @@ in
       p = svc.podman;
       unitName = "fleet-${svc.name}.service";
       lib = pkgs.lib;
-      publish = map (
-        port:
-        let
-          parts = lib.splitString ":" port;
-        in
-        "--publish=" + (if builtins.length parts == 2 then "127.0.0.1:${port}" else port)
-      ) (p.ports or [ ]);
+      # Private (net.private, podman): no publish needed at all. nginx
+      # (routes.go backendAddr) proxies straight to the bridge IP:port,
+      # which podman routes without a --publish, same as a nixos guest's
+      # veth. A bare "port:port" entry (the old 127.0.0.1-default) is
+      # dropped; an explicit host address (e.g. "0.0.0.0:X:Y", for a port
+      # meant to stay reachable on every interface alongside the private
+      # IP) still publishes as written.
+      publish = builtins.filter (x: x != null) (
+        map (
+          port:
+          let
+            parts = lib.splitString ":" port;
+          in
+          if builtins.length parts == 2 then
+            (if svc.net.private then null else "--publish=127.0.0.1:${port}")
+          else
+            "--publish=${port}"
+        ) (p.ports or [ ])
+      );
       volumes = map (b: "--volume=${b.host}:${b.container}:idmap") (persistList svc);
       envs = lib.mapAttrsToList (k: v: "--env=${k}=${toString v}") (p.environment or { });
       runArgs = [
@@ -883,7 +930,8 @@ in
         "--sdnotify=conmon"
         "--log-driver=journald"
       ]
-      ++ lib.optional (!svc.internet) "--network=fleet-noinet"
+      ++ lib.optional (!svc.internet || svc.net.private) "--network=fleet-noinet"
+      ++ lib.optional svc.net.private "--ip=${svc.net.ip}"
       ++ publish
       ++ volumes
       ++ envs

@@ -43,7 +43,10 @@ type Service struct {
 }
 
 // Net is lib.nix normalizeNet (ROUTING-PLAN §8 step 5). IP is the guest
-// address (10.233.<index>.2) when Private, else empty.
+// address when Private: 10.233.<index>.2 for kind = "nixos" (a per-service
+// veth), or 10.89.250.<100+index> for kind = "podman" (a static --ip on the
+// shared fleet-noinet bridge: .1 is the bridge/gateway and podman's dynamic
+// IPAM hands out .2 upward, so static IPs start at .101 to stay clear).
 type Net struct {
 	Private bool     `json:"private"`
 	Index   *int     `json:"index"`
@@ -52,8 +55,9 @@ type Net struct {
 	Egress  []string `json:"egress"`
 }
 
-// backendAddr is where the host reaches the service: its private guest IP,
-// or loopback on the host network.
+// backendAddr is where the host reaches the service: its private IP (guest
+// veth for nixos, static bridge IP for podman), or loopback on the host
+// network for anything not on net.private.
 func backendAddr(s Service) string {
 	if s.Net.Private && s.Net.IP != nil {
 		return *s.Net.IP

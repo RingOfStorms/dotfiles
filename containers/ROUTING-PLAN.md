@@ -691,7 +691,8 @@ Taken 2026-10-16:
      lio). 80/443: `100.64.0.0/10` accept, minus an explicit drop per
      `tailnetExcludedOverlayIps` (o002 + low-trust hosts) ahead of it so
      the drop can't be shadowed, on every host with `cfg.nginx.enable`
-     (conservative: legacy string-config nginx vhosts can't be
+     (conservative: no inventory service uses a legacy `nginx` string
+     anymore, but hand-kept vhosts outside the inventory can't be
      enumerated). LAN: `fleet.global.lanSubnet` accept on 80/443 where
      the host has a `lanIp` and a lan/public `routes` exposure (or the
      legacy `nginx.acl.lan`). `guest-egress`: ve-* containers whose
@@ -794,7 +795,12 @@ Taken 2026-10-16:
      `dns-records.nix`; apex/www/ellalala/headscale/o002 on o002; mail
      and DKIM records (unmanaged).
 5. Private container networking, service by service, arr last.
-   **Design (2026-10-21); mechanism built, puzzles first:**
+   **Done for every nixos-kind inventory service** (all on `net.private`,
+   arr last at index 16). Remaining on the host network by design: the
+   two podman services (opengist on h001's podman0 bridge, localai on
+   joe with GPU passthrough), the hello-nixos/hello-podman test pair, and
+   minecraft (host = null, inactive; its `via = router` route needs host
+   networking when re-enabled). **Design (2026-10-21); mechanism built, puzzles first:**
    - **Opt-in per service**: `net = { private = true; index = <1-254>; }`
      in service.nix. `index` is explicit and **fleet-wide unique**: the
      inventory eval throws on a duplicate. It's never derived from the name,
@@ -851,9 +857,10 @@ Taken 2026-10-16:
      only) from the files after every firewall reload. Prerouting/output
      DNATs `fib daddr type local` traffic on that port to the guest, and
      forward admits `ct status dnat`. That's the same reach as `tcpPorts`
-     today (any interface). Per-route `allow` (immich pg → lio) becomes a
-     source match in the same element in a later batch; until then immich
-     stays on the host network. DNAT ports never touch `temp-ports`.
+     today (any interface). Per-route `allow` (immich pg → lio) is a
+     source match (`allow = [ "lio" ]`) on the route's tailnet exposure.
+     **Done**: immich is private (index 15); routes.pg/routes.ml DNAT to
+     the guest with that allow list, not the host network. DNAT ports never touch `temp-ports`.
      `cnt port open` refuses private services (use a route; a temp DNAT
      is later work). `fleet-publish`/podman are unchanged: podman already
      has its own bridge, and its publish → bridge IP is a separate item.
