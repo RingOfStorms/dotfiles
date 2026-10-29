@@ -448,19 +448,15 @@ cmd_rows() {
 # sorts and previews itself. Same grouping rule as cmd_rows (a session belongs to
 # the repo holding most of its panes; ties use the first pane in list order).
 json_str() {
-	local s=$1 out="" c i
-	for ((i = 0; i < ${#s}; i++)); do
-		c=${s:i:1}
-		case "$c" in
-		'"') out+='\"' ;;
-		'\') out+='\\' ;;
-		$'\t') out+='\t' ;;
-		$'\n') out+='\n' ;;
-		$'\r') out+='\r' ;;
-		*) out+=$c ;;
-		esac
-	done
-	REPLY=$out
+	# Parameter expansion instead of a per-character loop: one pass per rule,
+	# and no shellcheck complaints about the backslash case pattern.
+	local s=$1
+	s=${s//\\/\\\\}
+	s=${s//\"/\\\"}
+	s=${s//$'\t'/\\t}
+	s=${s//$'\n'/\\n}
+	s=${s//$'\r'/\\r}
+	REPLY=$s
 }
 
 # json_obj KEY VALUE... prints one object. A value prefixed with raw: is emitted
@@ -486,9 +482,9 @@ cmd_rows_json() {
 	fmt="#{session_name}${TAB}#{window_index}${TAB}$(field window_name)${TAB}#{pane_id}${TAB}#{pane_active}${TAB}#{window_active}${TAB}$(field pane_current_command)${TAB}$(field pane_current_path)${TAB}$(field @agent_state)${TAB}$(field @agent_unseen)${TAB}$(field @session_ai_name)${TAB}#{pane_title}"
 
 	local -a order=() objs=()
-	local -A seen=() count=() active=() apath=() ailabel=() agents=() repo_n=() repo_br=() repo_wt=() repo_top=() repo_sessions=() s_repo=() s_branch=() s_wt=()
+	local -A seen=() count=() active=() apath=() ailabel=() agents=() repo_n=() repo_br=() repo_wt=() repo_sessions=() s_repo=() s_branch=() s_wt=()
 	local s wi wn pane pact wact cmd path st unseen ai title kind label common top branch key best bestrepo
-	local sortable group name r prev spath pcommon pbranch ptop plabel pkind pst punseen ppane
+	local sortable group name r prev pcommon pbranch ptop plabel pkind pst punseen ppane
 
 	while IFS=$TAB read -r s wi wn pane pact wact cmd path st unseen ai title; do
 		undash "$path" && path=$REPLY
@@ -517,7 +513,6 @@ cmd_rows_json() {
 			key="$s$TAB$common"
 			repo_n[$key]=$(( ${repo_n[$key]:-0} + 1 ))
 			repo_br[$key]=$branch
-			repo_top[$common]=$top
 			if [ "$top" = "${common%/.git}" ]; then repo_wt[$key]=0; else repo_wt[$key]=1; fi
 		fi
 		if [ -n "$kind" ]; then
