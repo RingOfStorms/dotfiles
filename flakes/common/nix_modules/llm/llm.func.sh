@@ -1,16 +1,31 @@
-# llm_chat <smart|fast> <system-prompt> <user-prompt>
+# llm_chat <smart|fast> [<system-prompt>] [<user-prompt>]
 #
 # Sends one chat completion to LiteLLM and prints the reply text. Model and
 # reasoning come from MODEL_<TIER> / MODEL_<TIER>_REASONING (set by the
 # ringofstorms.llm NixOS module); export them to override per shell session.
 # Temperature and token limits are intentionally never sent.
+#
+# The user prompt can be given as an argument or piped in on stdin, and the
+# system prompt is optional (it is omitted entirely when not given):
+#
+#   llm_chat fast "write a haiku"                 # no system prompt
+#   llm_chat fast "You are terse." "write a haiku"  # explicit system prompt
+#   cat notes.md | llm_chat fast                  # prompt from stdin
+#   llm_chat fast < notes.md                      # same, via redirection
+#   cat notes.md | llm_chat fast "Summarize."     # arg becomes system prompt
+#
+# With two arguments, non-empty piped stdin takes over as the user prompt and
+# the argument is treated as the system prompt. If stdin is a terminal (or
+# empty, e.g. /dev/null in a script) the argument is the user prompt, so
+# `llm_chat fast "write a haiku"` behaves the same either way.
 llm_chat() {
-  if [ $# -ne 3 ]; then
-    printf 'Usage: llm_chat <smart|fast> <system-prompt> <user-prompt>\n' >&2
+  if [ $# -lt 1 ] || [ $# -gt 3 ]; then
+    printf 'Usage: llm_chat <smart|fast> [<system-prompt>] [<user-prompt>]\n' >&2
     return 2
   fi
 
   local model reasoning dep payload curl_out http_code body message
+  local system='' user='' stdin_data=''
   case "$1" in
     smart) model=${MODEL_SMART:-}; reasoning=${MODEL_SMART_REASONING:-} ;;
     fast) model=${MODEL_FAST:-}; reasoning=${MODEL_FAST_REASONING:-} ;;
@@ -32,17 +47,50 @@ llm_chat() {
     fi
   done
 
+  # Only touch stdin when the prompt could come from it; a three-argument call
+  # must never block on (or consume) whatever stdin happens to be attached.
+  if [ $# -lt 3 ] && [ ! -t 0 ]; then
+    stdin_data=$(cat) || return 1
+  fi
+
+  case "$#" in
+    3)
+      system=$2
+      user=$3
+      ;;
+    2)
+      if [ -n "$stdin_data" ]; then
+        system=$2
+        user=$stdin_data
+      else
+        user=$2
+      fi
+      ;;
+    1)
+      user=$stdin_data
+      if [ -z "$user" ]; then
+        printf 'llm_chat: no prompt given (pass a prompt or pipe stdin).\n' >&2
+        return 2
+      fi
+      ;;
+  esac
+
+  if [ -z "${user//[[:space:]]/}" ]; then
+    printf 'llm_chat: empty prompt.\n' >&2
+    return 2
+  fi
+
   payload=$(jq -n \
     --arg model "$model" \
     --arg reasoning "$reasoning" \
-    --arg system "$2" \
-    --arg user "$3" \
+    --arg system "$system" \
+    --arg user "$user" \
     '{
       model: $model,
-      messages: [
-        { role: "system", content: $system },
-        { role: "user", content: $user }
-      ]
+      messages: (
+        (if $system == "" then [] else [{ role: "system", content: $system }] end)
+        + [{ role: "user", content: $user }]
+      )
     } + (if $reasoning == "" then {} else { reasoning_effort: $reasoning } end)') || return 1
 
   # Fail fast when the endpoint is unreachable. LLM_MAX_TIME (seconds) caps the
