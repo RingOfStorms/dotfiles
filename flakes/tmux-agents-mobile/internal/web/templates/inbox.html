@@ -1,14 +1,4 @@
-{{define "inbox.html"}}{{template "head" .}}
-{{if .NoServer}}
-  <p class="empty">No tmux server running on this host.</p>
-{{else if .ErrText}}
-  <p class="error">{{.ErrText}}</p>
-{{else if eq .Total 0}}
-  <p class="empty">No panes right now.</p>
-{{else}}
-<p id="no-matches" class="empty" hidden>nothing matches</p>
-<div class="cards">
-{{range .Cards}}
+{{define "cards"}}{{range .Cards}}
   <a class="card" href="{{.Href}}" data-text="{{.Text}}">
     <div class="card-top">
       <span class="repo">{{.Repo}}</span>
@@ -28,8 +18,18 @@
     </div>
     {{end}}
   </a>
-{{end}}
-</div>
+{{end}}{{end}}
+
+{{define "inbox.html"}}{{template "head" .}}
+{{if .NoServer}}
+  <p class="empty">No tmux server running on this host.</p>
+{{else if .ErrText}}
+  <p class="error">{{.ErrText}}</p>
+{{else if eq .Total 0}}
+  <p class="empty">No panes right now.</p>
+{{else}}
+<p id="no-matches" class="empty" hidden>nothing matches</p>
+<div class="cards">{{template "cards" .}}</div>
 
 <button id="search-toggle" class="fab" type="button" aria-label="filter panes" aria-expanded="false">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">

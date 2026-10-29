@@ -67,6 +67,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /new/dirs", s.dirSuggestions)
 	mux.HandleFunc("POST /new", s.newSession)
 	mux.Handle("GET /static/", http.FileServerFS(assets))
+	// The service worker has to be served from the root: its scope is its own
+	// URL, and the whole app needs to be in scope for installability.
+	mux.HandleFunc("GET /sw.js", s.rootAsset("static/sw.js", "text/javascript; charset=utf-8"))
+	mux.HandleFunc("GET /manifest.webmanifest", s.rootAsset("static/manifest.webmanifest", "application/manifest+json"))
 	return s.middleware(mux)
 }
 
@@ -131,6 +135,11 @@ func (w *statusRecorder) Unwrap() http.ResponseWriter { return w.ResponseWriter 
 func (s *Server) headers(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
+		// Nothing here is worth caching: after a sign-out the back button must not
+		// show a page rendered from the previous session.
+		if !strings.HasPrefix(r.URL.Path, "/static/") {
+			h.Set("Cache-Control", "no-store")
+		}
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("X-Frame-Options", "DENY")
@@ -438,4 +447,18 @@ func (s *Server) pane(w http.ResponseWriter, r *http.Request) (tmux.Pane, bool) 
 		return tmux.Pane{}, false
 	}
 	return p, true
+}
+
+// rootAsset serves an embedded file from the site root rather than /static/.
+func (s *Server) rootAsset(name, contentType string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, err := assets.ReadFile(name)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", contentType)
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write(body)
+	}
 }

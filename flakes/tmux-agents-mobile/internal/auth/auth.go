@@ -513,6 +513,23 @@ func (a *Authenticator) handleCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, sanitizeReturnTo(pending.ReturnTo), http.StatusFound)
 }
 
+// signedOutPage is shown after logout. It deliberately does not redirect into
+// /auth/login: the identity provider's session is usually still alive, so that
+// redirect comes straight back and the tap reads as a no-op.
+const signedOutPage = `<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>signed out</title>
+<body style="font:16px/1.5 system-ui,sans-serif;background:#11111b;color:#cdd6f4;padding:28px;max-width:34rem;margin:0 auto">
+<h1 style="font-size:19px;margin:0 0 12px">Signed out</h1>
+<p style="color:#a6adc8">This app's session is cleared.</p>
+<p style="color:#a6adc8">If your identity provider still has a session, signing in
+again will not ask for a password. Authorisation for this app is re-checked either
+way.</p>
+<p style="margin-top:22px"><a href="/auth/login" style="color:#89b4fa">sign in again</a></p>
+</body>
+`
+
 func (a *Authenticator) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
@@ -523,7 +540,10 @@ func (a *Authenticator) handleLogout(w http.ResponseWriter, r *http.Request) {
 		Secure:   isSecureRequest(r),
 		SameSite: http.SameSiteLaxMode,
 	})
-	http.Redirect(w, r, "/auth/login", http.StatusFound)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, signedOutPage)
 }
 
 func (a *Authenticator) redirectURI(r *http.Request) string {

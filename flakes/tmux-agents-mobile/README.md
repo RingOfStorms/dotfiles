@@ -132,6 +132,12 @@ two-flag mistake. The header of the UI shows a red **no auth** badge in that
 mode so it is obvious which one you are looking at. (`--dev-no-auth` and
 `--dev-allow-tailnet` still work as aliases.)
 
+**Sign out** clears this app's session and shows a "signed out" page; it does not
+bounce into the OIDC flow, because the identity provider's session usually
+survives and would re-authenticate instantly (which reads as "nothing
+happened"). Ending the Zitadel session as well needs a post-logout redirect URI
+registered on the app - the end-session endpoint is not called.
+
 ## Deployment
 
 Three modules, the same options:
@@ -206,6 +212,33 @@ agent does not depend on the launchd environment having them.
 
 `homeManagerModules.default` is Linux-only (it writes a systemd user unit);
 use `darwinModules` on macOS.
+## Installable app (PWA)
+
+The UI is a plain web app that Chrome/Safari can install to the home screen:
+`/manifest.webmanifest` (served as `application/manifest+json`), 192/512 PNG and
+SVG icons, `display: standalone`, plus `apple-touch-icon` and the
+`apple-mobile-web-app-*` meta tags for iOS.
+
+The service worker (`/sw.js`, served from the root so its scope covers the whole
+app) only ever caches `/static/*`, and only responses that are genuine 200s and
+were not redirected — with Zitadel in front, an expired session turns a static
+request into a redirect to the login page, and caching that as `app.css` would
+leave the phone with a broken stylesheet. The pane list, frames, SSE and every
+POST always go to the network.
+
+Installability needs a secure context, i.e. the https vhost (or localhost during
+development).
+
+## Live list
+
+The pane list polls `GET /?fragment=cards` every 3 seconds and swaps the cards in
+place, so panes appearing/exiting and state changes show up without a reload. It
+pauses while the tab is hidden or a finger is down (swapping the DOM under a tap
+would swallow it), skips the swap when the markup is byte-identical (the common
+case), preserves scroll position, and re-applies an active filter to the new
+cards. A response only counts when it carries `X-Fragment: cards`, so an expired
+session or a missing tmux server cannot paste a login page into the list.
+
 ## Limits
 
 - Full-screen TUIs are captured as text, so they reflow as prose. The *fit*

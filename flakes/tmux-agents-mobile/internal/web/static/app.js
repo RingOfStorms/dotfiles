@@ -230,29 +230,30 @@
     btn.addEventListener("click", () => send({ key: btn.dataset.key }));
   }
 
-  /* ---------------- inbox filter ---------------- */
+  /* ---------------- inbox: filter + refresh ---------------- */
 
   const filter = document.getElementById("filter");
+  const cardsEl = document.querySelector(".cards");
+  const noMatches = document.getElementById("no-matches");
+
+  // Cards are replaced by the poll, so this queries them fresh each time.
+  const applyFilter = () => {
+    if (!cardsEl) return;
+    const terms = filter ? filter.value.toLowerCase().split(/\s+/).filter(Boolean) : [];
+    let visible = 0;
+    for (const card of cardsEl.querySelectorAll(".card")) {
+      const text = (card.dataset.text || "").toLowerCase();
+      const on = terms.every((term) => text.includes(term));
+      card.classList.toggle("hidden-card", !on);
+      if (on) visible++;
+    }
+    if (noMatches) noMatches.hidden = visible > 0;
+  };
+
   if (filter) {
-    const cards = Array.from(document.querySelectorAll(".cards .card"));
-    const none = document.getElementById("no-matches");
     const toggle = document.getElementById("search-toggle");
     const bar = document.getElementById("searchbar");
     const close = document.getElementById("search-close");
-
-    const apply = () => {
-      // Every term must appear in the card's own text, like the navigator's
-      // `--exact` matching; the card already carries repo/session context.
-      const terms = filter.value.toLowerCase().split(/\s+/).filter(Boolean);
-      let visible = 0;
-      for (const card of cards) {
-        const text = (card.dataset.text || "").toLowerCase();
-        const on = terms.every((term) => text.includes(term));
-        card.classList.toggle("hidden-card", !on);
-        if (on) visible++;
-      }
-      if (none) none.hidden = visible > 0;
-    };
 
     // The filter lives behind a button so the list owns the screen; closing it
     // clears the query, because a filter you cannot see must not stay applied.
@@ -271,7 +272,7 @@
       }
       if (filter.value !== "") {
         filter.value = "";
-        apply();
+        applyFilter();
       }
       filter.blur();
     };
@@ -284,9 +285,50 @@
         setOpen(false);
       }
     });
-    filter.addEventListener("input", apply);
-    filter.addEventListener("search", apply);
-    apply();
+    filter.addEventListener("input", applyFilter);
+    filter.addEventListener("search", applyFilter);
+    applyFilter();
+  }
+
+  // Panes appear, exit and change state on the computer; the list has to follow
+  // without a reload. Polls pause while the tab is hidden or a finger is down
+  // (swapping the DOM under a tap would swallow it), and only swap when the
+  // markup actually changed.
+  if (cardsEl) {
+    let pressed = false;
+    cardsEl.addEventListener("pointerdown", () => {
+      pressed = true;
+    });
+    for (const ev of ["pointerup", "pointercancel"]) {
+      window.addEventListener(ev, () => {
+        pressed = false;
+      });
+    }
+
+    const refresh = async () => {
+      if (document.hidden || pressed) return;
+      try {
+        const res = await fetch("/?fragment=cards", {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        if (!res.ok || res.headers.get("X-Fragment") !== "cards") return;
+        const html = await res.text();
+        if (html === cardsEl.innerHTML) return;
+        const main = cardsEl.closest("main");
+        const top = main ? main.scrollTop : 0;
+        cardsEl.innerHTML = html;
+        if (main) main.scrollTop = top;
+        applyFilter();
+      } catch (err) {
+        // Offline or the server restarted: the next tick tries again.
+      }
+    };
+
+    setInterval(refresh, 3000);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) refresh();
+    });
   }
 
   /* ---------------- new-session directory picker ---------------- */
@@ -376,4 +418,12 @@
   }
 
   if (frame) connect(frame);
+
+  // Installable app: the service worker only caches static assets. It needs a
+  // secure context (https, or localhost during development).
+  if ("serviceWorker" in navigator && window.isSecureContext) {
+    addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    });
+  }
 })();

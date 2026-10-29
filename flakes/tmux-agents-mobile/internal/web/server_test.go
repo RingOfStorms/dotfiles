@@ -2,15 +2,21 @@ package web
 
 import (
 	"compress/gzip"
+	"fmt"
+	"html/template"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/agents"
+	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/tmux"
 )
 
 func testServer(roots ...string) *Server {
@@ -299,5 +305,76 @@ func TestEventStreamFlushesThroughMiddleware(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("first event was not flushed: the stream is buffered")
+	}
+}
+
+// After a sign-out the browser must not be able to show a cached page rendered
+// from the previous session (the back button on a phone does exactly that).
+func TestHTMLIsNotCached(t *testing.T) {
+	s := testServer()
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	h := s.headers(ok)
+
+	page := httptest.NewRequest(http.MethodGet, "http://example.test/p/1", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, page)
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("page Cache-Control = %q", got)
+	}
+
+	// Static assets stay cacheable.
+	asset := httptest.NewRequest(http.MethodGet, "http://example.test/static/app.css", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, asset)
+	if got := rec.Header().Get("Cache-Control"); got != "" {
+		t.Fatalf("asset Cache-Control = %q, want unset", got)
+	}
+}
+
+// Chrome only offers the install prompt when the manifest and a service worker
+// are served from the origin itself with the right content types.
+func TestInstallableAssets(t *testing.T) {
+	s := testServer()
+	s.tpl = template.Must(template.ParseFS(assets, "templates/*.html"))
+	h := s.Handler()
+
+	for _, tc := range []struct{ path, contentType string }{
+		{"/manifest.webmanifest", "application/manifest+json"},
+		{"/sw.js", "text/javascript; charset=utf-8"},
+		{"/static/icon-192.png", "image/png"},
+		{"/static/icon-512.png", "image/png"},
+	} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://example.test"+tc.path, nil))
+		if rec.Code != http.StatusOK {
+			t.Errorf("%s: status = %d", tc.path, rec.Code)
+			continue
+		}
+		if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, tc.contentType) {
+			t.Errorf("%s: content-type = %q, want %q", tc.path, got, tc.contentType)
+		}
+	}
+}
+
+// The inbox poll swaps cards in place: the fragment must be exactly what sits
+// inside the page's card container, and must be refused when tmux is gone.
+func TestInboxFragment(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+	s := testServer()
+	s.tpl = template.Must(template.ParseFS(assets, "templates/*.html"))
+	// No tmux server on this socket: the fragment must not hand back a page.
+	s.tmux = tmux.New("tmux", fmt.Sprintf("tamfrag-%d", os.Getpid()))
+	s.agents = agents.New("", s.tmux)
+	h := s.Handler()
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://example.test/?fragment=cards", nil))
+	if rec.Code == http.StatusOK {
+		t.Fatalf("fragment with no server returned 200: %q", rec.Body.String())
+	}
+	if got := rec.Header().Get("X-Fragment"); got == "cards" {
+		t.Fatalf("fragment claimed to be cards: %q", rec.Body.String())
 	}
 }

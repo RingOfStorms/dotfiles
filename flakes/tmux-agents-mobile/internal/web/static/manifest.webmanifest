@@ -1,12 +1,19 @@
 {
+  "id": "/",
   "name": "tmux agents",
-  "short_name": "agents",
-  "description": "Mobile check-in for tmux agent panes",
+  "short_name": "tmux",
+  "description": "Phone-sized view of tmux agent panes",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": [ "standalone", "minimal-ui" ],
+  "orientation": "portrait",
   "background_color": "#11111b",
   "theme_color": "#11111b",
   "icons": [
+    { "src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml" }
   ]
 }

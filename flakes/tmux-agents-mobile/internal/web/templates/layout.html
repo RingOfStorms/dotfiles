@@ -6,8 +6,12 @@
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#11111b">
 <title>{{if .Title}}{{.Title}} · {{end}}tmux</title>
-<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="/static/app.css">
 <script src="/static/htmx.min.js" defer></script>
 <script src="/static/app.js" defer></script>
@@ -40,7 +44,7 @@
   <nav>
     <a href="/">panes</a>
     <a href="/new">new</a>
-    <a href="/auth/logout">sign out</a>
+    {{if not .Dev}}<a href="/auth/logout">sign out</a>{{end}}
   </nav>
   {{if .Dev}}<span class="badge dev">no auth</span>{{end}}
 {{end}}

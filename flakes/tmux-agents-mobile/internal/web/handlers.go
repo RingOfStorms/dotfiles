@@ -55,11 +55,23 @@ type InboxPage struct {
 func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	page := InboxPage{Base: s.base("", "inbox")}
+	// The page polls GET /?fragment=cards and swaps the result in place.
+	fragment := r.URL.Query().Get("fragment") == "cards"
+
+	if fragment {
+		// A stale page (no tmux, expired session, ...) must not be pasted into
+		// the card list; the client only swaps responses that say "cards".
+		w.Header().Set("X-Fragment", "error")
+	}
 
 	// One call to the plugin: it owns the grouping logic, so the phone and the
 	// desktop navigator can never disagree about which worktree a session is in.
 	rows, err := s.agentRows(ctx)
 	if err != nil {
+		if fragment {
+			s.fail(w, http.StatusServiceUnavailable, "tmux unavailable")
+			return
+		}
 		if errors.Is(err, tmux.ErrNoServer) {
 			page.NoServer = true
 		} else {
@@ -70,6 +82,15 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 	}
 	page.Cards = s.cards(rows)
 	page.Total = len(page.Cards)
+
+	if fragment {
+		w.Header().Set("X-Fragment", "cards")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := s.tpl.ExecuteTemplate(w, "cards", page); err != nil {
+			s.log.Error("template", "name", "cards", "err", err)
+		}
+		return
+	}
 	s.render(w, "inbox.html", page)
 }
 
