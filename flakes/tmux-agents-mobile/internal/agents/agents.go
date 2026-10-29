@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/diff"
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/tmux"
 )
 
@@ -44,6 +45,10 @@ type Provider struct {
 	Fallback *tmux.Client
 	TTL      time.Duration
 	Log      *slog.Logger
+	// Git fills repo/branch in the no-plugin fallback; nil disables it.
+	Git *diff.Git
+
+	repoCache map[string]repoInfo
 
 	mu   sync.Mutex
 	at   time.Time
@@ -53,7 +58,7 @@ type Provider struct {
 // New returns a provider. bin is the tmux-agents executable; when it is empty or
 // missing, rows are synthesised from list-panes (no repo/branch grouping).
 func New(bin string, fallback *tmux.Client) *Provider {
-	return &Provider{Bin: bin, Fallback: fallback, TTL: time.Second}
+	return &Provider{Bin: bin, Fallback: fallback, TTL: time.Second, repoCache: map[string]repoInfo{}}
 }
 
 // Rows returns the tree, cached.
@@ -84,7 +89,7 @@ func (p *Provider) fetch(ctx context.Context) ([]Row, error) {
 		// still works - but it must not be silent either: the fallback has no
 		// repo grouping, and that is a visibly different inbox.
 		if p.Log != nil {
-			p.Log.Warn("tmux-agents rows failed; using title detection only", "bin", p.Bin, "err", err)
+			p.Log.Warn("tmux-agents rows --json unavailable; falling back to title detection (no worktree ordering)", "bin", p.Bin, "err", err)
 		}
 	}
 	return p.synthesise(ctx)
@@ -105,6 +110,11 @@ func (p *Provider) plugin(ctx context.Context) ([]Row, error) {
 }
 
 // synthesise is the no-plugin fallback: agent panes only, flat, no repo info.
+// synthesise is the no-plugin fallback: it builds the same session → agent pane
+// shape from plain tmux data, with repo/branch looked up through git when a
+// runner is available. Sessions without agent panes still appear, so an older
+// tmux-agents (one without `rows --json`) degrades to "no worktree ordering"
+// rather than "shell-only sessions vanish".
 func (p *Provider) synthesise(ctx context.Context) ([]Row, error) {
 	if p.Fallback == nil {
 		return nil, errors.New("no agents source")
@@ -113,28 +123,88 @@ func (p *Provider) synthesise(ctx context.Context) ([]Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]Row, 0, len(panes))
+
+	type group struct {
+		name   string
+		active string
+		path   string
+		label  string
+		panes  []tmux.Pane
+	}
+	var order []*group
+	byName := map[string]*group{}
 	for _, pn := range panes {
-		kind, label := Detect(pn.Title, pn.Command)
-		if kind == "" {
-			continue
+		g := byName[pn.Session]
+		if g == nil {
+			g = &group{name: pn.Session, active: pn.ID, path: pn.Path, label: pn.SessionLabel}
+			byName[pn.Session] = g
+			order = append(order, g)
 		}
+		g.panes = append(g.panes, pn)
+		if pn.Active && pn.WindowActive {
+			g.active, g.path = pn.ID, pn.Path
+		}
+	}
+
+	rows := make([]Row, 0, len(panes)+len(order))
+	for _, g := range order {
+		repo, branch := p.repoInfo(ctx, g.path)
 		rows = append(rows, Row{
-			ID:         "p:" + pn.ID,
-			Kind:       "pane",
-			Session:    pn.Session,
-			Pane:       pn.ID,
-			Label:      label,
-			Agent:      kind,
-			State:      pn.AgentState,
-			Unseen:     flexBool(pn.AgentUnseen),
-			Path:       pn.Path,
-			Window:     fmt.Sprint(pn.WindowIndex),
-			WindowName: pn.WindowName,
+			ID:      "s:" + g.name,
+			Kind:    "session",
+			Session: g.name,
+			Pane:    g.active,
+			Label:   g.label,
+			Repo:    repo,
+			Branch:  branch,
+			Path:    g.path,
+			Panes:   len(g.panes),
 		})
+		for _, pn := range g.panes {
+			kind, label := Detect(pn.Title, pn.Command)
+			if kind == "" {
+				continue
+			}
+			rows = append(rows, Row{
+				ID:         "p:" + pn.ID,
+				Kind:       "pane",
+				Session:    g.name,
+				Pane:       pn.ID,
+				Label:      label,
+				Agent:      kind,
+				State:      pn.AgentState,
+				Unseen:     flexBool(pn.AgentUnseen),
+				Repo:       repo,
+				Branch:     branch,
+				Path:       pn.Path,
+				Window:     fmt.Sprint(pn.WindowIndex),
+				WindowName: pn.WindowName,
+			})
+		}
 	}
 	return rows, nil
 }
+
+// repoInfo resolves a directory to its worktree root and branch, cached per
+// path. Anything that is not a git checkout yields empty strings.
+func (p *Provider) repoInfo(ctx context.Context, path string) (string, string) {
+	if p.Git == nil || path == "" {
+		return "", ""
+	}
+	if v, ok := p.repoCache[path]; ok {
+		return v.repo, v.branch
+	}
+	found, err := p.Git.Find(ctx, path)
+	if err != nil {
+		p.repoCache[path] = repoInfo{}
+		return "", ""
+	}
+	v := repoInfo{repo: found.Root, branch: found.Branch}
+	p.repoCache[path] = v
+	return v.repo, v.branch
+}
+
+type repoInfo struct{ repo, branch string }
 
 // Detect mirrors agent_kind/agent_label in tmux-agents.sh: omp announces itself
 // through the terminal title, opencode through its title plus the running

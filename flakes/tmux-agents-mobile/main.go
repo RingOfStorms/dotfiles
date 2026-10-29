@@ -29,15 +29,15 @@ import (
 )
 
 type config struct {
-	listen       string
-	healthListen string
-	tmuxBin      string
-	tmuxSocket   string
-	agentsBin    string
-	gitBin       string
-	roots        string
-	devNoAuth    bool
-	devTailnet   bool
+	listen           string
+	healthListen     string
+	tmuxBin          string
+	tmuxSocket       string
+	agentsBin        string
+	gitBin           string
+	roots            string
+	noAuth           bool
+	allowNonLoopback bool
 
 	zitadelIssuer   string
 	zitadelProject  string
@@ -59,8 +59,11 @@ func main() {
 	flag.StringVar(&cfg.gitBin, "git", envDefault("TAM_GIT", "git"), "git binary")
 	flag.StringVar(&cfg.roots, "roots", envDefault("TAM_ROOTS", "~"),
 		"colon-separated directories a new session may be created in (default: the home directory)")
-	flag.BoolVar(&cfg.devNoAuth, "dev-no-auth", false, "disable authentication (loopback listen addresses only)")
-	flag.BoolVar(&cfg.devTailnet, "dev-allow-tailnet", false, "allow --dev-no-auth on a non-loopback address (phone testing only)")
+	flag.BoolVar(&cfg.noAuth, "no-auth", false, "serve without authentication; the listener must be loopback unless --allow-nonloopback")
+	flag.BoolVar(&cfg.allowNonLoopback, "allow-nonloopback", false, "permit --no-auth on a non-loopback address (unsafe: anyone who can reach it gets a shell)")
+	// Old names, kept so existing scripts and muscle memory keep working.
+	legacyNoAuth := flag.Bool("dev-no-auth", false, "alias for --no-auth")
+	legacyTailnet := flag.Bool("dev-allow-tailnet", false, "alias for --allow-nonloopback")
 
 	flag.StringVar(&cfg.zitadelIssuer, "zitadel-issuer", envDefault("TAM_ZITADEL_ISSUER", ""), "Zitadel OIDC issuer")
 	flag.StringVar(&cfg.zitadelProject, "zitadel-project-id", envDefault("TAM_ZITADEL_PROJECT_ID", ""), "Zitadel project ID")
@@ -71,6 +74,8 @@ func main() {
 	flag.StringVar(&cfg.sessionKeyFile, "session-key-file", envDefault("TAM_SESSION_KEY_FILE", ""), "HMAC session key file; a random key is generated per boot when empty")
 	flag.StringVar(&cfg.apiKeysFile, "api-keys-file", envDefault("TAM_API_KEYS_FILE", ""), "newline-delimited API keys (machines, tests)")
 	flag.Parse()
+	cfg.noAuth = cfg.noAuth || *legacyNoAuth
+	cfg.allowNonLoopback = cfg.allowNonLoopback || *legacyTailnet
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	if err := run(context.Background(), cfg, log); err != nil {
@@ -111,18 +116,21 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	}
 
 	if !authenticator.Enabled() {
-		if !cfg.devNoAuth {
-			return errors.New("no authentication configured: set TAM_ZITADEL_ISSUER and TAM_ZITADEL_CLIENT_ID, or pass --dev-no-auth")
+		if !cfg.noAuth {
+			return errors.New("no authentication configured: set TAM_ZITADEL_ISSUER and TAM_ZITADEL_CLIENT_ID, or pass --no-auth for a local-only server")
 		}
-		if !isLoopback(cfg.listen) && !cfg.devTailnet {
-			return fmt.Errorf("--dev-no-auth refuses to listen on %q; pass --dev-allow-tailnet to override", cfg.listen)
+		if !isLoopback(cfg.listen) && !cfg.allowNonLoopback {
+			return fmt.Errorf("--no-auth refuses to listen on %q (it would be wide open); pass --allow-nonloopback to override", cfg.listen)
 		}
-		log.Warn("AUTHENTICATION DISABLED", "listen", cfg.listen, "reason", "--dev-no-auth")
+		log.Warn("AUTHENTICATION DISABLED: every route is open to whoever can reach the listener", "listen", cfg.listen)
 	}
 
 	hub := watch.New(tmuxClient, log)
+	git := diff.New(cfg.gitBin)
+
 	provider := agents.New(cfg.agentsBin, tmuxClient)
 	provider.Log = log
+	provider.Git = git
 
 	// One index of the home directory, shared by the new-session picker.
 	home, err := os.UserHomeDir()
@@ -137,7 +145,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 			log.Warn("directory index failed; the picker will fall back", "err", err)
 		}
 	}()
-	webServer, err := web.New(tmuxClient, hub, provider, diff.New(cfg.gitBin), dirIndex, expandRoots(cfg.roots), cfg.devNoAuth, log)
+	webServer, err := web.New(tmuxClient, hub, provider, git, dirIndex, expandRoots(cfg.roots), !authenticator.Enabled(), log)
 	if err != nil {
 		return err
 	}

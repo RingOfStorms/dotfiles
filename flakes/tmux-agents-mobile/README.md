@@ -55,6 +55,27 @@ connected.
   desktop quiet while you watch (`@agent_watch_until`), and *desktop* hands the
   pane to the largest attached client.
 
+## What it needs from tmux (and from the plugin)
+
+The app drives stock tmux: `list-panes`, `capture-pane`, `send-keys`,
+`load-buffer`/`paste-buffer`, `new-session`, and pane options. **No tmux
+configuration changes and no patch to the plugin are required** - it works
+against whatever tmux server is running, and it never attaches a client.
+
+The tmux-agents plugin is optional and the app degrades in a defined way:
+
+| | New plugin (`rows --json`) | Older plugin (before this work) | No plugin |
+|---|---|---|---|
+| Pane list | navigator tree, repo → session → panes | title detection + `git` lookups | title detection + `git` lookups |
+| Shell-only sessions | session card | session card | session card |
+| Agent glyphs | `@agent_state` from the tick | `@agent_state` from the tick | guessed from the title |
+| Unseen marks | `@agent_unseen` | `@agent_unseen` | none |
+| Watching suppresses desktop alerts | yes (`@agent_watch_until`) | no - the old tick ignores it | no |
+
+The fallback is exercised by a test (`TestFallbackKeepsShellOnlySessions`), so
+pointing this at a machine with the older plugin gives you the full pane list
+and state, just without the worktree ordering the newer plugin adds.
+
 ## Plugin coupling (flakes/tmux-agents)
 
 Two small additions, both backwards compatible:
@@ -74,69 +95,117 @@ title, with no repo grouping.
 
 ```sh
 cd flakes/tmux-agents-mobile
-nix develop          # go, gopls, tmux, git
+nix develop          # go, gopls, tmux, git, fzf
 go test ./...
-go run . --listen 127.0.0.1:8099 --dev-no-auth
+go run . --listen 127.0.0.1:8099 --no-auth
 ```
 
-`--dev-no-auth` is refused unless the listen address is loopback. Testing from
-the phone before the real deployment needs a second, explicit flag:
-
-```sh
-go run . --listen 100.64.0.1:8099 --dev-no-auth --dev-allow-tailnet
-```
-
-and a temporary firewall rule for that address. The startup log prints a loud
-`AUTHENTICATION DISABLED` warning whenever this is on.
-
-Point it at another server with `--tmux-socket name` (`tmux -L name`). To use the
-plugin from this checkout (the installed one only grows `rows --json` once the
-flake is updated), point `--agents` at a wrapper — the script has no exec bit:
+Point it at another tmux server with `--tmux-socket name` (`tmux -L name`). To
+use the plugin from this checkout (the installed one only grows `rows --json`
+once the flake is updated), point `--agents` at a wrapper — the script has no
+exec bit:
 
 ```sh
 printf '#!/bin/sh\nexec bash %s "$@"\n' "$PWD/../tmux-agents/tmux-agents.sh" > /tmp/tmux-agents-dev
 chmod +x /tmp/tmux-agents-dev
-go run . --dev-no-auth --agents /tmp/tmux-agents-dev
+go run . --no-auth --agents /tmp/tmux-agents-dev
 ```
 
-Without `--agents` (or when the plugin is missing) the inbox still works, using
-terminal-title detection instead of the repo tree.
+Without `--agents` (or when the plugin is older than `rows --json`) the inbox
+still works: sessions and agent panes are detected from pane titles, with repo
+and branch filled in by git.
+
+## Authentication is optional
+
+Every route goes through Zitadel **when it is configured**, and the app refuses
+to start without it unless you ask for the unauthenticated mode explicitly:
+
+```sh
+tmux-agents-mobile                     # needs TAM_ZITADEL_ISSUER + TAM_ZITADEL_CLIENT_ID
+tmux-agents-mobile --no-auth           # loopback only: 127.0.0.1, ::1, localhost
+tmux-agents-mobile --no-auth --listen 0.0.0.0:8099 --allow-nonloopback
+```
+
+`--no-auth` on a non-loopback address is refused unless `--allow-nonloopback`
+is given too, so "exposed and unauthenticated" is always a deliberate,
+two-flag mistake. The header of the UI shows a red **no auth** badge in that
+mode so it is obvious which one you are looking at. (`--dev-no-auth` and
+`--dev-allow-tailnet` still work as aliases.)
 
 ## Deployment
 
-`homeManagerModules.default` installs a **user** service (it must be the same
-user as the tmux server for socket access). The Zitadel client is configured
-through the environment, not the Nix store:
+Three modules, the same options:
 
-```
-TAM_ZITADEL_ISSUER=https://sso.joshuabell.xyz
-TAM_ZITADEL_PROJECT_ID=…
-TAM_ZITADEL_CLIENT_ID=…            # PKCE app, redirect = …/auth/callback
-TAM_ZITADEL_CLAIM=flatRolesClaim
-TAM_ZITADEL_ROLE=                  # empty: any authenticated project member
-TAM_SESSION_KEY_FILE=/run/…
-```
+- `nixosModules.default` — the one to use on a NixOS host. It installs a
+  **systemd user unit** (`ConditionUser` pins it to one account, because it must
+  be the same user as the tmux server to reach `/tmp/tmux-<uid>/`). It does not
+  touch nginx, the firewall or DNS: the host owns those, since the exposure is
+  a property of the machine.
+- `darwinModules.default` — the same service as a launchd user agent on macOS.
+- `homeManagerModules.default` — a systemd user unit for a standalone
+  home-manager profile (Linux).
+
+Options worth knowing: `user` (required), `listen` (default
+`127.0.0.1:8099`), `roots` (default `["~"]`, the trust boundary for the
+new-session form), `sessionKeyFile` and `zitadel.{issuer,clientId,projectId,claim,role,redirectUri}`.
+The Zitadel client is public information, so it can live in the Nix config; a
+session key file avoids logging every phone out on restart.
+
+Set `zitadel.clientId` to gate it behind Zitadel (register
+`http(s)://<host>/auth/callback` as the app's redirect URI). With it empty the
+service runs **unauthenticated** and is then loopback-only - see
+[Authentication is optional](#authentication-is-optional).
 
 `auth.Wrap` covers the entire mux — pages, static assets, SSE and every POST.
 The only route served before the session check is `/auth/*`. `/healthz` lives on
 its own loopback listener so the authenticated mux needs no exception.
 
-nginx terminates the tailnet vhost (plain HTTP over the overlay, matching
-fleet-edge) and proxies to `127.0.0.1:8099`. SSE needs buffering off:
+### The lio setup
+
+`hosts/lio/tmux-mobile.nix` is the worked example: the service for the primary
+user, an nginx vhost for `tmux.<domain>` using the wildcard certificate h005
+pushes to lio (`fleet.wildcardTls`, with `:80` redirecting to it), and firewall
+rules that open `:80`/`:443` on `tailscale0` only — no container route, no
+public DNS. `hosts/h005/dns-records.nix` answers the name from the tailnet
+dnsmasq with lio's overlay IP, so it resolves for tailnet clients and nowhere
+else.
+
+SSE needs buffering off, which the vhost sets:
 
 ```nginx
-location / {
-  proxy_pass http://127.0.0.1:8099;
-  proxy_http_version 1.1;
-  proxy_set_header Host $host;
-  proxy_buffering off;          # SSE
-  proxy_read_timeout 1h;
+proxy_http_version 1.1;
+proxy_buffering off;
+proxy_read_timeout 1h;
+```
+
+The service sends `X-Accel-Buffering: no` on the event stream as well, so a
+proxy that honours it needs no extra configuration.
+
+### macOS (nix-darwin)
+
+`darwinModules.default` installs the same service as a **launchd user agent**
+(no systemd, no accumulation of a root daemon). On the Mac, a typical
+`configuration.nix` snippet:
+
+```nix
+{
+  imports = [ inputs.tmux-agents-mobile.darwinModules.default ];
+
+  services.tmux-agents-mobile = {
+    enable = true;
+    user = "josh";
+    listen = "127.0.0.1:8099";        # no auth, so loopback only
+    # zitadel.clientId = "…";         # omit for the unauthenticated mode
+  };
 }
 ```
 
-The service sets `X-Accel-Buffering: no` on the event stream as well, so a
-proxy that honours it needs no extra configuration.
+then `nix build .#darwinConfigurations.<host>.system` / `darwin-rebuild switch`
+as usual. The package wraps `tmux`, `git` and `fzf` into its `PATH`, so the
+agent does not depend on the launchd environment having them.
 
+`homeManagerModules.default` is Linux-only (it writes a systemd user unit);
+use `darwinModules` on macOS.
 ## Limits
 
 - Full-screen TUIs are captured as text, so they reflow as prose. The *fit*
@@ -168,3 +237,4 @@ directory (built at startup, refreshed every minute, hidden dirs skipped except
 match, so the field still works. The form itself still validates the chosen
 directory: `--roots` (default: the home directory) is the trust boundary the
 web UI may create sessions under.
+

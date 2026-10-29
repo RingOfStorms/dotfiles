@@ -16,7 +16,7 @@
       flake-utils,
       tmux-agents,
     }:
-    flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (
+    flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ] (
       system:
       let
         pkgs = import nixpkgs { inherit system; };
@@ -40,7 +40,12 @@
           # The tmux integration tests start an isolated `tmux -L tamtest-…`
           # server; tmux must be on PATH inside the sandbox, and it needs a
           # shell that exists there (the sandbox has no login shell of its own).
-          nativeCheckInputs = [ pkgs.tmux ];
+          # The tmux integration tests also shell out to git (repo/branch
+          # lookups in the no-plugin fallback).
+          nativeCheckInputs = [
+            pkgs.tmux
+            pkgs.git
+          ];
           preCheck = ''
             export SHELL=${pkgs.bashInteractive}/bin/bash
             export TMUX_TMPDIR="$TMPDIR"
@@ -77,6 +82,80 @@
       }
     )
     // {
+      # NixOS: the UI runs as a systemd *user* unit. It must be the same user as
+      # the tmux server to reach /tmp/tmux-<uid>/default without loosening a
+      # system unit's sandbox; NixOS installs user units system-wide, so
+      # ConditionUser pins it to the configured account. This module only runs
+      # the app - the vhost, firewall and DNS belong to the host.
+      nixosModules.default =
+        {
+          config,
+          lib,
+          pkgs,
+          ...
+        }:
+        let
+          cfg = config.services.tmux-agents-mobile;
+          environment = import ./nix/environment.nix { inherit cfg lib; };
+        in
+        {
+          imports = [ ./nix/options.nix ];
+
+          config = lib.mkIf cfg.enable {
+            services.tmux-agents-mobile.package =
+              lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+
+            systemd.user.services.tmux-agents-mobile = {
+              description = "tmux-agents-mobile phone UI";
+              wantedBy = [ "default.target" ];
+              after = [ "network.target" ];
+              # A unit-level directive: the account that owns the tmux server.
+              unitConfig.ConditionUser = cfg.user;
+              serviceConfig = {
+                ExecStart = "${cfg.package}/bin/tmux-agents-mobile";
+                Restart = "on-failure";
+                RestartSec = "5s";
+                UMask = "0077";
+                Environment = lib.mapAttrsToList (name: value: "${name}=${value}") environment;
+                # A user unit cannot carry most systemd hardening (no
+                # capabilities, no namespaces); these two still apply.
+                NoNewPrivileges = true;
+                RestrictSUIDSGID = true;
+              };
+            };
+          };
+        };
+
+      # nix-darwin: the same service as a per-user launchd agent.
+      darwinModules.default =
+        {
+          config,
+          lib,
+          pkgs,
+          ...
+        }:
+        let
+          cfg = config.services.tmux-agents-mobile;
+          environment = import ./nix/environment.nix { inherit cfg lib; };
+        in
+        {
+          imports = [ ./nix/options.nix ];
+
+          config = lib.mkIf cfg.enable {
+            services.tmux-agents-mobile.package =
+              lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+
+            launchd.user.agents.tmux-agents-mobile = {
+              command = "${cfg.package}/bin/tmux-agents-mobile";
+              serviceConfig = {
+                RunAtLoad = true;
+                KeepAlive = true;
+                EnvironmentVariables = environment;
+              };
+            };
+          };
+        };
+
       # Runs as the same user as the tmux server (so the socket needs no
       # tricks) and is meant to sit behind nginx on a tailnet-only vhost. The
       # Zitadel client is configured through the environment; see README.md.

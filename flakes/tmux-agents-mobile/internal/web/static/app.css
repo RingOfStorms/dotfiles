@@ -92,7 +92,7 @@ a { color: var(--accent); text-decoration: none; }
   background: var(--surface-2);
   color: var(--muted);
 }
-.badge.dev { color: var(--yellow); }
+.badge.dev { color: var(--red); border: 1px solid color-mix(in srgb, var(--red) 45%, transparent); }
 
 /* overflow menu (details/summary, no JS required to open) */
 .menu { position: relative; flex: 0 0 auto; margin-left: auto; }
