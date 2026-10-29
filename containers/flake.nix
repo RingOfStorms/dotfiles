@@ -94,6 +94,8 @@
           h: ((import ../hosts/fleet.nix).hosts.${h}.overlayIp or null) != null
         ) (builtins.attrNames (import ../hosts/fleet.nix).hosts);
         dataRoot = containersLib.dataRoot;
+        # LAN subnet, for the `weblan` ports-file lines (host-module.nix).
+        lanSubnet = containersLib.lanSubnet;
       };
 
       packages = forAll (pkgs: rec {

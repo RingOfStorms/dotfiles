@@ -148,13 +148,13 @@ inventory = redeploying h005** (after `nix flake update containers` in
 
 ## Topology (`/topology`)
 
-`/topology` draws the whole edge: internet, the Oracle Cloud node, the rack,
-the home LAN, the roaming laptops, and how they relate. The page is a
-pan/zoom SVG (drag, scroll/pinch, click a box for its details) that refreshes
-`/topology.svg` every 30s, plus a notes panel and per-layer checkboxes
-(Physical / Tailnet / Public paths / Agents & control).
+`/topology` is a route atlas of the edge: internet, the Oracle Cloud node, the
+rack, the home LAN and the roaming laptops as fixed-size stations in open
+labelled regions. It answers "what is where, what is up, and what talks to
+what" from a single screen; per-service chips are gone, so a host carrying
+sixteen services still reads as one box.
 
-The diagram is a hand-written spec merged with everything the inventory
+The drawing is a hand-written spec merged with everything the inventory
 already knows:
 
 ```
@@ -165,12 +165,125 @@ fleet-edge --topology /path/to/topology.json      # or FLEET_EDGE_TOPOLOGY
 sets `FLEET_EDGE_TOPOLOGY` from `services.fleet-edge.topology`. With neither,
 every inventory host is drawn in one zone.
 
-Drag to pan; wheel/pinch or `+`/`-` to zoom; `0`/fit resets the view.
-Select a box (click or Enter/Space) for full details and connected paths;
-Escape clears selection. The URL fragment preserves selection and layer
-toggles persist locally. Status refreshes every 30s while the tab is visible,
-preserving zoom, selection and layer state. Offline hosts retain declared
-container placement but show unknown container status, not stale metrics.
+### Reading the map
+
+Drag to pan; wheel or pinch to zoom; `+` / `-` zoom, `0` or `fit` returns to
+the whole-fleet overview, `Escape` clears the selection. A click on a station
+(Enter/Space when it has focus) opens its details in the sidebar: addresses,
+declared role, lines, services with their exposure, drives with their SMART
+finding, filesystems, fail2ban jails and the wiring it participates in. The
+URL fragment carries the selection, so a sidebar can be linked to.
+
+The opening view is not the fitted overview. A 1800-unit atlas fitted into a
+1440 px stage renders station names at 7.5 px, so the page opens at whatever
+zoom makes a name clear (at least 11.5 px) and centres the host carrying the
+most declared services among those currently online — a router or a cloud
+region makes a poor centre because no fleet service is anchored to it. If no
+host is online yet it falls back to `hubs.edge`, then to the middle of the
+diagram; no host id is hardcoded. `fit` is the explicit overview you return
+to. A view saved on a wide screen is raised to the same floor when it is
+restored on a phone, so a station name is never illegible after a resize:
+the saved centre is kept and only the scale moves.
+
+The map refreshes every 30 s while the tab is visible, preserving zoom,
+selection and layer state. Polling and animation stop when the tab is hidden.
+
+### Views and layers
+
+Three view buttons choose which wiring is drawn:
+
+| view | draws |
+| --- | --- |
+| Overview | stations, regions and labels only — no static wiring |
+| Physical | the known cabling: WAN, ethernet, trunk, KVM, power |
+| Control | the poll and control paths (agent polls, dashboard fan) |
+
+Overview hides the declared rails on purpose: the page's job there is the
+shape of the fleet, and journeys are drawn on demand instead. Journeys and
+traffic dots live in their own overlay, so selecting a host or switching mode
+draws a route over an Overview without turning the rails back on.
+
+The layer checkboxes (Physical links, Tailnet paths, Public paths, Agents &
+control) filter link families independently of the view. Toggles persist in
+`localStorage`, as do zoom and selection.
+
+### Traffic: simulated by default, honest about it
+
+The badge reads **Simulation** from first paint: requests are generated from
+the routes the repo declares (public through the edge hub, tailnet from a
+virtual overlay client), and no traffic is measured. Switching to **Real**
+does not invent anything — with no provider connected the badge reads *No
+traffic provider*, the sidebar says "no measured source is connected", and no
+dot is drawn. Only a provider that reports events animates, and each event is
+styled as measured or simulated.
+
+Animations respect `prefers-reduced-motion`: the travelling dot is replaced
+by a marker that appears at the destination. At most 64 dots are in flight and
+each event id is consumed once.
+
+### History and replay
+
+Snapshots are recorded every 30 s and kept for 24 h (`/api/topology/timeline`,
+clamped to 1–24 h). Where that history lives depends on the NixOS option
+`services.fleet-edge.dbPath` (default `/var/lib/fleet-edge/metrics.db`), which
+the module passes as `--db` / `FLEET_EDGE_DB`. With a database, snapshots are
+written to SQLite, survive a restart, and the timeline reports
+`persistent: true`; its 24 h window is the last 24 h of stored rows, so it
+reaches back before a restart. With `dbPath = ""` persistence is off and the
+same 24 h is held in a bounded in-memory ring: the page behaves identically for
+the life of the process, but every restart starts with an empty strip
+(`persistent: false`) and the window can only ever cover time since that
+process started.
+
+The strip above the scrubber is the visual history: one bar per slice at the
+worst finding in it, so a disk warning stays visible instead of collapsing into
+a hairline. Slices with no snapshot are left empty — a recording gap never
+reads as healthy time — and a replay that reaches one stops with "No recording
+covers that moment…" rather than showing a healthier map than what was
+recorded.
+
+The scrubber seeks; ▶ replays from the current cursor at 1×/4×/16×/64× (64× ≈
+22 min for a day); **Live** returns to the newest snapshot. A replay frame is
+requested with `trafficWindow=full` so its whole 30 s window is queued and
+released by the replay clock; a scrubbed frame shows recorded health without
+traffic; pausing playback freezes any dots already in flight. A frame older
+than its snapshot window is labelled with its age instead of pretending to be
+current.
+
+Playback has one clock: pausing stops it, so the label, the slider and every
+dot freeze where they are, and the page stops polling `/api/topology/traffic`
+until the map is live again. Events the replay has queued but not yet reached
+wait with it. Resuming continues from that exact cursor — the queue and the
+window already fetched are kept, so no event is replayed twice or dropped.
+Scrubbing, **Live** and a mode switch are new intents: they cancel a frame
+request that is still in flight, and a replay frame that arrives after the
+pause is ignored rather than drawn behind a stopped clock. Only play requests
+carry the whole window; a scrub asks again at the cursor, so playing straight
+after a scrub still queues that window.
+
+### Country flags
+
+Set `services.fleet-edge.geoipCountryFile` (or pass `--geoip-country-file` /
+`FLEET_EDGE_GEOIP_COUNTRY_FILE`; the module default is empty, which disables
+lookups entirely). The value is a path to the offline **DB-IP Lite Country**
+CSV, plain or gzip-compressed — `.csv` and `.csv.gz` are both accepted, chosen
+by sniffing the file header rather than the extension, so a decompressed dump
+works without renaming it. Example:
+`/var/lib/fleet-edge/dbip-country-lite.csv.gz`.
+
+The file is parsed once at startup and queried in memory; nothing is
+downloaded and no banned address ever leaves the host for a lookup, so the
+sidebar still resolves countries on a machine with no egress. A configured
+path that is missing or malformed fails startup rather than serving a partial
+index, so a half-parsed database can never answer wrongly; leaving the option
+empty is the supported way to disable lookups.
+
+Banned addresses in the sidebar then carry a flag and country name, and the
+attribution line names the source (DB-IP Lite Country, CC BY 4.0). The country
+is where the address block is *registered*: it is an estimate about an
+address, never a claim about a person, and private, loopback, link-local,
+CGNAT, documentation and IPv6 ULA space is deliberately left unlabelled
+instead of guessed.
 
 ### Schema
 
@@ -180,7 +293,7 @@ container placement but show unknown container status, not stale metrics.
 | --- | --- |
 | `width` | SVG width in units (0 = 1800) |
 | `rows[].zones[]{id,label,kind,flex}` | horizontal bands; zones share a row, widths proportional to `flex` |
-| `nodes[]{id,host,label,kind,zone,lines[],href}` | one box; `host` binds it to an inventory host |
+| `nodes[]{id,host,label,kind,zone,role,badges[],lines[],href}` | one station; `host` binds it to an inventory host, `role` is the muted line under the name, `badges` the declared tags |
 | `links[]{from,to,kind,label}` | one declared connection between two node ids |
 | `defaultZone` | zone that receives every inventory host the spec doesn't place |
 | `hide[]` | inventory hosts never auto-placed |
@@ -194,13 +307,17 @@ the layer it belongs to: `wan`, `ethernet`, `trunk`, `wifi`, `kvm`, `power`
 
 ### What is derived, never declared
 
-- **Inventory hosts and their live state** — the poll's state dot, overlay/LAN
-  IPs, metrics and container chips come from the inventory, not the spec.
+- **Inventory hosts and their live state** — the state dot, overlay/LAN IPs,
+  role, metrics and per-service detail come from the inventory, not the spec.
   Every inventory host the spec doesn't place appears in `defaultZone`, so a
   new fleet host shows up without a spec edit (use `hide` for non-fleet
   things like the printer).
-- **Container chips** — the services the repo declares on that host, with the
-  exposure stripe and the polled state dot.
+- **Service and drive detail** — the sidebar lists every declared service with
+  its exposure, proto, port and URLs, every drive with its SMART finding, the
+  filesystems and the fail2ban jails. A red service count means something is
+  not running; a ban is protective enforcement and is never counted as a
+  fault. Missing SMART is unknown, not healthy, and a standby drive is quiet
+  rather than failing.
 - **`hubs.tailnet`** — an edge to every placed host with an overlay IP.
 - **`hubs.edge`** — an edge to every placed host carrying `via = "edge"`
   routes, labelled with the count.
@@ -226,7 +343,8 @@ node id that collides with an auto-placed host name, links with an unknown
 kind/endpoint or a self-loop, and a hub naming a node the spec doesn't
 place.
 Negative widths/flex are rejected, and every computed zone must be at least
-200 SVG units wide (after the row's gaps and proportional flex allocation).
+`topology.MinWidth` (224 SVG units) wide, after the row's gaps and
+proportional flex allocation.
 
 h005's spec is `hosts/h005/topology.nix`, wired in `hosts/h005/fleet-edge.nix`
 as `topology = import ./topology.nix { inherit fleet constants; };` — it reads

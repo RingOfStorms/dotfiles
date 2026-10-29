@@ -80,6 +80,8 @@ type Inventory struct {
 	// trusts the declared host.
 	ContainerHosts []string `json:"containerHosts"`
 	DataRoot       string   `json:"dataRoot"`
+	// LanSubnet is the fleet LAN (fleet.nix global.lanSubnet), for `weblan`.
+	LanSubnet string `json:"lanSubnet"`
 }
 
 var (
@@ -963,6 +965,12 @@ func prepareScript(s Service, host string) string {
 	for _, l := range portsFileLines(s, host) {
 		ports.WriteString(l + "\n")
 	}
+	// 80/443 admission (ROUTING-PLAN 8.2) for this service's vhosts on this
+	// host, from its own routes. Written before prunePortsScript, which
+	// ignores non-`tcp|udp` first words.
+	for _, l := range srcPortLines(s, host) {
+		ports.WriteString(l + "\n")
+	}
 	b.WriteString(fmt.Sprintf("old_ports=$(cat /var/lib/fleet-containers/ports/%s 2>/dev/null || true)\n", s.Name))
 	b.WriteString(fmt.Sprintf("printf %%s %s > /var/lib/fleet-containers/ports/%s\n", q(ports.String()), s.Name))
 	b.WriteString(prunePortsScript)
@@ -986,6 +994,90 @@ const prunePortsScript = `while read -r pr po mode _ || [ -n "$pr" ]; do
   nft delete element inet nixos-fw temp-ports "{ $pr . $po }" 2>/dev/null || true
 done <<< "$old_ports"
 `
+
+// refreshScript rewrites the 80/443 admission in s's ports file on host
+// from srcPortLines, which is what a deploy would have written: the web
+// and weblan lines are recomputed and every other line is kept. Only the
+// ports file is touched -- the container and its nginx site keep running,
+// so a vhost's `allow` list still only changes on a deploy.
+func refreshScript(s Service, host string) string {
+	p := "/var/lib/fleet-containers/ports/" + s.Name
+	var fresh strings.Builder
+	for _, l := range srcPortLines(s, host) {
+		fresh.WriteString(l + "\n")
+	}
+	var b strings.Builder
+	b.WriteString("set +e\n")
+	b.WriteString("p=" + p + "\n")
+	b.WriteString("b=$p.bak\n")
+	b.WriteString("if [ ! -e \"$p\" ]; then\n")
+	b.WriteString(fmt.Sprintf("  printf \"warning: %s has no ports file on %s yet; its net.uses admission is unchanged\\n\" >&2\n", s.Name, host))
+	b.WriteString("  exit 0\nfi\n")
+	b.WriteString("rm -f \"$b\" \"$p.new\"\n")
+	b.WriteString(fmt.Sprintf("cp \"$p\" \"$b\" || { printf \"warning: cannot back up %s on %s; its net.uses admission is stale\\n\" >&2; exit 0; }\n", p, host))
+	b.WriteString("if awk \"\\$1 == \\\"web\\\" || \\$1 == \\\"weblan\\\" { next } { print }\" \"$b\" > \"$p.new\"")
+	if fresh.Len() > 0 {
+		// srcPortLines only emits addresses and CIDRs, so a double-quoted
+		// block carries the newlines and needs no shell quoting.
+		b.WriteString(" && printf %s \"" + fresh.String() + "\" >> \"$p.new\"")
+	}
+	b.WriteString(" && mv -f \"$p.new\" \"$p\"; then\n")
+	b.WriteString("  rm -f \"$b\"\n")
+	b.WriteString("else\n")
+	b.WriteString(fmt.Sprintf("  printf \"warning: cannot rewrite %s on %s; kept the previous ports file\\n\" >&2\n", p, host))
+	b.WriteString("  mv -f \"$b\" \"$p\"\n")
+	b.WriteString("fi\n")
+	b.WriteString("rm -f \"$b\" \"$p.new\"\n")
+	b.WriteString(fmt.Sprintf("systemctl reload-or-restart fleet-containers-ports.service || printf \"warning: cannot reload the ports sets on %s\\n\" >&2\n", host))
+	return b.String()
+}
+
+// refreshCallers re-computes the ports file of every callee caller's
+// net.uses names, on every host each callee actually runs on: a move or a
+// destroy changes where the caller is, which those files encode. Called
+// after the change has been made, and after resetFleetPlacement, so the
+// placement it reads is the new one. Failures are warnings: the move or
+// destroy itself already succeeded.
+func refreshCallers(caller Service) {
+	var callees []Service
+	for _, u := range caller.Net.Uses {
+		t, r, ok := usesTarget(u)
+		if !ok || r.Proto != "http" || r.Exposure == "local" {
+			continue
+		}
+		callees = append(callees, t)
+	}
+	if len(callees) == 0 {
+		// The common case: nothing to re-admit, so no discovery sweep.
+		return
+	}
+	fp := fleetPlacementNow()
+	if fp == nil {
+		return
+	}
+	done := map[string]bool{}
+	for _, t := range callees {
+		hosts, known := fp.places(t.Name, t.Host)
+		if !known {
+			fmt.Fprintf(os.Stderr, "warning: %s was not discovered (a host did not answer); refreshing its admission of %s on its declared host %s\n", t.Name, caller.Name, t.Host)
+		}
+		if len(hosts) == 0 {
+			fmt.Fprintf(os.Stderr, "warning: %s is installed on no host; its admission of %s is not refreshed\n", t.Name, caller.Name)
+			continue
+		}
+		for _, th := range hosts {
+			key := th + " " + t.Name
+			if done[key] {
+				continue
+			}
+			done[key] = true
+			info("refreshing the 80/443 admission of %s on %s (net.uses %s)", t.Name, th, caller.Name)
+			if err := remote(th, true, refreshScript(t, th)); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: refreshing %s on %s: %v\n", t.Name, th, err)
+			}
+		}
+	}
+}
 
 // siteScript writes (or removes) the service's nginx site on host, validated
 // with nginx -t and rolled back on failure. Used by prepareScript and by
@@ -1054,7 +1146,15 @@ func cmdDeploy(args []string) error {
 		return remote(h, true, "set -euo pipefail\n"+siteScript(s, h)+dropOverrideScript(s.Name))
 	}
 	ref := withRev(flakeRef(s.Dir), f.vals["rev"])
-	return deploy(s, h, ref, f.bools["local"])
+	if err := deploy(s, h, ref, f.bools["local"]); err != nil {
+		return err
+	}
+	// A deploy is where a new placement first shows up, so the callees this
+	// service uses have to admit it from its new host. Not in deploy() itself:
+	// a move deploys mid-flight and refreshes once, after the switch.
+	resetFleetPlacement()
+	refreshCallers(s)
+	return nil
 }
 
 func deploy(s Service, h, ref string, local bool) error {
@@ -1306,7 +1406,21 @@ func cmdDestroy(args []string) error {
 		script += "rm -rf " + q(dataDir(s)) + "\n"
 	}
 	info("removing %s from %s%s", s.Name, h, map[bool]string{true: " and DELETING its data"}[f.bools["purge"]])
-	return remote(h, true, script)
+	err := remote(h, true, script)
+	if err != nil {
+		// The removal may have failed, so the service can still be running:
+		// leave the callees' admission alone rather than withdraw it.
+		return err
+	}
+	// Whoever used this service's routes has to stop admitting this copy.
+	// Its definition stays: another host may still be running it, and that
+	// copy has to keep its admission. Only the (service, host) pair is
+	// retired, so discovery stops reporting the copy just removed even if the
+	// host has not caught up. Only warnings: the removal itself is done.
+	retirePlacement(s.Name, h)
+	resetFleetPlacement()
+	refreshCallers(s)
+	return nil
 }
 
 // ---------------------------------------------------------------- idmap

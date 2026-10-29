@@ -16,9 +16,11 @@ import (
 	"io"
 	"net"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 )
@@ -163,8 +165,11 @@ func isEdgeRoute(r Route) bool {
 //     and only it trusts X-Forwarded-For (real_ip) from the edge.
 //
 // tailnet and lan routes get only the internal server. Their source ACL
-// (§2.1: enforced by transport peer, never DNS) is an include written by
-// host-module.nix, see writeExposureACL. Returns "" when nothing is exposed.
+// (§2.1: enforced by transport peer, never DNS) is either an include
+// written by host-module.nix (writeExposureACL) or, for a tailnet route
+// with `allow`, per-host `allow <overlayIp>; # allow: <host>` lines plus
+// `deny all;` -- the same set the host firewall admits on 80/443 for that
+// route (srcPortLines). Returns "" when nothing is exposed.
 func routesVhost(s Service) string {
 	var b strings.Builder
 	for _, n := range sortedRouteNames(s) {
@@ -187,11 +192,13 @@ func routesVhost(s Service) string {
 		// net.uses callers (ROUTING-PLAN §8 step 5; FLOWS-AUDIT target
 		// design (a)): same-host private guests come in on 10.233.0.1,
 		// which the tailnet/lan ACL would refuse; cross-host callers
-		// arrive masqueraded as their host's overlay IP.
+		// arrive masqueraded as their host's overlay IP. The firewall
+		// half (srcPortLines) follows live discovery; this list still
+		// follows the declared host, so it is only as current as the repo.
 		for _, c := range callerIPs(s, n) {
 			fmt.Fprintf(&b, "  allow %s; # %s\n", c.ip, c.comment)
 		}
-		writeExposureACL(&b, r)
+		writeRouteACL(&b, r)
 		writeRouteBody(&b, r)
 		b.WriteString("}\n")
 		if !isEdgeRoute(r) {
@@ -209,7 +216,7 @@ func routesVhost(s Service) string {
 	return b.String()
 }
 
-// writeExposureACL restricts the internal server to the route's exposure
+// writeRouteACL restricts the internal server to the route's exposure
 // (ROUTING-PLAN §2.1). The CIDRs live in Nix: host-module.nix writes
 // /etc/fleet-containers/nginx-acl-{tailnet,lan}.conf (allow ...; deny all;).
 // Server level, so every location (incl. /oauth2/ and the auth_request
@@ -217,7 +224,23 @@ func routesVhost(s Service) string {
 // nginx runs allow/deny in the access phase before auth_request, and the
 // edge-peer 444 above (rewrite phase) before both. public: no ACL here
 // (LAN and tailnet use the internal listener; the edge server is separate).
-func writeExposureACL(b *strings.Builder, r Route) {
+//
+// A tailnet route with `allow` renders the named hosts' overlay IPs instead
+// of the include (lib.nix only allows `allow` there): the same hosts the
+// host firewall admits on 80/443 for that route (srcPortLines), so the two
+// layers agree and a new vhost's sources are narrowed in both places at
+// once. Names without an overlay IP in the inventory are skipped: the
+// include would have admitted a wider range, so failing narrow is right.
+func writeRouteACL(b *strings.Builder, r Route) {
+	if r.Exposure == "tailnet" && len(r.Allow) > 0 {
+		for _, a := range r.Allow {
+			if ip := hostOverlayIP(a); ip != "" {
+				fmt.Fprintf(b, "  allow %s; # allow: %s\n", ip, a)
+			}
+		}
+		b.WriteString("  deny all;\n")
+		return
+	}
 	switch r.Exposure {
 	case "tailnet", "lan":
 		fmt.Fprintf(b, "  include /etc/fleet-containers/nginx-acl-%s.conf;\n", r.Exposure)
@@ -436,6 +459,246 @@ func portsFileLines(s Service, host string) []string {
 		out = append(out, "noinet ve-"+s.Name)
 	}
 	out = append(out, netExceptions(s, host)...)
+	return out
+}
+
+// fleetPlacement is one discovery sweep of the container hosts, cached for
+// the process: which hosts each installed service was found on, and which
+// hosts did not answer. net.uses admission follows the live fleet, not the
+// `host` field of service.nix: a service that moved without the repo being
+// updated still lands where it actually runs.
+type fleetPlacement struct {
+	found map[string][]string // service -> hosts it is installed on, sorted
+	down  map[string]bool     // hosts that could not be probed
+}
+
+var (
+	fleetPlacementCache *fleetPlacement
+	fleetProbe          = probe // var so tests can fake the fleet
+	// retired holds the (service, host) pairs this process removed. A probe
+	// that still reports one -- a host that has not re-read its gcroots yet,
+	// or a sweep that raced the uninstall -- must not re-admit it.
+	retired = map[string]map[string]bool{}
+)
+
+// resetFleetPlacement drops the cached sweep, for a command that changed
+// where a service runs (move, destroy) and must not act on the old answer.
+func resetFleetPlacement() { fleetPlacementCache = nil }
+
+// retirePlacement records that name no longer runs on host, so discovery
+// cannot keep admitting that copy. Other copies of the same name are
+// untouched: they are still running and still dial out as their own hosts.
+func retirePlacement(name, host string) {
+	if retired[name] == nil {
+		retired[name] = map[string]bool{}
+	}
+	retired[name][host] = true
+}
+
+// fleetPlacementNow is the cached discovery sweep, or nil when discovery is
+// not attempted: --dry-run must leave the fleet alone, and an inventory with
+// no services has no net.uses caller to place. A service installed on this
+// machine is recorded without probing here, as hostForRead does.
+func fleetPlacementNow() *fleetPlacement {
+	if fleetPlacementCache != nil {
+		return fleetPlacementCache
+	}
+	loadInventory()
+	if inv == nil || len(inv.Services) == 0 || dryRun {
+		return nil
+	}
+	p := &fleetPlacement{found: map[string][]string{}, down: map[string]bool{}}
+	find := func(name, h string) {
+		// A copy this process already removed is not a placement, however
+		// the probe still reports it.
+		if retired[name][h] || slices.Contains(p.found[name], h) {
+			return
+		}
+		p.found[name] = append(p.found[name], h)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, h := range containerHosts() {
+		if isLocal(h) {
+			for _, s := range inv.Services {
+				if installedHere(s) {
+					mu.Lock()
+					find(s.Name, h)
+					mu.Unlock()
+				}
+			}
+		}
+		wg.Add(1)
+		go func(h string) {
+			defer wg.Done()
+			rows, err := fleetProbe(ctx, h)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				p.down[h] = true
+				return
+			}
+			for _, r := range rows {
+				find(r.svc, h)
+			}
+		}(h)
+	}
+	wg.Wait()
+	for name := range p.found {
+		sort.Strings(p.found[name])
+	}
+	fleetPlacementCache = p
+	return p
+}
+
+// places reports from which hosts name reaches its callees, for net.uses
+// admission: every host discovery found it installed on (a stale copy on an
+// old host still dials out from that host's overlay IP), nothing when every
+// host answered and nobody has it, or -- when any host failed to answer and
+// the name was found nowhere -- the declared host, with known = false: a
+// partial sweep cannot rule out that the caller is running on the host that
+// did not answer.
+func (p *fleetPlacement) places(name, declared string) (hosts []string, known bool) {
+	if p == nil {
+		// No discovery (--dry-run): the declared host stands in, so the
+		// printed script stays offline.
+		return []string{declared}, true
+	}
+	if hosts := p.found[name]; len(hosts) > 0 {
+		return hosts, true
+	}
+	if len(p.down) > 0 {
+		return []string{declared}, false
+	}
+	return nil, true
+}
+
+// srcPortLines is this service's 80/443 admission as ports-file lines
+// (host-module.nix applyPorts, which refills the nixos-fw @src* sets on
+// every run): ROUTING-PLAN 8.2. Computed from the service's own routes at
+// the host it is being deployed to -- not from a host-keyed inventory map --
+// so a service deployed or moved onto a host reaches its own vhost there.
+// Every service on a host contributes its own lines; applyPorts flushes the
+// sets once per run and adds all of them. nginx still enforces the per-vhost
+// exposure ACL, so over-admission here is only TCP reachability.
+//
+//	web <addr|cidr>   -> @src (v4) / @src6 (v6)
+//	weblan <cidr>     -> @src_lan
+//
+// An http route with no `allow` admits the whole tailnet range (the same
+// literal lib.nix webSourcesByHost uses for the build-time half); one with
+// `allow` admits exactly the named hosts' overlay IPs, and an unknown name
+// is skipped (fail closed). A net.uses caller of an http route is admitted
+// too, from every host its live discovery puts it on: nothing for this host
+// (@guest-egress already accepts the guest address), else that host's overlay
+// IP. A caller every host answered for but nobody has is admitted nowhere --
+// it was destroyed, so falling back to its declared host would undo the
+// withdraw. Only an inconclusive sweep falls back to the declared host. The
+// CLI refreshes this on deploy, move and destroy (main.go refreshCallers),
+// retiring the pair it removed so one destroyed copy does not take a
+// surviving copy's admission with it; the build-time half is lib.nix
+// webSourcesByHost.
+func srcPortLines(s Service, host string) []string {
+	if inv == nil {
+		return nil
+	}
+	var (
+		ips  []string
+		lan  bool
+		seen = map[string]bool{}
+	)
+	add := func(ip string) {
+		if ip == "" || seen[ip] {
+			return
+		}
+		seen[ip] = true
+		ips = append(ips, ip)
+	}
+	for _, n := range sortedRouteNames(s) {
+		r := s.Routes[n]
+		if r.Proto != "http" || r.Exposure == "local" {
+			continue
+		}
+		if len(r.Allow) == 0 {
+			add("100.64.0.0/10")
+		}
+		for _, a := range r.Allow {
+			add(hostOverlayIP(a))
+		}
+		// LAN clients reach the vhost directly unless the route is only
+		// published through the router (minecraft), as in webSourcesByHost.
+		if (r.Exposure == "lan" || r.Exposure == "public") && !slices.Contains(r.Via, "router") {
+			lan = true
+		}
+	}
+	// net.uses lands on the callee's nginx (ROUTING-PLAN §8 step 5). Only
+	// http: tcp/udp uses are covered by netExceptions' egress elements,
+	// which are what fleet-net matches for those flows. Where a caller runs
+	// comes from discovery, not from its `host` field: a service moved
+	// without a repo update must still reach the callee's vhost, and one
+	// installed twice is admitted from both hosts.
+	if len(inv.Services) > 0 {
+		fp := fleetPlacementNow()
+		admitCaller := func(c Service, entry string) {
+			places, known := fp.places(c.Name, c.Host)
+			if !known {
+				// A host did not answer, so the fleet cannot contradict the
+				// declaration: fall back to it rather than cut the caller off.
+				fmt.Fprintf(os.Stderr, "warning: %s uses %s but was not discovered (a host did not answer); admitting its declared host %s\n", c.Name, entry, c.Host)
+				places = []string{c.Host}
+			} else if len(places) == 0 {
+				// Every host answered and none has it: destroyed, or not yet
+				// deployed. Admitting the declaration here would re-admit a
+				// service that `cnt destroy` just withdrew.
+				fmt.Fprintf(os.Stderr, "note: %s uses %s but is installed on no host; not admitting it\n", c.Name, entry)
+				return
+			}
+			for _, p := range places {
+				// On this host the guest's own address is already accepted
+				// by @guest-egress; elsewhere the flow arrives masqueraded as
+				// that host's overlay IP.
+				if p == "" || p == host {
+					continue
+				}
+				if ip := hostOverlayIP(p); ip != "" {
+					add(ip)
+				} else {
+					fmt.Fprintf(os.Stderr, "warning: %s uses %s from %s, which has no overlayIp in the inventory; not admitting it\n", c.Name, entry, p)
+				}
+			}
+		}
+		callers := make([]Service, 0, len(inv.Services))
+		for _, c := range inv.Services {
+			callers = append(callers, c)
+		}
+		sort.Slice(callers, func(i, j int) bool { return callers[i].Name < callers[j].Name })
+		for _, n := range sortedRouteNames(s) {
+			if r := s.Routes[n]; r.Proto != "http" || r.Exposure == "local" {
+				continue
+			}
+			entry := s.Name + "." + n
+			for _, c := range callers {
+				// net.uses only applies with net.private (lib.nix rejects
+				// it otherwise), so there is no Net.Private test here.
+				if slices.Contains(c.Net.Uses, entry) {
+					admitCaller(c, entry)
+				}
+			}
+		}
+	}
+	sort.Strings(ips)
+	out := make([]string, 0, len(ips)+1)
+	for _, ip := range ips {
+		out = append(out, "web "+ip)
+	}
+	if lan && inv.LanSubnet != "" {
+		out = append(out, "weblan "+inv.LanSubnet)
+	}
+	if len(out) == 0 {
+		return nil
+	}
 	return out
 }
 
@@ -888,6 +1151,12 @@ type callerEntry struct {
 //     caller's packets leave masqueraded as that host (FLOWS-AUDIT target
 //     design (a): "the callee's vhost renders allow <caller host
 //     overlayIp>; # net.uses <svc>").
+//
+// This follows the declared host, so it is only as current as the repo: it is
+// the nginx half, rendered by a deploy of the callee itself. The firewall
+// half (srcPortLines) follows live discovery instead, and main.go
+// refreshCallers rewrites it on a deploy, move or destroy; a vhost left stale
+// that way still refuses the caller until the callee's next deploy.
 func callerIPs(s Service, route string) []callerEntry {
 	if inv == nil {
 		return nil

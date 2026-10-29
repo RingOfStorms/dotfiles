@@ -1,92 +1,98 @@
 {{/* Shared by /topology (inline) and /topology.svg (standalone download,
    live refresh source). Self-contained: own styles with the dashboard
    theme as fallbacks, so the file renders the same outside the page.
-   Every selector is scoped to .topo (inline <style> is document-global). */}}
+   Every selector is scoped to .topo (inline <style> is document-global).
+   The diagram is a route atlas: open labelled regions holding small round
+   stations. Links are drawn on top; journeys and traffic are added by
+   topology.js into the dedicated layers below. */}}
 {{define "topology.svg"}}<svg xmlns="http://www.w3.org/2000/svg" id="topo" class="topo" viewBox="0 0 {{.Width}} {{.Height}}" preserveAspectRatio="xMidYMid meet" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
 <style>
 .topo { --t-surface: var(--surface, #23262e); --t-alt: var(--surface-alt, #2a2d36); --t-border: var(--border, #353946); --t-text: var(--text, #d6d9e0); --t-muted: var(--muted, #8b90a0); --t-accent: var(--accent, #5fa8d3); --t-green: var(--green, #4caf7d); --t-red: var(--red, #e06c75); --t-red-bg: var(--red-bg, #3a2429); --t-amber: var(--amber, #d7a24a); --t-purple: var(--badge-tailnet, #8a7ec8); --t-local: var(--badge-local, #7a8ba0); }
 .topo .topo-bg { fill: var(--bg, #1b1d23); }
 .topo text { fill: var(--t-text); }
-.topo .zone rect { fill: rgba(139, 144, 160, 0.04); stroke: var(--t-border); stroke-width: 1.5; stroke-dasharray: 7 5; }
-.topo .zone text { fill: var(--t-muted); font-size: 14px; font-weight: 600; letter-spacing: 0.06em; }
-.topo .z-internet rect { fill: rgba(215, 162, 74, 0.05); stroke: rgba(215, 162, 74, 0.4); }
+
+/* Regions are open ground, not cards: a whisper of tint and a hairline. */
+.topo .zone rect { fill: rgba(139, 144, 160, 0.035); stroke: rgba(139, 144, 160, 0.22); stroke-width: 1; stroke-dasharray: 2 7; }
+.topo .zone text { fill: var(--t-muted); font-size: 12.5px; font-weight: 600; letter-spacing: 0.1em; }
+.topo .z-internet rect { fill: rgba(215, 162, 74, 0.045); stroke: rgba(215, 162, 74, 0.25); }
 .topo .z-internet text { fill: var(--t-amber); }
-.topo .z-cloud rect { fill: rgba(95, 168, 211, 0.06); stroke: rgba(95, 168, 211, 0.45); }
+.topo .z-cloud rect { fill: rgba(95, 168, 211, 0.045); stroke: rgba(95, 168, 211, 0.25); }
 .topo .z-cloud text { fill: var(--t-accent); }
-.topo .z-tailnet rect { fill: rgba(138, 126, 200, 0.07); stroke: rgba(138, 126, 200, 0.5); }
+.topo .z-tailnet rect { fill: rgba(138, 126, 200, 0.05); stroke: rgba(138, 126, 200, 0.3); }
 .topo .z-tailnet text { fill: var(--t-purple); }
-.topo .z-home rect, .topo .z-rack rect { fill: rgba(76, 175, 125, 0.05); stroke: rgba(76, 175, 125, 0.4); }
+.topo .z-home rect, .topo .z-rack rect { fill: rgba(76, 175, 125, 0.04); stroke: rgba(76, 175, 125, 0.22); }
 .topo .z-home text, .topo .z-rack text { fill: var(--t-green); }
-.topo .z-lan rect { fill: rgba(95, 168, 211, 0.04); stroke: rgba(95, 168, 211, 0.3); }
-.topo .z-roaming rect { fill: rgba(139, 144, 160, 0.05); stroke: rgba(139, 144, 160, 0.4); }
+.topo .z-lan rect { fill: rgba(95, 168, 211, 0.03); stroke: rgba(95, 168, 211, 0.2); }
+.topo .z-roaming rect { fill: rgba(139, 144, 160, 0.04); stroke: rgba(139, 144, 160, 0.22); }
 
-.topo .edge path { fill: none; stroke: #6b7080; stroke-width: 1.8; transition: opacity 0.2s; }
-.topo .k-wan path { stroke: var(--t-amber); stroke-width: 2.6; }
-.topo .k-trunk path { stroke: #9aa0b2; stroke-width: 4; }
-.topo .k-ethernet path { stroke: #7d8394; stroke-width: 2.2; }
-.topo .k-wifi path { stroke-dasharray: 2 6; stroke-linecap: round; stroke-width: 2.2; }
-.topo .k-kvm path { stroke-dasharray: 1 4; stroke-linecap: round; stroke-width: 1.6; }
-.topo .k-power path { stroke: #c8875e; stroke-dasharray: 1 4; stroke-linecap: round; stroke-width: 1.8; }
-.topo .k-tailnet path { stroke: var(--t-purple); stroke-dasharray: 6 6; opacity: 0.75; }
-.topo .k-public path { stroke: var(--t-amber); stroke-width: 2.4; stroke-dasharray: 10 6; }
-.topo .k-agent path { stroke: var(--t-accent); stroke-dasharray: 2 6; stroke-linecap: round; stroke-width: 2; opacity: 0.75; }
-.topo .k-control path { stroke: var(--t-green); stroke-dasharray: 8 4; opacity: 0.85; }
-.topo .edge.live.k-public path { animation: topo-flow 3s linear infinite; }
-.topo .edge.live.k-tailnet path { animation: topo-flow 9s linear infinite; }
-.topo .edge.live.k-agent path { animation: topo-flow 6s linear infinite; }
-.topo .edge.live.k-control path { animation: topo-flow 5s linear infinite; }
-.topo .edge:not(.live) path { opacity: 0.28; }
-@keyframes topo-flow { to { stroke-dashoffset: -96; } }
+.topo .edge path { fill: none; stroke: #6b7080; stroke-width: 1.6; stroke-linejoin: round; transition: opacity 0.2s; }
+.topo .k-wan path { stroke: var(--t-amber); stroke-width: 2.4; }
+.topo .k-trunk path { stroke: #9aa0b2; stroke-width: 3.2; }
+.topo .k-ethernet path { stroke: #7d8394; stroke-width: 1.9; }
+.topo .k-wifi path { stroke-dasharray: 2 6; stroke-linecap: round; stroke-width: 2; }
+.topo .k-kvm path { stroke-dasharray: 1 4; stroke-linecap: round; stroke-width: 1.5; }
+.topo .k-power path { stroke: #c8875e; stroke-dasharray: 1 4; stroke-linecap: round; stroke-width: 1.7; }
+.topo .k-tailnet path { stroke: var(--t-purple); stroke-dasharray: 6 6; opacity: 0.7; }
+.topo .k-public path { stroke: var(--t-amber); stroke-width: 2.2; stroke-dasharray: 10 6; }
+.topo .k-agent path { stroke: var(--t-accent); stroke-dasharray: 2 6; stroke-linecap: round; stroke-width: 1.8; opacity: 0.65; }
+.topo .k-control path { stroke: var(--t-green); stroke-dasharray: 8 4; opacity: 0.8; }
+.topo .edge:not(.live) path { opacity: 0.25; }
 
+/* Only simulated traffic animates. Dashes never move merely because an agent
+   is reachable: the travelling dots in #topo-events come from events. */
 .topo .elabel rect { fill: var(--t-surface); stroke: var(--t-border); }
-.topo .elabel text { fill: var(--t-muted); font-size: 11px; }
+.topo .elabel text { fill: var(--t-muted); font-size: 10.5px; }
 .topo .elabel.layer-public text { fill: var(--t-amber); }
 
-.topo .node { cursor: pointer; transition: opacity 0.2s; }
-.topo .node .box { fill: var(--t-surface); stroke: var(--t-border); stroke-width: 1.6; }
-.topo .node:hover .box { stroke: var(--t-accent); }
-.topo .node:focus-visible .box { stroke: var(--t-accent); stroke-width: 3; }
-.topo .st-online .box { stroke: rgba(76, 175, 125, 0.75); }
-.topo .st-down .box { stroke: var(--t-red); fill: var(--t-red-bg); }
-.topo .st-sleeping .box { stroke-dasharray: 6 4; }
-.topo .st-sleeping, .topo .st-no-endpoint { opacity: 0.85; }
-.topo .node.sel .box { stroke: var(--t-accent); stroke-width: 3; }
+/* Stations: one circular head, the name, the plain role, membership tags. */
+.topo .node { cursor: pointer; }
+.topo .node .head { fill: var(--t-surface); stroke: var(--t-border); stroke-width: 1.6; }
+.topo .node:hover .head { stroke: var(--t-accent); }
+.topo .node:focus-visible .head { stroke: var(--t-accent); stroke-width: 3; }
+.topo .node:focus { outline: none; }
+.topo .st-online .head { stroke: rgba(76, 175, 125, 0.8); }
+.topo .st-down .head { stroke: var(--t-red); fill: var(--t-red-bg); }
+.topo .st-sleeping .head { stroke-dasharray: 5 4; }
+.topo .st-sleeping .label, .topo .st-no-endpoint .label { fill: var(--t-muted); }
+.topo .node.sel .head { stroke: var(--t-accent); stroke-width: 3; }
+.topo .node.dim { opacity: 0.35; }
 .topo .icon { color: var(--t-muted); }
 .topo .st-online .icon, .topo .st-static .icon { color: var(--t-text); }
-.topo .label { font-size: 14.5px; font-weight: 650; }
-.topo .line { font-size: 11.5px; fill: var(--t-muted); }
-.topo .line.mono { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; }
-.topo .line.metrics { fill: var(--t-green); }
+.topo .label { font-size: 13.5px; font-weight: 650; }
+.topo .role { font-size: 10.5px; fill: var(--t-muted); }
+.topo .tags { font-size: 10px; fill: var(--t-purple); }
+.topo .count { font-size: 10px; fill: var(--t-muted); }
+.topo .count.bad { fill: var(--t-red); font-weight: 650; }
+.topo .ring { fill: none; stroke-width: 1.8; stroke-dasharray: 4 4; }
+.topo .ring.warn { stroke: var(--t-amber); }
+.topo .ts { color: var(--t-purple); }
 .topo .sdot { fill: var(--t-muted); }
-.topo .st-online .sdot, .topo .st-online .pulse { fill: var(--t-green); }
+.topo .st-online .sdot { fill: var(--t-green); }
 .topo .st-down .sdot { fill: var(--t-red); }
 .topo .st-sleeping .sdot { fill: none; stroke: var(--t-muted); stroke-width: 1.5; }
 .topo .pulse { opacity: 0; transform-box: fill-box; transform-origin: center; }
-.topo .st-online .pulse { animation: topo-pulse 2.4s ease-out infinite; }
-@keyframes topo-pulse { 0% { opacity: 0.6; transform: scale(1); } 100% { opacity: 0; transform: scale(2.8); } }
-.topo .ts { color: var(--t-purple); }
+.topo .st-online .pulse { animation: topo-pulse 2.6s ease-out infinite; }
+@keyframes topo-pulse { 0% { opacity: 0.5; transform: scale(1); } 100% { opacity: 0; transform: scale(2.4); } }
 
-.topo .chips-label { font-size: 10.5px; fill: var(--t-muted); letter-spacing: 0.05em; }
-.topo .chip .cbox { fill: var(--t-alt); stroke: var(--t-border); stroke-width: 0.8; }
-.topo .chip text { font-size: 11px; }
-.topo .chip .cexp { fill: transparent; }
-.topo .ex-public .cexp { fill: var(--t-amber); }
-.topo .ex-lan .cexp { fill: var(--t-accent); }
-.topo .ex-tailnet .cexp { fill: var(--t-purple); }
-.topo .ex-local .cexp { fill: var(--t-local); }
-.topo .chip .cdot { fill: #555a68; }
-.topo .sv-active .cdot { fill: var(--t-green); }
-.topo .sv-failed .cdot { fill: var(--t-red); }
-.topo .sv-failed .cbox { stroke: var(--t-red); }
-.topo .sv-inactive .cdot { fill: var(--t-muted); }
+/* Journeys, simulated traffic dots and the virtual client origins. */
+.topo .journey { fill: none; stroke: var(--t-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; opacity: 0.9; }
+.topo .journey.j-public { stroke: var(--t-amber); }
+.topo .journey.j-tailnet { stroke: var(--t-purple); }
+.topo .journey.preview { stroke-width: 1.5; }
+.topo .origin rect { fill: var(--t-alt); stroke: var(--t-border); stroke-dasharray: 4 3; stroke-width: 1.2; }
+.topo .origin text { fill: var(--t-muted); font-size: 11px; }
+.topo .ev-dot { fill: var(--t-amber); }
+.topo .ev-dot.aud-tailnet { fill: var(--t-purple); }
 
-.topo.has-sel .edge path { opacity: 0.08; }
-.topo.has-sel .edge.hl path { opacity: 1; stroke-width: 3; }
-.topo.has-sel .elabel { opacity: 0.15; }
+.topo.has-sel .edge path { opacity: 0.07; }
+.topo.has-sel .edge.hl path { opacity: 1; stroke-width: 2.6; }
+.topo.has-sel .elabel { opacity: 0.12; }
 .topo.has-sel .elabel.hl { opacity: 1; }
-.topo .node.dim { opacity: 0.3; }
 .topo.hide-physical .layer-physical, .topo.hide-tailnet .layer-tailnet, .topo.hide-public .layer-public, .topo.hide-control .layer-control { display: none; }
-@media (prefers-reduced-motion: reduce) { .topo .edge path, .topo .pulse { animation: none !important; } }
+/* Overview shows stations and what is drawn on demand: the declared cabling
+   and the poll/control plough are reference material for their own views. */
+.topo.view-overview .edges, .topo.view-overview .edge-labels { display: none; }
+@media (prefers-reduced-motion: reduce) { .topo .pulse { animation: none !important; } }
 </style>
 <defs>
 <symbol id="ti-internet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M5 7h14M5 17h14"/></symbol>
@@ -109,10 +115,10 @@
 <symbol id="ti-device" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="4"/><circle cx="12" cy="12" r="3"/></symbol>
 </defs>
 <rect class="topo-bg" width="{{.Width}}" height="{{.Height}}"/>
-<g id="topo-viewport"><g id="topo-root">
+<g id="topo-viewport"><g id="topo-root" data-width="{{.Width}}" data-height="{{.Height}}" data-asof="{{.AsOf.Format "2006-01-02T15:04:05Z07:00"}}" data-hub-tailnet="{{.Hubs.Tailnet}}" data-hub-edge="{{.Hubs.Edge}}" data-hub-router="{{.Hubs.Router}}" data-hub-dashboard="{{.Hubs.Dashboard}}" data-layers="physical,tailnet,public,control">
 <metadata id="topo-meta">{{.Meta}}</metadata>
 <g class="zones">{{range .Zones}}
-<g class="zone z-{{.Kind}}" data-zone="{{.ID}}"><rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="16"/><text x="{{.X}}" y="{{.Y}}" dx="18" dy="23">{{.Label}}</text></g>{{end}}
+<g class="zone z-{{.Kind}}" data-zone="{{.ID}}"><rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="18"/><text x="{{.X}}" y="{{.Y}}" dx="18" dy="24">{{.Label}}</text></g>{{end}}
 </g>
 <g class="edges">{{range .Edges}}
 <g class="edge k-{{.Kind}} layer-{{.Layer}}{{if .Live}} live{{end}}" data-from="{{.From}}" data-to="{{.To}}"><path d="{{.D}}"/></g>{{end}}
@@ -120,18 +126,23 @@
 <g class="nodes">{{range .Nodes}}
 <g class="node st-{{.State}} kind-{{.Kind}}" data-id="{{.ID}}"{{if .Host}} data-host="{{.Host}}"{{end}} transform="translate({{.X}} {{.Y}})" tabindex="0" role="button" aria-label="{{.Title}}">
 <title>{{.Title}}</title>
-<rect class="box" width="{{.W}}" height="{{.H}}" rx="10"/>
-<use class="icon" href="#ti-{{.Icon}}" x="12" y="9" width="22" height="22"/>
-<text class="label" x="42" y="26">{{.Label}}</text>
-{{if ne .State "static"}}<circle class="pulse" cx="{{.DotX}}" cy="20" r="5"/><circle class="sdot" cx="{{.DotX}}" cy="20" r="5"/>{{end}}
-{{if .Tailnet}}<use class="ts" href="#ti-mesh" x="{{.TsX}}" y="13" width="14" height="14"><title>on the tailnet</title></use>{{end}}
-{{range .Lines}}<text class="line {{.Class}}" x="12" y="{{.Y}}">{{.Text}}</text>
-{{end}}{{with .ChipsLabel}}<text class="chips-label" x="12" y="{{.Y}}">{{.Text}}</text>{{end}}
-{{range .Chips}}<g class="chip sv-{{.State}} ex-{{.Exposure}}" transform="translate({{.X}} {{.Y}})"><title>{{.Full}} · {{.State}}{{if .Exposure}} · {{.Exposure}}{{end}}</title><rect class="cbox" width="{{.W}}" height="18" rx="4"/><rect class="cexp" width="3" height="18" rx="1.5"/><circle class="cdot" cx="11" cy="9" r="3"/><text x="19" y="13">{{.Name}}</text></g>
-{{end}}</g>{{end}}
+{{if or .Warn .SvcFailed}}<circle class="ring warn" cx="{{.HeadX}}" cy="{{.HeadY}}" r="23"/>{{end}}
+<circle class="head" cx="{{.HeadX}}" cy="{{.HeadY}}" r="{{.R}}"/>
+<use class="icon" href="#ti-{{.Icon}}" x="{{.IconX}}" y="{{.IconY}}" width="20" height="20"/>
+{{if ne .State "static"}}<circle class="pulse" cx="{{.DotX}}" cy="{{.HeadY}}" r="4"/><circle class="sdot" cx="{{.DotX}}" cy="{{.HeadY}}" r="4"/>{{end}}
+{{if .Tailnet}}<use class="ts" href="#ti-mesh" x="{{.TsX}}" y="{{.TsY}}" width="12" height="12"><title>on the tailnet</title></use>{{end}}
+<text class="label" x="{{.HeadX}}" y="{{.LabelY}}" text-anchor="middle">{{.Label}}</text>
+<text class="role" x="{{.HeadX}}" y="{{.RoleY}}" text-anchor="middle">{{.Role}}</text>
+{{if .Tags}}<text class="tags" x="{{.HeadX}}" y="{{.TagsY}}" text-anchor="middle">{{.Tags}}</text>{{end}}
+{{if .SvcCount}}<text class="count{{if .SvcFailed}} bad{{end}}" x="{{.CountX}}" y="{{.CountY}}">{{.SvcCount}} svc{{if .SvcFailed}} · {{.SvcFailed}} down{{end}}</text>{{end}}
+{{if .Warn}}<text class="count warn" x="{{.CountX}}" y="{{.WarnY}}">{{.Warn}} to check</text>{{end}}
+<rect class="hit" width="{{.W}}" height="{{.H}}" fill="transparent"/>
+</g>{{end}}
 </g>
 <g class="edge-labels">{{range .Edges}}{{if .Label}}
 <g class="elabel layer-{{.Layer}}" data-from="{{.From}}" data-to="{{.To}}"><rect x="{{.LRX}}" y="{{.LRY}}" width="{{.LW}}" height="18" rx="9"/><text x="{{.LX}}" y="{{.LY}}" dy="4" text-anchor="middle">{{.Label}}</text></g>{{end}}{{end}}
 </g>
+<g id="topo-journey" class="journeys"></g>
+<g id="topo-events"></g>
 </g></g>
 </svg>{{end}}

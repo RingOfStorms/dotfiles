@@ -23,12 +23,29 @@ let
   holdDir = "/run/fleet-containers/hold";
   mutable = "/etc/systemd-mutable/system";
   thisHost = config.networking.hostName;
-  # ROUTING-PLAN §8 step 2: explicit per-host firewall for the internal
-  # :80/:443 listener. High-trust overlay IPs, minus o002 (the edge must
-  # never satisfy a tailnet allow) and this host itself; lan routes also
-  # open the LAN interface (cfg.nginx.acl.lan / lanInterface).
   fleetLib = import ./lib.nix;
-  httpExposure = (fleetLib.httpExposureByHost ./.).${thisHost} or null;
+  # ROUTING-PLAN 8.2: the 80/443 sources this host's firewall admits for its
+  # own internal nginx, computed from the inventory this host declares plus
+  # nginx.extraWebSources (hand vhosts outside it). These are the build-time
+  # literals; the runtime half (`@src`/`@src6`/`@src_lan`) is written per
+  # service by `containers deploy` from that service's routes. nginx still
+  # enforces the per-vhost exposure ACL; this is only the TCP admission.
+  webSources =
+    (fleetLib.webSourcesByHost {
+      dir = ./.;
+      extra.${thisHost}.tailnet = cfg.nginx.extraWebSources;
+    }).${thisHost} or {
+      tailnet = [ ];
+      lan = false;
+    };
+  webSources4 = fleetLib.webSourcesIps {
+    sources = webSources.tailnet;
+    family = "v4";
+  };
+  webSources6 = fleetLib.webSourcesIps {
+    sources = webSources.tailnet;
+    family = "v6";
+  };
   # nginx allow list for nginx.acl (ROUTING-PLAN §2.1), deny-by-default.
   aclText =
     cidrs:
@@ -107,8 +124,17 @@ let
   #   guest <ve-iface>                    net.private guest (isolated, fleet-net @guests)
   #   noinet <ve-iface>                   private guest with internet = false
   #   allow <ve-iface> <ipv4> <tcp|udp> <port>   net.uses / net.egress exception
-  # @routes, @routes_lan, @routes_at, @routes_from, @guests, @noinet and @egress are flushed and refilled on every
-  # run, so a redeploy or a removed ports file drops stale entries.
+  #   web <addr|cidr>                     source for the internal 80/443 rules
+  #                                       (@src ipv4 or @src6 ipv6), written by
+  #                                       `cnt deploy` from the service's routes
+  #                                       and its net.uses callers' hosts, and
+  #                                       rewritten on the callee host after a
+  #                                       `cnt deploy`/`move`/`destroy` of such
+  #                                       a caller (ROUTING-PLAN 8.2)
+  #   weblan <cidr>                       LAN clients on 80/443 (@src_lan)
+  # @routes, @routes_lan, @routes_at, @routes_from, @guests, @noinet, @egress
+  # and @src, @src6, @src_lan are flushed and refilled on every run, so a
+  # redeploy or a removed ports file drops stale entries.
   applyPorts = pkgs.writeShellScript "fleet-containers-apply-ports" ''
     set -u
     nft=${pkgs.nftables}/bin/nft
@@ -126,9 +152,28 @@ let
       $nft flush set inet fleet-net egress
       $nft flush set inet nixos-fw guest-egress 2>/dev/null || true
     fi
+    # Web admission sources (ROUTING-PLAN 8.2) are not private-network
+    # specific: flush outside the gate above. Missing sets (a host without
+    # the nginx module) are not an error.
+    $nft flush set inet nixos-fw src 2>/dev/null || true
+    $nft flush set inet nixos-fw src6 2>/dev/null || true
+    $nft flush set inet nixos-fw src_lan 2>/dev/null || true
     for f in ${stateDir}/ports/*; do
       while read -r proto port mode ip rest; do
         case "$proto" in
+          web|weblan)
+            # Fail closed on anything that is not a plain address/CIDR.
+            case "''${port:-}" in ""|*[!0-9A-Fa-f:./]*) continue ;; esac
+            if [ "$proto" = weblan ]; then
+              case "$port" in *:*) continue ;; esac
+              set=src_lan
+            else
+              case "$port" in *:*) set=src6 ;; *) set=src ;; esac
+            fi
+            $nft add element inet nixos-fw $set "{ $port }" \
+              || echo "containers: could not add $port to nixos-fw @$set (from $f)" >&2
+            continue
+            ;;
           guest|noinet|allow)
             case "$port" in ve-*) ;; *) continue ;; esac
             if [ "$fleetnet" != 1 ]; then
@@ -482,10 +527,11 @@ in
     # Read-only GET /status.json for fleet-edge (ROUTING-PLAN.md §5.4); see
     # cli/statusserver.go for the JSON contract. Off by default.
     #
-    # The firewall is NOT opened for it: today tailscale0 is a trusted
-    # interface, so an overlay-IP listener is reachable from high-trust
-    # tailnet nodes. Step 2 (no trusted tailscale0) must add an explicit rule
-    # admitting h005 only.
+    # The firewall is NOT opened for it: tailscale0 is an untrusted
+    # interface (ringofstorms.tailnet.trustInterface = false) and the
+    # generated 80/443 admission below does not cover this port, so a host
+    # enabling it needs its own rule (h005 admits its own overlay IP; a
+    # server host needs `ip saddr <reader> tcp dport <port> accept`).
     statusEndpoint = {
       enable = lib.mkOption {
         type = lib.types.bool;
@@ -684,10 +730,29 @@ in
       type = lib.types.bool;
       default = true;
       description = ''
-        Open TCP 80/443 on every interface when nginx.enable is set. The
-        generated vhosts gate access themselves (nginx.acl exposure ACLs,
-        edge.blockInternal), so the firewall only needs to let them in.
-        Turn off to scope the ports per interface in the host config instead.
+        Generate the per-host firewall admission for TCP 80/443 (ROUTING-PLAN
+        8.2): the build-time tailnet sources computed from the routes the
+        inventory declares for this host, plus the runtime `@src*` sets that
+        `containers deploy` fills per service, and on hosts serving LAN
+        clients the LAN subnet. The generated vhosts gate access themselves
+        (nginx.acl exposure ACLs), so the firewall only needs to let them in.
+        Turn off to write the rules per interface in the host config instead
+        (this also drops extraWebSources).
+      '';
+    };
+    nginx.extraWebSources = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      example = [
+        "100.64.0.0/10"
+        "fd7a:115c:a1e0::/48"
+      ];
+      description = ''
+        Extra sources admitted on TCP 80/443 for this host's internal nginx,
+        on top of the ones derived from the inventory (ROUTING-PLAN 8.2).
+        For hand-written vhosts outside the inventory, whose clients are not
+        visible to the route computation. IPv4/IPv6 addresses or CIDR blocks;
+        gated by nginx.openFirewall.
       '';
     };
     persist = {
@@ -783,6 +848,26 @@ in
           set guest-egress {
             comment "ROUTING-PLAN 8.2: mirror of fleet-net egress; admits net.uses/net.egress guest flows only"
             type ifname . ipv4_addr . inet_proto . inet_service
+          }
+          # ROUTING-PLAN 8.2 web admission, refilled by applyPorts on every
+          # run (cnt deploy adds a new vhost's source here, no rebuild).
+          set src {
+            comment "web sources: tailnet ipv4 (cnt deploy)"
+            type ipv4_addr
+            flags interval
+            auto-merge
+          }
+          set src6 {
+            comment "web sources: tailnet ipv6 (cnt deploy)"
+            type ipv6_addr
+            flags interval
+            auto-merge
+          }
+          set src_lan {
+            comment "web sources: LAN clients ipv4 (cnt deploy)"
+            type ipv4_addr
+            flags interval
+            auto-merge
           }
         '';
 
@@ -976,29 +1061,23 @@ in
         # dnsmasq hands LAN clients h001's lanIp for lan/public routes, so
         # without this rule every LAN client would be cut off.
         #
-        # Tailnet half: `100.64.0.0/10` (every tailnet peer, including
-        # phones and unlisted nodes -- ROUTING-PLAN 8.2 spec), minus o002
-        # (reaches routes through the edge listener, not here) and
-        # low-trust nodes (joe, i001, hass today). Generated as an
-        # explicit drop per excluded overlay IP, before the broad accept,
-        # so the drop can never be shadowed by rule order. Gated on
-        # cfg.nginx.enable, not `httpExposure != null`: httpExposureByHost
-        # only sees services on the new `routes` schema. Every inventory
-        # service in containers/*/service.nix is already on `routes` (no
-        # service uses a legacy `nginx` string today); the conservative
-        # gate stays for bare-metal `services.nginx.virtualHosts`
-        # additions outside the inventory (e.g. h001's arr-nginx.nix
-        # media-health alias, h005's own hand vhosts) that share the same
-        # nginx and need 80/443 open too. There is no cheap way to
-        # enumerate every hand-kept vhost's exposure from here, so any
-        # host with nginx enabled gets the tailnet allow, conservatively.
-        # nginx itself still enforces the
-        # exposure ACL per vhost (nginx.acl); this is only the TCP
-        # admission. Checked against h001: no route's `allow` list
-        # includes a low-trust host as caller of a service on this host
-        # (joe's own localai route lists h001/lio/oren/juni/gp3 as
-        # callers, the reverse direction; nothing here grants joe/i001
-        # inbound to h001), so the drop cannot shadow a legitimate flow.
+        # Tailnet half (ROUTING-PLAN 8.2): the sources computed by
+        # lib.nix webSourcesByHost from the http routes this host declares --
+        # `100.64.0.0/10` for a route with no `allow`, the named hosts'
+        # overlay IPs for a route with one, plus nginx.extraWebSources for
+        # hand-written vhosts outside the inventory (h001's arr
+        # media-health aliases, h005's own vhosts). Those literals reflect
+        # the inventory at build time; the `@src*` sets are the runtime
+        # half: `containers deploy` writes `web <addr>`/`weblan <cidr>`
+        # lines into *that service's* ports file, computed from its own
+        # routes at the host it is being deployed to, and applyPorts refills
+        # the sets from every ports file on each run -- so a service
+        # deployed or moved onto a host built before it existed still gets
+        # admitted, without a rebuild, and admission follows the service
+        # rather than its declared host. nginx still enforces the per-vhost
+        # exposure ACL (nginx.acl); this is only the TCP admission, which is
+        # why narrowing it is safe.
+        #
         # ve-* guests whose packet already `return`ed out of fleet-net's
         # guest-in chain (fleet-net.nft, priority -5) on an `@egress` match
         # still have to clear nixos-fw's input-allow (priority 0); the
@@ -1009,25 +1088,21 @@ in
         # allow. Covers e.g. life (ve-life) -> this host's own nginx at
         # 10.233.0.1/<overlayIp>:443 for sso-proxy.
         networking.firewall.extraInputRules = lib.mkMerge [
-          (lib.mkIf cfg.nginx.openFirewall (
-            let
-              excludedIps = builtins.filter (ip: ip != thisOverlayIp) (
-                fleetLib.tailnetExcludedOverlayIps (fleet.hosts or { })
-              );
-              thisOverlayIp = (fleet.hosts.${thisHost} or { }).overlayIp or null;
-            in
-            lib.concatMapStrings (
-              ip:
-              ''ip saddr ${ip} tcp dport { 80, 443 } drop comment "generated: tailnet http routes, excluded (ROUTING-PLAN 8.2)"''
-              + "\n"
-            ) excludedIps
-            + ''ip saddr 100.64.0.0/10 tcp dport { 80, 443 } accept comment "generated: tailnet http routes (ROUTING-PLAN 8.2)"''
-            + "\n"
-          ))
+          (lib.mkIf (cfg.nginx.openFirewall && webSources4 != [ ]) ''
+            ip saddr { ${lib.concatStringsSep ", " webSources4} } tcp dport { 80, 443 } accept comment "generated: http route sources, inventory (ROUTING-PLAN 8.2)"
+          '')
+          (lib.mkIf (cfg.nginx.openFirewall && webSources6 != [ ]) ''
+            ip6 saddr { ${lib.concatStringsSep ", " webSources6} } tcp dport { 80, 443 } accept comment "generated: http route sources, inventory (ROUTING-PLAN 8.2)"
+          '')
+          (lib.mkIf cfg.nginx.openFirewall ''
+            ip saddr @src tcp dport { 80, 443 } accept comment "generated: http route sources, runtime (cnt deploy; ROUTING-PLAN 8.2)"
+            ip6 saddr @src6 tcp dport { 80, 443 } accept comment "generated: http route sources, runtime (cnt deploy; ROUTING-PLAN 8.2)"
+            ip saddr @src_lan tcp dport { 80, 443 } accept comment "generated: LAN http sources, runtime (cnt deploy; ROUTING-PLAN 8.2)"
+          '')
           (lib.mkIf
             (
               cfg.nginx.openFirewall
-              && ((httpExposure.lan or false) || cfg.nginx.acl.lan != [ ])
+              && (webSources.lan || cfg.nginx.acl.lan != [ ])
               && (fleet.hosts.${thisHost}.lanIp or null) != null
             )
             ''

@@ -2,10 +2,11 @@
 # (hosts/h001/floating-containers.nix, containers/README.md).
 # The containers host module (inputs.containers.nixosModules.default) provides
 # nginx (:80/:443 internal, :8443 edge) with the runtime include dir, the
-# nonlocal-bind sysctls and nginx's ordering after tailscale, 80/443 in the
-# firewall, the receiver for the cert h005 pushes to hosts with routes
-# (hosts/h005/wildcard-cert.nix), runtime firewall ports, extra-container and
-# podman, and (ringofstorms.containers.persist, on because
+# nonlocal-bind sysctls and nginx's ordering after tailscale, the generated
+# 80/443 firewall rules (sources from the `routes` inventory plus the runtime
+# sets `cnt deploy` fills), the receiver for the cert h005 pushes to hosts with
+# routes (hosts/h005/wildcard-cert.nix), runtime firewall ports,
+# extra-container and podman, and (ringofstorms.containers.persist, on because
 # ringofstorms.impermanence is) persistence of the container state dirs and
 # the pushed cert. Services themselves are deployed with `containers`, not by
 # rebuilding this host.

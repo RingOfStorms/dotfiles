@@ -683,32 +683,84 @@ Taken 2026-10-16:
      out on 22.
    - The edge hop o002 → host is plain `http://<overlayIp>:8443` with the
      route `Host`; https or no `Host` fails by design.
-   - **Explicit per-host firewall, generated from the inventory
-     (deployed 2026-10-26/27).** Replaces the blanket 22/80/443 allows
-     above with rules computed from `fleet.nix` + `containers/lib.nix`.
+   - **Explicit per-host firewall, generated from the inventory.**
+     ssh rules deployed 2026-10-26/27; the 80/443 source narrowing is
+     built and reviewed but **not deployed yet**. Replaces the blanket
+     22/80/443 allows above with rules computed from `fleet.nix` +
+     `containers/lib.nix`.
      ssh: `firewallHighTrustIps` (trust = "high" overlay IPs) only, on
      `tailscale0`, guarded by `sshGuardAssertion` (fails eval if the list
      is empty or excludes lio's overlay IP, so a typo can't lock out
-     lio). 80/443: `100.64.0.0/10` accept, minus an explicit drop per
-     `tailnetExcludedOverlayIps` (o002 + low-trust hosts) ahead of it so
-     the drop can't be shadowed, on every host with `cfg.nginx.enable`
-     (conservative: no inventory service uses a legacy `nginx` string
-     anymore, but hand-kept vhosts outside the inventory can't be
-     enumerated). LAN: `fleet.global.lanSubnet` accept on 80/443 where
-     the host has a `lanIp` and a lan/public `routes` exposure (or the
-     legacy `nginx.acl.lan`). `guest-egress`: ve-* containers whose
-     packet already cleared fleet-net's egress filter get re-admitted
-     into nixos-fw by the same `inet fleet-net egress` set (guest .
-     daddr . proto . port), not a blanket `ve-*` allow. h005
-     (`hosts/h005/firewall.nix`) and lio (`hosts/lio/configuration.nix`)
-     compute the same high-trust ssh list themselves (excluding
-     o002/self) since h005 doesn't trust tailscale0 as an interface and
-     both need their own local rules; h005 additionally scopes its own
-     80/443 (fleet-edge dashboard, oauth2-proxy sso-proxy) to the
-     tailnet-minus-excluded set the same way. oauth2-proxy's 4180 client
+     lio). 80/443: the sources are **computed from the inventory**, not a
+     blanket subnet -- at build time `containers/lib.nix webSourcesByHost
+     { dir; hosts; }` walks every `routes` http entry and yields, per host,
+     `{ tailnet; lan; }`: a tailnet route with no `allow` contributes
+     `100.64.0.0/10`, one with `allow = [ "lio" ... ]` contributes exactly
+     those hosts' `overlayIp`s (an unknown name throws at eval), and `lan`
+     is true for any lan/public route whose `via` is not `[ "router" ]`.
+     `nginx.extraWebSources` merges extra CIDRs in for hand-written vhosts
+     the inventory cannot see (h001's arr block in `mods/arr-nginx.nix`, so
+     h001 widens back to the whole tailnet). Today that is
+     h001 → `/10` + `fd7a:115c:a1e0::/48` (+ LAN), h003 → `/10`, joe →
+     `100.64.0.1,/13,/15,/18,/2` (its routes name their callers). Rendered
+     as literal sets **and** as three runtime sets -- `@src` (v4), `@src6`
+     (v6), `@src_lan` -- which `applyPorts` flushes and refills from
+     `web <addr>` / `weblan <cidr>` lines in the ports files on every
+     deploy (sets are `flags interval, auto-merge`). The runtime lines are
+     computed **per service, from that service's own routes, at the host it
+     is being deployed to** (`containers deploy` writes them into the
+     service's ports file; `move` is a deploy at the destination), not from
+     a host-keyed map: a service deployed or moved onto a host built before
+     it existed is admitted without a rebuild, and admission follows the
+     service rather than its declared `host`. `net.uses` is admitted the
+     same way, from the callee side: the service whose ports file this is
+     carries a `web` line for every http (non-`local`) route another
+     service's `net.uses` names, addressed to where **discovery** finds
+     that caller -- nothing when it runs on the callee host (`@guest-egress`
+     already accepts the guest's own address), else the overlay IP of
+     **every** host it is installed on (a cross-host packet leaves
+     masqueraded as that host; a stale copy left running elsewhere still
+     dials out as that host). A caller that every host answered for but none
+     has is admitted nowhere: it was destroyed or never deployed, and
+     admitting its declared host there would re-admit one that `cnt destroy`
+     just withdrew. Only an inconclusive sweep (a host did not answer) falls
+     back to the declared host, with a warning. `cnt deploy`, `cnt move` and
+     `cnt destroy` refresh the affected callees' ports files on the callees'
+     hosts, ports only. A destroy or move withdraws the line for the copy it
+     removed -- that (service, host) pair -- and leaves any other copy's line
+     alone, since that copy is still running and still dials out as its own
+     host. The remaining copy's definition is never deleted from the
+     inventory for this purpose. Neither touches the callee container or its
+     nginx site, so the vhost's `allow <caller>` line is only rewritten by a
+     deploy of the callee itself. Malformed input is rejected per line, so it
+     fails closed.
+     LAN: `fleet.global.lanSubnet` accept on 80/443 where the host has a
+     `lanIp` and a lan/public `routes` exposure (or a hand-set
+     `nginx.acl.lan`); h003 has the ACL but no `lanIp`, so its LAN clients
+     are admitted by the runtime `@src_lan` rule instead. `guest-egress`: ve-*
+     containers whose packet already cleared fleet-net's egress filter get
+     re-admitted into nixos-fw by the same `inet fleet-net egress` set
+     (guest . daddr . proto . port), not a blanket `ve-*` allow.
+     Narrowing the TCP source cannot break a vhost: nginx still enforces
+     the per-vhost exposure ACL (`nginx.acl`, plus `allow <overlayIp>;` per
+     named host, rendered from the same `allow` list), which is the real
+     gate. h005 (`hosts/h005/firewall.nix`) and lio
+     (`hosts/lio/configuration.nix`) compute the same lists themselves
+     (h005 doesn't trust tailscale0 as an interface; both need local
+     rules). h005's own 80/443 stays tailnet-minus-excluded
+     (`tailnetExcludedOverlayIps`: o002 + low-trust) rather than a computed
+     allow-list, because `sso-proxy` is the login endpoint every gated
+     vhost redirects to and phones are not in `fleet.nix`, so they can
+     never appear in an inventory-derived list. oauth2-proxy's 4180 client
      list is generated from `inputs.containers.inventory.containerHosts`
      instead of hand-kept. o002 is unchanged: global `:22` stays as a
      deliberate break-glass exception.
+     Known gaps, both latent: (a) a route with `via = [ "router" ]` does
+     not set `lan`, but a LAN client arrives with the WAN source, so a
+     router-only route would need `nginx.extraWebSources`; (b) no host has
+     an `overlayIp6` in `fleet.nix`, so an `allow`-narrowed route admits no
+     v6 peers (`/10`-wide routes still match `@src6`, which only
+     `cnt deploy` fills).
      Rolled out 2026-10-26/27 host by host (10-min `systemd-run`
      auto-revert, full `/tmp/fw-live/probe.sh` matrix before disarming):
      h001 (gen `...275n04s`), h003 (`...k3iskvx`), h004 (`...hcavyl7`),

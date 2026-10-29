@@ -694,10 +694,20 @@ footer {
 .prio-0, .prio-1, .prio-2, .prio-3 { color: var(--red); }
 .prio-4 { color: var(--amber); }
 
-/* Topology has its own scrolling sidebar; the canvas stays in view. */
+/* Topology is a route atlas: a map that keeps itself in view and a sidebar
+   that scrolls on its own. Stations on the map are fixed size; every piece of
+   detail lives in the sidebar, so the map never reflows as data arrives. */
 .topo-main { max-width: none; padding: 0.8rem; }
 .topo-head h1 { margin: 0 0 0.25rem; }
-.topo-head .summary { margin: 0 0 0.7rem; }
+.topo-head .summary { margin: 0 0 0.3rem; }
+.topo-problems {
+  display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0 0 0.7rem;
+  font-size: 0.75rem;
+}
+.topo-problem {
+  padding: 0.1rem 0.45rem; border-radius: 999px;
+  color: var(--red); background: var(--red-bg); border: 1px solid var(--red);
+}
 .topo-layout { display: flex; gap: 0.8rem; flex: 1; min-height: 0; }
 .topo-stage {
   position: relative; flex: 1; min-width: 0; min-height: 0;
@@ -709,51 +719,169 @@ footer {
 .topo-stage > #topo { display: block; width: 100%; height: 100%; touch-action: none; user-select: none; cursor: grab; }
 .topo-stage > #topo.panning, .topo-stage > #topo.panning .node { cursor: grabbing; }
 .topo-stage .topo-bg { display: none; }
+
 .topo-toolbar {
   position: absolute; top: 0.5rem; left: 0.5rem; right: 0.5rem;
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem 0.7rem;
   padding: 0.4rem 0.6rem; border: 1px solid var(--border); border-radius: 8px;
   background: var(--surface); font-size: 0.7rem;
 }
+.topo-view { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.topo-view button {
+  border: 0; background: var(--surface-alt); color: var(--muted);
+  padding: 0.15rem 0.5rem; font: inherit; cursor: pointer;
+}
+.topo-view button + button { border-left: 1px solid var(--border); }
+.topo-view button:hover { color: var(--text); }
+.topo-view button.on { background: var(--accent); color: var(--bg); font-weight: 650; }
 .topo-layer { display: inline-flex; align-items: center; gap: 0.2rem; cursor: pointer; white-space: nowrap; }
 .topo-layer input { accent-color: var(--accent); margin: 0; }
 .topo-zoom { display: inline-flex; gap: 0.25rem; margin-left: auto; }
-.topo-zoom button, .topo-close {
+.topo-zoom button, .topo-close, .topo-route-btn, #topo-play, #topo-live {
   border: 1px solid var(--border); border-radius: 5px; background: var(--surface-alt);
   color: var(--text); padding: 0.15rem 0.45rem; font: inherit; cursor: pointer;
 }
-.topo-zoom button:hover, .topo-close:hover { border-color: var(--accent); }
+.topo-zoom button:hover, .topo-close:hover, .topo-route-btn:hover, #topo-play:hover, #topo-live:hover { border-color: var(--accent); }
 .topo-download { white-space: nowrap; }
 .topo-hint { position: absolute; bottom: 0.4rem; left: 0.6rem; color: var(--muted); font-size: 0.65rem; pointer-events: none; }
+
+/* The badge is the page's honesty: it is server-rendered as "Simulation" and
+   only JavaScript ever changes it, so a fetch failure leaves it truthful. */
+.topo-sim {
+  position: absolute; top: 3.05rem; right: 0.75rem; z-index: 2;
+  padding: 0.12rem 0.5rem; border-radius: 999px; font-size: 0.65rem; font-weight: 650;
+  letter-spacing: 0.03em; pointer-events: none;
+  color: var(--amber); background: var(--amber-bg); border: 1px solid var(--amber);
+}
+.topo-sim.is-real { color: var(--green); background: var(--green-bg); border-color: var(--green); }
+
 .topo-side { flex: 0 0 19rem; overflow: auto; min-height: 0; }
 .topo-card { padding: 0.7rem; margin-bottom: 0.65rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 0.75rem; }
 .topo-card h2 { margin: 0 0 0.4rem; font-size: 0.9rem; }
-.topo-card h3 { margin: 0.8rem 0 0.3rem; font-size: 0.75rem; }
+.topo-card h3 { margin: 0.8rem 0 0.3rem; font-size: 0.75rem; letter-spacing: 0.02em; }
 .topo-card p { margin: 0.4rem 0 0; line-height: 1.5; }
 .topo-note summary { cursor: pointer; font-weight: 600; }
-.topo-legend { display: block; width: 100%; }
-.topo-legend text { font-size: 11px; }
-.topo-legend .node { cursor: default; }
-.topo-legend-chips { font-size: 0.65rem; }
+.topo-note p { white-space: pre-line; }
+.topo-tech { font-size: 0.7rem; }
+.topo-attr { margin: 0 0 0.65rem; font-size: 0.62rem; color: var(--muted); line-height: 1.5; }
+
+/* Traffic mode + the per-mode note. The note explains what is on screen, so
+   it is never hidden behind a tooltip. */
+.topo-modes { display: flex; gap: 0.9rem; margin: 0 0 0.35rem; }
+.topo-modes label { display: inline-flex; align-items: center; gap: 0.25rem; cursor: pointer; }
+.topo-modes input { accent-color: var(--accent); margin: 0; }
+#topo-mode-note { font-size: 0.7rem; }
+.topo-sim-note { font-size: 0.7rem; color: var(--amber); }
+
+/* History: a 24 h health strip, the scrub range, then transport controls. */
+.topo-time-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.35rem; }
+#topo-time-label { font-weight: 650; font-variant-numeric: tabular-nums; }
+#topo-time-meta { font-size: 0.65rem; font-variant-numeric: tabular-nums; }
+.topo-strip {
+  position: relative; height: 1.35rem; border-radius: 4px;
+  background: var(--surface-alt); overflow: hidden;
+}
+.topo-strip .seg { position: absolute; top: 0; bottom: 0; }
+.topo-strip .seg.ok { background: rgba(76, 175, 125, 0.55); }
+.topo-strip .seg.quiet { background: rgba(139, 144, 160, 0.28); }
+.topo-strip .seg.warn { background: rgba(215, 162, 74, 0.75); }
+.topo-strip .seg.bad { background: rgba(224, 108, 117, 0.8); }
+.topo-strip .cursor {
+  position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px;
+  background: var(--text); box-shadow: 0 0 0 1px var(--bg);
+}
+#topo-time { display: block; width: 100%; margin: 0.4rem 0 0.1rem; accent-color: var(--accent); }
+.topo-time-ctl { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; }
+.topo-time-ctl label { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.65rem; }
+#topo-speed { font: inherit; font-size: 0.65rem; background: var(--surface-alt); color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 0.1rem 0.2rem; }
+#topo-play[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+#topo-live { margin-left: auto; }
+.topo-time-note { font-size: 0.65rem; color: var(--muted); }
+
+/* Legend: the five states a station can be in, drawn as the map draws them. */
+.topo-states { display: flex; flex-wrap: wrap; gap: 0.2rem 0.75rem; margin: 0; font-size: 0.68rem; }
+.topo-state { display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
+.topo-state .dot.ok { background: var(--green); }
+.topo-state .dot.sleep { background: transparent; border: 1.5px solid var(--muted); }
+.topo-state .dot.bad { background: var(--red); }
+.topo-state .dot.none { background: var(--muted); }
+.topo-state .ring { width: 0.6rem; height: 0.6rem; border-radius: 50%; border: 1.5px dashed var(--amber); display: inline-block; }
+
+/* Drilldown. Every section names its own age, because SMART and fail2ban are
+   sampled on their own cadence and a stale reading must not look current. */
 .topo-info-head { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; }
 .topo-info-head h2 { margin: 0; overflow-wrap: anywhere; }
-.topo-close { margin-left: auto; }
-.topo-facts { display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 0.6rem; }
+.topo-info-sub { margin: 0.25rem 0 0; font-size: 0.7rem; }
+.topo-info-state { margin: 0.25rem 0 0; font-size: 0.7rem; color: var(--muted); }
+.topo-close { margin-left: auto; line-height: 1; }
+.topo-facts { display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 0.6rem; margin: 0.5rem 0 0; }
 .topo-facts dt { color: var(--muted); }
 .topo-facts dd { margin: 0; overflow-wrap: anywhere; }
-.topo-lines, .topo-links, .topo-svcs { padding-left: 1rem; margin: 0.4rem 0; }
-.topo-lines li, .topo-links li, .topo-svcs li { margin: 0.35rem 0; overflow-wrap: anywhere; }
-.topo-svcs { list-style: none; padding-left: 0; }
-.topo-svcs .badge { margin-left: 0.3rem; }
+.topo-lines, .topo-links { padding-left: 1rem; margin: 0.4rem 0; }
+.topo-lines li, .topo-links li { margin: 0.35rem 0; overflow-wrap: anywhere; }
 .topo-link-kind { font-size: 0.65rem; }
 .lk-tailnet { color: var(--badge-tailnet); }
 .lk-public { color: var(--amber); }
 .lk-control { color: var(--accent); }
+.lk-physical { color: var(--text); }
+
+.topo-health { margin: 0.55rem 0 0; }
+.topo-health p { margin: 0.15rem 0 0; font-size: 0.7rem; }
+.topo-bad { color: var(--red); }
+.topo-warn { color: var(--amber); }
+.topo-ok { color: var(--green); }
+
+.topo-svcs, .topo-drives, .topo-fs, .topo-jails, .topo-bans {
+  list-style: none; padding: 0; margin: 0.4rem 0 0;
+}
+.topo-svcs > li, .topo-drives > li, .topo-fs > li, .topo-jails > li, .topo-bans > li {
+  padding: 0.4rem 0; border-top: 1px solid var(--border); overflow-wrap: anywhere;
+}
+.topo-svcs > li:first-child, .topo-drives > li:first-child, .topo-fs > li:first-child,
+.topo-jails > li:first-child, .topo-bans > li:first-child { border-top: 0; padding-top: 0.15rem; }
+.topo-svcs .badge { margin-left: 0.3rem; }
+.topo-platform { font-size: 0.65rem; margin-top: 0.2rem; }
+.topo-svc-actions { margin-top: 0.3rem; }
+.topo-route-btn { font-size: 0.65rem; padding: 0.1rem 0.4rem; }
+.topo-route-note { font-size: 0.65rem; min-height: 1em; margin: 0 0 0.2rem; }
+.topo-drives .topo-age, .topo-fs .topo-age, .topo-bans .topo-age, .topo-jails .topo-age {
+  font-size: 0.62rem; color: var(--muted);
+}
+.topo-age.old { color: var(--amber); }
+.topo-ips { font-size: 0.62rem; line-height: 1.6; overflow-wrap: anywhere; }
+
+/* Nothing is silently truncated: a long list stays whole behind a button. */
+.topo-more {
+  width: 100%; margin-top: 0.3rem; padding: 0.2rem 0.4rem;
+  border: 1px dashed var(--border); border-radius: 5px; background: transparent;
+  color: var(--muted); font: inherit; font-size: 0.65rem; cursor: pointer;
+}
+.topo-more:hover { border-color: var(--accent); color: var(--text); }
+.topo-more-row { border-top: 0 !important; padding-top: 0 !important; }
+
+/* A narrow screen stacks the sidebar under the map: the map keeps a usable
+   height, the strip and range stay reachable, and nothing scrolls sideways. */
 @media (max-width: 900px) {
+  .topo-main { padding: 0.6rem; }
   .topo-layout { flex-direction: column; overflow: auto; }
-  .topo-stage { flex: 0 0 65dvh; min-height: 22rem; }
+  .topo-stage { flex: 0 0 auto; height: 60dvh; min-height: 18rem; padding: 4.6rem 0.35rem 1.3rem; }
   .topo-side { flex: 0 0 auto; overflow: visible; }
-  .topo-stage { padding-top: 5rem; }
-  .topo-toolbar { font-size: 0.6rem; }
-  .topo-hint { font-size: 0.55rem; }
+  .topo-toolbar { gap: 0.3rem 0.5rem; font-size: 0.62rem; }
+  .topo-sim { top: 4.1rem; }
+  .topo-hint { display: none; }
+  .topo-strip { height: 1.15rem; }
+}
+@media (max-width: 480px) {
+  .topo-main { padding: 0.45rem; }
+  .topo-head h1 { font-size: 1.3rem; }
+  .topo-head .summary { font-size: 0.8rem; }
+  .topo-stage { height: 52dvh; min-height: 15rem; }
+  .topo-toolbar { padding: 0.3rem 0.4rem; }
+  .topo-zoom { margin-left: 0; }
+  .topo-card { padding: 0.55rem; font-size: 0.72rem; }
+  .topo-modes { gap: 0.6rem; }
+  .topo-facts { grid-template-columns: 1fr; gap: 0.1rem; }
+  .topo-facts dt { margin-top: 0.3rem; font-size: 0.65rem; }
+  .topo-time-ctl { flex-wrap: wrap; }
+  #topo-live { margin-left: 0; }
 }

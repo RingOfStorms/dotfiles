@@ -74,6 +74,8 @@ PATH="${extra:+$extra:}` + r.bin + `:$PATH" eval "$script"
 
 	sshUser = "root"
 	dryRun = false
+	retired = map[string]map[string]bool{}
+	t.Cleanup(func() { retired = map[string]map[string]bool{} })
 	inv = &Inventory{
 		DataRoot:       r.root,
 		Services:       map[string]Service{"svc": {Name: "svc", Dir: "svc", Kind: "podman", Host: "src"}},

@@ -1,8 +1,12 @@
 package containers
 
 import (
+	"context"
+
 	"errors"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -366,6 +370,7 @@ func TestPrepareScriptRoutes(t *testing.T) {
 	}
 	if !strings.Contains(ps, `printf %s 'tcp 7000
 udp 9000
+web 100.64.0.0/10
 ' > /var/lib/fleet-containers/ports/sec`) {
 		t.Errorf("ports file wrong:\n%s", ps)
 	}
@@ -824,5 +829,604 @@ func TestPrepareScriptPrivateCheckByKind(t *testing.T) {
 	}
 	if strings.Contains(ps, "fleet-noinet") {
 		t.Errorf("nixos net.private must not check fleet-noinet:\n%s", ps)
+	}
+}
+
+// srcPortLines is the runtime half of ROUTING-PLAN 8.2: the 80/443
+// admission for one service, from its own routes at the host it is being
+// deployed to (applyPorts turns the lines into @src/@src6/@src_lan). No
+// host-keyed map: a service reaches its own vhost wherever it lands.
+func TestSrcPortLines(t *testing.T) {
+	old := inv
+	defer func() { inv = old }()
+
+	lio, gp3, h001 := "100.64.0.1", "100.64.0.15", "100.64.0.13"
+	inv = &Inventory{
+		LanSubnet: "10.12.14.0/24",
+		Hosts: map[string]Host{
+			"lio": {OverlayIP: &lio}, "gp3": {OverlayIP: &gp3}, "h001": {OverlayIP: &h001},
+		},
+	}
+	if got := srcPortLines(Service{Name: "x"}, "h001"); got != nil {
+		t.Errorf("no routes: got %v, want nil", got)
+	}
+
+	// No allow: the whole tailnet range, the same literal lib.nix uses.
+	s := Service{Name: "trilium", Routes: map[string]Route{"web": httpRoute("notes", 8300, "tailnet", "native")}}
+	if got, want := strings.Join(srcPortLines(s, "lio"), "|"), "web 100.64.0.0/10"; got != want {
+		t.Errorf("no allow: got %q want %q", got, want)
+	}
+
+	// allow: exactly the named overlay IPs; unknown names are dropped.
+	r := httpRoute("notes", 8300, "tailnet", "native")
+	r.Allow = []string{"lio", "nosuch", "gp3"}
+	s = Service{Name: "trilium", Routes: map[string]Route{"web": r}}
+	if got, want := strings.Join(srcPortLines(s, "lio"), "|"), "web 100.64.0.1|web 100.64.0.15"; got != want {
+		t.Errorf("allow: got %q want %q", got, want)
+	}
+
+	// Deployed onto a host that declares no services: the lines still come
+	// from the service's own routes (the old per-host map wrote nothing).
+	if got := srcPortLines(s, "h004"); len(got) == 0 {
+		t.Errorf("routes on a host without declared services must still admit: %v", got)
+	}
+
+	// local-only: nothing to admit.
+	s = Service{Name: "searx", Routes: map[string]Route{"api": httpRoute("searx", 8080, "local", "native")}}
+	if got := srcPortLines(s, "h001"); got != nil {
+		t.Errorf("local-only: got %v, want nil", got)
+	}
+
+	// LAN: a lan route opens @src_lan; a public route via the router does
+	// not (its LAN clients arrive with the WAN source, ROUTING-PLAN 8.2).
+	r = httpRoute("dash", 8080, "lan", "native")
+	r.Via = nil
+	s = Service{Name: "dash", Routes: map[string]Route{"web": r}}
+	if got, want := strings.Join(srcPortLines(s, "h003"), "|"), "web 100.64.0.0/10|weblan 10.12.14.0/24"; got != want {
+		t.Errorf("lan: got %q want %q", got, want)
+	}
+	r = httpRoute("minecraft", 8080, "public", "native")
+	r.Via = []string{"router"}
+	s = Service{Name: "minecraft", Routes: map[string]Route{"web": r}}
+	if got, want := strings.Join(srcPortLines(s, "h003"), "|"), "web 100.64.0.0/10"; got != want {
+		t.Errorf("via router: got %q want %q", got, want)
+	}
+	// No lanSubnet: no weblan line (an empty element would be a syntax
+	// error, and a zero-length CIDR would admit nothing useful).
+	inv.LanSubnet = ""
+	r = httpRoute("dash", 8080, "lan", "native")
+	r.Via = nil
+	s = Service{Name: "dash", Routes: map[string]Route{"web": r}}
+	if got, want := strings.Join(srcPortLines(s, "h003"), "|"), "web 100.64.0.0/10"; got != want {
+		t.Errorf("empty lanSubnet: got %q want %q", got, want)
+	}
+	// A caller with no http route of its own contributes no lines: the
+	// admission it needs is written into the callee's ports file.
+	inv.LanSubnet = "10.12.14.0/24"
+	life := Service{Name: "life", Host: "h001", Net: Net{Private: true, IP: sp("10.233.4.2"),
+		Uses: []string{"zitadel.web"}}}
+	if got := srcPortLines(life, "h001"); got != nil {
+		t.Errorf("caller: got %v, want nil", got)
+	}
+}
+
+// prepareScript writes this service's srcPortLines into its own ports file,
+// before the prune/reload block, so applyPorts refills the sets from every
+// file on each deploy and prunes from the same pass.
+func TestPrepareScriptWebSources(t *testing.T) {
+	old := inv
+	defer func() { inv = old }()
+	inv = &Inventory{DataRoot: "/srv/containers", Hosts: map[string]Host{}, LanSubnet: "10.12.14.0/24"}
+	s := Service{Name: "sec", Routes: map[string]Route{"web": httpRoute("secrets", 8300, "public", "native-oidc")}}
+	ps := prepareScript(s, "h001")
+	want := "web 100.64.0.0/10\nweblan 10.12.14.0/24\n"
+	printf := strings.Index(ps, "printf %s '")
+	prune := strings.Index(ps, "while read -r pr po mode _")
+	i := strings.Index(ps, want)
+	if printf < 0 || prune < 0 || i < printf || i > prune {
+		t.Fatalf("web/weblan lines must be in the ports body, before the prune block:\n%s", ps)
+	}
+	// A service with no http routes (minecraft's are tcp) writes none.
+	s = Service{Name: "mc", Routes: map[string]Route{"game": Route{Port: 25565, Proto: "tcp", Exposure: "public", Via: []string{"router"}}}}
+	if ps := prepareScript(s, "h001"); strings.Contains(ps, "web 100.64") || strings.Contains(ps, "weblan") {
+		t.Errorf("no http routes, must write no web lines:\n%s", ps)
+	}
+}
+
+// ---------------------------------------------------------- net.uses admission
+
+// useRig fakes the inventory and the live placement sweep for the net.uses
+// tests: hosts answers `installed`, the hosts listed in down fail to answer.
+// localHost is pinned away from every test host so the sweep probes them all
+// instead of shortcutting to this machine's gcroots.
+func useRig(t *testing.T, svcs map[string]Service, installed map[string][]string, down ...string) {
+	t.Helper()
+	oldInv, oldDry, oldLocal, orig, oldRetired := inv, dryRun, localHost, fleetProbe, retired
+	t.Cleanup(func() {
+		inv, dryRun, localHost, fleetProbe = oldInv, oldDry, oldLocal, orig
+		retired = oldRetired
+		resetFleetPlacement()
+	})
+	lio, gp3, h001, h003 := "100.64.0.1", "100.64.0.15", "100.64.0.13", "100.64.0.31"
+	inv = &Inventory{
+		LanSubnet:      "10.12.14.0/24",
+		Services:       svcs,
+		ContainerHosts: []string{"h001", "h003", "gp3"},
+		Hosts: map[string]Host{
+			"lio": {OverlayIP: &lio}, "gp3": {OverlayIP: &gp3},
+			"h001": {OverlayIP: &h001}, "h003": {OverlayIP: &h003},
+		},
+	}
+	localHost = "not-a-fleet-host"
+	fleetProbe = fakeFleet(installed, down...)
+	dryRun = false
+	resetFleetPlacement()
+}
+
+// captureStderr runs f and returns what it wrote to stderr.
+func captureStderr(t *testing.T, f func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	must(t, err)
+	oldOut, oldErr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = w, w
+	f()
+	w.Close()
+	os.Stdout, os.Stderr = oldOut, oldErr
+	var b strings.Builder
+	buf := make([]byte, 4096)
+	for {
+		n, err := r.Read(buf)
+		b.Write(buf[:n])
+		if err != nil {
+			break
+		}
+	}
+	r.Close()
+	return b.String()
+}
+
+// allowCallee is an http vhost that only lio may read, so every other web
+// line in its ports file is a net.uses admission.
+func allowCallee(host string) Service {
+	r := httpRoute("app", 8300, "tailnet", "native")
+	r.Allow = []string{"lio"}
+	return Service{Name: "app", Host: host, Routes: map[string]Route{"web": r}}
+}
+
+func usingCaller(declared string) Service {
+	return Service{Name: "life", Host: declared, Net: Net{Private: true, IP: sp("10.233.4.2"),
+		Uses: []string{"app.web"}}}
+}
+
+// The callee admits the caller where discovery finds it, not where its
+// service.nix says: a moved caller still reaches the vhost.
+func TestSrcPortLinesUsesCallerHost(t *testing.T) {
+	callee := allowCallee("h003")
+	// Declared h001, actually running on gp3: h001's overlay IP must not be
+	// admitted, gp3's must.
+	useRig(t, map[string]Service{"app": callee, "life": usingCaller("h001")},
+		map[string][]string{"h003": {"app+"}, "gp3": {"life+"}})
+	if got, want := strings.Join(srcPortLines(callee, "h003"), "|"), "web 100.64.0.1|web 100.64.0.15"; got != want {
+		t.Errorf("caller on gp3: got %q want %q", got, want)
+	}
+}
+
+// A caller installed on two hosts (a stale copy nobody removed, plus the live
+// one) may dial out from either, so both hosts are admitted and the declared
+// host of neither is not.
+func TestSrcPortLinesUsesEveryCallerHost(t *testing.T) {
+	callee := allowCallee("h003")
+	useRig(t, map[string]Service{"app": callee, "life": usingCaller("h001")},
+		map[string][]string{"h003": {"app+"}, "h001": {"life+"}, "gp3": {"life+"}})
+	if got, want := strings.Join(srcPortLines(callee, "h003"), "|"), "web 100.64.0.1|web 100.64.0.13|web 100.64.0.15"; got != want {
+		t.Errorf("caller on h001 and gp3: got %q want %q", got, want)
+	}
+}
+
+// A caller on the callee's own host needs nothing in @src: @guest-egress
+// already accepts the guest address, and nginx allows the guest IP.
+func TestSrcPortLinesUsesSameHost(t *testing.T) {
+	callee := allowCallee("h001")
+	useRig(t, map[string]Service{"app": callee, "life": usingCaller("h001")},
+		map[string][]string{"h001": {"app+", "life+"}})
+	if got, want := strings.Join(srcPortLines(callee, "h001"), "|"), "web 100.64.0.1"; got != want {
+		t.Errorf("caller on the callee host: got %q want %q", got, want)
+	}
+	if v := routesVhost(callee); !strings.Contains(v, "allow 10.233.4.2; # net.uses life") {
+		t.Errorf("same-host caller must be allowed by guest IP:\n%s", v)
+	}
+}
+
+// A sweep that lost a host cannot confirm the caller is nowhere, so it is
+// admitted by its declared host, with a warning. That holds whether the host
+// that failed was the declared one or some other: the caller may be running
+// on the box that did not answer.
+func TestSrcPortLinesUsesPartialDiscovery(t *testing.T) {
+	for _, c := range []struct{ name, down string }{
+		{"declared host down", "h001"},
+		{"other host down", "gp3"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			callee := allowCallee("h003")
+			useRig(t, map[string]Service{"app": callee, "life": usingCaller("h001")},
+				map[string][]string{"h003": {"app+"}}, c.down)
+			var got []string
+			out := captureStderr(t, func() { got = srcPortLines(callee, "h003") })
+			if want := "web 100.64.0.1|web 100.64.0.13"; strings.Join(got, "|") != want {
+				t.Errorf("%s down: got %v want %s", c.down, got, want)
+			}
+			if !strings.Contains(out, "warning:") || !strings.Contains(out, "did not answer") {
+				t.Errorf("stderr lacks a warning that a host did not answer:\n%s", out)
+			}
+		})
+	}
+}
+
+// Every host answered and nobody has the caller: it was destroyed (or never
+// deployed), so nothing is admitted. Falling back to the declared host here
+// would re-admit a service that `cnt destroy` has just withdrawn.
+func TestSrcPortLinesUsesAbsentCaller(t *testing.T) {
+	callee := allowCallee("h003")
+	useRig(t, map[string]Service{"app": callee, "life": usingCaller("h001")},
+		map[string][]string{"h003": {"app+"}})
+	var got []string
+	out := captureStderr(t, func() { got = srcPortLines(callee, "h003") })
+	if want := "web 100.64.0.1"; strings.Join(got, "|") != want {
+		t.Errorf("absent caller admitted: got %v want %s", got, want)
+	}
+	if strings.Contains(out, "warning:") {
+		t.Errorf("a simply-absent caller is not a warning:\n%s", out)
+	}
+}
+
+// The two answers above come from one predicate, so pin it directly: only a
+// complete sweep may report an absent service as known-absent.
+func TestPlacesRequiresCompleteSweep(t *testing.T) {
+	cases := []struct {
+		name  string
+		p     fleetPlacement
+		want  []string
+		known bool
+	}{
+		{"complete, absent", fleetPlacement{found: map[string][]string{}, down: map[string]bool{}}, nil, true},
+		{"declared host down", fleetPlacement{found: map[string][]string{},
+			down: map[string]bool{"h001": true}}, []string{"h001"}, false},
+		{"other host down", fleetPlacement{found: map[string][]string{},
+			down: map[string]bool{"gp3": true}}, []string{"h001"}, false},
+		{"found on one host, another down", fleetPlacement{
+			found: map[string][]string{"life": {"gp3"}}, down: map[string]bool{"h001": true}},
+			[]string{"gp3"}, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, known := c.p.places("life", "h001")
+			if strings.Join(got, ",") != strings.Join(c.want, ",") || known != c.known {
+				t.Errorf("got (%v, %v) want (%v, %v)", got, known, c.want, c.known)
+			}
+		})
+	}
+}
+
+// net.uses of a tcp route, or of a route that does not exist, is not a
+// nginx admission: netExceptions covers the former, lib.nix the latter.
+func TestSrcPortLinesUsesNonHTTP(t *testing.T) {
+	callee := Service{Name: "app", Host: "h001", Routes: map[string]Route{
+		"web":  httpRoute("app", 8300, "local", "native"),
+		"game": {Port: 25565, Proto: "tcp", Exposure: "public", Via: []string{"router"}},
+	}}
+	caller := Service{Name: "life", Host: "h001", Net: Net{Private: true, IP: sp("10.233.4.2"),
+		Uses: []string{"app.game", "app.nosuch"}}}
+	useRig(t, map[string]Service{"app": callee, "life": caller},
+		map[string][]string{"h001": {"app+"}, "gp3": {"life+"}})
+	if got := srcPortLines(callee, "h001"); got != nil {
+		t.Errorf("tcp/missing-route uses: got %v, want nil", got)
+	}
+}
+
+// --------------------------------------------------- refreshing the ports file
+
+// refreshScript rewrites only the web/weblan lines of a live ports file on the
+// callee host: no deploy, no site rewrite, no restart of the callee.
+func TestRefreshScript(t *testing.T) {
+	// One http route open to the whole tailnet, so the fresh admission is a
+	// single predictable line.
+	callee := Service{Name: "app", Host: "h001",
+		Routes: map[string]Route{"web": httpRoute("app", 8300, "tailnet", "native")}}
+
+	for _, c := range []struct {
+		name string
+		file string // existing content; "" = no file
+		awk  bool   // break awk in PATH
+		want string // expected content afterwards
+		out  string // substring expected on stderr; "" = no warning
+	}{
+		{"rewrites web lines and keeps the rest",
+			"guest ve-app\ntcp 9000 dnat 10.233.9.2 100.64.0.13\nweb 100.64.0.99\nweblan 10.9.9.0/24\n", false,
+			"guest ve-app\ntcp 9000 dnat 10.233.9.2 100.64.0.13\nweb 100.64.0.0/10\n", ""},
+		{"keeps a file without a trailing newline",
+			"guest ve-app\nweb 100.64.0.99", false,
+			"guest ve-app\nweb 100.64.0.0/10\n", ""},
+		{"missing file", "", false, "",
+			"has no ports file on h001 yet; its net.uses admission is unchanged"},
+		{"failed write restores the previous file",
+			"guest ve-app\nweb 100.64.0.99\n", true,
+			"guest ve-app\nweb 100.64.0.99\n", "kept the previous ports file"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r := newOverrideRig(t)
+			// Computed here: the fresh lines come from the inventory the rig
+			// installs (no services, so only the route's own admission).
+			script := refreshScript(callee, "h001")
+			if strings.Contains(script, "'") {
+				t.Errorf("the script is single-quoted by sshArgs, so it cannot contain one:\n%s", script)
+			}
+			if !strings.Contains(script, "web 100.64.0.0/10") {
+				t.Errorf("script does not write the fresh admission:\n%s", script)
+			}
+			if strings.Contains(script, "nginx") {
+				t.Errorf("a ports-only refresh must not touch the nginx site:\n%s", script)
+			}
+			dir := filepath.Join(r.dir, "ports")
+			must(t, os.MkdirAll(dir, 0o755))
+			p := filepath.Join(dir, "app")
+			if c.file != "" {
+				must(t, os.WriteFile(p, []byte(c.file), 0o644))
+			}
+			if c.awk {
+				writeExe(t, filepath.Join(r.bin, "awk"), "#!/bin/sh\nexit 2\n")
+			}
+			cmd := exec.Command(r.bash, "-c", strings.ReplaceAll(script, "/var/lib/fleet-containers", r.dir))
+			cmd.Env = append(os.Environ(), "PATH="+r.bin+":"+os.Getenv("PATH"))
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("script failed: %v\n%s", err, out)
+			}
+			switch got, err := os.ReadFile(p); {
+			case c.want == "" && err == nil:
+				t.Errorf("ports file should not exist, got %q", got)
+			case c.want != "" && err != nil:
+				t.Fatalf("ports file gone, want %q: %v", c.want, err)
+			case c.want != "" && string(got) != c.want:
+				t.Errorf("ports file:\n%q\nwant\n%q", got, c.want)
+			}
+			for _, leftover := range []string{"app.bak", "app.new"} {
+				if exists(filepath.Join(dir, leftover)) {
+					t.Errorf("%s left behind", leftover)
+				}
+			}
+			if c.out != "" && !strings.Contains(string(out), c.out) {
+				t.Errorf("output lacks %q:\n%s", c.out, out)
+			}
+			// Without a ports file there is no set to rebuild on that host,
+			// so the refresh must not reload anything either.
+			log, _ := os.ReadFile(r.log)
+			reloaded := strings.Contains(string(log), "reload-or-restart fleet-containers-ports.service")
+			if reloaded != (c.file != "") {
+				t.Errorf("reloaded=%v, ports file existed=%v:\n%s", reloaded, c.file != "", log)
+			}
+		})
+	}
+}
+
+// refreshCallers goes to the host the callee actually runs on and only
+// rewrites its ports file: the callee itself keeps running.
+func TestRefreshCallersUsesCalleeHost(t *testing.T) {
+	r := newRig(t)
+	callee := allowCallee("src") // declared src, actually running on dst
+	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Host: "dst",
+		Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
+	installed := fakeFleet(map[string][]string{"dst": {"app+", "svc+"}}, "src")
+	oldProbe := fleetProbe
+	t.Cleanup(func() { fleetProbe = oldProbe; resetFleetPlacement() })
+	fleetProbe = installed
+	inv.Services = map[string]Service{"app": callee, "svc": caller}
+	inv.Hosts = map[string]Host{"src": {User: "root", OverlayIP: sp("100.64.0.11")},
+		"dst": {User: "root", OverlayIP: sp("100.64.0.12")},
+		// The callee's own `allow lio` must survive the refresh.
+		"lio": {OverlayIP: sp("100.64.0.1")}}
+	resetFleetPlacement()
+
+	dir := filepath.Join(r.dst+".state", "vlfc", "ports")
+	must(t, os.MkdirAll(dir, 0o755))
+	p := filepath.Join(dir, "app")
+	must(t, os.WriteFile(p, []byte("guest ve-app\nweb 100.64.0.11\n"), 0o644))
+
+	refreshCallers(caller)
+
+	// The stale src overlay IP that the wrong-direction admission wrote is
+	// gone; the caller now shares dst with the callee, so @guest-egress
+	// covers it and only the route's own admission is rewritten.
+	if got, want := readFile(t, p), "guest ve-app\nweb 100.64.0.1\n"; got != want {
+		t.Errorf("ports file on dst:\n%q\nwant\n%q", got, want)
+	}
+	calls := r.calls()
+	if !strings.Contains(calls, "ssh dst:") {
+		t.Errorf("refresh did not run on the callee host:\n%s", calls)
+	}
+	if strings.Contains(calls, "ssh src:") {
+		t.Errorf("refresh ran on the declared host:\n%s", calls)
+	}
+	if !strings.Contains(calls, "systemctl reload-or-restart fleet-containers-ports.service") {
+		t.Errorf("ports sets not reloaded:\n%s", calls)
+	}
+	for _, bad := range []string{"systemctl stop", "systemctl start", "nginx", "extra-container"} {
+		if strings.Contains(calls, bad) {
+			t.Errorf("a ports-only refresh must not run %q:\n%s", bad, calls)
+		}
+	}
+	for _, leftover := range []string{"app.bak", "app.new"} {
+		if exists(filepath.Join(dir, leftover)) {
+			t.Errorf("%s left behind on dst", leftover)
+		}
+	}
+}
+
+// A callee installed on two hosts is stale on one of them: both ports files
+// are refreshed, since either may be the one serving -- and only the host the
+// caller is not on needs the caller's overlay IP.
+func TestRefreshCallersEveryCalleeHost(t *testing.T) {
+	r := newRig(t)
+	callee := allowCallee("src")
+	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Host: "dst",
+		Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
+	oldProbe := fleetProbe
+	t.Cleanup(func() { fleetProbe = oldProbe; resetFleetPlacement() })
+	fleetProbe = fakeFleet(map[string][]string{"src": {"app+"}, "dst": {"app+", "svc+"}})
+	inv.Services = map[string]Service{"app": callee, "svc": caller}
+	inv.Hosts = map[string]Host{"lio": {OverlayIP: sp("100.64.0.1")}, "dst": {OverlayIP: sp("100.64.0.12")}}
+	resetFleetPlacement()
+
+	ports := map[string]string{}
+	for _, h := range []string{r.root, r.dst} {
+		p := filepath.Join(h+".state", "vlfc", "ports")
+		must(t, os.MkdirAll(p, 0o755))
+		must(t, os.WriteFile(filepath.Join(p, "app"), []byte("guest ve-app\nweb 100.64.0.99\n"), 0o644))
+		ports[h] = filepath.Join(p, "app")
+	}
+
+	refreshCallers(caller)
+
+	calls := r.calls()
+	for _, h := range []string{"src", "dst"} {
+		if !strings.Contains(calls, "ssh "+h+":") {
+			t.Errorf("callee not refreshed on %s:\n%s", h, calls)
+		}
+	}
+	for h, want := range map[string]string{
+		r.dst:  "guest ve-app\nweb 100.64.0.1\n",                  // caller is here
+		r.root: "guest ve-app\nweb 100.64.0.1\nweb 100.64.0.12\n", // caller on dst
+	} {
+		if got := readFile(t, ports[h]); got != want {
+			t.Errorf("ports file on %s:\n%q\nwant\n%q", h, got, want)
+		}
+	}
+}
+
+// Destroying a caller must withdraw its admission from the callee's ports
+// file, not re-point it at the caller's declared host: the service is gone.
+func TestDestroyWithdrawsCallerAdmission(t *testing.T) {
+	r := newRig(t)
+	callee := allowCallee("src")
+	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Host: "dst",
+		Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
+	oldProbe := fleetProbe
+	t.Cleanup(func() { fleetProbe = oldProbe; resetFleetPlacement() })
+	fleetProbe = fakeFleet(map[string][]string{"src": {"app+"}})
+	inv.Services = map[string]Service{"app": callee, "svc": caller}
+	inv.Hosts = map[string]Host{"lio": {OverlayIP: sp("100.64.0.1")}, "dst": {OverlayIP: sp("100.64.0.12")}}
+	resetFleetPlacement()
+
+	dir := filepath.Join(r.root+".state", "vlfc", "ports")
+	must(t, os.MkdirAll(dir, 0o755))
+	p := filepath.Join(dir, "app")
+	must(t, os.WriteFile(p, []byte("guest ve-app\nweb 100.64.0.1\nweb 100.64.0.12\n"), 0o644))
+
+	if err := cmdDestroy([]string{"svc", "--host", "dst"}); err != nil {
+		t.Fatalf("destroy: %v", err)
+	}
+	if got, want := readFile(t, p), "guest ve-app\nweb 100.64.0.1\n"; got != want {
+		t.Errorf("callee still admits the destroyed caller:\n%q\nwant\n%q", got, want)
+	}
+}
+
+// The withdraw must survive the next CLI run: service.nix still declares the
+// destroyed caller, so a fresh inventory lists it again. Discovery is what
+// says it is gone, and that must keep its admission out.
+func TestDestroyedCallerStaysWithdrawn(t *testing.T) {
+	r := newRig(t)
+	callee := allowCallee("src")
+	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Host: "dst",
+		Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
+	// dst keeps the overlay IP the stale copy dialled out as, so admitting the
+	// declared host would put the withdrawn address straight back.
+	hosts := map[string]Host{"src": {User: "root", OverlayIP: sp("100.64.0.1")},
+		"dst": {User: "root", OverlayIP: sp("100.64.0.12")}}
+	reload := func() { // what loadInventory does on the next command
+		inv = &Inventory{DataRoot: r.root, Hosts: hosts,
+			Services: map[string]Service{"app": callee, "svc": caller}}
+		resetFleetPlacement()
+	}
+	oldProbe := fleetProbe
+	t.Cleanup(func() { fleetProbe = oldProbe; resetFleetPlacement() })
+	// svc is gone from the fleet; every host answers.
+	fleetProbe = fakeFleet(map[string][]string{"src": {"app+"}})
+	reload()
+
+	dir := filepath.Join(r.root+".state", "vlfc", "ports")
+	must(t, os.MkdirAll(dir, 0o755))
+	p := filepath.Join(dir, "app")
+	must(t, os.WriteFile(p, []byte("guest ve-app\nweb 100.64.0.1\nweb 100.64.0.12\n"), 0o644))
+
+	if err := cmdDestroy([]string{"svc", "--host", "dst"}); err != nil {
+		t.Fatalf("destroy: %v", err)
+	}
+	reload()
+	refreshCallers(caller)
+
+	if got := readFile(t, p); strings.Contains(got, "100.64.0.12") {
+		t.Errorf("a destroyed caller is admitted again on the next run:\n%q", got)
+	}
+}
+
+// Destroying one copy of a caller must not withdraw the other: only the
+// (service, host) pair that was removed stops being admitted, so a copy still
+// running elsewhere keeps reaching the callee. The probe here still reports
+// the destroyed copy, as a host that has not caught up would.
+func TestDestroyOneCopyKeepsTheOther(t *testing.T) {
+	r := newRig(t)
+	callee := allowCallee("src")
+	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Host: "dst",
+		Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
+	oldProbe := fleetProbe
+	t.Cleanup(func() { fleetProbe = oldProbe; resetFleetPlacement() })
+	fleetProbe = fakeFleet(map[string][]string{
+		"src":  {"app+"},
+		"dst":  {"svc+"}, // the copy about to be destroyed, still reported
+		"h003": {"svc+"},
+	})
+	inv.ContainerHosts = []string{"src", "dst", "h003"}
+	inv.Services = map[string]Service{"app": callee, "svc": caller}
+	inv.Hosts = map[string]Host{
+		"lio":  {User: "root", OverlayIP: sp("100.64.0.1")}, // the route's allow
+		"dst":  {User: "root", OverlayIP: sp("100.64.0.12")},
+		"h003": {User: "root", OverlayIP: sp("100.64.0.31")},
+	}
+	resetFleetPlacement()
+
+	dir := filepath.Join(r.root+".state", "vlfc", "ports")
+	must(t, os.MkdirAll(dir, 0o755))
+	p := filepath.Join(dir, "app")
+	must(t, os.WriteFile(p, []byte("guest ve-app\nweb 100.64.0.1\nweb 100.64.0.12\nweb 100.64.0.31\n"), 0o644))
+
+	if err := cmdDestroy([]string{"svc", "--host", "dst"}); err != nil {
+		t.Fatalf("destroy: %v", err)
+	}
+	if got, want := readFile(t, p), "guest ve-app\nweb 100.64.0.1\nweb 100.64.0.31\n"; got != want {
+		t.Errorf("destroying the dst copy:\n%q\nwant\n%q", got, want)
+	}
+}
+
+// A caller whose net.uses names no http route needs no refresh, and must not
+// trigger a discovery sweep or any ssh.
+func TestRefreshCallersIgnoresNonHTTP(t *testing.T) {
+	r := newRig(t)
+	callee := Service{Name: "app", Dir: "app", Kind: "podman", Host: "dst",
+		Routes: map[string]Route{"game": {Port: 25565, Proto: "tcp", Exposure: "public", Via: []string{"router"}}}}
+	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Host: "dst",
+		Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.game", "nosuch.web"}}}
+	oldProbe := fleetProbe
+	t.Cleanup(func() { fleetProbe = oldProbe; resetFleetPlacement() })
+	fleetProbe = func(context.Context, string) ([]row, error) {
+		t.Error("discovery ran for a caller with no http net.uses")
+		return nil, nil
+	}
+	inv.Services = map[string]Service{"app": callee, "svc": caller}
+	resetFleetPlacement()
+
+	refreshCallers(caller)
+
+	if calls := r.calls(); calls != "" {
+		t.Errorf("nothing should run, got:\n%s", calls)
 	}
 }

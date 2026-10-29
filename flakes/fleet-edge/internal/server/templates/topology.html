@@ -3,17 +3,22 @@
 <header class="page-head topo-head">
   <h1>Topology</h1>
   <p class="summary" id="topo-summary">
-    <strong>{{.Online}}</strong>/<strong>{{.Polled}}</strong> polled hosts online
+    <strong>{{.Online}}</strong> machine{{if ne .Online 1}}s{{end}} available
     {{if .Sleeping}} · <strong>{{.Sleeping}}</strong> sleeping{{end}}
-    {{if .Down}} · <strong class="warn">{{.Down}}</strong> down{{end}}
-    <span class="muted" id="topo-updated"> · live, refreshes every 30s</span>
+    {{if .Down}} · <strong class="warn">{{.Down}}</strong> needs attention{{end}}
+    <span class="muted" id="topo-updated"> · live</span>
   </p>
+  <p class="topo-problems" id="topo-problems" hidden></p>
 </header>
 <div class="topo-layout">
-  <div class="topo-stage" id="topo-stage" tabindex="0" aria-label="Topology diagram: drag to pan, scroll or pinch to zoom, click a box for details">
+  <div class="topo-stage" id="topo-stage" tabindex="0" aria-label="Topology diagram: drag to pan, scroll or pinch to zoom, click a station for details">
     {{template "topology.svg" .Diagram}}
     <div class="topo-toolbar">
-      {{range .Layers}}<label class="topo-layer"><input type="checkbox" data-layer="{{.ID}}" checked> {{.Label}}</label>{{end}}
+      <div class="topo-view" role="group" aria-label="View">
+        <button type="button" data-view="overview" class="on">Overview</button>
+        <button type="button" data-view="physical">Physical</button>
+        <button type="button" data-view="control">Control</button>
+      </div>
       <span class="topo-zoom">
         <button type="button" data-zoom="in" title="Zoom in (+)">+</button>
         <button type="button" data-zoom="out" title="Zoom out (-)">−</button>
@@ -21,37 +26,85 @@
       </span>
       <a class="topo-download" href="/topology.svg" download="topology.svg" title="Download as a standalone SVG">SVG ↓</a>
     </div>
-    <div class="topo-hint">drag to pan · scroll / pinch to zoom · click a box for details</div>
+    <div class="topo-sim" id="topo-sim" title="Requests on this map are generated, not measured">Simulation</div>
+    <div class="topo-hint">drag to pan · scroll / pinch to zoom · click a station for details</div>
   </div>
   <aside class="topo-side">
     <section class="topo-card" id="topo-info" hidden></section>
+
+    <section class="topo-card">
+      <h2>Traffic</h2>
+      <p class="topo-modes">
+        <label><input type="radio" name="topo-mode" value="simulated" checked> Simulated</label>
+        <label><input type="radio" name="topo-mode" value="real"> Real</label>
+      </p>
+      <p class="muted" id="topo-mode-note">Requests are generated from the declared routes: no traffic is measured.</p>
+      <p class="topo-sim-note" id="topo-sim-note" hidden></p>
+    </section>
+
+    <section class="topo-card">
+      <h2>History</h2>
+      <div class="topo-time">
+        <div class="topo-time-head">
+          <span id="topo-time-label">Live</span>
+          <span class="muted" id="topo-time-meta"></span>
+        </div>
+        <div class="topo-strip" id="topo-strip" role="img" aria-label="Recorded health over the last 24 hours"></div>
+        <input type="range" id="topo-time" min="0" max="1000" value="1000" step="1"
+               aria-label="Recorded history: drag to replay, right for live">
+        <div class="topo-time-ctl">
+          <button type="button" id="topo-play" title="Play the recorded window" aria-pressed="false">▶</button>
+          <label class="muted">speed
+            <select id="topo-speed" aria-label="Playback speed">
+              <option value="1">1×</option>
+              <option value="4">4×</option>
+              <option value="16">16×</option>
+              <option value="64" selected>64× (≈22 min for 24 h)</option>
+            </select>
+          </label>
+          <button type="button" id="topo-live" title="Return to the live map">Live</button>
+        </div>
+        <p class="topo-time-note" id="topo-time-note">No history yet: recording starts with the first poll.</p>
+      </div>
+    </section>
+
     <section class="topo-card">
       <h2>Legend</h2>
-      <svg class="topo topo-legend" viewBox="0 0 300 236" aria-hidden="true">
-        <g class="edge k-wan live"><path d="M4 12h44"/></g><text x="58" y="16">WAN uplink</text>
-        <g class="edge k-trunk live"><path d="M4 34h44"/></g><text x="58" y="38">802.1Q trunk</text>
-        <g class="edge k-ethernet live"><path d="M4 56h44"/></g><text x="58" y="60">ethernet</text>
-        <g class="edge k-wifi live"><path d="M4 78h44"/></g><text x="58" y="82">wi-fi</text>
-        <g class="edge k-kvm live"><path d="M4 100h44"/></g><text x="58" y="104">KVM / USB / power</text>
-        <g class="edge k-tailnet live"><path d="M4 122h44"/></g><text x="58" y="126">tailnet membership / coordination</text>
-        <g class="edge k-public live"><path d="M4 144h44"/></g><text x="58" y="148">public traffic path</text>
-        <g class="edge k-agent live"><path d="M4 166h44"/></g><text x="58" y="170">fleet-agent poll (:9101)</text>
-        <g class="edge k-control live"><path d="M4 188h44"/></g><text x="58" y="192">control / push</text>
-        <g class="node st-online"><circle class="sdot" cx="10" cy="216" r="5"/></g><text x="20" y="220">online</text>
-        <g class="node st-sleeping"><circle class="sdot" cx="80" cy="216" r="5"/></g><text x="90" y="220">asleep</text>
-        <g class="node st-down"><circle class="sdot" cx="150" cy="216" r="5"/></g><text x="160" y="220">down</text>
-        <g class="node st-no-endpoint"><circle class="sdot" cx="212" cy="216" r="5"/></g><text x="222" y="220">not polled</text>
-      </svg>
-      <p class="topo-legend-chips">
-        Container chips: dot = state, left stripe = exposure
-        <span class="badge badge-public">public</span>
-        <span class="badge badge-lan">lan</span>
-        <span class="badge badge-tailnet">tailnet</span>
-        <span class="badge badge-local">local</span>
+      <p class="topo-states">
+        <span class="topo-state"><i class="dot ok"></i>available</span>
+        <span class="topo-state"><i class="dot sleep"></i>sleeping</span>
+        <span class="topo-state"><i class="dot bad"></i>down</span>
+        <span class="topo-state"><i class="dot none"></i>not monitored</span>
+        <span class="topo-state"><i class="ring"></i>a disk needs a look</span>
       </p>
+      <p class="muted">A red service count means something is not running. Bans are protective enforcement, never a fault.</p>
+      <p class="muted">Traces appear only for traffic: <span class="badge badge-public">public</span> through the edge hub, <span class="badge badge-tailnet">tailnet</span> from a simulated overlay client.</p>
     </section>
+
+    <section class="topo-card">
+      <h2>Draw</h2>
+      {{range .Layers}}<label class="topo-layer"><input type="checkbox" data-layer="{{.ID}}"{{if .Default}} checked{{end}}> {{.Label}}</label>{{end}}
+      <p class="muted">Overview shows what is needed to read the map. Physical adds the known cabling.</p>
+    </section>
+
+    <section class="topo-card topo-tech">
+      <h2>Fleet</h2>
+      <dl class="topo-facts">
+        <dt>polled</dt><dd>{{.Polled}}</dd>
+        <dt>available</dt><dd>{{.Online}}</dd>
+        <dt>sleeping</dt><dd>{{.Sleeping}}</dd>
+        <dt>down</dt><dd>{{.Down}}</dd>
+        <dt>not monitored</dt><dd id="topo-unpolled">—</dd>
+      </dl>
+    </section>
+
+    <p class="topo-attr" id="topo-attr" hidden>
+      Country flags are an estimate from an offline database.
+      <a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by DB-IP</a>
+      <span class="muted" id="topo-attr-note"></span>
+    </p>
     {{range .Notes}}
-    <details class="topo-card topo-note" open>
+    <details class="topo-card topo-note">
       <summary>{{.Title}}</summary>
       <p>{{.Text}}</p>
     </details>

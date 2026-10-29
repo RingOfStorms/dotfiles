@@ -2,6 +2,7 @@ package topology
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -118,12 +119,10 @@ func TestBuildDeclaredContainerHostWithNoContainers(t *testing.T) {
 	if !n.ContainerHost {
 		t.Error("h003 declared in containerHosts must be a container host")
 	}
-	// A declared host with nothing on it still says it is a container host.
-	if n.ChipsLabel == nil || !strings.Contains(strings.ToLower(n.ChipsLabel.Text), "container") {
-		t.Fatalf("chips label = %+v", n.ChipsLabel)
-	}
-	if len(n.Chips) != 0 {
-		t.Errorf("expected no chips, got %+v", n.Chips)
+	// A declared host with nothing on it still counts as a container host,
+	// but the station stays empty: services belong to the sidebar.
+	if n.SvcCount != 0 || n.SvcFailed != 0 {
+		t.Errorf("a host with no services must show no service counts: %d/%d", n.SvcCount, n.SvcFailed)
 	}
 	ni := infoByID(t, d)["h003"]
 	if !ni.ContainerHost {
@@ -142,11 +141,9 @@ func TestBuildContainerHostFromServiceHost(t *testing.T) {
 	if !n.ContainerHost {
 		t.Fatal("h001 carries declared services, so it is a container host")
 	}
-	if n.ChipsLabel == nil || !strings.Contains(strings.ToLower(n.ChipsLabel.Text), "container") {
-		t.Fatalf("chips label = %+v", n.ChipsLabel)
-	}
-	if len(n.Chips) != 2 || n.Chips[0].Name != "jellyfin" || n.Chips[1].Name != "photos" {
-		t.Fatalf("chips = %+v", n.Chips)
+	// The station counts its services instead of listing them.
+	if n.SvcCount != 2 || n.SvcFailed != 0 {
+		t.Fatalf("service counts = %d/%d, want 2/0", n.SvcCount, n.SvcFailed)
 	}
 	// Container states come from the poll; the unstatused service is unknown.
 	ni := infoByID(t, d)["h001"]
@@ -170,8 +167,8 @@ func TestBuildPollOnlyHostIsNotContainerHost(t *testing.T) {
 	if n.ContainerHost {
 		t.Fatal("a host that only answers polls is not a container host")
 	}
-	if n.ChipsLabel != nil {
-		t.Fatalf("no chips and no containers: label must be nil, got %+v", n.ChipsLabel)
+	if n.SvcCount != 0 {
+		t.Errorf("a poll-only host declares no services, got %d", n.SvcCount)
 	}
 	if infoByID(t, d)["gp3"].ContainerHost {
 		t.Error("NodeInfo.containerHost must be false for a poll-only host")
@@ -184,10 +181,10 @@ func TestBuildEdgesLiveOnlyBetweenPresentNodes(t *testing.T) {
 	delete(polls, "gp3") // gp3 is now down
 	d := Build(testSpec(), state.MergeAt(inv, polls, at), at)
 
-	if e := edge(t, d, "internet", "h001", "tailnet"); !e.Live {
+	if e := edge(t, d, "internet", "h001", "agent"); !e.Live {
 		t.Error("online host must have a live edge")
 	}
-	if e := edge(t, d, "internet", "gp3", "tailnet"); e.Live {
+	if e := edge(t, d, "internet", "gp3", "agent"); e.Live {
 		t.Error("down host must not have a live edge")
 	}
 	if e := edge(t, d, "internet", "h003", "agent"); !e.Live {
@@ -216,13 +213,8 @@ func TestBuildOfflineHostIsNotLiveAndHasNoMetrics(t *testing.T) {
 	if n.live {
 		t.Error("a host with no successful poll must not be live")
 	}
-	if e := edge(t, d, "internet", "h001", "tailnet"); e.Live {
+	if e := edge(t, d, "internet", "h001", "agent"); e.Live {
 		t.Error("offline host must not have a live edge")
-	}
-	for _, l := range n.Lines {
-		if l.Class == "metrics" {
-			t.Errorf("offline host metrics line drawn: %q", l.Text)
-		}
 	}
 	for _, l := range infoByID(t, d)["h001"].Lines {
 		if strings.Contains(l, "cpu") {
@@ -238,18 +230,15 @@ func TestBuildNodeInfoCarriesFullMetrics(t *testing.T) {
 	if !nodesByID(d)["h001"].live {
 		t.Fatal("an online reachable host must be live")
 	}
-	var metricsLine string
-	for _, l := range nodesByID(d)["h001"].Lines {
-		if l.Class == "metrics" {
-			metricsLine = l.Text
-		}
-	}
-	if !strings.Contains(metricsLine, "cpu 12%") || !strings.Contains(metricsLine, "mem 25%") || !strings.Contains(metricsLine, "up 1h") {
-		t.Fatalf("metrics line = %q", metricsLine)
-	}
 	ni := infoByID(t, d)["h001"]
 	if !strings.Contains(strings.Join(ni.Lines, "|"), "cpu 12%") {
 		t.Errorf("NodeInfo.Lines lacks the metrics: %+v", ni.Lines)
+	}
+	if ni.System == nil || ni.System.CPUPercent != 12.5 {
+		t.Errorf("NodeInfo.System = %+v", ni.System)
+	}
+	if n := nodesByID(d)["h001"]; n.Title == "" {
+		t.Error("every station carries a title for its tooltip")
 	}
 	if !strings.Contains(ni.StateText, "up 1h") {
 		t.Errorf("state text = %q", ni.StateText)
@@ -277,14 +266,15 @@ func TestBuildDerivedEdges(t *testing.T) {
 	m := state.MergeAt(testInventory(), allPolls(), at)
 	d := Build(testSpec(), m, at)
 
-	edge(t, d, "edge", "h001", "public")
-	edge(t, d, "internet", "h001", "tailnet")
+	edge(t, d, "internet", "h001", "agent")
 	edge(t, d, "internet", "h003", "agent")
 
-	// Only hosts with an overlay IP get a tailnet edge.
+	// The only derived edges are agent polls. Overlay membership is a station
+	// tag and public reach is a journey drawn on demand, so neither is a
+	// permanent rail on the map.
 	for _, e := range d.Edges {
-		if e.Kind == "tailnet" && e.To == "edge" {
-			t.Errorf("static node must not get a tailnet edge: %+v", e)
+		if e.Kind != "agent" {
+			t.Errorf("derived edge %s->%s is %q, want only agent edges", e.From, e.To, e.Kind)
 		}
 	}
 }
@@ -430,11 +420,11 @@ func TestValidate(t *testing.T) {
 		{"zero width falls back to the default", func(s *Spec) { s.Width = 0 }, ""},
 		{"negative width", func(s *Spec) { s.Width = -10 }, "negative"},
 		{"valid at the default width", func(s *Spec) { s.Width = DefaultWidth }, ""},
-		{"ten zones at the minimum width", tenZones, "minimum 200"},
+		{"ten zones at the minimum width", tenZones, fmt.Sprintf("minimum %d", MinWidth)},
 		{"two zones at the minimum width", func(s *Spec) {
 			s.Width = MinWidth
 			s.Rows[0].Zones = []Zone{{ID: "net", Flex: 1}, {ID: "fleet", Flex: 1}}
-		}, "minimum 200"},
+		}, fmt.Sprintf("minimum %d", MinWidth)},
 		{"flex starves a zone", func(s *Spec) {
 			s.Rows[0].Zones = []Zone{{ID: "net", Flex: 50}, {ID: "fleet", Flex: 1}}
 		}, `zone "fleet"`},
@@ -528,5 +518,188 @@ func TestBuildEmptySpec(t *testing.T) {
 	}
 	if d.Meta != "{}" {
 		t.Errorf("meta = %q", d.Meta)
+	}
+}
+
+// serviceInventory declares one host whose three services reach it three
+// different ways: public through the edge, public through the router, and
+// host-only. An unplaced service is declared too and must attach to no station.
+func serviceInventory() *inventory.Inventory {
+	return &inventory.Inventory{
+		Services: map[string]inventory.Service{
+			"media": {Name: "media", Kind: "nixos", Host: "h004", Routes: map[string]inventory.Route{
+				"web": {Port: 443, Proto: "https", FQDN: strp("media.example"), Exposure: "public", Via: []string{"edge"}},
+			}},
+			"router-ui": {Name: "router-ui", Host: "h004", Routes: map[string]inventory.Route{
+				"web": {Port: 8443, Exposure: "public", Via: []string{"router"}},
+			}},
+			"vault": {Name: "vault", Host: "h004", Routes: map[string]inventory.Route{
+				"web": {Port: 8200, Exposure: "local"},
+			}},
+			"stray": {Name: "stray", Routes: map[string]inventory.Route{
+				"web": {Port: 9000, Exposure: "public", Via: []string{"edge"}},
+			}},
+		},
+		Hosts: map[string]inventory.Host{"h004": {OverlayIP: strp("100.64.0.44")}},
+	}
+}
+
+// A public route is public only where it genuinely enters from the internet:
+// through the edge hub, or through the router when that is what terminates it.
+func TestServiceExposureAndRouteOrigin(t *testing.T) {
+	spec := &Spec{DefaultZone: "fleet", Nodes: []NodeSpec{{ID: "edge", Label: "Edge", Kind: "cloud", Zone: "fleet"}}}
+	d := Build(spec, state.MergeAt(serviceInventory(), map[string]state.HostPoll{}, at), at)
+
+	svcs := map[string]ServiceInfo{}
+	for _, s := range infoByID(t, d)["h004"].Services {
+		svcs[s.Name] = s
+	}
+	if len(svcs) != 3 {
+		t.Fatalf("services = %+v", svcs)
+	}
+	if media := svcs["media"]; !media.Public || media.ViaRouter {
+		t.Errorf("edge-terminated public route = %+v", media)
+	}
+	if router := svcs["router-ui"]; router.Public || !router.ViaRouter {
+		t.Errorf("router-terminated public route = %+v", router)
+	}
+	if vault := svcs["vault"]; vault.Public || vault.ViaRouter || vault.Exposure != "local" {
+		t.Errorf("host-only route = %+v", vault)
+	}
+	for _, s := range svcs {
+		if s.Name == "stray" {
+			t.Error("a service with no declared host must not attach to a station")
+		}
+	}
+}
+
+// The station counts services, not containers: a station with two of three
+// services down shows 3/1 without listing a single name.
+func TestStationServiceCountsAndFailure(t *testing.T) {
+	inv := serviceInventory()
+	poll := state.HostPoll{
+		Host: "h004", OK: true, PolledAt: at,
+		Status: &state.HostStatus{
+			Host: "h004",
+			Services: map[string]state.ServiceStatus{
+				"media":     {Active: "active", Enabled: true},
+				"router-ui": {Active: "failed", Enabled: true},
+				"vault":     {Active: "inactive", Enabled: false},
+			},
+		},
+	}
+	d := Build(&Spec{DefaultZone: "fleet"}, state.MergeAt(inv, map[string]state.HostPoll{"h004": poll}, at), at)
+
+	n := nodesByID(d)["h004"]
+	if n.SvcCount != 3 || n.SvcFailed != 2 {
+		t.Fatalf("station counts = %d services, %d failing", n.SvcCount, n.SvcFailed)
+	}
+	if n.Warn != 0 {
+		t.Errorf("stopped services are not disk warnings: %d", n.Warn)
+	}
+	ni := infoByID(t, d)["h004"]
+	if ni.SvcFailed != 2 {
+		t.Errorf("NodeInfo.SvcFailed = %d", ni.SvcFailed)
+	}
+}
+
+// driveUnhealthy is the single shared rule behind the station badge, the
+// sidebar pill and the history strip: standby is never a fault, every defect
+// counter is, and a worn-out drive is.
+func TestDriveUnhealthyPredicate(t *testing.T) {
+	cases := []struct {
+		name string
+		drv  state.SmartDrive
+		want bool
+	}{
+		{"healthy", state.SmartDrive{Healthy: true}, false},
+		{"healthy with counters of zero", state.SmartDrive{Healthy: true, TempC: 41}, false},
+		{"standby and unreadable", state.SmartDrive{Standby: true, Healthy: false, PendingSectors: 4}, false},
+		{"failed verdict", state.SmartDrive{Healthy: false}, true},
+		{"pending sectors", state.SmartDrive{Healthy: true, PendingSectors: 1}, true},
+		{"uncorrectable", state.SmartDrive{Healthy: true, UncorrectableErrors: 2}, true},
+		{"media errors", state.SmartDrive{Healthy: true, MediaErrors: 1}, true},
+		{"reallocated", state.SmartDrive{Healthy: true, ReallocatedSectors: 8}, true},
+		{"worn out", state.SmartDrive{Healthy: true, WearPercentUsed: 100}, true},
+		{"worn but usable", state.SmartDrive{Healthy: true, WearPercentUsed: 99}, false},
+	}
+	for _, c := range cases {
+		if got := driveUnhealthy(c.drv); got != c.want {
+			t.Errorf("%s: driveUnhealthy = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// diskProblems counts a drive once and a pool once, however many submounts
+// report it, and never counts a spun-down drive or a healthy array.
+func TestDiskProblemsCountsEachPoolOnce(t *testing.T) {
+	degraded := func(mount string) state.FilesystemMount {
+		return state.FilesystemMount{Mount: mount, FSType: "bcachefs", Bcachefs: &state.BcachefsInfo{
+			UUID: "pool-a", Degraded: true,
+			Devices: []state.BcachefsDevice{{Name: "sda", IOErrorsRead: 3}},
+		}}
+	}
+	st := &state.HostStatus{
+		Smart: []state.SmartDrive{
+			{Device: "/dev/sda", Healthy: true},
+			{Device: "/dev/sdb", Healthy: true, PendingSectors: 2},
+			{Device: "/dev/sdc", Standby: true, Healthy: false, MediaErrors: 5},
+		},
+		Filesystems: []state.FilesystemMount{
+			degraded("/mnt/a"),
+			degraded("/mnt/a/sub"),
+			{Mount: "/", FSType: "ext4"},
+			{Mount: "/mnt/ok", FSType: "bcachefs", Bcachefs: &state.BcachefsInfo{UUID: "pool-b"}},
+		},
+	}
+	// One bad drive plus one pool reported by two submounts.
+	if got := diskProblems(st); got != 2 {
+		t.Fatalf("diskProblems = %d, want 2", got)
+	}
+	if got := diskProblems(&state.HostStatus{}); got != 0 {
+		t.Errorf("an empty status has no problems, got %d", got)
+	}
+}
+
+// The station is fixed size and its head, icon, dot and counter baselines all
+// stay inside the box, whatever the label length.
+func TestStationGeometryStaysInsideTheBox(t *testing.T) {
+	inv := serviceInventory()
+	inv.Hosts["h004"] = inventory.Host{OverlayIP: strp("100.64.0.44")}
+	spec := &Spec{
+		Width:       DefaultWidth,
+		Rows:        []Row{{Zones: []Zone{{ID: "fleet", Label: "Fleet", Flex: 1}}}},
+		DefaultZone: "fleet",
+		Nodes: []NodeSpec{{
+			Host: "h004", Label: "A very long station label that would overflow", Zone: "fleet",
+			Badges: []string{"tailnet", "VLAN 20"},
+		}},
+	}
+	d := Build(spec, state.MergeAt(inv, map[string]state.HostPoll{}, at), at)
+
+	n := nodesByID(d)["h004"]
+	if n.W != stationW || n.H != stationH {
+		t.Fatalf("station = %dx%d, want %dx%d", n.W, n.H, stationW, stationH)
+	}
+	inside := func(name string, x, y int) {
+		if x < 0 || x > n.W || y < 0 || y > n.H {
+			t.Errorf("%s (%d,%d) is outside the %dx%d station", name, x, y, n.W, n.H)
+		}
+	}
+	inside("head", n.HeadX, n.HeadY)
+	inside("icon", n.IconX, n.IconY)
+	inside("dot", n.DotX, n.HeadY)
+	inside("tailnet", n.TsX, n.TsY)
+	inside("count", n.CountX, n.CountY)
+	inside("warn", n.CountX, n.WarnY)
+	if n.Tags != "tailnet · VLAN 20" {
+		t.Errorf("station tags = %q", n.Tags)
+	}
+	ni := infoByID(t, d)["h004"]
+	if ni.X != float64(n.CenterX()) || ni.Y != float64(n.CenterY()) {
+		t.Errorf("NodeInfo anchor = (%v,%v), station centre = (%d,%d)", ni.X, ni.Y, n.CenterX(), n.CenterY())
+	}
+	if strings.Join(ni.Badges, ",") != "tailnet,VLAN 20" {
+		t.Errorf("NodeInfo.Badges = %v", ni.Badges)
 	}
 }

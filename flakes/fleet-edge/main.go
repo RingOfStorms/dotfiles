@@ -24,6 +24,7 @@ import (
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/bunny"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/dash"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/edgevhost"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/geoip"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/overrides"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/placements"
@@ -31,6 +32,7 @@ import (
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/shareserve"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/state"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/store"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/timeline"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/topology"
 )
 
@@ -371,6 +373,8 @@ func main() {
 	pollTimeout := flag.Duration("poll-timeout", 3*time.Second, "per-host poll timeout")
 	dbPath := flag.String("db", envDefault("FLEET_EDGE_DB", ""), "path to SQLite metrics database (empty disables persistence)")
 	title := flag.String("title", envDefault("FLEET_EDGE_TITLE", "fleet-edge"), "page title (env FLEET_EDGE_TITLE)")
+	geoipFile := flag.String("geoip-country-file", envDefault("FLEET_EDGE_GEOIP_COUNTRY_FILE", ""),
+		"offline DB-IP Lite Country CSV(.gz) for banned-address countries (empty disables lookups)")
 	background := flag.String("background", envDefault("FLEET_EDGE_BACKGROUND", ""),
 		"background image: http(s) URL used directly, or a local file served at /assets/bg (env FLEET_EDGE_BACKGROUND)")
 	iconBase := flag.String("icon-base", envDefault("FLEET_EDGE_ICON_BASE", dash.DefaultIconBase),
@@ -417,12 +421,23 @@ func main() {
 	}
 
 	poller := state.NewPoller(inv, *statusURLTemplate, *pollTimeout)
+	var st *store.Store
 	if *dbPath != "" {
-		st, err := store.Open(*dbPath)
+		opened, err := store.Open(*dbPath)
 		if err != nil {
 			log.Fatalf("opening metrics db %s: %v", *dbPath, err)
 		}
+		st = opened
 		poller.SetStore(st)
+	}
+	history := timeline.NewRecorder(st)
+
+	var countryDB *geoip.DB
+	if *geoipFile != "" {
+		countryDB, err = geoip.Load(*geoipFile)
+		if err != nil {
+			log.Fatalf("loading country database %s: %v", *geoipFile, err)
+		}
 	}
 
 	var sessionSecret []byte
@@ -452,7 +467,16 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
+	// Poll once synchronously so the atlas's first snapshot captures observed
+	// health. Starting the recorder alongside an unpolled poller would record
+	// every host as down for the first 30 s.
+	poller.PollOnce(ctx)
 	go poller.Run(ctx, *pollInterval)
+	// The atlas samples on its own schedule so history covers the whole day,
+	// not just the moments someone had the page open.
+	go history.Run(ctx, poller.Current, func(err error) {
+		log.Printf("atlas: recording snapshot: %v", err)
+	})
 
 	srv := server.New(poller, server.Config{
 		Title:        *title,
@@ -461,6 +485,8 @@ func main() {
 		Links:        links,
 		OverridesURL: *overridesURL,
 		Topology:     topo,
+		History:      history,
+		GeoIP:        countryDB,
 	})
 	httpServer := &http.Server{
 		Addr:              *listen,

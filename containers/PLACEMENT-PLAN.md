@@ -1,22 +1,32 @@
 # Service placement: where a floating container runs
 
 Design for removing `host` from `service.nix`. Today 19 of the 20
-`containers/<svc>/service.nix` files name the host they run on (17 on h001,
-`localai` on joe, `hello-podman` on lio; `minecraft` is `host = null`, inactive,
-which is already the shape the registry wants: *no row*), and six Nix functions
+`containers/<svc>/service.nix` files name the host they run on (16 on h001,
+`hello-nixos` on h003 after its recent move, `localai` on joe, `hello-podman` on
+lio; `minecraft` is `host = null`, offline), and six Nix functions
 (`edgeRoutes`, `edgeVirtualHosts`, `routeNamesByHost`, `httpExposureByHost`,
-`dnsRecords`, `routerForwards` — all in `containers/lib.nix`) derive network
-state from that one string. That makes Nix the runtime answer to "which box runs
-X", which is wrong: placement changes on a `cnt move`, and a Nix string that must
-be edited, committed, rebuilt and pushed afterwards is a shadow copy that is
-either stale or a source of silent mistakes.
+`dnsRecords`, `routerForwards` — all in `containers/lib.nix`, listed in §4)
+derive network state from that one string. That makes Nix
+the runtime answer to "which box runs X", which is wrong: placement changes on a
+`cnt move`, and a Nix string that must be edited, committed, rebuilt and pushed
+afterwards is a shadow copy that is either stale or a source of silent mistakes.
 
 Target: **Nix describes what a service is; h005 describes where it runs.**
 Placement is runtime state, recorded in one registry, and everything that must
-follow it (DNS, o002 vhosts, firewall admission, the CLI's own guessing) reads
-that registry instead of a Nix attribute.
+follow it (DNS, o002 vhosts and streams, h005 WAN forwards, firewall admission,
+the CLI's own guessing) reads that registry instead of a Nix attribute.
 
-Status: **phase 1 done** (registry + API + unit wiring). Phases 2–6 below.
+An unplaced service is **offline and unowned**: no row, no route, no DNS name, no
+key on the edge. That is one state, not a flag — there is no `enabled`/
+`inactive`/`disabled` field anywhere in this design. `minecraft` is the live
+example (`host = null` today); its `service.nix` still declares the game and web
+routes because those are facts about the service, but while it has no row the
+25565 forward does not exist, `computerboyz` has neither a DNS record nor an
+o002 vhost, and the dashboard lists it under "unplaced".
+
+Status: **phase 1 done** (registry + API + unit wiring, including reservation
+tokens, revision CAS, installed-vs-active health, fenced expiry and explicit
+recovery). Phases 2–6 below.
 
 ---
 
@@ -27,12 +37,13 @@ Status: **phase 1 done** (registry + API + unit wiring). Phases 2–6 below.
 `internal/overrides`, mounted on one `http.ServeMux` in `main.go`).
 
 State: `/var/lib/fleet-edge-overrides/placements.json` (0600, written atomically
-under a mutex) and `placements-audit.log` (one JSON line per request, refusals and
-rate-limited calls included). Same `StateDirectory` as the expose authority: both
-are h005-local runtime state owned by the same DynamicUser, and no other process
-opens the files — the dashboard (and, in phase 3, the reconciler) read the
-loopback export over HTTP, the same way `--overrides-url` already works
-(`main.go:55`).
+under a mutex; the file is `{"revision": N, "rows": [...]}`, and `revision` is
+the registry-wide counter that outlives the rows) and `placements-audit.log`
+(one JSON line per request, refusals and rate-limited calls included). Same
+`StateDirectory` as the expose authority: both are h005-local runtime state
+owned by the same DynamicUser, and no other process opens the files — the
+dashboard (and, in phase 3, the reconciler) read the loopback export over HTTP,
+the same way `--overrides-url` already works (`main.go:55`).
 
 Callers authenticate exactly like `cnt expose` (`internal/authority`): a Zitadel
 machine token whose `sub` is in `fleet.global.overrideWriters`
@@ -51,46 +62,131 @@ a host that cannot write a placement also cannot close its own firewall rule.
 |---|---|
 | `service` | inventory service name (`containers/<svc>/service.nix`) |
 | `host` | destination: where it should run |
-| `state` | `prepared` \| `committed` \| `retiring` |
+| `state` | `prepared` \| `committed` \| `retiring` \| `stale` |
 | `previous` | the prior binding, kept for rollback |
+| `token` | the reservation handle; while it is set the row is fenced. Commit, retire, rollback, recover and renew all present it, and a handle from a move that has ended is refused rather than read as "no reservation" |
+| `revision` | the row's incarnation: a number minted from the registry counter on every write, for compare-and-swap on the writes that carry no token (`import`, `force`, a tokenless `DELETE`). Numbers are never reissued — the counter survives the row it was read from |
 | `device`, `user`, `reason` | who and why |
-| `created`, `updated`, `reserveSince` | timestamps (`reserveSince` = reservation start) |
+| `created`, `updated` | timestamps |
+| `reserveSince` | last lease renewal (a move renews it as it advances) |
 | `hostMissingSince`, `conflict`, `lastError` | sweep observations, never auto-resolved |
 
 `Row.Effective()` is the single reader-facing answer: a `prepared` row still
 serves from `previous` (a move in flight), a `committed` row serves from `host`,
-a `prepared` first placement serves nowhere. `GET /internal/placements.json`
-exports `{rows, host: {svc: host}, conflicts}` so a reader never replays the state
-machine.
+a `prepared` first placement and a `stale` row serve nowhere (nothing is claimed
+until commit or recovery decides). `GET /internal/placements.json` exports
+`{rows, host: {svc: host}, conflicts}` so a reader never replays the state
+machine, and an absent entry is what "unplaced" means.
 
 ### API
 
 | Call | Effect |
 |---|---|
-| `POST /api/placements/import` | one-time bootstrap: adopt observed placements, skip existing rows unless `force` |
-| `POST /api/placements/reserve` | record destination + previous; nothing routed to it yet |
-| `POST /api/placements/commit` | routing now points at the destination; destination must report the service |
-| `POST /api/placements/retire` | the source is being uninstalled; rollback now needs `force` |
-| `DELETE /api/placements/<svc>[?force=1]` | rollback: restore the prior binding, or drop a first placement |
+| `POST /api/placements/import` | one-time bootstrap: adopt observed placements, skip existing rows unless `force`; a fenced row needs its `token` or `force`; CAS on `revision` |
+| `POST /api/placements/reserve` | record destination + previous, mint a token; nothing routed to it yet. Repeating it with the same token and host renews the lease. A token or revision the existing row has moved past is a 409, and so is either handle on a service with no row left |
+| `POST /api/placements/commit` | routing now points at the destination; destination must be installed *and* active; needs the token |
+| `POST /api/placements/retire` | the source is being uninstalled; rollback now needs `force`; needs the token |
+| `POST /api/placements/renew` | extend the lease on a `prepared` row you hold (a move longer than `ReserveTTL`) |
+| `POST /api/placements/recover` | settle a `stale` row after checking both hosts (also `DELETE <svc>?recover=1`) |
+| `DELETE /api/placements/<svc>?token=<t>[&force=1]` | rollback: restore the prior binding, or drop a first placement; refused on a `stale` row. On a row with no token, `?revision=<n>` (the incarnation read) stands in for it |
 | `GET /api/placements[?verify=1]` | rows + effective hosts (+ live per-host verification) |
 
+Every operation that finishes, undoes or extends a move presents the row's
+`token`, and a mismatch is a 409: the token is how two clients moving the same
+service stay apart. `force` is the only override, and it mints a fresh token so
+the displaced client's handle stops working. Writes with no token (`import`, a
+`DELETE`) CAS on `revision` and are refused if the row has changed since they
+read it.
+
+`revision` is an incarnation, not a counter on the row: it is minted from a
+sequence in `placements.json` that no deletion resets. So a number cannot
+outlive the placement it was read from either. Destroy a service, deploy it
+again, and a delayed `DELETE ?revision=<old>` is a 409 against the replacement
+rather than a hit — the replacement was minted above every number already
+handed out, including those of rows that no longer exist.
+
+A token is also refused once the move it belonged to has ended — the sweep
+cleared it because the source was uninstalled, or the move was recovered or
+rolled back. That handle matches nothing on a row that now has no token, and a
+plain tokenless `DELETE` is not the fallback: it would drop or move a binding the
+caller never reserved. So a `DELETE` carries the token, or — on a row whose move
+has ended — the revision it read, or `force`. Ending a placement is always an
+explicit act, never the absence of an argument.
+
+The fence is the token itself, not the state or the lease: any row that still
+carries one — `prepared`, `stale`, or a `committed`/`retiring` move whose source
+is not yet uninstalled — refuses a second reserve. The 30-minute lease only
+decides when the sweep *announces* a `prepared` row as `stale`; it never frees
+the binding, because an expired move may have stopped its source already.
+
+A reserve is fenced by both handles on *every* existing row, not only on one
+that still carries a token: presenting a token the row no longer has is a 409
+(the reservation it belongs to has ended), and so is a revision the row has
+moved past. A delayed reserve — composed before a move finished, delivered
+after the sweep cleared its token — is therefore refused instead of starting a
+new move against the replacement binding it never reserved. The same holds
+where there is no row left at all: a reserve carrying a token or a revision can
+only belong to a placement that was since deleted, so it is a 409 rather than a
+first placement — otherwise a replay would bring the deleted row back. A first
+placement carries neither handle, so it is unaffected. `force` is the override,
+and it mints a new token.
+
+A write is persisted before it is visible. Each operation builds the new rows
+and the next `revision` on a copy, writes that copy, and only then makes it the
+registry's — so a state file that cannot be written (full disk, a read-only
+state dir) is a 500 that leaves the row and the counter exactly as they were,
+rather than a binding this process reports until the next restart takes it
+away. Sweep commits its whole batch the same way: the row changes and the audit
+lines for them either all land or none do.
+
 Refusals carried over from the CLI's old `checkPlacement`/`moveSource` logic:
-unknown service, host that is not a container host, a move whose destination
-already runs the service (a second copy would split it, `force` when that copy is
-the one to keep), commit before the destination reports the copy, and a rollback
-onto a source that was retired (`cnt move` renamed its data).
+unknown service, host that is not a container host, a second reserve while one
+is live, a move whose destination already runs the service (a second copy would
+split it, `force` when that copy is the one to keep), commit before the
+destination reports the copy *serving*, and a rollback onto a source that was
+retired (`cnt move` renamed its data).
 
 ### Sweep (30 s)
 
-- A reservation older than `ReserveTTL` (30 min) rolls back to `previous` — this
-  is the "the move never cut over" case, and the reason rollback is free.
-- A reachable destination that stops reporting the service → `hostMissingSince`
+Health is about a copy *serving*: a unit that is installed but stopped is not a
+placement that is up, and it is not an absent one either. The two facts are
+kept apart everywhere — `installed` and `active` — because they answer different
+questions: commit needs both, import needs both, and only a confirmed
+*uninstall* ends a rollback binding (a move stops the source before it removes
+it, so an active-only feed would drop the way back mid-move).
+
+- A reservation whose lease ran out (30 min) is **fenced as `stale`, never
+  rolled back**. A move stops its source before it restores the destination, so
+  "the reservation expired" does not mean "the source still serves": an
+  automatic rollback could route the name at a stopped host while the move is
+  still running. The row keeps `previous` and its token (a second move stays
+  refused) and `Effective()` reports nowhere. `--recover` settles it by asking
+  the hosts; a long move renews its lease instead (`renew`, or re-reserve with
+  the token). Nothing settles a fence on a timer.
+- A reachable destination that stops serving the service → `hostMissingSince`
   + `lastError`. Not deleted, no grace: a stopped copy is not a lost placement.
-- Any *other* host reporting the service → `conflict`. Never resolved
-  automatically; `cnt place --verify` and the dashboard surface it.
-- A non-prepared row whose `previous` host stops reporting → `previous` cleared,
-  the move is complete.
+- Any *other* host *serving* the service → `conflict`. Never resolved
+  automatically; `cnt place --verify` and the dashboard surface it. The
+  previous host counts the same way **once the destination also serves**: a
+  move stops its source before it commits, so a source still answering next to
+  the committed destination is a split brain, not the middle of a move. It is
+  flagged and left alone — the rollback binding and the token stay until the
+  source is stopped or retired. A source that is stopped, or that serves alone
+  while the move is still prepared, is the normal mid-move state and stays
+  silent.
+- A row that still carries a token refuses a second `reserve` (`prepared`,
+  `stale`, and a `committed`/`retiring` move whose source is not yet uninstalled
+  alike). The token and `previous` are cleared together: a `committed` row whose
+  `previous` host no longer has the unit installed has completed its move, so
+  there is nothing left to undo and the binding is free again. A
+  `committed`/`retiring` row whose source is only stopped keeps both.
 - An unreachable host changes nothing (silence is not absence).
+
+`verify` reports a fenced row's service as `stale`, so `cnt audit` can tell "a
+move is stuck and needs a human" apart from "the copy is down". It counts the
+rollback copy as expected only while the destination is not serving: once both
+serve, the previous host shows up as a stray, the same split brain the sweep
+flags.
 
 ---
 
@@ -107,32 +203,33 @@ below):
 
 ```
 1 preflight (target, source)                      ─ unchanged
-2 RESERVE destination            ← registry: previous = source, state = prepared
-                                   (effective host is still the source: DNS and
-                                    o002 keep pointing at it)
+2 RESERVE destination            ← registry: previous = source, state = prepared,
+                                   mint a token. (Effective host is still the
+                                   source: DNS and o002 keep pointing at it.)
 3 final backup on source, stop                    ─ unchanged (source stopped, data intact)
 4 restore snapshot + live DB clusters on target    ─ unchanged
 5 deploy + route health on target                  ─ unchanged
 6 restore check, first backup on target            ─ unchanged
-7 COMMIT                         ← registry: published host = destination. h005's
-                                   reconciler writes DNS and the o002 vhost on its
-                                   next pass (phase 3; until then the Reconcile
-                                   step does not exist and this is just the flip).
-                                   `cnt move` then polls `GET ?verify=1` until the
-                                   destination reports `ok` and no host reports a
-                                   stray copy. That endpoint validates *what the
-                                   hosts run*, not DNS: name resolution is checked
-                                   by `cnt audit` (phase 3) against the same
+7 COMMIT (with the token)         ← registry: published host = destination. The
+                                   destination must report installed+active. h005's
+                                   reconciler writes DNS and the o002 vhost/stream on
+                                   its next pass (phases 3 and 4a; until then the
+                                   Reconcile step does not exist and this is just
+                                   the flip). `cnt move` then polls `GET ?verify=1`
+                                   until the destination reports `ok` and no host
+                                   reports a stray copy. That endpoint validates
+                                   *what the hosts run*, not DNS: name resolution is
+                                   checked by `cnt audit` (phase 3) against the same
                                    registry. On timeout the source is untouched, so
-                                   `DELETE` rolls back.
-8 RETIRE source                  ← registry: rollback now needs force
+                                   `DELETE ?token=` rolls back.
+8 RETIRE source (with the token)  ← registry: rollback now needs force
 9 uninstall source, data → .moved-<date>           ─ switchScript, unchanged
-   (sweep clears `previous` once the source stops reporting the service)
+   (sweep clears `previous` once the source is confirmed uninstalled)
 ```
 
 Any failure before step 7 is undone by redeploying the target down and restarting
-the stopped source, then `DELETE /api/placements/<svc>` — which restores the
-*prior* binding, it never invents or deletes one. A failure between 7 and 8 (a
+the stopped source, then `DELETE /api/placements/<svc>?token=<t>` — which restores
+the *prior* binding, it never invents or deletes one. A failure between 7 and 8 (a
 rollback the operator wants) is `DELETE` plus restarting the source: the source
 copy is intact because step 9 has not run. After 8 only `force` applies, and the
 printed recovery is the same one `move` prints today.
@@ -140,8 +237,30 @@ printed recovery is the same one `move` prints today.
 Why this order and not the reverse: routing must never point at a host that has
 not proven it can serve the data, and the source must never be destroyed before
 routing has demonstrably moved off it. Reserving early is what makes the DNS half
-of the cutover a flip rather than a guess, and makes an abandoned move
-self-healing after 30 minutes.
+of the cutover a flip rather than a guess.
+
+**The token, not the clock, decides who may act.** Each reserve mints an opaque
+handle and keeps it; commit, retire, rollback, recover and renew present it, so a
+client that wakes up late cannot finish or undo a move someone else has since
+taken over. "Live" here means the row carries a token, whatever its state or the
+age of its lease: a second reserve is refused (409) rather than treated as a hint
+that the binding is free, and `force` is the only takeover — it mints a fresh
+token, which is exactly what makes the displaced handle stale.
+
+**A long move keeps its lease; it does not get resolved by it.** Step 3→7 can
+exceed `ReserveTTL` on a large service, so `cnt move` calls `renew` between steps.
+If it does not (crash, killed terminal), the sweep fences the row as `stale`
+rather than rolling back: mid-move the source is stopped and the destination is
+not serving, so a rollback would point the name at a dead host. Nothing moves
+until `cnt place --recover <svc>` asks the hosts which copy is live — the
+destination serving means the move landed (record the commit); the source serving
+means it did not (restore `previous`); the source installed-but-stopped means it
+is still in flight (refuse and say so). Two answers decide nothing, because both
+are the same guess: a host that did not answer (the silent end may still be
+serving) and both ends reporting the service (the move stopped short of a clean
+cutover, so either binding strands the other copy). Both give a 409 naming the
+hosts; `--force` records the prior binding anyway (or the destination, when the
+fence sat on a first placement with nothing to go back to).
 
 A move no longer needs `moveWarning` and the "update `host =` in service.nix"
 step: the reservation *is* the record, and the only remaining must-do is
@@ -162,27 +281,66 @@ step: the reservation *is* the record, and the only remaining must-do is
 - `firewallHighTrustIps`, `sshGuardAssertion`, `tailnetExcludedOverlayIps`
   (`containers/lib.nix`): they depend on host trust and overlay IPs, never on
   which service runs where.
-- **The o002 non-HTTP stream and WAN forwards**: `routerForwards`
-  (`containers/lib.nix`, consumer `hosts/h005/router-forwards.nix:23`)
-  evaluates to **`[]` today** — evaluated, not assumed: the only
-  `via = [ "router" ]` route in the tree is minecraft's 25565
-  (`containers/minecraft/service.nix:32`), and the function skips `host = null`
-  services, so the list is empty while minecraft is inactive. Forgejo's SSH
-  :3032 is `via = [ "edge" ]` and is *not* generated at all: o002's
-  `streamConfig` (`hosts/oracle/o002/nginx.nix:196-201`) hard-codes
-  `${upstreamHost}:3032` with `upstreamHost = "100.64.0.13"` (h001,
-  `hosts/oracle/o002/_constants.nix:16`). Both become one hand-kept list in
-  `hosts/h005/router-forwards.nix` with an explicit `host` field — a DNAT is a
-  WAN decision with a hand-checked port, and it will be at most two entries, not
-  a derivation.
+- **Ports, protocols and names, never destinations.** A `proto`/`port` in
+  `service.nix` is a service fact (which port it listens on, whether it needs a
+  WAN port); *which box* answers is not, and every derivation of the second from
+  the first is what this plan deletes.
 
 **Becomes runtime** (recorded in the registry):
 
 - Which host runs a service.
 - The tailnet/LAN DNS answer for every route name (host overlay/LAN IP).
 - The o002 vhost target for every `public` + `via = edge` route.
+- The o002 **stream** target for every `public` + `via = edge` + `proto = tcp`
+  route (forgejo's SSH :3032) — today a hard-coded `${upstreamHost}:3032`
+  (`hosts/oracle/o002/nginx.nix:179-186`, `upstreamHost = "100.64.0.13"` in
+  `hosts/oracle/o002/_constants.nix:16`), which silently breaks SSH the moment
+  forgejo is moved and leaves no Nix-level trace.
+- The h005 **WAN forwards** for every `public` + `via = [ "router" ]` non-HTTP
+  route (minecraft's 25565). `routerForwards` (`containers/lib.nix`, consumer
+  `hosts/h005/router-forwards.nix:23`) evaluates to `[]` today only because
+  minecraft is unplaced and the function skips `host = null`; a forward needs
+  the placed host's `lanIp`, so a hand-kept list would be a shadow copy of the
+  row that goes stale exactly like `host =` did.
 - `:80`/`:443` admission on the host that received the placement (firewall).
 - The CLI's resolution of "the host" for every command.
+
+### Two worked examples
+
+**`minecraft` (offline, unowned).** `containers/minecraft/service.nix` keeps
+declaring what the service *is*: a Velocity/Paper stack, the WAN game port
+25565 (`proto = "tcp"`, `exposure = "public"`, `via = [ "router" ]`), and the
+`computerboyz` web route on 8080 (`exposure = "public"`, `via = [ "edge" ]`
+default). What it does not carry — and never again will — is a `host`, an
+`enabled`/`inactive` flag, or any per-host artefact. While there is no row:
+
+- no `computerboyz` DNS record anywhere: no `hostsdir` entry on either dnsmasq
+  instance (the per-name files derive from effective hosts), and no `public`
+  CNAME either, because the published name set is filtered by "has a placement"
+  (§5);
+- no o002 vhost for `computerboyz` exists, hand-kept or pushed;
+- no h005 DNAT for 25565 exists;
+- the dashboard lists it under "unplaced" and `cnt place` says "no placement";
+- `cnt deploy`/`start` refuse without `--host`; with `--host` they make a first
+  placement (reserve+commit), and *that* is what recreates the record, the vhost
+  and the forward on the next reconciler pass.
+
+The import (`cnt place --import`) adopts only a copy that is installed **and**
+active, so a stale unit left on a host from an old run does not get adopted
+behind the operator's back; it is listed as skipped with the reason.
+
+**`forgejo` (public TCP, moving off h001).** `containers/forgejo/service.nix`
+declares `routes.web` (3000, `git`, public via the edge) and `routes.ssh`
+(`port = 3032`, `proto = "tcp"`, `exposure = "public"`, `via = [ "edge" ]`).
+The SSH route is a *declared public TCP route on the edge*, not a hard-coded
+stream on one destination: h005 pushes `:3032 → <placed host overlay>:3032` to
+o002's stream receiver, so moving forgejo to h003 rewrites one file on o002 and
+SSH keeps working. Nothing about the move touches `service.nix`, `_constants.nix`
+or the router. o002's firewall keeps `3032` literal, because "the edge accepts
+public :3032" is a property of the edge, not of where forgejo happens to run.
+This matters right now: h001 is scheduled for a fresh reinstall, and the old
+hand-kept `proxy_pass 100.64.0.13:3032` would have made that reinstall an SSH
+outage with no Nix-level trace.
 
 ---
 
@@ -197,8 +355,8 @@ Derived-from-`s.host` Nix functions and their call sites:
 | `routeNamesByHost` | `lib.nix`, called `hosts/h005/wildcard-cert.nix:37` (`routeHosts`) | 5 | Delete. Every route name is a single label under `*.${domain}`, so the cert needs no per-name SAN and the push target set becomes the static container-host list |
 | `httpExposureByHost` | `lib.nix`, called `containers/host-module.nix:31` | 5 | Delete; runtime firewall allowlist (see §7) |
 | `dnsRecords` | `lib.nix`, called `hosts/h005/dns-records.nix:12` → `hosts/h005/mods/networking.nix:22`; consumed at `:44` (`host-record`, tailnet), `:49` (`local=`, tailnet) and `:249` (`host-record`, LAN) | 3,5 | Phase 3: h005 writes per-name files into **two** runtime `hostsdir`s (`tailnet/`, `lan/`) from the registry; the `host-record` lines go away, the `local=` does not. Phase 5: **not** deleted — drop the `s.host != null` filter and the IP fields, keeping the `local=` name list and the `public` CNAME list |
-| `routerForwards` | `lib.nix`, called `hosts/h005/router-forwards.nix:23` | 5 | Becomes a hand-kept list with explicit hosts |
-| o002's `streamConfig` | `hosts/oracle/o002/nginx.nix:196-201` proxies :3032 to `_constants.nix:16` `upstreamHost = "100.64.0.13"` (h001), not to a route's host | 5 | Forgejo's SSH route is `via = edge`, `proto = tcp`; the stream has to follow placement. Either drive it from the registry or move :3032 to a router forward with an explicit host. Left alone it keeps working only while forgejo is on h001 — a `move` breaks SSH silently, with no Nix-level trace |
+| `routerForwards` | `lib.nix`, called `hosts/h005/router-forwards.nix:23` | 4a | Delete. h005 writes the DNAT set from the registry (the placed host's `lanIp`, one entry per `public` + `router` non-HTTP route) and applies it; port and protocol still come from `service.nix`, only the address moves |
+| o002's `streamConfig` | `hosts/oracle/o002/nginx.nix:179-186` proxies :3032 to `_constants.nix:16` `upstreamHost = "100.64.0.13"` (h001), not to a route's host | 4a | Delete the hard-coded server and the `upstreamHost` constant. `streamConfig` becomes `include /var/lib/fleet-edge-streams/*.stream;` and h005 pushes one file per `public`+`via = edge`+`tcp` route through a stream receiver modelled on `edge-vhost-receiver.nix` (§5). Left alone it keeps working only while forgejo is on h001 — a `move` breaks SSH silently |
 | `DeclaredHost` | `flakes/fleet-edge/internal/state/state.go:666`, `polls[svc.Host]` at `678`; `server/server.go:355` (sort), `564` (host detail); `dash/dash.go:158,189,225-231`; `topology/layout.go:170` | 2,5 | Rename to the registry's effective host (`BoundHost`), fed by the export; group/sort by it; a service with no row is "unplaced" |
 | CLI `hostFor` | `fleet-agent/internal/containers/main.go:485` | 2 | `--host` > registry row > discovery (`deploy/start/destroy` matrix, §6) |
 | CLI `hostForRead` | `main.go:506` | 2 | Same, but `installedHere` stays the cheap local shortcut |
@@ -219,11 +377,33 @@ Derived-from-`s.host` Nix functions and their call sites:
 Every one of these has a test that pins `s.Host`; those tests either gain a fake
 registry client or move to the phase that deletes the field.
 
+### Hand-kept per-host entries (the audit)
+
+Every place the tree still says "this name/port lives on that box" by hand, and
+what removes it. Anything not in this list either stays for a reason that is not
+placement (host membership, identity, trust) or was missed:
+
+| Hand-kept entry | Where | Dies how |
+|---|---|---|
+| `containerVhosts` (every container vhost generated at eval time) | `hosts/oracle/o002/nginx.nix:23-26` | Phase 5 deletes the binding and the `clash` assert with it; the names arrive as pushed `edgevhost` files. The `hosts/_shared_assets/utilities/edge-vhost-receiver.nix` `reserved` list is built from o002's own `virtualHosts`, so removing `containerVhosts` is also what makes those names pushable |
+| `streamConfig` (hard-coded `:3032 → 100.64.0.13`) | `hosts/oracle/o002/nginx.nix:179-186` | Phase 4a: `services.nginx.streamConfig = "include /var/lib/fleet-edge-streams/*.stream;"`, files pushed per placement |
+| `upstreamHost = "100.64.0.13"` | `hosts/oracle/o002/_constants.nix:16` | Phase 4a: deleted with the stream server; nothing else reads it |
+| o002 firewall `3032` | `hosts/oracle/o002/nginx.nix:207-211` | **Stays.** "The edge accepts public :3032" is a property of the edge; the destination behind it is the runtime part |
+| o002 hand vhosts `www`, `sso-proxy`; public A/CNAMEs `o002`, `headscale`, `www`, `sso-proxy`, `*.share` | `hosts/oracle/o002/nginx.nix` `handVhosts` (:93-160), `hosts/h005/dns-records.nix:76-105` | **Stay.** Not container routes; `headscale` and the o002 anchors are h005/o002's own services. The `clash` eval already refuses a hand name that becomes generated |
+| `computerboyz`, `minecraft` CNAMEs | `hosts/h005/dns-records.nix:96-103` (`map (cname "o002") [ … "computerboyz" … ]`, `map (cname "home") [ "minecraft" ]`) | Delete now: the `computerboyz` vhost is already gone from o002, so this CNAME is currently resolving to the `_` reject. After phase 3 the published set derives from placements and an unplaced service must have no name at all; `minecraft`'s `via = router` CNAME would otherwise point at a closed forward |
+| `routerForwards` call | `hosts/h005/router-forwards.nix:23` | Phase 4a: the forward rules come from the registry, so the module keeps only the chain and the option |
+| `routeHosts` / `targetNames` (TLS push targets) | `hosts/h005/wildcard-cert.nix:37-47` | Phase 5: pinned literal `h001, h003, joe, lio, o002` — the cert is a wildcard, so the target set is host membership, not placement |
+| `overrideWriters` | `hosts/fleet.nix:54-59` | **Stays**, but phase 2 must add `h001`, `h003` and `joe`: a host that cannot write a placement also cannot close its own firewall rule. Identity, not placement |
+| `containerHosts` | `containers/flake.nix:87-91` | **Stays.** A host must be rebuilt to join; phase 2 drops the "*plus every declared host*" augmentation so the set is exactly this list (+ `joe`) |
+| "set `host` in `service.nix`", "point `computerboyz` in `hosts/oracle/o002/nginx.nix` at the new host", "WAN port-forwards on the router" | `containers/minecraft/README.md:16,82-83`, `containers/README.md:400-404` | Phase 6 rewrites the move instructions: there is nothing to edit, `cnt move` is the whole procedure |
+
+The invariant to check at the end of phase 5: `grep -rn 'upstreamHost\|containerVhosts\|\.host\b' hosts/oracle/o002/*.nix hosts/h005/*.nix containers/lib.nix` returns only host-membership and trust facts, and no file names a service next to a host.
+
 ## 5. Where the reconciler lives
 
-Phase 3 adds one loop to the same `fleet-edge-overrides` unit (it already owns
-the state dir, the sweep and the local secrets), fed by the registry export and
-the inventory's declarative routes:
+Phases 3 and 4a add one loop to the same `fleet-edge-overrides` unit (it already
+owns the state dir, the sweep and the local secrets), fed by the registry export
+and the inventory's declarative routes:
 
 - **Tailnet + LAN DNS**: one plain hosts file per name in *two* directories —
   `/var/lib/fleet-edge-dns/tailnet/` and `.../lan/` — because the instances must
@@ -252,22 +432,26 @@ the inventory's declarative routes:
   (`networking.nix:320-333`), which still reads `/var/lib`, so no new
   permission, capability or reload path is needed, but the modes are load
   bearing.
-  - Only the IP half moves. `local=/<fqdn>/` lines carry no address, so
-    `dnsRecords` keeps generating them; they exist only on the **tailnet**
-    instance (`networking.nix:49` maps `dnsRecords.tailnet`) — the LAN instance
-    answers from `host-record` and `server=` with no `local=` at all. A name with
-    `local=` plus a `hostsdir` entry answers locally instead of following the
-    public CNAME chain (verified: A answered, AAAA `NOERROR`/empty), which is why
-    `local=` must survive the removal of `host-record`. Phase 5 therefore does
-    not delete `dnsRecords`: it drops the `s.host != null` filter and the
+  - Only the IP half moves into the `hostsdir`. `local=/<fqdn>/` lines carry no
+    address, so `dnsRecords` keeps generating them; they exist only on the
+    **tailnet** instance (`networking.nix:49` maps `dnsRecords.tailnet`) — the
+    LAN instance answers from `host-record` and `server=` with no `local=` at
+    all. A name with `local=` plus a `hostsdir` entry answers locally instead of
+    following the public CNAME chain (verified: A answered, AAAA
+    `NOERROR`/empty), which is why `local=` must survive the removal of
+    `host-record`. Phase 5 therefore does not delete `dnsRecords`: it drops the
     address fields, leaving the `local=` name list and the `public` CNAME list.
-  - Of the three lists `dnsRecords` returns, only `tailnet` (every non-local
-    route → overlay IP, 25 names today) and `lan` (lan+public routes → LAN IP,
-    13 names, only hosts that have one) depend on placement. `public` (13) is
-    the same set as `lan` and targets `o002`/`home` regardless of host, so the
-    bunny `publicSpec` needs the route *set* and nothing else — which is why
-    `dns-plan` stays a declarative reconcile and never reads the registry for a
-    target.
+    Both name lists filter on "has a placement", so an unplaced service keeps
+    its name out of the tailnet resolver entirely instead of shadowing the
+    public chain with nothing behind it.
+  - Of the three lists `dnsRecords` returns, `tailnet` (every non-local route →
+    overlay IP) and `lan` (lan+public routes → LAN IP, only hosts that have one)
+    depend on placement for the *address*. `public` targets `o002`/`home`
+    regardless of which host holds the service, so the bunny `publicSpec` needs
+    only the route *set* — and that set must also become "routes of placed
+    services", so the resolver feeds it the set of effective hosts (names only,
+    no addresses) while the CNAME target stays declarative. `dns-plan` never
+    learns a host.
   - The LAN instance keeps its current shape — no `local=`, `server=` fallthrough
     for everything not in a file — so nothing about LAN AAAA behaviour changes
     in this phase.
@@ -298,11 +482,41 @@ the inventory's declarative routes:
   that stops answering never causes a removal — the host's own edge listener
   already fails closed to 444, so an unreachable host leaves a vhost that
   returns 502 (visible to `cnt audit`) rather than deleting state on a guess.
-- **Reload debt** is already tracked by the receiver's `.reload-pending` marker
-  and retried (`edgeReloadPending`); the placement loop reports through that
-  marker instead of adding a second one. `dns-plan`/`publicSpec` is unchanged:
-  public records CNAME `o002`/`home` regardless of host, so the bunny side needs
-  no placement input at all.
+- **o002 streams (non-HTTP public routes)**: same loop, same key, a second
+  receiver. For each `public` + `via = edge` + `proto = tcp` route whose service
+  has an effective host, h005 pushes `{"op":"add","port":3032,"host":"<overlayIp>"}`;
+  o002 writes `/var/lib/fleet-edge-streams/<port>.stream` holding
+  `server { listen <port>; proxy_pass <overlayIp>:<port>; }` and runs the same
+  `nginx -t` + reload dance. `nginx.nix`'s `streamConfig` becomes
+  `include /var/lib/fleet-edge-streams/*.stream;` and `_constants.nix`
+  `upstreamHost` goes away. The receiver is a near-copy of
+  `hosts/_shared_assets/utilities/edge-vhost-receiver.nix`: forced-command key,
+  JSON on stdin (never nginx text), atomic write, `.reload-pending` on a failed
+  reload, `fleet-stream-expire` timer **and** boot unit before `nginx.service`,
+  `systemd.tmpfiles` for the directory (not persisted, like the vhost dir).
+  Expiry **deletes** the file, which is the stream equivalent of the vhost
+  receiver's `return 444`: nginx's `stream` module has no `return`, and a
+  `server` block without `proxy_pass` fails `nginx -t`, so a closed port is the
+  only fail-closed rendering. One file per port, add-before-remove, and a port
+  that collides with a hand-kept stream is a hard startup assert (mirroring the
+  `clash` assert on vhosts). o002's firewall keeps `3032` literal: it is a fixed
+  WAN port, not a placement fact.
+  Why the push and not a router forward: o002 is the public edge and already
+  accepts this traffic; a DNAT would move the port's public identity to whichever
+  host holds forgejo, and h001 is scheduled for a fresh reinstall — SSH has to
+  survive the move without touching the router or the service's own Nix.
+- **WAN forwards**: for each `public` + `via = [ "router" ]` non-HTTP route whose
+  service is placed, h005 writes the DNAT (WAN `<port>` → placed host's `lanIp`)
+  and applies it, replacing `routerForwards`. An unplaced service has no forward,
+  so minecraft's 25565 is closed while it is offline and opens when a placement
+  lands — no `enabled` flag, no stale rule.
+- **Reload debt** is already tracked by the vhost receiver's `.reload-pending`
+  marker and retried (`edgeReloadPending`); the stream receiver gets the same
+  marker under its own name, and one reload serves both (a single `nginx -t` +
+  reload covers `http` and `stream`). The placement loop reports through those
+  markers instead of adding a third. `dns-plan` needs no address input: the
+  `public` CNAMEs point at `o002`/`home` regardless of host, so the bunny side
+  gets the name set and nothing else.
 
 ## 6. The CLI (`cnt`) once placement is runtime
 
@@ -317,9 +531,17 @@ Resolution order for every command: `--host` > registry row > discovery.
 | no row, nothing discovered | refuse unless `--host` (a first placement needs a destination) | error |
 | row exists, host unreachable | refuse (silent absence is not absence) | note, read elsewhere if the service answers |
 
-- `cnt place` shows rows, `--verify` shows live per-host state, `--set <svc>
-  --host <h>` records a first placement, `--import` is the one-time bootstrap
-  (below). `cnt move` calls reserve/commit/retire itself.
+- `cnt place` shows rows, `--verify` shows live per-host state (including a
+  `stale` row's fence), `--set <svc> --host <h>` records a first placement,
+  `--recover <svc>` settles a fenced row (asks both hosts, then commits or
+  restores; refuses when the source is installed-but-stopped, i.e. still in
+  flight), `--import` is the one-time bootstrap (below). Two refusals are
+  deliberate: it decides nothing when a host did not answer (the silent end may
+  still be serving), and nothing when both ends report the service running
+  (picking either copy strands the other on the same name) — the 409 names both
+  hosts, and `--force` is how an operator records that choice. `cnt move` calls
+  reserve/commit/retire itself, holds the token for the whole run, and renews
+  the lease as it advances so a slow move never fences.
 - `cnt deploy` on a service whose registry host is not the host it deployed to is
   a bug in the CLI, not a user error: it resolves once, then uses that string.
 - **Add `joe` to `containerHosts` in phase 2, not phase 5.** Today the CLI's
@@ -327,7 +549,7 @@ Resolution order for every command: `--host` > registry row > discovery.
   `localai` (declared `host = "joe"`) is discoverable at all. Once the field is
   gone the probe set is exactly `inv.ContainerHosts`, so a host that only ever
   held one service would silently disappear from discovery. The registry's own
-  probe set (`statuses`, `placements.go:577`) has the same shape and would
+  probe set (`statuses`, `placements.go:904`) has the same shape and would
   miss it for the same reason during the bootstrap import.
 
 ## 7. Firewall and certificates
@@ -359,28 +581,42 @@ Resolution order for every command: `--host` > registry row > discovery.
 
 1. Turn on the unit with the registry empty (nothing reads it yet).
 2. Discovery import: for each inventory service, probe every container host and
-   import the single running copy (`POST /api/placements/import`).
-   Services with no copy, or with two, are printed and left unplaced for a human
-   — the import refuses to guess, and never suggests a host from Nix.
+   import the single copy that is installed **and** active
+   (`POST /api/placements/import`). The response lists what was skipped and why
+   (`installed but not running`, `not installed`, `did not answer`). Services
+   with no serving copy, or with two, are printed and left unplaced for a human —
+   the import refuses to guess, never suggests a host from Nix, and never adopts
+   a stopped unit on the strength of its data directory.
 3. Only once the registry matches reality do phases 2–5 flip their readers.
 
 There is no path that seeds the registry from `service.nix`. That is the point:
 a Nix seed would re-create the shadow copy the design removes.
 
+Three facts the plan starts from, so nothing downstream re-derives them:
+`hello-nixos` now runs on **h003** (its `service.nix` says so and the generated
+DNS follows), and `computerboyz`'s o002 vhost is **already deleted and deployed**
+— the `_` reject vhost answers that name now. The public CNAME for it is still in
+`hosts/h005/dns-records.nix:96-99`, pointing at an edge that no longer knows the
+name, so deleting that line is a live fix, not just phase-5 cleanup. h001 is
+scheduled for a **fresh reinstall**, which is why forgejo's SSH must not depend
+on anything stored in h001's Nix.
+
 ## 9. Phases
 
 | Phase | Scope | Files | Risk |
 |---|---|---|---|
-| **1 (done)** | Registry: rows, state machine, sweep, API, loopback export, auth, audit; shared writer auth in `internal/authority`; one listener in `main.go`; flake option text; h005 `/api/placements` nginx location | `flakes/fleet-edge/internal/{authority,placements}/*`, `internal/overrides/overrides.go`, `flakes/fleet-edge/{main.go,flake.nix}`, `hosts/h005/fleet-edge.nix` | None: nothing reads the registry yet |
-| **2** | Read paths: CLI resolution (`hostFor`, `hostForRead`, `containerHosts`, `checkPlacement`, `backendOf`, `routes.go`, `expose.go`, drift/status output), dashboard grouping, `overrides.Check`; add h001, h003 and `joe` to `overrideWriters`; add `joe` to `containerHosts`; discovery import command (`cnt place`) | `flakes/fleet-agent/internal/containers/{main.go,move.go,port.go,routes.go,expose.go}`, `flakes/fleet-edge/internal/{overrides,state,server,dash,topology}`, `hosts/fleet.nix`, `containers/flake.nix` | Medium: a wrong resolution starts a second copy; the refusals above are the guard. CLI tests cover the matrix |
-| **3** | Reconciler: two DNS `hostsdir`s (tailnet overlay IPs, LAN IPs) written from the registry export, o002 runtime vhosts, `dns-plan` keeps its declarative input (only the CNAME *set* follows the registry) | `flakes/fleet-edge/internal/{reconcile,dnsplan,server}`, `hosts/h005/{dns-records.nix,mods/networking.nix}`, `hosts/oracle/o002/nginx.nix` | High: DNS and o002 are shared. Fail-closed ordering (add before remove, keep the old answer when a host is unreachable) and `cnt audit` checks |
-| **4** | Move rebind: reserve → … → commit → retire, rollback, expired-reservation recovery; delete `moveWarning` and the `host = %q` message | `flakes/fleet-agent/internal/containers/{move.go,main.go}`, tests | High: irreversible step. Dry-run prints the same 9 steps; every failure path has a test |
-| **5** | Nix stops declaring placement: remove `host` from the 20 `service.nix` files and the `host = null` default in `lib.nix`, delete the functions in §4, runtime firewall allowlist (with `fw-narrow`), cert targets pinned, o002's :3032 stream given an explicit host | `containers/*/service.nix`, `containers/lib.nix`, `containers/host-module.nix`, `containers/flake.nix` inventory, `hosts/h005/{dns-records,router-forwards,wildcard-cert}.nix`, `hosts/oracle/o002/{nginx,_constants}.nix`, `containers/tests/edge-vhosts.nix` | High, and the point of no return; done last so every reader already ignores the field |
-| **6** | Docs: `containers/README.md`, `ROUTING-PLAN.md` (§5.2 table, §5.3, §8 step 9, the §8 step 4 "no runtime path" paragraph), `flakes/fleet-edge/README.md` | docs | Low |
+| **1 (done)** | Registry: rows, state machine, sweep, API, loopback export, auth, audit; reservation tokens + revision CAS; `installed` vs `active` health; fenced expiry with `recover`/`renew`; shared writer auth in `internal/authority`; one listener in `main.go`; flake option text; h005 `/api/placements` nginx location | `flakes/fleet-edge/internal/{authority,placements}/*`, `internal/overrides/overrides.go`, `flakes/fleet-edge/{main.go,flake.nix}`, `hosts/h005/fleet-edge.nix` | None: nothing reads the registry yet |
+| **2** | Read paths: CLI resolution (`hostFor`, `hostForRead`, `containerHosts`, `checkPlacement`, `backendOf`, `routes.go`, `expose.go`, drift/status output), dashboard grouping, `overrides.Check`; add h001, h003 and `joe` to `overrideWriters`; add `joe` to `containerHosts`; discovery import command (`cnt place`, including `--recover`) | `flakes/fleet-agent/internal/containers/{main.go,move.go,port.go,routes.go,expose.go}`, `flakes/fleet-edge/internal/{overrides,state,server,dash,topology}`, `hosts/fleet.nix`, `containers/flake.nix` | Medium: a wrong resolution starts a second copy; the refusals above are the guard. CLI tests cover the matrix |
+| **3** | Reconciler: two DNS `hostsdir`s (tailnet overlay IPs, LAN IPs) written from the registry export, o002 runtime vhosts, `dns-plan` keeps its declarative input (only the CNAME *set* follows the registry, and an unplaced service contributes no name) | `flakes/fleet-edge/internal/{reconcile,dnsplan,server}`, `hosts/h005/{dns-records.nix,mods/networking.nix}`, `hosts/oracle/o002/nginx.nix` | High: DNS and o002 are shared. Fail-closed ordering (add before remove, keep the old answer when a host is unreachable) and `cnt audit` checks |
+| **4** | Move rebind: reserve → … → commit → retire, rollback with the token, `renew` mid-move, `--recover` for a fenced row; delete `moveWarning` and the `host = %q` message | `flakes/fleet-agent/internal/containers/{move.go,main.go}`, tests | High: irreversible step. Dry-run prints the same 9 steps; every failure path has a test |
+| **4a** | Non-HTTP public routes follow placement: o002 stream receiver (`edge-stream-receive` / `fleet-stream-expire`, one file per port, boot unit + timer) with `streamConfig = "include /var/lib/fleet-edge-streams/*.stream;"`, `upstreamHost` deleted; h005 WAN forwards written from the registry, `routerForwards` deleted | `flakes/fleet-edge/internal/{edgestream,reconcile,server}`, `hosts/_shared_assets/utilities/edge-stream-receiver.nix`, `hosts/oracle/o002/{nginx,_constants}.nix`, `hosts/h005/router-forwards.nix`, `containers/lib.nix` | High: o002 SSH and the WAN path. Forgejo SSH must keep working across the h001 reinstall; verify with an SSH clone before and after a test move |
+| **5** | Nix stops declaring placement: remove the `host` line from all 20 `service.nix` files (19 name a host, `minecraft` is `null`) and the `host = null` default in `lib.nix`, delete the functions in §4, delete the stale `computerboyz`/`minecraft` hand DNS, runtime firewall allowlist (with `fw-narrow`), cert targets pinned | `containers/*/service.nix`, `containers/lib.nix`, `containers/host-module.nix`, `containers/flake.nix` inventory, `hosts/h005/{dns-records,wildcard-cert}.nix`, `containers/tests/edge-vhosts.nix` | High, and the point of no return; done last so every reader already ignores the field |
+| **6** | Docs: `containers/README.md`, `containers/minecraft/README.md` (drop the "point computerboyz / set host" move instructions), `ROUTING-PLAN.md` (§5.2 table, §5.3, §8 step 9, the §8 step 4 "no runtime path" paragraph), `flakes/fleet-edge/README.md` | docs | Low |
 
 Each phase is one deployable cutover: phase *n* leaves the tree working with
 every caller migrated, and no phase adds a field or an alias that a later phase
-has to remember to delete.
+has to remember to delete. 4a is separate from 4 because it touches the public
+edge and can land before or after the move rebind, but not during one.
 
 ## 10. Open items
 
@@ -394,14 +630,11 @@ has to remember to delete.
   pair keeps the private-network path and a cross-host pair gets the overlay
   allow — but only the *next* deploy of either service picks up the change.
   `cnt audit` flags the drift in between.
-- **"Inactive" loses its encoding.** `minecraft` is off today via `host = null`
-  plus a comment (`containers/minecraft/service.nix:9-11`); the CLI refuses to
-  act on it without `--host`. Once the field is gone, that state *is* "no row",
-  which is also what a brand-new service looks like. The behaviour is the same
-  (mutating commands demand `--host`, readers print it as unplaced), so nothing
-  breaks — but `cnt place` has nowhere to say "this one is deliberately off,
-  don't import it". Either leave it implicit or add an `inactive` flag to the
-  row; decide in phase 2, before the import runs, since the import would
-  otherwise adopt a stale copy on whatever host still has the data.
+- **No `enabled` flag, by design.** An unplaced service *is* the offline state:
+  no row, nothing routed, nothing named. `minecraft` needs no encoding beyond
+  that (`host = null` becomes "no row"), and the import adopts only a copy that
+  is installed **and** active, so the stale unit left from its last run is
+  skipped with a printed reason rather than resurrecting a placement. Decided;
+  nothing left to choose in phase 2.
 - **Restore** (`cnt restore <svc> <file>`) writes data on a host; it must target
   the bound host, and it already refuses when the copy is running there.

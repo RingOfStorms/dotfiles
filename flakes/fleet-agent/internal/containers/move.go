@@ -448,6 +448,13 @@ func cmdMove(args []string) error {
 	if err := remote(from, true, switchScript(s)); err != nil {
 		return fmt.Errorf("cleanup on %s: %w (%s runs on %s; the source copy is stopped)", from, err, s.Name, to)
 	}
+	// The callees' 80/443 admission follows where the caller is, so it is
+	// stale now; the sweep must be redone. The source pair is retired too: a
+	// probe that races the uninstall must not keep admitting the copy that
+	// was just removed (the target's copy is admitted normally).
+	retirePlacement(s.Name, from)
+	resetFleetPlacement()
+	refreshCallers(s)
 	fmt.Print(moveWarning(s, to))
 	return nil
 }

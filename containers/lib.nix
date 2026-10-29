@@ -167,8 +167,9 @@ let
         }
         {
           # The serving host's nginx renders allow as per-host `allow
-          # <overlayIp>;` lines in place of the tailnet ACL (cli/routes.go
-          # writeExposureACL).
+          # <overlayIp>; # allow: <host>` lines plus `deny all;` instead of
+          # the tailnet ACL include (cli/routes.go routesVhost), and
+          # webSourcesByHost feeds the same overlay IPs to the host firewall.
           bad = isHttp && (r.allow or [ ]) != [ ] && exposure != "tailnet";
           msg = "allow on http routes is only implemented for exposure = \"tailnet\"";
         }
@@ -265,10 +266,14 @@ let
   # the kind, checked by checkNetIndexes); the host side of every veth is
   # netHostAddress. The host only lets a guest reach the internet and its
   # DNS. Exceptions:
-  #   uses   = [ "svc.route" ]   another service's route: direct to the
-  #            guest IP when both are private on one host, else the
-  #            target host's overlay IP on tcp 443 (its nginx). Resolved
-  #            by the CLI at deploy time (cli/routes.go netExceptions).
+  #   uses   = [ "svc.route" ]   another service's route, both ways: this
+  #            guest may reach it (egress allow, cli/routes.go
+  #            netExceptions: the guest IP when both are private on one
+  #            host, else the target host's overlay IP on tcp 443, its
+  #            nginx), and the target admits this caller on 80/443 in its
+  #            own ports file, from the hosts discovery puts the caller on
+  #            (cli/routes.go srcPortLines) -- not from its `host` field.
+  #            That file is refreshed after a deploy, move or destroy.
   #   egress = [ "10.12.14.181:9010/tcp" ]   a fixed LAN/tailnet endpoint.
   # For kind = "podman", `index` instead picks a static address on the
   # shared fleet-noinet bridge (10.89.250.<N>, a separate fleet-wide-unique
@@ -449,10 +454,128 @@ let
           allServices dir
         )
       );
+
+  # Tailnet peers a host's own http vhosts must not serve: o002 (the public
+  # edge, which reaches them through its edge listener instead) and the
+  # low-trust nodes (hosts/fleet.nix trust = "low"). ROUTING-PLAN 8.2.
+  # Container hosts do not need this: webSourcesByHost lists exactly who may
+  # reach them. h005 does, because its vhosts (fleet-edge dashboard,
+  # oauth2-proxy sso-proxy) are hand-written and sso-proxy must stay
+  # reachable from devices that are not in fleet.nix at all (phones).
+  tailnetExcludedOverlayIps =
+    hosts:
+    builtins.filter (ip: ip != null) (
+      map (name: hosts.${name}.overlayIp or null) (
+        builtins.filter (name: name == "o002" || (hosts.${name}.trust or null) == "low") (
+          builtins.attrNames hosts
+        )
+      )
+    );
+
+  # An IPv4/IPv6 literal or CIDR block, as used in nft set elements and
+  # allow lists. Validated at eval time so a typo fails the build instead of
+  # producing a ruleset nft rejects at boot.
+  validWebSource =
+    s:
+    builtins.match "^([0-9]{1,3}\\.){3}[0-9]{1,3}(/[0-9]{1,2})?$" s != null
+    || builtins.match "^[0-9a-f]{0,4}(:[0-9a-f]{0,4}){2,7}(/[0-9]{1,3})?$" s != null;
+
+  # Split web-admission sources into the v4/v6 lists the host firewall rules
+  # use (`ip saddr` vs `ip6 saddr`). Throws on a malformed entry.
+  #   sources  list of addresses/CIDRs
+  #   family   "v4" or "v6"
+  webSourcesIps =
+    { sources, family }:
+    let
+      bad = builtins.filter (s: !validWebSource s) sources;
+      isV4 = s: builtins.match "^[^:]*$" s != null;
+    in
+    if bad != [ ] then
+      throw "webSourcesIps: ${builtins.toJSON (builtins.head bad)} is not an IPv4/IPv6 address or CIDR"
+    else if family != "v4" && family != "v6" then
+      throw "webSourcesIps: family must be \"v4\" or \"v6\""
+    else
+      builtins.filter (s: isV4 s == (family == "v4")) sources;
+
+  # The build-time half of the 80/443 admission (ROUTING-PLAN 8.2) for this
+  # host's own internal nginx: literal `ip saddr` rules from the routes the
+  # inventory declares for it, instead of a blanket
+  # `ip saddr 100.64.0.0/10 accept`. The runtime half (`@src`/`@src6`/
+  # `@src_lan`) is written per service by `containers deploy` from that
+  # service's own routes, so this map only covers what is declared here at
+  # build time. nginx still enforces the per-vhost exposure ACL; both are only
+  # the TCP admission.
+  #   dir    the containers directory
+  #   extra  per-host additions for hand vhosts outside the inventory
+  #          (h001's arr media-health aliases)
+  #   hosts  fleet.nix hosts (overlayIp)
+  # Returns { <host> = { tailnet = [ addr-or-cidr ]; lan = bool; }; },
+  # sorted and deduped, omitting hosts with nothing to admit:
+  #   tailnet  `100.64.0.0/10` for a route without `allow`, else the
+  #            overlay IP of every host it names
+  #   lan      the host also serves LAN clients directly on 80/443 (a
+  #            lan/public route that is not `via = [ "router" ]`).
+  # Not covered: a `via = [ "router" ]` public route's LAN clients, which
+  # h005 DNATs and which arrive with the WAN source (see ROUTING-PLAN 8.2).
+  webSourcesByHost =
+    {
+      dir,
+      extra ? { },
+      hosts ? fleetHosts.hosts,
+    }:
+    let
+      routes = builtins.filter (r: r.proto == "http" && r.exposure != "local") (
+        builtins.concatMap (s: map (r: r // { inherit (s) host; }) (builtins.attrValues s.routes)) (
+          builtins.filter (s: s.host != null) (allServices dir)
+        )
+      );
+      allowIps =
+        r:
+        map (
+          n:
+          hosts.${n}.overlayIp
+            or (throw "webSourcesByHost: ${r.fqdn}: allow names ${n}, which has no overlayIp in fleet.nix")
+        ) r.allow;
+      # No allow list means every tailnet node may reach nginx (it still
+      # enforces the per-vhost ACL); an allow list narrows admission to it.
+      sourcesOf = r: if r.allow == [ ] then [ "100.64.0.0/10" ] else allowIps r;
+      computed = builtins.mapAttrs (_: rs: {
+        tailnet = builtins.concatMap sourcesOf rs;
+        lan = builtins.any (
+          r: (r.exposure == "lan" || r.exposure == "public") && !(builtins.elem "router" r.via)
+        ) rs;
+      }) (builtins.groupBy (r: r.host) routes);
+      merged =
+        builtins.mapAttrs (h: v: {
+          tailnet = v.tailnet ++ (extra.${h}.tailnet or [ ]);
+          lan = v.lan || (extra.${h}.lan or false);
+        }) computed
+        // builtins.mapAttrs (_: e: {
+          tailnet = e.tailnet or [ ];
+          lan = e.lan or false;
+        }) (builtins.removeAttrs extra (builtins.attrNames computed));
+      out = builtins.mapAttrs (_: v: {
+        tailnet = builtins.sort builtins.lessThan (
+          builtins.attrNames (
+            builtins.listToAttrs (
+              map (s: {
+                name = s;
+                value = null;
+              }) v.tailnet
+            )
+          )
+        );
+        inherit (v) lan;
+      }) merged;
+    in
+    builtins.removeAttrs out (
+      builtins.filter (h: out.${h}.tailnet == [ ] && !out.${h}.lan) (builtins.attrNames out)
+    );
 in
 {
   inherit
     dataRoot
+    lanSubnet
     persistList
     normalize
     normalizeRoute
@@ -462,21 +585,12 @@ in
     netHostAddress
     checkNetIndexes
     allServices
+    tailnetExcludedOverlayIps
+    validWebSource
+    webSourcesIps
+    webSourcesByHost
     ;
 
-  # ROUTING-PLAN 8.2: tailnet 80/443 is `100.64.0.0/10` minus o002 (edge-only,
-  # uses 8443) and low-trust nodes (joe, i001, hass today). Takes fleet.nix's
-  # `hosts` attrset; returns the overlay IPs to exclude (host-module.nix drops
-  # from these, then falls through to `ip saddr 100.64.0.0/10 accept`).
-  tailnetExcludedOverlayIps =
-    hosts:
-    let
-      names = builtins.attrNames hosts;
-      excludedNames = builtins.filter (
-        name: name == "o002" || (hosts.${name}.trust or null) == "low"
-      ) names;
-    in
-    builtins.filter (ip: ip != null) (map (name: hosts.${name}.overlayIp or null) excludedNames);
   # services.nginx.virtualHosts for the public edge (o002), generated from
   # every public `via = edge` http route (ROUTING-PLAN §2.3, §8 step 3).
   # Each proxies over the tailnet to the service host's edge listener
@@ -541,25 +655,6 @@ in
     builtins.mapAttrs (_: rs: builtins.sort builtins.lessThan (map (r: r.fqdn) rs)) (
       builtins.groupBy (r: r.host) routes
     );
-
-  # Per-host summary of what the internal :80/:443 listener must allow
-  # (ROUTING-PLAN §8 step 2): every non-local http route needs the tailnet
-  # ACL; lan/public routes also need the LAN subnet. Hosts without any
-  # http route (or without a host at all) are omitted.
-  httpExposureByHost =
-    dir:
-    let
-      routes = builtins.filter (r: r.proto == "http" && r.exposure != "local") (
-        builtins.concatMap (s: map (r: r // { inherit (s) host; }) (builtins.attrValues s.routes)) (
-          builtins.filter (s: s.host != null) (allServices dir)
-        )
-      );
-      byHost = builtins.groupBy (r: r.host) routes;
-    in
-    builtins.mapAttrs (_: rs: {
-      tailnet = true;
-      lan = builtins.any (r: r.exposure == "lan" || r.exposure == "public") rs;
-    }) byHost;
 
   # ROUTING-PLAN §8 step 2: explicit per-host firewall, generated from the
   # inventory instead of hand-written global allows ("every host trusts

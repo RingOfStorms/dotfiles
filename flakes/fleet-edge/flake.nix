@@ -105,6 +105,17 @@
               default = "/var/lib/fleet-edge/metrics.db";
               description = "Path to the SQLite time-series metrics database (empty string disables persistence).";
             };
+            geoipCountryFile = lib.mkOption {
+              type = lib.types.str;
+              default = "";
+              example = "/var/lib/fleet-edge/dbip-country-lite.csv.gz";
+              description = ''
+                Path to an offline DB-IP Lite Country CSV (plain or gzip) used
+                to label banned addresses with an IP-registration country.
+                Empty disables country lookups. Nothing is downloaded at
+                runtime; the file must be provisioned locally.
+              '';
+            };
 
             auth = {
               zitadel = {
@@ -324,8 +335,9 @@
                 /topology diagram spec, passed as FLEET_EDGE_TOPOLOGY. The
                 schema is `topology.Spec` in internal/topology/topology.go:
                 width, rows[].zones[]{id,label,kind,flex}, nodes[]{id,host,
-                label,kind,zone,lines[],href}, links[]{from,to,kind,label},
-                defaultZone, hide[], hubs{tailnet,edge,router,dashboard} and
+                label,kind,zone,role,badges[],lines[],href}, links[]{from,to,
+                kind,label}, defaultZone, hide[], hubs{tailnet,edge,router,
+                dashboard} and
                 notes[]{title,text}. Hosts, container placement, public paths,
                 tailnet membership and agent polling are derived from the
                 inventory, so the spec only carries what the inventory cannot
@@ -432,6 +444,7 @@
                 FLEET_EDGE_ICON_BASE = cfg.iconBase;
                 FLEET_EDGE_LINKS = toString (pkgs.writeText "fleet-edge-links.json" (builtins.toJSON cfg.links));
                 FLEET_EDGE_DB = cfg.dbPath;
+                FLEET_EDGE_GEOIP_COUNTRY_FILE = cfg.geoipCountryFile;
                 FLEET_EDGE_ZITADEL_ISSUER = if cfg.auth.zitadel.enable then cfg.auth.zitadel.issuer else "";
                 FLEET_EDGE_ZITADEL_PROJECT_ID = if cfg.auth.zitadel.enable then cfg.auth.zitadel.projectId else "";
                 FLEET_EDGE_ZITADEL_CLAIM = cfg.auth.zitadel.claim;

@@ -144,7 +144,7 @@ func Open(dbPath string) (*Store, error) {
 		dbPath:    dbPath,
 		sqliteBin: bin,
 	}
-	if err := s.execSQL(context.Background(), schemaSQL); err != nil {
+	if err := s.execSQL(context.Background(), schemaSQL+atlasSchemaSQL); err != nil {
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
 	return s, nil

@@ -15,69 +15,80 @@ import (
 // a template to draw without arithmetic.
 type Diagram struct {
 	Width, Height int
-	Zones         []ZoneBox
-	Edges         []Edge
-	Nodes         []Node
-	// Meta is the JSON node-detail map (id -> NodeInfo) for the info panel.
+	// AsOf is the snapshot time the layout was built for. /topology.svg is
+	// also served for recorded frames, so the client measures ages from this
+	// instead of from the wall clock.
+	AsOf  time.Time
+	Zones []ZoneBox
+	Edges []Edge
+	Nodes []Node
+	// Hubs name the nodes derived paths attach to. The template passes them to
+	// topology.js, which builds journeys from them: a public journey is
+	// simulated client -> edge hub -> host -> service.
+	Hubs Hubs
+	// Meta is the JSON node-detail map (id -> NodeInfo) behind the sidebar
+	// drilldown: every technical fact lives there, not on the diagram.
 	Meta string
 }
 
-// ZoneBox is a laid-out zone.
+// ZoneBox is a laid-out region: open ground with a label, not a card.
 type ZoneBox struct {
 	ID, Label, Kind string
 	X, Y, W, H      int
 }
 
-// Node is a laid-out box. Child coordinates are relative to (X, Y).
+// Node is a laid-out station: one circular head with the icon, the name, the
+// plain role under it and, when it has any, the membership tags.
+//
+// HeadX/HeadY/R and the text baselines are box-local, so the template only
+// needs a single translate; CenterX/CenterY give the absolute point that
+// links and journeys attach to.
 type Node struct {
-	ID, Label, Kind, Host string
-	// Icon is the glyph symbol: Kind when known, else "device".
-	Icon string
-	// State: online, down, sleeping, no-endpoint (hosts) or static.
-	State      string
-	X, Y, W, H int
-	// DotX is the status dot's x; TsX the tailnet marker's (Tailnet only).
-	DotX, TsX int
-	Lines     []TextLine
-	Tailnet   bool
-	// ContainerHost: the inventory declares containers on this host. True
-	// even with zero containers, so the box still reads "container host".
+	ID, Label, Kind, Host, Icon, Role, State string
+	X, Y, W, H                               int
+	HeadX, HeadY, R                          int
+	LabelY, RoleY                            int
+	Tags                                     string
+	TagsY                                    int
+	// IconX/IconY, DotX, TsX/TsY and the counter baselines derive from the
+	// head; the template only reads them.
+	IconX, IconY, DotX, TsX, TsY int
+	CountX, CountY, WarnY        int
+	// SvcCount is every declared service here, SvcFailed those that are not
+	// running. Warn counts disk health problems; neither is security.
+	SvcCount, SvcFailed, Warn int
+	// Tailnet marks overlay membership; ContainerHost says the inventory
+	// declares containers here even when there are none yet.
+	Tailnet       bool
 	ContainerHost bool
-	ChipsLabel    *TextLine
-	Chips         []Chip
 	Title         string
-	// live: the box is confirmed present right now (static gear always, a host
-	// only while the merge reports it online and reachable). Edges animate
-	// only between live boxes.
+	// live: confirmed present right now. Static gear always is; only links
+	// between live stations are drawn as live.
 	live bool
 }
 
-// TextLine is one line of text inside a node.
-type TextLine struct {
-	Text  string
-	Y     int
-	Class string
-}
+// CenterX, CenterY are the absolute head centre.
+func (n Node) CenterX() int { return n.X + n.HeadX }
+func (n Node) CenterY() int { return n.Y + n.HeadY }
 
-// Chip is one container/service inside a container host's box. Name may be
-// truncated to fit; Full is the untruncated name.
-type Chip struct {
-	Name, Full, State, Exposure string
-	X, Y, W                     int
-}
-
-// Edge is one drawn connection. (LX, LY) is the label center, (LRX, LRY)
-// its background's corner.
+// Edge is one drawn connection. D is an orthogonal stub-elbow-stub path;
+// LX/LY is the label's centre, LRX/LRY its background's corner, LW its width.
 type Edge struct {
 	From, To, Kind, Layer, Label string
-	// Live: both ends are present right now, so flow animation runs.
-	Live             bool
-	D                string
-	LX, LY, LRX, LRY int
-	LW               int
+	Live                         bool
+	D                            string
+	LX, LY, LW                   int
+	LRX, LRY                     int
 }
 
-// NodeInfo is the info-panel payload for one node.
+// NodeInfo is the sidebar drilldown payload for one node. The overview stays
+// plain; the raw host status is carried here so the detail panel can show
+// every technical fact without the map repeating it.
+//
+// Ages are never precomputed into a single "stale" verdict: the client has the
+// snapshot time, each section's own timestamp and each section's expected
+// cadence, so a 15-minute SMART refresh is not called stale by a 1-minute
+// fail2ban expectation (or the reverse).
 type NodeInfo struct {
 	Label     string        `json:"label"`
 	Kind      string        `json:"kind"`
@@ -88,25 +99,57 @@ type NodeInfo struct {
 	OverlayIP string        `json:"overlayIp,omitempty"`
 	LanIP     string        `json:"lanIp,omitempty"`
 	Href      string        `json:"href,omitempty"`
+	Badges    []string      `json:"badges,omitempty"`
 	Lines     []string      `json:"lines,omitempty"`
 	Services  []ServiceInfo `json:"services,omitempty"`
 	Links     []LinkInfo    `json:"links,omitempty"`
-	// ContainerHost: containers are declared on this host, even if there are
-	// none right now. Lets the panel say "Containers (0)" instead of hiding
-	// the section. Deliberately no omitempty: false is meaningful.
+	// X, Y is the station head in SVG units: traces anchor here instead of
+	// measuring the DOM.
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	// Live is the merge's reachability verdict, Reachable the raw echo from
+	// the last poll. lastSeen is empty when the host was never polled.
+	Live        bool      `json:"live"`
+	Reachable   bool      `json:"reachable"`
+	LastSeen    time.Time `json:"lastSeen,omitempty"`
+	LastSeenAge string    `json:"lastSeenAge,omitempty"`
+	PolledAt    time.Time `json:"polledAt,omitempty"`
+	StatusTime  string    `json:"statusTime,omitempty"`
+	// Counts, separated on purpose: an absent host and a stopped service are
+	// faults; disk advisories are warnings; bans are enforced protection.
+	SvcFailed    int                     `json:"svcFailed"`
+	DiskWarnings int                     `json:"diskWarnings"`
+	BannedCount  int                     `json:"bannedCount,omitempty"`
+	SmartTotal   int                     `json:"smartTotal"`
+	SmartOK      int                     `json:"smartOk"`
+	SmartFailed  int                     `json:"smartFailed"`
+	System       *state.SystemMetrics    `json:"system,omitempty"`
+	Smart        []state.SmartDrive      `json:"smart,omitempty"`
+	Filesystems  []state.FilesystemMount `json:"filesystems,omitempty"`
+	Fail2ban     *state.Fail2banSummary  `json:"fail2ban,omitempty"`
+	// ContainerHost: containers are declared on this host even when there are
+	// none right now. Deliberately no omitempty: false is meaningful.
 	ContainerHost bool `json:"containerHost"`
 }
 
-// ServiceInfo is one container in the info panel.
+// ServiceInfo is one declared service of a host.
 type ServiceInfo struct {
 	Name        string   `json:"name"`
 	State       string   `json:"state"`
 	Exposure    string   `json:"exposure,omitempty"`
 	Description string   `json:"description,omitempty"`
 	URLs        []string `json:"urls,omitempty"`
+	Proto       string   `json:"proto,omitempty"`
+	Port        int      `json:"port,omitempty"`
+	// Public: a genuinely public route (exposure public) that reaches the
+	// service through the edge hub (Via contains "edge"). ViaRouter marks a
+	// public route that terminates on the router instead — a different hub, so
+	// a journey must not pretend it goes through the edge.
+	Public    bool `json:"public"`
+	ViaRouter bool `json:"viaRouter"`
 }
 
-// LinkInfo is one connection in the info panel, from this node's side.
+// LinkInfo is one connection in the sidebar, from this node's side.
 type LinkInfo struct {
 	Kind      string `json:"kind"`
 	Layer     string `json:"layer"`
@@ -118,34 +161,30 @@ type LinkInfo struct {
 
 // Geometry (SVG units). Text widths are estimates for system-ui.
 const (
-	zonePad    = 18
-	zoneHead   = 34
-	nodeGap    = 18
+	zonePad    = 22
+	zoneHead   = 40
 	zoneGap    = 26
-	rowGap     = 46
-	minZoneH   = 110
-	nodeW      = 220
-	wideNodeW  = 470
-	wideChips  = 6
-	headH      = 40
-	lineH      = 16
-	bottomPad  = 10
-	chipH      = 18
-	chipGap    = 4
-	minChipW   = 100
-	chipsHead  = 18
-	labelCharW = 8.2
-	smallCharW = 6.3
+	rowGap     = 40
+	minZoneH   = 168
+	stationW   = 180
+	stationH   = 92
+	stationR   = 18
+	stationGX  = 26
+	stationGY  = 28
+	originBand = 74
+	labelCharW = 7.4
+	smallCharW = 6.0
 )
 
 var exposureRank = map[string]int{"local": 1, "tailnet": 2, "lan": 3, "public": 4}
 
-// icons are the glyph symbols the SVG template defines.
+// icons are the glyph symbols the SVG template defines. Any other kind falls
+// back to "device" rather than drawing an empty head.
 var icons = map[string]bool{
 	"internet": true, "cloud": true, "dns": true, "user": true, "modem": true,
 	"router": true, "switch": true, "ap": true, "server": true, "nas": true,
 	"workstation": true, "laptop": true, "phone": true, "appliance": true,
-	"kvm": true, "ups": true, "mesh": true, "device": true,
+	"kvm": true, "ups": true, "mesh": true, "device": true, "computer": true,
 }
 
 var roleKinds = map[string]string{
@@ -155,10 +194,10 @@ var roleKinds = map[string]string{
 	"appliance":   "appliance",
 }
 
-// Build lays out spec against the current merged state. The spec must have
-// passed Validate against the inventory the state was merged from;
-// references that still don't resolve (inventory changed underneath) are
-// skipped rather than drawn wrong.
+// Build lays out spec against the merged state, as of now. The spec must have
+// passed Validate against the inventory the state was merged from; a reference
+// that still doesn't resolve (inventory changed underneath) is skipped rather
+// than drawn wrong.
 func Build(spec *Spec, m state.Merged, now time.Time) Diagram {
 	width := spec.diagramWidth()
 	hosts := map[string]state.HostView{}
@@ -197,7 +236,7 @@ func Build(spec *Spec, m state.Merged, now time.Time) Diagram {
 		}
 	}
 
-	d := Diagram{Width: width}
+	d := Diagram{Width: width, AsOf: now, Hubs: spec.Hubs}
 	info := map[string]*NodeInfo{}
 	byZone := map[string][]*Node{}
 	nodes := map[string]*Node{}
@@ -211,7 +250,7 @@ func Build(spec *Spec, m state.Merged, now time.Time) Diagram {
 		byZone[ns.Zone] = append(byZone[ns.Zone], n)
 	}
 
-	y := 0
+	y := originBand
 	for _, row := range spec.Rows {
 		if len(row.Zones) == 0 {
 			continue
@@ -222,8 +261,7 @@ func Build(spec *Spec, m state.Merged, now time.Time) Diagram {
 		widths := zoneWidths(row, width)
 		for i, z := range row.Zones {
 			w := widths[i]
-			h := flowZone(byZone[z.ID], x, y, w)
-			rowH = max(rowH, h)
+			rowH = max(rowH, flowZone(byZone[z.ID], x, y, w))
 			d.Zones = append(d.Zones, ZoneBox{ID: z.ID, Label: z.Label, Kind: z.Kind, X: x, Y: y, W: w})
 			x += w + zoneGap
 		}
@@ -232,9 +270,9 @@ func Build(spec *Spec, m state.Merged, now time.Time) Diagram {
 		}
 		y += rowH + rowGap
 	}
-	d.Height = max(y-rowGap, minZoneH)
+	d.Height = max(y-rowGap+zonePad, originBand+minZoneH)
 
-	// Node draw order: spec order, so later boxes overlap earlier ones.
+	// Station draw order: spec order, so later stations sit on top.
 	for _, ns := range specs {
 		if n := nodes[ns.nodeID()]; n != nil {
 			d.Nodes = append(d.Nodes, *n)
@@ -255,50 +293,24 @@ func Build(spec *Spec, m state.Merged, now time.Time) Diagram {
 	for _, l := range spec.Links {
 		add(l.From, l.To, l.Kind, l.Label)
 	}
-	// Host name -> node id (a spec node may give a host a different id).
+	// Agent polling is the only derived edge family: a real, recorded
+	// relationship (fleet-edge asks each agent every 30s). Tailnet membership
+	// is a station tag and public paths are journeys, never permanent rails.
 	hostNode := map[string]string{}
+	var hostNames []string
 	for _, n := range nodes {
 		if n.Host != "" {
 			hostNode[n.Host] = n.ID
+			hostNames = append(hostNames, n.Host)
 		}
-	}
-	hostNames := make([]string, 0, len(hostNode))
-	for h := range hostNode {
-		hostNames = append(hostNames, h)
 	}
 	sort.Strings(hostNames)
-	for _, h := range hostNames {
-		edgeRoutes, routerRoutes := 0, 0
-		for _, s := range svcByHost[h] {
-			for _, r := range s.Routes {
-				for _, v := range r.Via {
-					switch v {
-					case "edge":
-						edgeRoutes++
-					case "router":
-						routerRoutes++
-					}
-				}
-			}
-		}
-		if spec.Hubs.Edge != "" && edgeRoutes > 0 {
-			add(spec.Hubs.Edge, hostNode[h], "public", plural(edgeRoutes, "public route"))
-		}
-		if spec.Hubs.Router != "" && routerRoutes > 0 {
-			add(spec.Hubs.Router, hostNode[h], "public", plural(routerRoutes, "port forward"))
-		}
-	}
-	for _, h := range hostNames {
-		if spec.Hubs.Tailnet != "" && hosts[h].OverlayIP != "" {
-			add(spec.Hubs.Tailnet, hostNode[h], "tailnet", "")
-		}
-	}
 	for _, h := range hostNames {
 		if spec.Hubs.Dashboard != "" && hosts[h].HasEndpoint {
 			add(spec.Hubs.Dashboard, hostNode[h], "agent", "")
 		}
 	}
-	routeEdges(edges, nodes)
+	routeStations(edges, nodes)
 	d.Edges = edges
 
 	for _, e := range edges {
@@ -306,6 +318,10 @@ func Build(spec *Spec, m state.Merged, now time.Time) Diagram {
 		info[e.From].Links = append(info[e.From].Links, LinkInfo{Kind: e.Kind, Layer: e.Layer, Peer: e.To, PeerLabel: b.Label, Label: e.Label, Out: true})
 		info[e.To].Links = append(info[e.To].Links, LinkInfo{Kind: e.Kind, Layer: e.Layer, Peer: e.From, PeerLabel: a.Label, Label: e.Label})
 	}
+	for id, n := range nodes {
+		info[id].X, info[id].Y = float64(n.CenterX()), float64(n.CenterY())
+	}
+
 	meta, _ := json.Marshal(info)
 	d.Meta = string(meta)
 	return d
@@ -328,7 +344,7 @@ func (s *Spec) diagramWidth() int {
 
 // zoneWidths splits a row's width across its zones in proportion to flex,
 // rounding each zone and giving the last one whatever is left. Validate uses
-// the very same arithmetic so a spec it accepts always lays out in bounds.
+// the very same arithmetic, so a spec it accepts always lays out in bounds.
 func zoneWidths(row Row, width int) []int {
 	widths := make([]int, len(row.Zones))
 	total := 0.0
@@ -355,39 +371,60 @@ func up(hv state.HostView) bool {
 	return hv.StateBadge == "online" && hv.Reachable
 }
 
-func plural(n int, what string) string {
-	if n == 1 {
-		return "1 " + what
-	}
-	return fmt.Sprintf("%d %ss", n, what)
-}
-
-// buildNode fills a node's content; width and height are provisional until
-// flowZone fits it to its zone.
+// buildNode fills a station's content and its drilldown payload.
 func buildNode(ns NodeSpec, hosts map[string]state.HostView, svcByHost map[string][]state.ServiceView, now time.Time) (*Node, *NodeInfo) {
-	n := &Node{ID: ns.nodeID(), Label: ns.Label, Kind: ns.Kind, Host: ns.Host, State: "static", W: nodeW, live: true}
-	ni := &NodeInfo{Href: ns.Href, Lines: append([]string(nil), ns.Lines...)}
-	var hv state.HostView
+	n := &Node{ID: ns.nodeID(), Label: ns.Label, Kind: ns.Kind, Host: ns.Host, Role: ns.Role, State: "static", live: true}
+	ni := &NodeInfo{Href: ns.Href, Role: ns.Role, Live: true, Reachable: true}
+	ni.Lines = append([]string(nil), ns.Lines...)
+	ni.Badges = append([]string(nil), ns.Badges...)
 	if ns.Host != "" {
-		var ok bool
-		if hv, ok = hosts[ns.Host]; !ok {
+		hv, ok := hosts[ns.Host]
+		if !ok {
 			return nil, nil
 		}
 		n.State = hv.StateBadge
-		if n.Kind == "" {
-			n.Kind = roleKinds[hv.Role]
-		}
+		n.live = up(hv)
 		n.Tailnet = hv.OverlayIP != ""
 		n.ContainerHost, ni.ContainerHost = hv.ContainerHost, hv.ContainerHost
-		n.live = up(hv)
-		ni.Host, ni.Role, ni.OverlayIP, ni.LanIP = ns.Host, hv.Role, hv.OverlayIP, hv.LanIP
+		ni.Host, ni.OverlayIP, ni.LanIP = ns.Host, hv.OverlayIP, hv.LanIP
+		ni.Live, ni.Reachable = n.live, hv.Reachable
+		ni.LastSeen, ni.LastSeenAge, ni.PolledAt = hv.LastSeen, hv.LastSeenAge, hv.PolledAt
+		ni.BannedCount = hv.BannedCount
+		if n.Role == "" {
+			n.Role, ni.Role = hv.Role, hv.Role
+		}
 		if ni.Href == "" && hv.HasEndpoint {
 			ni.Href = "/hosts/" + ns.Host
 		}
 		ni.StateText = stateText(hv, now)
+		if n.Kind == "" {
+			n.Kind = roleKinds[hv.Role]
+		}
+		if hv.Status != nil {
+			st := hv.Status
+			ni.StatusTime = st.Time
+			ni.Filesystems, ni.Fail2ban = st.Filesystems, st.Fail2ban
+			ni.Smart = st.Smart
+			ni.SmartTotal = len(st.Smart)
+			for _, dr := range st.Smart {
+				if driveUnhealthy(dr) {
+					ni.SmartFailed++
+				} else if !dr.Standby {
+					ni.SmartOK++
+				}
+			}
+			ni.DiskWarnings = diskProblems(st)
+			// Gauges from an absent host are history: the sidebar labels them
+			// last known instead of drawing a live dial.
+			if n.live {
+				ni.System = st.System
+			}
+		}
+		if m := systemLine(hv); m != "" && n.live {
+			ni.Lines = append(ni.Lines, m)
+		}
 	}
-	// A spec node without a label falls back to its host, then its id: no box
-	// ever draws an empty heading.
+	// No station ever draws an empty heading.
 	if n.Label == "" {
 		n.Label = ns.Host
 	}
@@ -397,59 +434,125 @@ func buildNode(ns NodeSpec, hosts map[string]state.HostView, svcByHost map[strin
 	if n.Kind == "" {
 		n.Kind = "device"
 	}
+	if n.Role == "" {
+		n.Role = n.Kind
+	}
 	n.Icon = n.Kind
 	if !icons[n.Icon] {
 		n.Icon = "device"
 	}
-	ni.Label, ni.Kind, ni.State = n.Label, n.Kind, n.State
+	n.Tags = strings.Join(ns.Badges, " · ")
+	ni.Label, ni.Kind, ni.State, ni.Role = n.Label, n.Kind, n.State, n.Role
 	n.Title = n.Label
-	if ni.StateText != "" {
+	if n.Role != "" {
+		n.Title += " · " + n.Role
+	}
+	if ni.StateText != "" && ni.StateText != "online" {
 		n.Title += " — " + ni.StateText
 	}
 
-	for _, l := range ns.Lines {
-		n.Lines = append(n.Lines, TextLine{Text: l})
-	}
-	if ns.Host != "" {
-		var ips []string
-		for _, ip := range []string{hv.OverlayIP, hv.LanIP} {
-			if ip != "" {
-				ips = append(ips, ip)
+	if ns.Host != "" { // svcByHost[""] holds services not placed on a host
+		for _, s := range svcByHost[ns.Host] {
+			exp, rank := "", 0
+			var urls []string
+			public, viaRouter := false, false
+			si := ServiceInfo{Name: s.Name, State: s.Active, Description: s.Description}
+			for _, r := range s.Routes {
+				if exposureRank[r.Exposure] > rank {
+					exp, rank = r.Exposure, exposureRank[r.Exposure]
+				}
+				if r.Exposure == "public" {
+					// Only a public route can be public, and where it enters
+					// decides the hub: edge hub, or the router if it terminates
+					// there. Anything else is not a public path at all.
+					switch {
+					case contains(r.Via, "edge"):
+						public = true
+					case contains(r.Via, "router"):
+						viaRouter = true
+					}
+				}
+				if u := r.URLStr(); u != "" {
+					urls = append(urls, u)
+				}
+				if si.Proto == "" && r.Proto != "" {
+					si.Proto, si.Port = r.Proto, r.Port
+				}
 			}
-		}
-		if len(ips) > 0 {
-			n.Lines = append(n.Lines, TextLine{Text: strings.Join(ips, " · "), Class: "mono"})
-		}
-		if m := metrics(hv); m != "" {
-			n.Lines = append(n.Lines, TextLine{Text: m, Class: "metrics"})
-			// The panel gets the whole line: the box truncates to its width,
-			// the panel has room to show every number.
-			ni.Lines = append(ni.Lines, m)
-		}
-	}
-	var services []state.ServiceView
-	if ns.Host != "" { // svcByHost[""] holds unplaced services (host = null)
-		services = svcByHost[ns.Host]
-	}
-	for _, s := range services {
-		exp, rank := "", 0
-		var urls []string
-		for _, r := range s.Routes {
-			if exposureRank[r.Exposure] > rank {
-				exp, rank = r.Exposure, exposureRank[r.Exposure]
+			sort.Strings(urls)
+			si.Exposure, si.URLs, si.Public, si.ViaRouter = exp, urls, public, viaRouter
+			if s.Active != "active" && s.Active != "" && s.Active != "unknown" {
+				ni.SvcFailed++
 			}
-			if u := r.URLStr(); u != "" {
-				urls = append(urls, u)
-			}
+			ni.Services = append(ni.Services, si)
+			n.SvcCount++
 		}
-		sort.Strings(urls)
-		n.Chips = append(n.Chips, Chip{Name: s.Name, Full: s.Name, State: s.Active, Exposure: exp})
-		ni.Services = append(ni.Services, ServiceInfo{Name: s.Name, State: s.Active, Exposure: exp, Description: s.Description, URLs: urls})
 	}
-	if len(n.Chips) > wideChips {
-		n.W = wideNodeW
-	}
+	n.SvcFailed = ni.SvcFailed
+	n.Warn = ni.DiskWarnings
 	return n, ni
+}
+
+func contains(list []string, want string) bool {
+	for _, v := range list {
+		if v == want {
+			return true
+		}
+	}
+	return false
+}
+
+// driveUnhealthy is the shared rule for "this drive needs attention": a
+// spun-down drive cannot be interrogated, so it is never a failure there; any
+// defect counter, full wear, or a false SMART verdict makes the drive count
+// once. The same predicate feeds the station badge and the historical
+// driveWarnings series, so the live map and the timeline agree.
+func driveUnhealthy(d state.SmartDrive) bool {
+	if d.Standby {
+		return false
+	}
+	return !d.Healthy ||
+		d.PendingSectors > 0 || d.UncorrectableErrors > 0 || d.MediaErrors > 0 ||
+		d.ReallocatedSectors > 0 || d.WearPercentUsed >= 100
+}
+
+// diskProblems counts what the station should flag: unhealthy drives and
+// pools that are degraded or logging IO errors. A pool is counted once even
+// when several submounts report the same array.
+func diskProblems(st *state.HostStatus) int {
+	n := 0
+	for _, d := range st.Smart {
+		if driveUnhealthy(d) {
+			n++
+		}
+	}
+	seen := map[string]bool{}
+	for _, fs := range st.Filesystems {
+		b := fs.Bcachefs
+		if b == nil || !(b.Degraded || bcachefsIOErrors(b) > 0) {
+			continue
+		}
+		// Pool identity, so submounts of one array are one problem. A status
+		// without a UUID falls back to the mount, which is unique per pool.
+		key := b.UUID
+		if key == "" {
+			key = "mount:" + fs.Mount
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		n++
+	}
+	return n
+}
+
+func bcachefsIOErrors(b *state.BcachefsInfo) uint64 {
+	var n uint64
+	for _, d := range b.Devices {
+		n += d.IOErrorsRead + d.IOErrorsWrite + d.IOErrorsCsum
+	}
+	return n
 }
 
 func stateText(hv state.HostView, now time.Time) string {
@@ -472,24 +575,10 @@ func stateText(hv state.HostView, now time.Time) string {
 	}
 }
 
-// seenSuffix says when the host was last heard from. The merge precomputes the
-// age; a HostView from elsewhere still carries LastSeen, so fall back to it
-// rather than dropping the timestamp.
-func seenSuffix(hv state.HostView, now time.Time) string {
-	age := hv.LastSeenAge
-	if age == "" && !hv.LastSeen.IsZero() && !now.IsZero() {
-		age = state.FormatAge(now.Sub(hv.LastSeen))
-	}
-	if age == "" {
-		return ""
-	}
-	return " · last seen " + age + " ago"
-}
-
-// metrics renders the CPU/memory/uptime line for a host the merge reports up.
-// Numbers from a host that is not reachable would read as live readings.
-func metrics(hv state.HostView) string {
-	if !up(hv) || hv.Status == nil || hv.Status.System == nil {
+// systemLine is the one-line CPU/memory/uptime summary the sidebar shows; the
+// station itself stays non-technical.
+func systemLine(hv state.HostView) string {
+	if hv.Status == nil || hv.Status.System == nil {
 		return ""
 	}
 	sys := hv.Status.System
@@ -503,83 +592,58 @@ func metrics(hv state.HostView) string {
 	return strings.Join(parts, " · ")
 }
 
-func flowZone(nodes []*Node, x, y, w int) int {
-	// Validate guarantees every zone is wide enough for its padding and one
-	// node, so the inner area is positive without a clamp here.
-	inner := w - 2*zonePad
-	for _, n := range nodes {
-		n.W = min(n.W, inner)
-		finishNode(n)
+func seenSuffix(hv state.HostView, now time.Time) string {
+	if hv.LastSeenAge != "" {
+		return " · last seen " + hv.LastSeenAge + " ago"
 	}
+	if !hv.LastSeen.IsZero() && !now.IsZero() {
+		return " · last seen " + state.FormatAge(now.Sub(hv.LastSeen)) + " ago"
+	}
+	return ""
+}
+
+// flowZone places fixed-size stations in rows inside a zone and returns the
+// zone height the region needs. Fixed stations keep the map legible instead
+// of growing a box per service.
+func flowZone(nodes []*Node, x, y, w int) int {
+	inner := w - 2*zonePad
+	cols := max(1, (inner+stationGX)/(stationW+stationGX))
 	cy := y + zoneHead
-	for i := 0; i < len(nodes); {
-		j, used := i, 0
-		for j < len(nodes) && (j == i || used+nodeGap+nodes[j].W <= inner) {
-			if j > i {
-				used += nodeGap
-			}
-			used += nodes[j].W
-			j++
+	for i := 0; i < len(nodes); i += cols {
+		row := nodes[i:min(i+cols, len(nodes))]
+		used := len(row)*stationW + (len(row)-1)*stationGX
+		cx := x + zonePad + max(0, (inner-used)/2)
+		for _, n := range row {
+			finishNode(n, cx, cy)
+			cx += stationW + stationGX
 		}
-		cx := x + zonePad + (inner-used)/2
-		rowH := 0
-		for _, n := range nodes[i:j] {
-			n.X, n.Y = cx, cy
-			cx += n.W + nodeGap
-			rowH = max(rowH, n.H)
-		}
-		cy += rowH + nodeGap
-		i = j
+		cy += stationH + stationGY
 	}
 	if len(nodes) == 0 {
 		return minZoneH
 	}
-	return cy - nodeGap + zonePad - y
+	return cy - stationGY + zonePad - y
 }
 
-// finishNode truncates text to the final width and computes the height.
-func finishNode(n *Node) {
-	// Leave room for the 22px icon and the status/tailnet markers on the
-	// right before the heading.
-	n.Label = truncate(n.Label, max(2, int(float64(n.W-72)/labelCharW)))
-	cy := headH
-	for i := range n.Lines {
-		n.Lines[i].Text = truncate(n.Lines[i].Text, int(float64(n.W-24)/smallCharW))
-		n.Lines[i].Y = cy + 12
-		cy += lineH
-	}
-	// A declared container host always says so, even with nothing on it: the
-	// zero count is the information, not a reason to hide the label.
-	if n.ContainerHost || len(n.Chips) > 0 {
-		cy += 4
-		label := plural(len(n.Chips), "container")
-		if n.ContainerHost {
-			label = "container host · " + label
-		}
-		n.ChipsLabel = &TextLine{Text: truncate(label, max(2, int(float64(n.W-24)/smallCharW))), Y: cy + 11}
-		cy += chipsHead
-	}
-	if len(n.Chips) > 0 {
-		inner := n.W - 24
-		cols := max(1, (inner+chipGap)/(minChipW+chipGap))
-		cw := (inner - chipGap*(cols-1)) / cols
-		for i := range n.Chips {
-			c := &n.Chips[i]
-			c.X = 12 + (i%cols)*(cw+chipGap)
-			c.Y = cy + (i/cols)*(chipH+chipGap)
-			c.W = cw
-			c.Name = truncate(c.Name, int(float64(cw-20)/smallCharW))
-		}
-		rows := (len(n.Chips) + cols - 1) / cols
-		cy += rows*(chipH+chipGap) - chipGap
-	}
-	n.H = cy + bottomPad
-	n.DotX, n.TsX = n.W-16, n.W-36
+// finishNode fixes a station's box and its box-local geometry: head circle,
+// name, role, then one quiet line of membership tags.
+func finishNode(n *Node, x, y int) {
+	n.X, n.Y, n.W, n.H = x, y, stationW, stationH
+	n.HeadX, n.HeadY, n.R = stationW/2, stationR+6, stationR
+	n.LabelY, n.RoleY = n.HeadY+n.R+16, n.HeadY+n.R+29
+	n.TagsY = n.RoleY + 13
+	n.Label = truncate(n.Label, max(2, int(float64(n.W-16)/labelCharW)))
+	n.Role = truncate(n.Role, max(2, int(float64(n.W-16)/smallCharW)))
+	n.Tags = truncate(n.Tags, max(2, int(float64(n.W-16)/smallCharW)))
+	n.IconX, n.IconY = n.HeadX-10, n.HeadY-10
+	n.DotX = n.HeadX - n.R - 4
+	n.TsX, n.TsY = n.HeadX-5, n.HeadY+n.R-5
+	n.CountX, n.CountY, n.WarnY = n.HeadX+n.R+7, n.HeadY-4, n.HeadY+11
 }
 
 func truncate(s string, n int) string {
 	r := []rune(s)
-	if n < 2 || len(r) <= n {
+	if len(r) <= n {
 		return s
 	}
 	return string(r[:n-1]) + "…"
@@ -588,117 +652,67 @@ func truncate(s string, n int) string {
 type side int
 
 const (
-	top side = iota
-	bottom
-	left
+	left side = iota
 	right
+	above
+	below
 )
 
-type anchor struct {
-	edge  int
-	from  bool
-	side  side
-	other float64 // peer coordinate along the side, for ordering
-}
-
-// routeEdges picks a side of each endpoint, spreads endpoints sharing a
-// side in the order of their peers (so fans don't cross at the node), and
-// writes a cubic path plus its label position.
-func routeEdges(edges []Edge, nodes map[string]*Node) {
-	type key struct {
-		node string
-		side side
-	}
-	groups := map[key][]anchor{}
-	sides := make([][2]side, len(edges))
-	for i, e := range edges {
-		a, b := nodes[e.From], nodes[e.To]
-		sa, sb := pickSides(a, b)
-		sides[i] = [2]side{sa, sb}
-		acx, acy := center(a)
-		bcx, bcy := center(b)
-		pa, pb := bcx, acx
-		if sa == left || sa == right {
-			pa = bcy
-		}
-		if sb == left || sb == right {
-			pb = acy
-		}
-		groups[key{e.From, sa}] = append(groups[key{e.From, sa}], anchor{edge: i, from: true, side: sa, other: pa})
-		groups[key{e.To, sb}] = append(groups[key{e.To, sb}], anchor{edge: i, side: sb, other: pb})
-	}
-	pts := make([][2][2]float64, len(edges))
-	for k, list := range groups {
-		sort.SliceStable(list, func(i, j int) bool { return list[i].other < list[j].other })
-		n := nodes[k.node]
-		for i, an := range list {
-			// Spread across the middle 70% of the side.
-			t := 0.5
-			if len(list) > 1 {
-				t = 0.15 + 0.7*float64(i)/float64(len(list)-1)
-			}
-			var p [2]float64
-			fx, fy, fw, fh := float64(n.X), float64(n.Y), float64(n.W), float64(n.H)
-			switch k.side {
-			case top:
-				p = [2]float64{fx + fw*t, fy}
-			case bottom:
-				p = [2]float64{fx + fw*t, fy + fh}
-			case left:
-				p = [2]float64{fx, fy + fh*t}
-			case right:
-				p = [2]float64{fx + fw, fy + fh*t}
-			}
-			idx := 1
-			if an.from {
-				idx = 0
-			}
-			pts[an.edge][idx] = p
-		}
-	}
+// routeStations draws orthogonal M/L paths between station heads: a stub out
+// of each circle, one elbow, and a label at the bend. No curves and no fans:
+// a link is a fact, not decoration.
+func routeStations(edges []Edge, nodes map[string]*Node) {
 	for i := range edges {
-		p1, p2 := pts[i][0], pts[i][1]
-		c1 := control(p1, sides[i][0], p2)
-		c2 := control(p2, sides[i][1], p1)
-		edges[i].D = fmt.Sprintf("M%.0f %.0f C%.0f %.0f %.0f %.0f %.0f %.0f", p1[0], p1[1], c1[0], c1[1], c2[0], c2[1], p2[0], p2[1])
-		// Bezier midpoint (t = 0.5).
-		mx := (p1[0] + 3*c1[0] + 3*c2[0] + p2[0]) / 8
-		my := (p1[1] + 3*c1[1] + 3*c2[1] + p2[1]) / 8
-		edges[i].LX, edges[i].LY = int(mx), int(my)
+		a, b := nodes[edges[i].From], nodes[edges[i].To]
+		ax, ay := float64(a.CenterX()), float64(a.CenterY())
+		bx, by := float64(b.CenterX()), float64(b.CenterY())
+		sa, sb := pickSides(a, b)
+		p1 := stub(ax, ay, sa)
+		p2 := stub(bx, by, sb)
+		var d string
+		var mid [2]float64
+		if sa == left || sa == right {
+			mx := (p1[0] + p2[0]) / 2
+			d = fmt.Sprintf("M%.0f %.0f L%.0f %.0f L%.0f %.0f L%.0f %.0f", p1[0], p1[1], mx, p1[1], mx, p2[1], p2[0], p2[1])
+			mid = [2]float64{mx, (p1[1] + p2[1]) / 2}
+		} else {
+			my := (p1[1] + p2[1]) / 2
+			d = fmt.Sprintf("M%.0f %.0f L%.0f %.0f L%.0f %.0f L%.0f %.0f", p1[0], p1[1], p1[0], my, p2[0], my, p2[0], p2[1])
+			mid = [2]float64{(p1[0] + p2[0]) / 2, my}
+		}
+		edges[i].D = d
+		edges[i].LX, edges[i].LY = int(mid[0]), int(mid[1])
 		edges[i].LW = int(float64(len([]rune(edges[i].Label)))*smallCharW) + 12
 		edges[i].LRX, edges[i].LRY = edges[i].LX-edges[i].LW/2, edges[i].LY-9
 	}
 }
 
-func center(n *Node) (float64, float64) {
-	return float64(n.X) + float64(n.W)/2, float64(n.Y) + float64(n.H)/2
-}
-
-// pickSides connects vertically separated boxes top/bottom, otherwise by
-// their facing left/right sides.
+// pickSides connects vertically separated stations through head top/bottom,
+// otherwise through their facing sides.
 func pickSides(a, b *Node) (side, side) {
 	switch {
-	case b.Y >= a.Y+a.H:
-		return bottom, top
-	case a.Y >= b.Y+b.H:
-		return top, bottom
-	case b.X >= a.X+a.W/2:
+	case b.CenterY() > a.CenterY()+2*stationR:
+		return below, above
+	case a.CenterY() > b.CenterY()+2*stationR:
+		return above, below
+	case b.CenterX() >= a.CenterX():
 		return right, left
 	default:
 		return left, right
 	}
 }
 
-func control(p [2]float64, s side, other [2]float64) [2]float64 {
-	k := math.Max(36, math.Max(math.Abs(other[0]-p[0]), math.Abs(other[1]-p[1]))*0.4)
+// stub is the point on a station's circle in the given direction.
+func stub(cx, cy float64, s side) [2]float64 {
+	r := float64(stationR)
 	switch s {
-	case top:
-		return [2]float64{p[0], p[1] - k}
-	case bottom:
-		return [2]float64{p[0], p[1] + k}
 	case left:
-		return [2]float64{p[0] - k, p[1]}
+		return [2]float64{cx - r, cy}
+	case right:
+		return [2]float64{cx + r, cy}
+	case above:
+		return [2]float64{cx, cy - r}
 	default:
-		return [2]float64{p[0] + k, p[1]}
+		return [2]float64{cx, cy + r}
 	}
 }

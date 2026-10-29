@@ -10,6 +10,15 @@
     # internal listener and the pushed cert are host-module defaults.
     # LAN subnet for `exposure = "lan"` routes (nginx-acl-lan.conf).
     nginx.acl.lan = [ "10.12.14.0/24" ];
+    # Hand-written vhosts in mods/arr-nginx.nix (:34-38) admit the whole
+    # tailnet, and the inventory cannot see them, so the generated 80/443
+    # sources (containers/lib.nix webSourcesByHost) are widened back to the
+    # full tailnet here rather than dropping arr's clients (ROUTING-PLAN
+    # 8.2). Narrow this when arr moves to a `routes` declaration.
+    nginx.extraWebSources = [
+      "100.64.0.0/10"
+      "fd7a:115c:a1e0::/48"
+    ];
     # Nightly restic of every service here, one snapshot per svc:<name>
     # (ROUTING-PLAN §9.1). Repo + credentials: restic_h001_env_2026-10-01
     # (sec-agent.nix configChanges sets environmentFile). Same schedule and

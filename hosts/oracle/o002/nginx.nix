@@ -161,22 +161,6 @@ in
             };
           };
 
-          # ── Minecraft survival map (squaremap) ─────────────────────────────
-          # Proxied to h003's nginx over tailscale, which proxies to squaremap
-          "computerboyz.${domain}" = {
-            enableACME = true;
-            forceSSL = true;
-            extraConfig = nginxSnippets.cookieStrip;
-            locations."/" = {
-              return = "444";
-            };
-            locations."/map/survival/" = {
-              proxyPass = "http://${fleet.hosts.h003.overlayIp}:80/map/survival/";
-              extraConfig = nginxSnippets.identityClear;
-              proxyWebsockets = true;
-            };
-          };
-
           "_" = {
             rejectSSL = true;
             default = true;

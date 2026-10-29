@@ -50,15 +50,21 @@ type Zone struct {
 	Flex float64 `json:"flex"`
 }
 
-// NodeSpec places one box. Host binds it to an inventory host (live state,
-// IPs, containers); ID defaults to Host.
+// NodeSpec places one station. Host binds it to an inventory host (live
+// state, IPs, containers); ID defaults to Host.
 type NodeSpec struct {
-	ID    string   `json:"id"`
-	Host  string   `json:"host"`
-	Label string   `json:"label"`
-	Kind  string   `json:"kind"`
-	Zone  string   `json:"zone"`
-	Lines []string `json:"lines"`
+	ID    string `json:"id"`
+	Host  string `json:"host"`
+	Label string `json:"label"`
+	Kind  string `json:"kind"`
+	Zone  string `json:"zone"`
+	// Role is the plain-language job of the gear, drawn under its name
+	// ("core switch", "reverse proxy"). Hosts default to the inventory role.
+	Role string `json:"role"`
+	// Badges are short membership chips ("tailnet", "VLAN 20"). Purely
+	// descriptive: nothing is derived from them.
+	Badges []string `json:"badges"`
+	Lines  []string `json:"lines"`
 	// Href makes the info panel link out (hosts link to /hosts/{name}).
 	Href string `json:"href"`
 }
@@ -109,15 +115,20 @@ var linkLayers = map[string]string{
 // LayerOf returns the layer a link kind belongs to.
 func LayerOf(kind string) string { return linkLayers[kind] }
 
-// Layer is one toggleable family of edges.
-type Layer struct{ ID, Label string }
+// Layer is one toggleable family of overlays: edges the layout draws, and the
+// journey traces topology.js derives from the metadata.
+type Layer struct {
+	ID, Label string
+	// Default is the checkbox state on a first visit.
+	Default bool
+}
 
 // Layers lists every layer in toggle order.
 var Layers = []Layer{
-	{"physical", "Physical"},
-	{"tailnet", "Tailnet"},
-	{"public", "Public paths"},
-	{"control", "Agents & control"},
+	{"physical", "Physical links", true},
+	{"tailnet", "Tailnet paths", true},
+	{"public", "Public paths", true},
+	{"control", "Agents & control", false},
 }
 
 // Default is used when no spec is configured: every host in one zone.
@@ -145,8 +156,9 @@ func Load(path string) (*Spec, error) {
 }
 
 // MinWidth is the narrowest usable zone: below it a zone's inner area cannot
-// hold a node box, so layout would draw boxes wider than the zone.
-const MinWidth = 200
+// hold a station, so layout would draw a box wider than its zone. It is the
+// station width plus the zone padding on both sides.
+const MinWidth = 224
 
 // Validate checks every reference against the spec and the inventory, so a
 // typo fails at startup instead of silently dropping a box or a cable. It
