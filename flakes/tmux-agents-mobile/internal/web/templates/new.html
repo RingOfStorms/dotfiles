@@ -1,0 +1,37 @@
+{{define "new.html"}}{{template "head" .}}
+<form method="post" action="/new" class="newform" data-home="{{.Home}}">
+  <h1 class="pagehead">new session</h1>
+  {{if .FormError}}<p class="error">{{.FormError}}</p>{{end}}
+
+  <label class="dirpick">directory
+    <input id="dir" name="dir" value="{{.Dir}}" placeholder="~/projects/…" required
+           autocomplete="off" autocapitalize="off" spellcheck="false">
+    <ul id="dirmenu" class="dirmenu" hidden></ul>
+  </label>
+
+  <label>session name
+    <input name="name" value="{{.Name}}" placeholder="defaults to the directory name" autocapitalize="off" spellcheck="false">
+  </label>
+
+  <label>program
+    <select name="program">
+      <option value="" {{if eq .Program ""}}selected{{end}}>shell only</option>
+      <option value="omp" {{if eq .Program "omp"}}selected{{end}}>omp</option>
+      <option value="opencode" {{if eq .Program "opencode"}}selected{{end}}>opencode</option>
+    </select>
+  </label>
+
+  <fieldset class="targets">
+    <legend>open as</legend>
+    <label><input type="radio" name="target" value="session" {{if ne .Target "window"}}checked{{end}}> new session</label>
+    <label><input type="radio" name="target" value="window" {{if eq .Target "window"}}checked{{end}}> new window in
+      <select name="session">
+      {{range .Sessions}}<option value="{{.}}">{{.}}</option>
+      {{end}}
+      </select>
+    </label>
+  </fieldset>
+
+  <button type="submit" class="send">create</button>
+</form>
+{{template "foot" .}}{{end}}

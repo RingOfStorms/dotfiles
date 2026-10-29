@@ -148,7 +148,7 @@ deliver() {
 	[ "$(opt @tmux-agents-notify on)" = on ] || return 0
 	if [ "$(opt @tmux-agents-notify-desktop on)" = on ] && command -v notify-send >/dev/null 2>&1; then
 		for ((i = 0; i < n; i++)); do
-			notify-send -a tmux-agents "${ev_title[i]}" "${ev_body[i]}" >/dev/null 2>&1 &
+			notify-send -a tmux-agents "${ev_title[i]}" "${ev_body[i]}" >/dev/null 2>&1 9>&- &
 		done
 	fi
 	if [ "$(opt @tmux-agents-notify-message off)" = on ]; then
@@ -174,9 +174,9 @@ deliver() {
 		[[ $vol =~ ^[0-9]+$ ]] || vol=$def
 		if [ "$vol" -gt 100 ]; then vol=100; fi
 		if command -v pw-play >/dev/null 2>&1; then
-			pw-play --volume "$((vol / 100)).$(printf '%02d' $((vol % 100)))" "$file" >/dev/null 2>&1 &
+			pw-play --volume "$((vol / 100)).$(printf '%02d' $((vol % 100)))" "$file" >/dev/null 2>&1 9>&- &
 		elif command -v paplay >/dev/null 2>&1; then
-			paplay --volume "$((vol * 65536 / 100))" "$file" >/dev/null 2>&1 &
+			paplay --volume "$((vol * 65536 / 100))" "$file" >/dev/null 2>&1 9>&- &
 		fi
 		;;
 	bell)
@@ -198,16 +198,18 @@ cmd_tick() {
 	fi
 
 	local fmt
-	fmt="#{pane_id}${TAB}#{window_id}${TAB}#{session_name}${TAB}#{window_index}${TAB}$(field window_name)${TAB}#{pane_active}${TAB}#{window_active}${TAB}#{session_attached}${TAB}#{window_zoomed_flag}${TAB}$(field @agent_state)${TAB}$(field @agent_unseen)${TAB}$(field @agent_win)${TAB}$(field pane_current_command)${TAB}#{pane_title}"
+	fmt="#{pane_id}${TAB}#{window_id}${TAB}#{session_name}${TAB}#{window_index}${TAB}$(field window_name)${TAB}#{pane_active}${TAB}#{window_active}${TAB}#{session_attached}${TAB}#{window_zoomed_flag}${TAB}$(field @agent_state)${TAB}$(field @agent_unseen)${TAB}$(field @agent_win)${TAB}$(field @agent_watch_until)${TAB}$(field pane_current_command)${TAB}#{pane_title}"
 
 	local -A win_want=() win_have=()
 	local -a cmds=()
-	local n_work=0 n_input=0 n_done=0 agents_sig=""
-	local pane win sess widx wname pact wact attached zoom st unseen walert command title kind label cur seen new_unseen
-	while IFS=$TAB read -r pane win sess widx wname pact wact attached zoom st unseen walert command title; do
+	local n_work=0 n_input=0 n_done=0 agents_sig="" now watch_until
+	local pane win sess widx wname pact wact attached zoom st unseen walert watch_until command title kind label cur seen new_unseen
+	now=$(date +%s)
+	while IFS=$TAB read -r pane win sess widx wname pact wact attached zoom st unseen walert watch_until command title; do
 		undash "$st" && st=$REPLY
 		undash "$unseen" && unseen=$REPLY
 		undash "$walert" && walert=$REPLY
+		undash "$watch_until" && watch_until=$REPLY
 		win_have[$win]=$walert
 		[ -n "${win_want[$win]+x}" ] || win_want[$win]=""
 		agent_kind "$title" "$command" && kind=$REPLY
@@ -216,6 +218,12 @@ cmd_tick() {
 
 		seen=0
 		if [ "$attached" != 0 ] && [ "$wact" = 1 ] && { [ "$zoom" = 0 ] || [ "$pact" = 1 ]; }; then
+			seen=1
+		fi
+		# tmux-agents-mobile sets @agent_watch_until while a phone has the pane
+		# open: looking at it there counts as having seen it, so the desktop
+		# stays quiet for as long as the phone is watching.
+		if [ -n "$watch_until" ] && [ "$watch_until" -gt "$now" ] 2>/dev/null; then
 			seen=1
 		fi
 
@@ -435,6 +443,159 @@ cmd_rows() {
 	return 0
 }
 
+# JSON form of the rows tree, for tmux-agents-mobile. The Go service needs the
+# repo/worktree identity and the agent state, not the ANSI rendering: it groups,
+# sorts and previews itself. Same grouping rule as cmd_rows (a session belongs to
+# the repo holding most of its panes; ties use the first pane in list order).
+json_str() {
+	local s=$1 out="" c i
+	for ((i = 0; i < ${#s}; i++)); do
+		c=${s:i:1}
+		case "$c" in
+		'"') out+='\"' ;;
+		'\') out+='\\' ;;
+		$'\t') out+='\t' ;;
+		$'\n') out+='\n' ;;
+		$'\r') out+='\r' ;;
+		*) out+=$c ;;
+		esac
+	done
+	REPLY=$out
+}
+
+# json_obj KEY VALUE... prints one object. A value prefixed with raw: is emitted
+# unquoted, which is how numbers and booleans get through.
+json_obj() {
+	local out="{" sep="" k v
+	while [ "$#" -ge 2 ]; do
+		k=$1 v=$2
+		shift 2
+		if [ "${v#raw:}" != "$v" ]; then
+			out+="$sep\"$k\":${v#raw:}"
+		else
+			json_str "$v"
+			out+="$sep\"$k\":\"$REPLY\""
+		fi
+		sep=","
+	done
+	printf '%s}' "$out"
+}
+
+cmd_rows_json() {
+	local fmt
+	fmt="#{session_name}${TAB}#{window_index}${TAB}$(field window_name)${TAB}#{pane_id}${TAB}#{pane_active}${TAB}#{window_active}${TAB}$(field pane_current_command)${TAB}$(field pane_current_path)${TAB}$(field @agent_state)${TAB}$(field @agent_unseen)${TAB}$(field @session_ai_name)${TAB}#{pane_title}"
+
+	local -a order=() objs=()
+	local -A seen=() count=() active=() apath=() ailabel=() agents=() repo_n=() repo_br=() repo_wt=() repo_top=() repo_sessions=() s_repo=() s_branch=() s_wt=()
+	local s wi wn pane pact wact cmd path st unseen ai title kind label common top branch key best bestrepo
+	local sortable group name r prev spath pcommon pbranch ptop plabel pkind pst punseen ppane
+
+	while IFS=$TAB read -r s wi wn pane pact wact cmd path st unseen ai title; do
+		undash "$path" && path=$REPLY
+		undash "$st" && st=$REPLY
+		undash "$unseen" && unseen=$REPLY
+		undash "$ai" && ai=$REPLY
+		if [ -z "${seen[$s]+x}" ]; then
+			seen[$s]=1
+			order+=("$s")
+			count[$s]=0
+			active[$s]=$pane
+			apath[$s]=$path
+			ailabel[$s]=$ai
+			agents[$s]=""
+		fi
+		count[$s]=$((count[$s] + 1))
+		if [ "$pact" = 1 ] && [ "$wact" = 1 ]; then
+			active[$s]=$pane
+			apath[$s]=$path
+		fi
+		agent_kind "$title" "$cmd" && kind=$REPLY
+		common="" top="" branch=""
+		git_info "$path"
+		if [ -n "$REPLY" ]; then
+			IFS=$TAB read -r common top branch <<<"$REPLY"
+			key="$s$TAB$common"
+			repo_n[$key]=$(( ${repo_n[$key]:-0} + 1 ))
+			repo_br[$key]=$branch
+			repo_top[$common]=$top
+			if [ "$top" = "${common%/.git}" ]; then repo_wt[$key]=0; else repo_wt[$key]=1; fi
+		fi
+		if [ -n "$kind" ]; then
+			agent_label "$kind" "$title"
+			# `-` sentinels: tab is IFS whitespace, so an empty middle field
+			# would collapse and shift every field after it.
+			agents[$s]+="$pane$TAB${REPLY:--}$TAB$kind$TAB${st:--}$TAB${unseen:--}$TAB$path$TAB${common:--}$TAB${branch:--}$TAB${top:--}$TAB$wi$TAB${wn:--}"$'\n'
+		fi
+	done < <(tmux list-panes -a -F "$fmt")
+
+	for s in "${order[@]}"; do
+		best=-1
+		bestrepo=""
+		for key in "${!repo_n[@]}"; do
+			[[ $key == "$s$TAB"* ]] || continue
+			if [ "${repo_n[$key]}" -gt "$best" ]; then
+				best=${repo_n[$key]}
+				bestrepo=${key#*"$TAB"}
+			fi
+		done
+		s_repo[$s]=$bestrepo
+		s_branch[$s]=""
+		s_wt[$s]=0
+		if [ -n "$bestrepo" ]; then
+			s_branch[$s]=${repo_br[$s$TAB$bestrepo]:-}
+			s_wt[$s]=${repo_wt[$s$TAB$bestrepo]:-0}
+		fi
+	done
+
+	sortable=""
+	for s in "${order[@]}"; do
+		if [ -n "${s_repo[$s]}" ]; then
+			r=${s_repo[$s]%/.git}
+			repo_sessions[$r]=$(( ${repo_sessions[$r]:-0} + 1 ))
+			sortable+="0${TAB}${r##*/}${TAB}${r}${TAB}${s}"$'\n'
+		else
+			sortable+="1${TAB}${s}${TAB}-${TAB}${s}"$'\n'
+		fi
+	done
+
+	prev=""
+	while IFS=$TAB read -r group name r s; do
+		[ -n "$s" ] || continue
+		if [ "$group" = 0 ] && [ "$r" != "$prev" ]; then
+			prev=$r
+			objs+=("$(json_obj id "r:$r" kind repo repo "${r##*/}" path "$r" session "" branch "" worktree raw:0 label "" agent "" state "" unseen raw:0 panes "raw:${repo_sessions[$r]:-0}" pane "${active[$s]}")")
+		fi
+		objs+=("$(json_obj \
+			id "s:$s" kind session session "$s" pane "${active[$s]}" \
+			repo "${s_repo[$s]:+${s_repo[$s]%/.git}}" branch "${s_branch[$s]}" \
+			worktree "raw:${s_wt[$s]:-0}" label "${ailabel[$s]}" state "" agent "" \
+			unseen raw:0 panes "raw:${count[$s]}" path "${apath[$s]}")")
+		while IFS=$TAB read -r ppane plabel pkind pst punseen ppath pcommon pbranch ptop pwi pwn; do
+			[ -n "$ppane" ] || continue
+			undash "$plabel" && plabel=$REPLY
+			undash "$pst" && pst=$REPLY
+			undash "$punseen" && punseen=$REPLY
+			undash "$pcommon" && pcommon=$REPLY
+			undash "$pbranch" && pbranch=$REPLY
+			undash "$ptop" && ptop=$REPLY
+			undash "$pwn" && pwn=$REPLY
+			objs+=("$(json_obj \
+				id "p:$ppane" kind pane pane "$ppane" session "$s" \
+				repo "${pcommon:+${pcommon%/.git}}" branch "$pbranch" \
+				worktree "raw:$([ -n "$pcommon" ] && [ "$ptop" != "${pcommon%/.git}" ] && echo 1 || echo 0)" \
+				label "$plabel" agent "$pkind" state "$pst" \
+				unseen "raw:$([ -n "$punseen" ] && echo 1 || echo 0)" panes raw:0 path "$ppath" \
+				window "$pwi" window_name "$pwn")")
+		done <<<"${agents[$s]:-}"
+	done < <(printf '%s' "$sortable" | LC_ALL=C sort -t "$TAB" -k1,1 -k2,2 -k3,3 -k4,4)
+
+	if [ "${#objs[@]}" -eq 0 ]; then
+		printf '[]\n'
+		return 0
+	fi
+	printf '[%s]\n' "$(printf '%s\n' "${objs[@]}" | paste -sd, -)"
+}
+
 cmd_preview() {
 	local out
 	out=$(tmux capture-pane -ep -t "$1" 2>/dev/null || true)
@@ -583,7 +744,7 @@ resume_lib="@resume_lib@"
 
 case "${1:-}" in
 tick) cmd_tick "${2:-}" ;;
-rows) cmd_rows ;;
+rows) if [ "${2:-}" = --json ]; then cmd_rows_json; else cmd_rows; fi ;;
 preview) cmd_preview "${2:?target}" ;;
 jump) cmd_jump "${2:?key}" "${3:?rows file}" ;;
 kill) cmd_kill "${2:?id}" "${3:?rows file}" ;;
@@ -594,7 +755,7 @@ restore) if resume_on; then cmd_restore; fi ;;
 restore-begin) if resume_on; then cmd_restore_begin; fi ;;
 resume-init) cmd_resume_init ;;
 *)
-	printf 'usage: tmux-agents {tick [quiet]|navigator|rows|preview TARGET|jump KEY ROWS|kill ID ROWS|create TARGET ROWS|save|restore|restore-begin|resume-init}\n' >&2
+	printf 'usage: tmux-agents {tick [quiet]|navigator|rows [--json]|preview TARGET|jump KEY ROWS|kill ID ROWS|create TARGET ROWS|save|restore|restore-begin|resume-init}\n' >&2
 	exit 2
 	;;
 esac

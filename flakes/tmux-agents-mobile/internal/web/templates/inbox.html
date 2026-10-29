@@ -1,0 +1,47 @@
+{{define "inbox.html"}}{{template "head" .}}
+{{if .NoServer}}
+  <p class="empty">No tmux server running on this host.</p>
+{{else if .ErrText}}
+  <p class="error">{{.ErrText}}</p>
+{{else if eq .Total 0}}
+  <p class="empty">No panes right now.</p>
+{{else}}
+<p id="no-matches" class="empty" hidden>nothing matches</p>
+<div class="cards">
+{{range .Cards}}
+  <a class="card" href="{{.Href}}" data-text="{{.Text}}">
+    <div class="card-top">
+      <span class="repo">{{.Repo}}</span>
+      <span class="path">{{.Path}}</span>
+    </div>
+    <div class="card-mid">
+      <span class="sess">{{.Session}}</span>
+      {{if .Label}}<span class="ai">{{.Label}}</span>{{end}}
+      {{if .Branch}}<span class="branch">[{{.Branch}}]</span>{{end}}
+    </div>
+    {{if .Pane}}
+    <div class="card-bot">
+      {{if .Glyph}}<span class="glyph {{.Class}}">{{.Glyph}}</span>{{end}}
+      <span class="plabel">{{.Pane}}</span>
+      {{if .Agent}}<span class="agent">{{.Agent}}</span>{{end}}
+      {{if .Window}}<span class="win">{{.Window}}</span>{{end}}
+    </div>
+    {{end}}
+  </a>
+{{end}}
+</div>
+
+<button id="search-toggle" class="fab" type="button" aria-label="filter panes" aria-expanded="false">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+    <circle cx="10.5" cy="10.5" r="6.5"></circle>
+    <path d="m15.5 15.5 4.5 4.5"></path>
+  </svg>
+</button>
+
+<div id="searchbar" class="searchbar" hidden>
+  <input id="filter" type="search" placeholder="filter panes…"
+         autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+  <button id="search-close" type="button" aria-label="close filter">✕</button>
+</div>
+{{end}}
+{{template "foot" .}}{{end}}

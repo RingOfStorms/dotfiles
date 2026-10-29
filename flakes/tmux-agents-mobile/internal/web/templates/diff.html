@@ -1,0 +1,57 @@
+{{define "diff.html"}}{{template "head" .}}
+{{if .ErrText}}<p class="error">{{.ErrText}}</p>{{end}}
+
+{{if .Files}}
+<ul class="files">
+{{range .Files}}
+  <li><a class="{{if eq .Path $.Selected}}active{{end}}" href="/p/{{$.Slug}}/diff?file={{.Path}}&staged={{if $.Staged}}1{{else}}0{{end}}{{if eq $.View "split"}}&view=split{{end}}">
+    <span class="status {{if .Untracked}}untracked{{end}}">{{if .Status}}{{.Status}}{{else}}M{{end}}</span>
+    <span class="path">{{.Path}}</span>
+  </a></li>
+{{end}}
+</ul>
+{{else if .IsRepo}}
+  <p class="empty">Working tree is clean.</p>
+{{end}}
+
+{{if .Selected}}
+<h2 class="filehead">{{.Selected}}{{if .Staged}} <span class="badge">staged</span>{{end}}</h2>
+{{if .Result.Truncated}}<p class="error">diff truncated</p>{{end}}
+
+{{if eq .View "split"}}
+<div class="diffwrap">
+<table class="diff split">
+{{range .Rows}}
+{{if .Kind}}
+  <tr class="full {{.Kind}}"><td colspan="4">{{.Text}}</td></tr>
+{{else}}
+  <tr>
+    <td class="ln {{.Left.Kind}}">{{if .Left.No}}{{.Left.No}}{{end}}</td>
+    <td class="tx {{.Left.Kind}}">{{if .Left.Text}}{{.Left.Text}}{{else}}&nbsp;{{end}}</td>
+    <td class="ln {{.Right.Kind}}">{{if .Right.No}}{{.Right.No}}{{end}}</td>
+    <td class="tx {{.Right.Kind}}">{{if .Right.Text}}{{.Right.Text}}{{else}}&nbsp;{{end}}</td>
+  </tr>
+{{end}}
+{{end}}
+</table>
+</div>
+{{else}}
+<div class="diffwrap">
+<table class="diff unified">
+{{range .Result.Lines}}
+{{if or (eq .Kind "hunk") (eq .Kind "meta")}}
+  <tr class="full {{.Kind}}"><td colspan="4">{{.Text}}</td></tr>
+{{else}}
+  <tr class="{{.Kind}}">
+    <td class="ln">{{if .OldNo}}{{.OldNo}}{{end}}</td>
+    <td class="ln">{{if .NewNo}}{{.NewNo}}{{end}}</td>
+    <td class="sign">{{.Sign}}</td>
+    <td class="tx">{{if .Body}}{{.Body}}{{else}}&nbsp;{{end}}</td>
+  </tr>
+{{end}}
+{{end}}
+</table>
+</div>
+{{end}}
+{{end}}
+{{template "foot" .}}{{end}}

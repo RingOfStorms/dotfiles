@@ -15,6 +15,7 @@
     omp-flake.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/omp";
     # tmux-agents.url = "path:../../flakes/tmux-agents";
     tmux-agents.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/tmux-agents";
+    tmux-agents-mobile.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/tmux-agents-mobile";
     nono.url = "github:always-further/nono/6118b79aeda1365da213d85457b4d3cf1201d575";
     nono.flake = false;
     rust-overlay.url = "github:oxalica/rust-overlay/26a71e661c47bd21a05d06fec749f3f7c75e9d12";
@@ -96,6 +97,7 @@
           inputs.common.nixosModules.essentials
           (import ../../flakes/common/nix_modules/git/default.nix)
           inputs.common.nixosModules.tmux
+          inputs.tmux-agents-mobile.nixosModules.default
           inputs.common.nixosModules.boot_systemd
           inputs.common.nixosModules.hardening
           inputs.common.nixosModules.ssh_root
@@ -187,6 +189,7 @@
           ./vms.nix
           ./nono.nix
           ./blender.nix
+          ./tmux-mobile.nix
           ({ pkgs, ... }: {
             environment.systemPackages = with pkgs; [
               vlang

@@ -36,6 +36,14 @@ let
       ip = h001.overlayIp;
       source = "hand (h005/dns-records.nix)";
     }
+    # tmux-agents-mobile on lio (hosts/lio/tmux-mobile.nix): tailnet-only, no
+    # public record and no container route, so it is answered here and nowhere
+    # else.
+    {
+      fqdn = "tmux.${domain}";
+      ip = fleet.hosts.lio.overlayIp;
+      source = "hand (lio/tmux-mobile.nix)";
+    }
   ];
 
   merge =

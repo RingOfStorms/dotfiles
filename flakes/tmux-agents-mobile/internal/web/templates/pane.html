@@ -1,0 +1,31 @@
+{{define "pane.html"}}{{template "head" .}}
+<pre id="frame" class="frame {{if .Fit}}fit{{else}}wrap{{end}}"
+     data-pane="{{.Slug}}"
+     data-fit="{{if .Fit}}1{{else}}0{{end}}">{{.Frame}}</pre>
+
+
+<form id="compose" class="compose" hx-post="/p/{{.Slug}}/keys" hx-swap="none" method="post" action="/p/{{.Slug}}/keys">
+  <textarea name="text" rows="1" placeholder="message the agent…" autocomplete="off" autocapitalize="sentences" spellcheck="false"></textarea>
+  <details class="keys-menu" data-menu>
+    <summary aria-label="keys">⌨</summary>
+    <div class="keys-panel">
+      <button type="button" class="wide" data-raw-toggle>typing mode</button>
+      <button type="button" data-key="Escape">esc</button>
+      <button type="button" data-key="C-c">^C</button>
+      <button type="button" data-key="Tab">tab</button>
+      <button type="button" data-key="Up">↑</button>
+      <button type="button" data-key="Down">↓</button>
+      <button type="button" data-key="Left">←</button>
+      <button type="button" data-key="Right">→</button>
+      <button type="button" data-key="Enter">⏎</button>
+      <button type="button" data-key="C-d">^D</button>
+      <button type="button" data-key="C-r">^R</button>
+      <button type="button" data-key="PPage">pg↑</button>
+      <button type="button" data-key="NPage">pg↓</button>
+    </div>
+  </details>
+  <input type="hidden" name="enter" value="1">
+  <button type="submit" class="send">send</button>
+</form>
+<textarea id="keysink" class="keysink" aria-hidden="true" tabindex="0"></textarea>
+{{template "foot" .}}{{end}}

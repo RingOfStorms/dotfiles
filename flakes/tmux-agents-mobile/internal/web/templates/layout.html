@@ -1,0 +1,54 @@
+{{define "head"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#11111b">
+<title>{{if .Title}}{{.Title}} · {{end}}tmux</title>
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/htmx.min.js" defer></script>
+<script src="/static/app.js" defer></script>
+</head>
+<body class="{{.Page}}">
+<header class="top">
+{{if .Back}}
+  <a class="back" href="{{.Back}}" aria-label="back">←</a>
+  <div class="ctx">
+    <div class="ctx-main">
+      {{if .Glyph}}<span class="glyph {{.GlyphClass}}">{{.Glyph}}</span>{{end}}
+      <span class="ctx-title">{{.Context}}</span>
+    </div>
+    {{if .Sub}}<div class="ctx-sub">{{.Sub}}</div>{{end}}
+  </div>
+  {{if .Actions}}
+  <details class="menu" data-menu>
+    <summary aria-label="actions">⋯</summary>
+    <div class="menu-body">
+      {{range .Actions}}
+        {{if .Href}}<a href="{{.Href}}"{{if .Class}} class="{{.Class}}"{{end}}>{{.Label}}</a>
+        {{else}}<form method="post" action="{{.Post}}">{{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">{{end}}<button{{if .Class}} class="{{.Class}}"{{end}}{{if .Confirm}} data-confirm="{{.Confirm}}"{{end}}>{{.Label}}</button></form>
+        {{end}}
+      {{end}}
+    </div>
+  </details>
+  {{end}}
+{{else}}
+  <a class="brand" href="/">tmux</a>
+  <nav>
+    <a href="/">panes</a>
+    <a href="/new">new</a>
+    <a href="/auth/logout">sign out</a>
+  </nav>
+  {{if .Dev}}<span class="badge dev">no auth</span>{{end}}
+{{end}}
+</header>
+<main>
+{{end}}
+
+{{define "foot"}}
+</main>
+</body>
+</html>{{end}}
