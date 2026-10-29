@@ -252,10 +252,10 @@ session or a missing tmux server cannot paste a login page into the list.
 ## Tuning the type size
 
 Everything scales from `--term-size` in `internal/web/static/app.css` (the
-terminal frame, default `22px`) and `--ui-size` (the chrome, `16px`). The *fit*
-toggle scales the frame down to whatever the pane's column count needs, so a
-384-column pane still fits on a phone screen, just small — that is the point of
-the toggle.
+terminal frame, default `18px`: a reading size for wrapped text) and `--ui-size`
+(the chrome, `16px`). The *fit* toggle scales the frame down to whatever the
+pane's column count needs, so a 384-column pane still fits on a phone screen,
+just small — that is the point of the toggle.
 
 The module is pinned to `go_1_27` through `buildGo127Module` (nixpkgs' default
 `go` lags a release), and `go.mod` declares `go 1.27.0`, so `nix develop` and
@@ -271,3 +271,8 @@ match, so the field still works. The form itself still validates the chosen
 directory: `--roots` (default: the home directory) is the trust boundary the
 web UI may create sessions under.
 
+
+The frame streams line patches, and only rows that changed are rewritten. A
+scroll shift or a change in the row count rebuilds the frame and restores the
+scroll position, so dragging to read scrollback (or sideways in *fit* mode)
+isn't interrupted by an agent that keeps printing.

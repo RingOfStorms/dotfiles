@@ -13,8 +13,10 @@
   --term-fg: #cdd6f4;
   --term-bg: #11111b;
   --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
-  /* The terminal's font size. Everything else is UI chrome around it. */
-  --term-size: 22px;
+  /* The terminal's font size. Everything else is UI chrome around it.
+     Wrapped text needs to stay readable at phone width, so this is a reading
+     size, not a "fit everything" size. */
+  --term-size: 18px;
   --ui-size: 16px;
 }
 
@@ -344,6 +346,8 @@ body.pane main {
   tab-size: 4;
   overflow: auto;
   overscroll-behavior: contain;
+  /* Fit mode needs a sideways drag; do not let anything upstream claim it. */
+  touch-action: pan-x pan-y;
   -webkit-text-size-adjust: 100%;
 }
 .frame .line { min-height: 1.32em; }

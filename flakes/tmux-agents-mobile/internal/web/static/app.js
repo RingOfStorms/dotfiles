@@ -65,14 +65,39 @@
       el.style.fontSize = size.toFixed(2) + "px";
     }
 
-    function render() {
-      const parts = new Array(lines.length);
+    const rowHTML = (i) => (lines[i] && lines[i].h) || "";
+
+    // Rebuilding is only for structural changes (a scroll shift, or the row
+    // count changing). Scroll offsets are restored when the reader is not
+    // following the bottom, because in fit mode dragging sideways is the only
+    // way to read the right-hand columns.
+    function rebuild() {
+      const top = el.scrollTop;
+      const left = el.scrollLeft;
+      const frag = document.createDocumentFragment();
       for (let i = 0; i < lines.length; i++) {
-        const l = lines[i];
-        parts[i] = '<div class="line" data-n="' + i + '">' + (l && l.h ? l.h : "") + "</div>";
+        const div = document.createElement("div");
+        div.className = "line";
+        div.dataset.n = String(i);
+        div.innerHTML = rowHTML(i);
+        frag.appendChild(div);
       }
-      el.innerHTML = parts.join("");
-      if (follow) el.scrollTop = el.scrollHeight;
+      el.replaceChildren(frag);
+      if (follow) {
+        el.scrollTop = el.scrollHeight;
+      } else {
+        el.scrollTop = top;
+        el.scrollLeft = left;
+      }
+    }
+
+    // The common case: a few rows changed in place. Touching only those rows
+    // keeps the scroll position, text selection and an in-progress drag intact.
+    function patchRows(changed) {
+      for (const l of changed) {
+        const node = el.querySelector('.line[data-n="' + l.n + '"]');
+        if (node) node.innerHTML = rowHTML(l.n);
+      }
     }
 
     function setMeta(f) {
@@ -85,7 +110,7 @@
       const src = f.lines || [];
       for (let i = 0; i < src.length; i++) lines.push(src[i]);
       setMeta(f);
-      render();
+      rebuild();
     }
 
     function patch(p) {
@@ -93,6 +118,7 @@
         replace(p);
         return;
       }
+      let structural = false;
       if (p.from) {
         const shifted = new Array(lines.length);
         for (let i = 0; i < lines.length; i++) {
@@ -100,18 +126,21 @@
           shifted[i] = j >= 0 && j < lines.length ? lines[j] : { n: i, h: "" };
         }
         for (let i = 0; i < shifted.length; i++) lines[i] = shifted[i];
+        structural = true;
       }
       const changed = p.lines || [];
       for (const l of changed) {
         if (l.n >= 0) lines[l.n] = l;
       }
-      if (typeof p.total === "number") {
+      if (typeof p.total === "number" && p.total !== lines.length) {
         lines.length = p.total;
         for (let i = 0; i < lines.length; i++) {
           if (!lines[i]) lines[i] = { n: i, h: "" };
         }
+        structural = true;
       }
-      render();
+      if (structural) rebuild();
+      else patchRows(changed);
     }
 
     const es = new EventSource(
