@@ -1,0 +1,379 @@
+// tmux-agents-mobile client: SSE frame patching, key forwarding, small form
+// niceties. No frameworks; htmx is used only for the compose form.
+(() => {
+  "use strict";
+
+  const frame = document.getElementById("frame");
+  const pane = frame ? frame.dataset.pane : null;
+
+  /* ---------------- compose ---------------- */
+
+  const compose = document.getElementById("compose");
+  if (compose) {
+    const box = compose.querySelector("textarea");
+    box.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        compose.requestSubmit();
+      }
+    });
+    // htmx posts this form; the server replies 204 and the textarea clears.
+    document.body.addEventListener("htmx:afterRequest", (e) => {
+      if (e.detail && e.detail.elt === compose && e.detail.successful) {
+        box.value = "";
+        box.focus();
+      }
+    });
+  }
+
+  /* ---------------- confirmations ---------------- */
+
+  for (const el of document.querySelectorAll("[data-confirm]")) {
+    const form = el.closest("form");
+    if (!form) continue;
+    form.addEventListener("submit", (e) => {
+      if (!window.confirm(el.dataset.confirm)) e.preventDefault();
+    });
+  }
+
+  /* ---------------- frame streaming ---------------- */
+
+  function connect(el) {
+    const fit = el.dataset.fit === "1";
+    const lines = [];
+    for (const child of el.children) {
+      lines.push({ n: Number(child.dataset.n || 0), h: child.innerHTML });
+    }
+
+    let follow = true;
+    const atBottom = () =>
+      el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    el.addEventListener("scroll", () => {
+      follow = atBottom();
+    });
+
+    // Fit mode shrinks the font just enough to show every column; never
+    // larger than the configured terminal size.
+    function fitFont(cols) {
+      if (!fit || !cols) return;
+      const base =
+        parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--term-size")
+        ) || 22;
+      const width = el.clientWidth - 18;
+      const size = Math.max(5.5, Math.min(base, width / cols / 0.6));
+      el.style.fontSize = size.toFixed(2) + "px";
+    }
+
+    function render() {
+      const parts = new Array(lines.length);
+      for (let i = 0; i < lines.length; i++) {
+        const l = lines[i];
+        parts[i] = '<div class="line" data-n="' + i + '">' + (l && l.h ? l.h : "") + "</div>";
+      }
+      el.innerHTML = parts.join("");
+      if (follow) el.scrollTop = el.scrollHeight;
+    }
+
+    function setMeta(f) {
+      if (f.cols) el.dataset.cols = f.cols;
+      fitFont(f.cols);
+    }
+
+    function replace(f) {
+      lines.length = 0;
+      const src = f.lines || [];
+      for (let i = 0; i < src.length; i++) lines.push(src[i]);
+      setMeta(f);
+      render();
+    }
+
+    function patch(p) {
+      if (p.full) {
+        replace(p);
+        return;
+      }
+      if (p.from) {
+        const shifted = new Array(lines.length);
+        for (let i = 0; i < lines.length; i++) {
+          const j = i + p.from;
+          shifted[i] = j >= 0 && j < lines.length ? lines[j] : { n: i, h: "" };
+        }
+        for (let i = 0; i < shifted.length; i++) lines[i] = shifted[i];
+      }
+      const changed = p.lines || [];
+      for (const l of changed) {
+        if (l.n >= 0) lines[l.n] = l;
+      }
+      if (typeof p.total === "number") {
+        lines.length = p.total;
+        for (let i = 0; i < lines.length; i++) {
+          if (!lines[i]) lines[i] = { n: i, h: "" };
+        }
+      }
+      render();
+    }
+
+    const es = new EventSource(
+      "/p/" + pane + "/events?fit=" + (fit ? "1" : "0")
+    );
+    es.addEventListener("init", (e) => replace(JSON.parse(e.data)));
+    es.addEventListener("full", (e) => replace(JSON.parse(e.data)));
+    es.addEventListener("patch", (e) => patch(JSON.parse(e.data)));
+    // A pane that exits (or is killed, or its session closes) has nothing left
+    // to show: go back to the inbox instead of lingering on a dead screen.
+    es.addEventListener("gone", () => {
+      es.close();
+      location.replace("/");
+    });
+    // A refused or closed stream means the same thing - the pane is gone, or
+    // this tab outlived a restart. EventSource gives up (CLOSED) on non-2xx
+    // and on a non-text/event-stream response, so treat that as gone too.
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) location.replace("/");
+    };
+    window.addEventListener("resize", () => fitFont(Number(el.dataset.cols)));
+
+    el.addEventListener("click", () => {
+      if (document.body.classList.contains("raw")) sink && sink.focus();
+    });
+  }
+
+  /* ---------------- raw keys ---------------- */
+
+  const sink = document.getElementById("keysink");
+  let raw = false;
+
+  function send(payload) {
+    if (!pane) return;
+    fetch("/p/" + pane + "/keys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      credentials: "same-origin",
+    }).catch(() => {});
+  }
+
+  const special = {
+    Enter: "Enter",
+    Escape: "Escape",
+    Tab: "Tab",
+    Backspace: "BSpace",
+    Delete: "DC",
+    ArrowUp: "Up",
+    ArrowDown: "Down",
+    ArrowLeft: "Left",
+    ArrowRight: "Right",
+    Home: "Home",
+    End: "End",
+    PageUp: "PPage",
+    PageDown: "NPage",
+  };
+
+  function translate(e) {
+    if (e.ctrlKey && e.key.length === 1 && !e.altKey) {
+      return { key: "C-" + e.key.toLowerCase() };
+    }
+    if (e.altKey && e.key.length === 1 && !e.ctrlKey) {
+      return { key: "M-" + e.key.toLowerCase() };
+    }
+    if (e.shiftKey && e.key === "Tab") return { key: "BTab" };
+    if (special[e.key]) return { key: special[e.key] };
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) return { text: e.key };
+    return null;
+  }
+
+  if (sink) {
+    sink.addEventListener("keydown", (e) => {
+      if (!raw) return;
+      const out = translate(e);
+      if (!out) return;
+      e.preventDefault();
+      send(out);
+    });
+
+    // Soft keyboards do not always emit keydown for every character; use the
+    // input event as the fallback and keep the sink empty.
+    sink.addEventListener("input", () => {
+      if (!raw) return;
+      const v = sink.value;
+      sink.value = "";
+      if (v) send({ text: v });
+    });
+  }
+
+  const toggle = document.querySelector("[data-raw-toggle]");
+  if (toggle) {
+    toggle.addEventListener("click", () => {
+      raw = !raw;
+      document.body.classList.toggle("raw", raw);
+      toggle.textContent = raw ? "typing on" : "typing mode";
+      // Close the popover so the keyboard has the screen.
+      const menu = toggle.closest("details");
+      if (menu) menu.open = false;
+      if (raw) {
+        if (sink) sink.focus({ preventScroll: true });
+      } else if (sink) {
+        sink.blur();
+      }
+    });
+  }
+
+  // Any tap outside an open menu or key popover closes it.
+  document.addEventListener("click", (e) => {
+    for (const d of document.querySelectorAll("details[data-menu][open]")) {
+      if (!d.contains(e.target)) d.open = false;
+    }
+  });
+
+  for (const btn of document.querySelectorAll("[data-key]")) {
+    btn.addEventListener("click", () => send({ key: btn.dataset.key }));
+  }
+
+  /* ---------------- inbox filter ---------------- */
+
+  const filter = document.getElementById("filter");
+  if (filter) {
+    const cards = Array.from(document.querySelectorAll(".cards .card"));
+    const none = document.getElementById("no-matches");
+    const toggle = document.getElementById("search-toggle");
+    const bar = document.getElementById("searchbar");
+    const close = document.getElementById("search-close");
+
+    const apply = () => {
+      // Every term must appear in the card's own text, like the navigator's
+      // `--exact` matching; the card already carries repo/session context.
+      const terms = filter.value.toLowerCase().split(/\s+/).filter(Boolean);
+      let visible = 0;
+      for (const card of cards) {
+        const text = (card.dataset.text || "").toLowerCase();
+        const on = terms.every((term) => text.includes(term));
+        card.classList.toggle("hidden-card", !on);
+        if (on) visible++;
+      }
+      if (none) none.hidden = visible > 0;
+    };
+
+    // The filter lives behind a button so the list owns the screen; closing it
+    // clears the query, because a filter you cannot see must not stay applied.
+    const setOpen = (open) => {
+      if (!bar) return;
+      bar.hidden = !open;
+      if (toggle) {
+        toggle.classList.toggle("is-open", open);
+        toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+      if (open) {
+        // Focus synchronously: the click is the user activation that lets the
+        // phone open its keyboard, and a rAF in between can lose it.
+        filter.focus();
+        return;
+      }
+      if (filter.value !== "") {
+        filter.value = "";
+        apply();
+      }
+      filter.blur();
+    };
+
+    toggle?.addEventListener("click", () => setOpen(bar.hidden));
+    close?.addEventListener("click", () => setOpen(false));
+    filter.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+      }
+    });
+    filter.addEventListener("input", apply);
+    filter.addEventListener("search", apply);
+    apply();
+  }
+
+  /* ---------------- new-session directory picker ---------------- */
+
+  const dirInput = document.getElementById("dir");
+  const dirMenu = document.getElementById("dirmenu");
+  if (dirInput && dirMenu) {
+    const home = dirInput.closest("[data-home]")?.dataset.home || "";
+    let items = [];
+    let picked = -1; // -1: nothing chosen with the arrows, so Enter submits
+    let timer = 0;
+    let seq = 0;
+
+    const short = (path) =>
+      home && path.startsWith(home + "/") ? "~" + path.slice(home.length) : path;
+
+    const close = () => {
+      dirMenu.hidden = true;
+      dirMenu.replaceChildren();
+      items = [];
+      picked = -1;
+    };
+
+    const choose = (path) => {
+      dirInput.value = path;
+      close();
+      dirInput.focus();
+    };
+
+    const paint = () => {
+      dirMenu.replaceChildren();
+      items.forEach((path, i) => {
+        const li = document.createElement("li");
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = short(path);
+        if (i === picked) b.className = "active";
+        // mousedown would blur the input and close the menu before click lands
+        b.addEventListener("mousedown", (e) => e.preventDefault());
+        b.addEventListener("click", () => choose(path));
+        li.appendChild(b);
+        dirMenu.appendChild(li);
+      });
+      dirMenu.hidden = items.length === 0;
+    };
+
+    const run = () => {
+      const mine = ++seq;
+      fetch("/new/dirs?q=" + encodeURIComponent(dirInput.value.trim()), {
+        credentials: "same-origin",
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (mine !== seq || !data) return;
+          items = data.items || [];
+          picked = -1;
+          paint();
+        })
+        .catch(() => {});
+    };
+
+    const schedule = () => {
+      clearTimeout(timer);
+      timer = setTimeout(run, 120);
+    };
+
+    dirInput.addEventListener("focus", schedule);
+    dirInput.addEventListener("input", schedule);
+    dirInput.addEventListener("keydown", (e) => {
+      if (dirMenu.hidden) return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        picked = picked + 1 >= items.length ? 0 : picked + 1;
+        paint();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        picked = picked - 1 < 0 ? items.length - 1 : picked - 1;
+        paint();
+      } else if (e.key === "Enter" && picked >= 0) {
+        e.preventDefault();
+        choose(items[picked]);
+      } else if (e.key === "Escape") {
+        close();
+      }
+    });
+    dirInput.addEventListener("blur", () => setTimeout(close, 120));
+  }
+
+  if (frame) connect(frame);
+})();

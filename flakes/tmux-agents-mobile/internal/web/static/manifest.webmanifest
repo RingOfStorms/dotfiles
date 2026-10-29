@@ -1,0 +1,12 @@
+{
+  "name": "tmux agents",
+  "short_name": "agents",
+  "description": "Mobile check-in for tmux agent panes",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#11111b",
+  "theme_color": "#11111b",
+  "icons": [
+    { "src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

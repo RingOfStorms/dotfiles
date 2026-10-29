@@ -66,7 +66,7 @@ resume_track() {
 	resume_on || return 0
 	rt=$(runtime_dir)
 	[ "$sig" = "$(cat "$rt/agents.sig" 2>/dev/null)" ] && return 0
-	{ cmd_save && printf '%s' "$sig" >"$rt/agents.sig"; } >/dev/null 2>&1 </dev/null &
+	{ cmd_save && printf '%s' "$sig" >"$rt/agents.sig"; } >/dev/null 2>&1 </dev/null 9>&- &
 }
 
 # Agent running under pane process $1 ($2 = pane title, used by opencode).
