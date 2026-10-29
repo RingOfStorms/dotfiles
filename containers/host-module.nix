@@ -1179,6 +1179,12 @@ in
       })
       (lib.mkIf bcfg.enable {
         environment.systemPackages = [
+          # `cnt move`'s step-5 restore check runs on the TARGET host and
+          # needs sqlite3 (PRAGMA integrity_check on SQLite copies) and gzip
+          # (-t on PG dumps). Ship them with the feature that makes a host a
+          # move target, not by hand per host.
+          pkgs.sqlite
+          pkgs.gzip
           (pkgs.writeShellScriptBin "fleet-restic" ''
             # restic with this host's fleet-backup credentials (root only)
             ${lib.optionalString (bcfg.environmentFile != null) "set -a; . ${bcfg.environmentFile}; set +a"}

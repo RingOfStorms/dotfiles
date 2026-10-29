@@ -28,6 +28,8 @@ package placements
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -81,6 +83,14 @@ type Row struct {
 	// HostMissingSince: first sweep at which the bound host didn't report
 	// the service (0 = reported, or not checked yet).
 	HostMissingSince int64 `json:"hostMissingSince,omitempty"`
+	// Token is the opaque handle the reserving client keeps: commit, retire
+	// and rollback must present it, so a stale move cannot act on a binding
+	// someone else has since reserved. Cleared when the reservation ends.
+	Token string `json:"token,omitempty"`
+	// Revision increments on every write that is not tied to a token
+	// (import, force), for compare-and-swap. A caller that sends a stale
+	// revision is refused rather than clobbering a newer decision.
+	Revision int64 `json:"revision"`
 	// Conflict names another host that also reports the service (split
 	// brain). Never resolved automatically.
 	Conflict  string `json:"conflict,omitempty"`
@@ -261,6 +271,13 @@ type Request struct {
 	Host    string `json:"host,omitempty"`
 	Reason  string `json:"reason,omitempty"`
 	User    string `json:"user,omitempty"`
+	// Token is the reservation handle returned by reserve. commit, retire and
+	// rollback require it while a reservation exists: without it an older move
+	// could commit or undo a binding that a newer client now owns.
+	Token string `json:"token,omitempty"`
+	// Revision is the row revision the caller last saw, for compare-and-swap on
+	// writes that carry no token (force, import adoption). 0 skips the check.
+	Revision int64 `json:"revision,omitempty"`
 	// Force overrides a safety check the operator has verified by hand.
 	Force bool `json:"force,omitempty"`
 }
@@ -426,9 +443,50 @@ func (s *Service) runsOn(ctx context.Context, host, service string) (running, kn
 	return svcs[service], true
 }
 
+// newToken mints a reservation handle. It is random so a client cannot guess
+// another's, and opaque so nothing may attach meaning to it.
+func newToken() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", fmt.Errorf("reservation token: %w", err)
+	}
+	return hex.EncodeToString(b[:]), nil
+}
+
+// reservationLive reports whether r holds an unexpired reservation. An older
+// one is void: the sweep rolls it back, so it no longer blocks a new move.
+func (s *Service) reservationLive(r *Row, now int64) bool {
+	return r.State == Prepared && r.Token != "" && now-r.ReserveSince < int64(ReserveTTL/time.Second)
+}
+
+// checkToken refuses a request that would finish or undo a move it did not
+// reserve. The token is an identity handle, not a secret: every writer can
+// read it from the row, but only the client that caused the move holds it, so
+// a slow client cannot commit, retire or roll back someone else's binding.
+func checkToken(r *Row, tok string, force bool) error {
+	if force || r.Token == "" || tok == r.Token {
+		return nil
+	}
+	return fail(409, "%s: stale reservation token: %s is reserved by another operation (force to override)", r.Service, r.Host)
+}
+
+// checkRevision refuses a tokenless write built on a stale read: the caller
+// echoes the revision it acted on, so it cannot overwrite a decision made since.
+func checkRevision(r *Row, rev int64, force bool) error {
+	if force || rev == 0 || rev == r.Revision {
+		return nil
+	}
+	return fail(409, "%s: changed since revision %d (now %d): re-read and retry", r.Service, rev, r.Revision)
+}
+
 // reserve prepares a placement: the destination is recorded (with the prior
 // binding, if any) but nothing is routed to it yet. The source keeps serving
 // until commit, so this is safe to run before stopping anything.
+//
+// An accepted reserve mints a token, which every later step of the same move
+// must present. That is what keeps two interleaved moves apart: the second
+// reserve is refused while the first is live, and the client that lost then
+// cannot commit or roll back the binding the other one owns.
 func (s *Service) reserve(req Request, dev string) (*Row, error) {
 	if err := s.checkService(req.Service); err != nil {
 		return nil, err
@@ -438,11 +496,23 @@ func (s *Service) reserve(req Request, dev string) (*Row, error) {
 	}
 	now := s.cfg.Now().Unix()
 	r := s.rows[req.Service]
+	if r != nil && s.reservationLive(r, now) {
+		// A move is already in flight. Only the client that made it may change
+		// the destination; anyone else must force the takeover explicitly.
+		if err := checkToken(r, req.Token, req.Force); err != nil {
+			return nil, err
+		}
+	}
+	tok, err := newToken()
+	if err != nil {
+		return nil, err
+	}
 	if r != nil && r.Host == req.Host {
 		if r.State != Prepared {
 			return nil, fail(409, "%s is already placed on %s", req.Service, req.Host)
 		}
 		r.Device, r.User, r.Reason, r.Updated, r.ReserveSince = dev, req.User, req.Reason, now, now
+		r.Token, r.Revision = tok, r.Revision+1
 		return r, s.save()
 	}
 	// A move onto a host that already runs the service would leave two copies
@@ -471,15 +541,24 @@ func (s *Service) reserve(req Request, dev string) (*Row, error) {
 	r.Device, r.User, r.Reason = dev, req.User, req.Reason
 	r.Updated, r.ReserveSince = now, now
 	r.HostMissingSince, r.Conflict, r.LastError = 0, "", ""
+	r.Token, r.Revision = tok, r.Revision+1
 	return r, s.save()
 }
 
 // commit records that routing (DNS and o002) points at the destination. The
-// destination must report the service unless it cannot be asked.
+// destination must report the service unless it cannot be asked. The token is
+// kept while a rollback binding remains, because retire and rollback belong to
+// the same move.
 func (s *Service) commit(req Request, dev string) (*Row, error) {
 	r := s.rows[req.Service]
 	if r == nil {
 		return nil, fail(404, "%s: no placement to commit", req.Service)
+	}
+	if err := checkToken(r, req.Token, req.Force); err != nil {
+		return nil, err
+	}
+	if err := checkRevision(r, req.Revision, req.Force); err != nil {
+		return nil, err
 	}
 	if r.State != Prepared {
 		return nil, fail(409, "%s is not prepared (state %s)", req.Service, r.State)
@@ -491,6 +570,10 @@ func (s *Service) commit(req Request, dev string) (*Row, error) {
 		return nil, fail(409, "%s does not report %s yet: deploy it there first", r.Host, req.Service)
 	}
 	r.State, r.Updated, r.ReserveSince, r.Device = Committed, s.cfg.Now().Unix(), 0, dev
+	if r.Previous == nil {
+		r.Token = "" // nothing to retire or roll back: the move is over
+	}
+	r.Revision++
 	return r, s.save()
 }
 
@@ -502,6 +585,12 @@ func (s *Service) retire(req Request, dev string) (*Row, error) {
 	if r == nil {
 		return nil, fail(404, "%s: no placement", req.Service)
 	}
+	if err := checkToken(r, req.Token, req.Force); err != nil {
+		return nil, err
+	}
+	if err := checkRevision(r, req.Revision, req.Force); err != nil {
+		return nil, err
+	}
 	if r.State == Prepared {
 		return nil, fail(409, "%s is still prepared: commit the move first", req.Service)
 	}
@@ -509,25 +598,33 @@ func (s *Service) retire(req Request, dev string) (*Row, error) {
 		return r, nil // something else already retired it
 	}
 	r.State, r.Updated, r.Device = Retiring, s.cfg.Now().Unix(), dev
+	r.Revision++
 	return r, s.save()
 }
 
 // remove rolls the placement back to its prior binding, or drops the row when
 // there is none. A single placement (no prior binding) is simply deleted.
-func (s *Service) remove(service string, force bool) (*Row, error) {
-	r := s.rows[service]
+func (s *Service) remove(req Request) (*Row, error) {
+	r := s.rows[req.Service]
 	if r == nil {
 		return nil, nil
 	}
+	if err := checkToken(r, req.Token, req.Force); err != nil {
+		return nil, err
+	}
+	if err := checkRevision(r, req.Revision, req.Force); err != nil {
+		return nil, err
+	}
 	if r.Previous == nil {
-		delete(s.rows, service)
+		delete(s.rows, req.Service)
 		return nil, s.save()
 	}
-	if r.State == Retiring && !force {
-		return nil, fail(409, "%s's source was retired: %s no longer has its data (force to record it anyway)", service, r.Previous.Host)
+	if r.State == Retiring && !req.Force {
+		return nil, fail(409, "%s's source was retired: %s no longer has its data (force to record it anyway)", req.Service, r.Previous.Host)
 	}
-	r.Host, r.State, r.Previous = r.Previous.Host, Committed, nil
+	r.Host, r.State, r.Previous, r.Token = r.Previous.Host, Committed, nil, ""
 	r.Updated, r.ReserveSince, r.HostMissingSince, r.Conflict, r.LastError = s.cfg.Now().Unix(), 0, 0, "", ""
+	r.Revision++
 	return r, s.save()
 }
 

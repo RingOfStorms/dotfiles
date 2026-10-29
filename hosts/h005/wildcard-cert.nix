@@ -42,6 +42,7 @@ let
     ++ [
       "joe"
       "lio"
+      "h003" # container host with backups but no routes yet: must terminate TLS before a `move` lands
       "o002"
     ]
   );

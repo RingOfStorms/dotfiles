@@ -164,6 +164,11 @@ in
           "tailnet"
       ))
     ];
+    # /topology diagram: physical gear, cabling and the explanation panel.
+    # Inventory hosts, container placement, public `via = edge` paths,
+    # tailnet membership and the fleet-agent poll fan are derived by
+    # fleet-edge itself; see hosts/h005/topology.nix.
+    topology = import ./topology.nix { inherit fleet constants; };
     auth.zitadel = {
       enable = true;
       issuer = "https://sso.${domain}";
@@ -202,8 +207,9 @@ in
         else
           [ ]
       );
-      # Public expose API (fleet-edge-overrides, ROUTING-PLAN §8 step 7).
-      # /internal/* is never proxied; the export is loopback-only.
+      # Public expose API and placement registry (fleet-edge-overrides,
+      # ROUTING-PLAN §8 step 7, containers/PLACEMENT-PLAN.md). /internal/*
+      # is never proxied; both exports are loopback-only.
       locations."/api/overrides" = {
         proxyPass = "http://127.0.0.1:8098";
         extraConfig = ''
@@ -214,6 +220,20 @@ in
           deny all;
           # The only peer identity the service trusts (it ignores this
           # header unless the TCP peer is loopback).
+          proxy_set_header X-Fleet-Peer $remote_addr;
+          client_max_body_size 16k;
+          proxy_read_timeout 180s;
+          ${nginxSnippets.identityClear}
+        '';
+      };
+      locations."/api/placements" = {
+        proxyPass = "http://127.0.0.1:8098";
+        extraConfig = ''
+          deny 100.64.0.5;
+          deny fd7a:115c:a1e0::5;
+          allow 100.64.0.0/10;
+          allow fd7a:115c:a1e0::/48;
+          deny all;
           proxy_set_header X-Fleet-Peer $remote_addr;
           client_max_body_size 16k;
           proxy_read_timeout 180s;

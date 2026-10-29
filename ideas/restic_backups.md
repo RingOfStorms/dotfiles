@@ -97,10 +97,9 @@ Architecture: **Direct to Backblaze B2** (`s3:https://<b2-endpoint>/<bucket>/...
 }
 ```
 
-### 2. Enable `ringofstorms.containers.backup` on `h003` (and `joe`)
-`cnt move <svc> --to h003` enforces that both source and target hosts have `ringofstorms.containers.backup` configured (`ROUTING-PLAN.md` §9.1). Enabling this on `h003` is required before using `h003` as a warm failover target (`ideas/resilience.md`) or evacuating `h001` for its impermanence re-image (`ideas/impermanence_everywhere.md`):
-- In `hosts/h003/containers.nix`: set `ringofstorms.containers.backup.enable = true;`.
-- In `hosts/h003/sec-agent.nix`: hydrate `restic_h001_env_2026-10-01` with `configChanges.ringofstorms.containers.backup.environmentFile = "$SECRET_PATH";`.
+### 2. ~~Enable `ringofstorms.containers.backup` on `h003`~~ (done 2026-10-23; `joe` still open)
+`cnt move <svc> --to <host>` enforces that both source and target hosts have `ringofstorms.containers.backup` configured (`ROUTING-PLAN.md` §9.1), which makes that host a failover target (`ideas/resilience.md`) or a place to evacuate `h001` to for its impermanence re-image (`ideas/impermanence_everywhere.md`).
+Done on `h003`: `hosts/h003/containers.nix` has `backup.enable = true` and `hosts/h003/sec-agent.nix` hydrates `restic_h001_env_2026-10-01` into `ringofstorms.containers.backup.environmentFile`. `joe` still needs the same two edits (it is low-trust, so granting it the shared repo key is a separate decision).
 
 ### 3. `o002` Headscale State Backup
 `o002` runs the fleet's `headscale` control plane (`hosts/oracle/o002/headscale.nix`) with state in `/persist/var/lib/headscale`. Since `backup.nix` was retired, `o002` has no automated off-host backup:

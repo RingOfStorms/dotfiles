@@ -1279,7 +1279,9 @@ same repo as h001 (repo id `7f023d4a`) via the existing high-trust grant of
 needs the `containers` input at ≥ 6b242c5e, so run `nix flake update
 containers` in hosts/lio after the push. Verified: snapshots `771250b9`
 (`svc:hello-nixos`) and `2b4175bc` (`svc:hello-podman`), taken on host lio,
-are visible from h001. h003 has no services, so nothing is enabled.
+are visible from h001. h003 also has `backup.enable = true` (2026-10-23,
+`hosts/h003/containers.nix`, secret wired in `hosts/h003/sec-agent.nix`),
+so it is a valid move target even while it runs no services.
 joe is low-trust: giving it the key (vs. `device_low_trust`) is a user
 decision; running `localai` there would also need to exclude
 `/srv/containers/localai/{models,backends}`.
@@ -1321,8 +1323,8 @@ decision; running `localai` there would also need to exclude
   printed manual steps (no split brain). Preflight leftover cleanup uses
   the same confirmed path. Re-runs are safe (`move-<svc>` marker on the
   target, `.was-running` on the source). `--dry-run` prints the whole
-  plan. A real move is now possible between h001 and lio, the only two
-  hosts with `ringofstorms.containers.backup`.
+  plan. Any host with `ringofstorms.containers.backup` is a valid target:
+  h001, lio and h003.
 - Status endpoint: `lastBackup` per service, read from the stamp (no restic).
   fleet-edge `/services` has a backup column (age, **stale** after 36h, `never`)
   and a stale count. h005 is deployed with `--override-input fleet-edge`
@@ -1330,15 +1332,21 @@ decision; running `localai` there would also need to exclude
   in hosts/h005.
 - Verified 2026-10-22 on h001: the full run stamped all 17 services, and
   `/status.json` and fleet-edge show their ages. `restore-check` passed for
-  puzzles (2 SQLite) and forgejo (3 PG dumps). `cnt --dry-run move puzzles
-  --to h003` printed all 7 steps; the real move would stop at step 1
-  because h003 has no fleet-backup.
+  puzzles (2 SQLite) and forgejo (3 PG dumps).
+- Step 5 needs `sqlite3` and `gzip` on the TARGET host. The host module now
+  ships both under `backup.enable` (it used to rely on h001's ad-hoc
+  `sqlite` in `hosts/h001/flake.nix`, so the first real move died at step 5
+  with "restore check needs sqlite3 on this host" and rolled back).
+- Done 2026-10-29: real move of `hello-nixos` from lio to h001 along with
+  the `service.nix` host flip. Steps 1-7 passed, the target took a fresh
+  `svc:hello-nixos` snapshot (`host=h001`), and the name moved with it
+  (tailnet DNS is generated from `service.nix`).
 
 Still open:
 
-- A real off-host move needs a second host with backups. Enable
-  `ringofstorms.containers.backup` on h003/joe (repo secret via sec-agent),
-  then do a test move of `hello-nixos` or puzzles.
+- `joe` is the only remaining backup-less container host; enable
+  `ringofstorms.containers.backup` there (repo secret via sec-agent) if it
+  should be a move target.
 - Stale backups are only flagged on the dashboard. Nothing sends an alert
   yet (left for the monitoring work).
 

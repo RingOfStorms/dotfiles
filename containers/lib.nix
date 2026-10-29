@@ -28,6 +28,14 @@ let
 
   domain = "joshuabell.xyz";
 
+  # hosts/fleet.nix: overlay IPs, trust levels and the one LAN subnet. The
+  # single source of truth for the firewall allow-lists below. Same local-tree
+  # assumption as the readFile'd snippets further down (consumed as
+  # `path:containers` next to hosts/, or via --override-input in the
+  # superproject); `import` keeps it lazy, so nothing here evaluates mkHost.
+  fleetHosts = import ../hosts/fleet.nix;
+  lanSubnet = fleetHosts.global.lanSubnet;
+
   # ---------------------------------------------------------------- routes
   # ROUTING-PLAN.md §2. Each route is normalized and validated here; any
   # mistake throws at eval time (the inventory, every flake build).
