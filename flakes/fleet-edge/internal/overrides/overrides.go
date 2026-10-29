@@ -263,9 +263,6 @@ func Check(inv *inventory.Inventory, spec *bunny.Spec, domain string, req Reques
 	if r.Proto != "http" {
 		return zero, "", fmt.Errorf("%s: only http routes can be exposed publicly", where)
 	}
-	if inventory.Str(r.Zone) != "main" {
-		return zero, "", fmt.Errorf("%s: zone %q can't be public", where, inventory.Str(r.Zone))
-	}
 	switch r.Exposure {
 	case "local":
 		return zero, "", fmt.Errorf("%s: local routes can't be exposed", where)

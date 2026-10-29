@@ -6,7 +6,7 @@
       default = true;
       listen = [
         {
-          addr = "0.0.0.0";
+          addr = "127.0.0.1"; # loopback only; the host nginx fronts it (routes.web)
           port = 8081;
         }
       ];

@@ -153,7 +153,7 @@ routes.web = {
   # groups = [ "notes" ];     auth = "oauth2-proxy" only: zitadel roles (any of)
   # bypass = [ "/api/" ];     auth = "oauth2-proxy" only: ungated path prefixes
   # via = [ "edge" ];        # public only; default [ "edge" ] for http, required for tcp/udp
-  # allow = [ "lio" ];  zone = "main";  health = "/healthz";
+  # allow = [ "lio" ];  health = "/healthz";
   # http knobs: websockets = true; maxBody = "100m"; buffering = true;
   #   timeouts = "60s"; forwardedProto = "https"; extraConfig = "";  (inside location /)
   # publicWithoutAuth = false;  needed for public + auth = "none"
@@ -173,7 +173,9 @@ in `<svc>.conf` (:80/:443 v4+v6, wildcard cert, proxy to
 `lan` and `public` produce the same vhost; the listener split, `allow` and
 the edge/DNS side are later steps of the plan. `local` produces nothing.
 
-`auth = "oauth2-proxy"` routes (tailnet/lan only for now) are gated by the
+`auth = "oauth2-proxy"` routes (any exposure, public included: sso-proxy has
+been public via o002 since 2026-10-28, so a public or `cnt expose`d gated
+route works off the tailnet too) are gated by the
 fleet oauth2-proxy on h005 (`hosts/h005/oauth2-proxy.nix`): nginx
 `auth_request`s `http://100.64.0.3:4180/oauth2/auth?allowed_groups=...`,
 sends a 401 to `https://sso-proxy.joshuabell.xyz/oauth2/start`, proxies

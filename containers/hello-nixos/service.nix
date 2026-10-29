@@ -1,5 +1,5 @@
 # Test service (nixos kind): stock nginx welcome page, nothing else.
-# Twin of ../hello-podman; use the pair to practise deploy/stop/move.
+# Twin of ../hello-podman; use the pair to practise deploy/stop/move/expose.
 {
   name = "hello-nixos";
   kind = "nixos";
@@ -14,7 +14,13 @@
     data = "/data";
   };
 
-  # Host network: nginx in the container listens here; opened in the host
-  # firewall at deploy time. http://<host>:8081/
-  tcpPorts = [ 8081 ];
+  # Host network: nginx in the container listens on 127.0.0.1:8081 only. The
+  # host nginx serves https://hello-nixos.joshuabell.xyz/ on the tailnet,
+  # gated by the fleet oauth2-proxy (sso-proxy on h005). Widen it for a
+  # while with `cnt expose hello-nixos.web --exposure public --for 15m`.
+  routes.web = {
+    port = 8081;
+    exposure = "tailnet";
+    auth = "oauth2-proxy";
+  };
 }

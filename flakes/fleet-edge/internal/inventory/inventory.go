@@ -34,13 +34,12 @@ type Route struct {
 	// Fields the expose-override service (internal/overrides) validates
 	// against and pushes to the edge. Absent in older inventories (zero
 	// values: refused there, never guessed).
-	Zone              *string `json:"zone"`
-	PublicWithoutAuth bool    `json:"publicWithoutAuth"`
-	Websockets        bool    `json:"websockets"`
-	MaxBody           string  `json:"maxBody"`
-	Buffering         bool    `json:"buffering"`
-	RequestBuffering  *bool   `json:"requestBuffering"`
-	Timeouts          string  `json:"timeouts"`
+	PublicWithoutAuth bool   `json:"publicWithoutAuth"`
+	Websockets        bool   `json:"websockets"`
+	MaxBody           string `json:"maxBody"`
+	Buffering         bool   `json:"buffering"`
+	RequestBuffering  *bool  `json:"requestBuffering"`
+	Timeouts          string `json:"timeouts"`
 }
 
 // Str returns s dereferenced, or "" if s is nil. Used by templates and

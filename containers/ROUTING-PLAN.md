@@ -1095,11 +1095,11 @@ Taken 2026-10-16:
           state for `cnt audit`).
         - **Validation** (`overrides.Check`, against h005's built-in
           inventory, same rules as `lib.nix` and `exposeCheck`): route
-          exists, http, `zone = main`, not `local`, not already public, via
+          exists, http, not `local`, not already public, via
           edge; the inventory host equals the host the CLI names (stale h005
           inventory refuses: fail closed); `auth = none` needs
-          `publicWithoutAuth`; `auth = oauth2-proxy` refused while sso-proxy
-          is tailnet-only (lift together with lib.nix ~199). The name must
+          `publicWithoutAuth`; `auth = oauth2-proxy` is allowed (sso-proxy
+          has been public via o002 since 2026-10-28; lib.nix agrees). The name must
           not be declared, external or retire-listed in `publicSpec`
           (`/etc/fleet-edge/public-spec.json`), and must have no bunny
           record we don't own.

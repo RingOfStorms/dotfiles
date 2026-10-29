@@ -190,14 +190,13 @@ func newRig(t *testing.T) *rig {
 	tb := true
 	inv := &inventory.Inventory{Services: map[string]inventory.Service{
 		"app": {Name: "app", Host: "h001", Routes: map[string]inventory.Route{
-			"web":   {Proto: "http", Exposure: "tailnet", Auth: sp("native"), FQDN: sp("app.example.com"), Zone: sp("main"), MaxBody: "100m", Timeouts: "60s", Websockets: true, RequestBuffering: &tb},
-			"open":  {Proto: "http", Exposure: "tailnet", Auth: sp("none"), FQDN: sp("open.example.com"), Zone: sp("main"), MaxBody: "1m", Timeouts: "60s"},
-			"gated": {Proto: "http", Exposure: "tailnet", Auth: sp("oauth2-proxy"), FQDN: sp("gated.example.com"), Zone: sp("main"), MaxBody: "1m", Timeouts: "60s"},
+			"web":   {Proto: "http", Exposure: "tailnet", Auth: sp("native"), FQDN: sp("app.example.com"), MaxBody: "100m", Timeouts: "60s", Websockets: true, RequestBuffering: &tb},
+			"open":  {Proto: "http", Exposure: "tailnet", Auth: sp("none"), FQDN: sp("open.example.com"), MaxBody: "1m", Timeouts: "60s"},
+			"gated": {Proto: "http", Exposure: "tailnet", Auth: sp("oauth2-proxy"), FQDN: sp("gated.example.com"), MaxBody: "1m", Timeouts: "60s"},
 		}},
-		"pub":  {Name: "pub", Host: "h001", Routes: map[string]inventory.Route{"web": {Proto: "http", Exposure: "public", Auth: sp("native"), FQDN: sp("pub.example.com"), Zone: sp("main"), MaxBody: "1m", Timeouts: "60s"}}},
-		"priv": {Name: "priv", Host: "h001", Routes: map[string]inventory.Route{"web": {Proto: "http", Exposure: "tailnet", Auth: sp("native"), FQDN: sp("priv.ts.example.com"), Zone: sp("private"), MaxBody: "1m", Timeouts: "60s"}}},
-		"decl": {Name: "decl", Host: "h001", Routes: map[string]inventory.Route{"web": {Proto: "http", Exposure: "tailnet", Auth: sp("native"), FQDN: sp("www.example.com"), Zone: sp("main"), MaxBody: "1m", Timeouts: "60s"}}},
-		"tcp":  {Name: "tcp", Host: "h001", Routes: map[string]inventory.Route{"ssh": {Proto: "tcp", Exposure: "tailnet", Zone: sp("main")}}},
+		"pub":  {Name: "pub", Host: "h001", Routes: map[string]inventory.Route{"web": {Proto: "http", Exposure: "public", Auth: sp("native"), FQDN: sp("pub.example.com"), MaxBody: "1m", Timeouts: "60s"}}},
+		"decl": {Name: "decl", Host: "h001", Routes: map[string]inventory.Route{"web": {Proto: "http", Exposure: "tailnet", Auth: sp("native"), FQDN: sp("www.example.com"), MaxBody: "1m", Timeouts: "60s"}}},
+		"tcp":  {Name: "tcp", Host: "h001", Routes: map[string]inventory.Route{"ssh": {Proto: "tcp", Exposure: "tailnet"}}},
 	}}
 	verifier, err := auth.New(auth.Config{
 		Zitadel:    auth.ZitadelConfig{Issuer: r.idp.srv.URL, ProjectID: project},
@@ -361,7 +360,6 @@ func TestCheckRefusals(t *testing.T) {
 	for _, tc := range []struct{ svc, route, host, want string }{
 		{"app", "open", "h001", "publicWithoutAuth"},
 		{"pub", "web", "h001", "already public"},
-		{"priv", "web", "h001", "zone"},
 		{"decl", "web", "h001", "declared in the public spec"},
 		{"tcp", "ssh", "h001", "http"},
 		{"app", "web", "lio", "inventory has host"},
