@@ -19,16 +19,16 @@
 </tr>
 </thead>
 <tbody>
-{{$lastHost := ""}}
+{{$lastHost := ""}}{{$haveHost := false}}
 {{range .Services}}
-{{if ne .DeclaredHost $lastHost}}
-<tr class="host-group"><td colspan="7">{{.DeclaredHost}}</td></tr>
-{{$lastHost = .DeclaredHost}}
+{{if or (not $haveHost) (ne .BoundHost $lastHost)}}
+<tr class="host-group"><td colspan="7">{{if .BoundHost}}{{.BoundHost}}{{else}}unplaced{{end}}</td></tr>
+{{$lastHost = .BoundHost}}{{$haveHost = true}}
 {{end}}
 <tr>
   <td>{{.Name}}</td>
   <td class="muted">{{.Kind}}</td>
-  <td class="mono">{{.DeclaredHost}}</td>
+  <td class="mono">{{if .BoundHost}}{{.BoundHost}}{{else}}<span class="muted">—</span>{{end}}</td>
   <td>{{template "status-pill" .Active}}</td>
   <td>{{template "backup-pill" .}}</td>
   <td>

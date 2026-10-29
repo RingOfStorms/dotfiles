@@ -1,9 +1,9 @@
 // /topology: a route atlas. The server lays out the map and renders it as
 // standalone SVG; this script only pans/zooms, replays recorded frames, and
 // draws journeys for the traffic events the backend reports. It never invents
-// a route: an event animates only along anchors that exist (a public route
-// through the edge or router hub, or a tailnet route to a placed host), and
-// the virtual origin is a marker, never real internet gear.
+// a route: an event animates only along a declared FQDN chip the server laid
+// out, through the public trunk into the edge proxy, or along an overlay
+// lead to the host. A name no route owns draws nothing at all.
 (() => {
   "use strict";
   const stage = document.getElementById("topo-stage");
@@ -34,7 +34,7 @@
   const MAX_STEP_MS = 60 * 1000;
   const MAX_DOTS = 64, MAX_SEEN = 4000;
   const VIEW_KEY = "fleet-topology-view";
-  const LAYER_KEY = "fleet-topology-hidden-layers";
+  const VIEW_NAME_KEY = "fleet-topology-view-name";
   const MODE_KEY = "fleet-topology-mode";
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const TIME_FMT = new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -60,11 +60,11 @@
   // recorded window instead of dumping a window's worth of dots at once.
   const pending = [];
   // ---- pan / zoom ------------------------------------------------------
-  // The map is drawn at full size for the fleet, which is far wider than any
-  // stage. Fitting it whole renders 7 px labels, so the first view scales up
-  // until the name under a station is readable and centres the home station;
-  // "fit" is still the explicit whole-fleet overview.
-  const LABEL_UNITS = 13.5, LABEL_MIN_PX = 11.5;
+  // The diagram is laid out by the server to be read whole: every column,
+  // every station, at once. So the opening view is always the whole map, at
+  // both a laptop and a phone: the reader's first look answers "what is my
+  // edge?" and zoom is a tool they reach for, never a state the page
+  // imposes on them. A saved view is honoured only if the reader made one.
   let t = { x: 0, y: 0, k: 1 };
   let autoView = true;        // no saved preference: derive the opening view
   try {
@@ -110,62 +110,15 @@
     apply();
     saveView();
   }
-
-  // focusNode picks the station worth opening on: the host carrying the most
-  // declared services among those currently up. A router or a cloud region
-  // makes a poor centre because nothing in the fleet is anchored to it.
-  function focusNode() {
-    const scored = [];
-    for (const [id, info] of Object.entries(meta)) {
-      if (!info || !info.host || !Array.isArray(info.services) || !info.services.length) continue;
-      if (!Number.isFinite(info.x) || !Number.isFinite(info.y)) continue;
-      scored.push({ info, live: info.state === "online" ? 1 : 0, n: info.services.length });
-    }
-    if (scored.length) {
-      scored.sort((a, b) => b.live - a.live || b.n - a.n);
-      return scored[0].info;
-    }
-    return meta[hubs.edge] || meta[hubs.dashboard] || null;
-  }
-  // legibleK is the smallest zoom at which a station name clears
-  // LABEL_MIN_PX on a stage of this size.
-  function legibleK() {
-    const r = svg.getBoundingClientRect();
-    if (!r.width || !r.height || !dims.w || !dims.h) return 0;
-    const base = Math.min(r.width / dims.w, r.height / dims.h);
-    if (!(base > 0)) return 0;
-    return clamp(Math.max(1, LABEL_MIN_PX / (LABEL_UNITS * base)));
-  }
-  // initialView parks the home station in the middle of the stage at that
-  // scale. fit() stays the explicit whole-fleet overview.
+  // initialView is the fit and nothing else. The server sized the viewBox to
+  // the stage's aspect ratio, so scale 1 already means "every station, every
+  // name, on screen": a phone shows the same map as a laptop, smaller.
   function initialView() {
     if (!autoView) return;
-    const k = legibleK();
-    if (!k) return;
-    const r = svg.getBoundingClientRect();
-    const focus = focusNode();
-    const px = focus && Number.isFinite(focus.x) ? focus.x : dims.w / 2;
-    const py = focus && Number.isFinite(focus.y) ? focus.y : dims.h / 2;
-    const mid = toSvg(r.left + r.width / 2, r.top + r.height / 2);
-    t = { x: mid.x - px * k, y: mid.y - py * k, k };
+    t = { x: 0, y: 0, k: 1 };
     apply();
   }
-  // A view saved on a wide screen is unreadable on a phone: keep its centre
-  // and raise the scale to this stage's floor once, never on every resize.
-  let restoreChecked = false;
-  function ensureLegible() {
-    const k = legibleK();
-    const r = svg.getBoundingClientRect();
-    if (!k || t.k >= k || !r.width) return;
-    const mid = toSvg(r.left + r.width / 2, r.top + r.height / 2);
-    const px = (mid.x - t.x) / t.k, py = (mid.y - t.y) / t.k;
-    t = { x: mid.x - px * k, y: mid.y - py * k, k };
-    apply();
-  }
-  window.addEventListener("resize", () => {
-    if (autoView) initialView();
-    else { restoreChecked = false; ensureLegible(); }
-  });
+  window.addEventListener("resize", () => { if (autoView) initialView(); });
 
   svg.addEventListener("wheel", (e) => {
     e.preventDefault();
@@ -261,41 +214,31 @@
     saveView();
   });
 
-  // ---- layers + view modes --------------------------------------------
-  let hidden = new Set();
-  try {
-    hidden = new Set(JSON.parse(localStorage.getItem(LAYER_KEY) || "[]"));
-  } catch { /* private mode: defaults */ }
-  const layerBoxes = side.querySelectorAll("input[data-layer]");
-  layerBoxes.forEach((cb) => {
-    const layer = cb.dataset.layer;
-    cb.checked = !hidden.has(layer);
-    svg.classList.toggle("hide-" + layer, !cb.checked);
-    cb.addEventListener("change", () => {
-      svg.classList.toggle("hide-" + layer, !cb.checked);
-      if (cb.checked) hidden.delete(layer);
-      else hidden.add(layer);
-      try { localStorage.setItem(LAYER_KEY, JSON.stringify([...hidden])); } catch { /* ignore */ }
-    });
-  });
-  const VIEWS = {
-    overview: [],
-    physical: ["tailnet", "public", "control"],
-    control: ["physical", "tailnet", "public"],
-  };
+  // ---- views -----------------------------------------------------------
+  // Views never hide anything: every public and overlay path is part of the
+  // always-on picture, so a view only decides which recorded wiring leads.
+  // There are no layer checkboxes and no hidden-layer storage: the diagram
+  // shows its whole reach at every moment, and the class on the root drives
+  // the opacity emphasis in the SVG's own stylesheet.
+  const VIEWS = ["overview", "physical", "control"];
   function setView(name) {
-    const off = VIEWS[name] || VIEWS.overview;
-    svg.classList.toggle("view-overview", name === "overview");
-    side.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === name));
-    layerBoxes.forEach((cb) => {
-      const want = !off.includes(cb.dataset.layer) && !hidden.has(cb.dataset.layer);
-      cb.checked = want;
-      svg.classList.toggle("hide-" + cb.dataset.layer, !want);
+    const view = VIEWS.includes(name) ? name : "overview";
+    for (const v of VIEWS) svg.classList.toggle("view-" + v, v === view);
+    document.querySelectorAll("[data-view]").forEach((b) => {
+      const on = b.dataset.view === view;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
     });
+    try { localStorage.setItem(VIEW_NAME_KEY, view); } catch { /* ignore */ }
   }
-  side.querySelectorAll("[data-view]").forEach((b) =>
+  document.querySelectorAll("[data-view]").forEach((b) =>
     b.addEventListener("click", () => setView(b.dataset.view)));
-  svg.classList.add("view-overview");
+  let savedView = "overview";
+  try {
+    const v = localStorage.getItem(VIEW_NAME_KEY);
+    if (VIEWS.includes(v)) savedView = v;
+  } catch { /* private mode */ }
+  setView(savedView);
 
   // ---- helpers ---------------------------------------------------------
   const el = (tag, attrs = {}, ...kids) => {
@@ -321,6 +264,162 @@
       return {};
     }
   };
+
+  // ---- route catalogue and web -----------------------------------------
+  // The server lays out the DNS clouds and carries the catalogue in
+  // <metadata id="topo-routes">. Nothing here invents a name: an event
+  // resolves against a declared marker (host + routeKey) or it draws no path.
+  let web = { groups: [], markers: [], links: [], records: [], available: false };
+
+  const parseWeb = (root) => {
+    let raw = null;
+    try {
+      const node = root.querySelector("#topo-routes");
+      if (node && node.textContent.trim()) raw = JSON.parse(node.textContent);
+    } catch { raw = null; }
+    const groups = raw && Array.isArray(raw.groups) ? raw.groups : [];
+    const markers = [];
+    for (const g of groups) {
+      if (!g || !Array.isArray(g.routes)) continue;
+      for (const m of g.routes) if (m && typeof m === "object") markers.push(m);
+    }
+    const dns = (raw && raw.dns) || {};
+    web = {
+      groups,
+      markers,
+      links: raw && Array.isArray(raw.links) ? raw.links : [],
+      records: Array.isArray(dns.records) ? dns.records : [],
+      available: !!dns.available,
+      zone: dns.zone || "",
+      external: Array.isArray(dns.external) ? dns.external : [],
+    };
+  };
+
+  // markerFor resolves a traffic event to the one declared marker it may
+  // animate. The event's audience selects the web it belongs to (public names
+  // travel the amber web, tailnet names the purple one), because the same name
+  // can be declared on both. The route key is authoritative: when the event
+  // names one, only an exact host + route + service match animates, and a
+  // mismatch draws nothing rather than a neighbouring chip's path. The service
+  // is the fallback for a provider that reports no route at all.
+  const markerFor = (ev) => {
+    const host = ev.host || "";
+    if (!host) return null;
+    const group = ev.audience === "tailnet" ? "overlay" : ev.audience === "public" ? "public" : "";
+    const inWeb = (m) => !group || m.group === group;
+    if (ev.route) {
+      return web.markers.find((m) => inWeb(m) && m.declared !== false && m.host === host &&
+        m.route === ev.route && (!ev.service || m.service === ev.service)) || null;
+    }
+    return web.markers.find((m) => inWeb(m) && m.host === host && m.declared !== false && m.service && m.service === ev.service) || null;
+  };
+
+  // Marker hitboxes in absolute SVG coordinates, cached per applied frame so
+  // a journey can start and end on the chip the pointer is actually over.
+  const markerBox = (m) => {
+    // A chip can be declared in either web, so both marker classes are matched
+    // and the marker's own group picks the one it means. Missing the overlay
+    // class was what left tailnet traffic without a start point.
+    const fqdn = cssId(m.fqdn || m.id);
+    const all = svg.querySelectorAll(`.rweb-marker[data-fqdn="${fqdn}"], .oweb-marker[data-fqdn="${fqdn}"]`);
+    const g = [...all].find((n) => !m.group || n.getAttribute("data-group") === m.group) || all[0] || null;
+    if (!g) return null;
+    const hit = g.querySelector(".rw-hit");
+    if (!hit) return null;
+    const x = Number(hit.getAttribute("x")) || 0;
+    const y = Number(hit.getAttribute("y")) || 0;
+    return { x, y, w: Number(hit.getAttribute("width")) || 0, h: Number(hit.getAttribute("height")) || 0 };
+  };
+  const cssId = (id) => (window.CSS && CSS.escape ? CSS.escape(id) : String(id).replace(/["\\]/g, "\\$&"));
+  // A declared chip selects the host that serves it, so the panel is one
+  // click away; a DNS-only chip stays inert and keeps the server's tooltip.
+  function bindMarkers() {
+    svg.querySelectorAll(".rweb-marker, .oweb-marker").forEach((g) => {
+      if (g.dataset.bound) return;
+      g.dataset.bound = "1";
+      if (g.getAttribute("data-declared") !== "true") return;
+      const pick = () => {
+        const id = byHost.get(g.getAttribute("data-host") || "");
+        if (id) select(id);
+      };
+      g.addEventListener("click", pick);
+      g.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); }
+      });
+    });
+  }
+
+  // ---- in-cloud sparkles -----------------------------------------------
+  // Slow, bounded and purely decorative: sparkles orbit inside a chip's own
+  // box. Labels never move, so hitboxes stay exactly where they were painted.
+  const orbits = [];
+  function hash32(str) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    return h >>> 0;
+  }
+  function ensureOrbits() {
+    orbits.length = 0;
+    svg.querySelectorAll(".rweb-marker, .oweb-marker").forEach((g) => {
+      const hit = g.querySelector(".rw-hit");
+      if (!hit) return;
+      const w = Number(hit.getAttribute("width")) || 0;
+      const h = Number(hit.getAttribute("height")) || 0;
+      if (w < 44 || h < 14) return;
+      let o = g.querySelector(".rweb-orbit");
+      if (!o) {
+        o = sEl("g", { class: "rweb-orbit" });
+        for (let i = 0; i < 3; i++) o.append(sEl("circle", { class: "spark", r: 1.5, cx: 0, cy: 0 }));
+        g.append(o);
+      }
+      o.dataset.cx = String(Number(hit.getAttribute("x")) + w - 13);
+      o.dataset.cy = String(Number(hit.getAttribute("y")) + h / 2);
+      orbits.push({ g: o, phase: (hash32(g.getAttribute("data-fqdn") || "x") % 1000) / 1000 });
+    });
+  }
+  function placeOrbits(clock) {
+    if (!orbits.length) return;
+    const base = (clock / ORBIT_PERIOD) * Math.PI * 2;
+    for (const o of orbits) {
+      const cx = Number(o.g.dataset.cx) || 0;
+      const cy = Number(o.g.dataset.cy) || 0;
+      const kids = o.g.children;
+      for (let i = 0; i < kids.length; i++) {
+        const a = base + o.phase * Math.PI * 2 + (i / kids.length) * Math.PI * 2;
+        kids[i].setAttribute("cx", (cx + Math.cos(a) * 7).toFixed(2));
+        kids[i].setAttribute("cy", (cy + Math.sin(a) * 7).toFixed(2));
+      }
+    }
+  }
+
+  // The orbit clock is the traffic clock: it only turns while the map shows
+  // live data or a playing replay, so pausing freezes the clouds exactly as it
+  // freezes the dots, and reduced motion never starts it. Its phase is
+  // accumulated rather than read from the wall clock, so resuming continues
+  // where the clouds were left instead of jumping.
+  let orbitRaf = 0, orbitClock = 0, orbitLast = 0;
+  const ORBIT_PERIOD = 26000; // one slow lap per 26 s
+  function orbitTick(now) {
+    orbitRaf = 0;
+    if (reduced || !orbits.length || !dotsRunning()) { orbitLast = 0; return; }
+    const dt = orbitLast ? Math.min(100, now - orbitLast) : 16;
+    orbitLast = now;
+    orbitClock = (orbitClock + dt) % ORBIT_PERIOD;
+    placeOrbits(orbitClock);
+    orbitRaf = requestAnimationFrame(orbitTick);
+  }
+  function startOrbits() {
+    if (reduced || !orbits.length || orbitRaf || !dotsRunning()) return;
+    orbitRaf = requestAnimationFrame(orbitTick);
+  }
+  function stopOrbits() {
+    if (orbitRaf) cancelAnimationFrame(orbitRaf);
+    orbitRaf = 0;
+    orbitLast = 0;
+  }
   const parseTime = (v) => {
     if (!v) return NaN;
     if (typeof v === "number") return v < 1e12 ? v * 1000 : v;
@@ -379,8 +478,8 @@
   const KIND_LABEL = {
     wan: "WAN", ethernet: "ethernet", trunk: "trunk", wifi: "wi-fi", kvm: "KVM", power: "power/USB",
     tailnet: "tailnet", public: "public path", agent: "fleet-agent poll", control: "control",
+    lan: "LAN attachment (switch/port not recorded)",
   };
-
   function select(id) {
     selected = meta[id] ? id : "";
     if (selected) history.replaceState(null, "", "#" + encodeURIComponent(selected));
@@ -389,18 +488,13 @@
     renderPanel();
   }
 
+  // highlight only marks the chosen station. The map is never dimmed: every
+  // public and overlay path keeps its baseline weight while a station is
+  // selected, so the always-on picture stays readable.
   function highlight() {
     const id = selected;
-    svg.classList.toggle("has-sel", !!id);
-    const near = new Set([id]);
-    svg.querySelectorAll(".edge, .elabel").forEach((e) => {
-      const on = !!id && (e.dataset.from === id || e.dataset.to === id);
-      e.classList.toggle("hl", on);
-      if (on) { near.add(e.dataset.from); near.add(e.dataset.to); }
-    });
     svg.querySelectorAll(".node").forEach((n) => {
       n.classList.toggle("sel", n.dataset.id === id);
-      n.classList.toggle("dim", !!id && !near.has(n.dataset.id));
     });
   }
 
@@ -466,14 +560,15 @@
   }
   function previewRoute(hostId, name) {
     clearPreview();
-    const svc = serviceOf(meta[hostId], name);
+    const info = meta[hostId];
+    const svc = serviceOf(info, name);
     if (!svc) return "this service is not declared any more.";
     if (!overlay) return "the map is not drawn yet.";
-    const audience = svc.public || svc.viaRouter ? "public" : svc.exposure === "local" ? "" : "tailnet";
-    if (!audience) return `${name} is reachable only from its own host: there is no path to draw.`;
-    const route = routeFor({ host: hostId, service: name, audience });
-    if (!route) return "No route can be drawn: the host is not placed, or the hub it needs is missing from the map.";
-    preview = journeyPath("journey preview j-" + route.audience, polyD(route.pts), route.audience, 1.5);
+    const route = (info.routes || []).find((r) => r.service === name) || null;
+    if (!route) return `${name} declares no route here: there is no path to draw.`;
+    const drawn = routeFor({ host: info.host || hostId, service: name, route: route.routeKey });
+    if (!drawn) return `${name} has no route on the map: its name is not bound to a drawn chip.`;
+    preview = journeyPath("journey preview j-" + drawn.audience, drawn.d, drawn.audience, 1.5);
     overlay.append(preview);
     return "";
   }
@@ -481,6 +576,15 @@
   function renderPanel() {
     const info = meta[selected];
     panel.hidden = !info;
+    // The popover floats over the map on the side opposite the chosen
+    // station, so it never covers the thing that was clicked.
+    if (info) {
+      const sx = t.x + info.x * t.k;
+      const r = stage.getBoundingClientRect();
+      panel.classList.toggle("left", sx > r.width / 2);
+    } else {
+      panel.classList.remove("left");
+    }
     panel.replaceChildren();
     clearPreview();
     if (!info) return;
@@ -516,8 +620,51 @@
       panel.append(el("ul", { class: "topo-lines" }, ...info.lines.map((l) => el("li", {}, l))));
     }
 
-    // Three separate ledgers: services not running and disk problems are
-    // faults; bans are protective enforcement and only ever a badge.
+    // Named routes: the FQDN a person types, which chip carries it and where
+    // that chip lands. This is the same list the map binds traffic against, so
+    // the panel and the moving dots can never disagree.
+    const routes = info.routes || [];
+    if (routes.length) {
+      panel.append(el("h3", {}, `Names (${routes.length})`));
+      const ul = el("ul", { class: "topo-routes" });
+      for (const r of routes) {
+        const li = el("li", {},
+          el("strong", {}, r.fqdn || r.label || r.routeKey || "route"),
+          r.public ? el("span", { class: "badge badge-public" }, "via edge")
+            : r.viaRouter ? el("span", { class: "badge badge-lan" }, "via router")
+            : el("span", { class: "badge badge-tailnet" }, "overlay"));
+        const bits = [r.service, r.routeKey !== r.service ? r.routeKey : "", r.proto && r.port ? `${r.proto}:${r.port}` : ""].filter(Boolean);
+        if (bits.length) li.append(el("div", { class: "muted topo-platform" }, bits.join(" · ")));
+        if (r.dns) li.append(el("div", { class: "muted" }, `DNS ${r.dns} · ${web.zone || "public zone"}`));
+        ul.append(li);
+      }
+      panel.append(ul);
+    }
+
+    // Disk space is the one simulated number on this page: the ring fill comes
+    // from the server's deterministic fraction, and it is labelled here and in
+    // every tooltip. Recorded capacity stays the honest figure beside it.
+    const mounts = info.mounts || [];
+    if (mounts.length) {
+      panel.append(el("h3", {}, `Space (simulated fill · ${mounts.length} mount${mounts.length === 1 ? "" : "s"})`));
+      const ul = el("ul", { class: "topo-mounts" });
+      mounts.forEach((m) => {
+        const frac = Math.max(0, Math.min(1, Number(m.simulatedFraction) || 0));
+        const li = el("li", {},
+          // The swatch is the ring's own stroke, so the list and the map agree.
+          el("span", { class: "topo-shade", style: m.color ? `color:${m.color}` : "" }),
+          el("strong", {}, m.mount || "mount"),
+          el("span", { class: "muted" }, ` · simulated ${Math.round(frac * 100)}%`),
+          m.actualTotal ? el("span", { class: "muted" }, ` · reported ${fmtBytes(m.actualUsed)} / ${fmtBytes(m.actualTotal)}`) : null);
+        if (m.submounts && m.submounts.length) li.append(el("div", { class: "muted" }, "+ " + m.submounts.join(" · ")));
+        ul.append(li);
+      });
+      ul.append(el("li", { class: "topo-age" }, "fill is a deterministic simulation; capacity and SMART above are recorded"));
+      panel.append(ul);
+    }
+
+    // Faults and enforcement are separate ledgers: services not running and
+    // disk problems are faults; bans are protective and only ever a badge.
     const health = el("div", { class: "topo-health" });
     if (info.svcFailed) health.append(el("p", { class: "topo-bad" }, `${info.svcFailed} of ${(info.services || []).length} services not running`));
     if (info.diskWarnings) health.append(el("p", { class: "topo-warn" }, `${info.diskWarnings} disk problem${info.diskWarnings === 1 ? "" : "s"}`));
@@ -672,10 +819,9 @@
   }
 
   // ---- traffic animation ----------------------------------------------
-  // Dots travel along anchors the server already declared. A public request
-  // enters through the edge hub, or the router when that is where it lands; a
-  // tailnet request starts at the overlay origin. Local-only services and
-  // unplaced hosts have no anchors, so they never get a trace.
+  // Every trace starts at a chip the server laid out and ends at the host
+  // that serves it: there is no invented "internet client" box, because the
+  // public trunk and the edge proxy already say where a request comes from.
   const seen = new Set();
   const dots = [];
   let rafId = 0;
@@ -684,84 +830,127 @@
     const info = meta[id];
     return info ? { x: info.x, y: info.y } : null;
   }
-  function originFor(kind) {
-    const x = kind === "tailnet" ? Math.max(140, dims.w - 140) : 110;
-    const y = 34;
-    if (!overlay) return { x, y };
-    const key = "origin-" + kind;
-    if (!overlay.querySelector("#" + key)) {
-      const marker = sEl("g", { class: "origin", id: key });
-      marker.append(sEl("rect", { x: x - 74, y: y - 16, width: 148, height: 32, rx: 16 }));
-      const text = sEl("text", { x, y: y + 4, "text-anchor": "middle" });
-      text.textContent = kind === "tailnet" ? "simulated overlay client" : "simulated internet client";
-      marker.append(text);
-      overlay.append(marker);
-    }
-    return { x, y };
-  }
   function serviceOf(info, name) {
     if (!info || !name) return null;
     return (info.services || []).find((s) => s.name === name) || null;
   }
-  // link appends an elbowed run between two anchors: one stub out of each and
-  // a single elbow, matching the drawn cabling.
-  function link(a, b, out) {
-    const pts = [];
-    const stubA = 18, stubB = 18;
-    const dx = b.x - a.x, dy = b.y - a.y;
-    const horizontal = Math.abs(dx) >= Math.abs(dy);
-    const sa = horizontal
-      ? { x: a.x + Math.sign(dx || 1) * stubA, y: a.y }
-      : { x: a.x, y: a.y + Math.sign(dy || 1) * stubA };
-    const sb = horizontal
-      ? { x: b.x - Math.sign(dx || 1) * stubB, y: b.y }
-      : { x: b.x, y: b.y - Math.sign(dy || 1) * stubB };
-    if (out.length) pts.push({ x: a.x, y: a.y });
-    pts.push(sa);
-    if (horizontal) {
-      const mx = (sa.x + sb.x) / 2;
-      pts.push({ x: mx, y: sa.y }, { x: mx, y: sb.y });
-    } else {
-      const my = (sa.y + sb.y) / 2;
-      pts.push({ x: sa.x, y: my }, { x: sb.x, y: my });
+  // curveThrough joins a short run of points with straight legs and quadratic
+  // corners, the same corner language the server uses for every drawn run. The
+  // radius shrinks to fit each leg, so a tight pair of bends never overshoots.
+  function curveThrough(points, radius) {
+    const n = points.length;
+    if (!n) return "";
+    const num = (v) => String(Math.round(v * 10) / 10);
+    let d = `M${num(points[0].x)} ${num(points[0].y)}`;
+    for (let i = 1; i < n - 1; i++) {
+      const p = points[i];
+      const inX = p.x - points[i - 1].x, inY = p.y - points[i - 1].y;
+      const outX = points[i + 1].x - p.x, outY = points[i + 1].y - p.y;
+      const inLen = Math.hypot(inX, inY), outLen = Math.hypot(outX, outY);
+      if (!inLen || !outLen) continue;
+      const r = Math.min(radius, inLen / 2, outLen / 2);
+      d += ` L${num(p.x - (inX / inLen) * r)} ${num(p.y - (inY / inLen) * r)}` +
+        ` Q${num(p.x)} ${num(p.y)} ${num(p.x + (outX / outLen) * r)} ${num(p.y + (outY / outLen) * r)}`;
     }
-    pts.push(sb, { x: b.x, y: b.y });
-    out.push(...pts);
-    return out;
+    const last = points[n - 1];
+    return d + ` L${num(last.x)} ${num(last.y)}`;
   }
+  // braceSpine is the x of the brace's long straight run — the bus every chip
+  // hangs off. It is the x the brace repeats most often, read from the drawn
+  // brace's own numbers rather than from a path parser.
+  function braceSpine(group) {
+    const nums = (String(group.brace || "").match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+    const tally = new Map();
+    for (let i = 0; i + 1 < nums.length; i += 2) tally.set(nums[i], (tally.get(nums[i]) || 0) + 1);
+    let best = group.collector.x - 16, bestN = 0;
+    for (const [x, n] of tally) if (n > bestN) { best = x; bestN = n; }
+    return best;
+  }
+  function linkFor(groupId, host, hostId) {
+    return web.links.find((l) => l.group === groupId &&
+      ((host && l.host === host) || (hostId && l.toId === hostId))) || null;
+  }
+  // declareDNS states the delegation the map would otherwise leave implied:
+  // the public zone is authoritative at the DNS provider, but nothing routes
+  // traffic there, so the line is faint and dotted and carries no dot. It runs
+  // from the provider's head up the gutter beside the clouds into the public
+  // collector, never across another cloud. Without a DNS node or a public
+  // collector there is nothing to declare, and nothing is drawn.
+  function declareDNS(root) {
+    const pub = web.groups.find((g) => g.id === "public");
+    if (!pub || !pub.collector) return;
+    const id = Object.keys(meta).find((k) => meta[k] && meta[k].kind === "dns");
+    if (!id) return;
+    const node = root.querySelector(`.node[data-id="${cssId(id)}"]`);
+    const head = node && node.querySelector(".head");
+    if (!head) return;
+    const at = (node.getAttribute("transform") || "").match(/-?[\d.]+/g) || [];
+    const ox = Number(at[0]) || 0, oy = Number(at[1]) || 0;
+    const cx = Number(head.getAttribute("cx")) || 0;
+    const cy = Number(head.getAttribute("cy")) || 0;
+    const r = Number(head.getAttribute("r")) || 0;
+    // Climb the empty corridor between the name clouds and the rack, so the
+    // declaration never runs across a chip, a label or another cloud's body.
+    // The turns are rounded with the same corners the server draws.
+    const lane = pub.collector.x + 36;
+    const d = curveThrough([
+      { x: ox + cx + r, y: oy + cy },
+      { x: lane, y: oy + cy },
+      { x: lane, y: pub.collector.y },
+      { x: pub.collector.x, y: pub.collector.y },
+    ], 12);
+    const g = sEl("g", { class: "dns-declaration", "aria-hidden": "true" });
+    const path = sEl("path", { d, fill: "none" });
+    const zone = web.zone ? ` ${web.zone}` : "";
+    // SVG carries its own <title> element; an HTML one in this namespace
+    // never becomes a tooltip.
+    const tip = sEl("title");
+    tip.textContent = `DNS declarations:${zone} is authoritative at ${(meta[id] && meta[id].label) || "the DNS provider"} and carries no traffic route`;
+    path.append(tip);
+    g.append(path);
+    const nodes = root.querySelector("g.nodes");
+    if (nodes) nodes.before(g); else root.append(g);
+  }
+  // routeFor walks an event along the ground the server actually drew: out of
+  // the chip onto its cloud's brace, down the brace to the collector, out the
+  // collector lead, then along the one branch declared for the serving host.
+  // Every leg restates the server's own drawn run — lead and branch verbatim,
+  // curves and all — behind one short curved feed from the chip, so the dot
+  // rides exactly the line on screen.
+  // The public lead carries every public name through the edge proxy and the
+  // branch takes it on to the host; an overlay name stays on the purple trunk
+  // and its own branch and never touches the public gateway. A name whose
+  // cloud or branch is missing draws nothing: an invented hop is worse than a
+  // missing one.
   function routeFor(ev) {
     if (!ev || !ev.host) return null;
-    const hostId = byHost.get(ev.host) || byHost.get(ev.to && ev.to.id);
+    const hostId = byHost.get(ev.host);
     const hostPt = hostId && nodePoint(hostId);
     if (!hostPt) return null;                       // unplaced host: nothing to draw
-    const svc = serviceOf(meta[hostId], ev.service);
-    if (!svc) return null;                          // not a declared service here
-    const pts = [];
-    if (ev.audience === "public") {
-      if (svc.viaRouter) {
-        const hubPt = hubs.router && nodePoint(hubs.router);
-        if (!hubPt) return null;                    // no router hub: never a fake route
-        link(originFor("internet"), hubPt, pts);
-      } else if (svc.public) {
-        const hubPt = hubs.edge && nodePoint(hubs.edge);
-        if (!hubPt) return null;
-        link(originFor("internet"), hubPt, pts);
-      } else {
-        return null;
-      }
-      const last = pts[pts.length - 1];
-      link(last, hostPt, pts);
-      return { pts, audience: "public" };
-    }
-    if (ev.audience === "tailnet") {
-      if (svc.exposure === "local") return null;    // local-only: no tailnet path
-      link(originFor("tailnet"), hostPt, pts);
-      return { pts, audience: "tailnet" };
-    }
-    return null;
+    const m = markerFor(ev);
+    if (!m) return null;                            // no declared route: no path
+    const box = markerBox(m);
+    if (!box) return null;
+    const group = web.groups.find((g) => g.id === m.group) || null;
+    if (!group || !group.collector) return null;
+    const branch = linkFor(group.id, ev.host, hostId);
+    // A name served by the edge proxy itself has no branch: its lead already
+    // ends on that hub, so the trace stops where the drawn lead stops.
+    if (!branch && hostId !== hubs.edge) return null;
+    // The feed leaves the chip's right edge, meets the brace's long run, and
+    // rides it to the collector where the server's lead begins.
+    const tip = group.collector;
+    const spine = braceSpine(group);
+    const y = box.y + box.h / 2;
+    const feed = curveThrough([
+      { x: box.x + box.w, y },
+      { x: spine, y },
+      { x: spine, y: tip.y },
+      { x: tip.x, y: tip.y },
+    ], 12);
+    const parts = [feed, group.lead, branch ? branch.d : ""].filter(Boolean);
+    return { d: parts.join(" "), audience: group.id === "public" ? "public" : "tailnet" };
   }
-
-  const polyD = (pts) => pts.map((p, i) => (i ? "L" : "M") + p.x.toFixed(0) + " " + p.y.toFixed(0)).join(" ");
 
   // Journey paths are created as the .journey element itself, so a
   // ".journey path" stylesheet rule never matches them and SVG's default
@@ -791,19 +980,10 @@
     // Style follows the event, not the mode: a real provider's events look
     // different from simulated ones even though they use the same primitives.
     const kind = ev.simulated === false ? "real" : "sim";
-    const path = journeyPath(`journey j-${route.audience} ${kind}`, polyD(route.pts), route.audience, 2);
-    const seg = [];
-    let total = 0;
-    for (let i = 1; i < route.pts.length; i++) {
-      const a = route.pts[i - 1], b = route.pts[i];
-      const len = Math.hypot(b.x - a.x, b.y - a.y);
-      if (len > 0) seg.push({ a, b, len });
-      total += len;
-    }
-    if (total < 1) return;
+    const path = journeyPath(`journey j-${route.audience} ${kind}`, route.d, route.audience, 2);
     const dot = sEl("circle", {
       class: `ev-dot aud-${route.audience} ${kind}`,
-      cx: route.pts[0].x, cy: route.pts[0].y, r: 3.2,
+      cx: 0, cy: 0, r: 3.2,
     });
     const tip = sEl("title");
     tip.textContent = [
@@ -813,31 +993,30 @@
     ].filter(Boolean).join(" · ");
     dot.append(tip);
     overlay.append(path, dot);
-    const dur = Math.min(2400, Math.max(700, total * 2.5));
-    const item = { dot, path, seg, total, dur, progress: 0, fading: false, fadeLeft: 0, out: false };
+    // The dot rides the path the browser resolved, not a copy of its corners:
+    // measured once on arrival, then queried by distance every frame.
+    const item = { dot, path, total: path.getTotalLength(), dur: 0, progress: 0, fading: false, fadeLeft: 0, out: false };
+    if (!(item.total >= 1)) { path.remove(); dot.remove(); return; }
+    const head = pointAt(item, 0);
+    dot.setAttribute("cx", head.x.toFixed(1));
+    dot.setAttribute("cy", head.y.toFixed(1));
+    item.dur = Math.min(2400, Math.max(700, item.total * 2.5));
     dots.push(item);
     if (reduced) {
       // No travelling dot: park the marker at the destination and fade it.
-      const end = route.pts[route.pts.length - 1];
-      dot.setAttribute("cx", end.x);
-      dot.setAttribute("cy", end.y);
+      const end = pointAt(item, item.total);
+      dot.setAttribute("cx", end.x.toFixed(1));
+      dot.setAttribute("cy", end.y.toFixed(1));
       item.fading = true;
       item.fadeLeft = 900;
     }
     if (!rafId) rafId = requestAnimationFrame(tick);
   }
 
+  // pointAt asks the browser where the drawn path is at a distance. Curves are
+  // measured by the same code that renders them, so no geometry is restated.
   function pointAt(item, dist) {
-    let left = dist;
-    for (const s of item.seg) {
-      if (left <= s.len) {
-        const f = left / s.len;
-        return { x: s.a.x + (s.b.x - s.a.x) * f, y: s.a.y + (s.b.y - s.a.y) * f };
-      }
-      left -= s.len;
-    }
-    const last = item.seg[item.seg.length - 1];
-    return last ? last.b : { x: 0, y: 0 };
+    return item.path.getPointAtLength(Math.max(0, Math.min(item.total, dist)));
   }
 
   // One clock moves the dots and expires them, and it only runs while the map
@@ -889,7 +1068,6 @@
     seen.clear();
     pending.length = 0;
     clearPreview();
-    if (overlay) overlay.querySelectorAll(".origin").forEach((o) => o.remove());
     epoch = "";
   }
 
@@ -949,16 +1127,21 @@
       w: Number(imported.getAttribute("data-width")) || 0,
       h: Number(imported.getAttribute("data-height")) || 0,
     };
+    parseWeb(imported);
+    declareDNS(imported);
+    bindMarkers();
+    ensureOrbits();
     ensureOverlay();
-    layerBoxes.forEach((cb) => svg.classList.toggle("hide-" + cb.dataset.layer, !cb.checked));
+
     if (selected && !meta[selected]) selected = "";
     highlight();
     renderPanel();
     summarize();
+    // Chips are rebuilt with every frame, so restart the decorative clock
+    // only when the map is actually showing motion.
+    startOrbits();
     if (autoView) initialView();
-    else if (!restoreChecked) { restoreChecked = true; ensureLegible(); }
   }
-
   function ensureOverlay() {
     const vp = viewport();
     if (!vp) return;
@@ -1155,6 +1338,7 @@
     if (!Number.isFinite(playWindowEnd)) requestFrame(cursor, "play", true);
     if (!playRaf) playRaf = requestAnimationFrame(playTick);
     if (!rafId) rafId = requestAnimationFrame(tick);
+    startOrbits();
   }
   function stopPlay() {
     playing = false;
@@ -1166,6 +1350,7 @@
     if (rafId) cancelAnimationFrame(rafId);
     rafId = 0;
     lastTick = 0;
+    stopOrbits();
     paintTime();
   }
   function playTick(now) {
@@ -1372,11 +1557,7 @@
         simNote.hidden = !note;
         simNote.textContent = note || (simulated ? "No simulated traffic for this window." : "");
       }
-      if (modeNote) {
-        modeNote.textContent = simulated
-          ? "No simulated traffic is available for this window."
-          : "Real traffic is not connected. Nothing is simulated in this mode.";
-      }
+      if (modeNote) modeNote.textContent = simulated ? "Simulated · nothing measured" : "No real traffic connected";
       return;
     }
     setBadge(simulated, "Live traffic");
@@ -1386,8 +1567,8 @@
     }
     if (modeNote) {
       modeNote.textContent = simulated
-        ? "Requests are generated from the declared routes: no traffic is measured."
-        : "Traffic measured by " + (traffic.provider || "the live provider") + ".";
+        ? "Simulated · declared routes"
+        : "Measured · " + (traffic.provider || "live provider");
     }
     // A live poll animates as events arrive. A full-window replay frame is
     // queued whole and paced by the replay clock; a plain seek shows no dots.
@@ -1400,10 +1581,10 @@
   }
 
   function showGeoip(geoip) {
-    if (geoip === undefined) return;
+    if (geoip === undefined || !attrEl) return;
     if (geoip && geoip.available) {
       attrEl.hidden = false;
-      attrNote.textContent = geoip.source ? " · " + geoip.source : "";
+      if (attrNote) attrNote.textContent = geoip.source ? " · " + geoip.source : "";
     } else {
       attrEl.hidden = true;
     }
@@ -1490,6 +1671,7 @@
       loadTimeline();
       if (playing && !playRaf) { lastPlayAt = 0; playRaf = requestAnimationFrame(playTick); }
       if (!rafId && dots.length) { lastTick = 0; rafId = requestAnimationFrame(tick); }
+      startOrbits();
     } else {
       stopPlay();
     }

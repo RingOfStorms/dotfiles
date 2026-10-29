@@ -42,7 +42,7 @@ func sample() state.Merged {
 	polls := map[string]state.HostPoll{
 		"h001": {Host: "h001", OK: true, PolledAt: time.Now()},
 	}
-	return state.Merge(inv, polls)
+	return state.Merge(inv, polls, nil)
 }
 
 func TestHandleIndexRenders(t *testing.T) {
@@ -206,7 +206,7 @@ func TestServicesShowBackupAge(t *testing.T) {
 		"old":   {Active: "active", LastBackup: now.Add(-50 * time.Hour).Format(time.RFC3339)},
 		"never": {Active: "active"},
 	}}}}
-	srv := New(fakeSource{m: state.Merge(inv, polls)}, Config{})
+	srv := New(fakeSource{m: state.Merge(inv, polls, nil)}, Config{})
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
 	body := w.Body.String()
@@ -287,7 +287,7 @@ func TestHostDetailAndBcachefsDrillDown(t *testing.T) {
 		},
 	}
 
-	srv := New(fakeSource{m: state.Merge(inv, polls)}, Config{})
+	srv := New(fakeSource{m: state.Merge(inv, polls, nil)}, Config{})
 
 	// 1. /hosts shows bcachefs usable vs raw and oren as sleep / offline
 	w := httptest.NewRecorder()
@@ -349,7 +349,7 @@ func TestServicesExposeSection(t *testing.T) {
 	}))
 	defer exp.Close()
 	inv := &inventory.Inventory{Services: map[string]inventory.Service{}, Hosts: map[string]inventory.Host{}}
-	srv := New(fakeSource{m: state.Merge(inv, nil)}, Config{OverridesURL: exp.URL})
+	srv := New(fakeSource{m: state.Merge(inv, nil, nil)}, Config{OverridesURL: exp.URL})
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
 	body := w.Body.String()
@@ -369,10 +369,105 @@ func TestServicesExposeSection(t *testing.T) {
 		t.Errorf("down: %d", w.Code)
 	}
 	// Unset: no section.
-	srv = New(fakeSource{m: state.Merge(inv, nil)}, Config{})
+	srv = New(fakeSource{m: state.Merge(inv, nil, nil)}, Config{})
 	w = httptest.NewRecorder()
 	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
 	if strings.Contains(w.Body.String(), "Expose overrides") {
 		t.Error("section shown without OverridesURL")
+	}
+}
+
+// boundSource is a Source that also merges a supplied binding, like
+// *state.Poller does in production.
+type boundSource struct {
+	inv *inventory.Inventory
+}
+
+func (b boundSource) Current() state.Merged { return state.Merge(b.inv, nil, nil) }
+func (b boundSource) CurrentBound(bound map[string]string) state.Merged {
+	return state.Merge(b.inv, nil, bound)
+}
+
+func TestServicesBoundHostFromRegistry(t *testing.T) {
+	inv := &inventory.Inventory{
+		Services: map[string]inventory.Service{
+			"photos":    {Name: "photos", Kind: "nixos", Host: "h001"},
+			"orphan":    {Name: "orphan", Kind: "nixos", Host: "h001"},
+			"elsewhere": {Name: "elsewhere", Kind: "nixos", Host: "h001"},
+		},
+		Hosts: map[string]inventory.Host{"h001": {User: "root"}},
+	}
+	calls := 0
+	reg := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		_, _ = w.Write([]byte(`{"rows":[],"host":{"photos":"h001","elsewhere":"h003"}}`))
+	}))
+	defer reg.Close()
+	srv := New(boundSource{inv: inv}, Config{PlacementsURL: reg.URL})
+
+	render := func() string {
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d", w.Code)
+		}
+		return w.Body.String()
+	}
+	page := render()
+	// Grouped by the registry's binding, with a row-less service under
+	// "unplaced" and never an empty header.
+	for _, want := range []string{`<td colspan="7">unplaced</td>`, `<td colspan="7">h001</td>`, `<td colspan="7">h003</td>`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("services page lacks %q", want)
+		}
+	}
+	if strings.Contains(page, `<td colspan="7"></td>`) {
+		t.Error("services page rendered an empty host group header")
+	}
+	// The export is cached, not refetched on every render.
+	render()
+	if calls != 1 {
+		t.Errorf("registry fetched %d times for two renders", calls)
+	}
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/state.json", nil))
+	if !strings.Contains(w.Body.String(), `"boundHost": ""`) {
+		t.Errorf("state.json lacks the unplaced service: %s", w.Body.String())
+	}
+}
+
+func TestServicesNoRegistryMeansUnplaced(t *testing.T) {
+	inv := &inventory.Inventory{
+		Services: map[string]inventory.Service{"photos": {Name: "photos", Kind: "nixos", Host: "h001"}},
+		Hosts:    map[string]inventory.Host{"h001": {User: "root"}},
+	}
+	srv := New(boundSource{inv: inv}, Config{})
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
+	if body := w.Body.String(); !strings.Contains(body, `<td colspan="7">unplaced</td>`) {
+		t.Errorf("services page without a registry lacks the unplaced group:\n%s", body)
+	}
+}
+
+func TestServicesUnreachableRegistryIsUnplaced(t *testing.T) {
+	inv := &inventory.Inventory{
+		Services: map[string]inventory.Service{"photos": {Name: "photos", Kind: "nixos", Host: "h001"}},
+		Hosts:    map[string]inventory.Host{"h001": {User: "root"}},
+	}
+	reg := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	url := reg.URL
+	reg.Close()
+	srv := New(boundSource{inv: inv}, Config{PlacementsURL: url})
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
+	body := w.Body.String()
+	// A registry that never answered has no rows, so nothing is bound: the
+	// Nix declaration must not stand in for a placement.
+	if !strings.Contains(body, `<td colspan="7">unplaced</td>`) {
+		t.Errorf("unreachable registry fell back to the declaration:\n%s", body)
+	}
+	if strings.Contains(body, `<td colspan="7">h001</td>`) {
+		t.Error("unreachable registry rendered the declared host")
 	}
 }

@@ -382,7 +382,7 @@ func main() {
 	linksFile := flag.String("links", envDefault("FLEET_EDGE_LINKS", ""),
 		"JSON array of extra start-page links [{name,url,icon,group,description,host,exposure}] (env FLEET_EDGE_LINKS)")
 	topologyFile := flag.String("topology", envDefault("FLEET_EDGE_TOPOLOGY", ""),
-		"JSON topology spec: zones, physical devices, links and notes (empty shows inventory hosts)")
+		"JSON topology spec: columns, physical devices, links and the DNS zone (empty shows inventory hosts)")
 	zitadelIssuer := flag.String("zitadel-issuer", envDefault("FLEET_EDGE_ZITADEL_ISSUER", ""), "Zitadel OIDC issuer URL")
 	zitadelProjectID := flag.String("zitadel-project-id", envDefault("FLEET_EDGE_ZITADEL_PROJECT_ID", ""), "Zitadel project ID")
 	zitadelClaim := flag.String("zitadel-claim", envDefault("FLEET_EDGE_ZITADEL_CLAIM", "flatRolesClaim"), "Zitadel roles claim")
@@ -392,6 +392,8 @@ func main() {
 	apiKeysFile := flag.String("api-keys-file", envDefault("FLEET_EDGE_API_KEYS_FILE", ""), "file holding newline-delimited plain API keys")
 	overridesURL := flag.String("overrides-url", envDefault("FLEET_EDGE_OVERRIDES_URL", ""),
 		"read-only export of fleet-edge-overrides for the /services section (empty hides it)")
+	placementsURL := flag.String("placements-url", envDefault("FLEET_EDGE_PLACEMENTS_URL", "http://127.0.0.1:8098/internal/placements.json"),
+		"read-only placement registry export; its binding is where each service runs now (empty: every service is unplaced)")
 	sessionKeyFile := flag.String("session-key-file", envDefault("FLEET_EDGE_SESSION_KEY_FILE", ""), "file holding HMAC session key (optional)")
 	flag.Parse()
 
@@ -472,21 +474,24 @@ func main() {
 	// every host as down for the first 30 s.
 	poller.PollOnce(ctx)
 	go poller.Run(ctx, *pollInterval)
-	// The atlas samples on its own schedule so history covers the whole day,
-	// not just the moments someone had the page open.
-	go history.Run(ctx, poller.Current, func(err error) {
-		log.Printf("atlas: recording snapshot: %v", err)
-	})
 
 	srv := server.New(poller, server.Config{
-		Title:        *title,
-		Background:   *background,
-		IconBase:     *iconBase,
-		Links:        links,
-		OverridesURL: *overridesURL,
-		Topology:     topo,
-		History:      history,
-		GeoIP:        countryDB,
+		Title:         *title,
+		Background:    *background,
+		IconBase:      *iconBase,
+		Links:         links,
+		OverridesURL:  *overridesURL,
+		PlacementsURL: *placementsURL,
+		Topology:      topo,
+		History:       history,
+		GeoIP:         countryDB,
+	})
+	// The atlas samples on its own schedule so history covers the whole day,
+	// not just the moments someone had the page open. It records the bound
+	// state: a replay must show where a service ran then, not what the Nix
+	// declaration once said.
+	go history.Run(ctx, func() state.Merged { return srv.Merged(ctx) }, func(err error) {
+		log.Printf("atlas: recording snapshot: %v", err)
 	})
 	httpServer := &http.Server{
 		Addr:              *listen,

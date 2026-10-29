@@ -3,6 +3,7 @@ package topology
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -41,12 +42,19 @@ func testInventory() *inventory.Inventory {
 	}
 }
 
+// testSpec is two columns: a cloud holding the edge hub, and the rack holding
+// the stations. The edge region is a plain cloud, not a route region, so the
+// derived public cloud only appears in the spec that asks for it.
 func testSpec() *Spec {
 	return &Spec{
-		Rows: []Row{{Zones: []Zone{
-			{ID: "net", Label: "Internet", Kind: "internet", Flex: 1},
-			{ID: "fleet", Label: "Fleet", Kind: "rack", Flex: 3},
-		}}},
+		Columns: []Column{
+			{ID: "outside", Label: "Outside", Flex: 1, Zones: []Zone{
+				{ID: "net", Label: "Internet", Kind: "internet", Flex: 1},
+			}},
+			{ID: "inside", Label: "Inside", Flex: 3, Zones: []Zone{
+				{ID: "fleet", Label: "Fleet", Kind: "rack", Flex: 1},
+			}},
+		},
 		Nodes: []NodeSpec{
 			{ID: "internet", Label: "Internet", Kind: "internet", Zone: "net"},
 			{ID: "edge", Label: "Edge proxy", Kind: "cloud", Zone: "net"},
@@ -97,6 +105,15 @@ func infoByID(t *testing.T, d Diagram) map[string]NodeInfo {
 	return out
 }
 
+func zoneByID(d Diagram, id string) (ZoneBox, bool) {
+	for _, z := range d.Zones {
+		if z.ID == id {
+			return z, true
+		}
+	}
+	return ZoneBox{}, false
+}
+
 func edge(t *testing.T, d Diagram, from, to, kind string) Edge {
 	t.Helper()
 	for _, e := range d.Edges {
@@ -108,8 +125,10 @@ func edge(t *testing.T, d Diagram, from, to, kind string) Edge {
 	return Edge{}
 }
 
+// --- stations and state ----------------------------------------------------
+
 func TestBuildDeclaredContainerHostWithNoContainers(t *testing.T) {
-	m := state.MergeAt(testInventory(), allPolls(), at)
+	m := state.MergeAt(testInventory(), allPolls(), at, nil)
 	d := Build(testSpec(), m, at)
 
 	n, ok := nodesByID(d)["h003"]
@@ -134,7 +153,7 @@ func TestBuildDeclaredContainerHostWithNoContainers(t *testing.T) {
 }
 
 func TestBuildContainerHostFromServiceHost(t *testing.T) {
-	m := state.MergeAt(testInventory(), allPolls(), at)
+	m := state.MergeAt(testInventory(), allPolls(), at, nil)
 	d := Build(testSpec(), m, at)
 
 	n := nodesByID(d)["h001"]
@@ -160,7 +179,7 @@ func TestBuildContainerHostFromServiceHost(t *testing.T) {
 }
 
 func TestBuildPollOnlyHostIsNotContainerHost(t *testing.T) {
-	m := state.MergeAt(testInventory(), allPolls(), at)
+	m := state.MergeAt(testInventory(), allPolls(), at, nil)
 	d := Build(testSpec(), m, at)
 
 	n := nodesByID(d)["gp3"]
@@ -179,7 +198,7 @@ func TestBuildEdgesLiveOnlyBetweenPresentNodes(t *testing.T) {
 	inv := testInventory()
 	polls := allPolls()
 	delete(polls, "gp3") // gp3 is now down
-	d := Build(testSpec(), state.MergeAt(inv, polls, at), at)
+	d := Build(testSpec(), state.MergeAt(inv, polls, at, nil), at)
 
 	if e := edge(t, d, "internet", "h001", "agent"); !e.Live {
 		t.Error("online host must have a live edge")
@@ -207,7 +226,7 @@ func TestBuildEdgesLiveOnlyBetweenPresentNodes(t *testing.T) {
 // up, and its LAST known numbers are not shown as current readings.
 func TestBuildOfflineHostIsNotLiveAndHasNoMetrics(t *testing.T) {
 	inv := testInventory()
-	d := Build(testSpec(), state.MergeAt(inv, nil, at), at)
+	d := Build(testSpec(), state.MergeAt(inv, nil, at, nil), at)
 
 	n := nodesByID(d)["h001"]
 	if n.live {
@@ -224,7 +243,7 @@ func TestBuildOfflineHostIsNotLiveAndHasNoMetrics(t *testing.T) {
 }
 
 func TestBuildNodeInfoCarriesFullMetrics(t *testing.T) {
-	m := state.MergeAt(testInventory(), allPolls(), at)
+	m := state.MergeAt(testInventory(), allPolls(), at, nil)
 	d := Build(testSpec(), m, at)
 
 	if !nodesByID(d)["h001"].live {
@@ -247,7 +266,7 @@ func TestBuildNodeInfoCarriesFullMetrics(t *testing.T) {
 
 func TestBuildServiceOnDownHostHasNoMetrics(t *testing.T) {
 	inv := testInventory()
-	d := Build(testSpec(), state.MergeAt(inv, map[string]state.HostPoll{}, at), at)
+	d := Build(testSpec(), state.MergeAt(inv, map[string]state.HostPoll{}, at, nil), at)
 
 	ni := infoByID(t, d)["h001"]
 	if ni.State != "down" {
@@ -262,8 +281,10 @@ func TestBuildServiceOnDownHostHasNoMetrics(t *testing.T) {
 	}
 }
 
+// --- derived edges and spec resolution -------------------------------------
+
 func TestBuildDerivedEdges(t *testing.T) {
-	m := state.MergeAt(testInventory(), allPolls(), at)
+	m := state.MergeAt(testInventory(), allPolls(), at, nil)
 	d := Build(testSpec(), m, at)
 
 	edge(t, d, "internet", "h001", "agent")
@@ -282,7 +303,7 @@ func TestBuildDerivedEdges(t *testing.T) {
 func TestBuildSkipsEmptyHubs(t *testing.T) {
 	spec := testSpec()
 	spec.Hubs = Hubs{}
-	m := state.MergeAt(testInventory(), allPolls(), at)
+	m := state.MergeAt(testInventory(), allPolls(), at, nil)
 	d := Build(spec, m, at)
 	if len(d.Edges) != 0 {
 		t.Fatalf("no hubs, no derived edges: %+v", d.Edges)
@@ -298,7 +319,7 @@ func TestBuildSkipsLinksToUnknownNodes(t *testing.T) {
 		{From: "ghost", To: "h001", Kind: "ethernet"},
 		{From: "internet", To: "nope", Kind: "wan"},
 	}
-	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at), at)
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
 	for _, e := range d.Edges {
 		if e.From == "ghost" || e.To == "ghost" || e.To == "nope" {
 			t.Errorf("edge to an unresolved node drawn: %+v", e)
@@ -311,10 +332,10 @@ func TestBuildSkipsLinksToUnknownNodes(t *testing.T) {
 
 func TestBuildSkipsNodeWithMissingHostBinding(t *testing.T) {
 	spec := &Spec{
-		Rows:  []Row{{Zones: []Zone{{ID: "fleet", Label: "Fleet", Flex: 1}}}},
-		Nodes: []NodeSpec{{Host: "gone", Zone: "fleet"}},
+		Columns: []Column{{ID: "c", Zones: []Zone{{ID: "fleet", Label: "Fleet", Flex: 1}}}},
+		Nodes:   []NodeSpec{{Host: "gone", Zone: "fleet"}},
 	}
-	m := state.MergeAt(testInventory(), allPolls(), at)
+	m := state.MergeAt(testInventory(), allPolls(), at, nil)
 	d := Build(spec, m, at)
 	if len(d.Nodes) != 0 {
 		t.Fatalf("node bound to a vanished host must be skipped: %+v", d.Nodes)
@@ -326,10 +347,10 @@ func TestBuildSkipsNodeWithMissingHostBinding(t *testing.T) {
 
 func TestBuildStaticNodeWithoutLabelFallsBackToID(t *testing.T) {
 	spec := &Spec{
-		Rows:  []Row{{Zones: []Zone{{ID: "fleet", Label: "Fleet", Flex: 1}}}},
-		Nodes: []NodeSpec{{ID: "switch", Zone: "fleet"}},
+		Columns: []Column{{ID: "c", Zones: []Zone{{ID: "fleet", Label: "Fleet", Flex: 1}}}},
+		Nodes:   []NodeSpec{{ID: "switch", Zone: "fleet"}},
 	}
-	d := Build(spec, state.MergeAt(testInventory(), nil, at), at)
+	d := Build(spec, state.MergeAt(testInventory(), nil, at, nil), at)
 	if len(d.Nodes) != 1 || d.Nodes[0].Label != "switch" {
 		t.Fatalf("nodes = %+v", d.Nodes)
 	}
@@ -338,7 +359,7 @@ func TestBuildStaticNodeWithoutLabelFallsBackToID(t *testing.T) {
 func TestBuildDegenerateLayoutStaysSane(t *testing.T) {
 	spec := testSpec()
 	spec.Width = 0
-	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at), at)
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
 	if d.Width != DefaultWidth {
 		t.Errorf("width = %d, want %d", d.Width, DefaultWidth)
 	}
@@ -356,56 +377,932 @@ func TestBuildDegenerateLayoutStaysSane(t *testing.T) {
 		}
 	}
 
-	// A row with no zones contributes nothing to the layout.
-	spec.Rows = append([]Row{{}}, spec.Rows...)
-	if got := Build(spec, state.MergeAt(testInventory(), allPolls(), at), at); got.Height != d.Height {
-		t.Errorf("empty row changed height: %d vs %d", got.Height, d.Height)
+	// A column with no zones contributes nothing to the layout.
+	spec.Columns = append([]Column{{ID: "empty"}}, spec.Columns...)
+	got := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	if len(got.Zones) != len(d.Zones) {
+		t.Errorf("empty column changed the region count: %d vs %d", len(got.Zones), len(d.Zones))
 	}
 }
 
-func TestBuildNodesFitTheirZone(t *testing.T) {
+func TestBuildEmptySpec(t *testing.T) {
+	d := Build(&Spec{}, state.Merged{}, at)
+	if d.Width != DefaultWidth || d.Height < minZoneH {
+		t.Fatalf("empty spec diagram = %dx%d", d.Width, d.Height)
+	}
+	if len(d.Nodes) != 0 || len(d.Edges) != 0 {
+		t.Fatalf("empty spec drew content: %+v", d)
+	}
+	if d.Meta != "{}" {
+		t.Errorf("meta = %q", d.Meta)
+	}
+}
+
+// --- columns ---------------------------------------------------------------
+
+// Columns share the width by flex and keep their own heights: a tall rack
+// never pads the route column beside it.
+func TestColumnsShareWidthNotHeight(t *testing.T) {
 	spec := &Spec{
-		Width:       MinWidth,
-		Rows:        []Row{{Zones: []Zone{{ID: "fleet", Label: "Fleet", Flex: 1}}}},
+		Width: 1500,
+		Columns: []Column{
+			{ID: "routes", Flex: 1, Zones: []Zone{{ID: "pub", Label: "Public", Flex: 1}}},
+			{ID: "rack", Flex: 2, Zones: []Zone{{ID: "fleet", Label: "Fleet", Flex: 1}}},
+		},
+		DefaultZone: "fleet",
+	}
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	if len(d.Columns) != 2 {
+		t.Fatalf("columns = %+v", d.Columns)
+	}
+	left, right := d.Columns[0], d.Columns[1]
+	if left.W < MinWidth || right.W < MinWidth {
+		t.Fatalf("column widths = %d,%d", left.W, right.W)
+	}
+	if right.W <= left.W {
+		t.Errorf("flex 2 column %d wide, flex 1 column %d wide: proportions lost", right.W, left.W)
+	}
+	if left.X != 0 || right.X <= left.X+left.W {
+		t.Errorf("columns overlap or leave no gap: %+v", d.Columns)
+	}
+	if right.X+right.W > d.Width {
+		t.Errorf("columns run past the diagram: %d > %d", right.X+right.W, d.Width)
+	}
+	// Both columns end at the same top and share the diagram's height.
+	if left.Y != right.Y {
+		t.Errorf("column tops differ: %d vs %d", left.Y, right.Y)
+	}
+}
+
+// A zone flexing takes the column's leftover; a zone without flex keeps its
+// natural height even when a sibling grows.
+func TestZoneFlexSharesColumnLeftoverOnly(t *testing.T) {
+	spec := &Spec{
+		Width:  900,
+		Height: 1200,
+		Columns: []Column{{ID: "rack", Zones: []Zone{
+			{ID: "fixed", Label: "Fixed", Flex: 0},
+			{ID: "grow", Label: "Grow", Flex: 1},
+		}}},
+		DefaultZone: "grow",
+	}
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	fixed, ok := zoneByID(d, "fixed")
+	if !ok {
+		t.Fatal("fixed zone missing")
+	}
+	grow, ok := zoneByID(d, "grow")
+	if !ok {
+		t.Fatal("grow zone missing")
+	}
+	if fixed.H != minZoneH {
+		t.Errorf("unflexed empty zone = %d high, want natural %d", fixed.H, minZoneH)
+	}
+	if grow.H <= fixed.H {
+		t.Errorf("flexing zone %d high, unflexed %d: leftover went nowhere", grow.H, fixed.H)
+	}
+	if d.Height < spec.Height {
+		t.Errorf("height %d below the spec's %d", d.Height, spec.Height)
+	}
+}
+
+// A column declares its own height from its contents when the spec sets none,
+// and the diagram is as tall as the tallest column.
+func TestDiagramHeightIsTheTallestColumn(t *testing.T) {
+	short := &Spec{
+		Width:       1200,
+		Columns:     []Column{{ID: "a", Zones: []Zone{{ID: "one", Flex: 1}}}},
+		DefaultZone: "one",
+	}
+	tall := &Spec{
+		Width: 1200,
+		Columns: []Column{{ID: "b", Zones: []Zone{
+			{ID: "one", Flex: 1},
+			{ID: "two", Flex: 1},
+			{ID: "three", Flex: 1},
+		}}},
+		DefaultZone: "one",
+	}
+	m := state.MergeAt(testInventory(), allPolls(), at, nil)
+	ds, dt := Build(short, m, at), Build(tall, m, at)
+	if dt.Height <= ds.Height {
+		t.Errorf("three regions %d high, one region %d high", dt.Height, ds.Height)
+	}
+	if ds.Height < minZoneH {
+		t.Errorf("single-region diagram %d high", ds.Height)
+	}
+}
+
+// --- row planning ----------------------------------------------------------
+
+// A stack region reads top to bottom in spec order, one station per row: the
+// rack order is the file's order, never sorted behind the author's back.
+func TestStackLayoutKeepsSpecOrder(t *testing.T) {
+	order := []string{"modem", "h005", "sg3210x", "sg1428pe", "h001"}
+	spec := &Spec{
+		Width: 900,
+		Columns: []Column{{ID: "rack", Zones: []Zone{{
+			ID: "rack", Label: "Rack", Layout: LayoutStack, Fill: "column", Flex: 1,
+		}}}},
+		DefaultZone: "rack",
+	}
+	for _, id := range order {
+		spec.Nodes = append(spec.Nodes, NodeSpec{ID: id, Zone: "rack"})
+	}
+	d := Build(spec, state.MergeAt(testInventory(), nil, at, nil), at)
+	nodes := nodesByID(d)
+	prev := -1
+	for _, id := range order {
+		n, ok := nodes[id]
+		if !ok {
+			t.Fatalf("%s not placed", id)
+		}
+		if n.Y <= prev {
+			t.Errorf("%s at y=%d does not follow the spec order (previous row bottom %d)", id, n.Y, prev)
+		}
+		prev = n.Y
+	}
+}
+
+// Column fill reads down a column before moving right, so a rack listed in
+// physical order stays in physical order across several columns.
+func TestColumnFillReadsDownThenAcross(t *testing.T) {
+	spec := &Spec{
+		Width: 1200,
+		Columns: []Column{{ID: "c", Zones: []Zone{{
+			ID: "rack", Layout: LayoutStack, Fill: "column", Cols: 2, Flex: 1,
+		}}}},
+	}
+	for i := range 6 {
+		spec.Nodes = append(spec.Nodes, NodeSpec{ID: fmt.Sprintf("n%d", i), Zone: "rack"})
+	}
+	// No DefaultZone and an empty inventory: only these six stations are laid
+	// out, so the fill order is the thing under test and nothing else.
+	d := Build(spec, state.MergeAt(&inventory.Inventory{}, nil, at, nil), at)
+	nodes := nodesByID(d)
+	// Six stations, two across: "column" fill reads down the first column,
+	// then the next, so rack order survives the wrap.
+	if nodes["n1"].X != nodes["n0"].X || nodes["n1"].Y <= nodes["n0"].Y {
+		t.Errorf("n1 is not below n0")
+	}
+	if nodes["n2"].X != nodes["n0"].X || nodes["n2"].Y <= nodes["n1"].Y {
+		t.Errorf("n2 is not below n1")
+	}
+	if nodes["n3"].X <= nodes["n0"].X || nodes["n3"].Y != nodes["n0"].Y {
+		t.Errorf("n3 did not start the second column at the top")
+	}
+}
+
+// Stations wrap by the region's width instead of overflowing it.
+func TestStationsWrapToTheRegionWidth(t *testing.T) {
+	spec := &Spec{
+		Width: MinWidth,
+		Columns: []Column{{ID: "c", Zones: []Zone{{
+			ID: "fleet", Flex: 1,
+		}}}},
 		DefaultZone: "fleet",
 	}
 	if err := spec.Validate(testInventory()); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
-	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at), at)
-	if len(d.Nodes) != 3 {
-		t.Fatalf("expected the three hosts placed, got %+v", d.Nodes)
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	z, ok := zoneByID(d, "fleet")
+	if !ok {
+		t.Fatal("fleet zone missing")
 	}
-	z := d.Zones[0]
 	inner := z.W - 2*zonePad
 	for _, n := range d.Nodes {
 		if n.W <= 0 || n.W > inner {
 			t.Errorf("node %s width %d outside 1..%d", n.ID, n.W, inner)
 		}
+		if n.X < z.X+zonePad-1 || n.X+n.W > z.X+z.W-zonePad+1 {
+			t.Errorf("node %s spans %d..%d, region inner %d..%d",
+				n.ID, n.X, n.X+n.W, z.X+zonePad, z.X+z.W-zonePad)
+		}
+	}
+}
+
+// Nodes never escape their own region, and a multi-row region grows instead of
+// letting a later row spill past its bottom edge.
+func TestBuildNodesFitTheirZone(t *testing.T) {
+	spec := &Spec{
+		Width:       MinWidth,
+		Columns:     []Column{{ID: "c", Zones: []Zone{{ID: "fleet", Label: "Fleet", Flex: 1}}}},
+		DefaultZone: "fleet",
+	}
+	if err := spec.Validate(testInventory()); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	if len(d.Nodes) != 3 {
+		t.Fatalf("expected the three hosts placed, got %+v", d.Nodes)
+	}
+	z := d.Zones[0]
+	for _, n := range d.Nodes {
 		if n.H <= 0 {
 			t.Errorf("node %s height %d", n.ID, n.H)
 		}
 		if n.DotX >= n.W {
 			t.Errorf("node %s status dot at %d, width %d", n.ID, n.DotX, n.W)
 		}
-		if n.X+n.W > z.X+z.W {
-			t.Errorf("node %s right edge %d past zone right edge %d", n.ID, n.X+n.W, z.X+z.W)
+		if n.Y+n.H > z.Y+z.H {
+			t.Errorf("node %s bottom %d past zone bottom %d", n.ID, n.Y+n.H, z.Y+z.H)
 		}
 	}
 }
 
+// --- route clouds ----------------------------------------------------------
+
+// routeInventory has:
+//
+//	h004  public via edge ("git"), public via router ("www"), local ("vault")
+//	h001  a second public name ("location") and a tailnet-only name ("notes")
+//	h003  one public name that aliases an existing FQDN ("git")
+//
+// The zone declares every one of those plus "parked", which no route serves.
+func routeInventory() *inventory.Inventory {
+	return &inventory.Inventory{
+		Services: map[string]inventory.Service{
+			"gitea": {Name: "gitea", Host: "h004", Routes: map[string]inventory.Route{
+				"web": {Port: 3000, FQDN: strp("git.example"), Exposure: "public", Via: []string{"edge"}},
+			}},
+			"router-ui": {Name: "router-ui", Host: "h004", Routes: map[string]inventory.Route{
+				"web": {Port: 8443, FQDN: strp("www.example"), Exposure: "public", Via: []string{"router"}},
+			}},
+			"vault": {Name: "vault", Host: "h004", Routes: map[string]inventory.Route{
+				"web": {Port: 8200, Exposure: "local"},
+			}},
+			"litellm": {Name: "litellm", Host: "h001", Routes: map[string]inventory.Route{
+				"web": {Port: 4000, FQDN: strp("location.example"), Exposure: "public", Via: []string{"edge"}},
+			}},
+			"trilium": {Name: "trilium", Host: "h001", Routes: map[string]inventory.Route{
+				"web": {Port: 8080, FQDN: strp("notes.example"), Exposure: "tailnet"},
+			}},
+			// Same FQDN as gitea, served from a second host: one name, one
+			// marker, and the first owner in host order wins.
+			"mirror": {Name: "mirror", Host: "h003", Routes: map[string]inventory.Route{
+				"web": {Port: 80, FQDN: strp("git.example"), Exposure: "public", Via: []string{"edge"}},
+			}},
+		},
+		Hosts: map[string]inventory.Host{
+			"h001": {OverlayIP: strp("100.64.0.13")},
+			"h003": {OverlayIP: strp("100.64.0.4")},
+			"h004": {OverlayIP: strp("100.64.0.17")},
+		},
+	}
+}
+
+// routeSpec is the two-cloud atlas: public names and overlay names in one
+// column, the rack in the other, the edge hub outside.
+func routeSpec() *Spec {
+	return &Spec{
+		Width: 1500,
+		Columns: []Column{
+			{ID: "outside", Label: "Outside", Flex: 1, Zones: []Zone{
+				{ID: "cloud", Label: "Oracle Cloud", Kind: "cloud", Flex: 1},
+				{ID: "public", Label: "Public DNS", Layout: LayoutRoutes, Group: GroupPublic, Flex: 1},
+				{ID: "overlay", Label: "Overlay names", Layout: LayoutRoutes, Group: GroupOverlay, Flex: 1},
+			}},
+			{ID: "inside", Label: "Home", Flex: 2, Zones: []Zone{
+				{ID: "fleet", Label: "Rack", Kind: "rack", Flex: 1},
+			}},
+		},
+		Nodes: []NodeSpec{{ID: "o002", Label: "Edge", Kind: "cloud", Zone: "cloud"}},
+		DNS: &DNS{Zone: "example", Records: []DNSRecord{
+			{Name: "git", Type: "CNAME", Value: "o002.example"},
+			{Name: "www", Type: "CNAME", Value: "home.example"},
+			{Name: "location", Type: "CNAME", Value: "o002.example"},
+			{Name: "notes", Type: "CNAME", Value: "o002.example"},
+			{Name: "parked", Type: "CNAME", Value: "o002.example"},
+		}},
+		DefaultZone: "fleet",
+		Hubs:        Hubs{Edge: "o002"},
+	}
+}
+
+func TestRouteCloudsClassifyByExposureAndOrigin(t *testing.T) {
+	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, nil), at)
+	if len(d.RouteWeb) == 0 {
+		t.Fatal("no public markers")
+	}
+	byLabel := map[string]RouteMarker{}
+	for _, m := range d.RouteWeb {
+		byLabel[m.Label] = m
+	}
+	// A public route is public only where it enters from the internet: the
+	// marker binds the FQDN's short name, not the service name.
+	git, ok := byLabel["git"]
+	if !ok {
+		t.Fatalf("no git marker in %+v", byLabel)
+	}
+	if git.Service != "gitea" || git.RouteKey != "git.example" {
+		t.Errorf("git marker = %+v", git)
+	}
+	if git.FQDN != "git.example" {
+		t.Errorf("marker label %q is not the short FQDN of %q", git.Label, git.FQDN)
+	}
+	if _, ok := byLabel["location"]; !ok {
+		t.Errorf("route served by a second host has no marker: %+v", byLabel)
+	}
+	// A DNS-only name is drawn, faint, with no owner at all.
+	parked, ok := byLabel["parked"]
+	if !ok {
+		t.Fatalf("a name the zone declares must appear: %+v", byLabel)
+	}
+	if parked.Declared || parked.Host != "" || parked.NodeID != "" {
+		t.Errorf("DNS-only marker invented an owner: %+v", parked)
+	}
+
+	// h001's tailnet-only name belongs to the overlay cloud, first; h004's
+	// local-only route belongs to neither.
+	if len(d.OverlayWeb) != 1 || d.OverlayWeb[0].FQDN != "notes.example" {
+		t.Fatalf("overlay = %+v", d.OverlayWeb)
+	}
+	if d.OverlayWeb[0].Label != "notes" {
+		t.Errorf("overlay label = %q", d.OverlayWeb[0].Label)
+	}
+	for _, m := range d.RouteWeb {
+		if m.FQDN == "" {
+			t.Errorf("marker without a name: %+v", m)
+		}
+		if strings.HasPrefix(m.FQDN, "vault") {
+			t.Errorf("a local-only route must not be drawn: %+v", m)
+		}
+	}
+	// Declared names sort before the zone's leftovers.
+	if !d.RouteWeb[0].Declared {
+		t.Errorf("first public marker is not a declared name: %+v", d.RouteWeb[0])
+	}
+}
+
+// One public FQDN is one marker, however many routes or aliases serve it.
+func TestOneMarkerPerFQDN(t *testing.T) {
+	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, nil), at)
+	count := map[string]int{}
+	for _, m := range d.RouteWeb {
+		count[m.FQDN]++
+	}
+	for fqdn, n := range count {
+		if n > 1 {
+			t.Errorf("%s drawn %d times", fqdn, n)
+		}
+	}
+	if got := count["git.example"]; got != 1 {
+		t.Errorf("git.example drawn %d times, want 1", got)
+	}
+	// Exactly the zone's five names: four owned, one DNS-only.
+	if len(d.RouteWeb) != 5 {
+		t.Errorf("public markers = %d, want the zone's 5 names", len(d.RouteWeb))
+	}
+}
+
+// Moving a public route's owner moves its marker and its binding: the model
+// never pins a name to whichever host happened to be first.
+func TestOwningHostChangeRebindsMarker(t *testing.T) {
+	before := routeInventory()
+	dBefore := Build(routeSpec(), state.MergeAt(before, nil, at, nil), at)
+
+	after := routeInventory()
+	moved := after.Services["gitea"]
+	delete(after.Services, "gitea")
+	moved.Host = "h001"
+	after.Services["gitea"] = moved
+	dAfter := Build(routeSpec(), state.MergeAt(after, nil, at, nil), at)
+
+	pick := func(d Diagram, svc string) (RouteMarker, bool) {
+		for _, m := range d.RouteWeb {
+			if m.Service == svc {
+				return m, true
+			}
+		}
+		return RouteMarker{}, false
+	}
+	was, ok := pick(dBefore, "gitea")
+	if !ok {
+		t.Fatal("gitea marker missing before the move")
+	}
+	now, ok := pick(dAfter, "gitea")
+	if !ok {
+		t.Fatal("gitea marker missing after the move")
+	}
+	if was.Host != "h004" || was.NodeID != "h004" {
+		t.Errorf("initial binding = %+v", was)
+	}
+	if now.Host != "h001" || now.NodeID != "h001" {
+		t.Errorf("marker did not rebind: %+v", now)
+	}
+	// The catalog record follows the route that serves it.
+	var rec *DNSRecord
+	for i := range dAfter.PublicZone.Records {
+		if dAfter.PublicZone.Records[i].Name == "git" {
+			rec = &dAfter.PublicZone.Records[i]
+		}
+	}
+	if rec == nil || rec.Host != "h001" || !rec.Declared {
+		t.Errorf("catalogue record = %+v", rec)
+	}
+}
+
+// The public brace is a real curly brace with a separate collector lead into
+// the edge hub; the overlay is one bundled trunk with one branch per host.
+func TestBraceAndCollectorPaths(t *testing.T) {
+	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, nil), at)
+	if d.RouteBrace == nil {
+		t.Fatal("no public brace")
+	}
+	if !strings.HasPrefix(d.RouteBrace.D, "M") {
+		t.Fatalf("brace path = %q", d.RouteBrace.D)
+	}
+	// A brace curves at both ends and bulges at its point; an elbow does not.
+	if !strings.Contains(d.RouteBrace.D, "Q") {
+		t.Errorf("public brace is not a curve: %q", d.RouteBrace.D)
+	}
+	if d.RouteBrace.LeadD == "" {
+		t.Error("public brace has no collector lead")
+	}
+	if d.RouteBrace.Hub != "o002" {
+		t.Errorf("public brace leads to %q", d.RouteBrace.Hub)
+	}
+	if d.RouteBrace.TipX <= d.RouteBrace.SpineX {
+		t.Errorf("public brace does not bulge away from its markers: spine %d tip %d",
+			d.RouteBrace.SpineX, d.RouteBrace.TipX)
+	}
+
+	if d.OverlayBrace == nil {
+		t.Fatal("no overlay brace")
+	}
+	if !strings.Contains(d.OverlayBrace.D, "Q") {
+		t.Errorf("overlay brace is not a curve: %q", d.OverlayBrace.D)
+	}
+	var overlayBranches []RouteLink
+	for _, l := range d.RouteLinks {
+		if l.Host == "" || l.ToID == "" {
+			t.Errorf("route link without endpoints: %+v", l)
+		}
+		if l.Group == GroupOverlay {
+			overlayBranches = append(overlayBranches, l)
+			// Every overlay branch leaves the same bus, so the bundle is
+			// one trunk rather than a lead per chip.
+			if l.FromX != d.OverlayBrace.TipX+trunkLen {
+				t.Errorf("overlay branch leaves x=%d, not the shared bus", l.FromX)
+			}
+		}
+	}
+	if n := len(overlayBranches); n != len(distinctOverlayHosts(d.OverlayWeb)) {
+		t.Errorf("%d overlay branches for %d hosts", n, len(distinctOverlayHosts(d.OverlayWeb)))
+	}
+	// Public reach is always drawn: every host serving a public name has a
+	// branch, whether or not anything is selected.
+	publicHosts := map[string]bool{}
+	for _, m := range d.RouteWeb {
+		if m.Host != "" && m.Host != d.Hubs.Edge {
+			publicHosts[m.Host] = true
+		}
+	}
+	gotPublic := map[string]bool{}
+	for _, l := range d.RouteLinks {
+		if l.Group == GroupPublic {
+			gotPublic[l.Host] = true
+		}
+	}
+	if len(gotPublic) != len(publicHosts) {
+		t.Errorf("public branches %v, want one per owning host %v", gotPublic, publicHosts)
+	}
+	// The lead is part of the cloud document too: a client that redraws from
+	// RouteMeta must get the trunk the SVG already draws, ending at the edge
+	// hub's perimeter rather than nowhere.
+	var groupsDoc routeDoc
+	if err := json.Unmarshal([]byte(d.RouteMeta), &groupsDoc); err != nil {
+		t.Fatalf("RouteMeta: %v", err)
+	}
+	hub, ok := nodesByID(d)["o002"]
+	if !ok {
+		t.Fatal("edge hub is not on the diagram")
+	}
+	leadEndsAt := func(path string, x, y int) bool {
+		var px, py float64
+		i := strings.LastIndex(path, "L")
+		if i < 0 {
+			return false
+		}
+		_, err := fmt.Sscanf(path[i:], "L%f %f", &px, &py)
+		return err == nil && px == float64(x) && py == float64(y)
+	}
+	for _, g := range groupsDoc.Groups {
+		if g.Lead == "" {
+			t.Errorf("group %q lost its collector lead", g.ID)
+			continue
+		}
+		var x, y float64
+		_, err := fmt.Sscanf(g.Lead, "M%f %f", &x, &y)
+		if err != nil || x != float64(g.Collector.X) || y != float64(g.Collector.Y) {
+			t.Errorf("group %q lead %q does not start at its collector %v", g.ID, g.Lead, g.Collector)
+		}
+	}
+	if pub, ok := func() (routeGroup, bool) {
+		for _, g := range groupsDoc.Groups {
+			if g.ID == GroupPublic {
+				return g, true
+			}
+		}
+		return routeGroup{}, false
+	}(); !ok {
+		t.Error("no public group in the route document")
+	} else if !leadEndsAt(pub.Lead, hub.CenterX()-hub.R, hub.CenterY()) {
+		t.Errorf("public lead %q does not end at the hub perimeter (%d,%d)", pub.Lead, hub.CenterX()-hub.R, hub.CenterY())
+	}
+}
+
+func distinctOverlayHosts(ms []RouteMarker) map[string]bool {
+	out := map[string]bool{}
+	for _, m := range ms {
+		if m.Host != "" {
+			out[m.Host] = true
+		}
+	}
+	return out
+}
+
+// The route document is valid JSON carrying both groups, their markers, the
+// braces and the catalogue — the client joins nothing else.
+func TestRouteMetaIsCompleteJSON(t *testing.T) {
+	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, nil), at)
+	var doc struct {
+		Groups []struct {
+			ID        string `json:"id"`
+			Brace     string `json:"brace"`
+			Lead      string `json:"lead"`
+			Collector struct {
+				X int `json:"x"`
+				Y int `json:"y"`
+			} `json:"collector"`
+			Routes []RouteMarker `json:"routes"`
+		} `json:"groups"`
+		DNS struct {
+			Zone    string      `json:"zone"`
+			Records []DNSRecord `json:"records"`
+		} `json:"dns"`
+	}
+	if err := json.Unmarshal([]byte(d.RouteMeta), &doc); err != nil {
+		t.Fatalf("RouteMeta: %v\n%s", err, d.RouteMeta)
+	}
+	if len(doc.Groups) != 2 {
+		t.Fatalf("groups = %+v", doc.Groups)
+	}
+	seen := map[string]bool{}
+	for _, g := range doc.Groups {
+		seen[g.ID] = true
+		if g.Brace == "" {
+			t.Errorf("group %s has no brace", g.ID)
+		}
+		if len(g.Routes) == 0 {
+			t.Errorf("group %s has no markers", g.ID)
+		}
+	}
+	if !seen[GroupPublic] || !seen[GroupOverlay] {
+		t.Errorf("groups = %v", seen)
+	}
+	if doc.DNS.Zone != "example" || len(doc.DNS.Records) != 5 {
+		t.Errorf("catalogue = %+v", doc.DNS)
+	}
+	// Markers carry their own absolute rectangle: the static SVG needs no JS.
+	for _, m := range d.RouteWeb {
+		if m.W <= 0 || m.H <= 0 || m.TX <= m.X || m.TY <= m.Y {
+			t.Errorf("marker %q has no laid-out chip: %+v", m.FQDN, m)
+		}
+	}
+}
+
+// A DNS-only name never animates and never claims an owner, and the catalogue
+// marks exactly the names a route actually serves.
+func TestDNSOnlyRecordIsFaintAndUnowned(t *testing.T) {
+	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, nil), at)
+	declared := map[string]bool{}
+	for _, r := range d.PublicZone.Records {
+		declared[r.Name] = r.Declared
+		if r.Declared && r.Host == "" {
+			t.Errorf("declared record %q has no owner", r.Name)
+		}
+	}
+	if declared["parked"] {
+		t.Error("a CNAME nobody serves must stay undeclared")
+	}
+	if !declared["git"] || !declared["location"] || !declared["www"] {
+		t.Errorf("declared map = %v", declared)
+	}
+	// "notes" is a tailnet name: the zone has it, but no public route serves
+	// it, so the catalogue must not call it declared.
+	if declared["notes"] {
+		t.Errorf("tailnet-only name marked declared: %v", declared)
+	}
+	if !d.PublicZone.Available || d.PublicZone.Zone != "example" {
+		t.Errorf("catalogue = %+v", d.PublicZone)
+	}
+}
+
+// --- routes per host -------------------------------------------------------
+
+// A host serving several names carries every one of them, each with its own
+// exposure and entry point; the station still shows counts, not names.
+func TestServiceExposureAndRouteOrigin(t *testing.T) {
+	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, nil), at)
+
+	svcs := map[string]ServiceInfo{}
+	for _, s := range infoByID(t, d)["h004"].Services {
+		svcs[s.Name] = s
+	}
+	if len(svcs) != 3 {
+		t.Fatalf("services = %+v", svcs)
+	}
+	if gitea := svcs["gitea"]; !gitea.Public || gitea.ViaRouter {
+		t.Errorf("edge-terminated public route = %+v", gitea)
+	}
+	if router := svcs["router-ui"]; router.Public || !router.ViaRouter {
+		t.Errorf("router-terminated public route = %+v", router)
+	}
+	if vault := svcs["vault"]; vault.Public || vault.ViaRouter || vault.Exposure != "local" {
+		t.Errorf("host-only route = %+v", vault)
+	}
+
+	// Every declared route of the host is in the drilldown, unaggregated.
+	ni := infoByID(t, d)["h004"]
+	if len(ni.Routes) != 3 {
+		t.Fatalf("routes = %+v", ni.Routes)
+	}
+	byKey := map[string]RouteInfo{}
+	for _, r := range ni.Routes {
+		byKey[r.RouteKey] = r
+	}
+	if r := byKey["git.example"]; !r.Public || r.DNS != "git" {
+		t.Errorf("git route = %+v", r)
+	}
+	if r := byKey["www.example"]; !r.ViaRouter {
+		t.Errorf("www route = %+v", r)
+	}
+	if r := byKey["8200"]; r.Public || r.ViaRouter {
+		t.Errorf("local route = %+v", r)
+	}
+}
+
+// Route keys are the traffic event's route key exactly, so a marker binds to
+// the events it names.
+func TestRouteKeyMatchesTrafficDerivation(t *testing.T) {
+	cases := []struct {
+		name string
+		rt   inventory.Route
+		want string
+	}{
+		{"named", inventory.Route{Name: strp("game"), Port: 25565, Proto: "tcp"}, "game"},
+		{"fqdn", inventory.Route{FQDN: strp("git.example"), Port: 443}, "git.example"},
+		{"url", inventory.Route{URL: strp("http://x.example"), Port: 80}, "http://x.example"},
+		{"proto/port", inventory.Route{Port: 25565, Proto: "tcp"}, "tcp/25565"},
+	}
+	for _, c := range cases {
+		if got := routeKey(c.rt, 0); got != c.want {
+			t.Errorf("%s: routeKey = %q, want %q", c.name, got, c.want)
+		}
+	}
+	if got := routeKey(inventory.Route{Port: 1}, 4); got != "route-4" {
+		t.Errorf("fallback key = %q", got)
+	}
+	// Name wins over FQDN: a route's name is what traffic events carry.
+	if got := routeKey(inventory.Route{Name: strp("web"), FQDN: strp("git.example")}, 0); got != "web" {
+		t.Errorf("name did not win: %q", got)
+	}
+}
+
+// --- mounts ----------------------------------------------------------------
+
+// One ring per reported primary mount, never one per pool: two bcachefs mounts
+// of the same pool are two draws of the same filesystem and get two rings.
+func TestOneRingPerPrimaryMount(t *testing.T) {
+	fs := []state.FilesystemMount{
+		{Mount: "/", FSType: "ext4", TotalBytes: 100, UsedBytes: 40},
+		{
+			Mount: "/mnt/pool", FSType: "bcachefs", TotalBytes: 900, UsedBytes: 600,
+			Submounts: []string{"/mnt/pool/photos", "/mnt/pool/media"},
+			Bcachefs:  &state.BcachefsInfo{UUID: "pool-a"},
+		},
+		{
+			Mount: "/mnt/pool/photos", FSType: "bcachefs", TotalBytes: 900, UsedBytes: 600,
+			Bcachefs: &state.BcachefsInfo{UUID: "pool-a"},
+		},
+		{
+			Mount: "/mnt/pool/media", FSType: "bcachefs", TotalBytes: 900, UsedBytes: 600,
+			Bcachefs: &state.BcachefsInfo{UUID: "pool-a"},
+		},
+		{Mount: "/mnt/bulk", FSType: "bcachefs", TotalBytes: 500, UsedBytes: 100,
+			Bcachefs: &state.BcachefsInfo{UUID: "pool-a"}},
+	}
+	// Role + overlay is what makes a host pollable: without a poll there is no
+	// agent state, so nothing to ring.
+	hosts := map[string]inventory.Host{
+		"h004": {Role: "server", OverlayIP: strp("100.64.0.17")},
+	}
+	d := Build(&Spec{
+		Width:       900,
+		Columns:     []Column{{ID: "c", Zones: []Zone{{ID: "fleet", Flex: 1}}}},
+		DefaultZone: "fleet",
+		Nodes:       []NodeSpec{{Host: "h004", Zone: "fleet"}},
+	}, state.MergeAt(&inventory.Inventory{Hosts: hosts}, map[string]state.HostPoll{"h004": {
+		Host: "h004", OK: true, PolledAt: at,
+		Status: &state.HostStatus{Host: "h004", Filesystems: fs},
+	}}, at, nil), at)
+
+	n := nodesByID(d)["h004"]
+	// "/", "/mnt/bulk" and "/mnt/pool" are primaries; the two submounts are
+	// aliases of the pool and are listed, never given rings of their own.
+	if len(n.Rings) != 3 {
+		t.Fatalf("rings = %+v, want one per primary mount", n.Rings)
+	}
+	ni := infoByID(t, d)["h004"]
+	if len(ni.Mounts) != 3 {
+		t.Fatalf("mounts = %+v", ni.Mounts)
+	}
+	seen := map[string]bool{}
+	for i, m := range ni.Mounts {
+		if seen[m.Mount] {
+			t.Errorf("mount %q drawn twice", m.Mount)
+		}
+		seen[m.Mount] = true
+		if m.SimulatedFraction <= 0 || m.SimulatedFraction > 1 {
+			t.Errorf("%s fraction = %v", m.Mount, m.SimulatedFraction)
+		}
+		// Every mount gets its own ring and its own shade, not a 4-colour
+		// palette cycling behind the reader's back.
+		if n.Rings[i].Shade != i {
+			t.Errorf("%s shade = %d, want %d", m.Mount, n.Rings[i].Shade, i)
+		}
+		if m.Color == "" || n.Rings[i].Color != m.Color {
+			t.Errorf("%s colour = %q / %q", m.Mount, m.Color, n.Rings[i].Color)
+		}
+		if m.Radius > stationW/2 {
+			t.Errorf("%s radius %d wider than half the station", m.Mount, m.Radius)
+		}
+	}
+	// The pool carries its two aliases as facts on its record; "/" has none.
+	byMount := map[string]MountInfo{}
+	for _, m := range ni.Mounts {
+		byMount[m.Mount] = m
+	}
+	if got := byMount["/mnt/pool"].Submounts; len(got) != 2 {
+		t.Errorf("pool lost its submount aliases: %+v", got)
+	}
+	if got := byMount["/"].Submounts; len(got) != 0 {
+		t.Errorf("root grew submounts: %+v", got)
+	}
+	// Distinct colours, not four shades for ten filesystems.
+	colors := map[string]bool{}
+	for _, m := range ni.Mounts {
+		colors[m.Color] = true
+	}
+	if len(colors) != len(ni.Mounts) {
+		t.Errorf("%d distinct colours for %d mounts", len(colors), len(ni.Mounts))
+	}
+}
+
+// No synthetic mounts: a host that reports nothing gets no ring, and an empty
+// mount name is not invented into one.
+func TestNoSyntheticMounts(t *testing.T) {
+	infos, rings := mountRings(nil, "h001", at)
+	if len(infos) != 0 || len(rings) != 0 {
+		t.Errorf("no filesystems produced %+v / %+v", infos, rings)
+	}
+	infos, rings = mountRings([]state.FilesystemMount{{Mount: "", FSType: "ext4"}}, "h001", at)
+	if len(infos) != 0 || len(rings) != 0 {
+		t.Errorf("a nameless mount produced %+v / %+v", infos, rings)
+	}
+}
+
+// Ten mounts still fit the station: ring radii stay inside its width and the
+// head and every text baseline stay inside the box.
+func TestManyRingsFitTheStation(t *testing.T) {
+	fs := make([]state.FilesystemMount, 10)
+	for i := range fs {
+		fs[i] = state.FilesystemMount{Mount: fmt.Sprintf("/mnt/vol%d", i)}
+	}
+	_, rings := mountRings(fs, "h004", at)
+	n := &Node{Rings: rings, Label: "h004"}
+	finishNode(n)
+	if n.W != stationW {
+		t.Errorf("station grew sideways to %d", n.W)
+	}
+	for _, r := range rings {
+		if r.R > stationW/2-ringStroke {
+			t.Errorf("ring %d wider than the station", r.R)
+		}
+		if n.HeadY-r.R < 0 {
+			t.Errorf("ring %d crosses the top edge (head %d)", r.R, n.HeadY)
+		}
+	}
+	if n.LabelY <= n.HeadY+rings[len(rings)-1].R {
+		t.Errorf("label at %d overlaps the outermost ring (head %d, r %d)",
+			n.LabelY, n.HeadY, rings[len(rings)-1].R)
+	}
+	if n.TagsY+4 > n.H {
+		t.Errorf("tags baseline %d outside the %d-high station", n.TagsY, n.H)
+	}
+}
+
+// The arc is a measurement of one ring: it starts at 12 o'clock on that ring's
+// own circle, centred on the final head, and sweeps clockwise for its fraction.
+func TestRingArcsShareTheHeadCentre(t *testing.T) {
+	fs := []state.FilesystemMount{{Mount: "/"}, {Mount: "/mnt/a"}, {Mount: "/mnt/b"}}
+	infos, rings := mountRings(fs, "h004", at)
+	n := &Node{Rings: rings, Label: "h004"}
+	finishNode(n)
+	for i, r := range rings {
+		if r.D == "" {
+			t.Fatalf("ring %d has no arc", i)
+		}
+		var x0, y0 float64
+		if _, err := fmt.Sscanf(r.D, "M%f %f", &x0, &y0); err != nil {
+			t.Fatalf("ring arc %q: %v", r.D, err)
+		}
+		if math.Abs(x0-float64(n.HeadX)) > 0.6 {
+			t.Errorf("ring %d arc starts at x=%.1f, head is at %d", i, x0, n.HeadX)
+		}
+		if math.Abs(y0-(float64(n.HeadY)-float64(r.R))) > 0.6 {
+			t.Errorf("ring %d arc starts at y=%.1f, ring top is %d", i, y0, n.HeadY-r.R)
+		}
+		if infos[i].Radius != r.R || infos[i].Shade != r.Shade {
+			t.Errorf("ring %d disagrees with its MountInfo: %+v / %+v", i, r, infos[i])
+		}
+	}
+}
+
+// A deterministic simulated fraction: the same instant redraws the same ring,
+// a different hour redraws a different one, and it is never a real reading.
+func TestSimulatedFractionIsDeterministic(t *testing.T) {
+	a := simFraction(at, "h004", "/")
+	if a != simFraction(at, "h004", "/") {
+		t.Error("same instant, different fraction")
+	}
+	if a == simFraction(at.Add(time.Hour), "h004", "/") {
+		t.Error("a different hour drew the same fraction")
+	}
+	if a < 0.08 || a >= 0.98 {
+		t.Errorf("fraction %v outside its declared band", a)
+	}
+}
+
+// Ring colours are blue and only blue: a ring that drifted into the violet
+// band would be read as the overlay cloud, and two mounts sharing a colour on
+// one host makes the rings useless.
+func TestRingColoursStayBlueAndDistinct(t *testing.T) {
+	hue := func(c string) float64 {
+		var h, s, l float64
+		if _, err := fmt.Sscanf(c, "hsl(%f %f%% %f%%)", &h, &s, &l); err != nil {
+			t.Fatalf("colour %q is not hsl: %v", c, err)
+		}
+		return h
+	}
+	for _, n := range []int{1, 2, 3, 10} {
+		seen := map[string]bool{}
+		for i := 0; i < n; i++ {
+			c := ringColor(i, n)
+			seen[c] = true
+			if h := hue(c); h < 195 || h > 215 {
+				t.Errorf("%d mounts, ring %d = %q: hue %.0f is not blue", n, i, c, h)
+			}
+		}
+		if len(seen) != n {
+			t.Errorf("%d mounts drew %d colours: %v", n, len(seen), seen)
+		}
+	}
+	if got, want := ringColor(0, 2), "hsl(205 44% 45.0%)"; got != want {
+		t.Errorf("first of two = %q, want %q", got, want)
+	}
+	if got, want := ringColor(1, 2), "hsl(205 58% 70.0%)"; got != want {
+		t.Errorf("second of two = %q, want %q", got, want)
+	}
+	if got, want := ringColor(0, 1), "hsl(205 50% 55.0%)"; got != want {
+		t.Errorf("lone mount = %q, want %q", got, want)
+	}
+}
+
+// The hash key is unambiguous: a host and mount pair that only differs by
+// where the separator falls must not collide.
+func TestSimulatedFractionSeparatesFields(t *testing.T) {
+	if simFraction(at, "a", "b/c") == simFraction(at, "a/b", "c") {
+		t.Error("separator did not separate the fields")
+	}
+}
+
+// --- validation ------------------------------------------------------------
+
 func TestValidate(t *testing.T) {
 	inv := testInventory()
 	valid := func() *Spec { return testSpec() }
-	// tenZones builds one row of ten equal zones, which cannot each get
-	// MinWidth out of a MinWidth-wide diagram.
-	tenZones := func(s *Spec) {
-		zones := make([]Zone, 10)
-		for i := range zones {
-			zones[i] = Zone{ID: string(rune('a' + i)), Flex: 1}
+	// tenColumns builds ten equal columns, which cannot each get MinWidth out
+	// of a MinWidth-wide diagram.
+	tenColumns := func(s *Spec) {
+		cols := make([]Column, 10)
+		for i := range cols {
+			cols[i] = Column{ID: string(rune('a' + i)), Flex: 1, Zones: []Zone{{ID: string(rune('a' + i))}}}
 		}
-		s.Width = MinWidth
-		s.Rows = []Row{{Zones: zones}}
+		s.Width = MinWidth / 4
+		s.Columns = cols
 		s.Nodes = nil
 		s.DefaultZone = ""
 		s.Hubs = Hubs{}
@@ -419,23 +1316,52 @@ func TestValidate(t *testing.T) {
 		{"valid", func(s *Spec) {}, ""},
 		{"zero width falls back to the default", func(s *Spec) { s.Width = 0 }, ""},
 		{"negative width", func(s *Spec) { s.Width = -10 }, "negative"},
+		{"negative height", func(s *Spec) { s.Height = -1 }, "negative"},
 		{"valid at the default width", func(s *Spec) { s.Width = DefaultWidth }, ""},
-		{"ten zones at the minimum width", tenZones, fmt.Sprintf("minimum %d", MinWidth)},
-		{"two zones at the minimum width", func(s *Spec) {
-			s.Width = MinWidth
-			s.Rows[0].Zones = []Zone{{ID: "net", Flex: 1}, {ID: "fleet", Flex: 1}}
-		}, fmt.Sprintf("minimum %d", MinWidth)},
-		{"flex starves a zone", func(s *Spec) {
-			s.Rows[0].Zones = []Zone{{ID: "net", Flex: 50}, {ID: "fleet", Flex: 1}}
-		}, `zone "fleet"`},
-		{"no zones", func(s *Spec) { s.Rows = nil }, "no zones"},
-		{"empty zone id", func(s *Spec) { s.Rows[0].Zones[0].ID = "" }, "empty id"},
-		{"duplicate zone", func(s *Spec) { s.Rows[0].Zones[1].ID = "net" }, "duplicate zone"},
-		{"negative flex", func(s *Spec) { s.Rows[0].Zones[0].Flex = -1 }, "negative flex"},
+		{"ten columns at the minimum width", tenColumns, fmt.Sprintf("minimum %d", MinWidth)},
+		{"hard flex starves a column", func(s *Spec) {
+			s.Columns[0].Flex = 50
+			s.Columns[1].Flex = 1
+		}, `column "inside"`},
+		{"no columns", func(s *Spec) { s.Columns = nil }, "no zones"},
+		{"column without zones", func(s *Spec) { s.Columns[0].Zones = nil }, "no zones"},
+		{"negative column flex", func(s *Spec) { s.Columns[0].Flex = -1 }, "negative flex"},
+		{"empty zone id", func(s *Spec) { s.Columns[0].Zones[0].ID = "" }, "empty id"},
+		{"duplicate zone", func(s *Spec) { s.Columns[1].Zones[0].ID = "net" }, "duplicate zone"},
+		{"negative zone flex", func(s *Spec) { s.Columns[0].Zones[0].Flex = -1 }, "negative flex"},
+		{"negative cols", func(s *Spec) { s.Columns[0].Zones[0].Cols = -1 }, "negative cols"},
+		{"unknown layout", func(s *Spec) { s.Columns[0].Zones[0].Layout = "spiral" }, "unknown layout"},
+		{"unknown fill", func(s *Spec) { s.Columns[0].Zones[0].Fill = "diagonal" }, "unknown fill"},
+		{"routes zone without group", func(s *Spec) {
+			s.Columns[0].Zones[0].Layout = LayoutRoutes
+		}, "names no group"},
+		{"group outside a routes zone", func(s *Spec) {
+			s.Columns[0].Zones[0].Group = GroupPublic
+		}, "does not lay out routes"},
+		{"unknown group", func(s *Spec) {
+			s.Columns[0].Zones[0].Layout = LayoutRoutes
+			s.Columns[0].Zones[0].Group = "internet"
+		}, "unknown group"},
+		{"two zones of one group", func(s *Spec) {
+			s.Columns[0].Zones = append(s.Columns[0].Zones,
+				Zone{ID: "pub2", Layout: LayoutRoutes, Group: GroupPublic})
+			s.Columns[0].Zones[0].Layout = LayoutRoutes
+			s.Columns[0].Zones[0].Group = GroupPublic
+		}, "both lay out"},
 		{"unknown default zone", func(s *Spec) { s.DefaultZone = "nowhere" }, "defaultZone"},
+		{"default zone lays out routes", func(s *Spec) {
+			s.Columns[0].Zones[0].Layout = LayoutRoutes
+			s.Columns[0].Zones[0].Group = GroupPublic
+			s.DefaultZone = "net"
+		}, "lays out routes"},
 		{"node without id or host", func(s *Spec) { s.Nodes = append(s.Nodes, NodeSpec{Zone: "fleet"}) }, "neither id nor host"},
 		{"duplicate node", func(s *Spec) { s.Nodes = append(s.Nodes, NodeSpec{ID: "edge", Zone: "net"}) }, "duplicate node"},
 		{"unknown zone", func(s *Spec) { s.Nodes = append(s.Nodes, NodeSpec{ID: "x", Zone: "nowhere"}) }, "unknown zone"},
+		{"node in a routes zone", func(s *Spec) {
+			s.Columns[0].Zones[0].Layout = LayoutRoutes
+			s.Columns[0].Zones[0].Group = GroupPublic
+			s.Nodes = append(s.Nodes, NodeSpec{ID: "x", Zone: "net"})
+		}, "routes zone"},
 		{"unknown host", func(s *Spec) { s.Nodes = append(s.Nodes, NodeSpec{ID: "x", Host: "ghost", Zone: "fleet"}) }, "unknown inventory host"},
 		{"host placed twice", func(s *Spec) {
 			s.Nodes = append(s.Nodes, NodeSpec{ID: "x", Host: "h001", Zone: "fleet"}, NodeSpec{ID: "y", Host: "h001", Zone: "fleet"})
@@ -454,6 +1380,24 @@ func TestValidate(t *testing.T) {
 		}, "self-loop"},
 		{"unknown hub", func(s *Spec) { s.Hubs.Edge = "ghost" }, "hubs.edge"},
 		{"hidden host not auto-placed", func(s *Spec) { s.Hide = []string{"h003"} }, ""},
+		{"dns records without a zone", func(s *Spec) {
+			s.DNS = &DNS{Records: []DNSRecord{{Name: "git", Type: "A", Value: "1.2.3.4"}}}
+		}, "no zone"},
+		{"dns record without a name", func(s *Spec) {
+			s.DNS = &DNS{Zone: "example", Records: []DNSRecord{{Type: "A", Value: "1.2.3.4"}}}
+		}, "no name"},
+		{"dns record without a value", func(s *Spec) {
+			s.DNS = &DNS{Zone: "example", Records: []DNSRecord{{Name: "git", Type: "A"}}}
+		}, "no value"},
+		{"dns record of an unknown type", func(s *Spec) {
+			s.DNS = &DNS{Zone: "example", Records: []DNSRecord{{Name: "git", Type: "PTR", Value: "x"}}}
+		}, "unknown type"},
+		{"dns name declared twice", func(s *Spec) {
+			s.DNS = &DNS{Zone: "example", Records: []DNSRecord{
+				{Name: "git", Type: "A", Value: "1.2.3.4"},
+				{Name: "git", Type: "A", Value: "5.6.7.8"},
+			}}
+		}, "twice"},
 	}
 
 	for _, tc := range cases {
@@ -477,21 +1421,22 @@ func TestValidate(t *testing.T) {
 	}
 }
 
-// Every zone Validate accepts is wide enough that layout's own split agrees.
-func TestValidateZoneWidthsMatchLayout(t *testing.T) {
+// Every column Validate accepts is wide enough that layout's own split agrees,
+// so a spec that starts must draw in bounds.
+func TestValidateColumnWidthsMatchLayout(t *testing.T) {
 	spec := testSpec()
 	spec.Width = DefaultWidth
 	if err := spec.Validate(testInventory()); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
-	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at), at)
-	widths := zoneWidths(spec.Rows[0], spec.Width)
-	if len(d.Zones) != len(widths) {
-		t.Fatalf("zones = %d, widths = %d", len(d.Zones), len(widths))
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	widths := columnWidths(spec.Columns, spec.Width)
+	if len(d.Columns) != len(widths) {
+		t.Fatalf("columns = %d, widths = %d", len(d.Columns), len(widths))
 	}
-	for i, z := range d.Zones {
-		if z.W != widths[i] || z.W < MinWidth {
-			t.Errorf("zone %s drawn %d wide, validated %d (minimum %d)", z.ID, z.W, widths[i], MinWidth)
+	for i, c := range d.Columns {
+		if c.W != widths[i] || c.W < MinWidth {
+			t.Errorf("column %s drawn %d wide, validated %d (minimum %d)", c.ID, c.W, widths[i], MinWidth)
 		}
 	}
 }
@@ -502,93 +1447,128 @@ func TestValidateHiddenHostIsNotDrawn(t *testing.T) {
 	if err := spec.Validate(testInventory()); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
-	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at), at)
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
 	if _, ok := nodesByID(d)["h003"]; ok {
 		t.Fatal("hidden host must not be auto-placed")
 	}
 }
 
-func TestBuildEmptySpec(t *testing.T) {
-	d := Build(&Spec{}, state.Merged{}, at)
-	if d.Width != DefaultWidth || d.Height < minZoneH {
-		t.Fatalf("empty spec diagram = %dx%d", d.Width, d.Height)
+// A host the spec never mentions still appears, in the default region.
+func TestDefaultZoneAutoPlacesUnknownHost(t *testing.T) {
+	spec := &Spec{
+		Width:       1200,
+		Columns:     []Column{{ID: "c", Zones: []Zone{{ID: "fleet", Flex: 1}}}},
+		DefaultZone: "fleet",
+		Nodes:       []NodeSpec{{Host: "h001", Zone: "fleet"}},
 	}
-	if len(d.Nodes) != 0 || len(d.Edges) != 0 {
-		t.Fatalf("empty spec drew content: %+v", d)
-	}
-	if d.Meta != "{}" {
-		t.Errorf("meta = %q", d.Meta)
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	for _, h := range []string{"h001", "h003", "gp3"} {
+		if _, ok := nodesByID(d)[h]; !ok {
+			t.Errorf("%s was not auto-placed", h)
+		}
 	}
 }
 
-// serviceInventory declares one host whose three services reach it three
-// different ways: public through the edge, public through the router, and
-// host-only. An unplaced service is declared too and must attach to no station.
-func serviceInventory() *inventory.Inventory {
-	return &inventory.Inventory{
-		Services: map[string]inventory.Service{
-			"media": {Name: "media", Kind: "nixos", Host: "h004", Routes: map[string]inventory.Route{
-				"web": {Port: 443, Proto: "https", FQDN: strp("media.example"), Exposure: "public", Via: []string{"edge"}},
-			}},
-			"router-ui": {Name: "router-ui", Host: "h004", Routes: map[string]inventory.Route{
-				"web": {Port: 8443, Exposure: "public", Via: []string{"router"}},
-			}},
-			"vault": {Name: "vault", Host: "h004", Routes: map[string]inventory.Route{
-				"web": {Port: 8200, Exposure: "local"},
-			}},
-			"stray": {Name: "stray", Routes: map[string]inventory.Route{
-				"web": {Port: 9000, Exposure: "public", Via: []string{"edge"}},
-			}},
+// --- parking: behaviour that must not regress ------------------------------
+
+// The station is fixed size and its head, icon, dot and counter baselines all
+// stay inside the box, whatever the label length.
+func TestStationGeometryStaysInsideTheBox(t *testing.T) {
+	spec := &Spec{
+		Width:       DefaultWidth,
+		Columns:     []Column{{ID: "c", Zones: []Zone{{ID: "fleet", Label: "Fleet", Flex: 1}}}},
+		DefaultZone: "fleet",
+		Nodes: []NodeSpec{{
+			Host: "h001", Label: "A very long station label that would overflow", Zone: "fleet",
+			Badges: []string{"tailnet", "VLAN 20"},
+		}},
+	}
+	d := Build(spec, state.MergeAt(testInventory(), map[string]state.HostPoll{}, at, nil), at)
+
+	n := nodesByID(d)["h001"]
+	if n.W != stationW {
+		t.Fatalf("station width = %d, want %d", n.W, stationW)
+	}
+	inside := func(name string, x, y int) {
+		if x < 0 || x > n.W || y < 0 || y > n.H {
+			t.Errorf("%s (%d,%d) is outside the %dx%d station", name, x, y, n.W, n.H)
+		}
+	}
+	inside("head", n.HeadX, n.HeadY)
+	inside("icon", n.IconX, n.IconY)
+	if n.IconX+10 != n.HeadX || n.IconY+10 != n.HeadY {
+		t.Errorf("icon centre = (%d,%d), station head = (%d,%d)", n.IconX+10, n.IconY+10, n.HeadX, n.HeadY)
+	}
+	inside("dot", n.DotX, n.HeadY)
+	inside("tailnet", n.TsX, n.TsY)
+	inside("count", n.CountX, n.CountY)
+	inside("warn", n.CountX, n.WarnY)
+	inside("label", n.HeadX, n.LabelY)
+	inside("tags", n.HeadX, n.TagsY)
+	if n.Tags != "tailnet · VLAN 20" {
+		t.Errorf("station tags = %q", n.Tags)
+	}
+	ni := infoByID(t, d)["h001"]
+	if ni.X != float64(n.CenterX()) || ni.Y != float64(n.CenterY()) {
+		t.Errorf("NodeInfo anchor = (%v,%v), station centre = (%d,%d)", ni.X, ni.Y, n.CenterX(), n.CenterY())
+	}
+	if strings.Join(ni.Badges, ",") != "tailnet,VLAN 20" {
+		t.Errorf("NodeInfo.Badges = %v", ni.Badges)
+	}
+}
+
+// A station's name is 21px type, so its baseline has to clear whatever is
+// drawn around the head: the outermost space ring when the host reports
+// mounts, the head circle when it does not. Clearing only the ring radius
+// put a ringless station's name through its own circle.
+func TestStationLabelClearsTheHead(t *testing.T) {
+	spec := &Spec{
+		Width:       DefaultWidth,
+		Columns:     []Column{{ID: "c", Zones: []Zone{{ID: "fleet", Label: "Fleet", Flex: 1}}}},
+		DefaultZone: "fleet",
+		Nodes: []NodeSpec{
+			{Host: "h001", Zone: "fleet"},
+			{ID: "apc1", Zone: "fleet"},
 		},
-		Hosts: map[string]inventory.Host{"h004": {OverlayIP: strp("100.64.0.44")}},
 	}
-}
+	inv := testInventory()
+	inv.Hosts["h001"] = inventory.Host{Role: "server", OverlayIP: strp("100.64.0.13")}
+	polls := map[string]state.HostPoll{"h001": testPoll("h001", at)}
+	d := Build(spec, state.MergeAt(inv, polls, at, nil), at)
 
-// A public route is public only where it genuinely enters from the internet:
-// through the edge hub, or through the router when that is what terminates it.
-func TestServiceExposureAndRouteOrigin(t *testing.T) {
-	spec := &Spec{DefaultZone: "fleet", Nodes: []NodeSpec{{ID: "edge", Label: "Edge", Kind: "cloud", Zone: "fleet"}}}
-	d := Build(spec, state.MergeAt(serviceInventory(), map[string]state.HostPoll{}, at), at)
-
-	svcs := map[string]ServiceInfo{}
-	for _, s := range infoByID(t, d)["h004"].Services {
-		svcs[s.Name] = s
-	}
-	if len(svcs) != 3 {
-		t.Fatalf("services = %+v", svcs)
-	}
-	if media := svcs["media"]; !media.Public || media.ViaRouter {
-		t.Errorf("edge-terminated public route = %+v", media)
-	}
-	if router := svcs["router-ui"]; router.Public || !router.ViaRouter {
-		t.Errorf("router-terminated public route = %+v", router)
-	}
-	if vault := svcs["vault"]; vault.Public || vault.ViaRouter || vault.Exposure != "local" {
-		t.Errorf("host-only route = %+v", vault)
-	}
-	for _, s := range svcs {
-		if s.Name == "stray" {
-			t.Error("a service with no declared host must not attach to a station")
+	for _, id := range []string{"h001", "apc1"} {
+		n := nodesByID(d)[id]
+		// The widest thing around the head: the outer ring, else the circle.
+		outer := n.R
+		for _, r := range n.Rings {
+			outer = max(outer, r.R)
+		}
+		if n.LabelY <= n.HeadY+outer {
+			t.Errorf("%s: label baseline %d does not clear the head at y=%d r=%d (outer %d)",
+				id, n.LabelY, n.HeadY, n.R, outer)
+		}
+		if n.H < n.LabelY {
+			t.Errorf("%s: hit rect %d is above the label baseline %d", id, n.H, n.LabelY)
 		}
 	}
 }
 
 // The station counts services, not containers: a station with two of three
-// services down shows 3/1 without listing a single name.
+// services down shows 3/2 without listing a single name.
 func TestStationServiceCountsAndFailure(t *testing.T) {
-	inv := serviceInventory()
+	inv := routeInventory()
 	poll := state.HostPoll{
 		Host: "h004", OK: true, PolledAt: at,
 		Status: &state.HostStatus{
 			Host: "h004",
 			Services: map[string]state.ServiceStatus{
-				"media":     {Active: "active", Enabled: true},
+				"gitea":     {Active: "active", Enabled: true},
 				"router-ui": {Active: "failed", Enabled: true},
 				"vault":     {Active: "inactive", Enabled: false},
 			},
 		},
 	}
-	d := Build(&Spec{DefaultZone: "fleet"}, state.MergeAt(inv, map[string]state.HostPoll{"h004": poll}, at), at)
+	d := Build(routeSpec(), state.MergeAt(inv, map[string]state.HostPoll{"h004": poll}, at, nil), at)
 
 	n := nodesByID(d)["h004"]
 	if n.SvcCount != 3 || n.SvcFailed != 2 {
@@ -597,8 +1577,7 @@ func TestStationServiceCountsAndFailure(t *testing.T) {
 	if n.Warn != 0 {
 		t.Errorf("stopped services are not disk warnings: %d", n.Warn)
 	}
-	ni := infoByID(t, d)["h004"]
-	if ni.SvcFailed != 2 {
+	if ni := infoByID(t, d)["h004"]; ni.SvcFailed != 2 {
 		t.Errorf("NodeInfo.SvcFailed = %d", ni.SvcFailed)
 	}
 }
@@ -661,45 +1640,120 @@ func TestDiskProblemsCountsEachPoolOnce(t *testing.T) {
 	}
 }
 
-// The station is fixed size and its head, icon, dot and counter baselines all
-// stay inside the box, whatever the label length.
-func TestStationGeometryStaysInsideTheBox(t *testing.T) {
-	inv := serviceInventory()
-	inv.Hosts["h004"] = inventory.Host{OverlayIP: strp("100.64.0.44")}
+// A segment draws a bar spanning its region and takes a row of its own: a
+// neutral fabric is never squeezed into a station cell.
+func TestSegmentSpansItsRegion(t *testing.T) {
 	spec := &Spec{
-		Width:       DefaultWidth,
-		Rows:        []Row{{Zones: []Zone{{ID: "fleet", Label: "Fleet", Flex: 1}}}},
-		DefaultZone: "fleet",
-		Nodes: []NodeSpec{{
-			Host: "h004", Label: "A very long station label that would overflow", Zone: "fleet",
-			Badges: []string{"tailnet", "VLAN 20"},
-		}},
+		Width: 1200,
+		Columns: []Column{{ID: "c", Zones: []Zone{{
+			ID: "lan", Flex: 1,
+		}}}},
+		DefaultZone: "lan",
+		Nodes: []NodeSpec{
+			{ID: "fabric", Label: "LAN fabric", Segment: true, Zone: "lan"},
+			{Host: "h001", Zone: "lan"},
+		},
 	}
-	d := Build(spec, state.MergeAt(inv, map[string]state.HostPoll{}, at), at)
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	z, ok := zoneByID(d, "lan")
+	if !ok {
+		t.Fatal("lan zone missing")
+	}
+	seg, ok := nodesByID(d)["fabric"]
+	if !ok {
+		t.Fatal("segment not placed")
+	}
+	if seg.W != z.W-2*zonePad {
+		t.Errorf("segment width %d, region inner %d", seg.W, z.W-2*zonePad)
+	}
+	if seg.H != segH {
+		t.Errorf("segment height = %d, want %d", seg.H, segH)
+	}
+	if seg.SegX2 != seg.W || seg.SegY2 != seg.H {
+		t.Errorf("segment bar = %+v", seg)
+	}
+	host := nodesByID(d)["h001"]
+	if host.Y <= seg.Y {
+		t.Errorf("station at y=%d did not take the row below the segment at %d", host.Y, seg.Y)
+	}
+}
 
-	n := nodesByID(d)["h004"]
-	if n.W != stationW || n.H != stationH {
-		t.Fatalf("station = %dx%d, want %dx%d", n.W, n.H, stationW, stationH)
+// The chain a reader is meant to trace — router, switch, LAN segment server —
+// must exist in the drawn graph, not just in prose. Every LAN attachment
+// therefore has to reach the fabric on both ends: a switch with no fabric
+// link would leave the servers hanging off nothing.
+func TestLanFabricConnectsSwitchesAndHosts(t *testing.T) {
+	spec := &Spec{
+		Width: 1200,
+		Columns: []Column{{ID: "c", Zones: []Zone{
+			{ID: "rack", Flex: 1},
+			{ID: "lan", Flex: 1},
+		}}},
+		DefaultZone: "lan",
+		Nodes: []NodeSpec{
+			{Host: "h005", Zone: "rack"},
+			{ID: "sg3210x", Zone: "rack"},
+			{ID: "sg1428pe", Zone: "rack"},
+			{ID: "fabric", Label: "LAN fabric", Segment: true, Zone: "lan"},
+			{Host: "h001", Zone: "lan"},
+		},
+		Links: []LinkSpec{
+			{From: "h005", To: "sg3210x", Kind: "trunk"},
+			{From: "sg3210x", To: "sg1428pe", Kind: "ethernet"},
+			{From: "sg3210x", To: "fabric", Kind: LinkLan},
+			{From: "sg1428pe", To: "fabric", Kind: LinkLan},
+			{From: "fabric", To: "h001", Kind: LinkLan},
+		},
 	}
-	inside := func(name string, x, y int) {
-		if x < 0 || x > n.W || y < 0 || y > n.H {
-			t.Errorf("%s (%d,%d) is outside the %dx%d station", name, x, y, n.W, n.H)
+	inv := &inventory.Inventory{
+		Services: map[string]inventory.Service{},
+		Hosts: map[string]inventory.Host{
+			"h005": {OverlayIP: strp("100.64.0.3"), LanIP: strp("10.12.14.1")},
+			"h001": {OverlayIP: strp("100.64.0.13"), LanIP: strp("10.12.14.5")},
+		},
+	}
+	d := Build(spec, state.MergeAt(inv, nil, at, nil), at)
+
+	// The graph is undirected for reachability: a dashed attachment claims a
+	// shared segment, not a direction.
+	adj := map[string][]string{}
+	lan := 0
+	for _, e := range d.Edges {
+		adj[e.From] = append(adj[e.From], e.To)
+		adj[e.To] = append(adj[e.To], e.From)
+		if e.Kind == LinkLan {
+			lan++
 		}
 	}
-	inside("head", n.HeadX, n.HeadY)
-	inside("icon", n.IconX, n.IconY)
-	inside("dot", n.DotX, n.HeadY)
-	inside("tailnet", n.TsX, n.TsY)
-	inside("count", n.CountX, n.CountY)
-	inside("warn", n.CountX, n.WarnY)
-	if n.Tags != "tailnet · VLAN 20" {
-		t.Errorf("station tags = %q", n.Tags)
+	if lan != 3 {
+		t.Errorf("%d LAN edges, want one per attachment (2 switches + 1 host)", lan)
 	}
-	ni := infoByID(t, d)["h004"]
-	if ni.X != float64(n.CenterX()) || ni.Y != float64(n.CenterY()) {
-		t.Errorf("NodeInfo anchor = (%v,%v), station centre = (%d,%d)", ni.X, ni.Y, n.CenterX(), n.CenterY())
+
+	// h005 reaches h001 only through a switch and the fabric.
+	seen := map[string]bool{"h005": true}
+	queue := []string{"h005"}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, next := range adj[cur] {
+			if !seen[next] {
+				seen[next] = true
+				queue = append(queue, next)
+			}
+		}
 	}
-	if strings.Join(ni.Badges, ",") != "tailnet,VLAN 20" {
-		t.Errorf("NodeInfo.Badges = %v", ni.Badges)
+	if !seen["h001"] {
+		t.Errorf("no drawn path h005 -> h001; reached %v", seen)
+	}
+	if !seen["fabric"] {
+		t.Error("the fabric segment is drawn but unreachable from the router")
+	}
+
+	// A switch that only had host-facing LAN edges would strand the servers;
+	// both switches must sit on the segment themselves.
+	for _, sw := range []string{"sg3210x", "sg1428pe"} {
+		if !seen[sw] {
+			t.Errorf("switch %q is not attached to the fabric", sw)
+		}
 	}
 }

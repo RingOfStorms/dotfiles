@@ -455,6 +455,99 @@ func TestPlacementStaleTokenAfterTakeover(t *testing.T) {
 	}
 }
 
+// TestPlacementStaleRollbackLeavesTakeover is the CLI's `cnt place --set`
+// failure path: it reserves, the commit is refused, and it then drops the
+// reservation it made. Between those two steps another client may take the
+// reservation over, which mints a new token — so the rollback must be unforced
+// and a 409 must be left alone. A forced DELETE there would delete the new
+// holder's row and mint a token nobody holds, losing the placement the
+// operator just asked for.
+func TestPlacementStaleRollbackLeavesTakeover(t *testing.T) {
+	r := newRig(t)
+	r.s.cfg.Status = r.status
+	r.up("h001", "app")
+	r.up("h003")
+	if c, _ := r.reserve("app", "h001", false); c != 200 {
+		t.Fatal(c)
+	}
+	if c, _ := r.commit("app"); c != 200 {
+		t.Fatal(c)
+	}
+	if c, out := r.reserve("app", "h003", false); c != 200 {
+		t.Fatalf("A reserves: %d %v", c, out)
+	}
+	stale := r.tok
+
+	// A's commit fails (h003 is not serving yet), and B takes the reservation
+	// over in the window before A rolls back.
+	if c, out := r.commit("app"); c != 409 {
+		t.Fatalf("A commits before h003 serves: %d %v", c, out)
+	}
+	c, out := r.callTok("POST", "/api/placements/reserve", lioPeer, "good-"+lioSub, Request{Service: "app", Host: "h003", Force: true})
+	if c != 200 {
+		t.Fatalf("B's takeover: %d %v", c, out)
+	}
+	fresh, _ := row(t, out)["token"].(string)
+	if fresh == "" || fresh == stale {
+		t.Fatalf("takeover token %q (stale %q)", fresh, stale)
+	}
+
+	if c, out := r.call("DELETE", "/api/placements/app?token="+stale, nil); c != 409 || !strings.Contains(out["error"].(string), "rollback refused") {
+		t.Fatalf("A's unforced rollback: %d %v", c, out)
+	}
+	if m := r.s.rows["app"]; m.Host != "h003" || m.State != Prepared || m.Token != fresh {
+		t.Fatalf("A's rollback touched B's reservation: %+v", m)
+	}
+	// B still owns it: it can commit once the destination serves.
+	r.up("h003", "app")
+	if c, out := r.callTok("POST", "/api/placements/commit", lioPeer, "good-"+lioSub, Request{Service: "app", Token: fresh}); c != 200 {
+		t.Fatalf("B commits: %d %v", c, out)
+	}
+}
+
+// TestPlacementForcedReserveDoesNotForceCommit is the other half of that path:
+// `cnt place --force` forces the *reserve* only. If the commit carried the same
+// flag it would skip checkToken, so a client whose reservation was taken over
+// between its own reserve and commit would commit the replacement row — a
+// destination it never reserved. The token is the handle for the commit, and
+// force never travels with it.
+func TestPlacementForcedReserveDoesNotForceCommit(t *testing.T) {
+	r := newRig(t)
+	r.s.cfg.Status = r.status
+	r.up("h001", "app")
+	r.up("h003")
+	if c, _ := r.reserve("app", "h001", false); c != 200 {
+		t.Fatal(c)
+	}
+	if c, _ := r.commit("app"); c != 200 {
+		t.Fatal(c)
+	}
+	// A places onto h003 with force (the service still runs on h001).
+	if c, out := r.reserve("app", "h003", true); c != 200 {
+		t.Fatalf("A's forced reserve: %d %v", c, out)
+	}
+	stale := r.tok
+	// B takes the same reservation over before A commits.
+	c, out := r.callTok("POST", "/api/placements/reserve", lioPeer, "good-"+lioSub, Request{Service: "app", Host: "h003", Force: true})
+	if c != 200 {
+		t.Fatalf("B's takeover: %d %v", c, out)
+	}
+	fresh, _ := row(t, out)["token"].(string)
+	if fresh == "" || fresh == stale {
+		t.Fatalf("takeover token %q (stale %q)", fresh, stale)
+	}
+	if c, out := r.call("POST", "/api/placements/commit", Request{Service: "app", Host: "h003", Token: stale}); c != 409 || !strings.Contains(out["error"].(string), "commit refused") {
+		t.Fatalf("A's unforced commit of B's reservation: %d %v", c, out)
+	}
+	if m := r.s.rows["app"]; m.Host != "h003" || m.State != Prepared || m.Token != fresh || m.Previous == nil || m.Previous.Host != "h001" {
+		t.Fatalf("A's commit touched B's reservation: %+v", m)
+	}
+	r.up("h003", "app")
+	if c, out := r.callTok("POST", "/api/placements/commit", lioPeer, "good-"+lioSub, Request{Service: "app", Token: fresh}); c != 200 {
+		t.Fatalf("B commits: %d %v", c, out)
+	}
+}
+
 // TestPlacementTakeoverRollback: B's rollback restores A's committed binding,
 // not the destination B itself had reserved.
 func TestPlacementTakeoverRollback(t *testing.T) {
@@ -1811,4 +1904,107 @@ func TestPlacementSaveFailureLeavesStateUntouched(t *testing.T) {
 			t.Fatalf("sweep after the state dir came back: %+v", m)
 		}
 	})
+}
+
+// TestPlacementForcedSetOverDeadBinding is the escape hatch `cnt place <svc>
+// --set <new> --force` for a binding whose host has gone away for good. The
+// dead host cannot be asked, so nothing about it can be confirmed; the force is
+// the operator's statement that this copy is the one to keep. Without force the
+// registry refuses, because moving onto a host that already serves the name
+// would leave two live copies of it.
+func TestPlacementForcedSetOverDeadBinding(t *testing.T) {
+	r := newRig(t)
+	r.s.cfg.Status = r.status
+	r.up("h003", "app")
+	if c, out := r.reserve("app", "h003", false); c != 200 {
+		t.Fatalf("reserve: %d %v", c, out)
+	}
+	if c, out := r.commit("app"); c != 200 {
+		t.Fatalf("commit: %d %v", c, out)
+	}
+	// h003 dies with the binding on it; the copy on h001 is already serving.
+	r.up("h001", "app")
+	r.down["h003"] = errors.New("dial tcp 100.64.0.13: connect: no route to host")
+
+	if c, out := r.reserve("app", "h001", false); c != 409 || !strings.Contains(out["error"].(string), "already runs on h001") {
+		t.Fatalf("unforced move onto a serving copy: %d %v", c, out)
+	}
+	if m := r.s.rows["app"]; m.Host != "h003" || m.State != Committed {
+		t.Fatalf("a refused reserve moved the row: %+v", m)
+	}
+
+	// Forced the reserve is accepted even though the answered destination
+	// argues against it, and h003 never has to answer.
+	if c, out := r.reserve("app", "h001", true); c != 200 {
+		t.Fatalf("forced reserve: %d %v", c, out)
+	}
+	tok := r.tok
+	if tok == "" {
+		t.Fatal("forced reserve minted no token")
+	}
+	if h := r.s.export().Host["app"]; h != "h003" {
+		t.Fatalf("a prepared reservation routes already: export %q", h)
+	}
+	if c, out := r.commit("app"); c != 200 {
+		t.Fatalf("commit: %d %v", c, out)
+	}
+	m := r.s.rows["app"]
+	if m.Host != "h001" || m.State != Committed || m.Previous == nil || m.Previous.Host != "h003" {
+		t.Fatalf("row after the forced move: %+v", m)
+	}
+	// The token stays while the old binding is still there to roll back to.
+	if m.Token != tok {
+		t.Errorf("token %q, want %q kept until the source is retired", m.Token, tok)
+	}
+	if h := r.s.export().Host["app"]; h != "h001" {
+		t.Fatalf("export %q, want h001", h)
+	}
+}
+
+// TestPlacementForcedRecoverOfSilentEnds is the other half of the escape:
+// `cnt place <svc> --recover --force` settles a row whose move lapsed while
+// neither end could be asked. Without force the registry refuses, because a
+// silent end may still be serving and picking one would strand the other; with
+// force it restores the previous binding, the copy the operator kept.
+func TestPlacementForcedRecoverOfSilentEnds(t *testing.T) {
+	r := newRig(t)
+	r.s.cfg.Status = r.status
+	r.up("h001", "app")
+	r.up("h003")
+	if c, _ := r.reserve("app", "h001", false); c != 200 {
+		t.Fatal(c)
+	}
+	if c, _ := r.commit("app"); c != 200 {
+		t.Fatal(c)
+	}
+	if c, out := r.reserve("app", "h003", false); c != 200 {
+		t.Fatalf("reserve: %d %v", c, out)
+	}
+	tok := r.tok
+	r.now = r.now.Add(ReserveTTL + time.Minute)
+	r.s.Sweep(context.Background())
+	if m := r.s.rows["app"]; m.State != Stale || m.Host != "h003" || m.Previous == nil || m.Previous.Host != "h001" {
+		t.Fatalf("expired move: %+v", m)
+	}
+	// Both ends went quiet: the row cannot be settled from their answers.
+	r.down["h001"] = errors.New("ssh: connect to host h001: No route to host")
+	r.down["h003"] = errors.New("ssh: connect to host h003: No route to host")
+	if c, out := r.call("POST", "/api/placements/recover", Request{Service: "app", Token: tok}); c != 409 || !strings.Contains(out["error"].(string), "cannot tell what the move did") {
+		t.Fatalf("unforced recover of silent ends: %d %v", c, out)
+	}
+	if m := r.s.rows["app"]; m.State != Stale || m.Host != "h003" {
+		t.Fatalf("a refused recover changed the row: %+v", m)
+	}
+	if c, out := r.call("POST", "/api/placements/recover", Request{Service: "app", Token: tok, Force: true}); c != 200 {
+		t.Fatalf("forced recover: %d %v", c, out)
+	}
+	if m := r.s.rows["app"]; m.Host != "h001" || m.State != Committed || m.Previous != nil || m.Token != "" {
+		t.Fatalf("forced recovery left %+v", m)
+	}
+	if h := r.s.export().Host["app"]; h != "h001" {
+		t.Fatalf("forced recovery advertised %q", h)
+	}
+	if a := r.auditLog(); !strings.Contains(a, `"action":"recover"`) {
+		t.Errorf("audit lacks the recovery:\n%s", a)
+	}
 }

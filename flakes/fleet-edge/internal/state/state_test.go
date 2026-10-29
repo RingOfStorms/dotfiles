@@ -46,7 +46,7 @@ func TestMergeWithGoodPoll(t *testing.T) {
 			},
 		},
 	}
-	m := Merge(inv, polls)
+	m := Merge(inv, polls, nil)
 	if len(m.Services) != 2 {
 		t.Fatalf("expected 2 services, got %d", len(m.Services))
 	}
@@ -78,7 +78,7 @@ func TestMergeUnreachableHost(t *testing.T) {
 	polls := map[string]HostPoll{
 		"h001": {Host: "h001", OK: false, Error: "context deadline exceeded", PolledAt: time.Now()},
 	}
-	m := Merge(inv, polls)
+	m := Merge(inv, polls, nil)
 	for _, sv := range m.Services {
 		if sv.Active != "unknown" {
 			t.Fatalf("expected unknown active when host unreachable, got %+v", sv)
@@ -94,7 +94,7 @@ func TestMergeUnreachableHost(t *testing.T) {
 
 func TestMergeNoPollYet(t *testing.T) {
 	inv := sampleInventory()
-	m := Merge(inv, map[string]HostPoll{})
+	m := Merge(inv, map[string]HostPoll{}, nil)
 	if len(m.Services) != 2 {
 		t.Fatalf("expected 2 services, got %d", len(m.Services))
 	}
@@ -146,7 +146,7 @@ func TestMergeNoEndpointHost(t *testing.T) {
 		"h001": {Host: "h001", OK: true, PolledAt: time.Now()},
 		"gp3":  {Host: "gp3", OK: false, Error: "refused", PolledAt: time.Now()},
 	}
-	m := Merge(inv, polls)
+	m := Merge(inv, polls, nil)
 	for _, h := range m.Hosts {
 		switch h.Host {
 		case "h001":
@@ -174,7 +174,7 @@ func TestMergeContainerHostIsDeclared(t *testing.T) {
 		"h003": {Host: "h003", OK: true, PolledAt: time.Now()},
 		"gp3":  {Host: "gp3", OK: true, PolledAt: time.Now()},
 	}
-	m := MergeAt(inv, polls, time.Now())
+	m := MergeAt(inv, polls, time.Now(), nil)
 	want := map[string]bool{"h001": true, "h003": true, "gp3": false}
 	if len(m.Hosts) != len(want) {
 		t.Fatalf("expected %d hosts, got %+v", len(want), m.Hosts)
@@ -193,9 +193,39 @@ func TestMergeContainerHostWithoutServices(t *testing.T) {
 		Hosts:          map[string]inventory.Host{"h003": {OverlayIP: strp("100.64.0.4")}},
 		ContainerHosts: []string{"h003"},
 	}
-	m := MergeAt(inv, map[string]HostPoll{}, time.Now())
+	m := MergeAt(inv, map[string]HostPoll{}, time.Now(), nil)
 	if len(m.Hosts) != 1 || !m.Hosts[0].ContainerHost {
 		t.Fatalf("expected declared container host, got %+v", m.Hosts)
+	}
+}
+
+func TestMergeBoundHost(t *testing.T) {
+	inv := sampleInventory() // jellyfin and photos, both declared on h001
+	// No registry map at all: the declaration is all there is.
+	m := MergeAt(inv, map[string]HostPoll{}, time.Now(), nil)
+	for _, svc := range m.Services {
+		if svc.BoundHost != "h001" {
+			t.Fatalf("%s: boundHost = %q, want the declared h001", svc.Name, svc.BoundHost)
+		}
+	}
+
+	// A registry that names one service: the other is unplaced, not declared.
+	m = MergeAt(inv, map[string]HostPoll{}, time.Now(), map[string]string{"photos": "h003"})
+	got := map[string]string{}
+	for _, svc := range m.Services {
+		got[svc.Name] = svc.BoundHost
+	}
+	if got["photos"] != "h003" || got["jellyfin"] != "" {
+		t.Fatalf("boundHost = %v, want photos=h003 jellyfin=unplaced", got)
+	}
+
+	// An empty (non-nil) registry is not "no registry": every service is
+	// unplaced, which is what running without one means.
+	m = MergeAt(inv, map[string]HostPoll{}, time.Now(), map[string]string{})
+	for _, svc := range m.Services {
+		if svc.BoundHost != "" {
+			t.Fatalf("%s: boundHost = %q, want unplaced", svc.Name, svc.BoundHost)
+		}
 	}
 }
 
@@ -225,7 +255,7 @@ func TestMergeBackupAge(t *testing.T) {
 		"never":    {Active: "active"},
 		"bad":      {Active: "active", LastBackup: "yesterday"},
 	}}}}
-	m := MergeAt(inv, polls, now)
+	m := MergeAt(inv, polls, now, nil)
 	got := map[string]ServiceView{}
 	for _, s := range m.Services {
 		got[s.Name] = s
@@ -244,7 +274,7 @@ func TestMergeBackupAge(t *testing.T) {
 	}
 	// exactly 36h is not stale yet
 	polls["h001"].Status.Services["old"] = ServiceStatus{LastBackup: "2026-10-21T00:00:00Z"}
-	if v := MergeAt(inv, polls, now); func() string {
+	if v := MergeAt(inv, polls, now, nil); func() string {
 		for _, s := range v.Services {
 			if s.Name == "old" {
 				return s.Backup
@@ -255,7 +285,7 @@ func TestMergeBackupAge(t *testing.T) {
 		t.Error("36h exactly flagged stale")
 	}
 	// unreachable host: unknown
-	m = MergeAt(inv, map[string]HostPoll{"h001": {Host: "h001", OK: false}}, now)
+	m = MergeAt(inv, map[string]HostPoll{"h001": {Host: "h001", OK: false}}, now, nil)
 	for _, s := range m.Services {
 		if s.Backup != "unknown" {
 			t.Errorf("%s: %q with the host down", s.Name, s.Backup)

@@ -148,14 +148,24 @@ inventory = redeploying h005** (after `nix flake update containers` in
 
 ## Topology (`/topology`)
 
-`/topology` is a route atlas of the edge: internet, the Oracle Cloud node, the
-rack, the home LAN and the roaming laptops as fixed-size stations in open
-labelled regions. It answers "what is where, what is up, and what talks to
-what" from a single screen; per-service chips are gone, so a host carrying
-sixteen services still reads as one box.
+`/topology` is a route atlas drawn as three vertical columns. Outside on the
+left are the public edge, the yellow public DNS name cloud, the separate
+purple overlay name cloud, and Bunny DNS. The middle is one green rack
+enclosure containing the modem, h005 router/dashboard, switches, servers,
+consoles and UPS units; rack order reads down the first internal column, then
+the next. The right contains the home LAN and roaming workstations. There is
+no separate internet-uplink or Headscale station and no generic simulated
+client: journeys start at the actual declared name badge.
+Every drawn connection is a Bezier: the server emits `L` legs joined by
+tangent `Q` corners for the physical, control and per-route paths, so there
+are no hard right angles, and the browser composes each traffic journey from
+those same `d` strings rather than restating the geometry. Traffic dots ride
+the rendered SVG through `getPointAtLength`, so a marker is always on the ink
+the reader sees, at whatever zoom and fit the map is shown in.
 
-The drawing is a hand-written spec merged with everything the inventory
-already knows:
+The drawing combines the hand-written physical/layout spec, inventory route
+declarations, actual agent reports and the placement registry's current
+service-to-host binding:
 
 ```
 fleet-edge --topology /path/to/topology.json      # or FLEET_EDGE_TOPOLOGY
@@ -165,57 +175,106 @@ fleet-edge --topology /path/to/topology.json      # or FLEET_EDGE_TOPOLOGY
 sets `FLEET_EDGE_TOPOLOGY` from `services.fleet-edge.topology`. With neither,
 every inventory host is drawn in one zone.
 
+Service ownership uses `--placements-url` / `FLEET_EDGE_PLACEMENTS_URL`
+(default `http://127.0.0.1:8098/internal/placements.json`), not a fallback to
+inventory placement. An empty URL or unavailable registry leaves services
+unplaced: the map does not invent their owning hosts or route branches.
+
 ### Reading the map
 
-Drag to pan; wheel or pinch to zoom; `+` / `-` zoom, `0` or `fit` returns to
-the whole-fleet overview, `Escape` clears the selection. A click on a station
-(Enter/Space when it has focus) opens its details in the sidebar: addresses,
-declared role, lines, services with their exposure, drives with their SMART
-finding, filesystems, fail2ban jails and the wiring it participates in. The
-URL fragment carries the selection, so a sidebar can be linked to.
+The page is one full-width canvas, with no permanent sidebar or explanatory
+disclosure. Station state, available CPU/memory gauges, simulated disk-usage
+rings, declared service counts, service failures, drive advisories and ban
+enforcement are glanceable without a click. Unknown metrics are not healthy
+zeros; bans are protective enforcement, not faults.
 
-The opening view is not the fitted overview. A 1800-unit atlas fitted into a
-1440 px stage renders station names at 7.5 px, so the page opens at whatever
-zoom makes a name clear (at least 11.5 px) and centres the host carrying the
-most declared services among those currently online — a router or a cloud
-region makes a poor centre because no fleet service is anchored to it. If no
-host is online yet it falls back to `hubs.edge`, then to the middle of the
-diagram; no host id is hardcoded. `fit` is the explicit overview you return
-to. A view saved on a wide screen is raised to the same floor when it is
-restored on a phone, so a station name is never illegible after a resize:
-the saved centre is kept and only the scale moves.
+Drag to pan; wheel or pinch to zoom; `+` / `-` zoom, `0` or `fit` returns to
+the whole atlas, `Escape` closes the detail panel. The page **opens on the
+whole map**, at both a laptop and a phone: the server sizes the viewBox to the
+stage's aspect ratio, so scale 1 already means every station and every name is
+on screen. On a phone that is a smaller map rather than a clipped one, and the
+reader zooms in when they want to read a name.
+
+A click on a station (Enter/Space when it has focus) opens a selection popover
+with its addresses, role, every served FQDN and route key, services and exposure,
+SMART findings, filesystem/pool details, fail2ban jails and wiring. Its Space
+list has one row per reported primary mount, with recorded bytes beside the
+explicitly simulated fill and a swatch matching the mount's blue ring;
+submount aliases are listed under their primary rather than becoming extra
+rings. On a narrow screen the popover becomes a bottom drawer. The URL
+fragment carries the selection, so a station can be linked to.
+
+Roles and membership tags stay in station tooltips and the popover rather
+than crowding the resting map; health readouts remain on the canvas.
+
+Picking a station adds a selection ring without dimming anything else. A name
+badge may emphasise its route, but never hides another route. All public and
+overlay name badges, collectors and owner branches stay visible at baseline
+in Overview, Physical and Control, including routes not selected for a trace.
 
 The map refreshes every 30 s while the tab is visible, preserving zoom,
-selection and layer state. Polling and animation stop when the tab is hidden.
+selection and view. Polling and animation stop when the tab is hidden.
 
-### Views and layers
+### Views
 
-Three view buttons choose which wiring is drawn:
+Three view buttons choose which *cabling* leads; they never hide a station,
+a name or a route web.
 
 | view | draws |
 | --- | --- |
-| Overview | stations, regions and labels only — no static wiring |
-| Physical | the known cabling: WAN, ethernet, trunk, KVM, power |
-| Control | the poll and control paths (agent polls, dashboard fan) |
+| Overview | the known cabling quiet, every route web at full strength |
+| Physical | the recorded cabling at full weight: WAN, ethernet, trunk, shared L2 fabric, KVM, power |
+| Control | the poll and control paths at full weight (agent polls, dashboard fan, DNS and proxy pushes) |
 
-Overview hides the declared rails on purpose: the page's job there is the
-shape of the fleet, and journeys are drawn on demand instead. Journeys and
-traffic dots live in their own overlay, so selecting a host or switching mode
-draws a route over an Overview without turning the rails back on.
+Cabling that is not emphasised stays drawn at reduced weight: a view says
+what to look at first, it does not turn the physical picture into a rumour.
+The public and overlay webs are painted by the same layers in all three
+views.
 
-The layer checkboxes (Physical links, Tailnet paths, Public paths, Agents &
-control) filter link families independently of the view. Toggles persist in
-`localStorage`, as do zoom and selection.
+Cable detail — port, trunk, VLAN — is the cable's **tooltip**, never printed
+on the resting map, so no wall of "switch/port not recorded" crosses the
+stations. The same text appears in the selected station's wiring list.
+
+### What the drawing means
+
+Public names hang off one yellow curly brace and collector, leading through
+o002 and branching to **every current owning host**. Overlay names use their
+own purple curly brace and collector, branching once per owning host. Bunny
+DNS is outside the rack: h005's control link manages its declarations, and
+light declaration paths connect Bunny to the public names. A declaration is
+not evidence of a live DNS lookup or working service.
+
+Connections use Bézier curves instead of sharp elbow corners. Traffic dots
+follow the same curved public/overlay collector and owner paths drawn on the
+map; this changes geometry, not route visibility or pause/replay semantics.
+
+Disk-usage rings are **simulated**, always shades of one blue hue, and vary
+deterministically by snapshot hour, host and primary mount. Capacity bytes,
+CPU/memory utilisation, service state, drive advisories and bans come from
+actual agent reports, not that simulation. CPU and memory bars carry numeric
+percentages when available; a missing metric reads `—` without a fabricated
+bar. The popover keeps recorded capacity beside the simulated figure.
+
+Recorded WAN, trunk, switch-interlink, console and power wiring is solid.
+The neutral shared LAN fabric connects both switches and the wired LAN
+hosts with dashed logical attachments: `VLAN 20 shared fabric` on the switch
+side and `switch/port not recorded` on the host side. These assert L2
+membership, not an invented switch, port or patch cable. Roaming workstations
+have no permanent wire because the repo records none.
 
 ### Traffic: simulated by default, honest about it
 
 The badge reads **Simulation** from first paint: requests are generated from
-the routes the repo declares (public through the edge hub, tailnet from a
-virtual overlay client), and no traffic is measured. Switching to **Real**
-does not invent anything — with no provider connected the badge reads *No
-traffic provider*, the sidebar says "no measured source is connected", and no
-dot is drawn. Only a provider that reports events animates, and each event is
-styled as measured or simulated.
+the routes the repo declares, and no traffic is measured. Every journey starts
+at a chip the server actually laid out — a public name enters on its own chip,
+through the shared yellow trunk, the edge proxy and on to the host the route
+names; an overlay name leaves its purple cloud along the branch for its host.
+Switching to **Real** with no capture provider keeps the mode unavailable:
+the badge reads *No traffic provider*, the mode note explains that no measured
+source is connected, and no dot is drawn. Real capture is intentionally not
+configured. A connected provider's events distinguish measured from simulated
+traffic. A host/route pair without a declared badge draws no fictional path
+and creates no invented client box.
 
 Animations respect `prefers-reduced-motion`: the travelling dot is replaced
 by a marker that appears at the destination. At most 64 dots are in flight and
@@ -250,16 +309,15 @@ traffic; pausing playback freezes any dots already in flight. A frame older
 than its snapshot window is labelled with its age instead of pretending to be
 current.
 
-Playback has one clock: pausing stops it, so the label, the slider and every
-dot freeze where they are, and the page stops polling `/api/topology/traffic`
-until the map is live again. Events the replay has queued but not yet reached
-wait with it. Resuming continues from that exact cursor — the queue and the
-window already fetched are kept, so no event is replayed twice or dropped.
-Scrubbing, **Live** and a mode switch are new intents: they cancel a frame
-request that is still in flight, and a replay frame that arrives after the
-pause is ignored rather than drawn behind a stopped clock. Only play requests
-carry the whole window; a scrub asks again at the cursor, so playing straight
-after a scrub still queues that window.
+Playback has one clock: pausing freezes the label, slider, in-flight dot
+positions and fade, and queued events wait. Traffic polling stays stopped
+through recorded playback and pause. A pure pause/resume continues from the
+exact cursor with the fetched window and queue intact; each event is consumed
+once. Scrubbing, **Live** and a mode switch are new intents that cancel an
+in-flight frame request. A stale play response arriving after pause is ignored
+instead of moving the stopped cursor or replacing its SVG. Only play requests
+carry the whole traffic window; a scrub asks at the cursor, so play after a
+scrub fetches that full window before continuing.
 
 ### Country flags
 
@@ -273,12 +331,12 @@ works without renaming it. Example:
 
 The file is parsed once at startup and queried in memory; nothing is
 downloaded and no banned address ever leaves the host for a lookup, so the
-sidebar still resolves countries on a machine with no egress. A configured
+page still resolves countries on a machine with no egress. A configured
 path that is missing or malformed fails startup rather than serving a partial
 index, so a half-parsed database can never answer wrongly; leaving the option
 empty is the supported way to disable lookups.
 
-Banned addresses in the sidebar then carry a flag and country name, and the
+Banned addresses in the station panel then carry a flag and country name, and the
 attribution line names the source (DB-IP Lite Country, CC BY 4.0). The country
 is where the address block is *registered*: it is an estimate about an
 address, never a claim about a person, and private, loopback, link-local,
@@ -291,60 +349,113 @@ instead of guessed.
 
 | key | meaning |
 | --- | --- |
-| `width` | SVG width in units (0 = 1800) |
-| `rows[].zones[]{id,label,kind,flex}` | horizontal bands; zones share a row, widths proportional to `flex` |
-| `nodes[]{id,host,label,kind,zone,role,badges[],lines[],href}` | one station; `host` binds it to an inventory host, `role` is the muted line under the name, `badges` the declared tags |
-| `links[]{from,to,kind,label}` | one declared connection between two node ids |
-| `defaultZone` | zone that receives every inventory host the spec doesn't place |
-| `hide[]` | inventory hosts never auto-placed |
-| `hubs{tailnet,edge,router,dashboard}` | node ids the derived edges attach to (`""` skips that family) |
-| `notes[]{title,text}` | the explanation paragraphs |
+| `width` | SVG width in units (0 = 1500) |
+| `height` | minimum height in units (0 = whatever the tallest column needs) |
+| `columns[]{id,label,flex,zones[]}` | columns ordered left to right; width shares use `flex` (0 means 1) |
+| `columns[].zones[]{id,label,kind,flex,layout,cols,fill,box,group}` | regions stacked top to bottom; `flex` shares the column's leftover height (0 means natural content height) |
+| `nodes[]{id,host,label,kind,zone,role,badges[],lines[],href,segment}` | station placement and non-derived detail; `id` defaults to `host`, role/badges remain in tooltips and the popover, `segment` draws a fabric bar rather than a device head |
+| `links[]{from,to,kind,label}` | declared connection between node ids; the label is available in its tooltip and wiring detail |
+| `dns{zone,external[],records[]}` | public DNS catalogue; external names are managed elsewhere |
+| `dns.records[]{name,type,value,ttl,source,declared,host,service,route}` | relative name, record type and target, optional TTL/source; ownership fields are derived from declared routes, not hand-assigned |
+| `defaultZone` | station zone receiving inventory hosts not explicitly placed; empty leaves them out |
+| `hide[]` | inventory hosts excluded from automatic placement |
+| `hubs{tailnet,edge,router,dashboard}` | node ids for derived edge families; empty skips that family (h005 uses `edge = "o002"`, `dashboard = "h005"`, empty `tailnet`/`router`) |
 
-Zone `kind` picks the tint (`internet`, `cloud`, `tailnet`, `home`, `rack`,
-`lan`, `roaming`; anything else is neutral). Link `kind` picks the style and
-the layer it belongs to: `wan`, `ethernet`, `trunk`, `wifi`, `kvm`, `power`
-(physical), `tailnet`, `public`, `agent`/`control`.
+Zone `kind` selects a tint (`cloud`, `tailnet`, `home`, `rack`, `lan`,
+`roaming`; other values are neutral). `layout` accepts `flow` (the default:
+pack stations and wrap), `stack` (one station per row), or `routes` (a derived
+name cloud instead of stations). A routes region requires `group: "public"`
+or `"overlay"`, with at most one region per group. `cols: 0` fits as many
+stations as possible; a positive value caps items per row. `fill` accepts
+`row` (default) or `column` (down, then across). `box: true` draws one solid
+enclosure; h005's rack uses `layout: "flow", cols: 2, fill: "column"`.
+
+DNS record types are `A`, `AAAA`, `CNAME`, `TXT`, `MX`, `NS`, `SRV` and `CAA`.
+`available` belongs to the derived public-zone metadata, not the input schema.
+
+Link `kind` picks the style and the layer it belongs to: `wan`, `ethernet`,
+`trunk`, `wifi`, `kvm`, `power` (physical), `lan` (a visually dashed
+attachment whose switch port is not recorded), `tailnet`, `public`,
+`agent`/`control`.
+
+### The route clouds
+
+Route-cloud regions are derived rather than hand-placed. h005 imports
+`dns = (import ./dns-records.nix { inherit fleet; }).publicSpec`; this is the
+same public catalogue used by DNS planning, not a second list of FQDNs.
+The inventory supplies service routes and their current owning hosts.
+
+- **public** (`group: "public"`) has one badge per catalogue FQDN, labelled
+  with its relative name. For example `git.joshuabell.xyz` is Forgejo,
+  `location.joshuabell.xyz` is Dawarich, and `life.joshuabell.xyz` is Life;
+  all currently belong to h001 and lead through o002. The yellow collector
+  branches once per owner, not once per selected route.
+- **overlay** (`group: "overlay"`) contains the declared non-public names.
+  Trilium appears as `notes.joshuabell.xyz`, not a made-up service hostname;
+  `litellm.joshuabell.xyz` is another example. Its purple collector branches
+  once per owner.
+
+A DNS-only name without a placed declared route stays faint and unowned
+(`declared: false`, no host). It gets no simulated journey or guessed host,
+even when its record names o002 or resolves through a CNAME chain. Unknown
+DNS availability stays unknown rather than being painted healthy.
+
+`Diagram.RouteMeta` is the JSON behind `#topo-routes`
+(`{groups[],dns,links[]}`): the placed chips with their absolute coordinates,
+the collector points, brace/trunk paths, and public and overlay owner
+branches. Traffic events resolve by host and route key to the exact declared
+badge the server drew, never a synthesised one. Selection changes emphasis
+only, not the baseline route graph.
+
+### Simulated disk rings
+
+`Node.Rings` draws one ring per **reported primary mount**, with a distinct
+shade of the same blue hue. Pool submounts/aliases remain attached to their
+primary and do not create rings; separate reported primary mounts are not
+collapsed merely because they share a filesystem or device. The simulated
+fraction is deterministic in `(snapshot hour, host, mount)`, so an hour's
+replay is repeatable. It never modifies recorded capacity, SMART, filesystem
+health or service state. A mount with no report gets no guessed ring.
 
 ### What is derived, never declared
 
-- **Inventory hosts and their live state** — the state dot, overlay/LAN IPs,
-  role, metrics and per-service detail come from the inventory, not the spec.
-  Every inventory host the spec doesn't place appears in `defaultZone`, so a
-  new fleet host shows up without a spec edit (use `hide` for non-fleet
-  things like the printer).
-- **Service and drive detail** — the sidebar lists every declared service with
+- **Inventory hosts and live state** — the inventory supplies hosts, addresses,
+  roles, placement and declared services/routes; fleet-agent polls supply
+  reachability, metrics and health. Unplaced inventory hosts appear in
+  `defaultZone` unless hidden, so a new host needs no spec placement edit.
+- **Service and drive detail** — the station panel lists every declared service with
   its exposure, proto, port and URLs, every drive with its SMART finding, the
   filesystems and the fail2ban jails. A red service count means something is
   not running; a ban is protective enforcement and is never counted as a
   fault. Missing SMART is unknown, not healthy, and a standby drive is quiet
   rather than failing.
-- **`hubs.tailnet`** — an edge to every placed host with an overlay IP.
-- **`hubs.edge`** — an edge to every placed host carrying `via = "edge"`
-  routes, labelled with the count.
+- **`hubs.tailnet`** — optional coordination-server edges. h005 leaves it
+  empty: overlay membership is a station tag and routes remain direct owner
+  branches, not a permanent Headscale station/fan.
+- **`hubs.edge`** — public paths to every placed `via = "edge"` owner.
 - **`hubs.router`** — the same for `via = "router"` routes (`minecraft` has no
   host today, so h005 leaves this empty rather than draw an empty fan).
 - **`hubs.dashboard`** — an edge from the dashboard host to every host with a
   fleet-agent.
 
-Only the parts the inventory can't know live in the spec: physical gear,
-cabling, VLANs and the prose. A declared cable is drawn only when the repo
-records it (the h005 trunk, the switch interlink, the KVM, UPS and console
-wiring); a host whose switch port is unrecorded gets no ethernet edge at all
-rather than a guessed one — zone membership already says which network it is
-on.
+Only facts the inventory cannot derive are hand-written: physical gear,
+recorded cabling, VLAN membership, placement and station detail. Unknown
+switch/port attachments use the shared dashed LAN fabric instead of guessed
+ethernet edges. Technical explanations live here, not in schema notes or
+collapsible prose on the canvas.
 
 ### Validation
 
-`topology.Validate` runs at startup; a bad spec fails the service instead of
-drawing a wrong diagram. It rejects duplicate or empty zone ids, a
-`defaultZone` that isn't a zone, nodes in an undeclared zone, duplicate node
-ids, `host` values not in the inventory, a host placed twice, a hostless
-node id that collides with an auto-placed host name, links with an unknown
-kind/endpoint or a self-loop, and a hub naming a node the spec doesn't
-place.
-Negative widths/flex are rejected, and every computed zone must be at least
-`topology.MinWidth` (224 SVG units) wide, after the row's gaps and
-proportional flex allocation.
+`topology.Validate` runs at startup; a bad spec fails the service rather than
+drawing a wrong diagram. It rejects empty/duplicate zone ids, empty columns,
+negative dimensions/flex/column caps, unsupported layout/fill/group values,
+duplicate route-cloud groups, and columns too narrow for their stations.
+It also rejects undeclared station zones, stations placed in route regions,
+an invalid `defaultZone`, duplicate node ids or host placements, unknown
+inventory hosts, hostless ids colliding with auto-placed hosts, unknown link
+kinds/endpoints, self-loops, and hubs naming absent nodes. DNS records require
+a zone, a name, a supported type and a value; duplicate name/type pairs fail.
+Column widths are computed after gaps and proportional flex allocation.
 
 h005's spec is `hosts/h005/topology.nix`, wired in `hosts/h005/fleet-edge.nix`
 as `topology = import ./topology.nix { inherit fleet constants; };` — it reads

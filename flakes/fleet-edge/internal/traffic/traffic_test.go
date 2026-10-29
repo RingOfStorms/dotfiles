@@ -15,7 +15,7 @@ func strp(s string) *string { return &s }
 func fleet() state.Merged {
 	routes := func(host, exposure string, via ...string) state.ServiceView {
 		return state.ServiceView{
-			Name: host + "-" + exposure, DeclaredHost: host, Active: "active",
+			Name: host + "-" + exposure, BoundHost: host, Active: "active",
 			Routes: []inventory.Route{{
 				Port: 8080, Name: strp(exposure), Proto: "http", Exposure: exposure, Via: via,
 			}},
@@ -165,7 +165,7 @@ func TestStatusOnlyForHTTP(t *testing.T) {
 	m := state.Merged{
 		Hosts: []state.HostView{{Host: "h001", StateBadge: "online", AlwaysOn: true}},
 		Services: []state.ServiceView{{
-			Name: "tcp", DeclaredHost: "h001", Active: "active",
+			Name: "tcp", BoundHost: "h001", Active: "active",
 			Routes: []inventory.Route{
 				{Port: 5432, Name: strp("db"), Proto: "tcp", Exposure: "tailnet"},
 				{Port: 8080, Name: strp("web"), Proto: "http", Exposure: "tailnet"},

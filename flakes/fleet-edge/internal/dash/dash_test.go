@@ -46,7 +46,7 @@ func TestBuildMergesLinksAndRoutes(t *testing.T) {
 		},
 		Hosts: map[string]inventory.Host{"h001": {}},
 	}
-	m := state.Merge(inv, nil)
+	m := state.Merge(inv, nil, nil)
 	links := []Link{
 		{Name: "Git", URL: "https://git.example/", Icon: "forgejo", Group: "Apps"},
 		{Name: "Radarr", URL: "http://h001:7878", Group: "Media"},
@@ -100,7 +100,7 @@ func TestHostInference(t *testing.T) {
 			"joe":  {},
 		},
 	}
-	m := state.Merge(inv, nil)
+	m := state.Merge(inv, nil, nil)
 	ix := NewHostIndex(m)
 	cases := map[string]string{
 		"http://h001.net.example.com:7878":     "h001",
@@ -152,7 +152,7 @@ func TestLinkHostPrecedence(t *testing.T) {
 			"h001": {}, "h002": {}, "h005": {LanIP: strp("10.12.14.1")},
 		},
 	}
-	m := state.Merge(inv, nil)
+	m := state.Merge(inv, nil, nil)
 	links := []Link{
 		// inventory route host beats explicit host
 		{Name: "Photos", URL: "https://photos.example.com/", Host: "h002"},
@@ -184,7 +184,7 @@ func TestBuildRouteGroupAndLinkExposure(t *testing.T) {
 		},
 		Hosts: map[string]inventory.Host{"h001": {}},
 	}
-	m := state.Merge(inv, nil)
+	m := state.Merge(inv, nil, nil)
 	links := []Link{
 		{Name: "Git", URL: "https://git.example", Group: "Dev", Exposure: "tailnet"}, // route wins
 		{Name: "AdGuard", URL: "http://10.0.0.1:3000", Group: "Net", Exposure: "lan", Host: "h005"},

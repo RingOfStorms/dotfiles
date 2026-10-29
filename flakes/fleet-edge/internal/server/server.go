@@ -13,11 +13,13 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/dash"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/geoip"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/placements"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/state"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/store"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/topology"
@@ -67,6 +69,12 @@ type Config struct {
 	// (/internal/overrides.json). "" hides the section. The dashboard has
 	// no token and no write path: it only GETs this URL.
 	OverridesURL string
+	// PlacementsURL is the placement registry's read-only loopback export
+	// (/internal/placements.json). It is the source of truth for which host a
+	// service is bound to; "" means "no registry", so every service is
+	// unplaced. Left nil-empty (unset) the state layer falls back to the Nix
+	// declaration for tests that predate the registry.
+	PlacementsURL string
 	// Topology is the hand-written part of /topology (validated by the
 	// caller); nil means topology.Default().
 	Topology *topology.Spec
@@ -136,6 +144,83 @@ func (s *Server) fetchOverrides(ctx context.Context, now time.Time) ([]ExposeRow
 	return e.Rows, ""
 }
 
+// fetchPlacements GETs the registry export (short timeout; errors reported,
+// not fatal) and returns the host each service is bound to: a row's effective
+// host, so a move in flight reports its source and a stale row reports
+// nothing. The map is never nil.
+func (s *Server) fetchPlacements(ctx context.Context) (map[string]string, string) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.cfg.PlacementsURL, nil)
+	if err != nil {
+		return map[string]string{}, err.Error()
+	}
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return map[string]string{}, "fleet-edge-placements unreachable"
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return map[string]string{}, "fleet-edge-placements: " + resp.Status
+	}
+	var e placements.Export
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&e); err != nil {
+		return map[string]string{}, "bad export: " + err.Error()
+	}
+	if e.Host == nil {
+		e.Host = map[string]string{}
+	}
+	return e.Host, ""
+}
+
+// Merged renders the state with placement bindings applied. The registry
+// export is cached for placementsTTL so a burst of renders costs one loopback
+// GET; a failed refresh keeps the last good map, because a registry hiccup
+// must not blank every service at once. With no registry configured, and
+// before one has ever answered, no service has a row, so none is placed.
+// A Source that cannot take a binding keeps the declarative hosts, which is
+// the state layer's own fallback for "no registry at all".
+func (s *Server) Merged(ctx context.Context) state.Merged {
+	if s.cfg.PlacementsURL == "" {
+		if bs, ok := s.src.(BoundSource); ok {
+			return bs.CurrentBound(map[string]string{})
+		}
+		return s.src.Current()
+	}
+	return s.bound(ctx)
+}
+
+// bound merges with the cached registry binding, refreshing it if stale.
+func (s *Server) bound(ctx context.Context) state.Merged {
+	bs, ok := s.src.(BoundSource)
+	if !ok {
+		return s.src.Current()
+	}
+	s.regMu.Lock()
+	reg, at := s.reg, s.regAt
+	s.regMu.Unlock()
+	if time.Since(at) > placementsTTL {
+		// Fetch outside the lock: a slow registry must not serialize the
+		// renders that are already holding a snapshot. A failed attempt
+		// still stamps regAt, so an outage costs one GET per TTL rather
+		// than one per page view.
+		fresh, err := s.fetchPlacements(ctx)
+		s.regMu.Lock()
+		s.regAt = time.Now()
+		if err == "" {
+			reg, s.reg = fresh, fresh
+		}
+		s.regMu.Unlock()
+	}
+	if reg == nil {
+		// Registered but never answered: no rows are known, so nothing is
+		// bound. Guessing from the Nix declaration would reinstate exactly
+		// the shadow placement this registry replaces.
+		reg = map[string]string{}
+	}
+	return bs.CurrentBound(reg)
+}
+
 // Common is embedded in every page's view model.
 type Common struct {
 	Page       string
@@ -198,7 +283,6 @@ type TopologyData struct {
 	Common
 	Diagram                        topology.Diagram
 	Layers                         []topology.Layer
-	Notes                          []topology.Note
 	Polled, Online, Sleeping, Down int
 }
 
@@ -245,6 +329,13 @@ type Source interface {
 	Current() state.Merged
 }
 
+// BoundSource is optionally implemented by Source (e.g. *state.Poller) to
+// merge with an explicit placement binding. Without it the server can only
+// render the declarative state, which is what the tests exercise.
+type BoundSource interface {
+	CurrentBound(bound map[string]string) state.Merged
+}
+
 // HistorySource is optionally implemented by Source (e.g. *state.Poller) to
 // provide SQLite time-series queries and host endpoint URL resolution.
 type HistorySource interface {
@@ -252,6 +343,11 @@ type HistorySource interface {
 	Inventory() *inventory.Inventory
 	StatusURLFor(host string) (string, bool)
 }
+
+// placementsTTL is how long a fetched registry export is reused. The registry
+// sweeps every 30 s, so a fresh read every 10 s is well inside one sweep while
+// keeping the loopback GET off the render path.
+const placementsTTL = 10 * time.Second
 
 // Server is the read-only fleet-edge HTTP handler. It has no POST
 // handlers anywhere: every route is a GET that renders inventory plus
@@ -261,6 +357,13 @@ type Server struct {
 	cfg        Config
 	httpClient *http.Client
 	mux        *http.ServeMux
+
+	// reg is the last good placement export (service -> effective host);
+	// nil until the first successful fetch. Published maps are never
+	// mutated, so readers may use them after the lock is dropped.
+	regMu sync.Mutex
+	reg   map[string]string
+	regAt time.Time // when a fetch last succeeded or failed
 }
 
 func isURL(s string) bool {
@@ -359,7 +462,7 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	m := s.src.Current()
+	m := s.Merged(r.Context())
 	data := StartData{
 		Common:      s.common("start"),
 		Groups:      dash.Build(m, s.cfg.Links, s.cfg.IconBase),
@@ -370,10 +473,12 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleServices(w http.ResponseWriter, r *http.Request) {
-	m := s.src.Current()
+	m := s.Merged(r.Context())
+	// Unplaced services sort first: "" is not an error, it is where a
+	// service with no row lives.
 	sort.Slice(m.Services, func(i, j int) bool {
-		if m.Services[i].DeclaredHost != m.Services[j].DeclaredHost {
-			return m.Services[i].DeclaredHost < m.Services[j].DeclaredHost
+		if m.Services[i].BoundHost != m.Services[j].BoundHost {
+			return m.Services[i].BoundHost < m.Services[j].BoundHost
 		}
 		return m.Services[i].Name < m.Services[j].Name
 	})
@@ -438,7 +543,7 @@ func (s *Server) enrichHostCard(ctx context.Context, hv state.HostView, now time
 }
 
 func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
-	m := s.src.Current()
+	m := s.Merged(r.Context())
 	sort.Slice(m.Hosts, func(i, j int) bool { return m.Hosts[i].Host < m.Hosts[j].Host })
 	data := HostsData{Merged: m, Common: s.common("hosts")}
 	now := m.GeneratedAt
@@ -464,8 +569,8 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "hosts.html", data)
 }
 
-func (s *Server) diagram() topology.Diagram {
-	m := s.src.Current()
+func (s *Server) diagram(ctx context.Context) topology.Diagram {
+	m := s.Merged(ctx)
 	now := m.GeneratedAt
 	if now.IsZero() {
 		now = time.Now().UTC()
@@ -474,8 +579,8 @@ func (s *Server) diagram() topology.Diagram {
 }
 
 func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
-	d := s.diagram()
-	data := TopologyData{Common: s.common("topology"), Diagram: d, Layers: topology.Layers, Notes: s.cfg.Topology.Notes}
+	d := s.diagram(r.Context())
+	data := TopologyData{Common: s.common("topology"), Diagram: d, Layers: topology.Layers}
 	// Counted over the drawn hosts, the same way topology.js recounts
 	// after each live refresh.
 	for _, n := range d.Nodes {
@@ -503,7 +608,7 @@ func (s *Server) handleTopologySVG(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "image/svg+xml; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	if err := tmpl.ExecuteTemplate(w, "topology.svg", s.diagram()); err != nil {
+	if err := tmpl.ExecuteTemplate(w, "topology.svg", s.diagram(r.Context())); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -545,7 +650,7 @@ func (s *Server) handleHostDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	m := s.src.Current()
+	m := s.Merged(r.Context())
 	var found *state.HostView
 	for i := range m.Hosts {
 		if m.Hosts[i].Host == rawName {
@@ -583,9 +688,10 @@ func (s *Server) handleHostDetail(w http.ResponseWriter, r *http.Request) {
 		Ranges:   []string{"1h", "24h", "7d", "30d", "1y"},
 	}
 
-	// Collect services on this host and build log viewer options
+	// Collect services bound to this host and build log viewer options. An
+	// unplaced service binds nowhere, so it belongs on no host page.
 	for _, svc := range m.Services {
-		if svc.DeclaredHost == found.Host {
+		if svc.BoundHost != "" && svc.BoundHost == found.Host {
 			detail.Services = append(detail.Services, svc)
 			kind := "guest"
 			if svc.Kind == "podman" {
@@ -783,7 +889,7 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAPIState(w http.ResponseWriter, r *http.Request) {
-	m := s.src.Current()
+	m := s.Merged(r.Context())
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")

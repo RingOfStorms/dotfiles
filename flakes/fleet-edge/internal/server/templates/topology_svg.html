@@ -13,7 +13,7 @@
 
 /* Regions are open ground, not cards: a whisper of tint and a hairline. */
 .topo .zone rect { fill: rgba(139, 144, 160, 0.035); stroke: rgba(139, 144, 160, 0.22); stroke-width: 1; stroke-dasharray: 2 7; }
-.topo .zone text { fill: var(--t-muted); font-size: 12.5px; font-weight: 600; letter-spacing: 0.1em; }
+.topo .zone text { fill: var(--t-muted); font-size: 14px; font-weight: 600; letter-spacing: 0.1em; }
 .topo .z-internet rect { fill: rgba(215, 162, 74, 0.045); stroke: rgba(215, 162, 74, 0.25); }
 .topo .z-internet text { fill: var(--t-amber); }
 .topo .z-cloud rect { fill: rgba(95, 168, 211, 0.045); stroke: rgba(95, 168, 211, 0.25); }
@@ -25,24 +25,46 @@
 .topo .z-lan rect { fill: rgba(95, 168, 211, 0.03); stroke: rgba(95, 168, 211, 0.2); }
 .topo .z-roaming rect { fill: rgba(139, 144, 160, 0.04); stroke: rgba(139, 144, 160, 0.22); }
 
-.topo .edge path { fill: none; stroke: #6b7080; stroke-width: 1.6; stroke-linejoin: round; transition: opacity 0.2s; }
-.topo .k-wan path { stroke: var(--t-amber); stroke-width: 2.4; }
-.topo .k-trunk path { stroke: #9aa0b2; stroke-width: 3.2; }
-.topo .k-ethernet path { stroke: #7d8394; stroke-width: 1.9; }
-.topo .k-wifi path { stroke-dasharray: 2 6; stroke-linecap: round; stroke-width: 2; }
-.topo .k-kvm path { stroke-dasharray: 1 4; stroke-linecap: round; stroke-width: 1.5; }
-.topo .k-power path { stroke: #c8875e; stroke-dasharray: 1 4; stroke-linecap: round; stroke-width: 1.7; }
-.topo .k-tailnet path { stroke: var(--t-purple); stroke-dasharray: 6 6; opacity: 0.7; }
-.topo .k-public path { stroke: var(--t-amber); stroke-width: 2.2; stroke-dasharray: 10 6; }
-.topo .k-agent path { stroke: var(--t-accent); stroke-dasharray: 2 6; stroke-linecap: round; stroke-width: 1.8; opacity: 0.65; }
-.topo .k-control path { stroke: var(--t-green); stroke-dasharray: 8 4; opacity: 0.8; }
-.topo .edge:not(.live) path { opacity: 0.25; }
+/* Cabling weights are one step of a shared scale, so a view can emphasise a
+   layer without losing the lean of a trunk against a patch lead. */
+.topo .edge { --sw: 2.6; }
+.topo .edge path { fill: none; stroke: #7a8194; stroke-width: calc(var(--sw) * 1px); stroke-linejoin: round; transition: opacity 0.2s; }
+.topo .k-wan { --sw: 3.4; }
+.topo .k-wan path { stroke: var(--t-amber); }
+.topo .k-trunk { --sw: 4.2; }
+.topo .k-trunk path { stroke: #aab2c6; }
+.topo .k-ethernet { --sw: 3; }
+.topo .k-ethernet path { stroke: #8a91a5; }
+.topo .k-wifi { --sw: 2.8; }
+.topo .k-wifi path { stroke-dasharray: 3 7; stroke-linecap: round; }
+.topo .k-kvm { --sw: 2.4; }
+.topo .k-kvm path { stroke-dasharray: 1 5; stroke-linecap: round; }
+.topo .k-power { --sw: 2.6; }
+.topo .k-power path { stroke: #c8875e; stroke-dasharray: 1 5; stroke-linecap: round; }
+.topo .k-tailnet { --sw: 3; }
+.topo .k-tailnet path { stroke: var(--t-purple); stroke-dasharray: 7 6; opacity: 0.85; }
+.topo .k-public { --sw: 3.4; }
+.topo .k-public path { stroke: var(--t-amber); stroke-dasharray: 10 6; }
+.topo .k-agent { --sw: 2.2; }
+.topo .k-agent path { stroke: var(--t-accent); stroke-dasharray: 2 7; stroke-linecap: round; opacity: 0.7; }
+.topo .k-control { --sw: 3.2; }
+.topo .k-control path { stroke: var(--t-green); stroke-dasharray: 9 5; opacity: 0.9; }
+/* The shared L2 fabric: every server and access point is attached to it, but
+   no named patch cable was recorded, so it stays dashed. It is a long strand
+   rather than a dotted guess, because it is the run that actually connects
+   the rack to the house. */
+.topo .k-lan { --sw: 3; }
+.topo .k-lan path { stroke: #9aa2b6; stroke-dasharray: 7 5; stroke-linecap: round; opacity: 0.85; }
+/* A cable is drawn whether or not the far end answers; only a live pulse
+   distinguishes the two. Losing a whole run from the resting map would make
+   the physical picture a lie. */
+.topo .edge:not(.live) path { opacity: 0.8; }
 
 /* Only simulated traffic animates. Dashes never move merely because an agent
-   is reachable: the travelling dots in #topo-events come from events. */
-.topo .elabel rect { fill: var(--t-surface); stroke: var(--t-border); }
-.topo .elabel text { fill: var(--t-muted); font-size: 10.5px; }
-.topo .elabel.layer-public text { fill: var(--t-amber); }
+   is reachable: the travelling dots in #topo-events come from events. A
+   cable's port, trunk and VLAN never print on the resting map either — they
+   are the cable's own tooltip, so no wall of "switch/port not recorded" runs
+   through the stations. */
 
 /* Stations: one circular head, the name, the plain role, membership tags. */
 .topo .node { cursor: pointer; }
@@ -55,13 +77,12 @@
 .topo .st-sleeping .head { stroke-dasharray: 5 4; }
 .topo .st-sleeping .label, .topo .st-no-endpoint .label { fill: var(--t-muted); }
 .topo .node.sel .head { stroke: var(--t-accent); stroke-width: 3; }
-.topo .node.dim { opacity: 0.35; }
 .topo .icon { color: var(--t-muted); }
 .topo .st-online .icon, .topo .st-static .icon { color: var(--t-text); }
-.topo .label { font-size: 13.5px; font-weight: 650; }
-.topo .role { font-size: 10.5px; fill: var(--t-muted); }
-.topo .tags { font-size: 10px; fill: var(--t-purple); }
-.topo .count { font-size: 10px; fill: var(--t-muted); }
+.topo .label { font-size: 21px; font-weight: 650; }
+.topo .role { display: none; }
+.topo .tags { display: none; }
+.topo .count { font-size: 12px; fill: var(--t-muted); }
 .topo .count.bad { fill: var(--t-red); font-weight: 650; }
 .topo .ring { fill: none; stroke-width: 1.8; stroke-dasharray: 4 4; }
 .topo .ring.warn { stroke: var(--t-amber); }
@@ -78,21 +99,91 @@
 .topo .journey { fill: none; stroke: var(--t-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; opacity: 0.9; }
 .topo .journey.j-public { stroke: var(--t-amber); }
 .topo .journey.j-tailnet { stroke: var(--t-purple); }
-.topo .journey.preview { stroke-width: 1.5; }
-.topo .origin rect { fill: var(--t-alt); stroke: var(--t-border); stroke-dasharray: 4 3; stroke-width: 1.2; }
-.topo .origin text { fill: var(--t-muted); font-size: 11px; }
-.topo .ev-dot { fill: var(--t-amber); }
-.topo .ev-dot.aud-tailnet { fill: var(--t-purple); }
+/* Selection adds a ring to the chosen station and nothing else: every public
+   and overlay path stays at full strength, because the map's job is to show
+   the whole reach at once. */
 
-.topo.has-sel .edge path { opacity: 0.07; }
-.topo.has-sel .edge.hl path { opacity: 1; stroke-width: 2.6; }
-.topo.has-sel .elabel { opacity: 0.12; }
-.topo.has-sel .elabel.hl { opacity: 1; }
-.topo.hide-physical .layer-physical, .topo.hide-tailnet .layer-tailnet, .topo.hide-public .layer-public, .topo.hide-control .layer-control { display: none; }
-/* Overview shows stations and what is drawn on demand: the declared cabling
-   and the poll/control plough are reference material for their own views. */
-.topo.view-overview .edges, .topo.view-overview .edge-labels { display: none; }
+/* The public DNS web: one chip per declared name, an amber brace gathering
+   them into a single trunk that lands on the edge proxy. Labels stay
+   upright and left-aligned at the server's own text origin, so nothing
+   here can shift a hitbox. Only the in-cloud sparkles orbit. */
+.topo .rweb-marker, .topo .oweb-marker { cursor: pointer; }
+.topo .rw-tick { fill: var(--t-amber); }
+.topo .rw-txt { font-size: 16px; font-weight: 600; dominant-baseline: middle; }
+.topo .rw-hit { fill: transparent; stroke: none; }
+.topo .rweb-marker:hover .rw-hit, .topo .rweb-marker:focus-visible .rw-hit { fill: rgba(215, 162, 74, 0.1); stroke: rgba(215, 162, 74, 0.45); stroke-width: 1; }
+.topo .rweb-marker.dns-only .rw-tick { fill: var(--t-muted); opacity: 0.5; }
+.topo .rweb-marker.dns-only .rw-txt { fill: var(--t-muted); font-weight: 500; font-size: 15px; }
+.topo .rweb-orbit .spark { fill: var(--t-amber); opacity: 0.5; pointer-events: none; }
+
+.topo .rweb-brace { fill: none; stroke: var(--t-amber); stroke-width: 4.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0.92; }
+/* The public trunk leaves the brace point and runs to the edge proxy: the one
+   yellow line every public name shares before it forks to its own host. The
+   fork is one amber branch per owning host, drawn at the same weight so the
+   whole catalogue reads as one connected web. */
+.topo .rweb-lead-public { fill: none; stroke: var(--t-amber); stroke-width: 4.4; stroke-linecap: round; stroke-linejoin: round; }
+.topo .public-branch { fill: none; stroke: var(--t-amber); stroke-width: 3.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0.8; transition: opacity 0.18s, stroke-width 0.18s; }
+.topo .public-branch.on { opacity: 1; stroke-width: 4.6; }
+.topo .oweb-brace .rweb-brace { stroke: var(--t-purple); }
+
+.topo .oweb .rweb-lead, .topo .oweb-lead { fill: none; stroke: var(--t-purple); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 8 6; opacity: 0.85; }
+.topo .oweb-brace .oweb-lead { opacity: 1; stroke-width: 3.4; }
+/* One branch per host from the shared bus: purple and solid enough to follow
+   across the canvas, emphasised in place when its route is previewed. */
+.topo .overlay-branch { fill: none; stroke: var(--t-purple); stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; opacity: 0.7; transition: opacity 0.18s, stroke-width 0.18s; }
+.topo .overlay-branch.on { opacity: 1; stroke-width: 4.6; }
+.topo .oweb-marker .rw-tick { fill: var(--t-purple); }
+.topo .oweb-marker .rw-txt { fill: var(--t-text); }
+.topo .oweb-marker:hover .rw-hit, .topo .oweb-marker:focus-visible .rw-hit { fill: rgba(138, 126, 200, 0.12); stroke: rgba(138, 126, 200, 0.5); stroke-width: 1; }
+
+/* The one declared line that carries no traffic: the zone is authoritative at
+   the DNS provider, so the delegation is drawn as a faint dotted lead instead
+   of a route. Keeping it far under the web's weight stops it reading as a
+   path a request takes. */
+.topo .dns-declaration path { fill: none; stroke: var(--t-muted); stroke-width: 1.2; stroke-dasharray: 3 7; stroke-linecap: round; stroke-linejoin: round; opacity: 0.35; }
+.topo .dns-declaration path:hover { opacity: 0.62; }
+
+/* Column captions sit above their regions; regions themselves are captioned. */
+.topo .colcap { fill: var(--t-muted); font-size: 12.5px; font-weight: 650; letter-spacing: 0.14em; text-transform: uppercase; }
+
+/* The one solid region: the rack, a single green column of gear. */
+.topo .zone.box rect { fill: rgba(76, 175, 125, 0.055); stroke: rgba(76, 175, 125, 0.32); stroke-width: 1.4; stroke-dasharray: none; }
+
+/* Segment stations (the neutral switch fabric) are bars, not heads: they
+   mark a cable attachment point without claiming a named device. */
+.topo .node.seg .segbar { fill: rgba(139, 144, 160, 0.1); stroke: #7a8194; stroke-width: 2; stroke-dasharray: 6 4; }
+.topo .node.seg:hover .segbar { stroke: var(--t-accent); }
+.topo .node.seg .hit { fill: transparent; }
+
+/* Disk space rings: one ring per reported mount, each in its own blue. The
+   server owns the colour and writes it straight onto the arc, so nothing in
+   CSS may override it — blue means space and nothing else, amber stays the
+   drive-fault cue. */
+.topo .space-ring { fill: none; stroke-width: 3; stroke-linecap: butt; }
+.topo .space-ring.track { stroke: rgba(139, 144, 160, 0.2); }
+
+/* Health at a glance: two thin bars under the role, CPU then memory. A bar is
+   only drawn for a metric the last poll actually reported. */
+.topo .gauge-track { fill: rgba(139, 144, 160, 0.22); }
+.topo .gauge-fill.cpu { fill: var(--t-accent); }
+.topo .gauge-fill.mem { fill: #7bbcdd; }
+.topo .gcaption { font-size: 16px; fill: var(--t-muted); }
+.topo .gcaption.none { opacity: 0.7; }
+.topo .gauges { pointer-events: none; }
+.topo .count.ban, .topo .bans { fill: var(--t-amber); }
+.topo .banicon { color: var(--t-amber); opacity: 0.9; }
+/* Views never hide anything: every public and overlay path stays drawn, and
+   the view only decides which recorded cabling leads. The chosen layer keeps
+   its full weight, the rest stay readable as context, so a view never turns
+   the physical picture into a rumour. */
+.topo.view-overview .edges .edge:not(.layer-public) { opacity: 0.45; }
+.topo.view-physical .edges .edge.layer-physical path { opacity: 0.9; stroke-width: 4px; }
+.topo.view-physical .edges .edge:not(.layer-physical) { opacity: 0.35; }
+.topo.view-control .edges .edge.layer-control path { opacity: 0.9; stroke-width: 4px; }
+.topo.view-control .edges .edge:not(.layer-control) { opacity: 0.35; }
+
 @media (prefers-reduced-motion: reduce) { .topo .pulse { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .topo .rweb-orbit circle { display: none; } }
 </style>
 <defs>
 <symbol id="ti-internet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M5 7h14M5 17h14"/></symbol>
@@ -117,30 +208,57 @@
 <rect class="topo-bg" width="{{.Width}}" height="{{.Height}}"/>
 <g id="topo-viewport"><g id="topo-root" data-width="{{.Width}}" data-height="{{.Height}}" data-asof="{{.AsOf.Format "2006-01-02T15:04:05Z07:00"}}" data-hub-tailnet="{{.Hubs.Tailnet}}" data-hub-edge="{{.Hubs.Edge}}" data-hub-router="{{.Hubs.Router}}" data-hub-dashboard="{{.Hubs.Dashboard}}" data-layers="physical,tailnet,public,control">
 <metadata id="topo-meta">{{.Meta}}</metadata>
+<metadata id="topo-routes">{{.RouteMeta}}</metadata>
+<g class="cols">{{range .Columns}}<text class="colcap" x="{{.X}}" y="{{.Y}}" dy="14">{{.Label}}</text>{{end}}
+</g>
 <g class="zones">{{range .Zones}}
-<g class="zone z-{{.Kind}}" data-zone="{{.ID}}"><rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="18"/><text x="{{.X}}" y="{{.Y}}" dx="18" dy="24">{{.Label}}</text></g>{{end}}
+<g class="zone z-{{.Kind}}{{if .Box}} box{{end}}" data-zone="{{.ID}}"><rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="18"/><text x="{{.X}}" y="{{.Y}}" dx="18" dy="24">{{.Label}}</text></g>{{end}}
 </g>
 <g class="edges">{{range .Edges}}
-<g class="edge k-{{.Kind}} layer-{{.Layer}}{{if .Live}} live{{end}}" data-from="{{.From}}" data-to="{{.To}}"><path d="{{.D}}"/></g>{{end}}
+<g class="edge k-{{.Kind}} layer-{{.Layer}}{{if .Live}} live{{end}}" data-from="{{.From}}" data-to="{{.To}}"><title>{{.From}} → {{.To}}{{if .Label}} · {{.Label}}{{end}}</title><path d="{{.D}}" fill="none"/></g>{{end}}
+</g>
+{{with .RouteBrace}}<g class="rweb-brace layer-public" aria-hidden="true"><path class="rweb-brace" d="{{.D}}" fill="none"/>{{if .LeadD}}<path class="rweb-lead-public" d="{{.LeadD}}" fill="none"/>{{end}}</g>{{end}}
+{{if .RouteLinks}}<g class="rweb-branches layer-public" aria-hidden="true">{{range .RouteLinks}}{{if eq .Group "public"}}<path class="public-branch" data-host="{{.Host}}" data-to="{{.ToID}}" d="{{.D}}" fill="none"><title>public path → {{.Host}}</title></path>{{end}}{{end}}</g>{{end}}
+<g class="rweb layer-public">{{range .RouteWeb}}
+<g class="rweb-marker grp-public{{if not .Declared}} dns-only{{end}}" data-fqdn="{{.FQDN}}" data-host="{{.Host}}" data-node="{{.NodeID}}" data-route="{{.RouteKey}}" data-service="{{.Service}}" data-declared="{{if .Declared}}true{{else}}false{{end}}" data-group="public" tabindex="0">
+<title>{{.FQDN}}{{if .Declared}} → {{.Host}}{{end}}{{if .DNSName}} · DNS {{.DNSName}}{{end}}</title>
+<rect class="rw-tick" x="{{.X}}" y="{{.Y}}" width="3" height="{{.H}}" rx="1.5"/>
+<text class="rw-txt" x="{{.TX}}" y="{{.TY}}">{{.Label}}</text>
+<rect class="rw-hit" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="9"/>
+</g>{{end}}
+</g>
+{{with .OverlayBrace}}<g class="oweb-brace layer-tailnet" aria-hidden="true"><path class="rweb-brace" d="{{.D}}" fill="none"/>{{if .LeadD}}<path class="oweb-lead" d="{{.LeadD}}" fill="none"/>{{end}}</g>{{end}}
+<g class="oweb layer-tailnet">{{range .RouteLinks}}{{if eq .Group "overlay"}}<path class="overlay-branch" data-host="{{.Host}}" data-to="{{.ToID}}" d="{{.D}}" fill="none"><title>overlay branch → {{.Host}}</title></path>{{end}}{{end}}
+{{range .OverlayWeb}}
+<g class="oweb-marker grp-overlay" data-fqdn="{{.FQDN}}" data-host="{{.Host}}" data-node="{{.NodeID}}" data-route="{{.RouteKey}}" data-service="{{.Service}}" data-declared="true" data-group="overlay" tabindex="0">
+<title>{{.FQDN}}{{if .Host}} → {{.Host}} (tailnet){{end}}</title>
+<rect class="rw-tick" x="{{.X}}" y="{{.Y}}" width="3" height="{{.H}}" rx="1.5"/>
+<text class="rw-txt" x="{{.TX}}" y="{{.TY}}">{{.Label}}</text>
+<rect class="rw-hit" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="9"/>
+</g>{{end}}
 </g>
 <g class="nodes">{{range .Nodes}}
-<g class="node st-{{.State}} kind-{{.Kind}}" data-id="{{.ID}}"{{if .Host}} data-host="{{.Host}}"{{end}} transform="translate({{.X}} {{.Y}})" tabindex="0" role="button" aria-label="{{.Title}}">
-<title>{{.Title}}</title>
-{{if or .Warn .SvcFailed}}<circle class="ring warn" cx="{{.HeadX}}" cy="{{.HeadY}}" r="23"/>{{end}}
+<g class="node st-{{.State}} kind-{{.Kind}}{{if .Segment}} seg{{end}}" data-id="{{.ID}}"{{if .Host}} data-host="{{.Host}}"{{end}} transform="translate({{.X}} {{.Y}})" tabindex="0" role="button" aria-label="{{.Title}}">
+<title>{{.Title}}{{if .Tags}} · {{.Tags}}{{end}}</title>
+{{if .Segment}}<rect class="segbar" x="0" y="0" width="{{.W}}" height="{{.H}}" rx="{{.H}}" fill="none"/>
+{{else}}{{$node := .}}{{if or .Warn .SvcFailed}}<circle class="ring warn" cx="{{.HeadX}}" cy="{{.HeadY}}" r="23"/>{{end}}
+{{if .Rings}}<g class="space-rings">{{range .Rings}}<circle class="space-ring track" cx="{{$node.HeadX}}" cy="{{$node.HeadY}}" r="{{.R}}" fill="none"/>{{if .D}}<path class="space-ring grow" stroke="{{.Color}}" d="{{.D}}" fill="none"><title>{{.Mount}} · simulated space</title></path>{{end}}{{end}}</g>{{end}}
 <circle class="head" cx="{{.HeadX}}" cy="{{.HeadY}}" r="{{.R}}"/>
 <use class="icon" href="#ti-{{.Icon}}" x="{{.IconX}}" y="{{.IconY}}" width="20" height="20"/>
 {{if ne .State "static"}}<circle class="pulse" cx="{{.DotX}}" cy="{{.HeadY}}" r="4"/><circle class="sdot" cx="{{.DotX}}" cy="{{.HeadY}}" r="4"/>{{end}}
-{{if .Tailnet}}<use class="ts" href="#ti-mesh" x="{{.TsX}}" y="{{.TsY}}" width="12" height="12"><title>on the tailnet</title></use>{{end}}
+{{if .Tailnet}}<use class="ts" href="#ti-mesh" x="{{.TsX}}" y="{{.TsY}}" width="12" height="12"><title>on the tailnet</title></use>{{end}}{{end}}
 <text class="label" x="{{.HeadX}}" y="{{.LabelY}}" text-anchor="middle">{{.Label}}</text>
 <text class="role" x="{{.HeadX}}" y="{{.RoleY}}" text-anchor="middle">{{.Role}}</text>
+{{if or .CPUAvailable .MemAvailable}}<g class="gauges"><title>{{if .CPUAvailable}}cpu {{printf "%.0f" .CPUPercent}}%{{else}}cpu not monitored{{end}} · {{if .MemAvailable}}memory {{printf "%.0f" .MemPercent}}%{{else}}memory not monitored{{end}}</title>
+<g transform="translate(11.6 0) scale(.66 1)">{{if .CPUAvailable}}<rect class="gauge-track" x="{{.GaugeX}}" y="{{.CPUBarY}}" width="{{.GaugeW}}" height="3" rx="1.5"/><rect class="gauge-fill cpu" x="{{.GaugeX}}" y="{{.CPUBarY}}" width="{{.CPUFill}}" height="3" rx="1.5"/>{{end}}{{if .MemAvailable}}<rect class="gauge-track" x="{{.GaugeX}}" y="{{.MemBarY}}" width="{{.GaugeW}}" height="3" rx="1.5"/><rect class="gauge-fill mem" x="{{.GaugeX}}" y="{{.MemBarY}}" width="{{.MemFill}}" height="3" rx="1.5"/>{{end}}</g>
+<text class="gcaption{{if not .CPUAvailable}} none{{end}}" x="169" y="{{.CPUBarY}}" dy="3" text-anchor="end">{{if .CPUAvailable}}cpu {{printf "%.0f" .CPUPercent}}%{{else}}cpu —{{end}}</text>
+<text class="gcaption{{if not .MemAvailable}} none{{end}}" x="169" y="{{.MemBarY}}" dy="3" text-anchor="end">{{if .MemAvailable}}mem {{printf "%.0f" .MemPercent}}%{{else}}mem —{{end}}</text>
+</g>{{else}}{{if and .Host (not .Tags)}}<text class="gcaption none" x="{{.HeadX}}" y="{{.TagsY}}" text-anchor="middle">cpu — · mem —</text>{{end}}{{end}}
 {{if .Tags}}<text class="tags" x="{{.HeadX}}" y="{{.TagsY}}" text-anchor="middle">{{.Tags}}</text>{{end}}
 {{if .SvcCount}}<text class="count{{if .SvcFailed}} bad{{end}}" x="{{.CountX}}" y="{{.CountY}}">{{.SvcCount}} svc{{if .SvcFailed}} · {{.SvcFailed}} down{{end}}</text>{{end}}
-{{if .Warn}}<text class="count warn" x="{{.CountX}}" y="{{.WarnY}}">{{.Warn}} to check</text>{{end}}
+{{if or .Warn .BannedCount}}<text class="count{{if .Warn}} warn{{else}} ban{{end}}" x="{{.CountX}}" y="{{.WarnY}}">{{if .Warn}}{{.Warn}} to check{{end}}{{if and .Warn .BannedCount}} · {{end}}{{if .BannedCount}}<tspan class="bans">{{.BannedCount}} banned</tspan>{{end}}</text>{{end}}
 <rect class="hit" width="{{.W}}" height="{{.H}}" fill="transparent"/>
 </g>{{end}}
-</g>
-<g class="edge-labels">{{range .Edges}}{{if .Label}}
-<g class="elabel layer-{{.Layer}}" data-from="{{.From}}" data-to="{{.To}}"><rect x="{{.LRX}}" y="{{.LRY}}" width="{{.LW}}" height="18" rx="9"/><text x="{{.LX}}" y="{{.LY}}" dy="4" text-anchor="middle">{{.Label}}</text></g>{{end}}{{end}}
 </g>
 <g id="topo-journey" class="journeys"></g>
 <g id="topo-events"></g>

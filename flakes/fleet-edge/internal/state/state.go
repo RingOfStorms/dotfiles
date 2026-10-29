@@ -251,19 +251,21 @@ type HostPoll struct {
 	Status   *HostStatus `json:"status,omitempty"`
 }
 
-// ServiceView is one row of the merged dashboard state.
+// ServiceView is one row of the merged dashboard state. BoundHost is the host
+// the placement registry binds the service to (a row's effective host); ""
+// means the service is unplaced.
 type ServiceView struct {
-	Name         string            `json:"name"`
-	Kind         string            `json:"kind"`
-	Description  string            `json:"description"`
-	DeclaredHost string            `json:"declaredHost"`
-	Active       string            `json:"active"` // "unknown" if no data
-	Enabled      *bool             `json:"enabled,omitempty"`
-	Unit         string            `json:"unit,omitempty"`
-	Routes       []inventory.Route `json:"routes"`
-	Backup       string            `json:"backup"`
-	LastBackup   *time.Time        `json:"lastBackup,omitempty"`
-	BackupAge    string            `json:"backupAge,omitempty"`
+	Name        string            `json:"name"`
+	Kind        string            `json:"kind"`
+	Description string            `json:"description"`
+	BoundHost   string            `json:"boundHost"`
+	Active      string            `json:"active"` // "unknown" if no data
+	Enabled     *bool             `json:"enabled,omitempty"`
+	Unit        string            `json:"unit,omitempty"`
+	Routes      []inventory.Route `json:"routes"`
+	Backup      string            `json:"backup"`
+	LastBackup  *time.Time        `json:"lastBackup,omitempty"`
+	BackupAge   string            `json:"backupAge,omitempty"`
 }
 
 // HostView is one row/card of the /hosts page.
@@ -620,8 +622,14 @@ func (p *Poller) Run(ctx context.Context, interval time.Duration) {
 }
 
 // Current merges the latest polls with the static inventory into the
-// dashboard view. Safe to call concurrently with Run.
-func (p *Poller) Current() Merged {
+// dashboard view, with every host taken from the Nix declaration. Safe to
+// call concurrently with Run.
+func (p *Poller) Current() Merged { return p.CurrentBound(nil) }
+
+// CurrentBound is Current with the placement registry's binding (service ->
+// host). A supplied map wins: a service it does not name is unplaced, so
+// BoundHost is "". A nil map keeps the declarative fallback.
+func (p *Poller) CurrentBound(bound map[string]string) Merged {
 	p.mu.RLock()
 	polls := make(map[string]HostPoll, len(p.polls))
 	for k, v := range p.polls {
@@ -633,22 +641,31 @@ func (p *Poller) Current() Merged {
 	}
 	p.mu.RUnlock()
 
-	return mergeWithLast(p.inv, polls, last, time.Now())
+	return mergeWithLast(p.inv, polls, last, time.Now(), bound)
 }
 
 // Merge combines inventory with a set of host polls (keyed by host name)
 // into the dashboard view. Exported standalone for testing without a
-// running Poller.
-func Merge(inv *inventory.Inventory, polls map[string]HostPoll) Merged {
-	return MergeAt(inv, polls, time.Now())
+// running Poller. A nil bound map keeps the declarative fallback.
+func Merge(inv *inventory.Inventory, polls map[string]HostPoll, bound map[string]string) Merged {
+	return MergeAt(inv, polls, time.Now(), bound)
 }
 
 // MergeAt is Merge with an explicit clock (backup ages).
-func MergeAt(inv *inventory.Inventory, polls map[string]HostPoll, now time.Time) Merged {
-	return mergeWithLast(inv, polls, nil, now)
+func MergeAt(inv *inventory.Inventory, polls map[string]HostPoll, now time.Time, bound map[string]string) Merged {
+	return mergeWithLast(inv, polls, nil, now, bound)
 }
 
-func mergeWithLast(inv *inventory.Inventory, polls map[string]HostPoll, last map[string]lastKnownHost, now time.Time) Merged {
+// binding returns the host a service resolves to now: the registry's binding
+// when one was supplied (absent = unplaced), else the declaration.
+func binding(bound map[string]string, svc inventory.Service) string {
+	if bound != nil {
+		return bound[svc.Name]
+	}
+	return svc.Host
+}
+
+func mergeWithLast(inv *inventory.Inventory, polls map[string]HostPoll, last map[string]lastKnownHost, now time.Time, bound map[string]string) Merged {
 	m := Merged{GeneratedAt: now.UTC()}
 
 	svcNames := make([]string, 0, len(inv.Services))
@@ -659,13 +676,14 @@ func mergeWithLast(inv *inventory.Inventory, polls map[string]HostPoll, last map
 
 	for _, name := range svcNames {
 		svc := inv.Services[name]
+		host := binding(bound, svc)
 		view := ServiceView{
-			Name:         name,
-			Kind:         svc.Kind,
-			Description:  svc.Description,
-			DeclaredHost: svc.Host,
-			Active:       "unknown",
-			Backup:       "unknown",
+			Name:        name,
+			Kind:        svc.Kind,
+			Description: svc.Description,
+			BoundHost:   host,
+			Active:      "unknown",
+			Backup:      "unknown",
 		}
 		routeNames := make([]string, 0, len(svc.Routes))
 		for rn := range svc.Routes {
@@ -675,7 +693,7 @@ func mergeWithLast(inv *inventory.Inventory, polls map[string]HostPoll, last map
 		for _, rn := range routeNames {
 			view.Routes = append(view.Routes, svc.Routes[rn])
 		}
-		if poll, ok := polls[svc.Host]; ok && poll.OK && poll.Status != nil {
+		if poll, ok := polls[host]; ok && poll.OK && poll.Status != nil {
 			if ss, ok := poll.Status.Services[name]; ok {
 				view.Active = ss.Active
 				enabled := ss.Enabled
@@ -701,15 +719,16 @@ func mergeWithLast(inv *inventory.Inventory, polls map[string]HostPoll, last map
 	}
 
 	// Container hosts are declared, not observed: the inventory names them, or
-	// a service is declared on them. A host that only answers polls stays
-	// false; a declared container host stays true with zero containers.
+	// a service is bound to them. A host that only answers polls stays false;
+	// a declared container host stays true with zero containers. An unplaced
+	// service binds to no host and declares nothing.
 	containerHost := map[string]bool{}
 	for _, n := range inv.ContainerHosts {
 		containerHost[n] = true
 	}
-	for _, svc := range inv.Services {
-		if svc.Host != "" {
-			containerHost[svc.Host] = true
+	for _, svc := range m.Services {
+		if svc.BoundHost != "" {
+			containerHost[svc.BoundHost] = true
 		}
 	}
 

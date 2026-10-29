@@ -250,7 +250,7 @@ func routes(m state.Merged, routerPublic bool) []routeRef {
 	}
 	var out []routeRef
 	for _, svc := range m.Services {
-		if !online[svc.DeclaredHost] {
+		if !online[svc.BoundHost] {
 			continue
 		}
 		for i, r := range svc.Routes {
@@ -271,7 +271,7 @@ func routes(m state.Merged, routerPublic bool) []routeRef {
 				service:  svc.Name,
 				key:      key,
 				route:    name,
-				host:     svc.DeclaredHost,
+				host:     svc.BoundHost,
 				proto:    proto,
 				port:     r.Port,
 				audience: audience,

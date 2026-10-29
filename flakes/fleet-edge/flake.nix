@@ -334,14 +334,17 @@
               description = ''
                 /topology diagram spec, passed as FLEET_EDGE_TOPOLOGY. The
                 schema is `topology.Spec` in internal/topology/topology.go:
-                width, rows[].zones[]{id,label,kind,flex}, nodes[]{id,host,
-                label,kind,zone,role,badges[],lines[],href}, links[]{from,to,
-                kind,label}, defaultZone, hide[], hubs{tailnet,edge,router,
-                dashboard} and
-                notes[]{title,text}. Hosts, container placement, public paths,
-                tailnet membership and agent polling are derived from the
-                inventory, so the spec only carries what the inventory cannot
-                know. Host bindings and every reference are validated at
+                width, height, columns[]{id,label,flex,zones[]{id,label,
+                kind,flex,layout,cols,fill,box,group}}, nodes[]{id,host,
+                label,kind,zone,segment,role,badges[],lines[],href},
+                links[]{from,to,kind,label}, dns{zone,records[]{name,type,
+                value,ttl,external},external[]}, defaultZone, hide[] and
+                hubs{tailnet,edge,router,dashboard}. A column owns a share of
+                the width and its own height; a zone inside it owns a share of
+                that column's leftover. Hosts, container placement, public
+                paths, tailnet membership and agent polling are derived from
+                the inventory, so the spec only carries what the inventory
+                cannot know. Host bindings and every reference are validated at
                 startup. null keeps the built-in single-zone diagram.
               '';
             };

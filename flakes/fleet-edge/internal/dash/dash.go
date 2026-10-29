@@ -155,7 +155,7 @@ func Build(m state.Merged, links []Link, iconBase string) []Group {
 		icon := l.Icon
 		if ri, ok := byURL[strings.TrimRight(l.URL, "/")]; ok {
 			claimed[strings.TrimRight(l.URL, "/")] = true
-			t.Service, t.Host, t.Active, t.Exposure = ri.svc.Name, ri.svc.DeclaredHost, ri.svc.Active, ri.exp
+			t.Service, t.Host, t.Active, t.Exposure = ri.svc.Name, ri.svc.BoundHost, ri.svc.Active, ri.exp
 			if icon == "" {
 				icon = ri.icon
 			}
@@ -186,7 +186,7 @@ func Build(m state.Merged, links []Link, iconBase string) []Group {
 			Name: ri.name, URL: u, Letter: Letter(ri.name),
 			IconURL:     ResolveIcon(ri.icon, iconBase),
 			Description: ri.svc.Description, Service: ri.svc.Name,
-			Host: ri.svc.DeclaredHost, Active: ri.svc.Active, Exposure: ri.exp,
+			Host: ri.svc.BoundHost, Active: ri.svc.Active, Exposure: ri.exp,
 		})
 	}
 
@@ -222,13 +222,13 @@ func NewHostIndex(m state.Merged) HostIndex {
 		}
 	}
 	for _, svc := range m.Services {
-		if svc.DeclaredHost == "" {
+		if svc.BoundHost == "" {
 			continue
 		}
 		for _, rt := range svc.Routes {
 			if hn := urlHostname(rt.URLStr()); hn != "" {
 				if _, taken := ix.byName[hn]; !taken {
-					ix.byName[hn] = svc.DeclaredHost
+					ix.byName[hn] = svc.BoundHost
 				}
 			}
 		}
