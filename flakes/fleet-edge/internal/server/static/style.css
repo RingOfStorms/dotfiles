@@ -693,3 +693,67 @@ footer {
 .log-unit { color: var(--accent); flex: 0 0 auto; }
 .prio-0, .prio-1, .prio-2, .prio-3 { color: var(--red); }
 .prio-4 { color: var(--amber); }
+
+/* Topology has its own scrolling sidebar; the canvas stays in view. */
+.topo-main { max-width: none; padding: 0.8rem; }
+.topo-head h1 { margin: 0 0 0.25rem; }
+.topo-head .summary { margin: 0 0 0.7rem; }
+.topo-layout { display: flex; gap: 0.8rem; flex: 1; min-height: 0; }
+.topo-stage {
+  position: relative; flex: 1; min-width: 0; min-height: 0;
+  overflow: hidden; border: 1px solid var(--border); border-radius: 10px;
+  padding: 3.4rem 0.5rem 1.5rem;
+  background: var(--bg);
+}
+.topo-stage:focus-visible { outline: 2px solid var(--accent); }
+.topo-stage > #topo { display: block; width: 100%; height: 100%; touch-action: none; user-select: none; cursor: grab; }
+.topo-stage > #topo.panning, .topo-stage > #topo.panning .node { cursor: grabbing; }
+.topo-stage .topo-bg { display: none; }
+.topo-toolbar {
+  position: absolute; top: 0.5rem; left: 0.5rem; right: 0.5rem;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem 0.7rem;
+  padding: 0.4rem 0.6rem; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); font-size: 0.7rem;
+}
+.topo-layer { display: inline-flex; align-items: center; gap: 0.2rem; cursor: pointer; white-space: nowrap; }
+.topo-layer input { accent-color: var(--accent); margin: 0; }
+.topo-zoom { display: inline-flex; gap: 0.25rem; margin-left: auto; }
+.topo-zoom button, .topo-close {
+  border: 1px solid var(--border); border-radius: 5px; background: var(--surface-alt);
+  color: var(--text); padding: 0.15rem 0.45rem; font: inherit; cursor: pointer;
+}
+.topo-zoom button:hover, .topo-close:hover { border-color: var(--accent); }
+.topo-download { white-space: nowrap; }
+.topo-hint { position: absolute; bottom: 0.4rem; left: 0.6rem; color: var(--muted); font-size: 0.65rem; pointer-events: none; }
+.topo-side { flex: 0 0 19rem; overflow: auto; min-height: 0; }
+.topo-card { padding: 0.7rem; margin-bottom: 0.65rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 0.75rem; }
+.topo-card h2 { margin: 0 0 0.4rem; font-size: 0.9rem; }
+.topo-card h3 { margin: 0.8rem 0 0.3rem; font-size: 0.75rem; }
+.topo-card p { margin: 0.4rem 0 0; line-height: 1.5; }
+.topo-note summary { cursor: pointer; font-weight: 600; }
+.topo-legend { display: block; width: 100%; }
+.topo-legend text { font-size: 11px; }
+.topo-legend .node { cursor: default; }
+.topo-legend-chips { font-size: 0.65rem; }
+.topo-info-head { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; }
+.topo-info-head h2 { margin: 0; overflow-wrap: anywhere; }
+.topo-close { margin-left: auto; }
+.topo-facts { display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 0.6rem; }
+.topo-facts dt { color: var(--muted); }
+.topo-facts dd { margin: 0; overflow-wrap: anywhere; }
+.topo-lines, .topo-links, .topo-svcs { padding-left: 1rem; margin: 0.4rem 0; }
+.topo-lines li, .topo-links li, .topo-svcs li { margin: 0.35rem 0; overflow-wrap: anywhere; }
+.topo-svcs { list-style: none; padding-left: 0; }
+.topo-svcs .badge { margin-left: 0.3rem; }
+.topo-link-kind { font-size: 0.65rem; }
+.lk-tailnet { color: var(--badge-tailnet); }
+.lk-public { color: var(--amber); }
+.lk-control { color: var(--accent); }
+@media (max-width: 900px) {
+  .topo-layout { flex-direction: column; overflow: auto; }
+  .topo-stage { flex: 0 0 65dvh; min-height: 22rem; }
+  .topo-side { flex: 0 0 auto; overflow: visible; }
+  .topo-stage { padding-top: 5rem; }
+  .topo-toolbar { font-size: 0.6rem; }
+  .topo-hint { font-size: 0.55rem; }
+}

@@ -161,6 +161,44 @@ func TestMergeNoEndpointHost(t *testing.T) {
 	}
 }
 
+func TestMergeContainerHostIsDeclared(t *testing.T) {
+	inv := sampleInventory()
+	inv.Hosts["h003"] = inventory.Host{OverlayIP: strp("100.64.0.4")}
+	inv.Hosts["gp3"] = inventory.Host{OverlayIP: strp("100.64.0.15")}
+	inv.ContainerHosts = []string{"h003"}
+	// h001 is a container host only because a service is declared on it; a
+	// service with no host is unplaced and declares nothing.
+	inv.Services["unplaced"] = inventory.Service{Name: "unplaced", Kind: "nixos"}
+	polls := map[string]HostPoll{
+		"h001": {Host: "h001", OK: true, PolledAt: time.Now()},
+		"h003": {Host: "h003", OK: true, PolledAt: time.Now()},
+		"gp3":  {Host: "gp3", OK: true, PolledAt: time.Now()},
+	}
+	m := MergeAt(inv, polls, time.Now())
+	want := map[string]bool{"h001": true, "h003": true, "gp3": false}
+	if len(m.Hosts) != len(want) {
+		t.Fatalf("expected %d hosts, got %+v", len(want), m.Hosts)
+	}
+	for _, h := range m.Hosts {
+		if got := h.ContainerHost; got != want[h.Host] {
+			t.Errorf("%s: containerHost = %v, want %v", h.Host, got, want[h.Host])
+		}
+	}
+}
+
+func TestMergeContainerHostWithoutServices(t *testing.T) {
+	// A declared container host whose services are all gone stays a container
+	// host: the declaration is the truth, not the service list.
+	inv := &inventory.Inventory{
+		Hosts:          map[string]inventory.Host{"h003": {OverlayIP: strp("100.64.0.4")}},
+		ContainerHosts: []string{"h003"},
+	}
+	m := MergeAt(inv, map[string]HostPoll{}, time.Now())
+	if len(m.Hosts) != 1 || !m.Hosts[0].ContainerHost {
+		t.Fatalf("expected declared container host, got %+v", m.Hosts)
+	}
+}
+
 func TestPollOnceOnlyPolledHosts(t *testing.T) {
 	inv := sampleInventory()
 	inv.Hosts["gp3"] = inventory.Host{OverlayIP: strp("100.64.0.15")}

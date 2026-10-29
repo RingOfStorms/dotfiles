@@ -1,0 +1,63 @@
+{{define "topology.html"}}{{template "head" .}}
+<main class="topo-main">
+<header class="page-head topo-head">
+  <h1>Topology</h1>
+  <p class="summary" id="topo-summary">
+    <strong>{{.Online}}</strong>/<strong>{{.Polled}}</strong> polled hosts online
+    {{if .Sleeping}} · <strong>{{.Sleeping}}</strong> sleeping{{end}}
+    {{if .Down}} · <strong class="warn">{{.Down}}</strong> down{{end}}
+    <span class="muted" id="topo-updated"> · live, refreshes every 30s</span>
+  </p>
+</header>
+<div class="topo-layout">
+  <div class="topo-stage" id="topo-stage" tabindex="0" aria-label="Topology diagram: drag to pan, scroll or pinch to zoom, click a box for details">
+    {{template "topology.svg" .Diagram}}
+    <div class="topo-toolbar">
+      {{range .Layers}}<label class="topo-layer"><input type="checkbox" data-layer="{{.ID}}" checked> {{.Label}}</label>{{end}}
+      <span class="topo-zoom">
+        <button type="button" data-zoom="in" title="Zoom in (+)">+</button>
+        <button type="button" data-zoom="out" title="Zoom out (-)">−</button>
+        <button type="button" data-zoom="fit" title="Fit (0)">fit</button>
+      </span>
+      <a class="topo-download" href="/topology.svg" download="topology.svg" title="Download as a standalone SVG">SVG ↓</a>
+    </div>
+    <div class="topo-hint">drag to pan · scroll / pinch to zoom · click a box for details</div>
+  </div>
+  <aside class="topo-side">
+    <section class="topo-card" id="topo-info" hidden></section>
+    <section class="topo-card">
+      <h2>Legend</h2>
+      <svg class="topo topo-legend" viewBox="0 0 300 236" aria-hidden="true">
+        <g class="edge k-wan live"><path d="M4 12h44"/></g><text x="58" y="16">WAN uplink</text>
+        <g class="edge k-trunk live"><path d="M4 34h44"/></g><text x="58" y="38">802.1Q trunk</text>
+        <g class="edge k-ethernet live"><path d="M4 56h44"/></g><text x="58" y="60">ethernet</text>
+        <g class="edge k-wifi live"><path d="M4 78h44"/></g><text x="58" y="82">wi-fi</text>
+        <g class="edge k-kvm live"><path d="M4 100h44"/></g><text x="58" y="104">KVM / USB / power</text>
+        <g class="edge k-tailnet live"><path d="M4 122h44"/></g><text x="58" y="126">tailnet membership / coordination</text>
+        <g class="edge k-public live"><path d="M4 144h44"/></g><text x="58" y="148">public traffic path</text>
+        <g class="edge k-agent live"><path d="M4 166h44"/></g><text x="58" y="170">fleet-agent poll (:9101)</text>
+        <g class="edge k-control live"><path d="M4 188h44"/></g><text x="58" y="192">control / push</text>
+        <g class="node st-online"><circle class="sdot" cx="10" cy="216" r="5"/></g><text x="20" y="220">online</text>
+        <g class="node st-sleeping"><circle class="sdot" cx="80" cy="216" r="5"/></g><text x="90" y="220">asleep</text>
+        <g class="node st-down"><circle class="sdot" cx="150" cy="216" r="5"/></g><text x="160" y="220">down</text>
+        <g class="node st-no-endpoint"><circle class="sdot" cx="212" cy="216" r="5"/></g><text x="222" y="220">not polled</text>
+      </svg>
+      <p class="topo-legend-chips">
+        Container chips: dot = state, left stripe = exposure
+        <span class="badge badge-public">public</span>
+        <span class="badge badge-lan">lan</span>
+        <span class="badge badge-tailnet">tailnet</span>
+        <span class="badge badge-local">local</span>
+      </p>
+    </section>
+    {{range .Notes}}
+    <details class="topo-card topo-note" open>
+      <summary>{{.Title}}</summary>
+      <p>{{.Text}}</p>
+    </details>
+    {{end}}
+  </aside>
+</div>
+</main>
+<script src="/static/topology.js" defer></script>
+{{template "foot" .}}{{end}}

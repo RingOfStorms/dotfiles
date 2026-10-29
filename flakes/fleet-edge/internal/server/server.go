@@ -19,12 +19,13 @@ import (
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/state"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/store"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/topology"
 )
 
 //go:embed templates/*.html
 var templateFS embed.FS
 
-//go:embed static/*.css
+//go:embed static/*
 var staticFS embed.FS
 
 var tmpl = template.Must(
@@ -64,6 +65,9 @@ type Config struct {
 	// (/internal/overrides.json). "" hides the section. The dashboard has
 	// no token and no write path: it only GETs this URL.
 	OverridesURL string
+	// Topology is the hand-written part of /topology (validated by the
+	// caller); nil means topology.Default().
+	Topology *topology.Spec
 }
 
 // ExposeRow is one public expose override on /services (from the export).
@@ -175,6 +179,15 @@ type HostsData struct {
 	UnreachableHost int
 }
 
+// TopologyData is the view model for topology.html.
+type TopologyData struct {
+	Common
+	Diagram                        topology.Diagram
+	Layers                         []topology.Layer
+	Notes                          []topology.Note
+	Polled, Online, Sleeping, Down int
+}
+
 // LogTargetOption represents one selectable log source in the drill-down log viewer.
 type LogTargetOption struct {
 	Kind   string // "guest" or "unit"
@@ -249,11 +262,16 @@ func New(src Source, cfg Config) *Server {
 	if hc == nil {
 		hc = &http.Client{Timeout: 5 * time.Second}
 	}
+	if cfg.Topology == nil {
+		cfg.Topology = topology.Default()
+	}
 	s := &Server{src: src, cfg: cfg, httpClient: hc, mux: http.NewServeMux()}
 	s.mux.HandleFunc("/", s.handleStart)
 	s.mux.HandleFunc("/services", s.handleServices)
 	s.mux.HandleFunc("/hosts", s.handleHosts)
 	s.mux.HandleFunc("/hosts/", s.handleHostDetail)
+	s.mux.HandleFunc("/topology", s.handleTopology)
+	s.mux.HandleFunc("/topology.svg", s.handleTopologySVG)
 	s.mux.HandleFunc("/healthz", s.handleHealthz)
 	s.mux.HandleFunc("/api/state.json", s.handleAPIState)
 	s.mux.HandleFunc("/api/hosts/", s.handleAPIHostSubroute)
@@ -424,6 +442,46 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.render(w, "hosts.html", data)
+}
+
+func (s *Server) diagram() topology.Diagram {
+	m := s.src.Current()
+	now := m.GeneratedAt
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	return topology.Build(s.cfg.Topology, m, now)
+}
+
+func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
+	d := s.diagram()
+	data := TopologyData{Common: s.common("topology"), Diagram: d, Layers: topology.Layers, Notes: s.cfg.Topology.Notes}
+	// Counted over the drawn hosts, the same way topology.js recounts
+	// after each live refresh.
+	for _, n := range d.Nodes {
+		switch n.State {
+		case "online":
+			data.Online++
+		case "sleeping":
+			data.Sleeping++
+		case "down":
+			data.Down++
+		default:
+			continue
+		}
+		data.Polled++
+	}
+	s.render(w, "topology.html", data)
+}
+
+// handleTopologySVG serves the diagram alone: a self-contained download and
+// the source topology.js swaps in for live status.
+func (s *Server) handleTopologySVG(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "image/svg+xml; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := tmpl.ExecuteTemplate(w, "topology.svg", s.diagram()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func parseRangeWindow(rangeKey string) (string, time.Duration) {

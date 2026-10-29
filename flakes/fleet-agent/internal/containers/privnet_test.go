@@ -3,6 +3,8 @@ package containers
 // Private container networking (ROUTING-PLAN §8 step 5).
 
 import (
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -146,5 +148,47 @@ func TestPortsFileTailnetAllow(t *testing.T) {
 	got := strings.Join(portsFileLines(s, "h001"), "\n")
 	if want := "guest ve-immich\ntcp 5432 dnat 10.233.15.2 100.64.0.13 100.64.0.1"; got != want {
 		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+// A deploy that drops a port deletes it from temp-ports (applyPorts only
+// ever adds); ports still opened by any ports file and DNAT lines stay.
+func TestDeployPrunesDroppedPorts(t *testing.T) {
+	r := newOverrideRig(t)
+	s := Service{Name: "app", Kind: "nixos", TCPPorts: []int{8090}}
+	ps := prepareScript(s, "h001")
+	i, j := strings.Index(ps, "old_ports="), strings.Index(ps, "systemctl reload-or-restart fleet-containers-ports")
+	if i < 0 || j < i || !strings.Contains(ps[i:j], prunePortsScript) {
+		t.Fatalf("prepareScript must prune between the ports write and the reload:\n%s", ps)
+	}
+	snippet := "set -euo pipefail\n" + ps[i:j]
+	nftLog := filepath.Join(r.dir, "nft.log")
+	// nft fails like a missing element does; the deploy must not care.
+	writeExe(t, filepath.Join(r.bin, "nft"), "#!"+r.bash+"\necho \"$*\" >> "+nftLog+"\nexit 1\n")
+	pd := filepath.Join(r.dir, "ports")
+	must(t, os.MkdirAll(pd, 0o755))
+	run := func() string {
+		t.Helper()
+		os.Remove(nftLog)
+		must(t, r.run(snippet))
+		b, _ := os.ReadFile(nftLog)
+		return string(b)
+	}
+	// No previous file: nothing to delete.
+	if got := run(); got != "" {
+		t.Errorf("missing old file: nft called: %q", got)
+	}
+	must(t, os.WriteFile(filepath.Join(pd, "app"), []byte("tcp 8090\ntcp 8081\nudp 9000\ntcp 3032 dnat 10.233.1.2\nguest ve-app\ntcp 7000"), 0o644))
+	must(t, os.WriteFile(filepath.Join(pd, "other"), []byte("udp 9000\n"), 0o644))
+	want := "delete element inet nixos-fw temp-ports { tcp . 8081 }\ndelete element inet nixos-fw temp-ports { tcp . 7000 }\n"
+	if got := run(); got != want {
+		t.Errorf("nft calls:\n%s\nwant:\n%s", got, want)
+	}
+	if b, _ := os.ReadFile(filepath.Join(pd, "app")); string(b) != "tcp 8090\n" {
+		t.Errorf("new ports file: %q", b)
+	}
+	// Idempotent: a second deploy of the same file deletes nothing.
+	if got := run(); got != "" {
+		t.Errorf("redeploy: nft called: %q", got)
 	}
 }

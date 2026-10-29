@@ -60,7 +60,7 @@ func loadMachineKey(path string) (machineKey, *rsa.PrivateKey, error) {
 			return k, nil, fmt.Errorf("%w: no Zitadel machine key at %s", errNoToken, path)
 		}
 		if os.IsPermission(err) {
-			return k, nil, fmt.Errorf("%w (public expose authenticates as this host's machine user: run with sudo)", err)
+			return k, nil, fmt.Errorf("%w: public expose signs with this host's machine key (root-only); run sudo fleet containers expose ... (the cnt alias does not expand under sudo)", err)
 		}
 		return k, nil, err
 	}

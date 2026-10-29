@@ -29,6 +29,15 @@ A single Go binary, `fleet-edge`:
   databases (including `h002` -> `h004` host replacement lineage).
 - Authenticates requests via Zitadel OIDC Authorization Code + PKCE (`admin`
   role claim, `fleet_session` HMAC cookie) or `Bearer` / `X-API-Key` tokens.
+  Auth is on when OIDC is (issuer **and** client ID set) or when any API key
+  exists; with neither, the middleware is a no-op and everything is open —
+  the deployment's nginx ACL is then the only gate. `--session-key-file` is
+  optional: without it the HMAC secret is random per process, so every
+  restart ends the browser sessions. `/healthz`, `/auth/login`,
+  `/auth/callback` (also `/callback`), and `/auth/logout` are exempt from the
+  session check; other `/auth/*` paths are not. h005 enables Zitadel with
+  the `admin` role, so its dashboard, topology/SVG, APIs and static assets
+  all require a session or API key.
 - Serves, on `--listen` (default `127.0.0.1:8099`, behind nginx on `h005` at
   `https://fleet.joshuabell.xyz`):
   - `GET /` — start page of app tiles.
@@ -42,6 +51,10 @@ A single Go binary, `fleet-edge`:
     inline SVG time-series charts, bcachefs pool/device breakdown, SMART drive
     table, Fail2ban jails & banned IPs, and live systemd/container log viewer
     (proxying `:9101/logs.json`).
+  - `GET /topology` — pan/zoom SVG of the rack, switches, VLANs, tailnet and
+    public paths with live status; `/topology.svg` serves the same diagram
+    standalone for download and for the page's 30s refresh. See
+    [Topology](#topology-topology).
   - `GET /healthz` — `ok` (unauthenticated).
   - `GET /api/state.json` — the merged view as JSON.
 
@@ -123,7 +136,8 @@ fleet-edge \
 Generate the inventory file with, e.g.:
 
 ```
-nix eval --json .#inventory > /var/lib/fleet-edge/inventory.json
+nix eval --json 'git+file:///home/josh/.config/nixos-config?dir=containers#inventory' \
+  > /var/lib/fleet-edge/inventory.json
 ```
 
 On h005 (`hosts/h005/fleet-edge.nix`) the inventory is generated at build
@@ -131,6 +145,93 @@ time from the `containers` flake input (`builtins.toJSON
 inputs.containers.inventory` via `pkgs.writeText`). **Refreshing the
 inventory = redeploying h005** (after `nix flake update containers` in
 `hosts/h005`). It is served tailnet-only at `http://h005.net.joshuabell.xyz/`.
+
+## Topology (`/topology`)
+
+`/topology` draws the whole edge: internet, the Oracle Cloud node, the rack,
+the home LAN, the roaming laptops, and how they relate. The page is a
+pan/zoom SVG (drag, scroll/pinch, click a box for its details) that refreshes
+`/topology.svg` every 30s, plus a notes panel and per-layer checkboxes
+(Physical / Tailnet / Public paths / Agents & control).
+
+The diagram is a hand-written spec merged with everything the inventory
+already knows:
+
+```
+fleet-edge --topology /path/to/topology.json      # or FLEET_EDGE_TOPOLOGY
+```
+
+`--topology` is an alternative to the environment variable; the NixOS module
+sets `FLEET_EDGE_TOPOLOGY` from `services.fleet-edge.topology`. With neither,
+every inventory host is drawn in one zone.
+
+Drag to pan; wheel/pinch or `+`/`-` to zoom; `0`/fit resets the view.
+Select a box (click or Enter/Space) for full details and connected paths;
+Escape clears selection. The URL fragment preserves selection and layer
+toggles persist locally. Status refreshes every 30s while the tab is visible,
+preserving zoom, selection and layer state. Offline hosts retain declared
+container placement but show unknown container status, not stale metrics.
+
+### Schema
+
+`topology.Spec` in `internal/topology/topology.go`:
+
+| key | meaning |
+| --- | --- |
+| `width` | SVG width in units (0 = 1800) |
+| `rows[].zones[]{id,label,kind,flex}` | horizontal bands; zones share a row, widths proportional to `flex` |
+| `nodes[]{id,host,label,kind,zone,lines[],href}` | one box; `host` binds it to an inventory host |
+| `links[]{from,to,kind,label}` | one declared connection between two node ids |
+| `defaultZone` | zone that receives every inventory host the spec doesn't place |
+| `hide[]` | inventory hosts never auto-placed |
+| `hubs{tailnet,edge,router,dashboard}` | node ids the derived edges attach to (`""` skips that family) |
+| `notes[]{title,text}` | the explanation paragraphs |
+
+Zone `kind` picks the tint (`internet`, `cloud`, `tailnet`, `home`, `rack`,
+`lan`, `roaming`; anything else is neutral). Link `kind` picks the style and
+the layer it belongs to: `wan`, `ethernet`, `trunk`, `wifi`, `kvm`, `power`
+(physical), `tailnet`, `public`, `agent`/`control`.
+
+### What is derived, never declared
+
+- **Inventory hosts and their live state** — the poll's state dot, overlay/LAN
+  IPs, metrics and container chips come from the inventory, not the spec.
+  Every inventory host the spec doesn't place appears in `defaultZone`, so a
+  new fleet host shows up without a spec edit (use `hide` for non-fleet
+  things like the printer).
+- **Container chips** — the services the repo declares on that host, with the
+  exposure stripe and the polled state dot.
+- **`hubs.tailnet`** — an edge to every placed host with an overlay IP.
+- **`hubs.edge`** — an edge to every placed host carrying `via = "edge"`
+  routes, labelled with the count.
+- **`hubs.router`** — the same for `via = "router"` routes (`minecraft` has no
+  host today, so h005 leaves this empty rather than draw an empty fan).
+- **`hubs.dashboard`** — an edge from the dashboard host to every host with a
+  fleet-agent.
+
+Only the parts the inventory can't know live in the spec: physical gear,
+cabling, VLANs and the prose. A declared cable is drawn only when the repo
+records it (the h005 trunk, the switch interlink, the KVM, UPS and console
+wiring); a host whose switch port is unrecorded gets no ethernet edge at all
+rather than a guessed one — zone membership already says which network it is
+on.
+
+### Validation
+
+`topology.Validate` runs at startup; a bad spec fails the service instead of
+drawing a wrong diagram. It rejects duplicate or empty zone ids, a
+`defaultZone` that isn't a zone, nodes in an undeclared zone, duplicate node
+ids, `host` values not in the inventory, a host placed twice, a hostless
+node id that collides with an auto-placed host name, links with an unknown
+kind/endpoint or a self-loop, and a hub naming a node the spec doesn't
+place.
+Negative widths/flex are rejected, and every computed zone must be at least
+200 SVG units wide (after the row's gaps and proportional flex allocation).
+
+h005's spec is `hosts/h005/topology.nix`, wired in `hosts/h005/fleet-edge.nix`
+as `topology = import ./topology.nix { inherit fleet constants; };` — it reads
+`fleet.hosts` and `_constants.nix` (VLAN ids, leases) so addresses can't
+drift from the router config.
 
 ## NixOS module (used by h005)
 
@@ -174,3 +275,5 @@ Layout:
 - `internal/state` — Status polling, log proxying, and merge into dashboard view.
 - `internal/store` — SQLite WAL time-series store, rollups, and Beszel importer.
 - `internal/server` — HTTP handlers, inline SVG chart generator, and embedded `html/template` pages.
+- `internal/topology` — `/topology` spec handling: validation against the
+  inventory, zone/row layout, edge routing and the derived hub edges.

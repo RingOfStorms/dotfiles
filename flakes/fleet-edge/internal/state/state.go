@@ -287,6 +287,13 @@ type HostView struct {
 	SmartTotal  int         `json:"smartTotal"`
 	SmartFailed int         `json:"smartFailed"`
 	BannedCount int         `json:"bannedCount"`
+
+	// ContainerHost is true when the inventory declares the host runs
+	// containers: it is listed in containerHosts, or at least one service is
+	// declared on it (an unplaced service, host = "", declares nothing). A host
+	// that only answers polls stays false; it is a declaration, not something a
+	// poll can add or remove.
+	ContainerHost bool `json:"containerHost"`
 }
 
 // Merged is the full state served by /api/state.json and rendered by the
@@ -693,6 +700,19 @@ func mergeWithLast(inv *inventory.Inventory, polls map[string]HostPoll, last map
 		polled[n] = true
 	}
 
+	// Container hosts are declared, not observed: the inventory names them, or
+	// a service is declared on them. A host that only answers polls stays
+	// false; a declared container host stays true with zero containers.
+	containerHost := map[string]bool{}
+	for _, n := range inv.ContainerHosts {
+		containerHost[n] = true
+	}
+	for _, svc := range inv.Services {
+		if svc.Host != "" {
+			containerHost[svc.Host] = true
+		}
+	}
+
 	hostNames := make([]string, 0, len(inv.Hosts))
 	for name := range inv.Hosts {
 		hostNames = append(hostNames, name)
@@ -706,12 +726,13 @@ func mergeWithLast(inv *inventory.Inventory, polls map[string]HostPoll, last map
 			role = "server"
 		}
 		hv := HostView{
-			Host:        name,
-			Role:        role,
-			AlwaysOn:    h.IsAlwaysOn(),
-			Replaces:    h.Replaces,
-			HasEndpoint: polled[name],
-			StateBadge:  "no-endpoint",
+			Host:          name,
+			Role:          role,
+			AlwaysOn:      h.IsAlwaysOn(),
+			Replaces:      h.Replaces,
+			HasEndpoint:   polled[name],
+			ContainerHost: containerHost[name],
+			StateBadge:    "no-endpoint",
 		}
 		if h.OverlayIP != nil {
 			hv.OverlayIP = *h.OverlayIP

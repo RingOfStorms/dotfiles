@@ -143,9 +143,13 @@ commands:
   port ls [host...]            temporarily open ports, their service and time left
   port close <svc> <port>/<proto> [--from ...] [--iface ...] [--host h]
                                close one early (same --from/--iface as the open)
-  expose <svc>[.<route>] --exposure tailnet|lan --for DUR [--reason TEXT] [--host h]
-                               widen an http route for a while (max 24h) on its host; the host
-                               reverts it at expiry (timer + boot/minute sweep). public: not yet
+  expose <svc>[.<route>] --exposure tailnet|lan|public --for DUR|forever [--reason TEXT] [--host h]
+                               widen an http route for a while on its host; the host reverts it
+                               at expiry (timer + boot/minute sweep). tailnet/lan: --for required,
+                               max 24h. public (via fleet-edge on h005 + o002 runtime vhost):
+                               default 8h, any duration or forever; signs with this machine's
+                               root-only key (/machine-key.json), so: sudo fleet containers expose ...
+                               (the cnt alias does not expand under sudo)
   expose --list [host...]      active overrides (also shown by routes and audit)
   expose --revoke <svc>        drop the override now (deploy drops it too)
   agent --listen ADDR [--host NAME]
@@ -959,12 +963,29 @@ func prepareScript(s Service, host string) string {
 	for _, l := range portsFileLines(s, host) {
 		ports.WriteString(l + "\n")
 	}
+	b.WriteString(fmt.Sprintf("old_ports=$(cat /var/lib/fleet-containers/ports/%s 2>/dev/null || true)\n", s.Name))
 	b.WriteString(fmt.Sprintf("printf %%s %s > /var/lib/fleet-containers/ports/%s\n", q(ports.String()), s.Name))
+	b.WriteString(prunePortsScript)
 	b.WriteString("systemctl reload-or-restart fleet-containers-ports.service || true\n")
 	b.WriteString(siteScript(s, host))
 	b.WriteString(dropOverrideScript(s.Name))
 	return b.String()
 }
+
+// prunePortsScript closes the temp-ports elements that $old_ports (the
+// service's previous ports file) opened and no ports file opens any more.
+// applyPorts only adds to that set (it is never flushed: agnos shares it),
+// so without this a dropped tcpPorts entry stays open until the next
+// firewall reload. cleanupScript's nftables restart would also do it, but is
+// too disruptive for every deploy. A missing old file or element is fine.
+const prunePortsScript = `while read -r pr po mode _ || [ -n "$pr" ]; do
+  case "$pr" in tcp|udp) ;; *) continue ;; esac
+  case "$po" in ""|*[!0-9]*) continue ;; esac
+  [ -z "$mode" ] || continue
+  grep -qxsF -- "$pr $po" /var/lib/fleet-containers/ports/* && continue
+  nft delete element inet nixos-fw temp-ports "{ $pr . $po }" 2>/dev/null || true
+done <<< "$old_ports"
+`
 
 // siteScript writes (or removes) the service's nginx site on host, validated
 // with nginx -t and rolled back on failure. Used by prepareScript and by

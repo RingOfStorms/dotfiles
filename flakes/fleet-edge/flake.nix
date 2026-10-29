@@ -157,10 +157,15 @@
             };
 
             overrides = {
-              enable = lib.mkEnableOption "the public `cnt expose` authority (fleet-edge-overrides, own unit and state)";
+              enable = lib.mkEnableOption ''
+                the public `cnt expose` authority and the placement registry
+                (fleet-edge-overrides, own unit and state);
+                see containers/PLACEMENT-PLAN.md
+              '';
               listen = lib.mkOption {
                 type = lib.types.str;
                 default = "127.0.0.1:8098";
+                description = "Loopback address h005 nginx proxies /api/overrides and /api/placements to.";
               };
               specFile = lib.mkOption {
                 type = lib.types.path;
@@ -311,6 +316,23 @@
                 }
               );
             };
+
+            topology = lib.mkOption {
+              type = lib.types.nullOr lib.types.json;
+              default = null;
+              description = ''
+                /topology diagram spec, passed as FLEET_EDGE_TOPOLOGY. The
+                schema is `topology.Spec` in internal/topology/topology.go:
+                width, rows[].zones[]{id,label,kind,flex}, nodes[]{id,host,
+                label,kind,zone,lines[],href}, links[]{from,to,kind,label},
+                defaultZone, hide[], hubs{tailnet,edge,router,dashboard} and
+                notes[]{title,text}. Hosts, container placement, public paths,
+                tailnet membership and agent polling are derived from the
+                inventory, so the spec only carries what the inventory cannot
+                know. Host bindings and every reference are validated at
+                startup. null keeps the built-in single-zone diagram.
+              '';
+            };
           };
 
           config = lib.mkIf cfg.enable {
@@ -330,7 +352,7 @@
                 knownHosts = pkgs.writeText "fleet-edge-edge-known-hosts" o.knownHosts;
               in
               {
-                description = "fleet-edge public expose overrides (ROUTING-PLAN §8 step 7)";
+                description = "fleet-edge expose overrides and placement registry (ROUTING-PLAN §8 step 7)";
                 wantedBy = [ "multi-user.target" ];
                 after = [ "network-online.target" ];
                 wants = [ "network-online.target" ];
@@ -430,6 +452,11 @@
               }
               // lib.optionalAttrs (cfg.auth.sessionKeyFile != null) {
                 FLEET_EDGE_SESSION_KEY_FILE = cfg.auth.sessionKeyFile;
+              }
+              // lib.optionalAttrs (cfg.topology != null) {
+                FLEET_EDGE_TOPOLOGY = toString (
+                  pkgs.writeText "fleet-edge-topology.json" (builtins.toJSON cfg.topology)
+                );
               };
 
               serviceConfig = {

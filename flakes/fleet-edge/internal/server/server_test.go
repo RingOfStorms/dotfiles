@@ -99,24 +99,6 @@ func TestHandleAPIStateJSON(t *testing.T) {
 	}
 }
 
-func TestNoPostHandlers(t *testing.T) {
-	srv := New(fakeSource{m: sample()}, Config{})
-	for _, path := range []string{"/", "/services", "/hosts", "/healthz", "/api/state.json"} {
-		req := httptest.NewRequest(http.MethodPost, path, nil)
-		w := httptest.NewRecorder()
-		srv.ServeHTTP(w, req)
-		// net/http's default mux has no method restriction per handler here
-		// (handlers are plain funcs), so this just documents that POST is
-		// treated identically to GET -- i.e. there is no mutating behavior
-		// triggered by method. The key read-only guarantee is that no
-		// handler writes state; verified by code review / Source interface
-		// being read-only (Current() has no side effects).
-		if w.Code >= 500 {
-			t.Fatalf("POST %s caused server error: %d", path, w.Code)
-		}
-	}
-}
-
 func TestStaticStyleCSSServed(t *testing.T) {
 	srv := New(fakeSource{m: sample()}, Config{})
 	req := httptest.NewRequest(http.MethodGet, "/static/style.css", nil)

@@ -20,15 +20,18 @@ import (
 	"time"
 
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/auth"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/authority"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/bunny"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/dash"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/edgevhost"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/overrides"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/placements"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/server"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/shareserve"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/state"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/store"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/topology"
 )
 
 // envDefault returns $key if set, else def; flags still override.
@@ -141,10 +144,11 @@ func fetchOwned(url string) ([]bunny.Owned, error) {
 	return e.Owned, nil
 }
 
-// runOverrides: the public expose authority (own unit, ROUTING-PLAN §8 step 7).
+// runOverrides: the public expose authority and the placement registry, one
+// unit (ROUTING-PLAN §8 step 7, containers/PLACEMENT-PLAN.md).
 func runOverrides(args []string) {
 	fs := flag.NewFlagSet("overrides", flag.ExitOnError)
-	listen := fs.String("listen", "127.0.0.1:8098", "address (loopback; h005 nginx proxies /api/overrides)")
+	listen := fs.String("listen", "127.0.0.1:8098", "address (loopback; h005 nginx proxies /api/overrides and /api/placements)")
 	invFile := fs.String("inventory", "", "inventory JSON")
 	specFile := fs.String("spec", "", "public DNS spec JSON (dns-records.nix publicSpec)")
 	writersFile := fs.String("writers", "", "JSON {host: {sub, peer}}: Zitadel machine users allowed to write, and their overlay IPs")
@@ -171,7 +175,7 @@ func runOverrides(args []string) {
 	if *zitadelIssuer == "" || *zitadelProjectID == "" {
 		log.Fatal("overrides: --zitadel-issuer and --zitadel-project-id are required")
 	}
-	writers := map[string]overrides.Writer{}
+	writers := map[string]authority.Writer{}
 	if *writersFile != "" {
 		b, err := os.ReadFile(*writersFile)
 		if err != nil {
@@ -182,8 +186,12 @@ func runOverrides(args []string) {
 		}
 	}
 	// No ClientID: the audience must be the project itself. AllowedRole
-	// stays empty; overrides authorizes by sub alone.
+	// stays empty; both authorities authorize by sub alone.
 	verifier, err := auth.New(auth.Config{Zitadel: auth.ZitadelConfig{Issuer: *zitadelIssuer, ProjectID: *zitadelProjectID}})
+	if err != nil {
+		log.Fatal(err)
+	}
+	au, err := authority.New(writers, verifier, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -201,16 +209,36 @@ func runOverrides(args []string) {
 	}
 	poller := state.NewPoller(inv, *statusTmpl, 5*time.Second)
 	cfg.Status = overrides.HTTPStatus(poller.StatusURLFor)
-	svc, err := overrides.New(cfg)
+	ov, err := overrides.New(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	pl, err := placements.New(placements.Config{Inventory: inv, StateDir: *stateDir, Auth: au,
+		Status: placements.HTTPHostServices(poller.StatusURLFor)})
 	if err != nil {
 		log.Fatal(err)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	go svc.Run(ctx, *every)
-	srv := &http.Server{Addr: *listen, Handler: svc.Handler(), ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 3 * time.Minute}
+	go ov.Run(ctx, *every)
+	go pl.Run(ctx, *every)
+	// One listener, both APIs: h005 proxies /api/overrides and /api/placements
+	// to the same loopback port, and each export stays loopback-only.
+	root := http.NewServeMux()
+	for _, s := range []struct {
+		export, api string
+		h           http.Handler
+	}{
+		{"/internal/overrides.json", "/api/overrides", ov.Handler()},
+		{"/internal/placements.json", "/api/placements", pl.Handler()},
+	} {
+		root.Handle(s.export, s.h)
+		root.Handle(s.api, s.h)
+		root.Handle(s.api+"/", s.h)
+	}
+	srv := &http.Server{Addr: *listen, Handler: root, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 3 * time.Minute}
 	go func() { <-ctx.Done(); _ = srv.Close() }()
-	log.Printf("fleet-edge overrides on %s", *listen)
+	log.Printf("fleet-edge overrides and placements on %s", *listen)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
@@ -349,6 +377,8 @@ func main() {
 		"CDN template for named icons, {name} substituted (env FLEET_EDGE_ICON_BASE)")
 	linksFile := flag.String("links", envDefault("FLEET_EDGE_LINKS", ""),
 		"JSON array of extra start-page links [{name,url,icon,group,description,host,exposure}] (env FLEET_EDGE_LINKS)")
+	topologyFile := flag.String("topology", envDefault("FLEET_EDGE_TOPOLOGY", ""),
+		"JSON topology spec: zones, physical devices, links and notes (empty shows inventory hosts)")
 	zitadelIssuer := flag.String("zitadel-issuer", envDefault("FLEET_EDGE_ZITADEL_ISSUER", ""), "Zitadel OIDC issuer URL")
 	zitadelProjectID := flag.String("zitadel-project-id", envDefault("FLEET_EDGE_ZITADEL_PROJECT_ID", ""), "Zitadel project ID")
 	zitadelClaim := flag.String("zitadel-claim", envDefault("FLEET_EDGE_ZITADEL_CLAIM", "flatRolesClaim"), "Zitadel roles claim")
@@ -372,6 +402,13 @@ func main() {
 	links, err := dash.LoadLinks(*linksFile)
 	if err != nil {
 		log.Fatalf("loading links: %v", err)
+	}
+	topo, err := topology.Load(*topologyFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := topo.Validate(inv); err != nil {
+		log.Fatal(err)
 	}
 	if bg := *background; bg != "" && !strings.HasPrefix(bg, "http://") && !strings.HasPrefix(bg, "https://") {
 		if _, err := os.Stat(*background); err != nil {
@@ -423,6 +460,7 @@ func main() {
 		IconBase:     *iconBase,
 		Links:        links,
 		OverridesURL: *overridesURL,
+		Topology:     topo,
 	})
 	httpServer := &http.Server{
 		Addr:              *listen,
