@@ -2,7 +2,11 @@ package containers
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"io"
 	"net/http"
@@ -671,5 +675,29 @@ func TestImportPlanSkipsSingletonWhileHostSilent(t *testing.T) {
 	entries, skipped = importPlan()
 	if len(entries) != 1 || entries[0] != (placementEntry{Service: "svc", Host: "src"}) || len(skipped) != 0 {
 		t.Errorf("all answering: entries = %v skipped = %q, want svc on src", entries, skipped)
+	}
+}
+
+// TestCmdPlaceImportNamesSilentHostWhenAllSkipped: when every service is
+// skipped because a host did not answer, `place --import` still refuses, but
+// the output must name that host -- "nothing to import" alone hides why.
+func TestCmdPlaceImportNamesSilentHostWhenAllSkipped(t *testing.T) {
+	resolutionRig(t, nil, nil, map[string][]string{"src": {"svc+"}}, "dst")
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	must(t, err)
+	pemKey := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+	key := filepath.Join(t.TempDir(), "machine-key.json")
+	b, err := json.Marshal(machineKey{KeyID: "k", UserID: "u", Key: string(pemKey)})
+	must(t, err)
+	must(t, os.WriteFile(key, b, 0o600))
+	t.Setenv("SEC_MACHINE_KEY", key)
+
+	var cmdErr error
+	out := captureStderr(t, func() { cmdErr = cmdPlace([]string{"--import"}) })
+	if cmdErr == nil || !strings.Contains(cmdErr.Error(), "nothing to import") {
+		t.Fatalf("err = %v, want the nothing-to-import refusal", cmdErr)
+	}
+	if !strings.Contains(out, "undecided: svc (a host did not answer: dst)") {
+		t.Errorf("output does not name the silent host dst:\n%s", out)
 	}
 }

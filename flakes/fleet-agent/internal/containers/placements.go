@@ -521,6 +521,11 @@ func cmdPlaceImport(f flags) error {
 		return nil
 	}
 	if len(entries) == 0 {
+		// The skip reasons are the answer here: a silent host is why nothing
+		// qualified, so name it before refusing.
+		for _, u := range unknown {
+			fmt.Printf("undecided: %s\n", u)
+		}
 		return fmt.Errorf("nothing to import: no service was found on exactly one host")
 	}
 	res, err := c.placementImport(placementImport{User: exposeUser(), Reason: "cnt place --import", Force: f.bools["force"],
