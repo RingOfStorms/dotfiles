@@ -48,16 +48,15 @@ the same way `--overrides-url` already works (`main.go:55`).
 
 Callers authenticate exactly like `cnt expose` (`internal/authority`): a Zitadel
 machine token whose `sub` is in `fleet.global.overrideWriters`
-(`hosts/fleet.nix:54-59`), sent from that host's overlay IP through h005 nginx
+(`hosts/fleet.nix:54-62`), sent from that host's overlay IP through h005 nginx
 (`/api/placements`, deny o002, `X-Fleet-Peer` set from the loopback trusted peer).
 Writers are per-host, so `Row.Device` is the host that made the change; that is
-the whole point of the machine-identity scheme. Today only lio/juni/gp3/oren are
-writers, of which just `lio` is a container host. Adding h001, h003 and `joe`
-was planned for phase 2 and is **deferred to phase 3**: it is blocked on
-provisioning Zitadel machine users for those hosts (all three already run
-sec-agent, `hosts/joe/flake.nix:118`, so they have a machine key). The writer
-set has to be complete *before* a host's own firewall rule can follow its
-placement, because a host that cannot write a placement cannot close the rule.
+the whole point of the machine-identity scheme. The writers are lio, juni, gp3,
+oren, h001, h003 and `joe`, so every container host can write. h001, h003 and
+`joe` were added in phase 3 (planned for phase 2, deferred until their Zitadel
+machine users were provisioned; all three run sec-agent, `hosts/joe/flake.nix:118`).
+The writer set had to be complete *before* a host's own firewall rule can follow
+its placement, because a host that cannot write a placement cannot close the rule.
 
 ### Row shape
 
@@ -441,10 +440,10 @@ found here that is *not* on the list is a phase-3 regression:
 - [ ] `containers/flake.nix:92-97` `containerHosts` — keep the list (it is host membership, not placement), and drop the declared-host fallback that `cli`'s `containerHosts()` still adds
 - [ ] the `host = null` default (`containers/lib.nix:408`), then the `host` line in all 20 `service.nix` files
 
-One item is phase 3 but is not a reader of `host`: adding `h001`, `h003` and
-`joe` to `fleet.global.overrideWriters` (`hosts/fleet.nix:54-59`). It was
-deferred out of phase 2 because it is blocked on provisioning Zitadel machine
-users for those hosts, not on any code here.
+One item was phase 3 but is not a reader of `host`: adding `h001`, `h003` and
+`joe` to `fleet.global.overrideWriters` (`hosts/fleet.nix:54-62`). It was
+deferred out of phase 2 until their Zitadel machine users were provisioned,
+and is now done.
 
 
 ### Hand-kept per-host entries (the audit)
@@ -463,7 +462,7 @@ placement (host membership, identity, trust) or was missed:
 | `computerboyz`, `minecraft` CNAMEs | `hosts/h005/dns-records.nix:96-103` (`map (cname "o002") [ … "computerboyz" … ]`, `map (cname "home") [ "minecraft" ]`) | Delete now: the `computerboyz` vhost is already gone from o002, so this CNAME is currently resolving to the `_` reject. After phase 3 the published set derives from placements and an unplaced service must have no name at all; `minecraft`'s `via = router` CNAME would otherwise point at a closed forward |
 | `routerForwards` call | `hosts/h005/router-forwards.nix:23` | Phase 4a: the forward rules come from the registry, so the module keeps only the chain and the option |
 | `routeHosts` / `targetNames` (TLS push targets) | `hosts/h005/wildcard-cert.nix:37-47` | Phase 5: pinned literal `h001, h003, joe, lio, o002` — the cert is a wildcard, so the target set is host membership, not placement |
-| `overrideWriters` | `hosts/fleet.nix:54-59` | **Stays** (identity, not placement). Phase 2 does *not* add `h001`, `h003` or `joe`: that is blocked on provisioning Zitadel machine users for them, and moved to phase 3. Until then a host that cannot write a placement also cannot close its own firewall rule |
+| `overrideWriters` | `hosts/fleet.nix:54-62` | **Stays** (identity, not placement). `h001`, `h003` and `joe` were added in phase 3 (deferred from phase 2 until their Zitadel machine users were provisioned), so every container host can write a placement and close its own firewall rule |
 | `containerHosts` | `containers/flake.nix:92-97` | **Stays.** A host must be rebuilt to join. The CLI's `containerHosts()` is this list ∪ the hosts the registry knows ∪ every declared host; phase 5 drops the declared-host loop, which is why a host that only ever held one service must appear here |
 | "set `host` in `service.nix`", "point `computerboyz` in `hosts/oracle/o002/nginx.nix` at the new host", "WAN port-forwards on the router" | `containers/minecraft/README.md:16,82-83`, `containers/README.md:400-404` | Phase 6 rewrites the move instructions: there is nothing to edit, `cnt move` is the whole procedure |
 
@@ -680,7 +679,7 @@ on anything stored in h001's Nix.
 |---|---|---|---|
 | **1 (done)** | Registry: rows, state machine, sweep, API, loopback export, auth, audit; reservation tokens + revision CAS; `installed` vs `active` health; fenced expiry with `recover`/`renew`; shared writer auth in `internal/authority`; one listener in `main.go`; flake option text; h005 `/api/placements` nginx location | `flakes/fleet-edge/internal/{authority,placements}/*`, `internal/overrides/overrides.go`, `flakes/fleet-edge/{main.go,flake.nix}`, `hosts/h005/fleet-edge.nix` | None: nothing reads the registry yet |
 | **2** | Read paths: CLI resolution (`resolveHost`/`resolvedHost`/`hostForRead`, `containerHosts`, `backendOf`, `routes.go`, `expose.go`, drift/status output; `checkPlacement` deleted), dashboard grouping, `overrides.Check`; `joe` in `containerHosts`; discovery import command (`cnt place`, including `--recover`); record the binding after a first `--host` deploy; refuse to start a leftover local copy the registry binds elsewhere. `overrideWriters` moved out of this phase (see §9 row 3) | `flakes/fleet-agent/internal/containers/{main.go,move.go,port.go,routes.go,expose.go,placements.go}`, `flakes/fleet-edge/internal/{overrides,state,server,dash,topology}`, `containers/flake.nix` | Medium: a wrong resolution starts a second copy; the refusals above are the guard. CLI tests cover the matrix (`internal/containers/placement_test.go`) |
-| **3** | Reconciler: two DNS `hostsdir`s (tailnet overlay IPs, LAN IPs) written from the registry export, o002 runtime vhosts, `dns-plan` keeps its declarative input (only the CNAME *set* follows the registry, and an unplaced service contributes no name). Also add `h001`, `h003` and `joe` to `overrideWriters` (`hosts/fleet.nix`) — deferred from phase 2. The hosts already have sec-agent machine users: add their userIds (from each host's machine key; the operator supplies them) to `overrideWriters`, keeping subs unique | `flakes/fleet-edge/internal/{reconcile,dnsplan,server}`, `hosts/h005/{dns-records.nix,mods/networking.nix}`, `hosts/oracle/o002/nginx.nix`, `hosts/fleet.nix` | High: DNS and o002 are shared. Fail-closed ordering (add before remove, keep the old answer when a host is unreachable) and `cnt audit` checks |
+| **3** | Reconciler: two DNS `hostsdir`s (tailnet overlay IPs, LAN IPs) written from the registry export, o002 runtime vhosts, `dns-plan` keeps its declarative input (only the CNAME *set* follows the registry, and an unplaced service contributes no name). Writers **done**: `h001`, `h003` and `joe` are in `overrideWriters` (`hosts/fleet.nix:54-62`) by their sec-agent machine userIds, subs unique, and h005's `fleet-edge.nix` maps each to its `overlayIp` | `flakes/fleet-edge/internal/{reconcile,dnsplan,server}`, `hosts/h005/{dns-records.nix,mods/networking.nix}`, `hosts/oracle/o002/nginx.nix`, `hosts/fleet.nix` | High: DNS and o002 are shared. Fail-closed ordering (add before remove, keep the old answer when a host is unreachable) and `cnt audit` checks |
 | **4 (done)** | Move rebind, in `cmdMove` (`move.go:344-554`) + `movestate.go`: reserve on the destination before any host is touched (resume only with a token the caller holds: local move-state file or `--resume-token`), `renew` around the final backup and between the long steps, commit after the restore check and first backup, retire just before the switch; rollback with the token on any failure before the commit (ownership confirmed first, unforced `DELETE`, target down, source restarted), `--recover` after it, and a takeover or unconfirmable ownership stops the move with both hosts untouched. `moveWarning` and its test deleted; the help text and `move.go`'s head comment describe the steps | `flakes/fleet-agent/internal/containers/{move.go,movestate.go,movestate_test.go,move_test.go,main.go,transfer_test.go}`, `containers/{README.md,PLACEMENT-PLAN.md}` | High: irreversible step, so the order is the design. Dry-run prints the same steps without touching the registry; the recorded path, the rollback, the takeovers, the resume and the refusals each have a test against a fake registry |
 | **4a** | Non-HTTP public routes follow placement: o002 stream receiver (`edge-stream-receive` / `fleet-stream-expire`, one file per port, boot unit + timer) with `streamConfig = "include /var/lib/fleet-edge-streams/*.stream;"`, `upstreamHost` deleted; h005 WAN forwards written from the registry, `routerForwards` deleted | `flakes/fleet-edge/internal/{edgestream,reconcile,server}`, `hosts/_shared_assets/utilities/edge-stream-receiver.nix`, `hosts/oracle/o002/{nginx,_constants}.nix`, `hosts/h005/router-forwards.nix`, `containers/lib.nix` | High: o002 SSH and the WAN path. Forgejo SSH must keep working across the h001 reinstall; verify with an SSH clone before and after a test move |
 | **5** | Nix stops declaring placement: remove the `host` line from all 20 `service.nix` files (19 name a host, `minecraft` is `null`) and the `host = null` default in `lib.nix`, delete the functions in §4, delete the stale `computerboyz`/`minecraft` hand DNS, runtime firewall allowlist (with `fw-narrow`), cert targets pinned | `containers/*/service.nix`, `containers/lib.nix`, `containers/host-module.nix`, `containers/flake.nix` inventory, `hosts/h005/{dns-records,wildcard-cert}.nix`, `containers/tests/edge-vhosts.nix` | High, and the point of no return; done last so every reader already ignores the field |

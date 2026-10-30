@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -91,8 +92,34 @@ var (
 	dryRun  bool
 )
 
+// usageOut is where usage text goes; tests swap it to capture help output.
+var usageOut io.Writer = os.Stderr
+
+// placeHelp lists every form cmdPlace accepts. It is shared by the top-level
+// usage and `place --help`.
+const placeHelp = `  place [--verify]             placement registry rows: bound host, state, lease left
+                               (--verify also checks where every bound service runs)
+  place <svc> --host h [--force]
+                               record a first placement on h (reserve + commit)
+  place <svc> --set h [--force]
+                               move the binding onto h (reserve + commit; --force
+                               overrides a conflicting reservation)
+  place <svc> --adopt          bind the one host discovery finds the service on
+  place <svc> --recover [--token T] [--force]
+                               settle a fenced row from the hosts' answers
+                               (--token: settle the move that holds T)
+  place --import [--force]     one-time bootstrap: bind every service discovery
+                               finds on exactly one host; reports what it skipped
+                               place talks to h005's registry with this machine's
+                               root-only key, so: sudo fleet containers place ...
+`
+
+func placeUsage() {
+	fmt.Fprint(usageOut, "usage: fleet containers [global flags] place [args]\n\n"+placeHelp)
+}
+
 func usage() {
-	fmt.Fprint(os.Stderr, `fleet containers - floating services from containers
+	fmt.Fprint(usageOut, `fleet containers - floating services from containers
 
 usage: fleet containers [global flags] <command> [args]
 
@@ -136,7 +163,7 @@ commands:
                                A registry that is configured but unreachable refuses the
                                move unless --force. Needs ringofstorms.containers.backup
                                on both hosts
-  restore-check <svc> [--host h] [--snapshot ID]
+`+placeHelp+`  restore-check <svc> [--host h] [--snapshot ID]
                                restore a svc:<svc> snapshot (default latest) to a scratch
                                dir: SQLite integrity_check, PG dumps complete
   health <svc> [--host h]      check every route answers on its host (backend and nginx)
@@ -213,7 +240,18 @@ func Run(args []string) {
 		os.Exit(2)
 	}
 	cmd, rest := args[0], args[1:]
-	var err error
+	known, err := dispatch(cmd, rest)
+	if !known {
+		usage()
+		os.Exit(2)
+	}
+	if err != nil {
+		die("%v", err)
+	}
+}
+
+// dispatch runs one subcommand; known is false for a command it does not have.
+func dispatch(cmd string, rest []string) (known bool, err error) {
 	switch cmd {
 	case "ls", "list":
 		err = cmdStatus(rest, false)
@@ -239,6 +277,8 @@ func Run(args []string) {
 		err = cmdRestore(rest)
 	case "move":
 		err = cmdMove(rest)
+	case "place":
+		err = cmdPlace(rest)
 	case "restore-check":
 		err = cmdRestoreCheck(rest)
 	case "health":
@@ -264,12 +304,9 @@ func Run(args []string) {
 	case "help", "-h":
 		usage()
 	default:
-		usage()
-		os.Exit(2)
+		return false, nil
 	}
-	if err != nil {
-		die("%v", err)
-	}
+	return true, err
 }
 
 // ---------------------------------------------------------------- helpers

@@ -536,6 +536,30 @@ func TestCmdPlaceDispatcher(t *testing.T) {
 	}
 }
 
+// TestDispatchPlaceHelp guards the top-level switch: `fleet containers place`
+// once fell through to the top-level usage because cmdPlace was never wired
+// in. Help must come from place itself and list every form it accepts.
+func TestDispatchPlaceHelp(t *testing.T) {
+	var buf strings.Builder
+	old := usageOut
+	usageOut = &buf
+	t.Cleanup(func() { usageOut = old })
+
+	known, err := dispatch("place", []string{"--help"})
+	if !known || err != nil {
+		t.Fatalf("dispatch(place --help) = known %v, err %v; want a known command and no error", known, err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "fleet containers - floating services") {
+		t.Fatalf("place --help printed the top-level usage:\n%s", out)
+	}
+	for _, want := range []string{"place [--verify]", "--host h", "--set h", "--adopt", "--recover", "--token T", "place --import"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("place --help is missing %q:\n%s", want, out)
+		}
+	}
+}
+
 // ------------------------------------------------- registry not consulted
 
 // registryWarnRig resets the once-per-process "not consulted" warning and
