@@ -25,12 +25,20 @@
           hostDef = fleet.hosts.${name};
           flakePath = hostDef.flakePath or "hosts/${name}";
 
-          # Determine deploy target: prefer lanIp for local hosts, else hostname
-          target = if hostDef ? lanIp then "root@${hostDef.lanIp}" else "root@${name}";
+          # Deploy target: overlay IP for hosts whose firewall closes LAN :22
+          # (deployVia = "overlay"), else lanIp for local hosts, else hostname.
+          viaOverlay = (hostDef.deployVia or null) == "overlay";
+          target =
+            if viaOverlay then
+              "root@${hostDef.overlayIp}"
+            else if hostDef ? lanIp then
+              "root@${hostDef.lanIp}"
+            else
+              "root@${name}";
 
           # Hosts accessed by name (on tailnet) that already have SSH keys configured
-          # don't need NIX_SSHOPTS. Hosts accessed by raw IP do.
-          needsKey = hostDef ? lanIp;
+          # don't need NIX_SSHOPTS. Hosts accessed by raw IP (LAN or overlay) do.
+          needsKey = viaOverlay || hostDef ? lanIp;
           sshOpts =
             if needsKey then ''NIX_SSHOPTS="-i ${fleet.global.secretsDir}/nix2nix_2026-03-15" '' else "";
         in

@@ -83,6 +83,9 @@ rec {
   #   publicIp    - Public IP (for cloud/VPS hosts)
   #   trust       - "high" | "low" | "none" (determines tailnet DNS policy)
   #   flakePath   - path to host's flake dir relative to repo root (auto-derived from name if omitted)
+  #   deployVia   - "overlay": deploy_<host> targets root@overlayIp, not the lanIp.
+  #                 Keeps deployment on the tailnet even when a host permits
+  #                 home LAN :22 as a low-trust-filtered fallback.
   hosts = {
     h001 = {
       user = "luser";
@@ -91,6 +94,7 @@ rec {
       trust = "high";
       role = "server";
       alwaysOn = true;
+      deployVia = "overlay";
     };
     # Containers host (router until 2026-10-15, re-imaged; hosts/h003/readme.md).
     # LAN by plain DHCP; services are reached over the tailnet.
@@ -110,6 +114,7 @@ rec {
       trust = "high";
       role = "server";
       alwaysOn = true;
+      deployVia = "overlay";
       replaces = [ "h002" ];
     };
     # Router (replaced h003 on 2026-10-15, h005/readme.md).
@@ -128,6 +133,7 @@ rec {
       trust = "low";
       role = "workstation";
       alwaysOn = false;
+      deployVia = "overlay";
     };
     joe = {
       user = "josh";
@@ -136,6 +142,7 @@ rec {
       trust = "low";
       role = "workstation";
       alwaysOn = false;
+      deployVia = "overlay";
     };
     juni = {
       user = "josh";

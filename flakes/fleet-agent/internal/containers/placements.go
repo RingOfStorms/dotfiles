@@ -510,21 +510,7 @@ func cmdPlaceImport(f flags) error {
 		return fmt.Errorf("the placement registry needs this machine's key: %w", err)
 	}
 	loadInventory()
-	var entries []placementEntry
-	var unknown []string
-	for name := range inv.Services {
-		s := inv.Services[name]
-		p := locate(s, fleetProbe)
-		switch {
-		case len(p.found) == 1:
-			entries = append(entries, placementEntry{Service: name, Host: p.found[0]})
-		case len(p.found) > 1:
-			unknown = append(unknown, fmt.Sprintf("%s on %s", name, joinHosts(p.found)))
-		case len(p.unreachable) > 0:
-			unknown = append(unknown, fmt.Sprintf("%s (a host did not answer: %s)", name, joinHosts(p.unreachable)))
-		}
-	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Service < entries[j].Service })
+	entries, unknown := importPlan()
 	if dryRun {
 		for _, e := range entries {
 			fmt.Printf("plan: import %s on %s\n", e.Service, e.Host)
@@ -553,6 +539,27 @@ func cmdPlaceImport(f flags) error {
 		fmt.Printf("undecided: %s\n", u)
 	}
 	return nil
+}
+
+// importPlan classifies every inventory service for `place --import`: found on
+// exactly one host (with every host answering) becomes an entry, anything else
+// is skipped with the reason. Like placeAdopt, a silent host is checked first:
+// a copy there would be missed, so a lone visible copy is not proof.
+func importPlan() (entries []placementEntry, skipped []string) {
+	for name := range inv.Services {
+		p := locate(inv.Services[name], fleetProbe)
+		switch {
+		case len(p.unreachable) > 0:
+			skipped = append(skipped, fmt.Sprintf("%s (a host did not answer: %s)", name, joinHosts(p.unreachable)))
+		case len(p.found) == 1:
+			entries = append(entries, placementEntry{Service: name, Host: p.found[0]})
+		case len(p.found) > 1:
+			skipped = append(skipped, fmt.Sprintf("%s on %s", name, joinHosts(p.found)))
+		}
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Service < entries[j].Service })
+	sort.Strings(skipped)
+	return entries, skipped
 }
 
 func placeList(c *edgeClient, verify bool) error {

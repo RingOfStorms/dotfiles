@@ -5,7 +5,9 @@
   ...
 }:
 {
-  # 1 GB /boot and ~210 MB NVIDIA initrds: keep at most 3 generations.
+  # 1 GB /boot and ~295 MB NVIDIA + gpu-unlock initrds (the GA10x GSP image is
+  # ~68 MB of that): keep at most 3 generations. The builder GCs before it
+  # copies, so the peak is 3 initrds (~925 MB with kernels).
   boot.loader.systemd-boot.configurationLimit = lib.mkForce 3;
 
   hardware.enableAllFirmware = true;

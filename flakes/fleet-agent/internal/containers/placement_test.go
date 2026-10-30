@@ -652,3 +652,24 @@ func TestReadPlacementsRequestFailureWarnsAndFallsBack(t *testing.T) {
 		t.Fatalf("warnings = %q, want one naming the failed request", w)
 	}
 }
+
+// TestImportPlanSkipsSingletonWhileHostSilent: one active copy on src while dst
+// does not answer is not "exactly one host" -- a copy on dst would be missed --
+// so `place --import` must skip it with the reason, as placeAdopt refuses.
+// With every host answering the same singleton is imported.
+func TestImportPlanSkipsSingletonWhileHostSilent(t *testing.T) {
+	resolutionRig(t, nil, nil, map[string][]string{"src": {"svc+"}}, "dst")
+	entries, skipped := importPlan()
+	if len(entries) != 0 {
+		t.Errorf("entries = %v, want none while dst is silent", entries)
+	}
+	if len(skipped) != 1 || skipped[0] != "svc (a host did not answer: dst)" {
+		t.Errorf("skipped = %q, want svc listed with the silent host", skipped)
+	}
+
+	resolutionRig(t, nil, nil, map[string][]string{"src": {"svc+"}})
+	entries, skipped = importPlan()
+	if len(entries) != 1 || entries[0] != (placementEntry{Service: "svc", Host: "src"}) || len(skipped) != 0 {
+		t.Errorf("all answering: entries = %v skipped = %q, want svc on src", entries, skipped)
+	}
+}

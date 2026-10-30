@@ -690,6 +690,30 @@ in
       )
     );
 
+  # LAN SSH fallback must not admit low-trust devices. Use a separate base
+  # chain before nixos-fw: extraInputRules drops run after its accepts.
+  # Keep all low-trust LAN IPs, including the destination host's own IP.
+  lowTrustLanSshTable =
+    {
+      hosts,
+      host,
+      lib,
+    }:
+    let
+      ips = builtins.filter (ip: ip != null) (
+        map (h: if (h.trust or null) == "low" then h.lanIp or null else null) (builtins.attrValues hosts)
+      );
+    in
+    lib.mkIf (ips != [ ]) {
+      family = "inet";
+      content = ''
+        chain input {
+          type filter hook input priority -10; policy accept;
+          ip saddr { ${builtins.concatStringsSep ", " ips} } tcp dport 22 counter drop comment "M3: low-trust LAN devices must not reach ${host} SSH"
+        }
+      '';
+    };
+
   # Lockout guard (ROUTING-PLAN §8 step 2): every host's generated ssh
   # allow-list must be non-empty and must contain lio's overlay IP, or a
   # fleet.nix typo / scoping bug silently locks out ssh from lio. Build a
