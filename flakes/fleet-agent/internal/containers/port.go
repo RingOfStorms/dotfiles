@@ -186,7 +186,7 @@ func backendOf(svcs map[string]Service, host string, port int, proto string) str
 	}
 	var hits []string
 	for _, s := range svcs {
-		if s.Host != host {
+		if resolvedHost(s) != host {
 			continue
 		}
 		for _, n := range sortedRouteNames(s) {
@@ -427,7 +427,7 @@ func cmdPort(args []string) error {
 	if r.Host != "" {
 		f.vals["host"] = r.Host
 	}
-	h := hostFor(s, f)
+	h, _ := hostFor(s, f)
 	msg, err := portGuards(s, r, h, inv.Services)
 	if err != nil {
 		return err

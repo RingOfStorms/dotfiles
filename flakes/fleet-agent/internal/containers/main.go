@@ -120,17 +120,31 @@ commands:
                                stop, tar data to this machine, start again
   restore <svc> <file> --host h [--force]
                                unpack a backup into /srv/containers/<svc> on a host
-  move <svc> --to h [--from h] move through the restic repo: final backup on the source,
-                               restore on h, deploy + route health, restore check, first
-                               backup on h, then retire the source (<svc>.moved-<date>).
-                               Any failure before that undoes h and restarts the source.
-                               Needs ringofstorms.containers.backup on both hosts
+  move <svc> --to h [--from h] [--force] [--resume-token T]
+                               move through the restic repo: reserve h in the placement
+                               registry first (a reservation another client holds stops
+                               the move before any host is touched), final backup on the
+                               source, restore on h, deploy + route health, restore check,
+                               first backup on h, then commit the move and retire the
+                               source (<svc>.moved-<date>). A failure before the commit
+                               undoes h, drops the reservation and restarts the source,
+                               but only while the move still owns the placement; a
+                               taken-over or unconfirmable row leaves both hosts alone
+                               (settle it with 'place <svc> --recover'). An interrupted
+                               run resumes with the token saved under
+                               $XDG_STATE_HOME/fleet-containers/moves (or --resume-token).
+                               A registry that is configured but unreachable refuses the
+                               move unless --force. Needs ringofstorms.containers.backup
+                               on both hosts
   restore-check <svc> [--host h] [--snapshot ID]
                                restore a svc:<svc> snapshot (default latest) to a scratch
                                dir: SQLite integrity_check, PG dumps complete
   health <svc> [--host h]      check every route answers on its host (backend and nginx)
-  destroy <svc> [--host h] [--purge]
-                               remove from a host (data kept unless --purge)
+  destroy <svc> [--host h] [--purge] [--force]
+                               remove from a host (data kept unless --purge). --host on a
+                               host the registry does not bind removes that stray copy and
+                               leaves the row; the bound copy needs --force (which also
+                               removes the row), and so does a row a move still holds
   routes [svc]                 declared routes (fqdn, port, exposure, auth, host)
   audit [host...] [--stdin]    non-loopback listeners on hosts vs declared ports (read-only)
                                --stdin reads 'ss -ltnupH' output from stdin for one host
@@ -159,9 +173,11 @@ commands:
   check-idmap <host>           test idmapped mounts on /srv/containers and /nix
   inventory                    print the inventory JSON
 
-status, logs, attach, shell, online, start, stop and restart use this machine
-when the service is installed here (no fleet probe; works on hosts that
-cannot ssh to the others). Pass --host to act elsewhere.
+status, logs, attach, shell, online and stop use this machine when the service
+is installed here (no fleet probe; works on hosts that cannot ssh to the
+others). start and restart follow the placement registry instead, so a leftover
+copy on this machine cannot be started while the name is bound elsewhere.
+Pass --host to act on a specific host.
 
 global flags (or env):
   --repo URL    flake repo (CONTAINERS_REPO, default `+defaultRepo+`)
@@ -479,25 +495,126 @@ func (f flags) svc() Service {
 	return service(f.pos[0])
 }
 
-// hostFor picks --host if given (the explicit escape hatch). Otherwise it
-// uses the declared host from service.nix, but only after a complete
-// discovery shows the service is installed nowhere else: every container
-// host must answer. If one is unreachable, or the service is on another
-// host or several hosts, it refuses loudly instead of acting on a guess.
-func hostFor(s Service, f flags) string {
-	if h := f.vals["host"]; h != "" {
-		return h
+// resolveHost resolves which host a mutating command acts on:
+//
+//	--host, when given;
+//	the placement registry's effective host, when it has a row;
+//	discovery, when it has no row.
+//
+// The second result says the placement still has to be recorded after the
+// command succeeds: the operator named the destination (--host) or discovery
+// found exactly one copy and it is adopted first. Everything else is either
+// already recorded or refused here, because a wrong guess starts a second copy
+// of the service somewhere.
+//
+// Refusals are the point: several copies, no copy, a copy on a host that did
+// not answer. A row whose effective host is unreachable is refused too: silence
+// is not absence, and acting on the old host could start a second copy. A
+// fenced row that names no host at all is refused before anything else: its
+// move owns the name, so --host and discovery would both act on a host the
+// move may have stranded.
+func resolveHost(s Service, f flags) (string, bool, error) {
+	v := registry()
+	bound := ""
+	if v != nil {
+		bound = v.Host[s.Name]
+		// A token means a move still owns this placement (placements.fenced)
+		// and the row names no host to act on: either it is Stale, or it is a
+		// first placement that has not served anything yet. Falling through to
+		// --host or discovery here is how a deploy or start lands a second copy
+		// before any registry write gets the chance to refuse it.
+		if r, ok := v.Rows[s.Name]; ok && r.Token != "" && r.effective() == "" {
+			return "", false, errFencedPlacement(s, r)
+		}
 	}
-	if s.Host == "" {
-		die("%s has no host in service.nix; pass --host", s.Name)
+	if h := f.vals["host"]; h != "" {
+		switch {
+		case bound == h:
+			// Already where the operator points: nothing to record (the
+			// registry refuses a reserve onto its own binding anyway).
+			return h, false, nil
+		case bound != "":
+			return "", false, fmt.Errorf("%s is placed on %s; `cnt place %s --set %s` records the move first (--host cannot override a live binding)", s.Name, bound, s.Name, h)
+		}
+		if dryRun {
+			return h, false, nil
+		}
+		return h, true, nil
 	}
 	if dryRun {
-		return s.Host
+		// No probing and no writes: the declared host keeps the printed
+		// script offline, as it always has.
+		if s.Host == "" {
+			return "", false, fmt.Errorf("%s has no host in service.nix and no --host; nothing to plan against", s.Name)
+		}
+		return s.Host, false, nil
 	}
-	if err := checkPlacement(s, locate(s, probe)); err != nil {
-		die("%v", err)
+	if bound != "" {
+		p := locate(s, fleetProbe)
+		if slices.Contains(p.unreachable, bound) {
+			return "", false, fmt.Errorf("%s is placed on %s, which did not answer; refusing to act on another host (a copy may be running there). Bring %s back, or move the binding with `cnt place %s --set <host> --force`; a fenced move is settled with `cnt place %s --recover --force`", s.Name, bound, bound, s.Name, s.Name)
+		}
+		return bound, false, nil
+	}
+	p := locate(s, fleetProbe)
+	switch {
+	case len(p.unreachable) > 0:
+		return "", false, fmt.Errorf("cannot confirm where %s is installed: %s did not answer, so a copy there would be missed. Pass --host to act on a specific host", s.Name, joinHosts(p.unreachable))
+	case len(p.found) == 0:
+		return "", false, fmt.Errorf("%s is placed on no host and installed on no host; pass --host to deploy it somewhere, then `cnt place %s --set <host>`", s.Name, s.Name)
+	case len(p.found) > 1:
+		return "", false, fmt.Errorf("%s is installed on %s but the registry has no row; `cnt place %s --set <host>` records which copy is authoritative", s.Name, joinHosts(p.found), s.Name)
+	}
+	return p.found[0], true, nil
+}
+
+// resolvedHost is the host a service really runs on: the registry's binding
+// when it has one, else the declared `host` (a build-time seed until phase 5).
+// Unlike resolveHost it never probes and never refuses: its callers build
+// tables and deploy scripts, where a discovery sweep per service would be
+// absurd and a refusal would leave a cell blank. Under --dry-run the registry
+// is not read either, so a printed plan stays offline.
+func resolvedHost(s Service) string {
+	if h := boundHost(s.Name); h != "" {
+		return h
 	}
 	return s.Host
+}
+
+// hostFor is resolveHost for commands that cannot report an error.
+func hostFor(s Service, f flags) (string, bool) {
+	h, record, err := resolveHost(s, f)
+	if err != nil {
+		die("%v", err)
+	}
+	if record {
+		adoptNote(s, h)
+	}
+	return h, record
+}
+
+func adoptNote(s Service, h string) {
+	info("%s is installed on %s but the registry has no row; adopting it (cnt place %s --adopt would do the same)", s.Name, h, s.Name)
+}
+
+// errLocalCopyPlacedElsewhere refuses to start a service on this machine while
+// the registry binds its name to another host: the leftover unit here would
+// answer the same name and split the service.
+func errLocalCopyPlacedElsewhere(s Service, bound string) error {
+	return fmt.Errorf("%s is placed on %s, but a copy is installed here (%s); starting it here would serve the same name from two hosts. Start it there with `cnt start %s --host %s`, or record the move first with `cnt place %s --set %s`", s.Name, bound, localHost, s.Name, bound, s.Name, localHost)
+}
+
+// errFencedPlacement refuses to resolve a host for a service a move still owns
+// while the row names no host to act on: a stale reservation, or a first
+// placement that has not been committed. --host and discovery would both act on
+// a host the move may have stranded, and only the holder (or recover, which
+// asks the hosts themselves) knows which copy is live.
+func errFencedPlacement(s Service, r placementRow) error {
+	prev := ""
+	if r.Previous != nil {
+		prev = fmt.Sprintf(" with a rollback binding on %s", r.Previous.Host)
+	}
+	return fmt.Errorf("%s is fenced: a move to %s is still open, held by %s (state %s%s). Settle it with `cnt place %s --recover`, which asks both ends; add --force when one does not answer. To take the name over instead, `cnt place %s --set <host> --force` mints a new reservation and invalidates that one", s.Name, r.Host, dash(r.Device), r.State, prev, s.Name, s.Name)
 }
 
 // hostForRead is hostFor for commands that only look or connect (status,
@@ -509,7 +626,8 @@ func hostForRead(s Service, f flags) string {
 	if f.vals["host"] == "" && !dryRun && installedHere(s) {
 		return localHost
 	}
-	return hostFor(s, f)
+	h, _ := hostFor(s, f)
+	return h
 }
 
 // gcroots holds the CLI-installed podman services (var for tests).
@@ -531,11 +649,17 @@ type placement struct {
 	unreachable []string // hosts that could not be probed
 }
 
-// containerHosts are the hosts that may run services: inventory
-// containerHosts plus every declared host. All of them are probed.
+// containerHosts are the hosts that may run services, and therefore the hosts
+// discovery probes: the inventory's containerHosts, every host the placement
+// registry knows about (so a host that only ever held one service is still
+// probed), and — while `host` remains a build-time seed — every declared host.
+// A host that appears in none of those can still be acted on with --host.
 func containerHosts() []string {
 	set := map[string]bool{}
 	for _, h := range inv.ContainerHosts {
+		set[h] = true
+	}
+	for _, h := range registryHosts() {
 		set[h] = true
 	}
 	for _, s := range inv.Services {
@@ -585,36 +709,6 @@ func locate(s Service, probe func(context.Context, string) ([]row, error)) place
 	sort.Strings(p.found)
 	sort.Strings(p.unreachable)
 	return p
-}
-
-// checkPlacement allows implicit use of the declared host only when discovery
-// was complete and the service is either nowhere (first deploy) or only there.
-func checkPlacement(s Service, p placement) error {
-	elsewhere := slices.DeleteFunc(slices.Clone(p.found), func(h string) bool { return h == s.Host })
-	switch {
-	case len(elsewhere) > 0:
-		return fmt.Errorf(`
-!!! %[1]s is declared on %[2]s but installed on %[3]s.
-!!! service.nix is out of date (was it moved without updating the repo?).
-!!! Refusing to guess. Either:
-!!!   - set   host = %[4]q;   in containers/%[5]s/service.nix and push, or
-!!!   - pass  --host <host>   to act on a specific host this once.`,
-			s.Name, s.Host, strings.Join(p.found, ", "), elsewhere[0], s.Dir)
-	case len(p.unreachable) > 0 && slices.Contains(p.running, s.Host):
-		// Running on the declared host and installed on no host that answered:
-		// a down box must not block work on it. A stopped copy is not enough:
-		// a move that failed after deploying on the target leaves the source
-		// installed but stopped, and the target may be the host that is down.
-		fmt.Fprintf(os.Stderr, "note: %s did not answer; using %s, where %s is running\n", strings.Join(p.unreachable, ", "), s.Host, s.Name)
-	case len(p.unreachable) > 0:
-		return fmt.Errorf(`
-!!! cannot confirm where %[1]s is installed: %[2]s did not answer.
-!!! It may be running there (e.g. after a move), so acting on the declared
-!!! host %[3]s could start a second copy. Refusing. Either bring
-!!! %[2]s back, or pass  --host <host>  to act on a specific host.`,
-			s.Name, strings.Join(p.unreachable, ", "), s.Host)
-	}
-	return nil
 }
 
 // ---------------------------------------------------------------- status
@@ -795,10 +889,12 @@ func renderStatus(all bool, probe func(context.Context, string) ([]row, error)) 
 		}
 		for _, r := range rows {
 			note := ""
-			switch {
+			switch bound := boundHost(n); {
 			case !known:
 				note = "not in repo"
-			case s.Host != "" && r.host != s.Host:
+			case bound != "" && r.host != bound:
+				note = "!! placed on " + bound + ": this is a stray copy (cnt place " + n + " --set " + r.host + " to move the binding)"
+			case bound == "" && s.Host != "" && r.host != s.Host:
 				note = "!! declared " + s.Host + ": set host = \"" + r.host + "\" in service.nix"
 			case len(rows) > 1:
 				note = "installed on several hosts"
@@ -1135,7 +1231,13 @@ if [ -e %[2]s/%[1]s.conf ]; then rm -f %[2]s/%[1]s.conf; systemctl reload nginx 
 func cmdDeploy(args []string) error {
 	f := parse(args, "local", "vhost-only")
 	s := f.svc()
-	h := hostFor(s, f)
+	h, record, err := resolveHost(s, f)
+	if err != nil {
+		return err
+	}
+	if record {
+		adoptNote(s, h)
+	}
 	if f.bools["vhost-only"] {
 		// Regenerate only the nginx site (e.g. after a routesVhost change);
 		// the container and its ports are not touched.
@@ -1154,7 +1256,63 @@ func cmdDeploy(args []string) error {
 	// a move deploys mid-flight and refreshes once, after the switch.
 	resetFleetPlacement()
 	refreshCallers(s)
+	if record {
+		recordAfterDeploy(s.Name, h)
+	}
 	return nil
+}
+
+// recordAfterDeploy adopts the placement of a service this deploy put on h with
+// --host (or found on exactly one host), so the next command resolves h from
+// the registry instead of guessing. The deploy already succeeded: a registry
+// failure is reported and left for the operator, never rolled back by undoing
+// the deploy.
+//
+// The write forces nothing. A reserve is the registry's compare-and-swap, and
+// the deploy runs for minutes on end: a row another client reserved in that
+// window — a move reserves before it deploys — is refused with a 409 naming the
+// move, and that reservation is left exactly as it is. Forcing would mint a new
+// token over it, which is how the move still running would be stopped from
+// committing what it reserved.
+func recordAfterDeploy(svc, h string) {
+	if dryRun {
+		return
+	}
+	c, err := edgeClientFor()
+	var row placementRow
+	if err == nil {
+		row, err = recordPlacement(c, svc, h, "cnt deploy --host", false)
+	}
+	if err == nil {
+		resetFleetPlacement()
+		info("%s: %s -> %s (revision %d)", row.Service, row.State, dash(row.effective()), row.Revision)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "\033[1;31m==>\033[0m WARNING: %s is running on %s but its placement was not recorded (%v).\n", svc, h, err)
+	fmt.Fprintf(os.Stderr, "\033[1;31m==>\033[0m WARNING: record it before anything else starts it: containers place %s --set %s\n", svc, h)
+	if holder := foreignHolder(err); holder != "" {
+		fmt.Fprintf(os.Stderr, "\033[1;31m==>\033[0m WARNING: %s owns the row now; the deploy left that reservation untouched (nothing forced).\n", holder)
+	}
+}
+
+// foreignHolder pulls the move out of a refusal. The registry is the only one
+// that knows which move owns the row now: the view this command resolved from
+// is as old as the deploy, so a name read from it would be the wrong client.
+func foreignHolder(err error) string {
+	var e *edgeHTTPError
+	if !errors.As(err, &e) || e.Code != 409 {
+		return ""
+	}
+	const owns, refused = " owns the reservation", "refused: "
+	end := strings.Index(e.Msg, owns)
+	if end < 0 {
+		return ""
+	}
+	start := strings.LastIndex(e.Msg[:end], refused)
+	if start < 0 {
+		return ""
+	}
+	return e.Msg[start+len(refused) : end]
 }
 
 func deploy(s Service, h, ref string, local bool) error {
@@ -1208,21 +1366,36 @@ func deploy(s Service, h, ref string, local bool) error {
 
 // ---------------------------------------------------------------- lifecycle
 
+// cmdUnit starts, stops or restarts a service. stop keeps the local fast path
+// (hostForRead): stopping a copy that is not the bound one only removes a stray.
+// start and restart resolve like a mutating command, because enabling a unit
+// starts it: on a host that holds a leftover copy while the registry binds
+// another host, the fast path would bring the leftover up under the same name
+// and split it.
 func cmdUnit(verb string, args []string) error {
 	f := parse(args)
 	s := f.svc()
-	h := hostForRead(s, f)
 	u := unitOf(s)
-	switch verb {
-	case "stop":
+	if verb == "stop" {
+		h := hostForRead(s, f)
 		info("stopping %s on %s (waits until fully down; stays stopped across reboots)", s.Name, h)
 		return remote(h, true, disableScript(s)+"systemctl stop "+u+" && echo stopped: $(systemctl is-active "+u+")")
-	case "restart":
+	}
+	h, record, err := resolveHost(s, f)
+	if err != nil {
+		return err
+	}
+	if record {
+		adoptNote(s, h)
+	}
+	if !isLocal(h) && installedHere(s) {
+		return errLocalCopyPlacedElsewhere(s, h)
+	}
+	if verb == "restart" {
 		// systemctl restart on container@ is unreliable (nixpkgs#43652).
 		return remote(h, true, enableScript(s)+"systemctl stop "+u+" && systemctl start "+u+" && systemctl is-active "+u)
-	default:
-		return remote(h, true, enableScript(s)+"systemctl start "+u+" && systemctl is-active "+u)
 	}
+	return remote(h, true, enableScript(s)+"systemctl start "+u+" && systemctl is-active "+u)
 }
 
 // cmdOnline temporarily gives an `internet = false` podman service network
@@ -1295,7 +1468,7 @@ func streamFrom(h, script string, w *os.File) error {
 func cmdBackup(args []string) error {
 	f := parse(args, "live", "yes", "y")
 	s := f.svc()
-	h := hostFor(s, f)
+	h, _ := hostFor(s, f)
 	yes := f.bools["yes"] || f.bools["y"]
 	name := fmt.Sprintf("%s-%s-%s.tar.zst", s.Name, h, time.Now().Format("2006-01-02T1504"))
 	out, err := backupDest(f.vals["o"], name, yes)
@@ -1357,7 +1530,7 @@ func cmdRestore(args []string) error {
 		return errors.New("usage: containers restore <svc> <file> --host h [--force]")
 	}
 	s := service(f.pos[0])
-	h := hostFor(s, f)
+	h, _ := hostFor(s, f)
 	file := f.pos[1]
 	in, err := os.Open(file)
 	if err != nil {
@@ -1397,10 +1570,53 @@ func uninstallScript(s Service) string {
 	return fmt.Sprintf("systemctl stop %s || true\nextra-container destroy %s\n", unitOf(s), s.Name)
 }
 
+// cmdDestroy removes the service from one host. Which copy that is decides
+// what is allowed:
+//
+//	a stray (--host names a host the registry does not bind): removed, once a
+//	probe confirms that host really has it; the registry row is not touched;
+//	the authoritative copy (the bound host): refused without --force, because
+//	the name would point at nothing. With --force the row goes too, unforced
+//	and guarded by the revision this command read;
+//	no row: as before (--host, else the one copy discovery finds).
+//
+// A fenced row (a move still holds it) is refused unless --force: the move
+// may be about to make either copy the live one.
 func cmdDestroy(args []string) error {
-	f := parse(args, "purge")
+	f := parse(args, "purge", "force")
 	s := f.svc()
-	h := hostFor(s, f)
+	force := f.bools["force"]
+	var row placementRow
+	hasRow, bound := false, ""
+	if v := registry(); v != nil {
+		row, hasRow = v.Rows[s.Name]
+		bound = v.Host[s.Name]
+	}
+	if hasRow && row.Token != "" && !force {
+		return fmt.Errorf("%w; destroy refuses while a move holds the row (pass --force to remove a copy anyway)", errFencedPlacement(s, row))
+	}
+	h := f.vals["host"]
+	if h == "" {
+		var err error
+		if h, _, err = resolveHost(s, f); err != nil {
+			return err
+		}
+	}
+	stray := bound != "" && h != bound
+	authoritative := bound != "" && h == bound
+	switch {
+	case stray && !dryRun:
+		installed, err := installedOn(s, h)
+		if err != nil {
+			return fmt.Errorf("%s is placed on %s; cannot confirm a stray copy on %s: %w", s.Name, bound, h, err)
+		}
+		if !installed {
+			return fmt.Errorf("%s is placed on %s and is not installed on %s; nothing to remove", s.Name, bound, h)
+		}
+		info("%s is placed on %s; removing the stray copy on %s (the registry row is left as it is)", s.Name, bound, h)
+	case authoritative && !force:
+		return fmt.Errorf("%s on %s is the authoritative copy (the placement registry binds it there); move it (`cnt move %s --to <host>`) or rebind it (`cnt place %s --set <host>`) first, or pass --force to remove it and its registry row", s.Name, h, s.Name, s.Name)
+	}
 	script := uninstallScript(s) + cleanupScript(s)
 	if f.bools["purge"] {
 		script += "rm -rf " + q(dataDir(s)) + "\n"
@@ -1420,6 +1636,41 @@ func cmdDestroy(args []string) error {
 	retirePlacement(s.Name, h)
 	resetFleetPlacement()
 	refreshCallers(s)
+	if authoritative && !dryRun {
+		return dropDestroyedRow(s, h, row.Revision)
+	}
+	return nil
+}
+
+// installedOn asks h alone whether s is installed there (any state).
+func installedOn(s Service, h string) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	rows, err := fleetProbe(ctx, h)
+	if err != nil {
+		return false, err
+	}
+	for _, r := range rows {
+		if r.svc == s.Name {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// dropDestroyedRow removes the row of a service whose authoritative copy a
+// forced destroy just removed: unforced, with the revision read before the
+// destroy, so a row someone rewrote in the meantime is left to them.
+func dropDestroyedRow(s Service, h string, revision int64) error {
+	c, err := edgeClientFor()
+	if err == nil {
+		_, err = c.placementRemove(s.Name, "", revision, false)
+	}
+	if err != nil {
+		return fmt.Errorf("%s was removed from %s, but its registry row was not (%v); it still names %s. Settle it with `cnt place %s --set <host>` or `cnt place %s --recover`", s.Name, h, err, h, s.Name, s.Name)
+	}
+	registryCache = nil
+	info("%s: registry row removed", s.Name)
 	return nil
 }
 
@@ -1456,25 +1707,6 @@ func cmdCheckIdmap(args []string) error {
 		return errors.New("usage: containers check-idmap <host>")
 	}
 	return remote(args[0], true, idmapScript)
-}
-
-// moveWarning is printed after a successful move. Until service.nix is
-// updated, commands without --host refuse to run (see checkPlacement).
-func moveWarning(s Service, to string) string {
-	bar := strings.Repeat("!", 72)
-	return fmt.Sprintf(`
-%[1]s
-!!! %[2]s now runs on %[3]s, but containers/%[4]s/service.nix still says
-!!! host = %[5]q.
-!!!
-!!! Until you change it to   host = %[3]q;   and push, commands for
-!!! %[2]s without --host will refuse to run, and a plain
-!!! 'containers deploy %[2]s' would need --host %[3]s.
-!!!
-!!! Also update any route that pointed at %[5]s
-!!! (e.g. the o002 nginx proxy, router port-forwards).
-%[1]s
-`, bar, s.Name, to, s.Dir, s.Host)
 }
 
 // moveSource picks the host to move from when --from is not given. It needs

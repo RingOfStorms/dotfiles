@@ -12,7 +12,11 @@
   --mauve: #cba6f7;
   --term-fg: #cdd6f4;
   --term-bg: #11111b;
-  --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+  /* Android has neither ui-monospace nor the Mac/Windows faces, so the well
+     known Linux/Android monospaces are named explicitly before the generic
+     fallback. */
+  --mono: ui-monospace, "JetBrains Mono", "Roboto Mono", "Droid Sans Mono",
+    SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   /* The terminal's font size. Everything else is UI chrome around it.
      Wrapped text needs to stay readable at phone width, so this is a reading
      size, not a "fit everything" size. */
@@ -342,7 +346,10 @@ body.pane main {
   border-radius: 12px;
   font-family: var(--mono);
   font-size: var(--term-size);
-  line-height: 1.32;
+  /* Terminal-like leading: no ligatures, no synthetic spacing. */
+  line-height: 1.2;
+  letter-spacing: 0;
+  font-variant-ligatures: none;
   tab-size: 4;
   overflow: auto;
   overscroll-behavior: contain;
@@ -350,10 +357,12 @@ body.pane main {
   touch-action: pan-x pan-y;
   -webkit-text-size-adjust: 100%;
 }
-.frame .line { min-height: 1.32em; }
+.frame .line { min-height: 1.2em; }
 .frame.wrap .line { white-space: pre-wrap; overflow-wrap: anywhere; }
-.frame.fit .line { white-space: pre; }
-.frame.fit { overflow-x: auto; }
+/* Fit mode exists to show the whole screen: fixed-width rows, glyphs stacked
+   with no leading at all. */
+.frame.fit { overflow-x: auto; line-height: 1; }
+.frame.fit .line { white-space: pre; min-height: 1em; }
 .frame a { text-decoration: underline; }
 
 .compose {

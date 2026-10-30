@@ -1,16 +1,23 @@
 package containers
 
-// `cnt move` (ROUTING-PLAN §8 step 9, §9.1). The data travels through the
-// shared restic repository, so the moved service continues its svc:<name>
-// series and a move doubles as a restore test:
+// `cnt move` (ROUTING-PLAN §8 step 9, §9.1, PLACEMENT-PLAN §2). The data travels
+// through the shared restic repository, so the moved service continues its
+// svc:<name> series and a move doubles as a restore test:
 //
+//	0 reserve     the destination in the placement registry, before any host
+//	              is touched: a destination another client holds stops the
+//	              move here (moveBegin). Resumes only with a token this caller
+//	              holds (local move-state file or --resume-token), and only
+//	              when no other move of the service runs on this machine
+//	              (lockMove, taken first)
 //	1 preflight   target has the host module, fleet-backup (fleet-restic) and
 //	              the service's capabilities; source has fleet-backup and the
 //	              data; leftovers of an interrupted move on the target are
 //	              cleared (only if marked as ours)
 //	2 final backup  backupHook while running, blocking stop on the source,
 //	              fleet-backup-svc@<svc> (one service, no prune), snapshot id
-//	              read from the fresh stamp
+//	              read from the fresh stamp; the lease is renewed before and
+//	              after it
 //	3 restore     that snapshot onto the target (SQLite .backup copies put
 //	              in place of the excluded live files), then the excluded
 //	              live PG clusters copied from the stopped source with the
@@ -19,14 +26,38 @@ package containers
 //	5 restore check  scratch restore of the same snapshot on the target:
 //	              SQLite PRAGMA integrity_check, PG dumps non-empty and valid
 //	6 first backup  on the target (fresh stamp from the target)
-//	7 switch      uninstall on the source, rename its data <svc>.moved-<date>
+//	7 commit      publish the destination as the binding, with the token the
+//	              reserve returned. Nothing polls the hosts: ``?verify=1``
+//	              validates what they run, not where the name points
+//	8 retire      record that the source is being retired, which is what makes
+//	              a rollback onto it need --force. Fails closed: unless the
+//	              registry confirms it, the move stops before 9 (source stopped
+//	              and installed, destination serving); a re-run with the held
+//	              token redoes only 8-9
+//	9 switch      uninstall on the source, rename its data <svc>.moved-<date>
 //	              (fleet-backup skips it)
 //
-// Any failure in 2-6 undoes the target: stop confirmed (killed if needed),
-// uninstall, data moved aside as <svc>.failed-move-<time>, marker removed
-// last; then the source starts again if it was running. If that rollback
-// fails the source is NOT started (no two live copies): both stay stopped,
-// the error says what to do by hand.
+// Steps 0, 2 (renewals) and 7-8 are the placement registry. The token ties
+// every later write to this move, so a client that wakes up late cannot finish
+// or undo one another device has taken over. Only a machine without a registry
+// client (no machine key) moves the service unrecorded; a registry that is
+// configured but cannot be used refuses the move before anything changes,
+// unless --force. A dry run never writes to it.
+//
+// Any failure in 1 releases the reservation. Any failure in 2-6 first confirms,
+// with the token, that this move still owns the placement; then it undoes the
+// target: stop confirmed (killed if needed), uninstall, data moved aside as
+// <svc>.failed-move-<time>, marker removed last; then the reservation is
+// dropped (routing goes back to the source) and the source starts again if it
+// was running. If that rollback fails the source is NOT started (no two live
+// copies): both stay stopped, the error says what to do by hand. After the
+// commit only the operator rolls back, with `containers place <svc> --recover`.
+//
+// A row another client has taken over (our token is gone: a --force, a second
+// move, a `place --set`), or one whose ownership the registry cannot confirm,
+// stops the move where it is and neither host is touched — the other client
+// may be serving from either, so rolling the target back or restarting the
+// source could destroy or duplicate the copy that ends up live.
 // Re-running after a failure or an interrupted run is safe.
 
 import (
@@ -316,16 +347,26 @@ By hand:
 }
 
 func cmdMove(args []string) error {
-	f := parse(args)
+	f := parse(args, "force")
 	s := f.svc()
 	to := f.vals["to"]
 	if to == "" {
-		return errors.New("usage: containers move <svc> --to <host> [--from <host>]")
+		return errors.New("usage: containers move <svc> --to <host> [--from <host>] [--force] [--resume-token <token>]")
+	}
+	// One move of s per machine at a time, held until cmdMove returns and
+	// taken before anything else (discovery included): a second run would
+	// read the first one's saved token and drive the same move.
+	if !dryRun {
+		unlock, err := lockMove(s.Name)
+		if err != nil {
+			return err
+		}
+		defer unlock()
 	}
 	from := f.vals["from"]
 	if from == "" && !dryRun {
 		var err error
-		if from, err = moveSource(s, locate(s, probe)); err != nil {
+		if from, err = moveSource(s, locate(s, fleetProbe)); err != nil {
 			return err
 		}
 	}
@@ -341,9 +382,25 @@ func cmdMove(args []string) error {
 	if err := validateRoutes(s); err != nil {
 		return err
 	}
+	// st is the placement reservation, taken before anything on either host
+	// changes (moveBegin): a destination another client holds stops the move
+	// here. nil means the move runs unrecorded (no registry client on this
+	// machine, or --force over one that cannot be used); every method is
+	// nil-safe, and a dry run never writes to the registry.
+	var st *moveState
 	if !dryRun {
+		var err error
+		if st, err = moveBegin(s, from, to, f.bools["force"], f.vals["resume-token"]); err != nil {
+			return err
+		}
+		if st != nil && st.committed {
+			// The commit of an earlier run landed: the destination serves
+			// and is the binding, so only retire and switch are left.
+			return finishMove(s, from, to, st)
+		}
 		for _, o := range fetchOverrides([]string{from}) {
 			if o.Service == s.Name && o.Exposure == "public" {
+				st.release()
 				return fmt.Errorf("%s has a public expose override on %s; cnt expose --revoke %s first (DNS/edge point at %s)", s.Name, from, s.Name, from)
 			}
 		}
@@ -353,18 +410,40 @@ func cmdMove(args []string) error {
 	}
 	started := time.Now()
 
-	info("1/7 preflight: %s (fleet-backup, capabilities, free) and %s", to, from)
+	info("1/9 preflight: %s (fleet-backup, capabilities, free) and %s", to, from)
 	if err := remote(to, true, movePreflightTarget(s, to)); err != nil {
+		st.release()
 		return fmt.Errorf("preflight on %s: %w (nothing changed on %s)", to, err, from)
 	}
 	if err := remote(from, true, movePreflightSource(s, from)); err != nil {
+		st.release()
 		return fmt.Errorf("preflight on %s: %w (nothing changed)", from, err)
 	}
 
-	info("2/7 final backup on %s: hook, stop, fleet-backup-svc@%s", from, s.Name)
+	info("2/9 final backup on %s: hook, stop, fleet-backup-svc@%s", from, s.Name)
 	wasRunning := !dryRun
 	undo := func(step string, err error, target bool) error {
 		msg := fmt.Sprintf("%s: %v", step, err)
+		// Rolling back or restarting acts for whoever owns the placement, so
+		// it needs proof this move still does: another client may be
+		// serving from either host. Lost or uncertain, both stay as they are.
+		canceled := errors.Is(err, errMoveCanceled)
+		if !canceled {
+			if e := st.owned(); e != nil {
+				msg += "\n" + e.Error()
+				if !errors.Is(e, errMoveCanceled) {
+					return errors.New(msg + fmt.Sprintf("\nneither host was rolled back or restarted: %s was left as it was on %s, and on %s; nothing was destroyed. Re-run the move once the registry answers (it resumes with the held token), or settle it with containers place %s --recover",
+						s.Name, from, to, s.Name))
+				}
+				canceled = true
+			}
+		}
+		if canceled {
+			// Another client owns the row now and may be serving from
+			// either host: leave both as they are (a stray copy is what
+			// `containers place <svc> --verify` reports).
+			return errors.New(msg + fmt.Sprintf("\n%s was left as it was on %s, and on %s; nothing was destroyed", s.Name, from, to))
+		}
 		targetDown := true
 		if target {
 			info("rolling back %s", to)
@@ -380,10 +459,13 @@ func cmdMove(args []string) error {
 			info("starting %s again on %s", s.Name, from)
 			if e := remote(from, true, strict+enableScript(s)+"systemctl start "+unitOf(s)+"\nsystemctl is-active "+unitOf(s)+"\nrm -f "+q(moveSourceMarker(s.Name))+"\n"); e != nil {
 				msg += fmt.Sprintf("\nrestart on %s FAILED (%v): containers start %s --host %s", from, e, s.Name, from)
+			} else {
+				msg += fmt.Sprintf("\n%s runs on %s again", s.Name, from)
 			}
 		} else {
 			msg += fmt.Sprintf("\n%s was not running on %s before the move; left stopped", s.Name, from)
 		}
+		st.release()
 		return errors.New(msg)
 	}
 	var snap backupStamp
@@ -391,6 +473,11 @@ func cmdMove(args []string) error {
 		remote(from, true, finalBackupScript(s))
 		snap.Snapshot = "<snapshot-from-step-2>"
 	} else {
+		// The final backup stops the source and may take a while: the lease
+		// is renewed on both sides of it.
+		if err := st.renew(); err != nil {
+			return fmt.Errorf("%w (nothing changed on %s)", err, from)
+		}
 		out, err := remoteOut(context.Background(), from, true, finalBackupScript(s))
 		wasRunning = wasActive(out)
 		if err != nil {
@@ -400,17 +487,23 @@ func cmdMove(args []string) error {
 			return undo("final backup on "+from, err, false)
 		}
 		info("snapshot %s (%s)", snap.Snapshot, snap.Time.Format(time.RFC3339))
+		if err := st.renew(); err != nil {
+			return undo("the placement of "+s.Name+" was taken over", err, false)
+		}
 	}
 
-	info("3/7 restoring snapshot %s onto %s, then live DB clusters from the stopped %s", snap.Snapshot, to, from)
+	info("3/9 restoring snapshot %s onto %s, then live DB clusters from the stopped %s", snap.Snapshot, to, from)
 	if err := remote(to, true, restoreScript(s, from, snap.Snapshot)); err != nil {
 		return undo("restore on "+to, err, true)
+	}
+	if err := st.renew(); err != nil {
+		return undo("the placement of "+s.Name+" was taken over", err, true)
 	}
 	if err := copyLiveDBs(s, from, to); err != nil {
 		return undo("copying live DB clusters", err, true)
 	}
 
-	info("4/7 deploying on %s and checking its routes", to)
+	info("4/9 deploying on %s and checking its routes", to)
 	if err := deploy(s, to, flakeRef(s.Dir), false); err != nil {
 		return undo("deploy on "+to, err, true)
 	}
@@ -420,12 +513,15 @@ func cmdMove(args []string) error {
 		}
 	}
 
-	info("5/7 restore check of snapshot %s on %s (scratch dir)", snap.Snapshot, to)
+	info("5/9 restore check of snapshot %s on %s (scratch dir)", snap.Snapshot, to)
+	if err := st.renew(); err != nil {
+		return undo("the placement of "+s.Name+" was taken over", err, true)
+	}
 	if err := restoreCheck(s, to, snap.Snapshot); err != nil {
 		return undo("restore check", err, true)
 	}
 
-	info("6/7 first backup on %s", to)
+	info("6/9 first backup on %s", to)
 	if dryRun {
 		remote(to, true, "set -e\n"+backupRunScript(s))
 	} else {
@@ -443,11 +539,37 @@ func cmdMove(args []string) error {
 	if err := remote(to, true, "rm -f "+q(moveMarker(s.Name))+"\n"); err != nil {
 		return fmt.Errorf("clearing the move marker on %s: %w (the move is complete otherwise; remove %s by hand)", to, err, moveMarker(s.Name))
 	}
-
-	info("7/7 switch: removing %s from %s (data kept as %s.moved-<date>)", s.Name, from, dataDir(s))
-	if err := remote(from, true, switchScript(s)); err != nil {
-		return fmt.Errorf("cleanup on %s: %w (%s runs on %s; the source copy is stopped)", from, err, s.Name, to)
+	// Everything on the destination has held: the copy is restored, deployed,
+	// serving, checked and backed up. Publish it. From here on the registry
+	// says h, and undoing the move is the operator's (`place <svc> --recover`).
+	info("7/9 committing %s to %s in the placement registry", s.Name, to)
+	if err := st.commit(); err != nil {
+		return undo("committing the move to "+to, err, true)
 	}
+	return finishMove(s, from, to, st)
+}
+
+// finishMove is steps 8-9 once the commit has landed, also the whole of a
+// re-run that resumes after it. Mark the source as retired before destroying
+// anything: a rollback onto it after this needs --force, so a stray copy of a
+// name another host owns cannot be started by accident. An unconfirmed retire
+// stops here, before the switch: the source stays installed and stopped, the
+// destination keeps serving.
+func finishMove(s Service, from, to string, st *moveState) error {
+	if err := st.retire(); err != nil {
+		if errors.Is(err, errMoveCanceled) {
+			return fmt.Errorf("%w\n%s is stopped but still installed on %s; nothing was destroyed there", err, s.Name, from)
+		}
+		return fmt.Errorf("retiring the source in the registry: %w\nthe move stopped before the switch: %s serves from %s (committed); the copy on %s is stopped and still installed, nothing was destroyed. Re-run `cnt move %s --to %s --from %s` (it resumes from the held token and redoes only the retire and the switch), or settle it with `cnt place %s --recover`",
+			err, s.Name, to, from, s.Name, to, from, s.Name)
+	}
+	info("8/9 switch: removing %s from %s (data kept as %s.moved-<date>)", s.Name, from, dataDir(s))
+	if err := remote(from, true, switchScript(s)); err != nil {
+		return fmt.Errorf("cleanup on %s: %w (%s runs on %s; the source copy is stopped). Re-run `cnt move %s --to %s --from %s` to redo the switch", from, err, s.Name, to, s.Name, to, from)
+	}
+	// The registry records the move and the source is gone; the held token
+	// has nothing left to resume, so the local move-state file goes.
+	st.forget()
 	// The callees' 80/443 admission follows where the caller is, so it is
 	// stale now; the sweep must be redone. The source pair is retired too: a
 	// probe that races the uninstall must not keep admitting the copy that
@@ -455,7 +577,7 @@ func cmdMove(args []string) error {
 	retirePlacement(s.Name, from)
 	resetFleetPlacement()
 	refreshCallers(s)
-	fmt.Print(moveWarning(s, to))
+	info("9/9 %s now runs on %s; the placement registry records the move, so nothing in Nix needs editing — containers place %s --verify confirms it", s.Name, to, s.Name)
 	return nil
 }
 

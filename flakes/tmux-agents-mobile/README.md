@@ -255,7 +255,10 @@ Everything scales from `--term-size` in `internal/web/static/app.css` (the
 terminal frame, default `18px`: a reading size for wrapped text) and `--ui-size`
 (the chrome, `16px`). The *fit* toggle scales the frame down to whatever the
 pane's column count needs, so a 384-column pane still fits on a phone screen,
-just small — that is the point of the toggle.
+just small — that is the point of the toggle. Leading is 1.2 for wrapped text and
+1.0 in fit mode (whole screen, no gaps between rows); ligatures are off and the
+font stack names the Android monospaces explicitly, since `ui-monospace` and the
+Mac faces do not exist there.
 
 The module is pinned to `go_1_27` through `buildGo127Module` (nixpkgs' default
 `go` lags a release), and `go.mod` declares `go 1.27.0`, so `nix develop` and

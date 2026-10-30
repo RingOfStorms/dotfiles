@@ -32,6 +32,10 @@ func newMoveRig(t *testing.T) *moveRig {
 	}
 	m := &moveRig{rig: r, repo: filepath.Join(filepath.Dir(r.root), "repo")}
 	must(t, os.MkdirAll(m.repo, 0o755))
+	// No registry client unless a test wires one (moveOnRegistry), and the
+	// move-state file in a scratch dir, whatever the machine running the tests.
+	t.Setenv("SEC_MACHINE_KEY", filepath.Join(t.TempDir(), "absent-machine-key.json"))
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	bash := realPath(t, "bash")
 	// src: running, with a sqlite db, a pg dump, a live pg cluster.
 	must(t, os.WriteFile(filepath.Join(r.root, "svc/data/app.db"), []byte("SQLite format 3\x00LIVE"), 0o644))
@@ -352,7 +356,7 @@ func TestMoveDryRunShowsPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"1/7 preflight", "2/7 final backup", "fleet-backup-svc@svc", "3/7 restoring", "4/7 deploying", "5/7 restore check", "PRAGMA integrity_check", "6/7 first backup", "7/7 switch", ".moved-"} {
+	for _, want := range []string{"1/9 preflight", "2/9 final backup", "fleet-backup-svc@svc", "3/9 restoring", "4/9 deploying", "5/9 restore check", "PRAGMA integrity_check", "6/9 first backup", "7/9 committing", "8/9 switch", "9/9", ".moved-"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("dry run lacks %q", want)
 		}

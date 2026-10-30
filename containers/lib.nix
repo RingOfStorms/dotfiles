@@ -394,6 +394,17 @@ let
     let
       s = {
         kind = "nixos";
+        # DEPRECATED build-time seed (PLACEMENT-PLAN.md §4/§9). Placement is
+        # runtime now: the fleet-edge registry is the source of truth and `cnt`
+        # resolves a service's host from it. `host` survives only so the
+        # remaining Nix builders below can keep deriving from it until phase 5
+        # deletes the field and every reader in one cutover:
+        #   edgeRoutes, edgeVirtualHosts, routeNamesByHost/tlsNamesByHost,
+        #   webSourcesByHost, dnsRecords, routerForwards,
+        #   host-module.nix's httpExposureByHost, containers/flake.nix's
+        #   containerHosts comment.
+        # Do not add a reader, and do not add a `host` to a new service.nix:
+        # record the destination with `cnt place <svc> --set <host>` instead.
         host = null;
         persist = { };
         tcpPorts = [ ];
@@ -441,7 +452,9 @@ let
     checkNetIndexes (map (d: normalize (import (dir + "/${d}/service.nix"))) dirs);
 
   # Public http routes reached through the edge (o002), each with `service`.
-  # Services without a declared host are skipped (nothing to proxy to).
+  # DEPRECATED reader of the `host` seed: a service with `host = null` is
+  # skipped because build time cannot know where it runs. The registry does;
+  # phase 5 deletes this function and o002's vhosts come from the reconciler.
   edgeRoutes =
     dir:
     builtins.filter

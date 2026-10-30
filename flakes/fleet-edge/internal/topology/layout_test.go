@@ -360,8 +360,16 @@ func TestBuildDegenerateLayoutStaysSane(t *testing.T) {
 	spec := testSpec()
 	spec.Width = 0
 	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
-	if d.Width != DefaultWidth {
-		t.Errorf("width = %d, want %d", d.Width, DefaultWidth)
+	// No width means the default one is split across the columns. Gutters
+	// that need room for lanes take it from column slack first; the diagram
+	// grows past the default only when slack runs out.
+	if d.Width < DefaultWidth {
+		t.Errorf("width = %d, want at least %d", d.Width, DefaultWidth)
+	}
+	for i, w := range columnWidths(spec.Columns, DefaultWidth) {
+		if d.Columns[i].W > w || d.Columns[i].W < MinWidth {
+			t.Errorf("column %s = %d wide, want between %d and the default split %d", d.Columns[i].ID, d.Columns[i].W, MinWidth, w)
+		}
 	}
 	if d.Height < minZoneH {
 		t.Errorf("height = %d", d.Height)
@@ -753,6 +761,69 @@ func TestOneMarkerPerFQDN(t *testing.T) {
 	// Exactly the zone's five names: four owned, one DNS-only.
 	if len(d.RouteWeb) != 5 {
 		t.Errorf("public markers = %d, want the zone's 5 names", len(d.RouteWeb))
+	}
+}
+
+// An overlay region with nothing to draw states why: the placement registry
+// returned no bindings, so no name has an owner. Silence there reads as a
+// broken render rather than as the registry's answer.
+func TestEmptyRegistryOverlayZoneSaysWhy(t *testing.T) {
+	// An empty non-nil binding map is the registry's "nothing is placed".
+	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, map[string]string{}), at)
+	if len(d.OverlayWeb) != 0 {
+		t.Fatalf("overlay markers = %d, want none without a placement", len(d.OverlayWeb))
+	}
+	if d.OverlayBrace != nil {
+		t.Error("an empty overlay cloud still got a brace")
+	}
+	z, ok := zoneByID(d, "overlay")
+	if !ok {
+		t.Fatal("no overlay region")
+	}
+	if len(z.Note) == 0 {
+		t.Fatal("empty overlay region says nothing")
+	}
+	note := strings.Join(z.Note, " ")
+	if !strings.Contains(note, "0 of 6") {
+		t.Errorf("note = %q, want the unplaced count of all 6 services", note)
+	}
+	// Every line has to fit inside the region, or the caption runs under the
+	// brace and off the column.
+	for _, line := range z.Note {
+		// A line may only run over if it is one unbreakable word: wrapping
+		// never cuts a word, so that is the one honest exception.
+		if len(strings.Fields(line)) > 1 {
+			if got, want := float64(len([]rune(line)))*noteCharW, float64(z.W-2*zonePad); got > want {
+				t.Errorf("note line %q is %.0f wide, region allows %.0f", line, got, want)
+			}
+		}
+	}
+	if z.NoteY <= z.Y+zoneHead || z.NoteY >= z.Y+z.H {
+		t.Errorf("note baseline %d outside the region body %d..%d", z.NoteY, z.Y+zoneHead, z.Y+z.H)
+	}
+	// The public cloud is still drawn from the zone catalogue alone, with no
+	// owner claimed by anything.
+	if len(d.RouteWeb) == 0 {
+		t.Fatal("no public markers at all")
+	}
+	for _, m := range d.RouteWeb {
+		if m.Declared {
+			t.Errorf("%s is declared, but no service is placed: %+v", m.FQDN, m)
+		}
+	}
+}
+
+// A region that did draw its names stays silent: the caption is for an empty
+// region, not a permanent subtitle.
+func TestPlacedOverlayZoneHasNoNote(t *testing.T) {
+	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, nil), at)
+	if len(d.OverlayWeb) == 0 {
+		t.Fatal("no overlay markers with the declarative bindings")
+	}
+	for _, z := range d.Zones {
+		if len(z.Note) != 0 {
+			t.Errorf("region %q prints %q despite drawing its contents", z.ID, z.Note)
+		}
 	}
 }
 
@@ -1422,7 +1493,8 @@ func TestValidate(t *testing.T) {
 }
 
 // Every column Validate accepts is wide enough that layout's own split agrees,
-// so a spec that starts must draw in bounds.
+// so a spec that starts must draw in bounds. A column may give up slack to the
+// gutters, never below the minimum and never so far a station leaves its region.
 func TestValidateColumnWidthsMatchLayout(t *testing.T) {
 	spec := testSpec()
 	spec.Width = DefaultWidth
@@ -1435,8 +1507,35 @@ func TestValidateColumnWidthsMatchLayout(t *testing.T) {
 		t.Fatalf("columns = %d, widths = %d", len(d.Columns), len(widths))
 	}
 	for i, c := range d.Columns {
-		if c.W != widths[i] || c.W < MinWidth {
+		if c.W > widths[i] || c.W < MinWidth {
 			t.Errorf("column %s drawn %d wide, validated %d (minimum %d)", c.ID, c.W, widths[i], MinWidth)
+		}
+	}
+	zoneOf := map[string]ZoneBox{}
+	for _, z := range d.Zones {
+		zoneOf[z.ID] = z
+	}
+	// The laid-out Node carries no zone; the spec does. A node's ID defaults to
+	// its host, and a host the spec never names lands in DefaultZone.
+	specZone := map[string]string{}
+	for _, ns := range spec.Nodes {
+		id := ns.ID
+		if id == "" {
+			id = ns.Host
+		}
+		specZone[id] = ns.Zone
+	}
+	for _, n := range d.Nodes {
+		zid, ok := specZone[n.ID]
+		if !ok || zid == "" {
+			zid = spec.DefaultZone
+		}
+		z, ok := zoneOf[zid]
+		if !ok {
+			continue
+		}
+		if n.X < z.X || n.X+n.W > z.X+z.W {
+			t.Errorf("station %s spans x %d..%d, outside region %s %d..%d", n.ID, n.X, n.X+n.W, z.ID, z.X, z.X+z.W)
 		}
 	}
 }
@@ -1754,6 +1853,203 @@ func TestLanFabricConnectsSwitchesAndHosts(t *testing.T) {
 	for _, sw := range []string{"sg3210x", "sg1428pe"} {
 		if !seen[sw] {
 			t.Errorf("switch %q is not attached to the fabric", sw)
+		}
+	}
+}
+
+// axisSeg is one axis-aligned piece of a drawn path: x fixed for a vertical
+// run (lo..hi in y), y fixed for a horizontal one.
+type axisSeg struct {
+	vertical bool
+	at       float64
+	lo, hi   float64
+}
+
+// axisSegs splits a path built from M/L/H/V/Q into its axis-aligned pieces.
+// A quadratic corner counts as its two legs, start to control and control to
+// end, which is exactly the lanes its stroke occupies.
+func axisSegs(t *testing.T, d string) []axisSeg {
+	t.Helper()
+	var out []axisSeg
+	add := func(a, b [2]float64) {
+		switch {
+		case a == b:
+		case math.Abs(a[0]-b[0]) < 1e-9:
+			out = append(out, axisSeg{true, a[0], min(a[1], b[1]), max(a[1], b[1])})
+		case math.Abs(a[1]-b[1]) < 1e-9:
+			out = append(out, axisSeg{false, a[1], min(a[0], b[0]), max(a[0], b[0])})
+		}
+	}
+	fields := strings.Fields(strings.NewReplacer("M", " M ", "L", " L ", "H", " H ", "V", " V ", "Q", " Q ").Replace(d))
+	var pen [2]float64
+	num := func(i int) float64 {
+		var f float64
+		if _, err := fmt.Sscan(fields[i], &f); err != nil {
+			t.Fatalf("path %q: bad number %q", d, fields[i])
+		}
+		return f
+	}
+	for i := 0; i < len(fields); {
+		switch fields[i] {
+		case "M":
+			pen = [2]float64{num(i + 1), num(i + 2)}
+			i += 3
+		case "L":
+			p := [2]float64{num(i + 1), num(i + 2)}
+			add(pen, p)
+			pen, i = p, i+3
+		case "H":
+			p := [2]float64{num(i + 1), pen[1]}
+			add(pen, p)
+			pen, i = p, i+2
+		case "V":
+			p := [2]float64{pen[0], num(i + 1)}
+			add(pen, p)
+			pen, i = p, i+2
+		case "Q":
+			c, p := [2]float64{num(i + 1), num(i + 2)}, [2]float64{num(i + 3), num(i + 4)}
+			add(pen, c)
+			add(c, p)
+			pen, i = p, i+5
+		default:
+			t.Fatalf("path %q: unexpected %q", d, fields[i])
+		}
+	}
+	return out
+}
+
+// denseSpec funnels many connections into one column: every rack station is
+// reached from outside, from the house and from inside the rack itself, and
+// rack rows hold two stations so some legs have to pass a neighbour.
+func denseSpec() *Spec {
+	s := &Spec{
+		Width: 1500,
+		Columns: []Column{
+			{ID: "outside", Label: "Outside", Flex: 1, Zones: []Zone{{ID: "net", Label: "Internet", Kind: "internet", Flex: 1}}},
+			{ID: "rackband", Label: "Rack", Flex: 1.4, Zones: []Zone{{ID: "rack", Label: "Rack", Kind: "rack", Layout: LayoutFlow, Cols: 2, Flex: 1}}},
+			{ID: "house", Label: "Home", Flex: 1.2, Zones: []Zone{{ID: "lan", Label: "LAN", Kind: "lan", Layout: LayoutFlow, Cols: 2, Flex: 1}}},
+		},
+	}
+	node := func(id, zone string) {
+		s.Nodes = append(s.Nodes, NodeSpec{ID: id, Label: id, Kind: "server", Zone: zone})
+	}
+	link := func(from, to string) { s.Links = append(s.Links, LinkSpec{From: from, To: to, Kind: "lan"}) }
+	node("isp", "net")
+	node("cloud", "net")
+	for i := 1; i <= 8; i++ {
+		node(fmt.Sprintf("r%d", i), "rack")
+	}
+	for i := 1; i <= 4; i++ {
+		node(fmt.Sprintf("h%d", i), "lan")
+	}
+	for i := 1; i <= 8; i++ {
+		link("isp", fmt.Sprintf("r%d", i))
+	}
+	for i := 2; i <= 6; i++ {
+		link("r1", fmt.Sprintf("r%d", i))
+	}
+	for i := 1; i <= 4; i++ {
+		link(fmt.Sprintf("h%d", i), "r1")
+		link("cloud", fmt.Sprintf("h%d", i))
+	}
+	link("r3", "h2")
+	link("r8", "cloud")
+	return s
+}
+
+// laneFixtures is every diagram the lane tests hold to: the agent fan of the
+// basic spec, both route clouds, and the dense rack.
+func laneFixtures() map[string]Diagram {
+	return map[string]Diagram{
+		"basic":  Build(testSpec(), state.MergeAt(testInventory(), allPolls(), at, nil), at),
+		"routes": Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, nil), at),
+		"dense":  Build(denseSpec(), state.MergeAt(&inventory.Inventory{}, nil, at, nil), at),
+	}
+}
+
+// TestLanesDoNotCollide: no two connections draw a stroke along the same
+// line. Every edge and every cloud branch is split into axis-aligned pieces,
+// and two pieces of different paths on one x (or y) must not overlap.
+func TestLanesDoNotCollide(t *testing.T) {
+	const eps = 0.5
+	for name, d := range laneFixtures() {
+		type owned struct {
+			who string
+			seg axisSeg
+		}
+		var all []owned
+		for _, e := range d.Edges {
+			for _, s := range axisSegs(t, e.D) {
+				all = append(all, owned{"edge " + e.From + "->" + e.To + " " + e.Kind, s})
+			}
+		}
+		for _, l := range d.RouteLinks {
+			for _, s := range axisSegs(t, l.D) {
+				all = append(all, owned{l.Group + " branch ->" + l.ToID, s})
+			}
+		}
+		if name == "dense" {
+			into := 0
+			for _, e := range d.Edges {
+				if strings.HasPrefix(e.To, "r") {
+					into++
+				}
+			}
+			if into < 6 {
+				t.Fatalf("dense fixture has %d edges into the rack column", into)
+			}
+		}
+		for i := range all {
+			for j := i + 1; j < len(all); j++ {
+				a, b := all[i], all[j]
+				if a.who == b.who || a.seg.vertical != b.seg.vertical || math.Abs(a.seg.at-b.seg.at) > eps {
+					continue
+				}
+				if over := min(a.seg.hi, b.seg.hi) - max(a.seg.lo, b.seg.lo); over > eps {
+					axis := "y"
+					if a.seg.vertical {
+						axis = "x"
+					}
+					t.Errorf("%s: %s and %s share %s=%.1f over %.1f..%.1f", name, a.who, b.who,
+						axis, a.seg.at, max(a.seg.lo, b.seg.lo), min(a.seg.hi, b.seg.hi))
+				}
+			}
+		}
+	}
+}
+
+// TestLaneAnchorsAreDistinct: every connection meeting a station has its own
+// attach point on it.
+func TestLaneAnchorsAreDistinct(t *testing.T) {
+	for name, d := range laneFixtures() {
+		type point struct {
+			station string
+			x, y    float64
+		}
+		var seen []point
+		var whose []string
+		claim := func(station, who string, x, y float64) {
+			for i, p := range seen {
+				if p.station == station && math.Abs(p.x-x) < 0.5 && math.Abs(p.y-y) < 0.5 {
+					t.Errorf("%s: %s and %s both meet %s at (%.1f,%.1f)", name, whose[i], who, station, x, y)
+				}
+			}
+			seen = append(seen, point{station, x, y})
+			whose = append(whose, who)
+		}
+		for _, e := range d.Edges {
+			segs := strings.Fields(strings.NewReplacer("M", " ", "L", " ", "Q", " ").Replace(e.D))
+			if len(segs) < 4 {
+				t.Fatalf("%s: edge %s->%s has path %q", name, e.From, e.To, e.D)
+			}
+			var x0, y0, x1, y1 float64
+			fmt.Sscan(segs[0], &x0)
+			fmt.Sscan(segs[1], &y0)
+			fmt.Sscan(segs[len(segs)-2], &x1)
+			fmt.Sscan(segs[len(segs)-1], &y1)
+			who := e.From + "->" + e.To + " " + e.Kind
+			claim(e.From, who, x0, y0)
+			claim(e.To, who, x1, y1)
 		}
 	}
 }

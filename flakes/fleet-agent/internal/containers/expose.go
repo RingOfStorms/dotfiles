@@ -350,7 +350,8 @@ func cmdExpose(args []string) error {
 		} else if !errors.Is(err, errNoToken) {
 			fmt.Fprintf(os.Stderr, "warning: h005: %v\n", err)
 		}
-		return remote(hostFor(s, f), true, revokeScript(s.Name))
+		h, _ := hostFor(s, f)
+		return remote(h, true, revokeScript(s.Name))
 	}
 	if len(f.pos) < 1 {
 		return errors.New("usage: cnt expose <svc>[.<route>] --exposure tailnet|lan|public --for DUR|forever [--reason TEXT] | --list [host...] | --revoke <svc>")
@@ -379,7 +380,7 @@ func cmdExpose(args []string) error {
 	if !needsHostVhost(s) {
 		return fmt.Errorf("%s has no host vhost to override", s.Name)
 	}
-	h := hostFor(s, f)
+	h, _ := hostFor(s, f)
 	head := "# managed by containers, service " + s.Name + " (generated from routes)\n"
 	baseline := head + routesVhost(s)
 	conf := head + fmt.Sprintf("# cnt expose override: route %s %s -> %s (see %s/%s)\n", route, s.Routes[route].Exposure, level, overridesDir, s.Name) + routesVhost(o)

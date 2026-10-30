@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -64,6 +65,14 @@ type ZoneBox struct {
 	ID, Label, Kind string
 	X, Y, W, H      int
 	Box             bool
+	// Note is the caption a derived region prints when it has nothing to
+	// draw, so an empty region states why instead of reading as a rendering
+	// fault. Lines are wrapped to the region width.
+	Note []string
+	// NoteX/NoteY are the absolute baseline of the first caption line and
+	// NoteDY the offset to each line after it: the template cannot do
+	// arithmetic, so the layout hands it numbers.
+	NoteX, NoteY, NoteDY int
 	// Zone is the declaration, so a route region still knows its group and
 	// column cap.
 	Zone Zone
@@ -377,33 +386,37 @@ type routeDoc struct {
 
 // Geometry (SVG units). Text widths are estimates for system-ui.
 const (
-	margin      = 18  // diagram edge
-	colHead     = 36  // column caption band
-	colGap      = 28  // between columns
-	zonePad     = 22  // inside a region
-	zoneHead    = 40  // region label band
-	zoneGapY    = 24  // between regions of one column
-	minZoneH    = 168 // an empty region still reads as a region
-	stationW    = 180
-	stationR    = 18
-	stationGX   = 26
-	stationGY   = 24
-	labelGap    = 24 // 21px name: baseline of the 16px caption under it
-	gaugePitch  = 22 // cpu caption to mem caption: a 16px box is ~18 tall
-	tagsClear   = 14 // mem caption to the count band
-	countInset  = 10 // count text left edge inside the station
-	countLine   = 15 // one 12px count row
-	segH        = 44 // a fabric bar
-	chipH       = 22 // one route marker
-	chipGap     = 8
-	chipMinW    = 150 // chips per row at the default width
-	braceW      = 16  // how far the brace's point bulges from its spine
-	braceGutter = braceW + 14
-	ringR0      = 24
-	ringStep    = 3
-	ringStroke  = 3
-	labelCharW  = 11.6
-	smallCharW  = 6.6
+	margin         = 18  // diagram edge
+	colHead        = 36  // column caption band
+	colGap         = 28  // between columns
+	zonePad        = 22  // inside a region
+	zoneHead       = 40  // region label band
+	zoneLabelX     = 18  // region label inset (the template's dx)
+	zoneLabelCharW = 9.6 // 14px region label, 0.1em letter spacing
+	zoneGapY       = 24  // between regions of one column
+	minZoneH       = 168 // an empty region still reads as a region
+	stationW       = 180
+	stationR       = 18
+	stationGX      = 26
+	stationGY      = 24
+	labelGap       = 24 // 21px name: baseline of the 16px caption under it
+	gaugePitch     = 22 // cpu caption to mem caption: a 16px box is ~18 tall
+	tagsClear      = 14 // mem caption to the count band
+	countInset     = 10 // count text left edge inside the station
+	countLine      = 15 // one 12px count row
+	segH           = 44 // a fabric bar
+	chipH          = 22 // one route marker
+	chipGap        = 8
+	chipMinW       = 150 // chips per row at the default width
+	braceW         = 16  // how far the brace's point bulges from its spine
+	braceGutter    = braceW + 14
+	ringR0         = 24
+	ringStep       = 3
+	ringStroke     = 3
+	labelCharW     = 11.6
+	smallCharW     = 6.6
+	noteCharW      = 7.6 // 15px italic caption, wrapped to the region width
+	noteLineGap    = 20  // baseline to baseline of one caption line
 )
 
 var exposureRank = map[string]int{"local": 1, "tailnet": 2, "lan": 3, "public": 4}
@@ -535,19 +548,13 @@ func Build(spec *Spec, m state.Merged, now time.Time) Diagram {
 	// leftover height. Columns are independent, so a tall rack never pads the
 	// route columns.
 	widths := columnWidths(spec.Columns, width)
-	type colPlan struct {
-		col   Column
-		x, w  int
-		zones []*zonePlan
-		nat   int
-	}
 	plans := make([]colPlan, 0, len(spec.Columns))
 	target := spec.Height
 	x := 0
 	for i, c := range spec.Columns {
 		cp := colPlan{col: c, x: x, w: widths[i]}
 		for _, z := range c.Zones {
-			zp := planZone(z, byZone[z.ID], len(rs.in(z)), cp.w)
+			zp := planZone(z, byZone[z.ID], rs.capacity(z), cp.w)
 			cp.zones = append(cp.zones, zp)
 			cp.nat += zp.natural
 		}
@@ -566,7 +573,10 @@ func Build(spec *Spec, m state.Merged, now time.Time) Diagram {
 	target = max(target, minZoneH)
 	d.Height = target
 
-	for _, cp := range plans {
+	// Who sits where, for the lane router: a station's column picks the
+	// channel it is reached from, its region the slack above its row.
+	ix := laneIndex{colOf: map[*Node]int{}, zoneOf: map[*Node]int{}}
+	for ci, cp := range plans {
 		top := margin
 		if cp.col.Label != "" {
 			top += colHead
@@ -597,6 +607,11 @@ func Build(spec *Spec, m state.Merged, now time.Time) Diagram {
 				ID: zp.zone.ID, Label: zp.zone.Label, Kind: zp.zone.Kind,
 				X: zp.x, Y: zp.y, W: zp.w, H: zp.h, Box: zp.zone.Box, Zone: zp.zone,
 			})
+			ix.zoneCol = append(ix.zoneCol, ci)
+			ix.zoneNodes = append(ix.zoneNodes, zp.nodes)
+			for _, n := range zp.nodes {
+				ix.colOf[n], ix.zoneOf[n] = ci, len(d.Zones)-1
+			}
 			if zp.zone.layout() != LayoutRoutes {
 				placeZone(zp)
 			}
@@ -604,12 +619,17 @@ func Build(spec *Spec, m state.Merged, now time.Time) Diagram {
 		}
 	}
 
+	// Lanes are planned once every station is placed, then the gutters and
+	// the rail band are widened to hold them before anything else reads a
+	// coordinate.
+	ln := planLanes(&d, edges, rs, nodes, ix)
+	ln.widen(&d, plans)
+
 	// Station draw order is spec order, so later stations sit on top.
 	for _, id := range order {
 		d.Nodes = append(d.Nodes, *nodes[id])
 	}
 
-	routeStations(edges, nodes, &d)
 	d.Edges = edges
 
 	for _, e := range edges {
@@ -627,6 +647,19 @@ func Build(spec *Spec, m state.Merged, now time.Time) Diagram {
 
 	d.PublicZone = rs.cat
 	d.RouteWeb, d.OverlayWeb = rs.place(&d, nodes)
+	// A derived region that drew nothing would read as a rendering fault, so
+	// it states why. Zones are addressed by index: zoneOf hands back a copy.
+	if len(d.OverlayWeb) == 0 {
+		for i := range d.Zones {
+			if d.Zones[i].Zone.Group != GroupOverlay {
+				continue
+			}
+			z := &d.Zones[i]
+			z.Note = wrapNote(overlayNote(m), z.W-2*zonePad)
+			z.NoteX, z.NoteY, z.NoteDY = z.X+zonePad, z.Y+zoneHead+22, noteLineGap
+			break
+		}
+	}
 	// The public cloud groups into the edge hub; the overlay cloud groups into
 	// one bundled trunk that branches once per owning host.
 	if z, ok := rs.zoneOf(&d, GroupOverlay); ok {
@@ -635,7 +668,8 @@ func Build(spec *Spec, m state.Merged, now time.Time) Diagram {
 	if z, ok := rs.zoneOf(&d, GroupPublic); ok {
 		d.RouteBrace = rs.brace(&d, z, GroupPublic, nodes)
 	}
-	d.RouteLinks = append(rs.overlayBranches(&d, nodes), rs.publicBranches(&d, nodes)...)
+	routeStations(edges, nodes, ln)
+	d.RouteLinks = ln.branches(&d)
 
 	nodesMeta, _ := json.Marshal(info)
 	d.Meta = string(nodesMeta)
@@ -683,6 +717,14 @@ func columnWidths(cols []Column, width int) []int {
 		x += w + colGap
 	}
 	return widths
+}
+
+// colPlan is one column's regions and the width Build measured them at.
+type colPlan struct {
+	col   Column
+	x, w  int
+	zones []*zonePlan
+	nat   int
 }
 
 // zonePlan is one region's placement: its stations, its natural height and
@@ -835,17 +877,20 @@ type routeSet struct {
 	overlay []RouteMarker
 	cat     PublicZone
 	hub     string // node the public brace leads into
+	// capPublic and capOverlay are how many names each cloud could hold with
+	// every declared service placed: what its region is sized for.
+	capPublic, capOverlay int
 }
 
-// in returns the markers belonging in a region.
-func (r *routeSet) in(z Zone) []RouteMarker {
+// capacity is how many chips a region is sized for.
+func (r *routeSet) capacity(z Zone) int {
 	switch z.Group {
 	case GroupPublic:
-		return r.public
+		return r.capPublic
 	case GroupOverlay:
-		return r.overlay
+		return r.capOverlay
 	}
-	return nil
+	return 0
 }
 
 // buildRoutes derives both clouds from the declared routes and the spec's DNS
@@ -990,6 +1035,29 @@ func buildRoutes(spec *Spec, svcByHost map[string][]state.ServiceView, info map[
 			}
 		}
 	}
+
+	// A region is sized for every name it could ever hold, placed or not:
+	// placement changes at runtime and replay frames are drawn from history,
+	// so a cloud gaining a chip must not move every region under it.
+	pub, ovl := map[string]bool{}, map[string]bool{}
+	for key := range claimed {
+		pub[key] = true
+	}
+	for _, list := range svcByHost {
+		for _, s := range list {
+			for _, rt := range s.Routes {
+				key := strings.ToLower(strings.TrimSuffix(rt.FQDNStr(), "."))
+				switch {
+				case key == "":
+				case rt.Exposure == "public":
+					pub[key] = true
+				case rt.Exposure == "tailnet":
+					ovl[key] = true
+				}
+			}
+		}
+	}
+	rs.capPublic, rs.capOverlay = max(len(pub), len(rs.public)), max(len(ovl), len(rs.overlay))
 	return rs
 }
 
@@ -1007,6 +1075,50 @@ func shortName(fqdn, zone string) string {
 		return f[:i]
 	}
 	return f
+}
+
+// overlayNote explains an overlay region that drew no name. The two causes are
+// told apart on evidence, never by guessing: nothing placed is a registry
+// answer, everything placed is a route answer.
+func overlayNote(m state.Merged) string {
+	if len(m.Services) > 0 {
+		unplaced := 0
+		for _, s := range m.Services {
+			if s.BoundHost == "" {
+				unplaced++
+			}
+		}
+		if unplaced == len(m.Services) {
+			return fmt.Sprintf("No service is placed: 0 of %d have a host in the placement registry, so no overlay name has an owner.", len(m.Services))
+		}
+	}
+	return "No placed service declares a tailnet name."
+}
+
+// wrapNote breaks a sentence into lines that fit width, at word boundaries
+// only: a caption is read, so a word cut in half reads as corruption.
+func wrapNote(s string, width int) []string {
+	if width <= 0 {
+		return []string{s}
+	}
+	perLine := max(1, int(float64(width)/noteCharW))
+	var lines []string
+	line := ""
+	for _, w := range strings.Fields(s) {
+		switch {
+		case line == "":
+			line = w
+		case len([]rune(line))+1+len([]rune(w)) <= perLine:
+			line += " " + w
+		default:
+			lines = append(lines, line)
+			line = w
+		}
+	}
+	if line != "" {
+		lines = append(lines, line)
+	}
+	return lines
 }
 
 // zoneOf finds the drawn region holding a cloud.
@@ -1098,86 +1210,39 @@ func (r *routeSet) brace(d *Diagram, z ZoneBox, group string, nodes map[string]*
 	if n == nil {
 		return b
 	}
+	// The lead's path needs its lane in the gutter, so the lane router
+	// writes LeadD once the gutters are sized.
 	b.Hub, b.HubX, b.HubY = r.hub, n.CenterX(), n.CenterY()
-	b.LeadD = elbowPath(float64(b.TipX), float64(b.Mid),
-		float64(n.CenterX()-n.R), float64(n.CenterY()))
 	return b
 }
 
 // trunkLen is how far the overlay's shared collector runs before branching.
 const trunkLen = 22
 
-// overlayBranches is one branch per owning host: the shared trunk splits once
-// per destination instead of drawing a lead from every chip.
-func (r *routeSet) overlayBranches(d *Diagram, nodes map[string]*Node) []RouteLink {
-	b := r.overlayBrace(d)
-	if b == nil {
-		return nil
-	}
-	busX := b.TipX + trunkLen
+// target is one host a cloud branches to.
+type target struct {
+	host, id string
+	n        *Node
+}
+
+// targets is each owning host once, in marker order: a cloud's trunk splits
+// once per destination instead of drawing a lead from every chip. skip is the
+// hub itself, which a branch never leaves for.
+func targets(markers []RouteMarker, nodes map[string]*Node, skip *Node) []target {
 	seen := map[string]bool{}
-	var links []RouteLink
-	for _, m := range r.overlay {
+	var out []target
+	for _, m := range markers {
 		if m.NodeID == "" || seen[m.NodeID] {
 			continue
 		}
 		n := nodes[m.NodeID]
-		if n == nil {
+		if n == nil || n == skip {
 			continue
 		}
 		seen[m.NodeID] = true
-		toX := n.CenterX() - n.R
-		gutter := columnGutter(d, n)
-		rail := float64(d.Columns[0].Y - 12)
-		points := [5][2]float64{{float64(busX), float64(b.Mid)}, {float64(busX), rail}, {gutter, rail}, {gutter, float64(n.CenterY())}, {float64(toX), float64(n.CenterY())}}
-		links = append(links, RouteLink{
-			Group: GroupOverlay, Host: m.Host, ToID: m.NodeID,
-			FromX: busX, FromY: b.Mid, ToX: toX, ToY: n.CenterY(),
-			D: roundedPath(points[:]),
-		})
+		out = append(out, target{host: m.Host, id: m.NodeID, n: n})
 	}
-	return links
-}
-
-// publicBranches is the public cloud's fork: one branch per host that serves a
-// public name, drawn from the edge hub out to that host. They are part of the
-// always-on picture, not a toggleable layer: the whole catalogue's reach is
-// visible at once, and selecting a route only emphasises its own branch.
-func (r *routeSet) publicBranches(d *Diagram, nodes map[string]*Node) []RouteLink {
-	hub := nodes[r.hub]
-	if hub == nil {
-		return nil
-	}
-	seen := map[string]bool{}
-	var links []RouteLink
-	for _, m := range r.public {
-		if m.NodeID == "" || seen[m.NodeID] {
-			continue
-		}
-		n := nodes[m.NodeID]
-		if n == nil || n == hub {
-			continue
-		}
-		seen[m.NodeID] = true
-		// From the hub's right edge to the host's left edge: a branch leaves
-		// the edge outward, so it never cuts back through the hub itself.
-		links = append(links, RouteLink{
-			Group: GroupPublic, Host: m.Host, ToID: m.NodeID,
-			FromX: hub.CenterX() + hub.R, FromY: hub.CenterY(),
-			ToX: n.CenterX() - n.R, ToY: n.CenterY(),
-			D: publicStationPath(d, hub, n),
-		})
-	}
-	return links
-}
-
-// overlayBrace is the committed overlay brace, which exists only after the
-// overlay region was drawn.
-func (r *routeSet) overlayBrace(d *Diagram) *RouteBrace {
-	if d.OverlayBrace != nil {
-		return d.OverlayBrace
-	}
-	return nil
+	return out
 }
 
 // groups is the route document's group list: both clouds with their geometry.
@@ -1229,10 +1294,13 @@ func bracePath(spineX, top, bottom int) string {
 }
 
 // roundedPath retains the endpoints and straight runs of a polyline while
-// replacing each turn with a tangent quadratic Bézier. Short runs limit the
-// radius so neighbouring corners cannot overlap.
+// replacing each turn with a tangent quadratic Bézier. A corner's radius is
+// clamped to half of each leg, so two corners sharing a short leg meet at its
+// middle instead of overlapping, and a leg that rounds away to nothing is not
+// written at all. A full reversal keeps its vertex: rounding it would draw a
+// spike back over the run.
 func roundedPath(points [][2]float64) string {
-	var clean [8][2]float64
+	var clean [12][2]float64
 	n := 0
 	for _, p := range points {
 		if n > 0 && clean[n-1] == p {
@@ -1252,13 +1320,25 @@ func roundedPath(points [][2]float64) string {
 	}
 	var d strings.Builder
 	fmt.Fprintf(&d, "M%.1f %.1f", clean[0][0], clean[0][1])
+	pen := clean[0]
+	lineTo := func(p [2]float64) {
+		if math.Abs(p[0]-pen[0]) >= 0.05 || math.Abs(p[1]-pen[1]) >= 0.05 {
+			fmt.Fprintf(&d, " L%.1f %.1f", p[0], p[1])
+		}
+		pen = p
+	}
 	for i := 1; i < n-1; i++ {
 		a, b, c := clean[i-1], clean[i], clean[i+1]
+		if (b[0]-a[0])*(c[1]-b[1]) == (b[1]-a[1])*(c[0]-b[0]) {
+			lineTo(b)
+			continue
+		}
 		before, after := math.Hypot(b[0]-a[0], b[1]-a[1]), math.Hypot(c[0]-b[0], c[1]-b[1])
 		r := min(14.0, before/2, after/2)
-		enter := [2]float64{b[0] + (a[0]-b[0])*r/before, b[1] + (a[1]-b[1])*r/before}
+		lineTo([2]float64{b[0] + (a[0]-b[0])*r/before, b[1] + (a[1]-b[1])*r/before})
 		leave := [2]float64{b[0] + (c[0]-b[0])*r/after, b[1] + (c[1]-b[1])*r/after}
-		fmt.Fprintf(&d, " L%.1f %.1f Q%.1f %.1f %.1f %.1f", enter[0], enter[1], b[0], b[1], leave[0], leave[1])
+		fmt.Fprintf(&d, " Q%.1f %.1f %.1f %.1f", b[0], b[1], leave[0], leave[1])
+		pen = leave
 	}
 	if n > 1 {
 		fmt.Fprintf(&d, " L%.1f %.1f", clean[n-1][0], clean[n-1][1])
@@ -1266,46 +1346,825 @@ func roundedPath(points [][2]float64) string {
 	return d.String()
 }
 
-// elbowPath takes the collector outward to a gutter before crossing above
-// the destination head, rather than cutting left through the name badges.
-func elbowPath(x1, y1, x2, y2 float64) string {
-	gutter, rail := max(x1, x2)+24, min(y1, y2)-36
-	points := [6][2]float64{{x1, y1}, {gutter, y1}, {gutter, rail}, {x2 - 24, rail}, {x2 - 24, y2}, {x2, y2}}
-	return roundedPath(points[:])
+// --- lanes -----------------------------------------------------------------
+//
+// Every vertical run between two columns owns an x in that gutter (a
+// channel), every crossing above the columns owns a rail, and every
+// connection meeting a station owns its own point on the rim. No two
+// connections share a stroke, so each one can be followed end to end. Lanes
+// are greedy interval colouring: runs sorted by where they start each take
+// the lowest lane free over their span.
+
+const (
+	lanePitch  = 6  // between two vertical lanes of one channel
+	laneClear  = 4  // free run between two intervals that reuse one lane
+	railPitch  = 6  // between two rails of the band above the columns
+	railTop    = 6  // the topmost rail
+	rimPitch   = 4  // between two attach points on one side of a head, at most
+	slackPitch = 4  // between two approach legs above a station row, at most
+	busPitch   = 8  // between two overlay branches leaving the bus
+	labelClear = 30 // a leg above a region's first row stays under its label
+	cloudHold  = 3  // lanes a cloud keeps in each gutter it could enter
+	cloudRails = 3  // rails a cloud keeps if it could cross a column
+)
+
+// approach is how a connection meets a station.
+type approach int
+
+const (
+	fromLeft  approach = iota // a horizontal leg into the left rim
+	fromTop                   // a leg above the row, then a drop onto the head
+	fromRight                 // the public fork leaving the edge hub
+)
+
+// end is one connection's attachment to a station.
+type end struct {
+	n      *Node
+	side   approach
+	pinned bool       // keeps the rim's centre point (the public lead)
+	lane   float64    // x the leg comes from; orders legs so they don't cross
+	up     bool       // the connection carries on above the leg
+	at     [2]float64 // the attach point
+	legY   float64    // y of the horizontal leg
 }
 
-// columnGutter is inside the column margin but outside station footprints.
-// A zone can pack several station columns; their shared outer gutter avoids
-// running past a neighbouring station's long label or gauge band.
-func columnGutter(d *Diagram, n *Node) float64 {
-	for _, c := range d.Columns {
-		if n.CenterX() >= c.X && n.CenterX() <= c.X+c.W {
-			return float64(c.X + 8)
+// leg appends the approach from lane x to the attach point.
+func (e *end) leg(p [][2]float64, x float64) [][2]float64 {
+	p = append(p, [2]float64{x, e.legY})
+	if e.side == fromTop {
+		p = append(p, [2]float64{e.at[0], e.legY})
+	}
+	return append(p, e.at)
+}
+
+// unleg is leg reversed: from the attach point out to lane x.
+func (e *end) unleg(p [][2]float64, x float64) [][2]float64 {
+	p = append(p, e.at)
+	if e.side == fromTop {
+		p = append(p, [2]float64{e.at[0], e.legY})
+	}
+	return append(p, [2]float64{x, e.legY})
+}
+
+// vrun is one vertical run in a channel. Channel c is the gutter left of
+// column c; the last channel is right of every column.
+type vrun struct {
+	ch     int
+	lo, hi float64
+	fixed  bool // a lane of its own: a cloud trunk leaving its region
+	lane   int
+	x      float64
+}
+
+// rail is one crossing above the columns, spanning channels lo..hi; a
+// column's interior is half way between its two channels.
+type rail struct {
+	lo, hi float64
+	lane   int
+	y      float64
+}
+
+// route is one connection: station ends, the lanes at each, the rail between.
+type route struct {
+	a, b     *end
+	ra, rb   *vrun
+	rail     *rail
+	host, to string
+	depart   float64 // overlay branches: y the branch leaves the bus at
+}
+
+// laneIndex is where Build put every station.
+type laneIndex struct {
+	colOf     map[*Node]int
+	zoneOf    map[*Node]int // index into Diagram.Zones
+	zoneCol   []int         // per Diagram.Zones entry
+	zoneNodes [][]*Node     // per Diagram.Zones entry
+}
+
+type lanes struct {
+	laneIndex
+	d        *Diagram
+	runs     []*vrun
+	rails    []*rail
+	ends     []*end
+	nLanes   []int     // per channel
+	chX      []float64 // channel origin
+	chW      []int     // channel width
+	nRails   int
+	capLanes []int // per channel, what the frame holds (see hold)
+	capRails int
+	edges    []route // parallel to Diagram.Edges
+	overlay  []route
+	public   []route
+	lead     *route
+}
+
+// planLanes registers every connection that crosses a gutter, edges and both
+// clouds' branches, and colours their runs into lanes. Only y spans and
+// channel indices are read, so the result survives widen's shift.
+func planLanes(d *Diagram, edges []Edge, rs *routeSet, nodes map[string]*Node, ix laneIndex) *lanes {
+	l := &lanes{laneIndex: ix, d: d}
+	channels := len(d.Columns) + 1
+	for _, e := range edges {
+		l.edges = append(l.edges, l.connect(nodes[e.From], nodes[e.To]))
+	}
+	// The frame is sized from the edges alone, before any cloud is planned.
+	l.colour(channels)
+	hub := nodes[rs.hub]
+	if _, ok := l.colOf[hub]; !ok {
+		hub = nil
+	}
+	pz, oz := zoneIndex(d, GroupPublic), zoneIndex(d, GroupOverlay)
+	l.capLanes, l.capRails = l.hold(hub, pz, oz)
+	planLead := func() {
+		if pz < 0 || len(rs.public) == 0 || hub == nil {
+			return
+		}
+		e := l.attach(hub, fromLeft)
+		e.pinned, e.up = true, true
+		l.lead = &route{b: e, ra: l.run(l.zoneCol[pz]+1, 0, 0, true)}
+	}
+	planOverlay := func() {
+		if oz < 0 || len(rs.overlay) == 0 {
+			return
+		}
+		ch := l.zoneCol[oz] + 1
+		for _, t := range targets(rs.overlay, nodes, nil) {
+			if _, ok := l.colOf[t.n]; !ok {
+				continue
+			}
+			tc := l.toward(t.n, ch)
+			r := route{b: l.reach(t.n, tc), ra: l.run(ch, 0, 0, true), host: t.host, to: t.id}
+			r.rb = r.ra
+			if tc != ch {
+				_, hi := l.band(r.b)
+				r.rb, r.rail, r.b.up = l.run(tc, math.Inf(-1), hi, false), l.span(float64(ch), float64(tc)), true
+			}
+			l.overlay = append(l.overlay, r)
 		}
 	}
-	return float64(n.X - 12)
-}
-
-// stationPath leaves through head rims and joins column gutters above the
-// regions, keeping vertical runs away from every station's readout band.
-func stationPath(d *Diagram, a, b *Node) string {
-	p1, p2 := a.anchor(left), b.anchor(left)
-	ga, gb := columnGutter(d, a), columnGutter(d, b)
-	if ga == gb {
-		points := [4][2]float64{p1, {ga, p1[1]}, {gb, p2[1]}, p2}
-		return roundedPath(points[:])
+	// A trunk leaving its region on the left of a gutter takes the gutter's
+	// first lanes, higher regions further left, so the departures never
+	// cross each other or an edge's lane.
+	if pz >= 0 && oz >= 0 && d.Zones[oz].Y < d.Zones[pz].Y {
+		planOverlay()
+		planLead()
+	} else {
+		planLead()
+		planOverlay()
 	}
-	rail := float64(d.Columns[0].Y - 12)
-	points := [6][2]float64{p1, {ga, p1[1]}, {ga, rail}, {gb, rail}, {gb, p2[1]}, p2}
-	return roundedPath(points[:])
+	// The fork leaves the hub's right rim into the gutter beside its column,
+	// so it never cuts back through the hub.
+	if hub != nil {
+		ch := l.colOf[hub] + 1
+		for _, t := range targets(rs.public, nodes, hub) {
+			if _, ok := l.colOf[t.n]; !ok {
+				continue
+			}
+			tc := l.toward(t.n, ch)
+			r := route{a: l.reach(hub, ch), b: l.reach(t.n, tc), host: t.host, to: t.id}
+			l.join(&r, ch, tc)
+			l.public = append(l.public, r)
+		}
+	}
+	l.colour(channels)
+	return l
 }
 
-func publicStationPath(d *Diagram, hub, n *Node) string {
-	p1, p2 := hub.anchor(right), n.anchor(left)
-	ga := float64(hub.X + hub.W + 12)
-	gb, rail := columnGutter(d, n), float64(d.Columns[0].Y-12)
-	points := [6][2]float64{p1, {ga, p1[1]}, {ga, rail}, {gb, rail}, {gb, p2[1]}, p2}
-	return roundedPath(points[:])
+// hold is what the frame keeps per channel and in the rail band: the lanes
+// the edges were just coloured into, plus a share for each cloud worked out
+// from the spec alone. Placement changes at runtime and replay frames are
+// drawn from history, so which branches exist in this snapshot must never
+// rescale or shift the map. Any station with a host could own a route, so a
+// cloud keeps one lane per such station it could reach through a gutter, at
+// most cloudHold, and cloudRails rails if any of them sits across a column.
+// A snapshot that needs more squeezes the pitch instead of growing (settle).
+func (l *lanes) hold(hub *Node, pz, oz int) ([]int, int) {
+	held, rails := slices.Clone(l.nLanes), l.nRails
+	cloud := func(trunk int, skip *Node) {
+		reach := make([]int, len(held))
+		crosses := false
+		for n := range l.colOf {
+			if n.Host == "" || n == skip {
+				continue
+			}
+			reach[trunk]++
+			if tc := l.toward(n, trunk); tc != trunk {
+				reach[tc]++
+				crosses = true
+			}
+		}
+		for c, k := range reach {
+			held[c] += min(k, cloudHold)
+		}
+		if crosses {
+			rails += cloudRails
+		}
+	}
+	if oz >= 0 {
+		cloud(l.zoneCol[oz]+1, nil)
+	}
+	if hub != nil {
+		if pz >= 0 {
+			held[l.zoneCol[pz]+1]++ // the public lead
+		}
+		cloud(l.colOf[hub]+1, hub)
+	}
+	return held, rails
+}
+
+// zoneIndex is the first drawn region holding a cloud, or -1.
+func zoneIndex(d *Diagram, group string) int {
+	for i, z := range d.Zones {
+		if z.Zone.Group == group {
+			return i
+		}
+	}
+	return -1
+}
+
+// connect plans one edge between the gutters its stations face each other
+// through; stations of one column share the gutter on its left.
+func (l *lanes) connect(a, b *Node) route {
+	ca, cb := l.toward(a, l.colOf[b]), l.toward(b, l.colOf[a])
+	r := route{a: l.reach(a, ca), b: l.reach(b, cb)}
+	l.join(&r, ca, cb)
+	return r
+}
+
+// toward is the gutter beside n's column on the side of column col: the
+// right one when col lies further right, otherwise the left one. A channel
+// index passed as col reads as the column right of that gutter.
+func (l *lanes) toward(n *Node, col int) int {
+	c := l.colOf[n]
+	if c < col {
+		return c + 1
+	}
+	return c
+}
+
+// join plans a connection whose ends reach gutters ca and cb: one lane when
+// they share a gutter, otherwise a lane at each joined over a rail.
+func (l *lanes) join(r *route, ca, cb int) {
+	alo, ahi := l.band(r.a)
+	blo, bhi := l.band(r.b)
+	if ca == cb {
+		r.ra = l.run(ca, min(alo, blo), max(ahi, bhi), false)
+		r.rb = r.ra
+		r.a.up, r.b.up = blo+bhi < alo+ahi, alo+ahi < blo+bhi
+		return
+	}
+	r.ra, r.rb = l.run(ca, math.Inf(-1), ahi, false), l.run(cb, math.Inf(-1), bhi, false)
+	r.rail = l.span(float64(ca), float64(cb))
+	r.a.up, r.b.up = true, true
+}
+
+func (l *lanes) attach(n *Node, side approach) *end {
+	e := &end{n: n, side: side}
+	l.ends = append(l.ends, e)
+	return e
+}
+
+// reach attaches n on the side facing gutter ch: the left rim for the gutter
+// left of its column, the right rim for the one right of it. When another
+// station of the row sits on that side, the leg runs above the row and drops
+// onto the head instead of cutting through the neighbour.
+func (l *lanes) reach(n *Node, ch int) *end {
+	right := ch > l.colOf[n]
+	side := fromLeft
+	if right {
+		side = fromRight
+	}
+	if zi, ok := l.zoneOf[n]; ok && !n.Segment {
+		for _, m := range l.zoneNodes[zi] {
+			if m != n && sameRow(m, n) && (m.X > n.X) == right {
+				side = fromTop
+				break
+			}
+		}
+	}
+	return l.attach(n, side)
+}
+
+func sameRow(a, b *Node) bool { return a.Y < b.Y+b.H && b.Y < a.Y+a.H }
+
+// band is the y range e's leg can end up at.
+func (l *lanes) band(e *end) (lo, hi float64) {
+	if e.side == fromTop {
+		return l.slack(e.n)
+	}
+	y, s := e.n.anchor(left)[1], spread(e.n)
+	return y - s, y + s
+}
+
+// spread is how far from a side's centre an attach point may sit.
+func spread(n *Node) float64 {
+	if n.Segment {
+		return float64(n.SegY2-n.SegY1) * 0.4
+	}
+	return 0.9 * float64(n.R)
+}
+
+// slack is the free band above a station's row: under the previous row (or
+// the region's label) and over the row's heads.
+func (l *lanes) slack(n *Node) (floor, top float64) {
+	zi, ok := l.zoneOf[n]
+	if !ok {
+		return float64(n.Y - 12), float64(n.Y)
+	}
+	rowTop := n.Y
+	for _, m := range l.zoneNodes[zi] {
+		if sameRow(m, n) {
+			rowTop = min(rowTop, m.Y)
+		}
+	}
+	fl := l.d.Zones[zi].Y + labelClear
+	for _, m := range l.zoneNodes[zi] {
+		if m.Y+m.H <= rowTop {
+			fl = max(fl, m.Y+m.H+3)
+		}
+	}
+	top = float64(rowTop + 3)
+	return min(float64(fl), top), top
+}
+
+func (l *lanes) run(ch int, lo, hi float64, fixed bool) *vrun {
+	r := &vrun{ch: ch, lo: lo, hi: hi, fixed: fixed}
+	l.runs = append(l.runs, r)
+	return r
+}
+
+func (l *lanes) span(a, b float64) *rail {
+	r := &rail{lo: min(a, b), hi: max(a, b)}
+	l.rails = append(l.rails, r)
+	return r
+}
+
+// colour assigns lanes. Fixed runs take a channel's first lanes in planning
+// order; the rest are sorted by start, deepest first on a tie, so runs bound
+// for the rail stack outward from the deepest and their legs don't cross.
+func (l *lanes) colour(channels int) {
+	l.nLanes = make([]int, channels)
+	fixed := make([]int, channels)
+	var free []*vrun
+	for _, r := range l.runs {
+		if r.fixed {
+			r.lane = fixed[r.ch]
+			fixed[r.ch]++
+		} else {
+			free = append(free, r)
+		}
+	}
+	sort.SliceStable(free, func(i, j int) bool {
+		if free[i].lo != free[j].lo {
+			return free[i].lo < free[j].lo
+		}
+		return free[i].hi > free[j].hi
+	})
+	busy := make([][]float64, channels) // per channel, where each lane frees up
+	for _, r := range free {
+		k := slices.IndexFunc(busy[r.ch], func(until float64) bool { return until+laneClear < r.lo })
+		if k < 0 {
+			k = len(busy[r.ch])
+			busy[r.ch] = append(busy[r.ch], r.hi)
+		} else {
+			busy[r.ch][k] = r.hi
+		}
+		r.lane = fixed[r.ch] + k
+	}
+	for c := range l.nLanes {
+		l.nLanes[c] = fixed[c] + len(busy[c])
+	}
+	sort.SliceStable(l.rails, func(i, j int) bool {
+		if l.rails[i].lo != l.rails[j].lo {
+			return l.rails[i].lo < l.rails[j].lo
+		}
+		return l.rails[i].hi > l.rails[j].hi
+	})
+	var railBusy []float64
+	for _, r := range l.rails {
+		k := slices.IndexFunc(railBusy, func(until float64) bool { return until < r.lo })
+		if k < 0 {
+			k = len(railBusy)
+			railBusy = append(railBusy, r.hi)
+		} else {
+			railBusy[k] = r.hi
+		}
+		r.lane = k
+	}
+	l.nRails = len(railBusy)
+}
+
+// widen sizes every gutter and the rail band from what hold kept, then lays
+// the columns out again around them. Growth comes out of column slack first
+// (room beyond a column's widest station row and region label), so the frame
+// keeps the spec's width while the stations still fit; only what the slack
+// cannot cover widens the diagram. Lane planning read y spans and channel
+// indices only, and re-placing a region keeps its row order, so the plan
+// survives.
+func (l *lanes) widen(d *Diagram, plans []colPlan) {
+	nc := len(plans)
+	l.chW = make([]int, nc+1)
+	grow := 0
+	for c := range l.chW {
+		if k := l.capLanes[c]; k > 0 {
+			l.chW[c] = (k + 1) * lanePitch
+		}
+		if c > 0 && c < nc {
+			l.chW[c] = max(l.chW[c], colGap)
+			grow += l.chW[c] - colGap
+		} else {
+			grow += l.chW[c]
+		}
+	}
+	w, slack := make([]int, nc), make([]int, nc)
+	for i := range plans {
+		w[i] = plans[i].w
+		slack[i] = w[i] - plans[i].need()
+	}
+	for grow > 0 {
+		i := 0
+		for j := range slack {
+			if slack[j] > slack[i] {
+				i = j
+			}
+		}
+		if nc == 0 || slack[i] <= 0 {
+			break
+		}
+		take := min(grow, slack[i])
+		w[i], slack[i], grow = w[i]-take, slack[i]-take, grow-take
+	}
+	shiftY := max(0, l.capRails-1) * railPitch
+	x, k := l.chW[0], 0
+	for i := range plans {
+		col := &d.Columns[i]
+		col.X, col.W, col.Y = x, w[i], col.Y+shiftY
+		for _, zp := range plans[i].zones {
+			zp.x, zp.w, zp.y = x, w[i], zp.y+shiftY
+			z := &d.Zones[k]
+			z.X, z.W, z.Y = zp.x, zp.w, zp.y
+			if zp.zone.layout() != LayoutRoutes {
+				placeZone(zp)
+			}
+			k++
+		}
+		x += w[i] + l.chW[i+1]
+	}
+	d.Width = max(d.Width, x)
+	d.Height += shiftY
+	l.chX = make([]float64, nc+1)
+	for c := 1; c <= nc; c++ {
+		l.chX[c] = float64(d.Columns[c-1].X + d.Columns[c-1].W)
+	}
+}
+
+// need is the narrowest a column can be with its widest station row and every
+// region label still fitting. A column holding a route cloud keeps its width:
+// its chips are laid out for it.
+func (cp *colPlan) need() int {
+	n := 0
+	for _, zp := range cp.zones {
+		if zp.zone.layout() == LayoutRoutes {
+			return cp.w
+		}
+		n = max(n, int(math.Ceil(float64(len([]rune(zp.zone.Label)))*zoneLabelCharW))+zoneLabelX+zonePad)
+		for _, row := range zp.rows {
+			rw := -stationGX
+			for _, m := range row {
+				if m.Segment {
+					rw += stationW + stationGX // a fabric spans whatever it is given
+				} else {
+					rw += m.W + stationGX
+				}
+			}
+			n = max(n, rw+2*zonePad)
+		}
+	}
+	return min(max(n, MinWidth), cp.w)
+}
+
+// settle places every lane and rail, then every attach point and leg. A
+// channel or band holding more than hold kept squeezes its pitch to fit.
+func (l *lanes) settle() {
+	for _, r := range l.runs {
+		n, w := float64(l.nLanes[r.ch]), float64(l.chW[r.ch])
+		pitch := min(lanePitch, w/(n+1))
+		r.x = l.chX[r.ch] + (w-(n-1)*pitch)/2 + float64(r.lane)*pitch
+	}
+	pitch := float64(railPitch)
+	if l.nRails > max(l.capRails, 2) {
+		pitch = railPitch * float64(max(l.capRails, 2)-1) / float64(l.nRails-1)
+	}
+	for _, r := range l.rails {
+		r.y = railTop + float64(r.lane)*pitch
+	}
+	l.prepare()
+	type rimKey struct {
+		n    *Node
+		side approach
+	}
+	type rowKey struct{ zone, top int }
+	rims, rows := map[rimKey][]*end{}, map[rowKey][]*end{}
+	var rimOrder []rimKey
+	var rowOrder []rowKey
+	for _, e := range l.ends {
+		if e.side == fromTop {
+			_, top := l.slack(e.n)
+			k := rowKey{l.zoneOf[e.n], int(top)}
+			if rows[k] == nil {
+				rowOrder = append(rowOrder, k)
+			}
+			rows[k] = append(rows[k], e)
+			continue
+		}
+		k := rimKey{e.n, e.side}
+		if rims[k] == nil {
+			rimOrder = append(rimOrder, k)
+		}
+		rims[k] = append(rims[k], e)
+	}
+	for _, k := range rimOrder {
+		rim(rims[k])
+	}
+	for _, k := range rowOrder {
+		l.legs(rows[k])
+	}
+	l.unclash()
+}
+
+// unclash keeps two legs off one line. Ends reaching a gutter from opposite
+// sides, or legs above two rows that happen to sit at one height, overlap
+// wherever their lanes interleave: the later leg steps aside half a rim
+// pitch at a time, within the room its approach has.
+func (l *lanes) unclash() {
+	type piece struct {
+		e      *end // nil for an overlay departure, which stays put
+		owner  *route
+		y      float64
+		lo, hi float64
+	}
+	var ps []piece
+	add := func(r *route, e *end, lane float64) {
+		if e != nil {
+			ps = append(ps, piece{e: e, owner: r, y: e.legY, lo: min(e.at[0], lane), hi: max(e.at[0], lane)})
+		}
+	}
+	for _, rs := range [...][]route{l.edges, l.public, l.overlay} {
+		for i := range rs {
+			r := &rs[i]
+			add(r, r.a, r.ra.x)
+			add(r, r.b, r.rb.x)
+		}
+	}
+	if l.lead != nil {
+		add(l.lead, l.lead.b, l.lead.b.lane)
+	}
+	if b := l.d.OverlayBrace; b != nil {
+		bus := float64(b.TipX + trunkLen)
+		for i := range l.overlay {
+			r := &l.overlay[i]
+			ps = append(ps, piece{owner: r, y: r.depart, lo: bus, hi: r.ra.x})
+		}
+	}
+	clash := func(i int, y float64) bool {
+		p := ps[i]
+		for j, q := range ps {
+			if j == i || q.owner == p.owner {
+				continue
+			}
+			if math.Abs(q.y-y) < 1 && min(p.hi, q.hi)-max(p.lo, q.lo) > 0.5 {
+				return true
+			}
+			// Two attach points on one rim stay apart.
+			if p.e.side != fromTop && q.e != nil && q.e.n == p.e.n && q.e.side == p.e.side && math.Abs(q.e.at[1]-y) < 1 {
+				return true
+			}
+		}
+		return false
+	}
+	for i := range ps {
+		p := &ps[i]
+		if p.e == nil || !clash(i, p.y) {
+			continue
+		}
+		e := p.e
+		lo, hi := l.band(e)
+		if e.side != fromTop {
+			c, s := e.n.anchor(left)[1], spread(e.n)
+			lo, hi = c-s, c+s
+		}
+	step:
+		for k := 1; k <= 8; k++ {
+			for _, dy := range [2]float64{rimPitch / 2, -rimPitch / 2} {
+				y := p.y + float64(k)*dy
+				if y < lo || y > hi || clash(i, y) {
+					continue
+				}
+				p.y, e.legY = y, y
+				if e.side != fromTop {
+					e.at[1] = y
+					if !e.n.Segment {
+						r, dy := float64(e.n.R), y-float64(e.n.CenterY())
+						w := math.Sqrt(r*r - dy*dy)
+						if e.side == fromRight {
+							e.at[0] = float64(e.n.CenterX()) + w
+						} else {
+							e.at[0] = float64(e.n.CenterX()) - w
+						}
+					}
+				}
+				break step
+			}
+		}
+	}
+}
+
+// rim spreads one side's attach points top to bottom. Legs whose connection
+// carries on upward sit higher, the lane nearest the station highest;
+// downward ones lower, the nearest lane lowest. So no leg crosses another
+// connection's run on its way in. A pinned end keeps the centre.
+func rim(es []*end) {
+	n, side := es[0].n, es[0].side
+	var pin *end
+	order := make([]*end, 0, len(es))
+	for _, e := range es {
+		if e.pinned && pin == nil {
+			pin = e
+		} else {
+			order = append(order, e)
+		}
+	}
+	sort.SliceStable(order, func(i, j int) bool {
+		a, b := order[i], order[j]
+		if a.up != b.up {
+			return a.up
+		}
+		// On the right the nearest lane is the leftmost: mirror it.
+		la, lb := a.lane, b.lane
+		if side == fromRight {
+			la, lb = -la, -lb
+		}
+		if a.up {
+			return la > lb
+		}
+		return la < lb
+	})
+	centre := float64(len(order)-1) / 2
+	if pin != nil {
+		mid := len(order) / 2
+		order = slices.Insert(order, mid, pin)
+		centre = float64(mid)
+	}
+	pitch := float64(rimPitch)
+	if reach := max(centre, float64(len(order)-1)-centre); reach > 0 {
+		pitch = min(pitch, spread(n)/reach)
+	}
+	s := left
+	if side == fromRight {
+		s = right
+	}
+	base := n.anchor(s)
+	for i, e := range order {
+		dy := (float64(i) - centre) * pitch
+		e.at = [2]float64{base[0], base[1] + dy}
+		if !n.Segment {
+			r := float64(n.R)
+			w := math.Sqrt(r*r - dy*dy)
+			if side == fromRight {
+				e.at[0] = float64(n.CenterX()) + w
+			} else {
+				e.at[0] = float64(n.CenterX()) - w
+			}
+		}
+		e.legY = e.at[1]
+	}
+}
+
+// legs stacks one row's above-the-row legs bottom to top, upward ones first
+// with the farthest lane lowest, and drops each onto its head in the same
+// order, so a drop never crosses a leg still heading past it. A lane right
+// of its head is mirrored, so either side orders the same way.
+func (l *lanes) legs(es []*end) {
+	far := func(e *end) float64 {
+		if e.lane > float64(e.n.CenterX()) {
+			return -e.lane
+		}
+		return e.lane
+	}
+	sort.SliceStable(es, func(i, j int) bool {
+		a, b := es[i], es[j]
+		if a.up != b.up {
+			return a.up
+		}
+		if a.up {
+			return far(a) < far(b)
+		}
+		return far(a) > far(b)
+	})
+	floor, top := l.slack(es[0].n)
+	pitch := float64(slackPitch)
+	if len(es) > 1 {
+		pitch = max(1, min(pitch, (top-floor)/float64(len(es)-1)))
+	}
+	perHead := map[*Node][]*end{}
+	for i, e := range es {
+		e.legY = top - float64(i)*pitch
+		perHead[e.n] = append(perHead[e.n], e)
+	}
+	for n, hs := range perHead {
+		r := float64(n.R)
+		pitch := float64(rimPitch)
+		if len(hs) > 1 {
+			pitch = min(pitch, 1.8*r/float64(len(hs)-1))
+		}
+		for i, e := range hs {
+			dx := (float64(i) - float64(len(hs)-1)/2) * pitch
+			e.at = [2]float64{float64(n.CenterX()) + dx, float64(n.CenterY()) - math.Sqrt(r*r-dx*dx)}
+		}
+	}
+}
+
+// path is an edge's polyline, from its first station to its second.
+func (r *route) path() string {
+	var buf [12][2]float64
+	p := r.a.unleg(buf[:0], r.ra.x)
+	if r.rail != nil {
+		p = append(p, [2]float64{r.ra.x, r.rail.y}, [2]float64{r.rb.x, r.rail.y})
+	}
+	return roundedPath(r.b.leg(p, r.rb.x))
+}
+
+// prepare fixes what settle orders legs by: each end's lane x, and for the
+// overlay the bus departures.
+func (l *lanes) prepare() {
+	for _, rs := range [2][]route{l.edges, l.public} {
+		for i := range rs {
+			rs[i].a.lane, rs[i].b.lane = rs[i].ra.x, rs[i].rb.x
+		}
+	}
+	if b := l.d.OverlayBrace; b != nil {
+		n := len(l.overlay)
+		for k := range l.overlay {
+			r := &l.overlay[k]
+			r.depart = float64(b.Mid + (2*k-(n-1))*busPitch/2)
+			r.b.lane = r.rb.x
+			if r.rail == nil {
+				lo, hi := l.band(r.b)
+				r.b.up = r.depart < (lo+hi)/2
+			}
+		}
+	}
+	if l.lead != nil {
+		l.lead.b.lane = l.lead.b.n.anchor(left)[0] - 24
+	}
+}
+
+// branches draws both clouds: the overlay bus and its branches, the public
+// fork and its lead. It runs after the braces exist, and after the edges were
+// drawn from the same settled attach points.
+func (l *lanes) branches(d *Diagram) []RouteLink {
+	var links []RouteLink
+	if b := d.OverlayBrace; b != nil && len(l.overlay) > 0 {
+		busX := b.TipX + trunkLen
+		if n := len(l.overlay); n > 1 {
+			// The bus is a short bar the branches leave at their own height.
+			b.LeadD = fmt.Sprintf("M%d %d H%d V%.0f V%.0f", b.TipX, b.Mid, busX, l.overlay[0].depart, l.overlay[n-1].depart)
+		}
+		for _, r := range l.overlay {
+			var buf [12][2]float64
+			p := append(buf[:0], [2]float64{float64(busX), r.depart}, [2]float64{r.ra.x, r.depart})
+			if r.rail != nil {
+				p = append(p, [2]float64{r.ra.x, r.rail.y}, [2]float64{r.rb.x, r.rail.y})
+			}
+			links = append(links, RouteLink{
+				Group: GroupOverlay, Host: r.host, ToID: r.to,
+				FromX: busX, FromY: int(r.depart),
+				ToX: int(math.Round(r.b.at[0])), ToY: int(math.Round(r.b.at[1])),
+				D: roundedPath(r.b.leg(p, r.rb.x)),
+			})
+		}
+	}
+	// The fork leaves the hub's right rim into the gutter beside its column,
+	// like any edge from there.
+	for _, r := range l.public {
+		links = append(links, RouteLink{
+			Group: GroupPublic, Host: r.host, ToID: r.to,
+			FromX: int(math.Round(r.a.at[0])), FromY: int(math.Round(r.a.at[1])),
+			ToX: int(math.Round(r.b.at[0])), ToY: int(math.Round(r.b.at[1])),
+			D: r.path(),
+		})
+	}
+	// The public lead takes its own lane out of the region, crosses above the
+	// hub and comes down beside it into the centre of its left rim.
+	if b, r := d.RouteBrace, l.lead; b != nil && r != nil {
+		e := r.b
+		tip, mid := float64(b.TipX), float64(b.Mid)
+		over, beside := min(mid, e.legY)-36, e.lane
+		points := [6][2]float64{{tip, mid}, {r.ra.x, mid}, {r.ra.x, over}, {beside, over}, {beside, e.legY}, e.at}
+		b.LeadD = roundedPath(points[:])
+	}
+	return links
 }
 
 // --- stations --------------------------------------------------------------
@@ -1532,8 +2391,11 @@ func finishNode(n *Node) {
 	// units) spilled ~55 units into the neighbouring station there. The
 	// counts get their own band under the badges instead, anchored to the
 	// station's inner edge, where the longest line fits with room to spare.
+	// A host keeps its service row with nothing placed on it: placement
+	// changes at runtime, and a station growing a row would move every station
+	// under it between two frames.
 	countRows := 0
-	if n.SvcCount > 0 {
+	if n.SvcCount > 0 || n.Host != "" {
 		n.CountX, n.CountY = countInset, n.TagsY+countLine
 		countRows++
 	}
@@ -1838,12 +2700,13 @@ const (
 	below
 )
 
-// routeStations uses the same rounded gutter routing as public branches.
-func routeStations(edges []Edge, nodes map[string]*Node, d *Diagram) {
+// routeStations draws every edge from its settled lanes and attach points.
+func routeStations(edges []Edge, nodes map[string]*Node, l *lanes) {
+	l.settle()
 	for i := range edges {
 		a, b := nodes[edges[i].From], nodes[edges[i].To]
 		mx, my := float64(a.CenterX()+b.CenterX())/2, float64(a.CenterY()+b.CenterY())/2
-		edges[i].D = stationPath(d, a, b)
+		edges[i].D = l.edges[i].path()
 		edges[i].LX, edges[i].LY = int(mx), int(my)
 		edges[i].LW = int(float64(len([]rune(edges[i].Label)))*smallCharW) + 12
 		edges[i].LRX, edges[i].LRY = edges[i].LX-edges[i].LW/2, edges[i].LY-9
@@ -1877,4 +2740,3 @@ func (n *Node) anchor(s side) [2]float64 {
 		return [2]float64{cx, cy + r}
 	}
 }
-

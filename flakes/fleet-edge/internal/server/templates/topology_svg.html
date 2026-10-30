@@ -25,6 +25,10 @@
 .topo .z-lan rect { fill: rgba(95, 168, 211, 0.03); stroke: rgba(95, 168, 211, 0.2); }
 .topo .z-roaming rect { fill: rgba(139, 144, 160, 0.04); stroke: rgba(139, 144, 160, 0.22); }
 
+/* An empty derived region says why it is empty; it is a sentence, not a
+   label, so it drops the caption's weight and tracking. */
+.topo .zone text.zone-note { fill: var(--t-muted); font-size: 15px; font-weight: 400; letter-spacing: 0; font-style: italic; }
+
 /* Cabling weights are one step of a shared scale, so a view can emphasise a
    layer without losing the lean of a trunk against a patch lead. */
 .topo .edge { --sw: 2.6; }
@@ -212,7 +216,7 @@
 <g class="cols">{{range .Columns}}<text class="colcap" x="{{.X}}" y="{{.Y}}" dy="14">{{.Label}}</text>{{end}}
 </g>
 <g class="zones">{{range .Zones}}
-<g class="zone z-{{.Kind}}{{if .Box}} box{{end}}" data-zone="{{.ID}}"><rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="18"/><text x="{{.X}}" y="{{.Y}}" dx="18" dy="24">{{.Label}}</text></g>{{end}}
+<g class="zone z-{{.Kind}}{{if .Box}} box{{end}}" data-zone="{{.ID}}">{{$z := .}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="18"/><text x="{{.X}}" y="{{.Y}}" dx="18" dy="24">{{.Label}}</text>{{if .Note}}<text class="zone-note" x="{{.NoteX}}" y="{{.NoteY}}">{{range $i, $l := .Note}}<tspan x="{{$z.NoteX}}"{{if $i}} dy="{{$z.NoteDY}}"{{end}}>{{$l}}</tspan>{{end}}</text>{{end}}</g>{{end}}
 </g>
 <g class="edges">{{range .Edges}}
 <g class="edge k-{{.Kind}} layer-{{.Layer}}{{if .Live}} live{{end}}" data-from="{{.From}}" data-to="{{.To}}"><title>{{.From}} → {{.To}}{{if .Label}} · {{.Label}}{{end}}</title><path d="{{.D}}" fill="none"/></g>{{end}}

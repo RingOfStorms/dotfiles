@@ -4,8 +4,9 @@ Design for removing `host` from `service.nix`. Today 19 of the 20
 `containers/<svc>/service.nix` files name the host they run on (16 on h001,
 `hello-nixos` on h003 after its recent move, `localai` on joe, `hello-podman` on
 lio; `minecraft` is `host = null`, offline), and six Nix functions
-(`edgeRoutes`, `edgeVirtualHosts`, `routeNamesByHost`, `httpExposureByHost`,
-`dnsRecords`, `routerForwards` — all in `containers/lib.nix`, listed in §4)
+(`edgeRoutes`, `edgeVirtualHosts`, `routeNamesByHost`, `dnsRecords`,
+`routerForwards` and `webSourcesByHost` — all in `containers/lib.nix`, listed in
+§4)
 derive network state from that one string. That makes Nix
 the runtime answer to "which box runs X", which is wrong: placement changes on a
 `cnt move`, and a Nix string that must be edited, committed, rebuilt and pushed
@@ -51,10 +52,12 @@ machine token whose `sub` is in `fleet.global.overrideWriters`
 (`/api/placements`, deny o002, `X-Fleet-Peer` set from the loopback trusted peer).
 Writers are per-host, so `Row.Device` is the host that made the change; that is
 the whole point of the machine-identity scheme. Today only lio/juni/gp3/oren are
-writers, of which just `lio` is a container host; phase 2 adds h001, h003 and
-`joe` — all three already run sec-agent (`hosts/joe/flake.nix:118`), so they
-have a machine key. The writer set has to be complete *before* phase 3, because
-a host that cannot write a placement also cannot close its own firewall rule.
+writers, of which just `lio` is a container host. Adding h001, h003 and `joe`
+was planned for phase 2 and is **deferred to phase 3**: it is blocked on
+provisioning Zitadel machine users for those hosts (all three already run
+sec-agent, `hosts/joe/flake.nix:118`, so they have a machine key). The writer
+set has to be complete *before* a host's own firewall rule can follow its
+placement, because a host that cannot write a placement cannot close the rule.
 
 ### Row shape
 
@@ -192,52 +195,61 @@ flags.
 
 ## 2. Move ordering (this is the part the old design got wrong)
 
-`switchScript` (`flakes/fleet-agent/internal/containers/move.go:288-294`)
+`switchScript` (`flakes/fleet-agent/internal/containers/move.go:307`)
 uninstalls the source and renames its data to `<dir>.moved-<date>`. The commit
-therefore has to land **before** that rename (step 9 below), not after it: once
+therefore has to land **before** that rename (step 7 below), not after it: once
 the data is renamed, rollback can no longer just point back at the source. That
 is the bug in the old design, which wrote the repo after the switch. The registry
-splits the old "update the repo after the move" into two calls, both on the safe
-side of the irreversible step (today's `1/7`…`7/7` labels map to 1, 3–6 and 9
-below):
+splits the old "update the repo after the move" into three calls, all on the safe
+side of the irreversible step. `cnt move` prints these labels (`move.go:337-524`):
 
 ```
 1 preflight (target, source)                      ─ unchanged
-2 RESERVE destination            ← registry: previous = source, state = prepared,
-                                   mint a token. (Effective host is still the
-                                   source: DNS and o002 keep pointing at it.)
-3 final backup on source, stop                    ─ unchanged (source stopped, data intact)
-4 restore snapshot + live DB clusters on target    ─ unchanged
-5 deploy + route health on target                  ─ unchanged
-6 restore check, first backup on target            ─ unchanged
-7 COMMIT (with the token)         ← registry: published host = destination. The
-                                   destination must report installed+active. h005's
-                                   reconciler writes DNS and the o002 vhost/stream on
-                                   its next pass (phases 3 and 4a; until then the
-                                   Reconcile step does not exist and this is just
-                                   the flip). `cnt move` then polls `GET ?verify=1`
-                                   until the destination reports `ok` and no host
-                                   reports a stray copy. That endpoint validates
-                                   *what the hosts run*, not DNS: name resolution is
-                                   checked by `cnt audit` (phase 3) against the same
-                                   registry. On timeout the source is untouched, so
-                                   `DELETE ?token=` rolls back.
-8 RETIRE source (with the token)  ← registry: rollback now needs force
+2 final backup on source, stop, snapshot id        ─ unchanged (data intact), then
+  RESERVE destination            ← registry: previous = source, state = prepared,
+                                   mint a token. Reserved here, not in step 1,
+                                   because the preflight uninstalls leftovers on
+                                   the destination and a stranded reservation
+                                   would keep routing blind until its lease ran
+                                   out. (Effective host is still the source: DNS
+                                   and o002 keep pointing at it.)
+3 restore snapshot + live DB clusters on target    ─ unchanged
+4 deploy + route health on target                  ─ unchanged
+5 restore check on target (scratch dir)            ─ unchanged
+6 first backup on target                          ─ unchanged; the move marker
+                                   is cleared here, so steps 7-9 are registry
+                                   bookkeeping an interrupted run can repeat
+7 COMMIT (with the token)         ← registry: published host = destination,
+                                   state committed. Nothing polls the hosts:
+                                   `GET ?verify=1` validates *what they run*,
+                                   not DNS, so the operator's check is
+                                   `cnt place <svc> --verify` / `cnt audit`
+                                   after the move. A failure here stops the
+                                   move with both hosts as they are — the
+                                   destination serving, the source stopped.
+8 RETIRE source (with the token)  ← registry: previous kept, state retiring, so
+                                   a rollback onto the source now needs force.
 9 uninstall source, data → .moved-<date>           ─ switchScript, unchanged
    (sweep clears `previous` once the source is confirmed uninstalled)
-```
 
-Any failure before step 7 is undone by redeploying the target down and restarting
-the stopped source, then `DELETE /api/placements/<svc>?token=<t>` — which restores
-the *prior* binding, it never invents or deletes one. A failure between 7 and 8 (a
-rollback the operator wants) is `DELETE` plus restarting the source: the source
-copy is intact because step 9 has not run. After 8 only `force` applies, and the
-printed recovery is the same one `move` prints today.
+Steps 2, 7 and 8 are the placement registry; 1 and 3-9 are unchanged.
 
 Why this order and not the reverse: routing must never point at a host that has
 not proven it can serve the data, and the source must never be destroyed before
 routing has demonstrably moved off it. Reserving early is what makes the DNS half
 of the cutover a flip rather than a guess.
+
+Any failure in steps 2-6 undoes the target: stop confirmed (killed if needed),
+uninstall, data moved aside as `<svc>.failed-move-<time>`, marker removed last;
+then `DELETE /api/placements/<svc>?token=<t>`, which restores the *prior* binding
+(it never invents or deletes one), and the source starts again if it was
+running. If that rollback fails the source is not started — both stay stopped and
+the error says what to do by hand. A commit that fails (step 7) takes the same
+undo path, so the reservation is not left behind. After the commit only the
+operator rolls back, with `cnt place <svc> --recover`. A retire that trips over
+a takeover is fatal and stops before the switch; any other retire failure is a
+warning and the move finishes, because the destination is already live and the
+sweep will settle the source.
 
 **The token, not the clock, decides who may act.** Each reserve mints an opaque
 handle and keeps it; commit, retire, rollback, recover and renew present it, so a
@@ -262,9 +274,17 @@ cutover, so either binding strands the other copy). Both give a 409 naming the
 hosts; `--force` records the prior binding anyway (or the destination, when the
 fence sat on a first placement with nothing to go back to).
 
-A move no longer needs `moveWarning` and the "update `host =` in service.nix"
-step: the reservation *is* the record, and the only remaining must-do is
-`cnt place --verify` / `cnt audit` finding nothing.
+While a fence is on, the CLI does not place anything: `resolveHost` refuses a
+row whose token is set and whose `effective()` is empty before it considers
+`--host` or discovery (a `stale` row, and a first `prepared` one), because the
+only two hosts that could be right are the ones the move just touched. Reads
+and `stop` still work through `hostForRead`; the two ways out are
+`cnt place <svc> --recover` and `cnt place <svc> --set <host> --force`.
+
+Phase 4 landed this: `cnt move` owns the row (`move.go`, `movestate.go`), so the
+old `moveWarning` and the "update `host =` in service.nix" step are gone. The
+reservation *is* the record, and the only remaining must-do after a move is
+`cnt place <svc> --verify` / `cnt audit` finding nothing.
 
 ---
 
@@ -353,29 +373,79 @@ Derived-from-`s.host` Nix functions and their call sites:
 | `edgeRoutes` | `lib.nix`, filtered by `r.service.host != null` | 5 | Delete; o002 vhosts come from the runtime reconciler |
 | `edgeVirtualHosts` | `lib.nix`, called `hosts/oracle/o002/nginx.nix:23`; eval test `containers/tests/edge-vhosts.nix` | 5 | Delete (and the eval test). o002 gets a reserved-name list + the existing `edgevhost` receiver |
 | `routeNamesByHost` | `lib.nix`, called `hosts/h005/wildcard-cert.nix:37` (`routeHosts`) | 5 | Delete. Every route name is a single label under `*.${domain}`, so the cert needs no per-name SAN and the push target set becomes the static container-host list |
-| `httpExposureByHost` | `lib.nix`, called `containers/host-module.nix:31` | 5 | Delete; runtime firewall allowlist (see §7) |
+| `webSourcesByHost` | `lib.nix:533-604`, filtered by `s.host != null`; called `containers/host-module.nix:31` | 5 | Delete; the runtime firewall allowlist (see §7) supersedes it, and the module keeps only what depends on host trust |
 | `dnsRecords` | `lib.nix`, called `hosts/h005/dns-records.nix:12` → `hosts/h005/mods/networking.nix:22`; consumed at `:44` (`host-record`, tailnet), `:49` (`local=`, tailnet) and `:249` (`host-record`, LAN) | 3,5 | Phase 3: h005 writes per-name files into **two** runtime `hostsdir`s (`tailnet/`, `lan/`) from the registry; the `host-record` lines go away, the `local=` does not. Phase 5: **not** deleted — drop the `s.host != null` filter and the IP fields, keeping the `local=` name list and the `public` CNAME list |
 | `routerForwards` | `lib.nix`, called `hosts/h005/router-forwards.nix:23` | 4a | Delete. h005 writes the DNAT set from the registry (the placed host's `lanIp`, one entry per `public` + `router` non-HTTP route) and applies it; port and protocol still come from `service.nix`, only the address moves |
 | o002's `streamConfig` | `hosts/oracle/o002/nginx.nix:179-186` proxies :3032 to `_constants.nix:16` `upstreamHost = "100.64.0.13"` (h001), not to a route's host | 4a | Delete the hard-coded server and the `upstreamHost` constant. `streamConfig` becomes `include /var/lib/fleet-edge-streams/*.stream;` and h005 pushes one file per `public`+`via = edge`+`tcp` route through a stream receiver modelled on `edge-vhost-receiver.nix` (§5). Left alone it keeps working only while forgejo is on h001 — a `move` breaks SSH silently |
-| `DeclaredHost` | `flakes/fleet-edge/internal/state/state.go:666`, `polls[svc.Host]` at `678`; `server/server.go:355` (sort), `564` (host detail); `dash/dash.go:158,189,225-231`; `topology/layout.go:170` | 2,5 | Rename to the registry's effective host (`BoundHost`), fed by the export; group/sort by it; a service with no row is "unplaced" |
-| CLI `hostFor` | `fleet-agent/internal/containers/main.go:485` | 2 | `--host` > registry row > discovery (`deploy/start/destroy` matrix, §6) |
-| CLI `hostForRead` | `main.go:506` | 2 | Same, but `installedHere` stays the cheap local shortcut |
-| CLI `containerHosts` | `main.go:534` | 2 | Drop the "plus every declared host" loop; the set is `containerHosts` from the inventory |
-| CLI `locate` | `main.go:554` | 2 | Kept as the discovery fallback and for `place --verify`; never the primary answer |
-| CLI `checkPlacement` | `main.go:590` | 2 | Delete; the registry refuses the conflicting writes itself |
-| CLI `moveSource` | `main.go:1368` | 4 | Read `row.Effective()` |
-| CLI `moveWarning` | `main.go:1349`, printed `move.go:451` | 4 | Delete |
-| CLI `ls` drift note | `main.go:788-804` (`!! declared … set host = …`) | 2 | Show `registry` vs `observed` and flag a mismatch as drift to fix with `cnt place` |
-| CLI `status` banner | `main.go:1681` (`declared: %s`) | 2 | Show the bound host and, when they differ, the observed host |
-| CLI `move` source pick | `move.go:333` (`from = s.Host` dry-run fallback) | 4 | `row.Effective()` |
-| CLI `backendOf` | `port.go:189` (filters `s.Host != host`) | 2 | Take the effective host per service |
-| CLI `routes` overrides fetch | `routes.go:460-461`, table `495,498,619` | 2 | Same, via the effective host |
-| CLI `callerIPs` | `routes.go:891-915` (`c.Host == s.Host` decides same-host private network) | 2,4 | Both sides resolved through the registry; `net.uses` between two services on the same host keeps the `10.233.0.1` path |
-| CLI `expose` | `expose.go:353,382` | 2 | `hostFor` → registry |
-| Dashboard services page | `server/templates/services.html:24-31` | 2 | Header per bound host; an unplaced service under "unplaced" |
+| `DeclaredHost` | deleted; `state.ServiceView.BoundHost` (`flakes/fleet-edge/internal/state/state.go:261`, set in `binding` at `:666-671`), sorted `server/server.go:480`, host page `:694`, `dash/dash.go:158,189,225-231`, `topology/layout.go:442`; template `internal/server/templates/services.html:24-31` | 2,5 | Phase 2 done: the registry's binding wins, a service it does not name is "unplaced", and the page groups by it. Phase 5 drops the declarative fallback (`bound == nil`) and the `host` seed |
+| CLI `resolveHost` | `fleet-agent/internal/containers/main.go:502` | 2 | The answer, in order: `--host` > registry row > discovery. A fenced row that names no host — a `stale` reservation, or a first placement that has not committed (token set, `effective()` empty) — is refused ahead of both branches, naming the device holding the move, its destination and both settles: `--recover` (asks the hosts themselves) and `--set <h> --force` (takes the name over). Letting it through is how a deploy or start lands a second copy on a host the move may have stranded, ahead of any registry write that could refuse it. A binding onto a host that does not answer refuses and names both escapes (`--set <h> --force`, `--recover --force`); `--host` may not override a different live binding; the first `--host` deploy records it |
+| CLI `resolvedHost` | `main.go:563` | 2 | Registry row, else the declared `host`, else `""`; never probes and never refuses, so table/script builders can use it |
+| CLI `hostForRead` | `main.go:611` | 2 | `installedHere` local shortcut first, else `hostFor` (so a registry row wins and an unreachable bound host still refuses). Read-only commands and `stop` only: they keep working on a fenced row, while `start`/`restart` resolve through `resolveHost` and refuse both a fence and a local copy the registry binds elsewhere |
+| CLI `containerHosts` | `main.go:643` | 2 | Inventory `containerHosts` ∪ the hosts the registry knows ∪ every declared host (the seed stays until phase 5). This is the discovery set; a host in none of them is still reachable with `--host` |
+| CLI `locate` | `main.go:666` | 2 | Kept as the discovery fallback and for `place --verify`; never the primary answer |
+| CLI `checkPlacement` | — | 2 | Deleted; the registry refuses the conflicting writes itself |
+| CLI `moveSource` | `main.go:1614`, dry-run fallback `move.go:348-350` (`from = s.Host`) | 4 | Kept unchanged: `--from` wins, else complete discovery decides, because a move needs the host that *holds a copy*, not the row that says which copy is authoritative (a split brain is exactly what it has to be told about). The dry-run fallback still reads `s.Host` until phase 5 deletes the field |
+| CLI `moveWarning` | deleted (was `main.go:1589`, printed at `move.go:458`) | 4 | Done: the binding is the registry's, so there is no `host =` line left to edit. `TestMoveWarning` went with it |
+| CLI `cmdMove` | `move.go:344-554`, `movestate.go` | 4 | Done: reserves on the destination before any host is touched (preflights included), `renew`s around the final backup and between steps, commits after the restore check and first backup, retires before the switch. The token is never taken from a read: a move resumes only with one its caller holds (the local move-state file `$XDG_STATE_HOME/fleet-containers/moves/<svc>.json`, or `--resume-token`), else reserves fresh, unforced unless `--force`, so a held or fenced row stops it with zero remote calls. Any failure up to the commit first confirms ownership with the token (renew, re-reserve), then rolls the target back, drops the reservation and restarts the source; lost or unconfirmable ownership leaves both hosts untouched. Only a machine with no registry client moves unrecorded; a configured registry that cannot be used refuses unless `--force` |
+| CLI `status`/`ls` note | `main.go:840-864` (`!! placed on … this is a stray copy`, else the legacy `!! declared … set host = …`) | 2 | Done: a copy where the registry does not bind it is a stray, with the `--set` that settles it. The `host =` note survives only for a service with no row at all until phase 5 |
+| CLI `cmdDestroy` | `main.go:1585-1645` | 2 | Done: `--host` on a host the registry does not bind removes that stray copy (after a probe confirms it is installed there), never touches the row, and retires only that `(svc, host)` pair before `refreshCallers`. The bound copy needs `--force`, which also removes the row (unforced `DELETE`, revision-guarded); a fenced row refuses without `--force`. Tests: `TestDestroyStrayCopyLeavesTheBinding`, `TestDestroyRefusals` |
+| CLI `detail` header | `main.go:1900-1905` (`declared: %s`) | 2,5 | Shows the bound host with the declared one beside it; phase 5 deletes the `(declared: …)` half |
+| CLI `backendOf` | `port.go:183` | 2 | Done: `resolvedHost(s) != host` per service |
+| CLI `routes` overrides fetch | `routes.go:730-736`, table `routesTableWith` `753-772` (HOST column `769,772`) | 2 | Done: overrides are fetched per `resolvedHost(s)`, and the HOST column prints it; a service with no binding prints `-` |
+| CLI `audit` listeners | `routes.go:893` | 2 | Done: `resolvedHost(s) != host` decides which service a listener belongs to |
+| CLI `netExceptions` | `routes.go:1090-1116` | 2 | Done: `th := resolvedHost(t)`, and a target with no binding gets no exception |
+| CLI `callerIPs` | `routes.go:1178-1190` (`sh`/`ch`) | 2 | Done: both sides resolved through the registry; `net.uses` between two services on the same host keeps the `10.233.0.1` path |
+| CLI `expose` | `expose.go:353,383` | 2 | Done: `hostFor`, so `--host` > registry row > discovery |
 
-Every one of these has a test that pins `s.Host`; those tests either gain a fake
-registry client or move to the phase that deletes the field.
+Tests that pin `s.Host` are the phase-2 residue: the matrix in
+`fleet-agent/internal/containers/placement_test.go` pins resolution, the
+split-brain start refusal, the deploy recording (and its non-fatal warning), the
+deploy leaving a reservation another client made during the deploy untouched —
+unforced, with the warning naming that move, `TestDeployLeavesAForeignReservation`
+— that the escape hatches reach the registry with `force` on the
+reserve/recover only, and that a fenced row naming no host refuses `deploy` and
+`start`/`restart` — stale with a rollback binding, and a first `prepared`
+placement, with and without `--host` — before any ssh, `systemctl` or registry
+write. The rest still assert the declared seed until phase 5 deletes the field.
+
+The move's own matrix is `fleet-agent/internal/containers/movestate_test.go`,
+driven by a stateful fake registry (`moveRegistry`) that mirrors the real
+handlers' 409s: `TestMoveThenDeployFollowsTheRegistry` (reserve → commit → retire
+in order, every later write carrying the reserve's token, and a deploy with no
+`--host` landing on the destination even when discovery reports a copy on both
+hosts), `TestMoveFailureReleasesTheReservation` (a failed restore check rolls the
+target back and drops the token, leaving the name on the source),
+`TestMoveTakeoverStopsBeforeTheSwitch` (a foreign token stops the move before the
+source is uninstalled, and neither the restart nor the target rollback runs),
+`TestMoveRefusedWhileAnotherMoveHoldsTheDestination` (a prepared or stale row
+held by another token refuses a second move with zero remote calls and no token
+adopted), `TestMoveResumesWithTheHeldToken` (the move-state file or
+`--resume-token` resumes and finishes), `TestMoveRefusedWhenTheRegistryIsDown`
+(a configured but unreachable registry refuses with zero remote calls),
+`TestMoveTakeoverThenDeployFailureLeavesBothHosts` (an ordinary deploy failure
+after a takeover neither rolls back nor restarts), and
+`TestMoveFailedRestoreCheckRollsBack` for the unrecorded path.
+
+#### Remaining Nix readers of `host` (phase-3 checklist)
+
+Phase 2 left the CLI reading the registry; these Nix builders still derive from
+the `host` seed and are the complete set to delete or move at runtime. Anything
+found here that is *not* on the list is a phase-3 regression:
+
+- [ ] `edgeRoutes` — `containers/lib.nix:458-468`, filter `r.service.host != null`; call site `hosts/oracle/o002/nginx.nix:23` (via `edgeVirtualHosts`), eval test `containers/tests/edge-vhosts.nix`
+- [ ] `webSourcesByHost` — `containers/lib.nix:533-604`, filter `s.host != null` at `:542`; call site `containers/host-module.nix:31`
+- [ ] `edgeVirtualHosts` — `containers/lib.nix:616-648`, consumes `edgeRoutes`; call site `hosts/oracle/o002/nginx.nix:23`
+- [ ] `routeNamesByHost` — `containers/lib.nix:659-671`, filter `s.host != null` at `:664`; call site `hosts/h005/wildcard-cert.nix:37`. There is no `tlsNamesByHost`; the cert's SANs come from this map
+- [ ] `dnsRecords` — `containers/lib.nix:726-798`, filter at `:740`; call site `hosts/h005/dns-records.nix:12` → `hosts/h005/mods/networking.nix:22`, consumed at `:44` (`host-record`, tailnet), `:49` (`local=`) and `:249` (`host-record`, LAN)
+- [ ] `routerForwards` — `containers/lib.nix:800-838`, `lanIp` lookup at `:810`, filter at `:831`; call site `hosts/h005/router-forwards.nix:23`
+- [ ] `containers/flake.nix:92-97` `containerHosts` — keep the list (it is host membership, not placement), and drop the declared-host fallback that `cli`'s `containerHosts()` still adds
+- [ ] the `host = null` default (`containers/lib.nix:408`), then the `host` line in all 20 `service.nix` files
+
+One item is phase 3 but is not a reader of `host`: adding `h001`, `h003` and
+`joe` to `fleet.global.overrideWriters` (`hosts/fleet.nix:54-59`). It was
+deferred out of phase 2 because it is blocked on provisioning Zitadel machine
+users for those hosts, not on any code here.
+
 
 ### Hand-kept per-host entries (the audit)
 
@@ -393,8 +463,8 @@ placement (host membership, identity, trust) or was missed:
 | `computerboyz`, `minecraft` CNAMEs | `hosts/h005/dns-records.nix:96-103` (`map (cname "o002") [ … "computerboyz" … ]`, `map (cname "home") [ "minecraft" ]`) | Delete now: the `computerboyz` vhost is already gone from o002, so this CNAME is currently resolving to the `_` reject. After phase 3 the published set derives from placements and an unplaced service must have no name at all; `minecraft`'s `via = router` CNAME would otherwise point at a closed forward |
 | `routerForwards` call | `hosts/h005/router-forwards.nix:23` | Phase 4a: the forward rules come from the registry, so the module keeps only the chain and the option |
 | `routeHosts` / `targetNames` (TLS push targets) | `hosts/h005/wildcard-cert.nix:37-47` | Phase 5: pinned literal `h001, h003, joe, lio, o002` — the cert is a wildcard, so the target set is host membership, not placement |
-| `overrideWriters` | `hosts/fleet.nix:54-59` | **Stays**, but phase 2 must add `h001`, `h003` and `joe`: a host that cannot write a placement also cannot close its own firewall rule. Identity, not placement |
-| `containerHosts` | `containers/flake.nix:87-91` | **Stays.** A host must be rebuilt to join; phase 2 drops the "*plus every declared host*" augmentation so the set is exactly this list (+ `joe`) |
+| `overrideWriters` | `hosts/fleet.nix:54-59` | **Stays** (identity, not placement). Phase 2 does *not* add `h001`, `h003` or `joe`: that is blocked on provisioning Zitadel machine users for them, and moved to phase 3. Until then a host that cannot write a placement also cannot close its own firewall rule |
+| `containerHosts` | `containers/flake.nix:92-97` | **Stays.** A host must be rebuilt to join. The CLI's `containerHosts()` is this list ∪ the hosts the registry knows ∪ every declared host; phase 5 drops the declared-host loop, which is why a host that only ever held one service must appear here |
 | "set `host` in `service.nix`", "point `computerboyz` in `hosts/oracle/o002/nginx.nix` at the new host", "WAN port-forwards on the router" | `containers/minecraft/README.md:16,82-83`, `containers/README.md:400-404` | Phase 6 rewrites the move instructions: there is nothing to edit, `cnt move` is the whole procedure |
 
 The invariant to check at the end of phase 5: `grep -rn 'upstreamHost\|containerVhosts\|\.host\b' hosts/oracle/o002/*.nix hosts/h005/*.nix containers/lib.nix` returns only host-membership and trust facts, and no file names a service next to a host.
@@ -540,23 +610,26 @@ Resolution order for every command: `--host` > registry row > discovery.
   still be serving), and nothing when both ends report the service running
   (picking either copy strands the other on the same name) — the 409 names both
   hosts, and `--force` is how an operator records that choice. `cnt move` calls
-  reserve/commit/retire itself, holds the token for the whole run, and renews
-  the lease as it advances so a slow move never fences.
+  reserve/commit/retire itself, reserves before it touches any host, holds the
+  token for the whole run (saved locally so only its own re-run can resume it),
+  and renews the lease as it advances so a slow move never fences.
 - `cnt deploy` on a service whose registry host is not the host it deployed to is
   a bug in the CLI, not a user error: it resolves once, then uses that string.
-- **Add `joe` to `containerHosts` in phase 2, not phase 5.** Today the CLI's
-  `containerHosts()` adds every declared `s.Host`, which is the only reason
-  `localai` (declared `host = "joe"`) is discoverable at all. Once the field is
-  gone the probe set is exactly `inv.ContainerHosts`, so a host that only ever
-  held one service would silently disappear from discovery. The registry's own
-  probe set (`statuses`, `placements.go:904`) has the same shape and would
-  miss it for the same reason during the bootstrap import.
+- **`joe` is in `containerHosts` (done).** The CLI's `containerHosts()` also
+  adds every declared `s.Host` and every host the registry knows, which is why
+  `localai` was discoverable before. Once the field is gone the probe set is
+  exactly `inv.ContainerHosts` ∪ the registry's hosts, so a host that only ever
+  held one service must be listed there or it silently disappears from
+  discovery. The registry's own probe set (`statuses`, `placements.go:904`) has
+  the same shape and would miss it for the same reason.
 
 ## 7. Firewall and certificates
 
 - **Firewall**: do not open `:80`/`:443` on every container host. Today
-  `host-module.nix` derives its `extraInputRules` from `httpExposureByHost` in
-  `lib.nix`, i.e. from `s.host`; after phase 5 that input is gone, so the rules
+  `host-module.nix` derives its `extraInputRules` from `webSourcesByHost` in
+  `lib.nix`, i.e. from `s.host`; the runtime half (the ports file) is already
+  live, so what remains is that build-time source set. After phase 5 it is
+  gone, and the rules
   become a runtime allowlist the host owns — set by `cnt deploy`/`move` when a
   placement lands, cleared when the last one leaves, applied as an nft set that
   the module always creates (empty = closed). Owner: `fw-narrow`.
@@ -572,8 +645,8 @@ Resolution order for every command: `--host` > registry row > discovery.
   `h001` and `joe` today (evaluated), unioned with the literal
   `[ "joe" "lio" "h003" "o002" ]`. So the current target set is
   `h001, joe, lio, h003, o002`, and phase 5 pins exactly that as a literal —
-  `h001`/`h003`/`lio` are `containerHosts`, `joe` becomes one in phase 2,
-  `o002` is the public edge. Push behaviour is unchanged (no name gains or loses
+  `h001`/`h003`/`lio`/`joe` are `containerHosts`, `o002` is the public edge.
+  Push behaviour is unchanged (no name gains or loses
   a target), and a host that has never served a route can still terminate TLS
   before the first `move` lands there.
 
@@ -606,9 +679,9 @@ on anything stored in h001's Nix.
 | Phase | Scope | Files | Risk |
 |---|---|---|---|
 | **1 (done)** | Registry: rows, state machine, sweep, API, loopback export, auth, audit; reservation tokens + revision CAS; `installed` vs `active` health; fenced expiry with `recover`/`renew`; shared writer auth in `internal/authority`; one listener in `main.go`; flake option text; h005 `/api/placements` nginx location | `flakes/fleet-edge/internal/{authority,placements}/*`, `internal/overrides/overrides.go`, `flakes/fleet-edge/{main.go,flake.nix}`, `hosts/h005/fleet-edge.nix` | None: nothing reads the registry yet |
-| **2** | Read paths: CLI resolution (`hostFor`, `hostForRead`, `containerHosts`, `checkPlacement`, `backendOf`, `routes.go`, `expose.go`, drift/status output), dashboard grouping, `overrides.Check`; add h001, h003 and `joe` to `overrideWriters`; add `joe` to `containerHosts`; discovery import command (`cnt place`, including `--recover`) | `flakes/fleet-agent/internal/containers/{main.go,move.go,port.go,routes.go,expose.go}`, `flakes/fleet-edge/internal/{overrides,state,server,dash,topology}`, `hosts/fleet.nix`, `containers/flake.nix` | Medium: a wrong resolution starts a second copy; the refusals above are the guard. CLI tests cover the matrix |
-| **3** | Reconciler: two DNS `hostsdir`s (tailnet overlay IPs, LAN IPs) written from the registry export, o002 runtime vhosts, `dns-plan` keeps its declarative input (only the CNAME *set* follows the registry, and an unplaced service contributes no name) | `flakes/fleet-edge/internal/{reconcile,dnsplan,server}`, `hosts/h005/{dns-records.nix,mods/networking.nix}`, `hosts/oracle/o002/nginx.nix` | High: DNS and o002 are shared. Fail-closed ordering (add before remove, keep the old answer when a host is unreachable) and `cnt audit` checks |
-| **4** | Move rebind: reserve → … → commit → retire, rollback with the token, `renew` mid-move, `--recover` for a fenced row; delete `moveWarning` and the `host = %q` message | `flakes/fleet-agent/internal/containers/{move.go,main.go}`, tests | High: irreversible step. Dry-run prints the same 9 steps; every failure path has a test |
+| **2** | Read paths: CLI resolution (`resolveHost`/`resolvedHost`/`hostForRead`, `containerHosts`, `backendOf`, `routes.go`, `expose.go`, drift/status output; `checkPlacement` deleted), dashboard grouping, `overrides.Check`; `joe` in `containerHosts`; discovery import command (`cnt place`, including `--recover`); record the binding after a first `--host` deploy; refuse to start a leftover local copy the registry binds elsewhere. `overrideWriters` moved out of this phase (see §9 row 3) | `flakes/fleet-agent/internal/containers/{main.go,move.go,port.go,routes.go,expose.go,placements.go}`, `flakes/fleet-edge/internal/{overrides,state,server,dash,topology}`, `containers/flake.nix` | Medium: a wrong resolution starts a second copy; the refusals above are the guard. CLI tests cover the matrix (`internal/containers/placement_test.go`) |
+| **3** | Reconciler: two DNS `hostsdir`s (tailnet overlay IPs, LAN IPs) written from the registry export, o002 runtime vhosts, `dns-plan` keeps its declarative input (only the CNAME *set* follows the registry, and an unplaced service contributes no name). Also add `h001`, `h003` and `joe` to `overrideWriters` (`hosts/fleet.nix`) — deferred from phase 2, blocked on provisioning Zitadel machine users for them | `flakes/fleet-edge/internal/{reconcile,dnsplan,server}`, `hosts/h005/{dns-records.nix,mods/networking.nix}`, `hosts/oracle/o002/nginx.nix`, `hosts/fleet.nix` | High: DNS and o002 are shared. Fail-closed ordering (add before remove, keep the old answer when a host is unreachable) and `cnt audit` checks |
+| **4 (done)** | Move rebind, in `cmdMove` (`move.go:344-554`) + `movestate.go`: reserve on the destination before any host is touched (resume only with a token the caller holds: local move-state file or `--resume-token`), `renew` around the final backup and between the long steps, commit after the restore check and first backup, retire just before the switch; rollback with the token on any failure before the commit (ownership confirmed first, unforced `DELETE`, target down, source restarted), `--recover` after it, and a takeover or unconfirmable ownership stops the move with both hosts untouched. `moveWarning` and its test deleted; the help text and `move.go`'s head comment describe the steps | `flakes/fleet-agent/internal/containers/{move.go,movestate.go,movestate_test.go,move_test.go,main.go,transfer_test.go}`, `containers/{README.md,PLACEMENT-PLAN.md}` | High: irreversible step, so the order is the design. Dry-run prints the same steps without touching the registry; the recorded path, the rollback, the takeovers, the resume and the refusals each have a test against a fake registry |
 | **4a** | Non-HTTP public routes follow placement: o002 stream receiver (`edge-stream-receive` / `fleet-stream-expire`, one file per port, boot unit + timer) with `streamConfig = "include /var/lib/fleet-edge-streams/*.stream;"`, `upstreamHost` deleted; h005 WAN forwards written from the registry, `routerForwards` deleted | `flakes/fleet-edge/internal/{edgestream,reconcile,server}`, `hosts/_shared_assets/utilities/edge-stream-receiver.nix`, `hosts/oracle/o002/{nginx,_constants}.nix`, `hosts/h005/router-forwards.nix`, `containers/lib.nix` | High: o002 SSH and the WAN path. Forgejo SSH must keep working across the h001 reinstall; verify with an SSH clone before and after a test move |
 | **5** | Nix stops declaring placement: remove the `host` line from all 20 `service.nix` files (19 name a host, `minecraft` is `null`) and the `host = null` default in `lib.nix`, delete the functions in §4, delete the stale `computerboyz`/`minecraft` hand DNS, runtime firewall allowlist (with `fw-narrow`), cert targets pinned | `containers/*/service.nix`, `containers/lib.nix`, `containers/host-module.nix`, `containers/flake.nix` inventory, `hosts/h005/{dns-records,wildcard-cert}.nix`, `containers/tests/edge-vhosts.nix` | High, and the point of no return; done last so every reader already ignores the field |
 | **6** | Docs: `containers/README.md`, `containers/minecraft/README.md` (drop the "point computerboyz / set host" move instructions), `ROUTING-PLAN.md` (§5.2 table, §5.3, §8 step 9, the §8 step 4 "no runtime path" paragraph), `flakes/fleet-edge/README.md` | docs | Low |
@@ -625,11 +698,11 @@ edge and can land before or after the move rebind, but not during one.
 - **`dataRoot` is per host**, not shared, so a placement is not a lease: two
   hosts can both hold valid data dirs after a failed move. The registry's job is
   to say which one is *authoritative*, not to clean up the other.
-- **`net.uses` across hosts** (`callerIPs`, `routes.go:891`) currently compares
-  two Nix hosts. After phase 2 it compares two registry hosts, so a same-host
-  pair keeps the private-network path and a cross-host pair gets the overlay
-  allow — but only the *next* deploy of either service picks up the change.
-  `cnt audit` flags the drift in between.
+- **`net.uses` across hosts** (`callerIPs`, `routes.go:1178`) compares two
+  registry hosts (`resolvedHost`), so a same-host pair keeps the
+  private-network path and a cross-host pair gets the overlay allow — but only
+  the *next* deploy of either service picks up the change. `cnt audit` flags
+  the drift in between.
 - **No `enabled` flag, by design.** An unplaced service *is* the offline state:
   no row, nothing routed, nothing named. `minecraft` needs no encoding beyond
   that (`host = null` becomes "no row"), and the import adopts only a copy that

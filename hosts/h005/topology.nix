@@ -2,18 +2,23 @@
 # flakes/fleet-edge/internal/topology/topology.go.
 #
 # Everything the inventory can derive is deliberately absent -- inventory
-# hosts, container placement, public `via = edge` paths, tailnet membership
-# and fleet-agent polling are merged in at render time. This file only
-# carries what the inventory cannot know: physical gear, cabling, VLANs, the
-# plain-language role of each box, and the explanation shown beside the map.
+# hosts, container placement, public and tailnet routes, DNS ownership,
+# tailnet membership and fleet-agent polling are merged in at render time.
+# This file only carries what the inventory cannot know: physical gear,
+# recorded cabling, VLANs, the plain-language role of each box, and the column
+# layout. Explaining the map belongs in the README, not in the spec.
 #
 # Sources for the facts below:
-#   hosts/fleet.nix                roles, overlay/LAN IPs (state comes from the poll)
 #   hosts/h005/_constants.nix      VLANs, static leases, WAN/trunk ports
 #   hosts/h005/switch_readme.md    switch models, ports, trunk tagging
 #   hosts/pikvm/*.md               both PiKVMs, ConnectPRO port mapping
 #   hosts/oracle/o002/nginx.nix    public edge (proxies to :8443 upstreams)
-#   hosts/h005/dns-records.nix     Bunny zone (o002 + headscale A records)
+#   hosts/h005/dns-records.nix     public zone (single source: imported below)
+#
+# The map is vertical: the first column is everything outside the house
+# (cloud hubs and the two derived name clouds), the second is the physical
+# rack, the third is the rest of the house. The rack is ONE box because it is
+# one enclosure: the modem and h005 share a shelf with the switches.
 #
 # A node id that is not an inventory host must never collide with a fleet
 # host name (gp3 h001 h003 h004 h005 hass i001 joe juni lio o002 oren t) or
@@ -25,6 +30,7 @@ let
   net = constants.network;
   lan = net.vlans.lan;
   mgmt = net.vlans.management;
+  domain = fleet.global.domain;
 
   # Static DHCP reservation -> address, so labels can't drift from
   # _constants.nix. Throws instead of rendering a stale/blank address.
@@ -38,14 +44,12 @@ let
     else
       (builtins.head hits).ip;
 
-  # The job of each kind of gear, in plain language. A station shows these two
-  # lines and nothing else; the full record lives in the sidebar and in the
+  # The job of each kind of gear, in plain language. A station shows its name
+  # and this line; the full record lives in the sidebar and in the
   # downloadable SVG, which is the point of a fixed-size station.
   roles = {
-    internet = "internet uplink";
     dns = "authoritative DNS";
     cloud = "public edge";
-    mesh = "tailnet coordination";
     modem = "WAN modem";
     switch = "switch";
     kvm = "KVM console";
@@ -59,7 +63,7 @@ let
   mgmtBadge = "VLAN ${toString mgmt.id}";
 
   # Hostless node: gear the fleet inventory doesn't track. `extra` overrides
-  # the kind's role and adds badges.
+  # the kind's role, adds badges, and turns the station into a segment bar.
   gearWith =
     id: zone: kind: label: lines: extra:
     {
@@ -72,6 +76,7 @@ let
         ;
       role = if extra ? role then extra.role else (roles.${kind} or "device");
       badges = extra.badges or [ ];
+      segment = extra.segment or false;
     };
   gear = id: zone: kind: label: lines: gearWith id zone kind label lines { };
 
@@ -87,6 +92,14 @@ let
     };
   placed = zone: host: placedWith zone host { };
 
+  # A LAN attachment whose switch and port were never recorded: a real
+  # attachment drawn dashed, claiming no cable and no port.
+  lanWire = host: wire "fabric" host "lan" "switch/port not recorded";
+  # The other end of the same segment: a switch that carries VLAN lan. This
+  # is the logical L2 fabric, not a cable — the recorded switch-to-switch
+  # link above stays the only claim about wiring between them.
+  fabricWire =
+    sw: wire sw "fabric" "lan" "VLAN ${toString lan.id} shared fabric";
   wire = from: to: kind: label: {
     inherit
       from
@@ -95,26 +108,27 @@ let
       label
       ;
   };
-  note = title: text: {
-    inherit title text;
-  };
 in
 {
-  width = 1800;
+  width = 1500;
+
+  # The route columns must fit the whole public zone; a taller minimum only
+  # stretches the regions that ask to share the leftover height.
+  height = 1000;
 
   # Anything the spec doesn't place lands here (a new fleet host shows up in
-  # the LAN region without editing this file).
+  # the house without editing this file).
   defaultZone = "lan";
 
   # TMREM printer: LAN only, no tailnet node, no fleet-agent.
   hide = [ "t" ];
 
   hubs = {
-    # Coordination server: the tailnet shows as a badge and a journey, not as
-    # a permanent fan across the map.
-    tailnet = "headscale";
-    # Public reverse proxy for `via = edge` routes: journies reach it when
-    # drawn on demand, and a service drilldown says which hub it enters.
+    # Coordination server: the tailnet shows as a station tag and a journey,
+    # never as a permanent fan across the map.
+    tailnet = "";
+    # Public reverse proxy for `via = edge` routes: the public cloud's
+    # collector leads into this node.
     edge = "o002";
     # No `via = router` route has a host (minecraft is unplaced), so there is
     # nothing to derive; claiming h005 here would invent a path.
@@ -123,86 +137,118 @@ in
     dashboard = "h005";
   };
 
-  rows = [
+  # The public zone has exactly one source: the records the edge actually
+  # serves. The route clouds mark which of these names a declared route owns.
+  dns = (import ./dns-records.nix { inherit fleet; }).publicSpec;
+
+  columns = [
+    # ── Outside: the cloud hubs, then the two derived name clouds ────
     {
+      id = "outside";
+      label = "Outside";
+      flex = 0.9;
       zones = [
-        {
-          id = "internet";
-          label = "Internet";
-          kind = "internet";
-          flex = 1.0;
-        }
         {
           id = "cloud";
           label = "Oracle Cloud (o002)";
           kind = "cloud";
-          flex = 1.2;
-        }
-      ];
-    }
-    {
-      zones = [
-        {
-          id = "home";
-          label = "Router (h005)";
-          kind = "home";
-          flex = 1.2;
+          flex = 1.0;
         }
         {
-          id = "rack";
-          label = "Rack";
-          kind = "rack";
+          # One marker per public FQDN, bundled into the edge hub. Names the
+          # zone declares without a route stay faint and unowned.
+          id = "public";
+          label = "Public names · ${domain}";
+          kind = "cloud";
+          layout = "routes";
+          group = "public";
           flex = 2.4;
         }
+        {
+          # One marker per overlay-only name, bundled into one trunk that
+          # branches once per owning host.
+          id = "overlay";
+          label = "Overlay names";
+          kind = "tailnet";
+          layout = "routes";
+          group = "overlay";
+          flex = 1.2;
+        }
+        {
+          id = "dns";
+          label = "Authoritative DNS";
+          kind = "internet";
+          flex = 1.0;
+        }
       ];
     }
+
+    # ── The rack: one enclosure, one region, listed in rack order ────
     {
+      id = "rackband";
+      label = "Rack";
+      flex = 1.35;
+      zones = [
+        {
+          id = "rack";
+          label = "Rack · modem, router, switches, servers, console, UPS";
+          kind = "rack";
+          box = true;
+          # Two columns read down the first, then the next: rack order stays
+          # vertical and the enclosure keeps its place in the width.
+          layout = "flow";
+          cols = 2;
+          fill = "column";
+          flex = 1.0;
+        }
+      ];
+    }
+
+    # ── The rest of the house ───────────────────────────────────────
+    {
+      id = "house";
+      label = "Home";
+      flex = 1.0;
       zones = [
         {
           id = "lan";
-          label = "Home LAN · VLAN ${vlanBadges}";
+          label = "Home LAN · VLAN ${toString lan.id}";
           kind = "lan";
-          flex = 1.0;
+          flex = 1.6;
         }
         {
           id = "roaming";
           label = "Roaming laptops & workstations";
           kind = "roaming";
-          flex = 1.25;
+          flex = 1.0;
         }
       ];
     }
   ];
 
   nodes = [
-    # ── WAN ─────────────────────────────────────────────────────────
-    (gear "internet" "internet" "internet" "Internet" [ "ISP uplink" ])
-    (gearWith "bunny" "internet" "dns" "Bunny DNS" [
-      "authoritative zone"
-      "${fleet.global.domain} · TTL 300"
-    ] { })
-
     # ── Oracle Cloud (o002) ─────────────────────────────────────────
     (placedWith "cloud" "o002" {
       badges = [ "public :443" ];
     })
-    (gearWith "headscale" "cloud" "mesh" "headscale" [
-      "coordination server"
-      "DERP region 999 (o002)"
-      "net.${fleet.global.domain}"
-    ] { badges = [ "public :443" ]; })
 
-    # ── Home router ─────────────────────────────────────────────────
-    (gear "modem" "home" "modem" "Modem" [ "WAN -> ${net.wanInterface}" ])
-    (placedWith "home" "h005" {
+    # ── Authoritative DNS ───────────────────────────────────────────
+    (gearWith "bunny" "dns" "dns" "Bunny DNS" [
+      "authoritative zone"
+      "${domain} · TTL 300"
+    ] { })
+
+    # ── Rack, in rack order (top to bottom) ─────────────────────────
+    # The modem and the router share the rack with the switches: the box is
+    # the enclosure, not "the servers".
+    (gear "modem" "rack" "modem" "Modem" [ "WAN -> ${net.wanInterface}" ])
+    (placedWith "rack" "h005" {
       role = "router · dashboard";
       badges = [
         "VLAN ${vlanBadges}"
         mgmtBadge
       ];
     })
-
-    # ── Rack ────────────────────────────────────────────────────────
     (gearWith "sg3210x" "rack" "switch" "SG3210X-M2" [
       "Omada L2 · 8×2.5G + 2×10G"
       "mgmt ${lease "SG3210X-M2"} (${mgmtBadge})"
@@ -249,8 +295,13 @@ in
     ] { })
 
     # ── Home LAN (VLAN 20) ──────────────────────────────────────────
-    # Home Assistant: a wired LAN appliance whose shelf position isn't
-    # recorded, so it sits with the home gear rather than in the rack.
+    # The only thing the repo records about LAN wiring is that these hosts
+    # are on the LAN: no switch port, no port number. The fabric bar stands
+    # for that neutral attachment so no invented cable is drawn.
+    (gearWith "fabric" "lan" "device" "LAN attachment" [
+      "switch and port not recorded"
+      "dashed = on the LAN, cable unknown"
+    ] { role = "LAN segment"; segment = true; })
     (placed "lan" "hass")
     (gearWith "ap-rax70" "lan" "ap" "RAX70" [
       "AP / wifi router"
@@ -273,11 +324,28 @@ in
   ];
 
   links = [
-    # ── Physical ────────────────────────────────────────────────────
-    (wire "internet" "modem" "wan" "ISP")
+    # ── Physical, recorded cabling only ─────────────────────────────
     (wire "modem" "h005" "wan" "${net.wanInterface}")
     (wire "h005" "sg3210x" "trunk" "${net.trunkInterface} ↔ Tw1/0/8 · tagged ${toString mgmt.id}+${toString lan.id}")
     (wire "sg3210x" "sg1428pe" "ethernet" "Te1/0/10 SFP+ DAC · VLAN ${toString lan.id}")
+
+    # The LAN segment's other end. Both switches carry VLAN lan, so the
+    # fabric is a shared L2 segment they attach to -- that is what makes the
+    # chain modem -> h005 -> switch -> fabric -> server readable. It claims no
+    # cable and no port: the one recorded cable between the switches stays
+    # the Te1/0/10 line above.
+    (fabricWire "sg3210x")
+    (fabricWire "sg1428pe")
+
+    # LAN attachment (dashed): these boxes are on the LAN, but which switch
+    # port -- or which switch -- carries each one is nowhere in the repo, so
+    # the link claims a subnet and nothing more.
+    (lanWire "h001")
+    (lanWire "h003")
+    (lanWire "h004")
+    (lanWire "hass")
+    (lanWire "ap-rax70")
+    (lanWire "ap-axt1800")
 
     # KVM cabling (hosts/pikvm/fleetkvm_v4plus.md): ConnectPRO ports 1-4.
     (wire "connectpro" "h001" "kvm" "port 1")
@@ -289,103 +357,8 @@ in
     (wire "apc1" "h005" "power" "USB (NUT)")
     (wire "apc2" "h005" "power" "USB (NUT)")
 
-    # ── Tailnet (membership only; the rest is derived from the inventory) ──
-    (wire "headscale" "pikvm" "tailnet" "node 16 · untagged josh")
-
-    # ── Public paths (o002 -> h001 is derived from `via = edge`) ────
-    (wire "internet" "o002" "public" "https :443 · o002.${fleet.global.domain}")
-    (wire "internet" "headscale" "public" "https :443 · DERP 3478/udp")
-
     # ── Control ─────────────────────────────────────────────────────
     (wire "h005" "bunny" "control" "dns-plan push (Bunny API)")
     (wire "h005" "o002" "control" "vhost + override push (ssh)")
-  ];
-
-  notes = [
-    (note "Declared, not discovered" ''
-      Every fleet host is one NixOS configuration in one flake; a deploy
-      builds that closure and copies it over the tailnet. Services are
-      declared per host, so names, placement and exposure are read from the
-      repo rather than from a scan. Switches, APs, KVM gear and UPSes are not
-      fleet hosts and have no such configuration, so they are hand-declared
-      here with whatever the repo actually records about them.
-    '')
-    (note "One station, one box" ''
-      Each station is the same size and shows only what you scan for: the
-      icon of the gear, its name, its job, and counters -- how many services
-      fail, how many disks need attention. Service names are not printed on
-      the map; select a station to get the full record: services with their
-      ports and URLs, drives with their SMART counters, filesystems, jails and
-      recent bans, and the last poll of every section.
-    '')
-    (note "Poll, not push" ''
-      fleet-edge on h005 polls each host's fleet-agent at
-      http://<overlayIp>:9101/status.json every 30 seconds. Agents never push
-      and hold no dashboard credentials, so a stopped dashboard costs no
-      agent anything. CPU, memory and uptime come from that poll; grey means
-      no agent has answered, and hand-declared gear has no live state at all.
-      Each section of the record carries its own age, because SMART is
-      sampled far less often than the poll itself.
-    '')
-    (note "Tailnet = membership and policy, not a relay" ''
-      headscale is key distribution, MagicDNS and ACL policy. Data between
-      tailnet nodes is WireGuard end to end -- direct when NAT allows,
-      through o002's embedded DERP when it doesn't -- and never transits the
-      dashboard. A host on the tailnet is marked with a small badge; the
-      path itself is drawn only when you ask for it.
-    '')
-    (note "Public path" ''
-      Internet -> o002, whose names live in the Bunny zone (A records o002
-      and headscale, wildcard CNAMEs to o002) -> o002's nginx terminates TLS
-      and proxies to the service host's :8443 edge listener over the
-      tailnet. headscale.<domain> is the exception that lands on headscale
-      itself. A public journey is drawn from the internet through the edge
-      hub to the host, and only for routes that genuinely declare it.
-    '')
-    (note "Declared routing is not proof of reachability" ''
-      Public journeys are derived from route declarations, so one exists even
-      while its container is stopped: the service state in the record and
-      the failing counter on the station carry the truth. The zone still
-      declares a minecraft -> home CNAME, but minecraft:game has via = router
-      and no host, so nothing forwards the port and no path exists. That is
-      why Router is left without a hub node.
-    '')
-    (note "Two VLANs, one trunk" ''
-      ${net.trunkInterface} ↔ Tw1/0/8 is the only tagged trunk, carrying
-      VLAN ${toString mgmt.id} (management, ${mgmt.ipv4}/${toString mgmt.ipv4Prefix})
-      and VLAN ${toString lan.id} (lan, ${lan.ipv4}/${toString lan.ipv4Prefix},
-      DHCP and DNS on h005). The core switch's own management address sits on
-      VLAN ${toString mgmt.id} and no untagged access port exists for it, so
-      management is reachable only through h005. TL-SG1428PE is factory-flat:
-      it extends VLAN ${toString lan.id} only, untagged, without STP.
-    '')
-    (note "Services, not containers" ''
-      A station counts the services the repo declares on that host -- never
-      what happens to be running -- and marks how many of them are failing.
-      A host declared with no services shows no count and is not an error.
-      Exposure (public, LAN, tailnet, local) and the entry point of a public
-      route are facts in the drilldown and in the journey you can draw, not
-      stripes or chips on the map.
-    '')
-    (note "Simulated traffic" ''
-      The journeys and dots are simulated: sample requests on this fleet's
-      declared routes, generated from the diagram, never measured and never
-      recorded. The badge above the map says so on first paint and the
-      server has no traffic provider other than the simulator, so nothing
-      here can be mistaken for observed traffic. Health, drives and bans are
-      polled; traffic is not.
-    '')
-    (note "KVM, UPS, and what isn't recorded" ''
-      fleetkvm drives a ConnectPRO 4-port KVM (1 h001, 2 h005, 3 h003,
-      4 h004). Its PiKVM image is still being set up, so it is not on the
-      tailnet yet. pikvm is on the tailnet as an untagged node but its
-      USB/HDMI target is not recorded anywhere in the repo. Both APC XS
-      1500M UPSes talk to h005 over USB and shut h001 and h004 down on
-      battery. Nothing in the repo records which switch port -- or which
-      switch -- each AP and rack host is wired to, so no access cable is
-      drawn: a DHCP reservation proves a subnet, not an ethernet endpoint.
-      Only the h005 trunk and the switch-to-switch link are recorded and
-      drawn.
-    '')
   ];
 }

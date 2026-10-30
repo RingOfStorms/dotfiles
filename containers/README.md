@@ -91,10 +91,10 @@ must be able to fetch that ref, so pair it with `deploy --local`).
 | `containers attach <svc>` | the service console (`attach` in service.nix); `shell` for root shell |
 | `containers backup <svc>` | asks where to save (default `~/backups`) and, if running, whether to stop it; then hook, stop, tar `/srv/containers/<svc>` to this machine, start again (`-o file\|dir`, `--live`, `-y`) |
 | `containers restore <svc> <file> --host h` | unpack a backup on a host (`--force` renames existing data) |
-| `containers move <svc> --to h` | final restic backup on the source, restore on the target, deploy + route health, restore check, first backup on the target, then retire the source |
+| `containers move <svc> --to h` | final restic backup on the source, restore on the target, deploy + route health, restore check, first backup on the target, then commit the move to the placement registry and retire the source. A failure before the commit undoes the target, drops the reservation and restarts the source |
 | `containers restore-check <svc> [--snapshot ID]` | restore a `svc:<svc>` snapshot to a scratch dir on its host: SQLite `integrity_check`, PG dumps complete |
 | `containers health <svc>` | every route answers on its host (backend and nginx) |
-| `containers destroy <svc>` | uninstall (data kept; `--purge` deletes it) |
+| `containers destroy <svc>` | uninstall (data kept; `--purge` deletes it). `--host` on a host the registry does not bind removes that stray copy and leaves the row; the bound copy, or a row a move still holds, needs `--force` (the bound copy's row is then removed, revision-guarded) |
 | `containers check-idmap <host>` | the idmap test above |
 | `containers routes [svc]` | declared routes from the inventory: fqdn, proto, port, exposure, auth, via, host (no network). Unconverted services show as `nginx string` |
 | `containers audit [host...] [--stdin]` | read-only: runs `ss -ltnupH` on each host (default: all container hosts) and lists every non-loopback listener as `declared` (a route, `tcpPorts`/`udpPorts` of a service declared on that host), `host` (small allowlist in `cli/routes.go`: 22, 80, 443, 53, tailscale 41641/udp, dhcp, mdns; plus host daemons the host module declares in `/etc/fleet-containers/host-listeners`, e.g. the status endpoint at its configured address; plus, matched by process name rather than port, tailscaled's dynamic sockets on tailnet/wildcard addresses and systemd-resolved LLMNR on 5355) or `UNDECLARED` (incl. ports of `exposure = "local"` routes, and `proto = "http"` backend ports found on a non-loopback address — those must stay on `127.0.0.1`, nginx is the only thing allowed to expose them). Needs root on the remote host to see process names; non-root users get `sudo -n` (fails fast instead of hanging if it needs a password). If sudo there needs a password, plain ssh can't prompt (no TTY): run it on the host itself and feed the file in with `--stdin` (exactly one host): `sudo ss -ltnupH > /tmp/<host>.ss && cnt audit <host> --stdin < /tmp/<host>.ss`, or collect the file with `ssh -t`. Empty `--stdin` input (or input with no listeners) is an error, so a failed collection never looks like a clean host. Otherwise exits 0 |
@@ -106,25 +106,68 @@ The host module adds the shell alias `cnt = "fleet containers"`.
 
 ### Where a service runs
 
-`host` in `service.nix` is where the service **should** run; the repo is the
-source of truth. The CLI still checks where it **actually** runs: it lists
-units on each host from systemd *and* from disk
+**Placement is runtime.** The fleet-edge placement registry is the source of
+truth for which host a service belongs to, and `cnt` resolves from it:
+`--host` > registry row > discovery. `cnt place <svc> --set <host>` records a
+binding, `cnt place <svc> --adopt` adopts the one copy discovery finds, and
+`cnt place` shows the rows.
+
+`host` in `service.nix` is **deprecated**: a build-time seed that a few Nix
+builders still read (`edgeVirtualHosts`, `webSourcesByHost`, h005's DNS records
+and WAN forwards, the host module's firewall input). Do not add a `host` to a
+new `service.nix`, and do not add a Nix reader for one: phase 5 deletes the
+field together with those readers (`PLACEMENT-PLAN.md` §4/§9 lists every one).
+
+The CLI still checks where a service **actually** runs: it lists units on each
+host from systemd *and* from disk
 (`/etc/systemd-mutable/system/container@*.service` and
 `/nix/var/nix/gcroots/fleet-containers/*`), so a stopped, disabled or
 unloaded service is still found.
 
-- `containers ls` marks a service installed somewhere other than its declared
-  host (`!! declared h003: set host = "h001" in service.nix`).
-- Commands without `--host` probe **every** container host (`containerHosts`
-  in `flake.nix`, plus all declared hosts). They act on the declared host only
-  if every host answered and the service is on no other host. If a host is
-  unreachable, or the service is elsewhere or on several hosts, they
-  **refuse** and say why (with the `service.nix` edit when it was moved).
-  `--host h` is the escape hatch for one command.
+- `containers ls` shows the registry's host next to the host that runs a copy,
+  and flags a copy the registry does not bind (`!! placed on h001: this is a
+  stray copy`).
+- A command with no `--host` uses the registry's host when there is a row (and
+  refuses when that host did not answer: silence is not absence). With no row
+  it probes **every** container host (`containerHosts` in `flake.nix`, plus
+  every host the registry knows and — while the seed remains — every declared
+  host), adopts the copy when exactly one is installed, and **refuses** when
+  there are several or none, saying which `cnt place` form records the answer.
+  `--host h` is the escape hatch for one command, and a first deploy needs it:
+  a successful `cnt deploy <svc> --host h` then records the binding itself
+  (reserve, then commit — unforced, like every write this command makes). A
+  deploy takes minutes, so a move may have reserved the row meanwhile: that
+  reservation is left exactly as it is, and the warning names the move holding
+  it before naming the command to run by hand: `cnt place <svc> --set <h>`. If
+  the write fails for any other reason, the deploy stands and the same warning
+  names the command.
+- When the bound host is **unreachable** every mutating command is refused
+  (silence is not absence). The escape hatch, in order of preference:
+  `cnt place <svc> --set <new> --force` moves the binding off a dead host —
+  the destination has to be running the service, so deploy it there with
+  `--host` first if the commit is refused. `cnt place <svc> --recover --force`
+  settles a *fenced* row (a move that stopped mid-flight, state `stale`); it
+  does not move a committed binding.
+- A **fenced** row that names no host at all — a `stale` reservation, or a
+  first placement whose move has not committed — refuses every mutating
+  command before `--host` or discovery is considered: the move still owns the
+  name, so placing the service anywhere is a guess between the two hosts it
+  just touched. The refusal names the device holding the move, the destination
+  and the state. `cnt place <svc> --recover` settles it by asking both ends
+  (add `--force` when one does not answer), and
+  `cnt place <svc> --set <host> --force` overrides it. Reads and `stop` still
+  work.
+- `start` and `restart` resolve like a deploy, not like a read: on a host that
+  still holds a leftover copy they refuse when the registry binds the name
+  elsewhere (that copy would answer the same name). `stop`, `status`, `logs`,
+  `attach`, `shell` and `online` keep the local fast path.
 - New container host: import the module there *and* add it to
   `containerHosts`, or `move --to` it is refused.
-- `move` finds the real source itself and ends with a banner telling you to
-  set `host` in `service.nix` and push.
+- `move` records itself in the placement registry: it reserves the destination
+  once the source is stopped, commits after the restore check and first backup,
+  and retires the source just before uninstalling it. A row another client has
+  taken over (a `--force`, a second move) stops it with both hosts untouched,
+  and `cnt place <svc> --recover` settles that. No `host =` line needs editing.
 
 ### nginx at runtime
 
@@ -450,6 +493,6 @@ curl http://lio:8081/ http://lio:8082/
 cnt status hello-podman
 cnt stop hello-nixos            # stays down after a reboot
 cnt backup hello-podman
-cnt move hello-nixos --to h003  # then set host = "h003" in its service.nix
+cnt move hello-nixos --to h003  # no service.nix edit: the move records itself
 cnt destroy hello-podman --purge
 ```

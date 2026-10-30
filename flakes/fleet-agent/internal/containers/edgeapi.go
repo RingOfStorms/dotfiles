@@ -72,6 +72,10 @@ func newEdgeClient() (*edgeClient, error) {
 		key: k, priv: priv, issuer: zitadelIssuer(), project: secProjectID}, nil
 }
 
+// edgeClientFor is newEdgeClient for the paths a test drives against a local
+// server: deploy's placement recording and the `place` writes.
+var edgeClientFor = newEdgeClient
+
 func fleetDomain() string {
 	if d := os.Getenv("FLEET_DOMAIN"); d != "" {
 		return d

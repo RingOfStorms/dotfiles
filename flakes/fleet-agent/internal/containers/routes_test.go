@@ -1369,6 +1369,41 @@ func TestDestroyedCallerStaysWithdrawn(t *testing.T) {
 	}
 }
 
+// The declared-host fallback must respect the retirement too: destroy the only
+// copy and have an unrelated host fail to answer, and the fallback would put
+// the removed copy straight back on its declared host.
+func TestDestroyedCallerNotReadmittedByFallback(t *testing.T) {
+	r := newRig(t)
+	callee := allowCallee("src")
+	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Host: "dst",
+		Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
+	inv.ContainerHosts = []string{"src", "dst", "h003"}
+	inv.Services = map[string]Service{"app": callee, "svc": caller}
+	inv.Hosts = map[string]Host{
+		"lio":  {User: "root", OverlayIP: sp("100.64.0.1")}, // the route's allow
+		"dst":  {User: "root", OverlayIP: sp("100.64.0.12")},
+		"h003": {User: "root", OverlayIP: sp("100.64.0.31")},
+	}
+	oldProbe := fleetProbe
+	t.Cleanup(func() { fleetProbe = oldProbe; resetFleetPlacement() })
+	// svc was only on dst; h003 is an unrelated host that fails to answer, so
+	// the sweep is inconclusive and would hand the declared host back.
+	fleetProbe = fakeFleet(map[string][]string{"src": {"app+"}}, "h003")
+	resetFleetPlacement()
+
+	dir := filepath.Join(r.root+".state", "vlfc", "ports")
+	must(t, os.MkdirAll(dir, 0o755))
+	p := filepath.Join(dir, "app")
+	must(t, os.WriteFile(p, []byte("guest ve-app\nweb 100.64.0.1\nweb 100.64.0.12\n"), 0o644))
+
+	if err := cmdDestroy([]string{"svc", "--host", "dst"}); err != nil {
+		t.Fatalf("destroy: %v", err)
+	}
+	if got, want := readFile(t, p), "guest ve-app\nweb 100.64.0.1\n"; got != want {
+		t.Errorf("the fallback re-admitted a destroyed copy:\n%q\nwant\n%q", got, want)
+	}
+}
+
 // Destroying one copy of a caller must not withdraw the other: only the
 // (service, host) pair that was removed stops being admitted, so a copy still
 // running elsewhere keeps reaching the callee. The probe here still reports
@@ -1404,6 +1439,155 @@ func TestDestroyOneCopyKeepsTheOther(t *testing.T) {
 	}
 	if got, want := readFile(t, p), "guest ve-app\nweb 100.64.0.1\nweb 100.64.0.31\n"; got != want {
 		t.Errorf("destroying the dst copy:\n%q\nwant\n%q", got, want)
+	}
+}
+
+// strayRig binds svc to h001 in the registry with a second copy on h003, and
+// fails the test on any registry write: removing a stray must never touch the
+// row.
+func strayRig(t *testing.T, row placementRow) (*rig, Service, string) {
+	t.Helper()
+	r := newRig(t)
+	callee := allowCallee("src")
+	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Host: "h001",
+		Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
+	fleetProbe = fakeFleet(map[string][]string{
+		"src":  {"app+"},
+		"h001": {"svc+"},
+		"h003": {"svc+"},
+	})
+	inv.ContainerHosts = []string{"src", "h001", "h003"}
+	inv.Services = map[string]Service{"app": callee, "svc": caller}
+	inv.Hosts = map[string]Host{
+		"lio":  {User: "root", OverlayIP: sp("100.64.0.1")}, // the route's allow
+		"h001": {User: "root", OverlayIP: sp("100.64.0.11")},
+		"h003": {User: "root", OverlayIP: sp("100.64.0.31")},
+	}
+	placementNow = func(bool) *placementView {
+		return &placementView{Host: map[string]string{"svc": row.effective()}, Rows: map[string]placementRow{"svc": row}}
+	}
+	registryCache = nil
+	resetFleetPlacement()
+	old := edgeClientFor
+	t.Cleanup(func() { edgeClientFor = old })
+	edgeClientFor = func() (*edgeClient, error) {
+		t.Errorf("destroy reached the registry client")
+		return nil, errNoToken
+	}
+	dir := filepath.Join(r.root+".state", "vlfc", "ports")
+	must(t, os.MkdirAll(dir, 0o755))
+	p := filepath.Join(dir, "app")
+	must(t, os.WriteFile(p, []byte("guest ve-app\nweb 100.64.0.1\nweb 100.64.0.11\nweb 100.64.0.31\n"), 0o644))
+	return r, caller, p
+}
+
+// A copy on a host the registry does not bind is a stray: `destroy --host`
+// removes it there and only there, leaves the row alone, and the bound copy
+// keeps its admission in the callee's ports file.
+func TestDestroyStrayCopyLeavesTheBinding(t *testing.T) {
+	bound := placementRow{Service: "svc", Host: "h001", State: placementCommitted, Revision: 7}
+	r, _, p := strayRig(t, bound)
+	if err := cmdDestroy([]string{"svc", "--host", "h003"}); err != nil {
+		t.Fatalf("destroy of the stray: %v\n%s", err, r.calls())
+	}
+	calls := r.calls()
+	if !strings.Contains(calls, "ssh h003:") || !strings.Contains(calls, "fleet-uninstall") {
+		t.Fatalf("the stray on h003 was not uninstalled:\n%s", calls)
+	}
+	if strings.Contains(calls, "ssh h001:") {
+		t.Fatalf("the bound host h001 was touched:\n%s", calls)
+	}
+	if got, want := readFile(t, p), "guest ve-app\nweb 100.64.0.1\nweb 100.64.0.11\n"; got != want {
+		t.Errorf("callee ports file:\n%q\nwant h001 still admitted, h003 withdrawn:\n%q", got, want)
+	}
+	if v := registry(); v.Rows["svc"] != bound || v.Host["svc"] != "h001" {
+		t.Errorf("row = %+v, want it unchanged on h001", v.Rows["svc"])
+	}
+	if !retired["svc"]["h003"] || retired["svc"]["h001"] {
+		t.Errorf("retired = %v, want only svc on h003", retired)
+	}
+}
+
+// `destroy --force` of the bound copy removes it, then its registry row
+// (dropDestroyedRow): one DELETE, unforced and without a token, guarded by the
+// revision read before the destroy. A row rewritten in the meantime refuses
+// the guard and is left to whoever rewrote it.
+func TestDestroyForcedBoundCopyDropsTheRow(t *testing.T) {
+	bound := placementRow{Service: "svc", Host: "h001", State: placementCommitted, Revision: 7}
+	for _, c := range []struct {
+		name    string
+		now     int64 // the row's revision in the registry when the DELETE lands
+		wantErr string
+	}{
+		{"current", 7, ""},
+		{"rewritten meanwhile", 9, "its registry row was not"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r, _, _ := strayRig(t, bound)
+			reg := newMoveRegistry(t)
+			row := bound
+			row.Revision = c.now
+			reg.mu.Lock()
+			reg.rows["svc"] = row
+			reg.mu.Unlock()
+			usePlacementServer(t, reg.srv)
+			err := cmdDestroy([]string{"svc", "--host", "h001", "--force"})
+			if c.wantErr == "" && err != nil || c.wantErr != "" && (err == nil || !strings.Contains(err.Error(), c.wantErr)) {
+				t.Fatalf("destroy: %v, want error %q\n%s", err, c.wantErr, r.calls())
+			}
+			if calls := r.calls(); !strings.Contains(calls, "ssh h001:") || !strings.Contains(calls, "fleet-uninstall") {
+				t.Fatalf("the bound copy on h001 was not uninstalled:\n%s", calls)
+			}
+			cs := reg.calls()
+			if len(cs) != 1 || cs[0].verb != "DELETE" || cs[0].act != "svc" {
+				t.Fatalf("registry calls = %+v, want one DELETE of svc", cs)
+			}
+			if q := cs[0].query; q.Get("revision") != "7" || q.Has("force") || q.Has("token") {
+				t.Errorf("DELETE query = %v, want revision=7, unforced, no token", q)
+			}
+			reg.mu.Lock()
+			got, ok := reg.rows["svc"]
+			reg.mu.Unlock()
+			if c.wantErr == "" && ok {
+				t.Errorf("row = %+v, want it removed", got)
+			}
+			if c.wantErr != "" && (!ok || got != row) {
+				t.Errorf("row = %+v, want the rewritten row left as it was", got)
+			}
+		})
+	}
+}
+
+// The refusals: the bound copy without --force, a host with no copy, and a row
+// a move still holds. None of them reaches a host beyond the probe.
+func TestDestroyRefusals(t *testing.T) {
+	committed := placementRow{Service: "svc", Host: "h001", State: placementCommitted, Revision: 7}
+	fenced := placementRow{Service: "svc", Host: "h003", State: placementPrepared, Token: "tok-move",
+		Previous: &placementBinding{Host: "h001"}, Revision: 8}
+	for _, c := range []struct {
+		name string
+		row  placementRow
+		args []string
+		want string
+	}{
+		{"bound host", committed, []string{"svc", "--host", "h001"}, "authoritative copy"},
+		{"bound by default", committed, []string{"svc"}, "authoritative copy"},
+		{"not installed", committed, []string{"svc", "--host", "src"}, "not installed on src"},
+		{"fenced", fenced, []string{"svc", "--host", "h003"}, "is fenced"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r, _, p := strayRig(t, c.row)
+			err := cmdDestroy(c.args)
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("got %v, want an error containing %q", err, c.want)
+			}
+			if calls := r.calls(); strings.Contains(calls, "ssh ") {
+				t.Fatalf("a refused destroy reached a host:\n%s", calls)
+			}
+			if got := readFile(t, p); !strings.Contains(got, "100.64.0.11") || !strings.Contains(got, "100.64.0.31") {
+				t.Errorf("a refused destroy changed admissions: %q", got)
+			}
+		})
 	}
 }
 

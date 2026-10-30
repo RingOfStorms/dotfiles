@@ -79,7 +79,6 @@ func queryLogs(ctx context.Context, host, target, kind string, lines int, priori
 		return res, err
 	}
 
-
 	units := installedUnits()
 	allowedExtra := map[string]string{}
 	for _, u := range extraUnits {

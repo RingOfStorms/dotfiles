@@ -193,8 +193,9 @@ func routesVhost(s Service) string {
 		// design (a)): same-host private guests come in on 10.233.0.1,
 		// which the tailnet/lan ACL would refuse; cross-host callers
 		// arrive masqueraded as their host's overlay IP. The firewall
-		// half (srcPortLines) follows live discovery; this list still
-		// follows the declared host, so it is only as current as the repo.
+		// half (srcPortLines) follows live discovery; this list resolves
+		// both sides through the placement registry, and only falls back
+		// to the declared host where the registry has no row.
 		for _, c := range callerIPs(s, n) {
 			fmt.Fprintf(&b, "  allow %s; # %s\n", c.ip, c.comment)
 		}
@@ -474,7 +475,9 @@ type fleetPlacement struct {
 
 var (
 	fleetPlacementCache *fleetPlacement
-	fleetProbe          = probe // var so tests can fake the fleet
+	// fleetProbe is how every discovery asks a host what it has installed:
+	// placement resolution (locate), net.uses admission and the sweep below.
+	fleetProbe = probe // var so tests can fake the fleet
 	// retired holds the (service, host) pairs this process removed. A probe
 	// that still reports one -- a host that has not re-read its gcroots yet,
 	// or a sweep that raced the uninstall -- must not re-admit it.
@@ -559,17 +562,25 @@ func fleetPlacementNow() *fleetPlacement {
 // host answered and nobody has it, or -- when any host failed to answer and
 // the name was found nowhere -- the declared host, with known = false: a
 // partial sweep cannot rule out that the caller is running on the host that
-// did not answer.
+// did not answer. Pairs this process retired are never reported, not even
+// through that fallback: a copy it just removed must not come back because
+// somebody else's probe failed.
 func (p *fleetPlacement) places(name, declared string) (hosts []string, known bool) {
 	if p == nil {
 		// No discovery (--dry-run): the declared host stands in, so the
 		// printed script stays offline.
+		if retired[name][declared] {
+			return nil, true
+		}
 		return []string{declared}, true
 	}
 	if hosts := p.found[name]; len(hosts) > 0 {
 		return hosts, true
 	}
 	if len(p.down) > 0 {
+		if retired[name][declared] {
+			return nil, true
+		}
 		return []string{declared}, false
 	}
 	return nil, true
@@ -720,8 +731,8 @@ func cmdRoutes(args []string) error {
 	if !dryRun && !f.bools["no-overrides"] {
 		hosts := map[string]bool{}
 		for _, s := range svcs {
-			if s.Host != "" && needsHostVhost(s) {
-				hosts[s.Host] = true
+			if h := resolvedHost(s); h != "" && needsHostVhost(s) {
+				hosts[h] = true
 			}
 		}
 		var hs []string
@@ -755,10 +766,10 @@ func routesTableWith(svcs []Service, ovs []override, now time.Time) string {
 				exp = fmt.Sprintf("%s (OVERRIDDEN from %s, %s left)", o.Exposure, r.Exposure, o.left(now))
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", s.Name, n, dash(str(r.FQDN)), r.Proto, r.Port,
-				exp, dash(str(r.Auth)), dash(strings.Join(r.Via, ",")), dash(s.Host))
+				exp, dash(str(r.Auth)), dash(strings.Join(r.Via, ",")), dash(resolvedHost(s)))
 		}
 		if len(s.Routes) == 0 && s.Nginx != nil {
-			fmt.Fprintf(w, "%s\t(nginx string, not converted)\t-\t-\t-\t-\t-\t-\t%s\n", s.Name, dash(s.Host))
+			fmt.Fprintf(w, "%s\t(nginx string, not converted)\t-\t-\t-\t-\t-\t-\t%s\n", s.Name, dash(resolvedHost(s)))
 		}
 	}
 	w.Flush()
@@ -879,7 +890,7 @@ func auditListeners(ls []listener, svcs []Service, host string, hostDecl ...host
 	localOnly := map[string]string{} // exposure = local: must not be on the network
 	private := map[string]string{}
 	for _, s := range svcs {
-		if s.Host != host {
+		if resolvedHost(s) != host {
 			continue
 		}
 		if s.Net.Private {
@@ -1099,7 +1110,11 @@ func netExceptions(s Service, host string) []string {
 	}
 	for _, u := range s.Net.Uses {
 		t, r, ok := usesTarget(u)
-		if !ok || t.Host == "" {
+		if !ok {
+			continue
+		}
+		th := resolvedHost(t)
+		if th == "" {
 			continue
 		}
 		proto, ports := "tcp", []int{80, 443}
@@ -1108,7 +1123,7 @@ func netExceptions(s Service, host string) []string {
 		}
 		// Same host, both private: straight to the guest (also how local
 		// routes, which have no name or host port, are reached).
-		if t.Host == host && t.Net.Private && t.Net.IP != nil {
+		if th == host && t.Net.Private && t.Net.IP != nil {
 			p := r.Proto
 			if p == "http" {
 				p = "tcp"
@@ -1118,7 +1133,7 @@ func netExceptions(s Service, host string) []string {
 		if r.Exposure == "local" {
 			continue
 		}
-		for _, ip := range hostIPs(t.Host) {
+		for _, ip := range hostIPs(th) {
 			for _, p := range ports {
 				add(ip, proto, p)
 			}
@@ -1152,15 +1167,19 @@ type callerEntry struct {
 //     design (a): "the callee's vhost renders allow <caller host
 //     overlayIp>; # net.uses <svc>").
 //
-// This follows the declared host, so it is only as current as the repo: it is
-// the nginx half, rendered by a deploy of the callee itself. The firewall
-// half (srcPortLines) follows live discovery instead, and main.go
-// refreshCallers rewrites it on a deploy, move or destroy; a vhost left stale
-// that way still refuses the caller until the callee's next deploy.
+// Both sides are resolved through the placement registry, so a caller or a
+// callee that moved without the repo being updated is still admitted on the
+// host it actually runs on; a pair the registry has no row for falls back to
+// the declared host, and so is only as current as the repo. This is the nginx
+// half, rendered by a deploy of the callee itself. The firewall half
+// (srcPortLines) follows live discovery instead, and main.go refreshCallers
+// rewrites it on a deploy, move or destroy; a vhost left stale that way still
+// refuses the caller until the callee's next deploy.
 func callerIPs(s Service, route string) []callerEntry {
 	if inv == nil {
 		return nil
 	}
+	sh := resolvedHost(s)
 	var out []callerEntry
 	seenHost := map[string]bool{}
 	for _, c := range inv.Services {
@@ -1168,16 +1187,17 @@ func callerIPs(s Service, route string) []callerEntry {
 			if u != s.Name+"."+route {
 				continue
 			}
-			if c.Net.Private && c.Net.IP != nil && c.Host == s.Host {
+			ch := resolvedHost(c)
+			if c.Net.Private && c.Net.IP != nil && ch == sh {
 				out = append(out, callerEntry{ip: *c.Net.IP, comment: "net.uses " + c.Name})
 				continue
 			}
-			if c.Host == "" || c.Host == s.Host || seenHost[c.Host] {
+			if ch == "" || ch == sh || seenHost[ch] {
 				continue
 			}
-			if ip := hostOverlayIP(c.Host); ip != "" {
+			if ip := hostOverlayIP(ch); ip != "" {
 				out = append(out, callerEntry{ip: ip, comment: "net.uses " + c.Name})
-				seenHost[c.Host] = true
+				seenHost[ch] = true
 			}
 		}
 	}

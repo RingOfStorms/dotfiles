@@ -38,6 +38,20 @@ func newRig(t *testing.T) *rig {
 	oldHold := holdDir
 	t.Cleanup(func() { holdDir = oldHold })
 	holdDir = filepath.Join(t.TempDir(), "hold")
+	// No test may read the live placement registry: hostFor resolves from a row
+	// when one exists, and a real read would make these fixtures depend on the
+	// fleet (and on a root-only machine key).
+	oldPlacement := placementNow
+	// Discovery is faked too: resolveHost probes the fleet, and the real probe
+	// would ssh out of the test. src is the fixture's declared host.
+	oldProbe := fleetProbe
+	t.Cleanup(func() {
+		placementNow, registryCache = oldPlacement, nil
+		fleetProbe = oldProbe
+		resetFleetPlacement()
+	})
+	placementNow = func(bool) *placementView { return nil }
+	fleetProbe = fakeFleet(map[string][]string{"src": {"svc+"}})
 	d := t.TempDir()
 	r := &rig{t: t, root: filepath.Join(d, "src"), dst: filepath.Join(d, "dst"), log: filepath.Join(d, "calls.log"), bin: filepath.Join(d, "bin"), breaks: map[string]string{}}
 	for _, p := range []string{r.root + "/svc/data/sub", r.dst, r.bin} {
@@ -137,7 +151,9 @@ func TestBackupFailsOnSourceReadError(t *testing.T) {
 	r := newRig(t)
 	r.breakTool("src", "tar", "#!/bin/sh\nprintf 'partial-archive'\necho 'tar: Cannot open: Input/output error' >&2\nexit 2\n")
 	out := filepath.Join(t.TempDir(), "b.tar.zst")
-	err := cmdBackup([]string{"svc", "-o", out})
+	// --host keeps resolution offline: there is no registry row in a test, and
+	// discovery would probe the real fleet.
+	err := cmdBackup([]string{"svc", "--host", "src", "-o", out})
 	if err == nil {
 		t.Fatal("backup reported success with a failing tar")
 	}
@@ -153,7 +169,7 @@ func TestBackupFailsOnCompressionError(t *testing.T) {
 	writeExe(t, filepath.Join(dir, "zstd"), "#!/bin/sh\nhead -c 100 >/dev/null; printf 'trunc'; echo 'zstd: write error' >&2; exit 1\n")
 	t.Setenv("BREAK_src", dir)
 	out := filepath.Join(t.TempDir(), "b.tar.zst")
-	if err := cmdBackup([]string{"svc", "-o", out}); err == nil {
+	if err := cmdBackup([]string{"svc", "--host", "src", "-o", out}); err == nil {
 		t.Fatal("backup reported success with a failing compressor")
 	}
 	assertNoArchive(t, out)
@@ -162,7 +178,7 @@ func TestBackupFailsOnCompressionError(t *testing.T) {
 func TestBackupSucceedsAndRoundTrips(t *testing.T) {
 	newRig(t)
 	out := filepath.Join(t.TempDir(), "b.tar.zst")
-	must(t, cmdBackup([]string{"svc", "-o", out}))
+	must(t, cmdBackup([]string{"svc", "--host", "src", "-o", out}))
 	x := t.TempDir()
 	cmd := exec.Command("bash", "-c", "zstd -d -q -c "+out+" | tar -xf - -C "+x)
 	must(t, cmd.Run())
@@ -261,45 +277,6 @@ func fakeFleet(installed map[string][]string, down ...string) func(context.Conte
 	}
 }
 
-func TestPlacementThroughLocate(t *testing.T) {
-	s := Service{Name: "mc", Dir: "mc", Host: "h003"}
-	inv = &Inventory{
-		Services:       map[string]Service{"mc": s},
-		ContainerHosts: []string{"h001", "h003"},
-	}
-	cases := []struct {
-		name      string
-		installed map[string][]string
-		down      []string
-		refuse    string // substring of the error, "" = allowed
-	}{
-		{"first deploy, all hosts answer", nil, nil, ""},
-		{"only on declared host", map[string][]string{"h003": {"mc"}}, nil, ""},
-		{"moved, service.nix stale", map[string][]string{"h001": {"mc"}}, nil, `host = "h001"`},
-		// The duplicate must be seen even though the declared host has it.
-		{"declared host has it and so does another", map[string][]string{"h003": {"mc"}, "h001": {"mc"}}, nil, "h001, h003"},
-		// Moved to h001, which is now down: must not reinstall on h003.
-		{"moved target unreachable", nil, []string{"h001"}, "h001 did not answer"},
-		// Running where declared: an offline box must not block work on it.
-		{"running on declared host, other host unreachable", map[string][]string{"h003": {"mc+"}}, []string{"h001"}, ""},
-		// A move to h001 deployed there, then failed to clean up h003 (stopped,
-		// still installed); h001 is now down. Deploying on h003 would start a
-		// second copy.
-		{"failed move cleanup, target unreachable", map[string][]string{"h003": {"mc"}}, []string{"h001"}, "h001 did not answer"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			err := checkPlacement(s, locate(s, fakeFleet(c.installed, c.down...)))
-			switch {
-			case c.refuse == "" && err != nil:
-				t.Fatalf("refused: %v", err)
-			case c.refuse != "" && (err == nil || !strings.Contains(err.Error(), c.refuse)):
-				t.Fatalf("want refusal containing %q, got %v", c.refuse, err)
-			}
-		})
-	}
-}
-
 func TestMoveSourceThroughLocate(t *testing.T) {
 	s := Service{Name: "mc", Dir: "mc", Host: "h003"}
 	inv = &Inventory{Services: map[string]Service{"mc": s}, ContainerHosts: []string{"h001", "h003", "lio"}}
@@ -311,13 +288,6 @@ func TestMoveSourceThroughLocate(t *testing.T) {
 	}
 	if _, err := moveSource(s, locate(s, fakeFleet(map[string][]string{"h003": {"mc"}, "lio": {"mc"}}))); err == nil {
 		t.Error("must refuse when installed on several hosts")
-	}
-}
-
-func TestMoveWarning(t *testing.T) {
-	s := Service{Name: "mc", Dir: "mc", Host: "h003"}
-	if w := moveWarning(s, "h001"); !strings.Contains(w, `host = "h001"`) || !strings.Contains(w, "containers/mc/service.nix") {
-		t.Errorf("warning lacks the edit to make:\n%s", w)
 	}
 }
 
