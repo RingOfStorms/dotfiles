@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -532,5 +533,98 @@ func TestCmdPlaceDispatcher(t *testing.T) {
 	cs := calls()
 	if len(cs) != 1 || cs[0].path != "/api/placements/recover" || cs[0].body["force"] != true || cs[0].body["service"] != "svc" {
 		t.Fatalf("recover calls = %+v, want one forced recover for svc", cs)
+	}
+}
+
+// ------------------------------------------------- registry not consulted
+
+// registryWarnRig resets the once-per-process "not consulted" warning and
+// captures it.
+func registryWarnRig(t *testing.T) *strings.Builder {
+	t.Helper()
+	var buf strings.Builder
+	reset := func(out io.Writer) {
+		registryMu.Lock()
+		registryWarnOut, registryWarned, registrySkipped = out, false, nil
+		registryMu.Unlock()
+	}
+	old := registryWarnOut
+	reset(&buf)
+	t.Cleanup(func() { reset(old) })
+	return &buf
+}
+
+// No key file at all (a dev box): nil, and nothing said about it.
+func TestReadPlacementsNoKeyIsQuiet(t *testing.T) {
+	buf := registryWarnRig(t)
+	t.Setenv("SEC_MACHINE_KEY", filepath.Join(t.TempDir(), "absent.json"))
+	if v := readPlacements(newEdgeClient, false); v != nil {
+		t.Fatalf("view = %+v, want nil", v)
+	}
+	if buf.Len() != 0 || registryUnconsulted() != nil {
+		t.Fatalf("a missing key warned: %q (%v)", buf.String(), registryUnconsulted())
+	}
+}
+
+// A key this user may not read (not root): nil, one warning naming sudo, no
+// matter how often the registry is asked.
+func TestReadPlacementsUnreadableKeyWarnsOnce(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a mode-0 file")
+	}
+	buf := registryWarnRig(t)
+	key := filepath.Join(t.TempDir(), "machine-key.json")
+	must(t, os.WriteFile(key, []byte("{}"), 0o000))
+	t.Setenv("SEC_MACHINE_KEY", key)
+	for range 3 {
+		if v := readPlacements(newEdgeClient, false); v != nil {
+			t.Fatalf("view = %+v, want nil", v)
+		}
+	}
+	out := buf.String()
+	if n := strings.Count(out, "warning:"); n != 1 {
+		t.Fatalf("%d warnings, want one: %q", n, out)
+	}
+	for _, want := range []string{"placement registry not consulted", "cannot read the machine key " + key + ": permission denied", "run as root (sudo) on an allowlisted host"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("warning does not say %q: %q", want, out)
+		}
+	}
+}
+
+// A registry that fails the request: one warning, the read-only path keeps
+// the declared host, and a discovery fallthrough in resolveHost says why.
+func TestReadPlacementsRequestFailureWarnsAndFallsBack(t *testing.T) {
+	resolutionRig(t, nil, nil, map[string][]string{"src": {"svc"}})
+	buf := registryWarnRig(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		regFail(w, http.StatusInternalServerError, "registry is down")
+	}))
+	t.Cleanup(srv.Close)
+	client := func() (*edgeClient, error) {
+		return &edgeClient{base: srv.URL, http: srv.Client(), token: "machine-token"}, nil
+	}
+	placementNow = func(verify bool) *placementView { return readPlacements(client, verify) }
+
+	s := inv.Services["svc"]
+	if h := resolvedHost(s); h != s.Host {
+		t.Fatalf("resolvedHost = %q, want the declared %q", h, s.Host)
+	}
+	var h string
+	out := captureStderr(t, func() {
+		var err error
+		if h, _, err = resolveHost(s, flags{vals: map[string]string{}}); err != nil {
+			t.Errorf("resolveHost: %v", err)
+		}
+	})
+	if h != "src" {
+		t.Errorf("resolveHost = %q, want src by discovery", h)
+	}
+	if !strings.Contains(out, "resolving the host by discovery: placement registry not consulted") || !strings.Contains(out, "sudo") {
+		t.Errorf("the discovery fallthrough did not say the registry was not consulted: %q", out)
+	}
+	w := buf.String()
+	if n := strings.Count(w, "warning:"); n != 1 || !strings.Contains(w, "500") {
+		t.Fatalf("warnings = %q, want one naming the failed request", w)
 	}
 }

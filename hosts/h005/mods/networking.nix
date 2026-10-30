@@ -248,6 +248,12 @@ in
       # joshuabell.xyz name NOT listed falls through to `server=` below.
       host-record = map (r: "${r.fqdn},${r.ip}") dnsRecords.lan;
 
+      # Keep listed names local for every RR type (same as the tailnet
+      # instance). Without this, AAAA/HTTPS for e.g. jellyfin fall through to
+      # `server=` below, get the public `CNAME o002`, and clients' resolvers
+      # (systemd-resolved) cache that chain and send LAN traffic out via o002.
+      local = map (r: "/${r.fqdn}/") dnsRecords.lan;
+
       # Fallthrough for joshuabell.xyz names not in host-record: forward to the
       # shared external plain-IP upstreams. Domain-scoped so dnsmasq only
       # forwards THIS zone (it is not a general recursive resolver). Must be

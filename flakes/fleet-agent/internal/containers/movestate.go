@@ -35,10 +35,13 @@ import (
 // `place --set`) while this one ran.
 var errMoveCanceled = errors.New("the move was taken over")
 
-// errCommitUnconfirmed says a commit failed and the row could not be re-read to
-// tell whether it landed anyway (an answer lost after the write). The move then
-// stops with both hosts as they are and the token kept: a re-run either resumes
-// after the commit (resumeCommitted) or resumes the reservation.
+// errCommitUnconfirmed says a commit failed and the re-read could not tell
+// whether it landed anyway (an answer lost after the write): the registry did
+// not answer, or it shows the row committed on the destination with no token
+// and no previous binding, which this move's commit leaves behind but so does
+// any other client's (tokenlessCommit). The move then stops with both hosts as
+// they are and the token kept: a re-run either resumes after the commit
+// (resumeCommitted) or resumes the reservation.
 var errCommitUnconfirmed = errors.New("the commit was not confirmed by the registry")
 
 // moveState is one move's handle on the registry. A nil *moveState is a move
@@ -181,10 +184,16 @@ func moveBegin(s Service, from, to string, force bool, resume string) (*moveStat
 		// A move interrupted (or stopped by an unconfirmed retire) after its
 		// commit has only retire and switch left: the reserve below would
 		// answer 409 on a committed row.
-		if done, err := resumeCommitted(c, s.Name, from, to, held); err != nil {
+		if r, err := resumeCommitted(c, s.Name, from, to, held, force); err != nil {
 			return nil, err
-		} else if done {
-			st.tok, st.committed = held, true
+		} else if r != nil {
+			// A tokenless row (accepted only with --force) has nothing to
+			// retire; the move-state file stays until the switch is done.
+			st.tok, st.committed = r.Token, true
+			if st.tok == "" {
+				info("%s: the registry records %s committed on %s with no token; finishing the move without proof it is this one's (--force): only the switch is left", s.Name, s.Name, to)
+				return st, nil
+			}
 			st.save()
 			info("%s: the move to %s already committed (%s); redoing only the retire and the switch", s.Name, to, via)
 			return st, nil
@@ -319,20 +328,23 @@ func (st *moveState) owned() error {
 }
 
 // landed reports whether r is the row this move's commit leaves behind: on to,
-// committed or retiring and still carrying the token, or committed with the
-// token cleared because there was no previous binding to retire (what the
-// registry's commit does when Previous is nil).
+// committed or retiring, and still carrying this move's token. A row committed
+// with the token cleared (no previous binding to retire) is not proof: another
+// client's commit leaves exactly the same row (see tokenlessCommit).
 func (st *moveState) landed(r placementRow) bool {
-	if r.Host != st.to {
+	if st.tok == "" || r.Token != st.tok || r.Host != st.to {
 		return false
 	}
-	switch r.State {
-	case placementCommitted:
-		return (st.tok != "" && r.Token == st.tok) || (r.Token == "" && r.Previous == nil)
-	case placementRetiring:
-		return st.tok != "" && r.Token == st.tok
-	}
-	return false
+	return r.State == placementCommitted || r.State == placementRetiring
+}
+
+// tokenlessCommit reports whether r is committed on to with no token and no
+// previous binding: what a commit leaves when there was nothing to retire.
+// The registry records nothing that ties such a row to the move that made it,
+// so to a move whose commit answer was lost it is ambiguous — its own commit,
+// or another client's (a forced reserve and commit, `place --set`).
+func tokenlessCommit(r placementRow, to string) bool {
+	return r.Host == to && r.State == placementCommitted && r.Token == "" && r.Previous == nil
 }
 
 // commit publishes the destination as the binding. It presents the token and
@@ -341,8 +353,10 @@ func (st *moveState) landed(r placementRow) bool {
 //
 // A failed commit re-reads the row, because its answer may have been lost after
 // the write landed: a row committed with this move's token is a commit that
-// succeeded. A re-read that fails returns errCommitUnconfirmed, which must not
-// be undone (the destination may already be the binding).
+// succeeded. A re-read that fails, or one that finds a tokenless commit on the
+// destination (tokenlessCommit: ours or anyone's), returns errCommitUnconfirmed,
+// which must be neither undone (the destination may already be the binding) nor
+// finished (the switch would uninstall a source this move may not own).
 func (st *moveState) commit() error {
 	if st == nil {
 		return nil
@@ -354,6 +368,10 @@ func (st *moveState) commit() error {
 			return fmt.Errorf("%w: %v (re-reading the row failed: %v)", errCommitUnconfirmed, err, e)
 		}
 		r, ok := v.Rows[st.svc]
+		if ok && tokenlessCommit(r, st.to) {
+			return fmt.Errorf("%w: %v; the registry records %s committed on %s with no token (revision %d, device %s), which is what this move's commit leaves when there is no previous binding, but also what another client's leaves, and nothing in the row ties it to this move",
+				errCommitUnconfirmed, err, st.svc, st.to, r.Revision, dash(r.Device))
+		}
 		if !ok || !st.landed(r) {
 			if c := st.takenOver(err, v); c != nil {
 				return c
@@ -365,7 +383,9 @@ func (st *moveState) commit() error {
 	}
 	st.committed = true
 	// The registry clears the token when there is no previous binding left to
-	// retire; nothing below then belongs to this move.
+	// retire; nothing below then belongs to this move. A tokenless row is only
+	// taken from the commit's own answer: the 200 to this move's token is the
+	// proof that the commit was ours.
 	st.tok = row.Token
 	return nil
 }
@@ -403,28 +423,41 @@ func (st *moveState) retire() error {
 	return fmt.Errorf("the retirement of %s was not confirmed by the registry: %w", st.from, err)
 }
 
-// resumeCommitted recognises a move whose commit already landed: the row is
-// on to, committed or retiring, and carries the token the caller holds (a
-// comparison with a held token, never an adoption). Only retire and switch are
-// left to redo.
-func resumeCommitted(c *edgeClient, svc, from, to, held string) (bool, error) {
+// resumeCommitted recognises a move whose commit already landed and returns the
+// row (nil when it has not): the row is on to, committed or retiring, and
+// carries the token the caller holds (a comparison with a held token, never an
+// adoption). Only retire and switch are left to redo.
+//
+// A tokenless commit on to (tokenlessCommit) is what this move leaves when its
+// commit answer was lost and there was no previous binding, but the registry
+// cannot prove it is this move's: without force the resume refuses it, and
+// with force the operator vouches for it (the row is returned, tokenless, so
+// the retire has nothing to do and the switch runs).
+func resumeCommitted(c *edgeClient, svc, from, to, held string, force bool) (*placementRow, error) {
 	v, err := c.placements(false)
 	if err != nil {
-		return false, nil
+		return nil, nil
 	}
 	r, ok := v.Rows[svc]
+	if ok && held != "" && tokenlessCommit(r, to) {
+		if !force {
+			return nil, fmt.Errorf("%[1]s: the registry records %[1]s committed on %[2]s with no token and no previous binding (revision %[3]d, device %[4]s, user %[5]s). That is what this move's commit leaves when its answer was lost, but also what another client's commit leaves, and the registry records nothing that ties it to the held token %[6]s; nothing was changed, and %[1]s is still installed on %[7]s. Check where %[1]s runs (`containers place %[1]s --verify`); if this move made that commit, re-run with --force to finish it: the switch then uninstalls %[1]s on %[7]s and renames its data. Otherwise leave %[7]s alone and remove the move-state file %[8]s",
+				svc, to, r.Revision, dash(r.Device), dash(r.User), held, from, moveStatePath(svc))
+		}
+		return &r, nil
+	}
 	if !ok || held == "" || r.Token != held || r.Host != to ||
 		(r.State != placementCommitted && r.State != placementRetiring) {
-		return false, nil
+		return nil, nil
 	}
 	if r.Previous == nil || r.Previous.Host != from {
 		prev := "none"
 		if r.Previous != nil {
 			prev = r.Previous.Host
 		}
-		return false, fmt.Errorf("%s: the held token's move committed to %s with source %s, not %s; nothing was changed (pass --from %s)", svc, to, prev, from, prev)
+		return nil, fmt.Errorf("%s: the held token's move committed to %s with source %s, not %s; nothing was changed (pass --from %s)", svc, to, prev, from, prev)
 	}
-	return true, nil
+	return &r, nil
 }
 
 // release drops the reservation this move made, and only that one: unforced,
@@ -467,8 +500,10 @@ func (st *moveState) takenOver(err error, v *placementView) error {
 	if !ok || r.Token == st.tok {
 		return nil
 	}
-	if r.Token == "" && r.State == placementCommitted && r.Host == st.to && r.Previous == nil {
-		// Our own commit ended the reservation: there was nothing to retire.
+	if tokenlessCommit(r, st.to) {
+		// A tokenless commit on the destination may be this move's own
+		// commit (nothing to retire) or another client's: ambiguous, not a
+		// confirmed takeover. The caller decides, and keeps the token.
 		return nil
 	}
 	st.forget()

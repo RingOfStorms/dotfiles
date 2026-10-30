@@ -556,6 +556,13 @@ func resolveHost(s Service, f flags) (string, bool, error) {
 		}
 		return bound, false, nil
 	}
+	if v == nil {
+		if why := registryUnconsulted(); why != nil {
+			// Discovery answers instead of the registry: say so, since what
+			// follows may act on (or adopt) the host it finds.
+			info("%s: resolving the host by discovery: placement registry not consulted (%v); %s", s.Name, why, registryHint)
+		}
+	}
 	p := locate(s, fleetProbe)
 	switch {
 	case len(p.unreachable) > 0:
@@ -573,7 +580,9 @@ func resolveHost(s Service, f flags) (string, bool, error) {
 // Unlike resolveHost it never probes and never refuses: its callers build
 // tables and deploy scripts, where a discovery sweep per service would be
 // absurd and a refusal would leave a cell blank. Under --dry-run the registry
-// is not read either, so a printed plan stays offline.
+// is not read either, so a printed plan stays offline. A registry that could
+// not be read (a key this user may not read, a failed request) falls back to
+// the declared host too, after the one warning readPlacements prints.
 func resolvedHost(s Service) string {
 	if h := boundHost(s.Name); h != "" {
 		return h

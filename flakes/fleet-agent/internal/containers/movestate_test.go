@@ -41,6 +41,11 @@ type moveRegistry struct {
 	// lostCommitReply lets a commit land, then answers it with a 500, as a
 	// connection that drops after the write would.
 	lostCommitReply bool
+	// foreignCommit makes the next commit find the row committed by another
+	// client on the same host, tokenless with no previous binding (a forced
+	// reserve and commit, `place --set`), and answers it with a 500: this
+	// move's commit is lost, and the row it re-reads is not its own.
+	foreignCommit bool
 	// renewLost answers renews with a 500, and the next reserve that presents
 	// a token finds the row taken over (a new token) and answers 409: an
 	// outage that hid a takeover from the renew.
@@ -233,6 +238,12 @@ func (m *moveRegistry) post(w http.ResponseWriter, act string, req placementReq)
 	case "commit":
 		if !ok {
 			regFail(w, http.StatusNotFound, req.Service+": no placement to commit")
+			return
+		}
+		if m.foreignCommit {
+			m.foreignCommit = false
+			m.store(placementRow{Service: req.Service, Host: row.Host, State: placementCommitted, Device: "other-device"})
+			regFail(w, http.StatusInternalServerError, "connection reset before the answer")
 			return
 		}
 		if m.takeover {
@@ -816,6 +827,93 @@ func TestMoveLostCommitReplyUnreadableStopsThenResumes(t *testing.T) {
 	}
 	if exists(moveStatePath("svc")) {
 		t.Error("the move-state file outlived the recorded move")
+	}
+}
+
+// Another client commits the destination tokenless (no previous binding), and
+// this move's commit answer is lost. The re-read cannot tell that row from the
+// one this move's own commit would leave, so the move stops unconfirmed: no
+// rollback, no retire, no switch on the source, and the token file kept. A
+// re-run refuses the same row without --force; with it, only the switch runs.
+func TestMoveForeignTokenlessCommitIsUnconfirmed(t *testing.T) {
+	m, reg := moveOnRegistry(t)
+	reg.mu.Lock()
+	reg.foreignCommit = true
+	reg.mu.Unlock()
+	err := runMove(t)
+	if !errors.Is(err, errCommitUnconfirmed) {
+		t.Fatalf("expected the ambiguous commit to stop the move unconfirmed, got %v\n%s", err, m.calls())
+	}
+	if !strings.Contains(err.Error(), "the held token was kept") {
+		t.Errorf("the error does not say the token was kept: %v", err)
+	}
+	sourceUntouched := func() {
+		t.Helper()
+		noUndo(t, m, reg)
+		if i := regFirst(reg.calls(), "retire"); i >= 0 {
+			t.Fatalf("an unconfirmed commit retired the source: %+v", reg.calls()[i])
+		}
+		if !exists(m.srcState()+"/installed-fleet-svc.service") || !exists(filepath.Join(m.root, "svc/data/b")) {
+			t.Fatalf("the source was uninstalled or its data touched:\n%s", m.calls())
+		}
+		if g, _ := filepath.Glob(filepath.Join(m.root, "svc.moved-*")); len(g) != 0 {
+			t.Fatalf("the switch ran on the source: %v", g)
+		}
+		if heldToken("svc", "dst") != "tok-1" {
+			t.Fatal("the held token was dropped")
+		}
+	}
+	sourceUntouched()
+
+	n := len(reg.calls())
+	err = runMove(t)
+	if err == nil || !strings.Contains(err.Error(), "re-run with --force") || errors.Is(err, errMoveCanceled) {
+		t.Fatalf("a resume on the ambiguous row = %v, want a refusal naming --force", err)
+	}
+	sourceUntouched()
+	for _, c := range reg.calls()[n:] {
+		if c.verb != http.MethodGet {
+			t.Fatalf("the refused resume wrote to the registry: %+v", c)
+		}
+	}
+
+	if err := cmdMove([]string{"svc", "--to", "dst", "--from", "src", "--force"}); err != nil {
+		t.Fatalf("forced resume: %v\n%s", err, m.calls())
+	}
+	if g, _ := filepath.Glob(filepath.Join(m.root, "svc.moved-*")); len(g) != 1 {
+		t.Fatalf("the forced resume did not switch: %v", g)
+	}
+	if i := regFirst(reg.calls(), "retire"); i >= 0 {
+		t.Fatalf("the forced resume retired a tokenless row: %+v", reg.calls()[i])
+	}
+	if exists(moveStatePath("svc")) {
+		t.Error("the move-state file outlived the finished move")
+	}
+}
+
+// A move of a service the registry has no row for: the commit's own 200 to
+// this move's token returns the row tokenless (no previous binding to retire).
+// That answer is the proof the commit was ours, so the retire is skipped and
+// the switch removes the source copy discovery found.
+func TestMoveWithoutPreviousBindingSwitches(t *testing.T) {
+	m, reg := moveOnRegistry(t)
+	reg.mu.Lock()
+	delete(reg.rows, "svc")
+	reg.mu.Unlock()
+	if err := runMove(t); err != nil {
+		t.Fatalf("move: %v\n%s", err, m.calls())
+	}
+	if i := regFirst(reg.calls(), "retire"); i >= 0 {
+		t.Fatalf("a move with no previous binding retired: %+v", reg.calls()[i])
+	}
+	if row := reg.rowNow("svc"); row.Host != "dst" || row.State != placementCommitted || row.Token != "" {
+		t.Fatalf("row = %+v, want dst committed, tokenless", row)
+	}
+	if g, _ := filepath.Glob(filepath.Join(m.root, "svc.moved-*")); len(g) != 1 {
+		t.Fatalf("the switch did not retire the source data: %v", g)
+	}
+	if exists(moveStatePath("svc")) {
+		t.Error("the move-state file outlived the finished move")
 	}
 }
 

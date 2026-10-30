@@ -12,8 +12,12 @@ package containers
 import (
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
+	"os"
 	"sort"
 	"strings"
+	"sync"
 	"text/tabwriter"
 )
 
@@ -85,19 +89,71 @@ type placementView struct {
 // through to discovery, which is what fixtures and dev machines need.
 var placementNow = fetchPlacements
 
-// fetchPlacements reads GET /api/placements. A machine without the root-only
-// key (every dev box, every test) has no way in, and that is not an error the
-// caller can act on: it returns nil and the caller discovers instead.
+// fetchPlacements reads GET /api/placements with this machine's key.
 func fetchPlacements(verify bool) *placementView {
-	c, err := newEdgeClient()
+	return readPlacements(newEdgeClient, verify)
+}
+
+// readPlacements is fetchPlacements with the client constructor as a seam. A
+// machine with no key file at all (every dev box, every test) has no way in,
+// and that is not an error the caller can act on: it returns nil quietly and
+// the caller discovers instead. A key that is there but cannot be used (not
+// root: EACCES), or a registry that fails the request, also returns nil, but
+// says so once (registryNotConsulted): falling back silently would hide that
+// the answer came from discovery and the declared host, not the registry.
+func readPlacements(client func() (*edgeClient, error), verify bool) *placementView {
+	c, err := client()
 	if err != nil {
+		if errors.Is(err, errNoToken) {
+			return nil
+		}
+		if errors.Is(err, fs.ErrPermission) {
+			err = fmt.Errorf("cannot read the machine key %s: permission denied", machineKeyPath())
+		}
+		registryNotConsulted(err)
 		return nil
 	}
 	v, err := c.placements(verify)
 	if err != nil {
+		registryNotConsulted(err)
 		return nil
 	}
 	return v
+}
+
+// registrySkipped is why this process could not consult the placement
+// registry; nil when it did, or when there is no machine key at all.
+// registryWarnOut is where the one warning about it goes (a var for tests).
+var (
+	registryMu      sync.Mutex
+	registrySkipped error
+	registryWarned  bool
+	registryWarnOut io.Writer = os.Stderr
+)
+
+// registryHint is what every "not consulted" message ends with.
+const registryHint = "run as root (sudo) on an allowlisted host for registry-backed resolution"
+
+// registryNotConsulted records why the registry could not be read and warns
+// about it once per process: a command that resolves many services must not
+// repeat it per service.
+func registryNotConsulted(err error) {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	registrySkipped = err
+	if registryWarned {
+		return
+	}
+	registryWarned = true
+	fmt.Fprintf(registryWarnOut, "warning: placement registry not consulted (%v); %s. Falling back to discovery and the declared host\n", err, registryHint)
+}
+
+// registryUnconsulted is the reason the registry could not be read in this
+// process, nil when it was read or there is no machine key.
+func registryUnconsulted() error {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	return registrySkipped
 }
 
 // placements reads the registry as a view.

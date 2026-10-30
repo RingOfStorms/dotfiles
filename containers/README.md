@@ -112,6 +112,13 @@ truth for which host a service belongs to, and `cnt` resolves from it:
 binding, `cnt place <svc> --adopt` adopts the one copy discovery finds, and
 `cnt place` shows the rows.
 
+Registry-backed resolution needs root plus the machine key on an allowlisted
+caller (`sudo fleet containers …`; the `cnt` alias does not expand under
+sudo). Otherwise `cnt` uses discovery and the declared host: a key it cannot
+read, or a registry that fails the request, prints one "placement registry not
+consulted" warning, and a mutating command that falls through to discovery
+says so too. With no machine key at all (a dev box) the fallback is silent.
+
 `host` in `service.nix` is **deprecated**: a build-time seed that a few Nix
 builders still read (`edgeVirtualHosts`, `webSourcesByHost`, h005's DNS records
 and WAN forwards, the host module's firewall input). Do not add a `host` to a
@@ -167,7 +174,12 @@ unloaded service is still found.
   once the source is stopped, commits after the restore check and first backup,
   and retires the source just before uninstalling it. A row another client has
   taken over (a `--force`, a second move) stops it with both hosts untouched,
-  and `cnt place <svc> --recover` settles that. No `host =` line needs editing.
+  and `cnt place <svc> --recover` settles that. A commit whose answer is lost
+  is confirmed only by a row that still carries the move's token; a row
+  committed with no token (no previous binding) could be anyone's, so the move
+  stops with both hosts untouched and the token kept, and a re-run finishes it
+  (the switch uninstalls the source) only with `--force`. No `host =` line
+  needs editing.
 
 ### nginx at runtime
 
