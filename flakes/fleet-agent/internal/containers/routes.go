@@ -1064,8 +1064,9 @@ type routingCheck struct {
 	Detail  string `json:"detail"`
 }
 
-// Routing is read-only and diagnostic: even an unavailable authority is not
-// an audit failure. A machine without credentials omits the section quietly.
+// Routing shows DNS, HTTP edge, TCP stream and WAN forward layers. It is
+// diagnostic: an unavailable authority is not an audit failure. A machine
+// without credentials omits the section quietly.
 func printRoutingAudit(w io.Writer, client func() (*edgeClient, error)) {
 	c, err := client()
 	if errors.Is(err, errNoToken) {

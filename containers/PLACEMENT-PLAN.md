@@ -3,10 +3,9 @@
 Design for removing `host` from `service.nix`. Today 19 of the 20
 `containers/<svc>/service.nix` files name the host they run on (16 on h001,
 `hello-nixos` on h003 after its recent move, `localai` on joe, `hello-podman` on
-lio; `minecraft` is `host = null`, offline), and six Nix functions
-(`edgeRoutes`, `edgeVirtualHosts`, `routeNamesByHost`, `dnsRecords`,
-`routerForwards` and `webSourcesByHost` — all in `containers/lib.nix`, listed in
-§4)
+lio; `minecraft` is `host = null`, offline), and five Nix functions
+(`edgeRoutes`, `edgeVirtualHosts`, `routeNamesByHost`, `dnsRecords`
+and `webSourcesByHost` — all in `containers/lib.nix`, listed in §4)
 derive network state from that one string. That makes Nix
 the runtime answer to "which box runs X", which is wrong: placement changes on a
 `cnt move`, and a Nix string that must be edited, committed, rebuilt and pushed
@@ -25,11 +24,14 @@ routes because those are facts about the service, but while it has no row the
 25565 forward does not exist, `computerboyz` has neither a DNS record nor an
 o002 vhost, and the dashboard lists it under "unplaced".
 
-Status: **phase 1 done**, **phase 2 done**, **phase 3 implemented, not deployed**.
-Phase 3 deploy order: **h005 first**, then **o002**. Until o002 deploys, its
-receiver refuses the placement pushes as reserved names. After o002 deploys,
-those names give 444 for up to approximately 30 seconds until h005's next pass.
-No deployment is part of this implementation. Phases 4–6 remain below.
+Status: **phase 1 done**, **phase 2 done**, **phase 3 implemented, not deployed**,
+**phase 4a implemented, not deployed**. Deploy **h005 first**, then **o002**.
+The stream layer rejects the old receiver's array reply without making changes.
+o002 seeds an empty stream directory at boot/activation from a Nix snapshot
+of its former static `3032 -> h001` stream, avoiding a cutover gap; thereafter
+the reconciler owns it. Before and after deployment (and a test move), run
+`git ls-remote ssh://git@git.joshuabell.xyz:3032/<repo>`.
+No deployment or SSH verification is part of this implementation.
 
 ---
 
@@ -312,16 +314,10 @@ reservation *is* the record, and the only remaining must-do after a move is
 - The tailnet/LAN DNS answer for every route name (host overlay/LAN IP).
 - The o002 vhost target for every `public` + `via = edge` route.
 - The o002 **stream** target for every `public` + `via = edge` + `proto = tcp`
-  route (forgejo's SSH :3032) — today a hard-coded `${upstreamHost}:3032`
-  (`hosts/oracle/o002/nginx.nix:179-186`, `upstreamHost = "100.64.0.13"` in
-  `hosts/oracle/o002/_constants.nix:16`), which silently breaks SSH the moment
-  forgejo is moved and leaves no Nix-level trace.
+  route (forgejo's SSH :3032) now follows placement via the stream receiver.
 - The h005 **WAN forwards** for every `public` + `via = [ "router" ]` non-HTTP
-  route (minecraft's 25565). `routerForwards` (`containers/lib.nix`, consumer
-  `hosts/h005/router-forwards.nix:23`) evaluates to `[]` today only because
-  minecraft is unplaced and the function skips `host = null`; a forward needs
-  the placed host's `lanIp`, so a hand-kept list would be a shadow copy of the
-  row that goes stale exactly like `host =` did.
+  route (minecraft's 25565) now follow the placed host's inventory `lanIp`.
+  Unplaced services contribute no forward; stale rows retain the last answer.
 - `:80`/`:443` admission on the host that received the placement (firewall).
 - The CLI's resolution of "the host" for every command.
 
@@ -375,8 +371,8 @@ Derived-from-`s.host` Nix functions and their call sites:
 | `routeNamesByHost` | `lib.nix`, called `hosts/h005/wildcard-cert.nix:37` (`routeHosts`) | 5 | Delete. Every route name is a single label under `*.${domain}`, so the cert needs no per-name SAN and the push target set becomes the static container-host list |
 | `webSourcesByHost` | `lib.nix:533-604`, filtered by `s.host != null`; called `containers/host-module.nix:31` | 5 | Delete; the runtime firewall allowlist (see §7) supersedes it, and the module keeps only what depends on host trust |
 | `dnsRecords` | `lib.nix`, called `hosts/h005/dns-records.nix:12` → `hosts/h005/mods/networking.nix:22`; consumed at `:44` (`host-record`, tailnet), `:49` (`local=`, tailnet) and `:249` (`host-record`, LAN) | 3,5 | Phase 3: h005 writes per-name files into **two** runtime `hostsdir`s (`tailnet/`, `lan/`) from the registry; the `host-record` lines go away, the `local=` does not. Phase 5: **not** deleted — drop the `s.host != null` filter and the IP fields, keeping the `local=` name list and the `public` CNAME list |
-| `routerForwards` | `lib.nix`, called `hosts/h005/router-forwards.nix:23` | 4a | Delete. h005 writes the DNAT set from the registry (the placed host's `lanIp`, one entry per `public` + `router` non-HTTP route) and applies it; port and protocol still come from `service.nix`, only the address moves |
-| o002's `streamConfig` | `hosts/oracle/o002/nginx.nix:179-186` proxies :3032 to `_constants.nix:16` `upstreamHost = "100.64.0.13"` (h001), not to a route's host | 4a | Delete the hard-coded server and the `upstreamHost` constant. `streamConfig` becomes `include /var/lib/fleet-edge-streams/*.stream;` and h005 pushes one file per `public`+`via = edge`+`tcp` route through a stream receiver modelled on `edge-vhost-receiver.nix` (§5). Left alone it keeps working only while forgejo is on h001 — a `move` breaks SSH silently |
+| h005 WAN forwards | `internal/wanforward`, `internal/reconcile` | 4a implemented | Static generator deleted. Root validates the registry-derived file and replaces one nft table atomically; port/protocol remain declarative |
+| o002's `streamConfig` | `hosts/oracle/o002/nginx.nix` | 4a implemented | Runtime include replaces the hard-coded target; `edgeStreamPorts` is placement-free admission, and boot/activation seed the pre-cutover stream when empty |
 | `DeclaredHost` | deleted; `state.ServiceView.BoundHost` (`flakes/fleet-edge/internal/state/state.go:261`, set in `binding` at `:666-671`), sorted `server/server.go:480`, host page `:694`, `dash/dash.go:158,189,225-231`, `topology/layout.go:442`; template `internal/server/templates/services.html:24-31` | 2,5 | Phase 2 done: the registry's binding wins, a service it does not name is "unplaced", and the page groups by it. Phase 5 drops the declarative fallback (`bound == nil`) and the `host` seed |
 | CLI `resolveHost` | `fleet-agent/internal/containers/main.go:502` | 2 | The answer, in order: `--host` > registry row > discovery. A fenced row that names no host — a `stale` reservation, or a first placement that has not committed (token set, `effective()` empty) — is refused ahead of both branches, naming the device holding the move, its destination and both settles: `--recover` (asks the hosts themselves) and `--set <h> --force` (takes the name over). Letting it through is how a deploy or start lands a second copy on a host the move may have stranded, ahead of any registry write that could refuse it. A binding onto a host that does not answer refuses and names both escapes (`--set <h> --force`, `--recover --force`); `--host` may not override a different live binding; the first `--host` deploy records it |
 | CLI `resolvedHost` | `main.go:563` | 2 | Registry row, else the declared `host`, else `""`; never probes and never refuses, so table/script builders can use it |
@@ -437,7 +433,6 @@ found here that is *not* on the list is a phase-3 regression:
 - [ ] `edgeVirtualHosts` — `containers/lib.nix:616-648`, consumes `edgeRoutes`; call site `hosts/oracle/o002/nginx.nix:23`
 - [ ] `routeNamesByHost` — `containers/lib.nix:659-671`, filter `s.host != null` at `:664`; call site `hosts/h005/wildcard-cert.nix:37`. There is no `tlsNamesByHost`; the cert's SANs come from this map
 - [ ] `dnsRecords` — `containers/lib.nix:726-798`, filter at `:740`; call site `hosts/h005/dns-records.nix:12` → `hosts/h005/mods/networking.nix:22`, consumed at `:44` (`host-record`, tailnet), `:49` (`local=`) and `:249` (`host-record`, LAN)
-- [ ] `routerForwards` — `containers/lib.nix:800-838`, `lanIp` lookup at `:810`, filter at `:831`; call site `hosts/h005/router-forwards.nix:23`
 - [ ] `containers/flake.nix:92-97` `containerHosts` — keep the list (it is host membership, not placement), and drop the declared-host fallback that `cli`'s `containerHosts()` still adds
 - [ ] the `host = null` default (`containers/lib.nix:408`), then the `host` line in all 20 `service.nix` files
 
@@ -456,12 +451,11 @@ placement (host membership, identity, trust) or was missed:
 | Hand-kept entry | Where | Dies how |
 |---|---|---|
 | `containerVhosts` (every container vhost generated at eval time) | `hosts/oracle/o002/nginx.nix:23-26` | Phase 5 deletes the binding and the `clash` assert with it; the names arrive as pushed `edgevhost` files. The `hosts/_shared_assets/utilities/edge-vhost-receiver.nix` `reserved` list is built from o002's own `virtualHosts`, so removing `containerVhosts` is also what makes those names pushable |
-| `streamConfig` (hard-coded `:3032 → 100.64.0.13`) | `hosts/oracle/o002/nginx.nix:179-186` | Phase 4a: `services.nginx.streamConfig = "include /var/lib/fleet-edge-streams/*.stream;"`, files pushed per placement |
-| `upstreamHost = "100.64.0.13"` | `hosts/oracle/o002/_constants.nix:16` | Phase 4a: deleted with the stream server; nothing else reads it |
+| `streamConfig` | `hosts/oracle/o002/nginx.nix` | Phase 4a implemented: runtime stream include; the hard-coded upstream constant is deleted |
 | o002 firewall `3032` | `hosts/oracle/o002/nginx.nix:207-211` | **Stays.** "The edge accepts public :3032" is a property of the edge; the destination behind it is the runtime part |
 | o002 hand vhosts `www`, `sso-proxy`; public A/CNAMEs `o002`, `headscale`, `www`, `sso-proxy`, `*.share` | `hosts/oracle/o002/nginx.nix` `handVhosts` (:93-160), `hosts/h005/dns-records.nix:76-105` | **Stay.** Not container routes; `headscale` and the o002 anchors are h005/o002's own services. The `clash` eval already refuses a hand name that becomes generated |
 | `computerboyz`, `minecraft` CNAMEs | `hosts/h005/dns-records.nix:96-103` (`map (cname "o002") [ … "computerboyz" … ]`, `map (cname "home") [ "minecraft" ]`) | Delete now: the `computerboyz` vhost is already gone from o002, so this CNAME is currently resolving to the `_` reject. After phase 3 the published set derives from placements and an unplaced service must have no name at all; `minecraft`'s `via = router` CNAME would otherwise point at a closed forward |
-| `routerForwards` call | `hosts/h005/router-forwards.nix:23` | Phase 4a: the forward rules come from the registry, so the module keeps only the chain and the option |
+| Static router forwards | `hosts/h005/router-forwards.nix` | Phase 4a implemented: only the WAN-to-LAN DNAT accept rule and option remain; runtime application is wired in `fleet-edge.nix` |
 | `routeHosts` / `targetNames` (TLS push targets) | `hosts/h005/wildcard-cert.nix:37-47` | Phase 5: pinned literal `h001, h003, joe, lio, o002` — the cert is a wildcard, so the target set is host membership, not placement |
 | `overrideWriters` | `hosts/fleet.nix:54-62` | **Stays** (identity, not placement). `h001`, `h003` and `joe` were added in phase 3 (deferred from phase 2 until their Zitadel machine users were provisioned), so every container host can write a placement and close its own firewall rule |
 | `containerHosts` | `containers/flake.nix:92-97` | **Stays.** A host must be rebuilt to join. The CLI's `containerHosts()` is this list ∪ the hosts the registry knows ∪ every declared host; phase 5 drops the declared-host loop, which is why a host that only ever held one service must appear here |
@@ -559,32 +553,38 @@ and the inventory's declarative routes:
   returns 502 (visible to `cnt audit`) rather than deleting state on a guess.
 - **o002 streams (non-HTTP public routes)**: same loop, same key, a second
   receiver. For each `public` + `via = edge` + `proto = tcp` route whose service
-  has an effective host, h005 pushes `{"op":"add","port":3032,"host":"<overlayIp>"}`;
+  has an effective host, h005 pushes `{"op":"add","kind":"placement","port":3032,"host":"h001"}`;
   o002 writes `/var/lib/fleet-edge-streams/<port>.stream` holding
   `server { listen <port>; proxy_pass <overlayIp>:<port>; }` and runs the same
   `nginx -t` + reload dance. `nginx.nix`'s `streamConfig` becomes
-  `include /var/lib/fleet-edge-streams/*.stream;` and `_constants.nix`
-  `upstreamHost` goes away. The receiver is a near-copy of
-  `hosts/_shared_assets/utilities/edge-vhost-receiver.nix`: forced-command key,
+  `include /var/lib/fleet-edge-streams/*.stream;`; the hard-coded upstream
+  constant is deleted. The receiver follows
+  `hosts/_shared_assets/utilities/edge-vhost-receiver.nix`: shared forced-command key,
   JSON on stdin (never nginx text), atomic write, `.reload-pending` on a failed
   reload, `fleet-stream-expire` timer **and** boot unit before `nginx.service`,
   `systemd.tmpfiles` for the directory (not persisted, like the vhost dir).
   Expiry **deletes** the file, which is the stream equivalent of the vhost
   receiver's `return 444`: nginx's `stream` module has no `return`, and a
   `server` block without `proxy_pass` fails `nginx -t`, so a closed port is the
-  only fail-closed rendering. One file per port, add-before-remove, and a port
-  that collides with a hand-kept stream is a hard startup assert (mirroring the
-  `clash` assert on vhosts). o002's firewall keeps `3032` literal: it is a fixed
-  WAN port, not a placement fact.
+  only fail-closed rendering. One file per port, add-before-remove, Kind/Host-fenced
+  removal; stale, duplicate-port and missing-IP entries keep their last answer.
+  Assertions require every admitted stream port in `allowedTCPPorts` and reject
+  collisions with 80/443/22. The firewall's 3032 is admission, not placement.
   Why the push and not a router forward: o002 is the public edge and already
   accepts this traffic; a DNAT would move the port's public identity to whichever
   host holds forgejo, and h001 is scheduled for a fresh reinstall — SSH has to
   survive the move without touching the router or the service's own Nix.
 - **WAN forwards**: for each `public` + `via = [ "router" ]` non-HTTP route whose
-  service is placed, h005 writes the DNAT (WAN `<port>` → placed host's `lanIp`)
-  and applies it, replacing `routerForwards`. An unplaced service has no forward,
-  so minecraft's 25565 is closed while it is offline and opens when a placement
-  lands — no `enabled` flag, no stale rule.
+  service is placed, h005 atomically writes `/var/lib/fleet-edge-forwards/forwards.json`
+  (`{forwards:[{proto,port,host,source}]}`). Root's `forwards-apply --inventory …
+  --wan IF --lan IF` validates every entry and derives LAN IPs from inventory,
+  then replaces `table ip fleet-wan-forwards` in one `nft -f` transaction under
+  flock, logging every applied set. Missing file means an empty table; invalid
+  data leaves the table unchanged and exits nonzero. A PathChanged unit and
+  failure-ignored nftables start/reload hooks trigger it. The directory is
+  `0775 root:fleet-edge-dns`, writable by the reconciler. Stale, duplicate and
+  missing-LAN-IP keys carry over from the current file. `cnt audit` reports
+  both `stream` and `wan` layers, including written-but-not-applied forwards.
 - **Reload debt** is already tracked by the vhost receiver's `.reload-pending`
   marker and retried (`edgeReloadPending`); the stream receiver gets the same
   marker under its own name, and one reload serves both (a single `nginx -t` +
@@ -687,7 +687,7 @@ on anything stored in h001's Nix.
 | **2** | Read paths: CLI resolution (`resolveHost`/`resolvedHost`/`hostForRead`, `containerHosts`, `backendOf`, `routes.go`, `expose.go`, drift/status output; `checkPlacement` deleted), dashboard grouping, `overrides.Check`; `joe` in `containerHosts`; discovery import command (`cnt place`, including `--recover`); record the binding after a first `--host` deploy; refuse to start a leftover local copy the registry binds elsewhere. `overrideWriters` moved out of this phase (see §9 row 3) | `flakes/fleet-agent/internal/containers/{main.go,move.go,port.go,routes.go,expose.go,placements.go}`, `flakes/fleet-edge/internal/{overrides,state,server,dash,topology}`, `containers/flake.nix` | Medium: a wrong resolution starts a second copy; the refusals above are the guard. CLI tests cover the matrix (`internal/containers/placement_test.go`) |
 | **3** | Reconciler: two DNS `hostsdir`s (tailnet overlay IPs, LAN IPs) written from the registry export, o002 runtime vhosts, `dns-plan` keeps its declarative input (only the CNAME *set* follows the registry, and an unplaced service contributes no name). Writers **done**: `h001`, `h003` and `joe` are in `overrideWriters` (`hosts/fleet.nix:54-62`) by their sec-agent machine userIds, subs unique, and h005's `fleet-edge.nix` maps each to its `overlayIp` | `flakes/fleet-edge/internal/{reconcile,dnsplan,server}`, `hosts/h005/{dns-records.nix,mods/networking.nix}`, `hosts/oracle/o002/nginx.nix`, `hosts/fleet.nix` | High: DNS and o002 are shared. Fail-closed ordering (add before remove, keep the old answer when a host is unreachable) and `cnt audit` checks |
 | **4 (done)** | Move rebind, in `cmdMove` (`move.go:344-554`) + `movestate.go`: reserve on the destination before any host is touched (resume only with a token the caller holds: local move-state file or `--resume-token`), `renew` around the final backup and between the long steps, commit after the restore check and first backup, retire just before the switch; rollback with the token on any failure before the commit (ownership confirmed first, unforced `DELETE`, target down, source restarted), `--recover` after it, and a takeover or unconfirmable ownership stops the move with both hosts untouched. `moveWarning` and its test deleted; the help text and `move.go`'s head comment describe the steps | `flakes/fleet-agent/internal/containers/{move.go,movestate.go,movestate_test.go,move_test.go,main.go,transfer_test.go}`, `containers/{README.md,PLACEMENT-PLAN.md}` | High: irreversible step, so the order is the design. Dry-run prints the same steps without touching the registry; the recorded path, the rollback, the takeovers, the resume and the refusals each have a test against a fake registry |
-| **4a** | Non-HTTP public routes follow placement: o002 stream receiver (`edge-stream-receive` / `fleet-stream-expire`, one file per port, boot unit + timer) with `streamConfig = "include /var/lib/fleet-edge-streams/*.stream;"`, `upstreamHost` deleted; h005 WAN forwards written from the registry, `routerForwards` deleted | `flakes/fleet-edge/internal/{edgestream,reconcile,server}`, `hosts/_shared_assets/utilities/edge-stream-receiver.nix`, `hosts/oracle/o002/{nginx,_constants}.nix`, `hosts/h005/router-forwards.nix`, `containers/lib.nix` | High: o002 SSH and the WAN path. Forgejo SSH must keep working across the h001 reinstall; verify with an SSH clone before and after a test move |
+| **4a (implemented, not deployed)** | Non-HTTP public routes follow placement: o002 stream receiver, boot seed/expire and timer; h005 validated atomic WAN forwarding; stream/WAN audit | `flakes/fleet-edge/internal/{edgestream,wanforward,reconcile}`, CLI audit, receiver and host Nix modules, `containers/lib.nix`, `containers/tests/edge-streams.nix` | Deploy h005 first (old receiver fails closed), then o002 (seed avoids a gap). Verify `git ls-remote ssh://git@git.joshuabell.xyz:3032/<repo>` before and after deployment and a test move |
 | **5** | Nix stops declaring placement: remove the `host` line from all 20 `service.nix` files (19 name a host, `minecraft` is `null`) and the `host = null` default in `lib.nix`, delete the functions in §4, delete the stale `computerboyz`/`minecraft` hand DNS, runtime firewall allowlist (with `fw-narrow`), cert targets pinned | `containers/*/service.nix`, `containers/lib.nix`, `containers/host-module.nix`, `containers/flake.nix` inventory, `hosts/h005/{dns-records,wildcard-cert}.nix`, `containers/tests/edge-vhosts.nix` | High, and the point of no return; done last so every reader already ignores the field |
 | **6** | Docs: `containers/README.md`, `containers/minecraft/README.md` (drop the "point computerboyz / set host" move instructions), `ROUTING-PLAN.md` (§5.2 table, §5.3, §8 step 9, the §8 step 4 "no runtime path" paragraph), `flakes/fleet-edge/README.md` | docs | Low |
 

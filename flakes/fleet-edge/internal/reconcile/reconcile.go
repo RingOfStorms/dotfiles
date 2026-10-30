@@ -1,12 +1,17 @@
 // Package reconcile makes h005's routing follow the placement registry
-// (containers/PLACEMENT-PLAN.md §5, phase 3). It runs in the
+// (containers/PLACEMENT-PLAN.md §5, phases 3 and 4a). It runs in the
 // fleet-edge-overrides unit next to the registry and, every pass:
 //
 //   - writes one hosts file per name into two dnsmasq `hostsdir`s: tailnet
 //     (every non-local route -> the placed host's overlay IP) and lan (lan and
 //     public routes -> its LAN IP, only for hosts that have one);
 //   - pushes the public `via = edge` http routes of placed services to o002's
-//     runtime vhost receiver (internal/edgevhost, Kind "placement").
+//     runtime vhost receiver (internal/edgevhost, Kind "placement");
+//   - pushes the public `via = edge` tcp routes of placed services to o002's
+//     stream receiver (internal/edgestream, one file per port);
+//   - writes the public `via = router` tcp/udp routes of placed services as
+//     h005's WAN forwards file (internal/wanforward), which root's
+//     forwards-apply validates and installs.
 //
 // Fail closed, in this order: every add and update lands before anything is
 // removed, and a failed add skips that layer's removals for the pass. A fenced
@@ -28,15 +33,19 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/authority"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/edgestream"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/edgevhost"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/placements"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/wanforward"
 )
 
 // Layers.
@@ -44,6 +53,8 @@ const (
 	Tailnet = "tailnet"
 	LAN     = "lan"
 	Edge    = "edge"
+	Stream  = "stream" // o002 stream servers, named "tcp/<port>"
+	WAN     = "wan"    // h005 WAN forwards, named "<proto>/<port>"
 )
 
 // Check statuses.
@@ -59,6 +70,11 @@ const (
 // EdgeClient is o002's receiver (overrides.SSHEdge).
 type EdgeClient interface {
 	Do(ctx context.Context, r edgevhost.Request) ([]byte, error)
+}
+
+// StreamClient is o002's stream receiver (overrides.SSHEdge.DoStream).
+type StreamClient interface {
+	DoStream(ctx context.Context, r edgestream.Request) ([]byte, error)
 }
 
 // Authenticator admits callers of the audit endpoint (authority.Auth).
@@ -78,6 +94,12 @@ type Config struct {
 	TailnetDir, LANDir string
 	// Edge is o002's receiver; nil skips the vhost layer.
 	Edge EdgeClient
+	// Streams is o002's stream receiver; nil skips the stream layer.
+	Streams StreamClient
+	// ForwardsFile is the WAN forwards file root's forwards-apply installs
+	// (its directory must exist); "" skips the layer. ForwardsStatus is the
+	// applier's record of what it installed, for the audit.
+	ForwardsFile, ForwardsStatus string
 	// TailnetServer and LANServer ("ip:port") are the dnsmasq instances the
 	// audit asks, so it sees what is served rather than what was written.
 	// "" checks the files only.
@@ -145,11 +167,23 @@ func (r *Reconciler) Run(ctx context.Context, every time.Duration) {
 type want struct {
 	dns     map[string]map[string]string // layer -> fqdn -> ip
 	vhosts  map[string]edgevhost.Request // fqdn -> add request
-	keep    map[string]map[string]bool   // layer -> fqdn left as it is
+	keep    map[string]map[string]bool   // layer -> fqdn (or port key) left as it is
 	service map[string]string            // fqdn -> service (every inventory route name)
 	host    map[string]string            // fqdn -> placed host
-	errs    []string
+	// Port layers (Stream, WAN), keyed "<proto>/<port>".
+	streams  map[string]edgestream.Request
+	forwards map[string]wanforward.Forward
+	portSvc  map[string]map[string]string // layer -> key -> service.route
+	portHost map[string]map[string]string // layer -> key -> placed host
+	errs     []string
 }
+
+// isStream: a public tcp route o002 forwards (via edge).
+func isStream(rt inventory.Route) bool {
+	return rt.Proto == "tcp" && rt.Exposure == "public" && slices.Contains(rt.Via, "edge")
+}
+
+func streamKey(port int) string { return "tcp/" + strconv.Itoa(port) }
 
 func isEdge(rt inventory.Route) bool {
 	if rt.Proto != "http" || rt.Exposure != "public" {
@@ -165,12 +199,17 @@ func isEdge(rt inventory.Route) bool {
 
 func (r *Reconciler) desired(exp placements.Export) *want {
 	w := &want{
-		dns:     map[string]map[string]string{Tailnet: {}, LAN: {}},
-		vhosts:  map[string]edgevhost.Request{},
-		keep:    map[string]map[string]bool{Tailnet: {}, LAN: {}, Edge: {}},
-		service: map[string]string{},
-		host:    map[string]string{},
+		dns:      map[string]map[string]string{Tailnet: {}, LAN: {}},
+		vhosts:   map[string]edgevhost.Request{},
+		keep:     map[string]map[string]bool{Tailnet: {}, LAN: {}, Edge: {}, Stream: {}, WAN: {}},
+		service:  map[string]string{},
+		host:     map[string]string{},
+		streams:  map[string]edgestream.Request{},
+		forwards: map[string]wanforward.Forward{},
+		portSvc:  map[string]map[string]string{Stream: {}, WAN: {}},
+		portHost: map[string]map[string]string{Stream: {}, WAN: {}},
 	}
+	r.desiredPorts(exp, w)
 	keepAll := func(fq string, rt inventory.Route) {
 		w.keep[Tailnet][fq], w.keep[LAN][fq] = true, true
 		if isEdge(rt) {
@@ -244,6 +283,62 @@ func (r *Reconciler) desired(exp placements.Export) *want {
 	return w
 }
 
+// desiredPorts fills the Stream and WAN layers. Independent of route names:
+// a port is the key. A key two routes claim, a fenced row and an
+// unaddressable host all keep the current answer.
+func (r *Reconciler) desiredPorts(exp placements.Export, w *want) {
+	inv := r.cfg.Inventory
+	for _, svc := range sortedKeys(inv.Services) {
+		s := inv.Services[svc]
+		for _, rn := range sortedKeys(s.Routes) {
+			rt := s.Routes[rn]
+			var layer, key string
+			switch {
+			case isStream(rt):
+				layer, key = Stream, streamKey(rt.Port)
+			case wanforward.IsRouter(rt):
+				layer, key = WAN, wanforward.Forward{Proto: rt.Proto, Port: rt.Port}.Key()
+			default:
+				continue
+			}
+			src := svc + "." + rn
+			if other, dup := w.portSvc[layer][key]; dup {
+				w.errs = append(w.errs, fmt.Sprintf("%s %s: declared by %s and %s; left as it is", layer, key, other, src))
+				w.keep[layer][key] = true
+				delete(w.streams, key)
+				delete(w.forwards, key)
+				continue
+			}
+			w.portSvc[layer][key] = src
+			if exp.Stale(svc) {
+				w.keep[layer][key] = true
+				continue
+			}
+			h := exp.Host[svc]
+			if h == "" {
+				continue // unplaced: closed
+			}
+			w.portHost[layer][key] = h
+			hi := inv.Hosts[h]
+			if layer == Stream {
+				if hi.OverlayIP == nil || *hi.OverlayIP == "" {
+					w.errs = append(w.errs, fmt.Sprintf("%s: host %s has no overlay IP in h005's inventory; stream left as it is", src, h))
+					w.keep[layer][key] = true
+					continue
+				}
+				w.streams[key] = edgestream.Request{Op: "add", Kind: edgestream.KindPlacement, Port: rt.Port, Host: h}
+				continue
+			}
+			if wanforward.LanIP(inv, h) == "" {
+				w.errs = append(w.errs, fmt.Sprintf("%s: host %s has no LAN IP; WAN forward left as it is", src, h))
+				w.keep[layer][key] = true
+				continue
+			}
+			w.forwards[key] = wanforward.Forward{Proto: rt.Proto, Port: rt.Port, Host: h, Source: src}
+		}
+	}
+}
+
 // Pass reconciles once and returns (and keeps, for the audit) what it did.
 func (r *Reconciler) Pass(ctx context.Context) Report {
 	r.mu.Lock()
@@ -262,6 +357,12 @@ func (r *Reconciler) Pass(ctx context.Context) Report {
 		}
 		if r.cfg.Edge != nil {
 			r.applyEdge(ctx, w, &rep)
+		}
+		if r.cfg.Streams != nil {
+			r.applyStreams(ctx, w, &rep)
+		}
+		if r.cfg.ForwardsFile != "" {
+			r.applyForwards(w, &rep)
 		}
 	}
 	for _, c := range rep.Changes {
@@ -435,6 +536,122 @@ func (r *Reconciler) applyEdge(ctx context.Context, w *want, rep *Report) {
 	}
 }
 
+func (r *Reconciler) listStreams(ctx context.Context) ([]edgestream.Entry, error) {
+	c, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	out, err := r.cfg.Streams.DoStream(c, edgestream.Request{Op: "list"})
+	if err != nil {
+		return nil, err
+	}
+	return edgestream.ParseList(out)
+}
+
+func (r *Reconciler) stream(ctx context.Context, req edgestream.Request) ([]byte, error) {
+	c, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	return r.cfg.Streams.DoStream(c, req)
+}
+
+// applyStreams: o002's stream servers, one per port, adds before removals,
+// own (placement) files only. An unreachable o002, or one whose forced
+// command does not know the stream receiver yet, changes nothing.
+func (r *Reconciler) applyStreams(ctx context.Context, w *want, rep *Report) {
+	live, err := r.listStreams(ctx)
+	if err != nil {
+		rep.Errors = append(rep.Errors, "o002 streams: "+err.Error()+"; nothing changed")
+		return
+	}
+	have := map[string]edgestream.Entry{}
+	for _, e := range live {
+		have[streamKey(e.Port)] = e
+	}
+	failed := false
+	for _, k := range sortedKeys(w.streams) {
+		req := w.streams[k]
+		if e, ok := have[k]; ok && e.Kind == edgestream.KindPlacement && e.Host == req.Host {
+			continue
+		}
+		if _, err := r.stream(ctx, req); err != nil {
+			rep.Errors = append(rep.Errors, fmt.Sprintf("o002 stream: %s -> %s: %v", k, req.Host, err))
+			failed = true
+			continue
+		}
+		rep.Changes = append(rep.Changes, fmt.Sprintf("o002 stream: %s -> %s", k, req.Host))
+	}
+	if failed {
+		rep.Errors = append(rep.Errors, "o002 stream: an add failed; removals wait for the next pass")
+		return
+	}
+	for _, e := range live {
+		k := streamKey(e.Port)
+		if e.Kind != edgestream.KindPlacement {
+			continue // unreadable file: fleet-stream-expire's to remove
+		}
+		if _, ok := w.streams[k]; ok || w.keep[Stream][k] {
+			continue
+		}
+		out, err := r.stream(ctx, edgestream.Request{Op: "remove", Kind: edgestream.KindPlacement, Port: e.Port, Host: e.Host})
+		if err != nil {
+			rep.Errors = append(rep.Errors, fmt.Sprintf("o002 stream: removing %s: %v", k, err))
+			continue
+		}
+		if bytes.HasPrefix(out, []byte(edgestream.KeptPrefix)) {
+			continue
+		}
+		rep.Changes = append(rep.Changes, fmt.Sprintf("o002 stream: %s removed", k))
+	}
+}
+
+// applyForwards rewrites the WAN forwards file when the wanted set changed.
+// One file, replaced atomically, so the applier installs every add and
+// removal in one nft transaction. Kept keys (fenced row, unaddressable
+// host, a port two routes claim) carry their current entry over.
+func (r *Reconciler) applyForwards(w *want, rep *Report) {
+	p := r.cfg.ForwardsFile
+	if fi, err := os.Stat(filepath.Dir(p)); err != nil || !fi.IsDir() {
+		rep.Errors = append(rep.Errors, fmt.Sprintf("wan: %s is missing; nothing changed", filepath.Dir(p)))
+		return
+	}
+	cur, err := wanforward.Read(p)
+	if err != nil {
+		rep.Errors = append(rep.Errors, fmt.Sprintf("wan: %v; nothing changed", err))
+		return
+	}
+	have := map[string]wanforward.Forward{}
+	for _, f := range cur.Forwards {
+		have[f.Key()] = f
+	}
+	next := wanforward.File{Forwards: []wanforward.Forward{}}
+	for _, k := range sortedKeys(w.forwards) {
+		next.Forwards = append(next.Forwards, w.forwards[k])
+	}
+	for _, k := range sortedKeys(have) {
+		if _, ok := w.forwards[k]; !ok && w.keep[WAN][k] {
+			next.Forwards = append(next.Forwards, have[k])
+		}
+	}
+	b := wanforward.Marshal(next)
+	if old, err := os.ReadFile(p); err == nil && bytes.Equal(old, b) {
+		return
+	}
+	if err := wanforward.WriteAtomic(p, b); err != nil {
+		rep.Errors = append(rep.Errors, fmt.Sprintf("wan: %v", err))
+		return
+	}
+	nextKeys := map[string]bool{}
+	for _, f := range next.Forwards {
+		nextKeys[f.Key()] = true
+		if have[f.Key()] != f {
+			rep.Changes = append(rep.Changes, fmt.Sprintf("wan: %s -> %s", f.Key(), f.Host))
+		}
+	}
+	for _, k := range sortedKeys(have) {
+		if !nextKeys[k] {
+			rep.Changes = append(rep.Changes, fmt.Sprintf("wan: %s removed", k))
+		}
+	}
+}
+
 // Check is one name on one layer, for `cnt audit`.
 type Check struct {
 	Layer   string `json:"layer"`
@@ -477,6 +694,12 @@ func (r *Reconciler) Verify(ctx context.Context) Verify {
 	}
 	if r.cfg.Edge != nil {
 		r.verifyEdge(ctx, w, &v)
+	}
+	if r.cfg.Streams != nil {
+		r.verifyStreams(ctx, w, &v)
+	}
+	if r.cfg.ForwardsFile != "" {
+		r.verifyWAN(w, &v)
 	}
 	sort.SliceStable(v.Checks, func(i, j int) bool {
 		if v.Checks[i].Layer != v.Checks[j].Layer {
@@ -596,6 +819,126 @@ func (r *Reconciler) verifyEdge(ctx context.Context, w *want, v *Verify) {
 		c := Check{Layer: Edge, FQDN: e.FQDN, Service: w.service[e.FQDN], Host: w.host[e.FQDN], Got: e.Host, Status: Extra}
 		if w.keep[Edge][e.FQDN] {
 			c.Status, c.Detail = Kept, "fenced row or unaddressable host: last answer stands"
+		}
+		v.Checks = append(v.Checks, c)
+	}
+}
+
+// closedCheck is the row for a declared port key nobody serves on purpose.
+func closedCheck(layer, k string, w *want) Check {
+	c := Check{Layer: layer, FQDN: k, Service: w.portSvc[layer][k], Host: w.portHost[layer][k], Status: OK, Detail: "unplaced: closed"}
+	if w.keep[layer][k] {
+		c.Status, c.Detail = Kept, "fenced row, unaddressable host or a port two routes claim: last answer stands"
+	}
+	return c
+}
+
+func (r *Reconciler) verifyStreams(ctx context.Context, w *want, v *Verify) {
+	live, err := r.listStreams(ctx)
+	if err != nil {
+		v.Errors = append(v.Errors, "o002 streams: "+err.Error())
+		for _, k := range sortedKeys(w.streams) {
+			v.Checks = append(v.Checks, Check{Layer: Stream, FQDN: k, Service: w.portSvc[Stream][k], Host: w.streams[k].Host, Want: w.streams[k].Host, Status: Pending, Detail: err.Error()})
+		}
+		return
+	}
+	have := map[string]edgestream.Entry{}
+	for _, e := range live {
+		have[streamKey(e.Port)] = e
+	}
+	for _, k := range sortedKeys(w.portSvc[Stream]) {
+		req, wanted := w.streams[k]
+		e, ok := have[k]
+		if !wanted {
+			if !ok {
+				v.Checks = append(v.Checks, closedCheck(Stream, k, w))
+			}
+			continue
+		}
+		c := Check{Layer: Stream, FQDN: k, Service: w.portSvc[Stream][k], Host: req.Host, Want: req.Host, Got: e.Host, Status: OK}
+		switch {
+		case !ok:
+			c.Status, c.Detail = Missing, "no stream on o002"
+		case e.Kind != edgestream.KindPlacement:
+			c.Status, c.Detail = Wrong, "o002 file is unreadable"
+		case e.Host != req.Host:
+			c.Status, c.Detail = Wrong, "o002 forwards to another host"
+		}
+		v.Checks = append(v.Checks, c)
+	}
+	for _, e := range live {
+		k := streamKey(e.Port)
+		if _, ok := w.streams[k]; ok {
+			continue
+		}
+		c := Check{Layer: Stream, FQDN: k, Service: w.portSvc[Stream][k], Host: w.portHost[Stream][k], Got: e.Host, Status: Extra}
+		switch {
+		case w.keep[Stream][k]:
+			c.Status, c.Detail = Kept, "fenced row or unaddressable host: last answer stands"
+		case e.Kind != edgestream.KindPlacement:
+			c.Detail = "unreadable file (fleet-stream-expire removes it)"
+		}
+		v.Checks = append(v.Checks, c)
+	}
+}
+
+// verifyWAN compares the wanted forwards with the file and with what root's
+// forwards-apply reports it installed.
+func (r *Reconciler) verifyWAN(w *want, v *Verify) {
+	cur, err := wanforward.Read(r.cfg.ForwardsFile)
+	if err != nil {
+		v.Errors = append(v.Errors, "wan: "+err.Error())
+	}
+	inFile := map[string]wanforward.Forward{}
+	for _, f := range cur.Forwards {
+		inFile[f.Key()] = f
+	}
+	applied := map[string]wanforward.Applied{}
+	st, err := wanforward.ReadStatus(r.cfg.ForwardsStatus)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		v.Errors = append(v.Errors, "wan: forwards-apply has not run since boot")
+	case err != nil:
+		v.Errors = append(v.Errors, "wan: status: "+err.Error())
+	case st.Error != "":
+		v.Errors = append(v.Errors, "wan: forwards-apply: "+st.Error)
+	}
+	for _, a := range st.Forwards {
+		applied[a.Key()] = a
+	}
+	keys := map[string]bool{}
+	for k := range w.portSvc[WAN] {
+		keys[k] = true
+	}
+	for k := range inFile {
+		keys[k] = true
+	}
+	for k := range applied {
+		keys[k] = true
+	}
+	for _, k := range sortedKeys(keys) {
+		want, wanted := w.forwards[k]
+		f, inF := inFile[k]
+		a, inA := applied[k]
+		if !wanted && !inF && !inA {
+			v.Checks = append(v.Checks, closedCheck(WAN, k, w))
+			continue
+		}
+		c := Check{Layer: WAN, FQDN: k, Service: w.portSvc[WAN][k], Host: w.portHost[WAN][k], Want: want.Host, Got: a.Host, Status: OK}
+		if inA {
+			c.Detail = "dnat to " + a.IP
+		}
+		switch {
+		case wanted && !inF:
+			c.Status, c.Detail = Missing, "not in the forwards file"
+		case wanted && f.Host != want.Host:
+			c.Status, c.Detail = Wrong, "forwards file names another host"
+		case wanted && (!inA || a.Host != want.Host):
+			c.Status, c.Detail = Pending, "written, not applied yet (forwards-apply)"
+		case !wanted && w.keep[WAN][k]:
+			c.Status, c.Detail = Kept, "fenced row or unaddressable host: last answer stands"
+		case !wanted:
+			c.Status, c.Detail = Extra, "unwanted forward"
 		}
 		v.Checks = append(v.Checks, c)
 	}

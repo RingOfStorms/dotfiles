@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/bunny"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/edgestream"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/edgevhost"
 )
 
@@ -32,11 +33,13 @@ func (b *BunnyDNS) Delete(ctx context.Context, zoneID, id int64) error {
 	return b.Client.DeleteRecord(ctx, zoneID, id)
 }
 
-// SSHEdge pushes requests to o002's fleet-vhost-receive over the restricted
-// key (the forced command ignores the remote command line; the request is
-// on stdin). The expose authority and the placement reconciler share one
-// SSHEdge, and Do runs one request at a time: the receiver's reload-pending
-// marker assumes nobody else is changing its directory mid-reload.
+// SSHEdge pushes requests to o002's receivers over the restricted key. The
+// forced command (fleet-edge-receive) dispatches on the remote command line:
+// `fleet-stream-receive` reaches the stream receiver, anything else the vhost
+// receiver; the request is on stdin. The expose authority and the placement
+// reconciler share one SSHEdge, and it runs one request at a time: each
+// receiver's reload-pending marker assumes nobody else is changing its
+// directory mid-reload, and one nginx reload serves both.
 type SSHEdge struct {
 	Target     string // root@o002
 	KeyFile    string
@@ -45,17 +48,28 @@ type SSHEdge struct {
 	mu         sync.Mutex
 }
 
+// Do sends one vhost request (internal/edgevhost).
 func (e *SSHEdge) Do(ctx context.Context, r edgevhost.Request) ([]byte, error) {
+	body, _ := json.Marshal(r)
+	return e.run(ctx, "fleet-vhost-receive", body)
+}
+
+// DoStream sends one stream request (internal/edgestream).
+func (e *SSHEdge) DoStream(ctx context.Context, r edgestream.Request) ([]byte, error) {
+	body, _ := json.Marshal(r)
+	return e.run(ctx, "fleet-stream-receive", body)
+}
+
+func (e *SSHEdge) run(ctx context.Context, command string, body []byte) ([]byte, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	body, _ := json.Marshal(r)
 	ssh := e.SSH
 	if ssh == "" {
 		ssh = "ssh"
 	}
 	c := exec.CommandContext(ctx, ssh, "-i", e.KeyFile, "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
 		"-o", "UserKnownHostsFile="+e.KnownHosts, "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=10",
-		e.Target, "fleet-vhost-receive")
+		e.Target, command)
 	c.Stdin = bytes.NewReader(body)
 	var out, errb bytes.Buffer
 	c.Stdout, c.Stderr = &out, &errb

@@ -10,11 +10,6 @@
     overlayIp = "100.64.0.5";
   };
 
-  # The Tailscale IP of h001, used by nginx to proxy services. o002 only does
-  # TLS termination + reverse proxy now; all stateful services (incl. the
-  # migrated vaultwarden + atuin) live on h001 behind the tailnet.
-  upstreamHost = "100.64.0.13";
-
   services = {
     # Headscale coordination server, migrated off l001. Co-hosted with
     # tailscaled (see headscale.nix for the co-host mitigations).

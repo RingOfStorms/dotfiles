@@ -400,7 +400,7 @@ let
         # remaining Nix builders below can keep deriving from it until phase 5
         # deletes the field and every reader in one cutover:
         #   edgeRoutes, edgeVirtualHosts, routeNamesByHost/tlsNamesByHost,
-        #   webSourcesByHost, dnsRecords, routerForwards,
+        #   webSourcesByHost, dnsRecords,
         #   host-module.nix's httpExposureByHost, containers/flake.nix's
         #   containerHosts comment.
         # Do not add a reader, and do not add a `host` to a new service.nix:
@@ -817,52 +817,13 @@ in
       );
     };
 
-  # WAN port forwards on the router (h005) for public `via = router`
-  # tcp/udp routes (ROUTING-PLAN §2.4, §8 step 4). DNAT goes to the
-  # service host's LAN IP, so the host must have one in fleet.nix.
-  # Services without a host are skipped (no forward while inactive).
-  # Returns [ { proto; port; host; ip; source; } ] sorted by proto/port;
-  # two routes forwarding the same proto/port throw.
-  routerForwards =
-    { dir, hosts }:
-    let
-      fwds = builtins.concatMap (
-        s:
-        map
-          (
-            n:
-            let
-              r = s.routes.${n};
-              ip = (hosts.${s.host} or { }).lanIp or null;
-            in
-            if ip == null then
-              throw "routerForwards: ${s.name}.${n}: host ${s.host} has no lanIp in fleet.nix (the router can only forward to the LAN)"
-            else
-              {
-                inherit (r) proto port;
-                inherit ip;
-                host = s.host;
-                source = "${s.name}.${n}";
-              }
-          )
-          (
-            builtins.filter (
-              n:
-              let
-                r = s.routes.${n};
-              in
-              r.exposure == "public" && r.proto != "http" && builtins.elem "router" r.via
-            ) (builtins.attrNames s.routes)
-          )
-      ) (builtins.filter (s: s.host != null) (allServices dir));
-      key = f: "${f.proto}/${toString f.port}";
-      keys = map key fwds;
-      dup = builtins.filter (k: builtins.length (builtins.filter (x: x == k) keys) > 1) keys;
-    in
-    if dup != [ ] then
-      throw "routerForwards: ${builtins.head dup} is forwarded by two routes"
-    else
-      builtins.sort (a: b: key a < key b) fwds;
+  # Placement-free admission list for the edge's runtime TCP stream receiver.
+  edgeStreamPorts = dir:
+    builtins.sort builtins.lessThan (builtins.attrValues (builtins.listToAttrs (
+      builtins.concatMap (s: map (r: { name = toString r.port; value = r.port; })
+        (builtins.filter (r: r.exposure == "public" && r.proto == "tcp" && builtins.elem "edge" r.via)
+          (builtins.attrValues s.routes))) (allServices dir)
+    )));
 
   # The extra-container `config` for a nixos-kind service. Pass it to
   # extra-container.lib.buildContainers { config = ...; }.

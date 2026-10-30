@@ -108,6 +108,7 @@
           ./nginx.nix
           ../../_shared_assets/utilities/wildcard-cert-receiver.nix
           ../../_shared_assets/utilities/edge-vhost-receiver.nix
+          ../../_shared_assets/utilities/edge-stream-receiver.nix
           ../../_shared_assets/utilities/share-receiver.nix
           (
             { pkgs, fleet, ... }:

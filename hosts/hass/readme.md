@@ -100,3 +100,10 @@ Each backup is about 7 GB. Restore by uploading the `.tar` during onboarding or 
 - HACS: the HA-MCP custom component / add-on
 - Built-in **Model Context Protocol Server** integration (enabled)
 - **Fleet Agent** (`local_fleet_agent`, in `./fleet-agent/`): local Home Assistant OS app serving `/status.json` and `/logs.json` on `:9101` (for `fleet-edge` on `h005`). Includes NVMe SMART telemetry (`/dev/nvme0`), `/data` disk usage, CPU/RAM/network/disk I/O, thermal sensors, and Supervisor add-on/core/host status + logs. Rebuild and deploy after changes to `flakes/fleet-agent` with `./fleet-agent/deploy.sh`.
+
+## Printer dashboard
+
+- The Prusa MK4 view is in **Josh → Printer** (`/dashboard-josh/printer`), not Home. Dashboards are storage-mode; edit through the Home Assistant UI or Lovelace API, never `.storage` files.
+- The printer has a DHCP reservation at `10.12.14.21` in `hosts/h005/_constants.nix`.
+- As of 2026-10-30, the printer's web interface is reachable, but the existing PrusaLink integration fails with `Cannot connect` after reload. Reconnection needs the printer's PrusaLink password; this integration exposes neither an options nor a reconfigure flow. The tab currently shows live plug power/energy and a PrusaLink link, with the connection problem stated explicitly.
+- The old camera and torch entities are absent from Home Assistant; they are not included in the replacement tab.

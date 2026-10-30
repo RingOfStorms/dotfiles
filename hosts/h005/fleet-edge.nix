@@ -63,9 +63,35 @@ let
       --key-file /var/lib/secrets_manager_hydrated/bunny_rw_dns_2026-03-15 \
       "$@"
   '';
+  forwardsApply = pkgs.writeShellScript "fleet-wan-forwards-apply" ''
+    export PATH=${lib.makeBinPath [ pkgs.nftables ]}
+    exec ${lib.getExe config.services.fleet-edge.package} forwards-apply \
+      --inventory ${config.services.fleet-edge.inventoryFile} \
+      --wan ${lib.escapeShellArg constants.network.wanInterface} \
+      --lan ${lib.escapeShellArg constants.network.vlans.lan.name}
+  '';
 in
 {
   imports = [ inputs.fleet-edge.nixosModules.default ];
+
+  systemd.services.fleet-wan-forwards = {
+    description = "Apply placement-owned WAN forwards";
+    after = [ "nftables.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "root";
+      ExecStart = forwardsApply;
+    };
+  };
+  systemd.paths.fleet-wan-forwards = {
+    wantedBy = [ "multi-user.target" ];
+    pathConfig.PathChanged = "/var/lib/fleet-edge-forwards/forwards.json";
+  };
+  # Ignore applier failure here: a bad data file must not break the base firewall.
+  systemd.services.nftables.serviceConfig = {
+    ExecStartPost = [ "-${forwardsApply}" ];
+    ExecReload = lib.mkAfter [ "-${forwardsApply}" ];
+  };
 
   environment.systemPackages = [
     dnsPlanWrapper

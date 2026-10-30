@@ -1628,11 +1628,11 @@ func TestRoutingAudit(t *testing.T) {
 		if r.Method != "GET" || r.URL.Path != "/api/placements/routing" || r.Header.Get("Authorization") != "Bearer test" {
 			t.Errorf("request: %v", r)
 		}
-		fmt.Fprint(w, `{"checks":[{"layer":"tailnet","fqdn":"photos.example.com","status":"ok","want":"100.64.0.13","got":"100.64.0.13"},{"layer":"edge","fqdn":"photos.example.com","status":"pending","detail":"reload pending"}],"errors":[]}`)
+		fmt.Fprint(w, `{"checks":[{"layer":"tailnet","fqdn":"photos.example.com","status":"ok","want":"100.64.0.13","got":"100.64.0.13"},{"layer":"edge","fqdn":"photos.example.com","status":"pending","detail":"reload pending"},{"layer":"stream","fqdn":"tcp/3032","status":"ok","want":"h001","got":"h001"},{"layer":"wan","fqdn":"tcp/25565","status":"pending","detail":"written, not applied yet"}],"errors":[]}`)
 	}))
 	defer srv.Close()
 	printRoutingAudit(&out, func() (*edgeClient, error) { return &edgeClient{base: srv.URL, http: srv.Client(), token: "test"}, nil })
-	for _, s := range []string{"== routing (h005)", "photos.example.com", "ok", "pending", "reload pending"} {
+	for _, s := range []string{"== routing (h005)", "photos.example.com", "ok", "pending", "reload pending", "stream", "tcp/3032", "wan", "tcp/25565"} {
 		if !strings.Contains(out.String(), s) {
 			t.Errorf("missing %q: %s", s, out.String())
 		}

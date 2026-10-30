@@ -23,6 +23,7 @@ import (
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/authority"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/bunny"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/dash"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/edgestream"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/edgevhost"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/geoip"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
@@ -35,6 +36,7 @@ import (
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/store"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/timeline"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/topology"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/wanforward"
 )
 
 // envDefault returns $key if set, else def; flags still override.
@@ -192,7 +194,7 @@ func runOverrides(args []string) {
 	stateDir := fs.String("state-dir", envDefault("STATE_DIRECTORY", "/var/lib/fleet-edge-overrides"), "state dir")
 	target := fs.String("target", "", "CNAME target (o002's name)")
 	keyFile := fs.String("bunny-key-file", "", "bunny API key (empty: writes return 503)")
-	pushKey := fs.String("push-key-file", "", "ssh key for o002 fleet-vhost-receive (empty: writes return 503)")
+	pushKey := fs.String("push-key-file", "", "ssh key for o002's fleet-edge-receive (empty: writes return 503)")
 	pushTarget := fs.String("push-target", "", "user@host of the edge")
 	knownHosts := fs.String("known-hosts", "", "known_hosts for the edge")
 	statusTmpl := fs.String("status-url-template", "http://{overlayIp}:9101/status.json", "host status url")
@@ -201,6 +203,8 @@ func runOverrides(args []string) {
 	lanDir := fs.String("dns-lan-dir", "/var/lib/fleet-edge-dns/lan", "LAN dnsmasq hostsdir")
 	tailnetServer := fs.String("dns-tailnet-server", "", "tailnet dnsmasq IP:port for audit")
 	lanServer := fs.String("dns-lan-server", "127.0.0.1:9053", "LAN dnsmasq IP:port for audit")
+	forwardsFile := fs.String("forwards-file", "", "WAN forwards file root's forwards-apply installs (empty: no WAN layer)")
+	forwardsStatus := fs.String("forwards-status", "/run/fleet-wan-forwards/applied.json", "forwards-apply's record, for the audit")
 	every := fs.Duration("sweep", 30*time.Second, "sweep interval")
 	_ = fs.Parse(args)
 	inv, err := inventory.Load(*invFile)
@@ -236,13 +240,15 @@ func runOverrides(args []string) {
 	}
 	cfg := overrides.Config{Inventory: inv, Spec: spec, Domain: spec.Zone, Target: *target, StateDir: *stateDir,
 		LockPath: *lockPath, Verifier: verifier, Writers: writers}
+	var streams reconcile.StreamClient
 	if *keyFile != "" && *pushKey != "" {
 		k, err := os.ReadFile(*keyFile)
 		if err != nil {
 			log.Fatal(err)
 		}
 		cfg.DNS = &overrides.BunnyDNS{Client: &bunny.Client{Key: strings.TrimSpace(string(k))}, Domain: spec.Zone}
-		cfg.Edge = &overrides.SSHEdge{Target: *pushTarget, KeyFile: *pushKey, KnownHosts: *knownHosts}
+		edge := &overrides.SSHEdge{Target: *pushTarget, KeyFile: *pushKey, KnownHosts: *knownHosts}
+		cfg.Edge, streams = edge, edge
 	} else {
 		log.Print("overrides: no bunny or push key; writes return 503")
 	}
@@ -263,7 +269,8 @@ func runOverrides(args []string) {
 		log.Fatal(err)
 	}
 	routing, err = reconcile.New(reconcile.Config{Inventory: inv, Source: func() (placements.Export, error) { return pl.Snapshot(), nil },
-		TailnetDir: *tailnetDir, LANDir: *lanDir, TailnetServer: *tailnetServer, LANServer: *lanServer, Edge: cfg.Edge})
+		TailnetDir: *tailnetDir, LANDir: *lanDir, TailnetServer: *tailnetServer, LANServer: *lanServer, Edge: cfg.Edge,
+		Streams: streams, ForwardsFile: *forwardsFile, ForwardsStatus: *forwardsStatus})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -354,6 +361,69 @@ func main() {
 				fmt.Println("expired", g)
 			}
 			if err != nil {
+				log.Fatal(err)
+			}
+			return
+		case "stream-receive":
+			fs := flag.NewFlagSet("stream-receive", flag.ExitOnError)
+			cfgPath := fs.String("config", "/etc/fleet-edge-stream/config.json", "receiver config")
+			_ = fs.Parse(os.Args[2:])
+			if err := edgestream.Receive(*cfgPath, os.Stdin, os.Stdout); err != nil {
+				fmt.Fprintln(os.Stderr, "fleet-stream-receive:", err)
+				os.Exit(1)
+			}
+			return
+		case "stream-expire":
+			fs := flag.NewFlagSet("stream-expire", flag.ExitOnError)
+			cfgPath := fs.String("config", "/etc/fleet-edge-stream/config.json", "receiver config")
+			noReload := fs.Bool("no-reload", false, "only delete files (boot, before nginx)")
+			_ = fs.Parse(os.Args[2:])
+			c, err := edgestream.LoadConfig(*cfgPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			gone, err := c.Expire(!*noReload)
+			for _, g := range gone {
+				fmt.Println("expired", g)
+			}
+			if err != nil {
+				log.Fatal(err)
+			}
+			return
+		case "stream-seed":
+			fs := flag.NewFlagSet("stream-seed", flag.ExitOnError)
+			cfgPath := fs.String("config", "/etc/fleet-edge-stream/config.json", "receiver config")
+			snapshot := fs.String("snapshot", "", "Nix snapshot of the pre-cutover static stream")
+			_ = fs.Parse(os.Args[2:])
+			c, err := edgestream.LoadConfig(*cfgPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			b, err := os.ReadFile(*snapshot)
+			if err != nil {
+				log.Fatal(err)
+			}
+			seeded, err := c.Seed(b)
+			for _, e := range seeded {
+				fmt.Printf("fleet-stream-seed: :%d -> %s (static cutover snapshot)\n", e.Port, e.Host)
+			}
+			if err != nil {
+				log.Fatal(err)
+			}
+			return
+		case "forwards-apply":
+			fs := flag.NewFlagSet("forwards-apply", flag.ExitOnError)
+			invFile := fs.String("inventory", "", "inventory JSON (the routes and LAN IPs a forward may use)")
+			file := fs.String("file", "/var/lib/fleet-edge-forwards/forwards.json", "forwards file written by fleet-edge-overrides")
+			status := fs.String("status", "/run/fleet-wan-forwards/applied.json", "where the applied set is recorded")
+			wan := fs.String("wan", "", "WAN interface")
+			lan := fs.String("lan", "", "LAN interface")
+			_ = fs.Parse(os.Args[2:])
+			inv, err := inventory.Load(*invFile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if err := wanforward.Apply(wanforward.ApplyConfig{Inventory: inv, File: *file, Status: *status, WAN: *wan, LAN: *lan}); err != nil {
 				log.Fatal(err)
 			}
 			return

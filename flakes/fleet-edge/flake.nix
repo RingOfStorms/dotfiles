@@ -366,6 +366,7 @@
             ] ++ lib.optionals cfg.overrides.enable [
               "d ${cfg.overrides.dns.tailnetDir} 0775 root fleet-edge-dns -"
               "d ${cfg.overrides.dns.lanDir} 0775 root fleet-edge-dns -"
+              "d /var/lib/fleet-edge-forwards 0775 root fleet-edge-dns -"
             ];
             users.groups.fleet-edge-dns = lib.mkIf cfg.overrides.enable { };
 
@@ -399,6 +400,7 @@
                       "--dns-lan-dir ${lib.escapeShellArg o.dns.lanDir}"
                       "--dns-tailnet-server ${lib.escapeShellArg o.dns.tailnetServer}"
                       "--dns-lan-server ${lib.escapeShellArg o.dns.lanServer}"
+                      "--forwards-file /var/lib/fleet-edge-forwards/forwards.json"
                     ]
                     ++ lib.optionals live [
                       "--bunny-key-file %d/bunny"
@@ -415,7 +417,7 @@
                   RestartSec = "5s";
                   StateDirectory = "fleet-edge-overrides";
                   StateDirectoryMode = "0700";
-                  ReadWritePaths = [ "/run/fleet-edge-bunny" o.dns.tailnetDir o.dns.lanDir ];
+                  ReadWritePaths = [ "/run/fleet-edge-bunny" o.dns.tailnetDir o.dns.lanDir "/var/lib/fleet-edge-forwards" ];
                   SupplementaryGroups = [ "fleet-edge-dns" ];
                   DynamicUser = true;
                   UMask = "0077";

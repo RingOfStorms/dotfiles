@@ -825,25 +825,18 @@ Taken 2026-10-16:
      h001 drops its own ACME cert and bunny grant. **Deployed 2026-10-21**;
      h001 has no ACME or bunny key, old per-name ACME dirs removed
      2026-10-22.
-   - **Router forwards: build-time too.** `lib.nix` `routerForwards` lists
-     public `via = router` tcp/udp routes of services with a host → DNAT to
-     the host's LAN IP (`networking.nat.forwardPorts`) plus one exact
-     accept rule in h005's `router-isolation` chain
-     (`hosts/h005/router-forwards.nix`). IPv4 only, no hairpin (LAN DNS
-     answers the LAN IP). Inactive service (`host = null`) → no forward.
-     minecraft is converted (`routes.game` tcp 25565 via router,
-     `routes.web` = squaremap at `computerboyz` via edge). **Code done, off by
-     decision.** **Before re-enabling** (minecraft stays off): a tcp/udp route has `fqdn = null`, so `dnsRecords` gives it
-     no tailnet or LAN record; `minecraft` only exists as the public CNAME
-     → `home`, and with no hairpin NAT a LAN player resolving it gets the
-     WAN IP and fails. Give raw routes a DNS name first (tailnet/LAN →
-     host IP, public → `home`).
-   - **Order**: DNS (done) → bunny apply (done) →
-     minecraft (restore on a LAN host, set `host`, deploy, rebuild h005
-     for the forward, rebuild o002 for the generated `computerboyz`, drop
-     its hand vhost and hand CNAME) → wildcard on h005 + distribution →
-     drop h001's key. **Rollback**: h005 previous generation (DNS and
-     forwards are in the system closure); bunny via the plan's old values.
+   - **Router forwards: runtime placement (phase 4a implemented, not deployed).**
+     Public `via = router` tcp/udp routes are reconciled into
+     `/var/lib/fleet-edge-forwards/forwards.json`. Root validates against the
+     inventory and atomically replaces `table ip fleet-wan-forwards` with
+     `nft -f`; path changes and nftables start/reload trigger application.
+     Missing data closes forwards; invalid data keeps the last table.
+     Unplaced services have no forward; stale rows retain the last answer.
+     The router-isolation chain permits WAN-to-LAN traffic with `ct status dnat`.
+     IPv4 only, no hairpin NAT. Minecraft remains unplaced/offline.
+   - **Phase 4a deployment order**: h005 first, then o002; see
+     `PLACEMENT-PLAN.md` §9. Routing follows the registry without rebuilding
+     the router or edge for a service move.
    - **Stays hand-kept**: unconverted service names (trilium, arr) in
      `dns-records.nix`; apex/www/ellalala/headscale/o002 on o002; mail
      and DKIM records (unmanaged).

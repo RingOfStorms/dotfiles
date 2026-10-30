@@ -1,9 +1,9 @@
 # Receiver for runtime public vhosts pushed by h005's fleet-edge-overrides
 # (containers/ROUTING-PLAN.md §8 step 7, "Public expose design" item 3).
 #
-# h005 runs `fleet-vhost-receive` over root SSH with a dedicated key whose
-# authorized_keys entry forces this one command (like the wildcard cert
-# receiver). The request is JSON on stdin, never nginx text: the receiver
+# h005 runs the vhost or stream receiver over root SSH with one dedicated
+# key. The forced dispatcher selects streams only for the exact command;
+# every other command reaches this vhost receiver. The request is JSON on stdin:
 # (fleet-edge `vhost-receive`, internal/edgevhost) validates it against the
 # build-time config below and renders the server block itself, proxying to
 # the service host's edge listener (<overlayIp>:8443) with the pushed
@@ -66,6 +66,12 @@ let
     export PATH=${path}
     exec ${lib.getExe cfg.package} vhost-expire --config ${receiverConfig} "$@"
   '';
+  dispatch = pkgs.writeShellScriptBin "fleet-edge-receive" ''
+    if [ "''${SSH_ORIGINAL_COMMAND:-}" = fleet-stream-receive ]; then
+      exec /run/current-system/sw/bin/fleet-stream-receive
+    fi
+    exec ${lib.getExe receive}
+  '';
 in
 {
   options.fleet.edgeVhost = {
@@ -78,7 +84,7 @@ in
       default = fleet.global.edgeVhostPushPubKey or null;
       description = ''
         Dedicated SSH public key for h005's fleet-edge-overrides, restricted
-        to fleet-vhost-receive. Not the wildcard cert key. null = no key line
+        to fleet-edge-receive. Not the wildcard cert key. null = no key line
         (the receiver is installed but unreachable).
       '';
     };
@@ -88,6 +94,7 @@ in
     environment.systemPackages = [
       receive
       expire
+      dispatch
     ];
     systemd.tmpfiles.rules = [ "d ${dir} 0755 root root -" ];
 
@@ -99,7 +106,7 @@ in
 
     users.users.root.openssh.authorizedKeys.keys =
       lib.optional (cfg.pushPubKey != null)
-        ''command="/run/current-system/sw/bin/fleet-vhost-receive",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-user-rc ${cfg.pushPubKey}'';
+        ''command="/run/current-system/sw/bin/fleet-edge-receive",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-user-rc ${cfg.pushPubKey}'';
 
     # Boot: drop expired (or unparseable) files before nginx reads them.
     systemd.services.fleet-vhost-expire-boot = {

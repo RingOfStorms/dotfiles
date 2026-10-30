@@ -9,13 +9,13 @@
 let
   c = constants;
   domain = fleet.global.domain;
-  upstream = c.upstreamHost;
   # Fleet oauth2-proxy's edge listener (ROUTING-PLAN §8 step 6): only
   # /oauth2/ is reached here, never the tailnet sign-in vhost or 4180.
   h005EdgeIp = fleet.hosts.h005.overlayIp;
 
   # Floating-container public vhosts arrive through fleet-vhost-receive.
   containersLib = import ../../../containers/lib.nix;
+  streamPorts = containersLib.edgeStreamPorts ../../../containers;
   # oauth2-proxy cookie/identity hygiene for app-facing hand vhosts (shared with routes.go).
   inherit (containersLib) nginxSnippets;
 
@@ -36,6 +36,16 @@ let
     if useWildcard name then builtins.removeAttrs v [ "enableACME" ] // config.fleet.wildcardTls else v;
 in
 {
+  assertions = [
+    {
+      assertion = lib.all (p: builtins.elem p config.networking.firewall.allowedTCPPorts) streamPorts;
+      message = "Every edge stream port must be admitted by allowedTCPPorts.";
+    }
+    {
+      assertion = lib.all (p: !(builtins.elem p [ 80 443 22 ])) streamPorts;
+      message = "Edge stream ports must not collide with HTTP, HTTPS or SSH.";
+    }
+  ];
   # nginx proxies to tailscale overlay IPs and binds on overlayIp.
   # tailscaled-autoconnect.service (Type=notify) only finishes once `tailscale up`
   # has returned and tailscale0 has its address; tailscaled.service alone is just
@@ -166,13 +176,7 @@ in
       in
       lib.mapAttrs withTls handVhosts;
 
-    # STREAMS
-    streamConfig = ''
-      server {
-        listen 3032;
-        proxy_pass ${upstream}:3032;
-      }
-    '';
+    streamConfig = "include /var/lib/fleet-edge-streams/*.stream;";
   };
 
   services.fail2ban = {

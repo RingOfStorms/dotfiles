@@ -20,8 +20,8 @@
   };
 
   # Velocity: the only port players use. Public through the router (h005
-  # DNATs WAN :25565 to the host's LAN IP; containers/lib.nix
-  # routerForwards), so the home IP is exposed for this name. Players
+  # DNATs WAN :25565 to the placed host's LAN IP via fleet-edge's runtime
+  # forwards), so the home IP is exposed for this name. Players
   # connect to minecraft.joshuabell.xyz (CNAME home). Auth: Velocity
   # online-mode (Mojang accounts) + whitelist.
   routes.game = {
