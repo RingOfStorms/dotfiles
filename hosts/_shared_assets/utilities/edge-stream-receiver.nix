@@ -9,7 +9,10 @@ let
   receiverConfig = pkgs.writeText "fleet-edge-stream.json" (builtins.toJSON {
     inherit dir hosts ports;
     nginxTest = ''"${nginx.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
-    nginxReload = "systemctl reload nginx";
+    # --no-block: the receiver runs this under its dir flock; waiting for the
+    # job would deadlock against fleet-stream-expire-boot (Before=nginx),
+    # which blocks on the same flock. nginx -t has already passed.
+    nginxReload = "systemctl reload --no-block nginx";
   });
   # Snapshot of nginx.nix's pre-cutover stream; never derived from placement.
   # Seeded once per edge (stream-seed writes ${dir}/.seeded); dir must persist.
@@ -50,6 +53,7 @@ in {
   };
   systemd.services.fleet-stream-expire = {
     description = "Expire invalid runtime edge streams";
+    after = [ "fleet-stream-expire-boot.service" ];
     serviceConfig = { Type = "oneshot"; ExecStart = lib.getExe expire; };
   };
   systemd.timers.fleet-stream-expire = {

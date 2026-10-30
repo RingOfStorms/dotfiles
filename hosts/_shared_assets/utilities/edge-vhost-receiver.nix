@@ -47,7 +47,10 @@ let
       certDir = config.fleet.wildcardCertDir;
       # Same -c trick as wildcard-cert-receiver.nix: test what nginx runs.
       nginxTest = ''"${nginxCfg.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
-      nginxReload = "systemctl reload nginx";
+      # --no-block: the receiver runs this under its dir flock; waiting for the
+      # job would deadlock against fleet-vhost-expire-boot (Before=nginx),
+      # which blocks on the same flock. nginx -t has already passed.
+      nginxReload = "systemctl reload --no-block nginx";
     }
   );
 
@@ -120,6 +123,7 @@ in
       };
     };
     systemd.services.fleet-vhost-expire = {
+      after = [ "fleet-vhost-expire-boot.service" ];
       description = "Drop expired runtime edge vhosts";
       serviceConfig = {
         Type = "oneshot";
