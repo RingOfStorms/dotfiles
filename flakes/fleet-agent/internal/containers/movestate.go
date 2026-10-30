@@ -35,6 +35,12 @@ import (
 // `place --set`) while this one ran.
 var errMoveCanceled = errors.New("the move was taken over")
 
+// errCommitUnconfirmed says a commit failed and the row could not be re-read to
+// tell whether it landed anyway (an answer lost after the write). The move then
+// stops with both hosts as they are and the token kept: a re-run either resumes
+// after the commit (resumeCommitted) or resumes the reservation.
+var errCommitUnconfirmed = errors.New("the commit was not confirmed by the registry")
+
 // moveState is one move's handle on the registry. A nil *moveState is a move
 // running without a registry: every method then does nothing.
 type moveState struct {
@@ -274,7 +280,10 @@ func (st *moveState) renew() error {
 // owned confirms, with this move's token, that the row is still ours before an
 // undo rolls the destination back or restarts the source. nil means it is; an
 // errMoveCanceled means another client holds it; any other error means the
-// registry could not say. Both errors leave the hosts as they are.
+// registry could not say, or the row is already committed with this move's
+// token (renew and reserve both refuse a committed row). Only a takeover the
+// re-read confirms drops the held token; every error leaves the hosts as they
+// are.
 func (st *moveState) owned() error {
 	if st == nil || st.tok == "" {
 		return nil
@@ -286,30 +295,73 @@ func (st *moveState) owned() error {
 	}
 	// A lease that ran out fenced the row; the token re-opens it if it is ours.
 	req.Reason = "cnt move"
-	if _, e := st.c.placementReserve(req); e == nil {
+	_, e := st.c.placementReserve(req)
+	if e == nil {
 		return nil
-	} else if supersededReservation(e) {
-		st.forget()
-		return fmt.Errorf("%w: %v", errMoveCanceled, e)
-	} else if isEdgeHTTP(e) {
+	}
+	if isEdgeHTTP(e) {
 		err = e
 	}
-	return fmt.Errorf("could not confirm that this move still owns the placement: %v", err)
+	if !supersededReservation(e) {
+		return fmt.Errorf("could not confirm that this move still owns the placement: %v", err)
+	}
+	v, re := st.c.placements(false)
+	if re != nil {
+		return fmt.Errorf("could not confirm that this move still owns the placement: %v (re-reading the row failed: %v)", e, re)
+	}
+	if r, ok := v.Rows[st.svc]; ok && st.landed(r) {
+		return fmt.Errorf("the registry already records the move to %s as committed with this move's token (%v); it is not undone", st.to, e)
+	}
+	if c := st.takenOver(e, v); c != nil {
+		return c
+	}
+	return fmt.Errorf("could not confirm that this move still owns the placement: %v", e)
+}
+
+// landed reports whether r is the row this move's commit leaves behind: on to,
+// committed or retiring and still carrying the token, or committed with the
+// token cleared because there was no previous binding to retire (what the
+// registry's commit does when Previous is nil).
+func (st *moveState) landed(r placementRow) bool {
+	if r.Host != st.to {
+		return false
+	}
+	switch r.State {
+	case placementCommitted:
+		return (st.tok != "" && r.Token == st.tok) || (r.Token == "" && r.Previous == nil)
+	case placementRetiring:
+		return st.tok != "" && r.Token == st.tok
+	}
+	return false
 }
 
 // commit publishes the destination as the binding. It presents the token and
 // nothing else: a forced commit would land a *replacement* reservation someone
 // else made on the same host (recordPlacement makes the same argument).
+//
+// A failed commit re-reads the row, because its answer may have been lost after
+// the write landed: a row committed with this move's token is a commit that
+// succeeded. A re-read that fails returns errCommitUnconfirmed, which must not
+// be undone (the destination may already be the binding).
 func (st *moveState) commit() error {
 	if st == nil {
 		return nil
 	}
 	row, err := st.c.placementCommit(placementReq{Service: st.svc, Host: st.to, User: st.user, Token: st.tok})
 	if err != nil {
-		if e := st.superseded(err); e != nil {
-			return e
+		v, e := st.c.placements(false)
+		if e != nil {
+			return fmt.Errorf("%w: %v (re-reading the row failed: %v)", errCommitUnconfirmed, err, e)
 		}
-		return err
+		r, ok := v.Rows[st.svc]
+		if !ok || !st.landed(r) {
+			if c := st.takenOver(err, v); c != nil {
+				return c
+			}
+			return err
+		}
+		info("%s: the commit's answer was lost (%v), but the registry records it; the move goes on", st.svc, err)
+		row = r
 	}
 	st.committed = true
 	// The registry clears the token when there is no previous binding left to
@@ -406,6 +458,11 @@ func (st *moveState) superseded(err error) error {
 	if e != nil {
 		return nil
 	}
+	return st.takenOver(err, v)
+}
+
+// takenOver is superseded's verdict on a row already re-read into v.
+func (st *moveState) takenOver(err error, v *placementView) error {
 	r, ok := v.Rows[st.svc]
 	if !ok || r.Token == st.tok {
 		return nil

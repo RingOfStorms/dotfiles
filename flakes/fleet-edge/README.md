@@ -407,6 +407,29 @@ branches. Traffic events resolve by host and route key to the exact declared
 badge the server drew, never a synthesised one. Selection changes emphasis
 only, not the baseline route graph.
 
+An overlay region that draws no name says why, in a wrapped `zone-note`
+caption under its label, rather than reading as a rendering fault. The cause
+comes from evidence: when no service has a host in the placement registry it
+reads `No service is placed: 0 of N have a host in the placement registry, so
+no overlay name has an owner.`; otherwise `No placed service declares a
+tailnet name.` A region that draws its contents prints no caption.
+
+#### Lanes and stable dimensions
+
+No two connections share a stroke. Every vertical run between two columns
+owns its own x in that gutter (a lane), every crossing above the columns owns
+a rail, and every connection meeting a station owns its own point on the rim.
+Lanes are assigned by greedy interval colouring, and gutters widen to hold
+them; the diagram grows only by what the spec's slack cannot cover.
+
+Placement changes at runtime and replay frames come from history, so the
+frame is sized from the spec, not from the branches in one snapshot. Each
+gutter keeps the lanes the cabling needs plus, per cloud, one lane for each
+hosted station it could reach through that gutter (at most 3), and 3 rails if
+any sits across a column. A snapshot needing more squeezes the lane pitch
+instead of growing. With an empty placement registry or a full one, the
+viewBox and every station's position are identical.
+
 ### Simulated disk rings
 
 `Node.Rings` draws one ring per **reported primary mount**, with a distinct

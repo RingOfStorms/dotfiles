@@ -38,6 +38,9 @@ type moveRegistry struct {
 	down bool
 	// downAfterCommit turns down on once a commit lands.
 	downAfterCommit bool
+	// lostCommitReply lets a commit land, then answers it with a 500, as a
+	// connection that drops after the write would.
+	lostCommitReply bool
 	// renewLost answers renews with a 500, and the next reserve that presents
 	// a token finds the row taken over (a new token) and answers 409: an
 	// outage that hid a takeover from the renew.
@@ -257,6 +260,10 @@ func (m *moveRegistry) post(w http.ResponseWriter, act string, req placementReq)
 		m.store(row)
 		if m.downAfterCommit {
 			m.down = true
+		}
+		if m.lostCommitReply {
+			regFail(w, http.StatusInternalServerError, "connection reset after the write")
+			return
 		}
 		reply()
 	case "retire":
@@ -708,6 +715,135 @@ func TestMoveUnconfirmedRetireStopsBeforeTheSwitch(t *testing.T) {
 	}
 	if exists(moveStatePath("svc")) {
 		t.Error("the move-state file outlived the recorded move")
+	}
+}
+
+// noUndo fails the test if the move rolled the destination back, restarted
+// the source, or sent the registry a rollback.
+func noUndo(t *testing.T, m *moveRig, reg *moveRegistry) {
+	t.Helper()
+	for _, c := range reg.calls() {
+		if c.verb == http.MethodDelete {
+			t.Fatalf("the move rolled the reservation back: %+v", c)
+		}
+	}
+	if g, _ := filepath.Glob(filepath.Join(m.dst, "svc.failed-move-*")); len(g) > 0 || !exists(m.dstState()+"/active-fleet-svc.service") {
+		t.Fatalf("the destination was rolled back (%v):\n%s", g, m.calls())
+	}
+	if exists(m.srcState() + "/active-fleet-svc.service") {
+		t.Fatal("the source was started again; the destination is the binding")
+	}
+}
+
+// A commit that lands but whose answer is lost (a 500 after the write) is
+// recognised by the re-read: the row is committed with this move's token, so
+// the move goes on to retire and switch instead of undoing a binding.
+func TestMoveLostCommitReplyGoesOn(t *testing.T) {
+	m, reg := moveOnRegistry(t)
+	reg.mu.Lock()
+	reg.lostCommitReply = true
+	reg.mu.Unlock()
+	if err := runMove(t); err != nil {
+		t.Fatalf("move: %v\n%s", err, m.calls())
+	}
+	noUndo(t, m, reg)
+	cs := reg.calls()
+	if i := regFirst(cs, "retire"); i < 0 || cs[i].req.Token != "tok-1" || cs[i].req.Force {
+		t.Fatalf("the move did not retire with tok-1: %+v", cs)
+	}
+	if row := reg.rowNow("svc"); row.Host != "dst" || row.State != placementRetiring || row.Token != "tok-1" {
+		t.Fatalf("row = %+v, want dst retiring, held by tok-1", row)
+	}
+	if g, _ := filepath.Glob(filepath.Join(m.root, "svc.moved-*")); len(g) != 1 {
+		t.Fatalf("the switch did not retire the source data: %v", g)
+	}
+}
+
+// A commit that lands but whose answer is lost, with the registry unreadable
+// right after: the move cannot tell whether it committed, so it stops with
+// both hosts as they are and the token kept. A re-run then finds the commit
+// with the held token and redoes only the retire and the switch.
+func TestMoveLostCommitReplyUnreadableStopsThenResumes(t *testing.T) {
+	m, reg := moveOnRegistry(t)
+	reg.mu.Lock()
+	reg.lostCommitReply, reg.downAfterCommit = true, true
+	reg.mu.Unlock()
+	err := runMove(t)
+	if err == nil || !errors.Is(err, errCommitUnconfirmed) {
+		t.Fatalf("expected the unconfirmed commit to stop the move, got %v\n%s", err, m.calls())
+	}
+	for _, want := range []string{"neither host was rolled back or restarted", "the held token was kept",
+		"Re-run `cnt move svc --to dst --from src`"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the error does not say %q: %v", want, err)
+		}
+	}
+	noUndo(t, m, reg)
+	if regFirst(reg.calls(), "retire") >= 0 {
+		t.Fatalf("an unconfirmed commit retired the source: %+v", reg.calls())
+	}
+	if !exists(m.srcState()+"/installed-fleet-svc.service") || !exists(filepath.Join(m.root, "svc/data/b")) {
+		t.Fatal("the source was uninstalled or its data touched")
+	}
+	if row := reg.rowNow("svc"); row.Host != "dst" || row.State != placementCommitted || row.Token != "tok-1" {
+		t.Fatalf("row = %+v, want dst committed, still held by tok-1", row)
+	}
+	if heldToken("svc", "dst") != "tok-1" {
+		t.Fatal("the held token was dropped, so a re-run could not resume")
+	}
+
+	reg.mu.Lock()
+	reg.down, reg.downAfterCommit, reg.lostCommitReply = false, false, false
+	n := len(reg.sent)
+	reg.mu.Unlock()
+	if err := runMove(t); err != nil {
+		t.Fatalf("resumed move: %v\n%s", err, m.calls())
+	}
+	cs := reg.calls()[n:]
+	for _, act := range []string{"reserve", "renew", "commit"} {
+		if i := regFirst(cs, act); i >= 0 {
+			t.Errorf("the resumed move sent a %s: %+v", act, cs[i])
+		}
+	}
+	if i := regFirst(cs, "retire"); i < 0 || cs[i].req.Token != "tok-1" || cs[i].req.Force {
+		t.Fatalf("the resumed move did not retire with tok-1: %+v", cs)
+	}
+	if row := reg.rowNow("svc"); row.Host != "dst" || row.State != placementRetiring {
+		t.Fatalf("row = %+v, want dst retiring", row)
+	}
+	if g, _ := filepath.Glob(filepath.Join(m.root, "svc.moved-*")); len(g) != 1 {
+		t.Fatalf("the resumed switch did not retire the source data: %v", g)
+	}
+	if exists(moveStatePath("svc")) {
+		t.Error("the move-state file outlived the recorded move")
+	}
+}
+
+// owned on a row committed with this move's token: renew and reserve both
+// answer 409 (as the registry does for a committed row), which is not a
+// takeover. The token file stays and the error is not errMoveCanceled.
+func TestOwnedKeepsTheTokenOnACommittedRow(t *testing.T) {
+	_, reg := moveOnRegistry(t)
+	reg.mu.Lock()
+	reg.store(placementRow{Service: "svc", Host: "dst", State: placementCommitted,
+		Previous: &placementBinding{Host: "src"}, Token: "tok-1"})
+	reg.mu.Unlock()
+	c, err := edgeClientFor()
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := &moveState{c: c, svc: "svc", from: "src", to: "dst", tok: "tok-1"}
+	st.save()
+	err = st.owned()
+	if err == nil || errors.Is(err, errMoveCanceled) {
+		t.Fatalf("owned() = %v, want a non-takeover error", err)
+	}
+	cs := reg.calls()
+	if regFirst(cs, "renew") < 0 || regFirst(cs, "reserve") < 0 {
+		t.Fatalf("owned did not try renew and reserve: %+v", cs)
+	}
+	if heldToken("svc", "dst") != "tok-1" {
+		t.Fatal("owned dropped the held token of a committed move")
 	}
 }
 

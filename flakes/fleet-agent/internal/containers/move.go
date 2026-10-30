@@ -544,6 +544,12 @@ func cmdMove(args []string) error {
 	// says h, and undoing the move is the operator's (`place <svc> --recover`).
 	info("7/9 committing %s to %s in the placement registry", s.Name, to)
 	if err := st.commit(); err != nil {
+		if errors.Is(err, errCommitUnconfirmed) {
+			// The commit may have landed: undoing would roll back the
+			// binding's only copy. Keep the token so a re-run can tell.
+			return fmt.Errorf("committing the move to %s: %w\nneither host was rolled back or restarted: %s was left serving on %s, and stopped but still installed on %s; nothing was destroyed and the held token was kept. Re-run `cnt move %s --to %s --from %s` once the registry answers (it resumes from the held token: if the commit landed, it redoes only the retire and the switch), or settle it with `cnt place %s --recover`",
+				to, err, s.Name, to, from, s.Name, to, from, s.Name)
+		}
 		return undo("committing the move to "+to, err, true)
 	}
 	return finishMove(s, from, to, st)
