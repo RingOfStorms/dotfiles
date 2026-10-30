@@ -1,6 +1,7 @@
 // Package edgevhost renders and installs runtime public vhosts on the edge
-// (o002) for `cnt expose --exposure public` (containers/ROUTING-PLAN.md §8
-// step 7, "Public expose design").
+// (o002): temporary ones for `cnt expose --exposure public`
+// (containers/ROUTING-PLAN.md §8 step 7, "Public expose design"), and the
+// public routes of placed services (containers/PLACEMENT-PLAN.md §5).
 //
 // h005 (internal/overrides) pushes one JSON Request over a restricted SSH key
 // whose forced command is `fleet-vhost-receive` (hosts/edge-vhost-receiver.nix).
@@ -26,6 +27,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -35,12 +37,28 @@ const EdgePort = 8443
 // HeaderPrefix starts the first line of every rendered file.
 const HeaderPrefix = "# fleet-edge-vhost "
 
+// Kinds of runtime vhost. The kind travels in the file's header, so the edge
+// itself records which writer owns each file: the expose authority never
+// counts a placement file as its leftover, and the placement reconciler never
+// removes an expose override.
+const (
+	KindExpose    = ""          // cnt expose --exposure public (internal/overrides)
+	KindPlacement = "placement" // a public route of a placed service (internal/reconcile)
+)
+
 // Request is what h005 sends (one JSON object on stdin).
+//
+// A remove carries the Kind of the writer that owns the file (KindExpose or
+// KindPlacement) and, optionally, the Host it expects; the receiver deletes
+// only a file whose header matches (see Handle). A receiver from before
+// this fence ignored both on remove; h005 and o002 deploy together, so
+// o002's receiver always comes from the same build as its callers.
 type Request struct {
 	Op               string `json:"op"` // add | remove | list
+	Kind             string `json:"kind,omitempty"`
 	FQDN             string `json:"fqdn,omitempty"`
-	Host             string `json:"host,omitempty"`
-	Until            int64  `json:"until"` // unix seconds; 0 = no expiry
+	Host             string `json:"host,omitempty"` // add: target; remove: expected owner host ("" = any)
+	Until            int64  `json:"until"`          // unix seconds; 0 = no expiry
 	MaxBody          string `json:"maxBody,omitempty"`
 	Websockets       bool   `json:"websockets,omitempty"`
 	Buffering        bool   `json:"buffering,omitempty"`
@@ -53,6 +71,15 @@ type Entry struct {
 	FQDN  string `json:"fqdn"`
 	Host  string `json:"host"`
 	Until int64  `json:"until"`
+	Kind  string `json:"kind,omitempty"`
+}
+
+// LiveExpose reports whether e is an expose override that has not expired
+// (until 0 = no expiry). A live expose wins over a placement of the same
+// name for its lifetime: the receiver refuses a placement add over it and
+// the reconciler skips the push. An unparseable file (Until -1) is not live.
+func (e Entry) LiveExpose(now time.Time) bool {
+	return e.Kind == KindExpose && (e.Until == 0 || now.Unix() < e.Until)
 }
 
 // Config is the receiver's build-time configuration (JSON file on o002).
@@ -97,8 +124,14 @@ func (c *Config) Validate(r *Request) error {
 			return fmt.Errorf("%s is already served by this edge's own config", fq)
 		}
 	}
+	if err := validKind(r.Kind); err != nil {
+		return err
+	}
 	if r.Op == "remove" {
 		return nil
+	}
+	if r.Kind == KindPlacement && r.Until != 0 {
+		return errors.New("a placement vhost has no expiry (until must be 0)")
 	}
 	ip, ok := c.Hosts[r.Host]
 	if !ok || !ipv4Re.MatchString(ip) {
@@ -116,6 +149,26 @@ func (c *Config) Validate(r *Request) error {
 	return nil
 }
 
+func validKind(k string) error {
+	switch k {
+	case KindExpose, KindPlacement:
+		return nil
+	}
+	return fmt.Errorf("kind %q: want %q or %q", k, KindExpose, KindPlacement)
+}
+
+// KindName is how output names a kind ("" reads as "expose").
+func KindName(k string) string {
+	if k == KindExpose {
+		return "expose"
+	}
+	return k
+}
+
+// KeptPrefix starts the line a fenced remove writes when the file belongs
+// to another owner and was left in place (not an error).
+const KeptPrefix = "kept: owned by "
+
 func onOff(b bool) string {
 	if b {
 		return "on"
@@ -125,14 +178,20 @@ func onOff(b bool) string {
 
 // Render returns the nginx file for a validated add request.
 func (c *Config) Render(r *Request) string {
-	hdr, _ := json.Marshal(Entry{FQDN: r.FQDN, Host: r.Host, Until: r.Until})
+	hdr, _ := json.Marshal(Entry{FQDN: r.FQDN, Host: r.Host, Until: r.Until, Kind: r.Kind})
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s%s\n", HeaderPrefix, hdr)
-	b.WriteString("# runtime vhost from fleet-edge overrides (cnt expose --exposure public); do not edit\n")
+	if r.Kind == KindPlacement {
+		b.WriteString("# runtime vhost from fleet-edge placements (public route of a placed service); do not edit\n")
+	} else {
+		b.WriteString("# runtime vhost from fleet-edge overrides (cnt expose --exposure public); do not edit\n")
+	}
 	fmt.Fprintf(&b, "server {\n  listen 80;\n  listen [::]:80;\n  server_name %s;\n  location / { return 301 https://$host$request_uri; }\n}\n", r.FQDN)
 	fmt.Fprintf(&b, "server {\n  listen 443 ssl;\n  listen [::]:443 ssl;\n  server_name %s;\n", r.FQDN)
 	fmt.Fprintf(&b, "  ssl_certificate %s/fullchain.pem;\n  ssl_certificate_key %s/key.pem;\n", c.CertDir, c.CertDir)
-	if c.LimitZone != "" {
+	// A placement vhost is the block lib.nix edgeVirtualHosts used to emit at
+	// eval time, which had no rate limit; only the temporary expose path does.
+	if c.LimitZone != "" && r.Kind != KindPlacement {
 		fmt.Fprintf(&b, "  limit_req zone=%s burst=100 nodelay;\n", c.LimitZone)
 	}
 	b.WriteString("  location / {\n")
@@ -191,6 +250,25 @@ const PendingMarker = ".reload-pending"
 const ErrReloadPending = "reload pending"
 
 func (c *Config) marker() string { return filepath.Join(c.Dir, PendingMarker) }
+
+// LockFile in Dir serializes every receiver and expire invocation (each
+// SSH push and each timer run is its own process), so a remove's ownership
+// check and its delete see the same file. Not *.conf: nginx never reads it.
+const LockFile = ".lock"
+
+// lock takes an exclusive flock on Dir's lock file; call the result to
+// release it.
+func (c *Config) lock() (func(), error) {
+	f, err := os.OpenFile(filepath.Join(c.Dir, LockFile), os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("lock: %w", err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("lock: %w", err)
+	}
+	return func() { f.Close() }, nil // closing drops the flock
+}
 
 // Pending reports whether a reload is still owed.
 func (c *Config) Pending() bool {
@@ -303,11 +381,24 @@ func (c *Config) List() ([]Entry, error) {
 	return out, nil
 }
 
-// Handle executes one request; list output goes to w as JSON.
+// Handle executes one request under the dir lock; list output goes to w as
+// JSON. Both writes are fenced by owner, checked against the current file
+// while the lock is held:
+//   - a placement add over a live expose file (Entry.LiveExpose) is kept;
+//   - a remove deletes only a file owned by r.Kind (and r.Host, if set).
+//
+// A kept request writes KeptPrefix+kind to w and returns nil (only an owed
+// reload is retried). A file without a parseable header has no owner and
+// may be replaced or removed (fail closed, like Expire).
 func (c *Config) Handle(r *Request, w io.Writer) error {
 	if err := c.Validate(r); err != nil {
 		return err
 	}
+	unlock, err := c.lock()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	switch r.Op {
 	case "list":
 		if err := c.flush(); err != nil {
@@ -319,13 +410,37 @@ func (c *Config) Handle(r *Request, w io.Writer) error {
 		}
 		return json.NewEncoder(w).Encode(l)
 	case "add":
-		if r.Until != 0 && r.Until <= time.Now().Unix() {
+		now := time.Now()
+		if r.Until != 0 && r.Until <= now.Unix() {
 			return errors.New("until is in the past")
+		}
+		if e, ok := c.current(r.FQDN); ok && r.Kind == KindPlacement && e.LiveExpose(now) {
+			return c.kept(w, e)
 		}
 		return c.swap(r.FQDN, []byte(c.Render(r)))
 	default:
+		if e, ok := c.current(r.FQDN); ok && (e.Kind != r.Kind || (r.Host != "" && e.Host != r.Host)) {
+			return c.kept(w, e)
+		}
 		return c.swap(r.FQDN, nil)
 	}
+}
+
+// current is the header of fqdn's file, if it exists and parses.
+func (c *Config) current(fqdn string) (Entry, bool) {
+	b, err := os.ReadFile(c.path(fqdn))
+	if err != nil {
+		return Entry{}, false
+	}
+	return ParseHeader(b)
+}
+
+// kept reports a fenced no-op on w and retries an owed reload.
+func (c *Config) kept(w io.Writer, e Entry) error {
+	if w != nil {
+		fmt.Fprintf(w, "%s%s on %s\n", KeptPrefix, KindName(e.Kind), e.Host)
+	}
+	return c.flush()
 }
 
 // Expire removes files whose until has passed (and unparseable ones: fail
@@ -334,6 +449,11 @@ func (c *Config) Handle(r *Request, w io.Writer) error {
 // previous run removed the files but its reload failed). With
 // reload=false (boot, before nginx) the marker is left for the next run.
 func (c *Config) Expire(now time.Time, reload bool) ([]string, error) {
+	unlock, err := c.lock()
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 	m, err := filepath.Glob(filepath.Join(c.Dir, "*.conf"))
 	if err != nil {
 		return nil, err

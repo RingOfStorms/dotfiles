@@ -120,6 +120,7 @@ type Pane struct {
 	AgentUnseen    bool
 	AgentWatchUnix int64
 	PaneName       string
+	PID            int
 }
 
 var listFields = []string{
@@ -128,7 +129,7 @@ var listFields = []string{
 	"pane_width", "pane_height", "history_size", "cursor_x", "cursor_y",
 	"pane_in_mode", "pane_dead", "session_attached",
 	"@agent_state", "@agent_unseen", "@agent_watch_until", "@pane_name",
-	"@session_ai_name",
+	"@session_ai_name", "pane_pid",
 }
 
 // metaFields are the bits of pane state that the frame renderer needs.
@@ -200,6 +201,7 @@ func parsePanes(raw string) []Pane {
 			AgentWatchUnix: atoi64(f[19]),
 			PaneName:       f[20],
 			SessionLabel:   f[21],
+			PID:            atoi(f[22]),
 		})
 	}
 	return panes

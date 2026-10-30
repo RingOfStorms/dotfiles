@@ -746,7 +746,7 @@ in
   #   lan      lan + public routes -> its host's LAN IP (hosts without a
   #            lanIp get no LAN record: LAN clients fall through to public)
   #   public   public routes -> CNAME o002 (via edge) or home (via router)
-  # Services without a host are skipped (nothing answers there).
+  # Route names and public membership are independent of placement.
   dnsRecords =
     { dir, hosts }:
     let
@@ -758,10 +758,11 @@ in
             s.routes.${n}
             // {
               source = "${s.name}.${n}";
+              service = s.name;
               host = s.host;
             }
           ) (builtins.attrNames s.routes)
-        ) (builtins.filter (s: s.host != null) (allServices dir))
+        ) (allServices dir)
       );
       hostIp =
         r: field:
@@ -788,11 +789,12 @@ in
           sortByName l;
     in
     {
+      names = checked (map (r: { inherit (r) fqdn source service; }) routes);
       tailnet = checked (
         map (r: {
           inherit (r) fqdn source;
           ip = overlayIp r;
-        }) routes
+        }) (builtins.filter (r: r.host != null) routes)
       );
       lan = checked (
         map
@@ -802,13 +804,13 @@ in
           })
           (
             builtins.filter (
-              r: (r.exposure == "lan" || r.exposure == "public") && hostIp r "lanIp" != null
+              r: r.host != null && (r.exposure == "lan" || r.exposure == "public") && hostIp r "lanIp" != null
             ) routes
           )
       );
       public = checked (
         map (r: {
-          inherit (r) fqdn source;
+          inherit (r) fqdn source service;
           type = "CNAME";
           target = "${if builtins.elem "edge" r.via then "o002" else "home"}.${domain}";
         }) (builtins.filter (r: r.exposure == "public") routes)

@@ -187,6 +187,12 @@
                 example = "o002.joshuabell.xyz";
                 description = "CNAME target for override records.";
               };
+              dns = {
+                tailnetDir = lib.mkOption { type = lib.types.str; default = "/var/lib/fleet-edge-dns/tailnet"; };
+                lanDir = lib.mkOption { type = lib.types.str; default = "/var/lib/fleet-edge-dns/lan"; };
+                tailnetServer = lib.mkOption { type = lib.types.str; default = ""; description = "Tailnet dnsmasq IP:port for routing audit."; };
+                lanServer = lib.mkOption { type = lib.types.str; default = "127.0.0.1:9053"; };
+              };
               zitadel = {
                 issuer = lib.mkOption {
                   type = lib.types.str;
@@ -357,7 +363,11 @@
               "z /var/lib/private 0700 root root -"
               # Shared flock for dns-plan --apply and fleet-edge-overrides.
               "d /run/fleet-edge-bunny 1777 root root -"
+            ] ++ lib.optionals cfg.overrides.enable [
+              "d ${cfg.overrides.dns.tailnetDir} 0775 root fleet-edge-dns -"
+              "d ${cfg.overrides.dns.lanDir} 0775 root fleet-edge-dns -"
             ];
+            users.groups.fleet-edge-dns = lib.mkIf cfg.overrides.enable { };
 
             systemd.services.fleet-edge-overrides = lib.mkIf cfg.overrides.enable (
               let
@@ -369,7 +379,7 @@
               {
                 description = "fleet-edge expose overrides and placement registry (ROUTING-PLAN §8 step 7)";
                 wantedBy = [ "multi-user.target" ];
-                after = [ "network-online.target" ];
+                after = [ "network-online.target" "systemd-tmpfiles-setup.service" ];
                 wants = [ "network-online.target" ];
                 path = [ pkgs.openssh ];
                 serviceConfig = {
@@ -385,6 +395,10 @@
                       "--zitadel-project-id ${lib.escapeShellArg o.zitadel.projectId}"
                       "--target ${lib.escapeShellArg o.target}"
                       "--status-url-template ${lib.escapeShellArg cfg.statusUrlTemplate}"
+                      "--dns-tailnet-dir ${lib.escapeShellArg o.dns.tailnetDir}"
+                      "--dns-lan-dir ${lib.escapeShellArg o.dns.lanDir}"
+                      "--dns-tailnet-server ${lib.escapeShellArg o.dns.tailnetServer}"
+                      "--dns-lan-server ${lib.escapeShellArg o.dns.lanServer}"
                     ]
                     ++ lib.optionals live [
                       "--bunny-key-file %d/bunny"
@@ -401,7 +415,8 @@
                   RestartSec = "5s";
                   StateDirectory = "fleet-edge-overrides";
                   StateDirectoryMode = "0700";
-                  ReadWritePaths = [ "/run/fleet-edge-bunny" ];
+                  ReadWritePaths = [ "/run/fleet-edge-bunny" o.dns.tailnetDir o.dns.lanDir ];
+                  SupplementaryGroups = [ "fleet-edge-dns" ];
                   DynamicUser = true;
                   UMask = "0077";
                   ProtectSystem = "strict";

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/bunny"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/edgevhost"
@@ -33,15 +34,20 @@ func (b *BunnyDNS) Delete(ctx context.Context, zoneID, id int64) error {
 
 // SSHEdge pushes requests to o002's fleet-vhost-receive over the restricted
 // key (the forced command ignores the remote command line; the request is
-// on stdin).
+// on stdin). The expose authority and the placement reconciler share one
+// SSHEdge, and Do runs one request at a time: the receiver's reload-pending
+// marker assumes nobody else is changing its directory mid-reload.
 type SSHEdge struct {
 	Target     string // root@o002
 	KeyFile    string
 	KnownHosts string
 	SSH        string // ssh binary
+	mu         sync.Mutex
 }
 
 func (e *SSHEdge) Do(ctx context.Context, r edgevhost.Request) ([]byte, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	body, _ := json.Marshal(r)
 	ssh := e.SSH
 	if ssh == "" {

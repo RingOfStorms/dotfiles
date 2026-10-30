@@ -609,10 +609,13 @@ func (s *Service) pushEdge(ctx context.Context, o *Row) error {
 	return nil
 }
 
+// dropEdge removes this row's expose vhost. The remove is fenced to
+// KindExpose: if a placement owns the name on o002, the receiver keeps it
+// and reports "kept: owned by placement", which is not an error here.
 func (s *Service) dropEdge(ctx context.Context, o *Row) error {
 	c, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	if _, err := s.cfg.Edge.Do(c, edgevhost.Request{Op: "remove", FQDN: o.FQDN}); err != nil {
+	if _, err := s.cfg.Edge.Do(c, edgevhost.Request{Op: "remove", Kind: edgevhost.KindExpose, FQDN: o.FQDN}); err != nil {
 		return err
 	}
 	o.Edge = false
@@ -847,7 +850,8 @@ func (s *Service) verify(ctx context.Context) Verify {
 			}
 			for _, e := range live {
 				have[e.FQDN] = true
-				if !rowFor[e.FQDN] {
+				// Placement vhosts belong to the reconciler, not to a row here.
+				if !rowFor[e.FQDN] && e.Kind != edgevhost.KindPlacement {
 					v.EdgeExtra = append(v.EdgeExtra, e.FQDN)
 				}
 			}

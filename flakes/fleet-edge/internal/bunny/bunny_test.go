@@ -66,6 +66,48 @@ func TestPlan(t *testing.T) {
 	}
 }
 
+// The CNAME set follows the registry: an unplaced service's record is retired
+// only on an exact match (a changed record blocks Apply), a placed one and a
+// hand name are planned as before, and the input spec is left alone.
+func TestForPlacements(t *testing.T) {
+	s := spec()
+	for i := range s.Records {
+		switch s.Records[i].Name {
+		case "photos":
+			s.Records[i].Service = "immich"
+		case "git":
+			s.Records[i].Service = "forgejo"
+		case "new":
+			s.Records[i].Service = "x"
+		}
+	}
+	z := zone()
+	z.Records = append(z.Records, Record{ID: 16, Type: 2, Name: "new", Value: "elsewhere.example.com", TTL: 300})
+	placed := map[string]bool{"forgejo": true}
+	f := s.ForPlacements(func(svc string) bool { return placed[svc] })
+	if err := f.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	m := byName(PlanWith(f, z, nil))
+	want := map[string]string{
+		"o002/A":       Keep,
+		"git/CNAME":    Update,
+		"photos/CNAME": Retire,
+		"new/CNAME":    RetireMismatch,
+	}
+	for k, a := range want {
+		if m[k].Action != a {
+			t.Errorf("%s: got %q want %q", k, m[k].Action, a)
+		}
+	}
+	if len(s.Records) != 5 || len(s.Retire) != 0 {
+		t.Errorf("input spec changed: %+v", s)
+	}
+	if _, err := Ops(1, PlanWith(f, z, nil)); err == nil {
+		t.Error("a retire-mismatch must block the plan")
+	}
+}
+
 func TestValidate(t *testing.T) {
 	s := spec()
 	s.Records = append(s.Records, Desired{Name: "evil", Type: "CNAME", Value: "attacker.net", TTL: 300})

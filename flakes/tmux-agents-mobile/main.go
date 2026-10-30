@@ -24,6 +24,7 @@ import (
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/diff"
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/dirs"
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/tmux"
+	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/transcript"
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/watch"
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/web"
 )
@@ -126,6 +127,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	}
 
 	hub := watch.New(tmuxClient, log)
+	chatHub := watch.NewChatHub(tmuxClient, transcript.NewLocator(), web.RenderChatItem, log)
 	git := diff.New(cfg.gitBin)
 
 	provider := agents.New(cfg.agentsBin, tmuxClient)
@@ -145,7 +147,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 			log.Warn("directory index failed; the picker will fall back", "err", err)
 		}
 	}()
-	webServer, err := web.New(tmuxClient, hub, provider, git, dirIndex, expandRoots(cfg.roots), !authenticator.Enabled(), log)
+	webServer, err := web.New(tmuxClient, hub, chatHub, provider, git, dirIndex, expandRoots(cfg.roots), !authenticator.Enabled(), log)
 	if err != nil {
 		return err
 	}

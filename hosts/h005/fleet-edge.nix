@@ -81,6 +81,7 @@ in
       enable = true;
       specFile = publicSpecFile;
       target = "o002.${fleet.global.domain}";
+      dns.tailnetServer = "${fleet.hosts.h005.overlayIp}:53";
       # By overlay IP so the pinned known_hosts line matches (ssh uses
       # StrictHostKeyChecking=yes with only this file).
       pushTarget = "root@${fleet.hosts.o002.overlayIp}";

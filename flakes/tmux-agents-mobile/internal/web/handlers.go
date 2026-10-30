@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/diff"
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/frame"
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/tmux"
+	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/watch"
 )
 
 // Card is one clickable leaf of the navigator tree, flattened. A session with
@@ -197,6 +199,35 @@ func tildeHome(path string) string {
 	return path
 }
 
+// PaneView is how the pane page shows the pane.
+type PaneView string
+
+const (
+	// ViewNative renders the agent's own session log as a conversation.
+	ViewNative PaneView = "native"
+	// ViewWrap re-flows the terminal screen at phone width.
+	ViewWrap PaneView = "wrap"
+	// ViewFit shows the terminal grid as is, shrunk to the screen width.
+	ViewFit PaneView = "fit"
+)
+
+// requestedView reads ?view=, keeping the older ?fit=1 links working. Empty
+// means "the best one available".
+func requestedView(q url.Values) PaneView {
+	switch PaneView(q.Get("view")) {
+	case ViewNative:
+		return ViewNative
+	case ViewWrap:
+		return ViewWrap
+	case ViewFit:
+		return ViewFit
+	}
+	if q.Get("fit") == "1" {
+		return ViewFit
+	}
+	return ""
+}
+
 // PanePage is the single-pane viewer.
 type PanePage struct {
 	Base
@@ -208,6 +239,7 @@ type PanePage struct {
 	State   string
 	Repo    string
 	Branch  string
+	View    PaneView
 	Fit     bool
 	Frame   template.HTML
 	Watched bool
@@ -225,10 +257,25 @@ func (s *Server) panePage(w http.ResponseWriter, r *http.Request) {
 		Slug:   slug,
 		Pane:   p,
 		Target: fmt.Sprintf("%s:%d", p.Session, p.WindowIndex),
-		Fit:    r.URL.Query().Get("fit") == "1",
 		State:  p.AgentState,
 		Label:  p.PaneName,
 	}
+	// The native view is the default wherever the agent's session log can be
+	// found; everything else (shells, unsupported agents) gets the terminal.
+	native := false
+	if s.chat != nil {
+		if _, _, err := s.chat.Locate(ctx, p); err == nil {
+			native = true
+		}
+	}
+	page.View = requestedView(r.URL.Query())
+	if page.View == "" || (page.View == ViewNative && !native) {
+		page.View = ViewWrap
+		if native {
+			page.View = ViewNative
+		}
+	}
+	page.Fit = page.View == ViewFit
 	if kind, label := agents.Detect(p.Title, p.Command); kind != "" {
 		page.Agent = kind
 		if page.Label == "" {
@@ -253,8 +300,10 @@ func (s *Server) panePage(w http.ResponseWriter, r *http.Request) {
 	if repo, err := s.git.Find(ctx, p.Path); err == nil {
 		page.Repo, page.Branch = repo.Root, repo.Branch
 	}
-	if raw, err := s.tmux.Capture(ctx, p.ID, tmux.CaptureOpts{Escapes: true, Join: !page.Fit, PreserveTrailing: page.Fit}); err == nil {
-		page.Frame = frameHTML(frame.Render(raw, !page.Fit))
+	if page.View != ViewNative {
+		if raw, err := s.tmux.Capture(ctx, p.ID, tmux.CaptureOpts{Escapes: true, Join: !page.Fit, PreserveTrailing: page.Fit}); err == nil {
+			page.Frame = frameHTML(frame.Render(raw, !page.Fit))
+		}
 	}
 	// Header: back to the inbox, the agent's own label, and the pane's state
 	// glyph, exactly as the tmux status line renders it.
@@ -278,7 +327,7 @@ func (s *Server) panePage(w http.ResponseWriter, r *http.Request) {
 	page.Context = title
 	page.Sub = sub
 	page.Glyph, page.GlyphClass = stateGlyph(page.State, p.AgentUnseen)
-	page.Actions = paneActions(slug, page.Fit)
+	page.Actions = paneActions(slug, page.View, native)
 	page.Watched = time.Unix(p.AgentWatchUnix, 0).After(time.Now())
 	s.render(w, "pane.html", page)
 }
@@ -291,7 +340,50 @@ func (s *Server) paneEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fit := r.URL.Query().Get("fit") == "1"
+	events, cancel := s.hub.Subscribe(p.ID, fit)
+	defer cancel()
+	s.stream(w, r, events, "gone")
+}
 
+// chatEvents streams the native conversation view: rendered items as they
+// appear or change, and the pane's agent state.
+func (s *Server) chatEvents(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.pane(w, r)
+	if !ok {
+		return
+	}
+	if s.chat == nil {
+		s.fail(w, http.StatusNotFound, "native view unavailable")
+		return
+	}
+	events, cancel := s.chat.Subscribe(p.ID)
+	defer cancel()
+	s.stream(w, r, events, "gone", "fallback")
+}
+
+// chatEarlier returns the items before ?before=, for "show earlier".
+func (s *Server) chatEarlier(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.pane(w, r)
+	if !ok {
+		return
+	}
+	if s.chat == nil {
+		s.fail(w, http.StatusNotFound, "native view unavailable")
+		return
+	}
+	before := atoiOr(r.URL.Query().Get("before"), 0)
+	page, err := s.chat.Earlier(p.ID, before, watch.ChatPage)
+	if err != nil {
+		s.fail(w, http.StatusConflict, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(page)
+}
+
+// stream relays hub events as server-sent events until the client leaves, the
+// hub closes the channel, or one of the final events is sent.
+func (s *Server) stream(w http.ResponseWriter, r *http.Request, events <-chan watch.Event, final ...string) {
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, no-transform")
 	w.Header().Set("X-Accel-Buffering", "no")
@@ -301,9 +393,6 @@ func (s *Server) paneEvents(w http.ResponseWriter, r *http.Request) {
 	flush := func() { _ = rc.Flush() }
 	_, _ = io.WriteString(w, "retry: 2000\n\n")
 	flush()
-
-	events, cancel := s.hub.Subscribe(p.ID, fit)
-	defer cancel()
 
 	ping := time.NewTicker(20 * time.Second)
 	defer ping.Stop()
@@ -317,7 +406,7 @@ func (s *Server) paneEvents(w http.ResponseWriter, r *http.Request) {
 			}
 			_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", ev.Name, ev.Data)
 			flush()
-			if ev.Name == "gone" {
+			if slices.Contains(final, ev.Name) {
 				return
 			}
 		case <-ping.C:
@@ -813,15 +902,23 @@ func boolInt(v bool) int {
 
 // paneActions is the pane page's overflow menu. Keeping every state-changing
 // action in here is what frees the screen for the frame and the composer.
-func paneActions(slug string, fit bool) []Action {
-	fitLabel := "fit to width"
-	if fit {
-		fitLabel = "wrap text"
-	}
-	return []Action{
+// Every view other than the current one is offered, so any of them is one tap
+// away whichever the page opened in.
+func paneActions(slug string, view PaneView, native bool) []Action {
+	actions := []Action{
 		{Label: "diff", Href: "/p/" + slug + "/diff"},
 		{Label: "history", Href: "/p/" + slug + "/history"},
-		{Label: fitLabel, Href: "/p/" + slug + "?fit=" + fmt.Sprint(boolInt(!fit))},
+	}
+	if native && view != ViewNative {
+		actions = append(actions, Action{Label: "conversation", Href: "/p/" + slug + "?view=native"})
+	}
+	if view != ViewWrap {
+		actions = append(actions, Action{Label: "terminal: wrap text", Href: "/p/" + slug + "?view=wrap"})
+	}
+	if view != ViewFit {
+		actions = append(actions, Action{Label: "terminal: fit to width", Href: "/p/" + slug + "?view=fit"})
+	}
+	return append(actions, []Action{
 		{Label: "mark seen", Post: "/p/" + slug + "/seen"},
 		{Label: "open on desktop", Post: "/p/" + slug + "/focus"},
 		{
@@ -832,7 +929,7 @@ func paneActions(slug string, fit bool) []Action {
 			Class:   "danger",
 		},
 		{Label: "sign out", Href: "/auth/logout"},
-	}
+	}...)
 }
 
 func frameHTML(lines []frame.Line) template.HTML {

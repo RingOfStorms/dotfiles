@@ -4,6 +4,9 @@ import (
 	"context"
 
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -652,8 +655,8 @@ func TestCmdAuditStdinRequiresOneHost(t *testing.T) {
 	oldInv := inv
 	t.Cleanup(func() { inv = oldInv })
 	inv = &Inventory{Services: map[string]Service{}}
-	if err := cmdAudit([]string{"h001", "h002", "--stdin"}); err == nil {
-		t.Fatal("expected error for --stdin with multiple hosts")
+	if err := cmdAudit([]string{"h001", "h002", "--stdin"}); err != nil {
+		t.Fatalf("audit diagnostics must exit zero: %v", err)
 	}
 }
 
@@ -1612,5 +1615,31 @@ func TestRefreshCallersIgnoresNonHTTP(t *testing.T) {
 
 	if calls := r.calls(); calls != "" {
 		t.Errorf("nothing should run, got:\n%s", calls)
+	}
+}
+
+func TestRoutingAudit(t *testing.T) {
+	var out strings.Builder
+	printRoutingAudit(&out, func() (*edgeClient, error) { return nil, errNoToken })
+	if out.Len() != 0 {
+		t.Fatalf("no key: %s", out.String())
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/api/placements/routing" || r.Header.Get("Authorization") != "Bearer test" {
+			t.Errorf("request: %v", r)
+		}
+		fmt.Fprint(w, `{"checks":[{"layer":"tailnet","fqdn":"photos.example.com","status":"ok","want":"100.64.0.13","got":"100.64.0.13"},{"layer":"edge","fqdn":"photos.example.com","status":"pending","detail":"reload pending"}],"errors":[]}`)
+	}))
+	defer srv.Close()
+	printRoutingAudit(&out, func() (*edgeClient, error) { return &edgeClient{base: srv.URL, http: srv.Client(), token: "test"}, nil })
+	for _, s := range []string{"== routing (h005)", "photos.example.com", "ok", "pending", "reload pending"} {
+		if !strings.Contains(out.String(), s) {
+			t.Errorf("missing %q: %s", s, out.String())
+		}
+	}
+	out.Reset()
+	printRoutingAudit(&out, func() (*edgeClient, error) { return nil, errors.New("unreachable") })
+	if !strings.Contains(out.String(), "pending: unreachable") {
+		t.Fatal(out.String())
 	}
 }

@@ -38,6 +38,10 @@ connected.
   real keyboard: Esc, Ctrl-C, Tab, arrows and Ctrl-<letter> go straight to the
   pane. If the pane exits (or is killed) while you are looking at it, the page
   returns to the inbox instead of staying on a dead screen.
+- **Conversation view** (omp panes) — see [Native conversation view](#native-conversation-view).
+  It is the default wherever the agent's session log can be found; the menu
+  switches to *terminal: wrap text* / *terminal: fit to width* (`?view=wrap|fit`)
+  and back (`?view=native`).
 - **Diff** (`/p/<id>/diff`) — `git status` plus a per-file diff for the
   pane's worktree, rendered like a mobile code review: unified by default with
   old/new gutters, a sign column and red/green rows, and a *side-by-side*
@@ -207,8 +211,8 @@ proxy that honours it needs no extra configuration.
 ```
 
 then `nix build .#darwinConfigurations.<host>.system` / `darwin-rebuild switch`
-as usual. The package wraps `tmux`, `git` and `fzf` into its `PATH`, so the
-agent does not depend on the launchd environment having them.
+as usual. The package wraps `tmux`, `git` and `fzf` (and `procps` on Linux) into
+its `PATH`, so the agent does not depend on the launchd environment having them.
 
 `homeManagerModules.default` is Linux-only (it writes a systemd user unit);
 use `darwinModules` on macOS.
@@ -238,6 +242,34 @@ would swallow it), skips the swap when the markup is byte-identical (the common
 case), preserves scroll position, and re-applies an active filter to the new
 cards. A response only counts when it carries `X-Fragment: cards`, so an expired
 session or a missing tmux server cannot paste a login page into the list.
+
+## Native conversation view
+
+For omp panes the page renders the agent's own session log instead of the
+terminal: user messages as bubbles, assistant prose as Markdown (goldmark;
+raw HTML in model output is shown as text, unsafe link schemes dropped),
+thinking collapsed, and each tool call as a one-line row (status glyph, tool,
+intent) that expands to the command/path, the output and, for edits, the diff.
+Notices (`custom_message` with `display: true`: advisor, IRC, async results)
+and compactions are collapsible rows; hidden entries are skipped.
+
+Finding the session (`internal/transcript/locate.go`, no plugin needed):
+
+1. `pane_pid` → `ps -e` process tree, breadth-first, to the shallowest `omp`
+   (sandbox wrappers like `nono` run it as a child, on its own pty).
+2. A session JSONL the process holds open, else omp's breadcrumb
+   `$PI_CODING_AGENT_DIR/terminal-sessions/<tty>` (line 2 is the session file),
+   else a `--resume=<file>` argument.
+
+Sessions are trees (re-sending a message branches); the view follows the newest
+entry back to the root, which is what omp resumes into. One reader per pane
+tails the file every 400ms and pushes rendered items over SSE
+(`/p/<id>/chat/events`: `init`, `items`, `state`, `fallback`, `gone`); a tool
+result re-renders its call in place. The page loads the last 60 items and
+*show earlier* fetches more (`/p/<id>/chat/earlier?before=N`). If no session
+can be read (agent exited, not omp), the page falls back to the terminal.
+Input still goes through `send-keys`, so the composer and ⌨ keys behave exactly
+as in the terminal views — `ask` prompts are answered with the arrow/Enter keys.
 
 ## Limits
 

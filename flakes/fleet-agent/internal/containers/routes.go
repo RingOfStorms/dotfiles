@@ -1002,7 +1002,11 @@ func cmdAudit(args []string) error {
 		hosts = containerHosts()
 	}
 	if f.bools["stdin"] && len(hosts) != 1 {
-		return errors.New("usage: containers audit <host> --stdin   (reads ss -ltnupH from stdin, exactly one host)")
+		fmt.Fprintln(os.Stderr, "usage: containers audit <host> --stdin   (reads ss -ltnupH from stdin, exactly one host)")
+		return nil
+	}
+	if !dryRun {
+		defer printRoutingAudit(os.Stdout, edgeClientFor)
 	}
 	var svcs []Service
 	for _, s := range inv.Services {
@@ -1012,12 +1016,14 @@ func cmdAudit(args []string) error {
 		if f.bools["stdin"] {
 			b, err := io.ReadAll(os.Stdin)
 			if err != nil {
-				return fmt.Errorf("%s: reading stdin: %v", h, err)
+				fmt.Fprintf(os.Stderr, "%s: reading stdin: %v\n", h, err)
+				continue
 			}
 			ssOut, hl, ov := splitAudit(string(b))
 			ls := parseSS(ssOut)
 			if len(ls) == 0 {
-				return errors.New("no ss output on stdin; collection failed?")
+				fmt.Fprintln(os.Stderr, "no ss output on stdin; collection failed?")
+				continue
 			}
 			fmt.Printf("== %s\n", h)
 			fmt.Print(auditTable(auditListeners(ls, svcs, h, parseHostListeners(hl)...)))
@@ -1035,7 +1041,7 @@ func cmdAudit(args []string) error {
 		if err != nil {
 			if sudoNeedsPassword(err) {
 				fmt.Fprint(os.Stderr, needsRootMsg(h))
-				return errors.New("audit needs root")
+				continue
 			}
 			fmt.Fprintf(os.Stderr, "%s: %v\n", h, err)
 			continue
@@ -1045,6 +1051,48 @@ func cmdAudit(args []string) error {
 		printAuditOverrides(parseOverrides(ov, h))
 	}
 	return nil
+}
+
+type routingCheck struct {
+	Layer   string `json:"layer"`
+	FQDN    string `json:"fqdn"`
+	Service string `json:"service"`
+	Host    string `json:"host"`
+	Want    string `json:"want"`
+	Got     string `json:"got"`
+	Status  string `json:"status"`
+	Detail  string `json:"detail"`
+}
+
+// Routing is read-only and diagnostic: even an unavailable authority is not
+// an audit failure. A machine without credentials omits the section quietly.
+func printRoutingAudit(w io.Writer, client func() (*edgeClient, error)) {
+	c, err := client()
+	if errors.Is(err, errNoToken) {
+		return
+	}
+	fmt.Fprintln(w, "== routing (h005)")
+	if err != nil {
+		fmt.Fprintf(w, "pending: %v\n", err)
+		return
+	}
+	var report struct {
+		Checks []routingCheck `json:"checks"`
+		Errors []string       `json:"errors"`
+	}
+	if err := c.do("GET", "/api/placements/routing", nil, &report); err != nil {
+		fmt.Fprintf(w, "pending: %v\n", err)
+		return
+	}
+	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(tw, "LAYER\tNAME\tSTATUS\tWANT\tGOT\tDETAIL")
+	for _, row := range report.Checks {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", row.Layer, row.FQDN, row.Status, dash(row.Want), dash(row.Got), row.Detail)
+	}
+	_ = tw.Flush()
+	for _, err := range report.Errors {
+		fmt.Fprintf(w, "pending: %s\n", err)
+	}
 }
 
 // needsRootMsg: sudo over plain ssh has no TTY to ask for a password.

@@ -28,6 +28,7 @@ import (
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/overrides"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/placements"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/reconcile"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/server"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/shareserve"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/state"
@@ -47,7 +48,9 @@ func envDefault(key, def string) string {
 // dnsPlan: `fleet-edge dns-plan --spec records.json --key-file f [--apply]`.
 // Fetches the zone and prints what a reconcile would do (ROUTING-PLAN §8
 // step 4). With --apply it then executes only the create/update/retire rows
-// (refusing the whole plan on any conflict or retire-mismatch).
+// (refusing the whole plan on any conflict or retire-mismatch). The spec is
+// declarative; only its route-record set follows the placement registry
+// (bunny.ForPlacements), so an unplaced service publishes no name.
 func dnsPlan(args []string) {
 	fs := flag.NewFlagSet("dns-plan", flag.ExitOnError)
 	specFile := fs.String("spec", "", "desired records JSON (generated on h005)")
@@ -57,12 +60,27 @@ func dnsPlan(args []string) {
 	overridesURL := fs.String("overrides-url", "http://127.0.0.1:8098/internal/overrides.json",
 		"loopback export of active expose overrides (records they own are never touched)")
 	noOverrides := fs.Bool("no-overrides", false, "skip the overrides export (read-only plans only)")
+	placementsURL := fs.String("placements-url", "http://127.0.0.1:8098/internal/placements.json",
+		"loopback export of the placement registry (a route record is published only while its service is placed)")
+	noPlacements := fs.Bool("no-placements", false, "plan every declared route record, placed or not (read-only plans only)")
 	lockPath := fs.String("lock", "/run/fleet-edge-bunny/lock", "flock shared with fleet-edge overrides (--apply)")
 	_ = fs.Parse(args)
 	var client *bunny.Client
 	spec, err := bunny.LoadSpec(*specFile)
 	if err != nil {
 		log.Fatal(err)
+	}
+	if *noPlacements {
+		if *apply {
+			log.Fatal("--apply refuses --no-placements: it would publish names of services the registry does not place")
+		}
+	} else {
+		// Fail closed: without the registry there is no record set to apply.
+		exp, err := fetchPlacements(*placementsURL)
+		if err != nil {
+			log.Fatalf("placements export %s: %v (pass --no-placements for a read-only plan)", *placementsURL, err)
+		}
+		spec = spec.ForPlacements(exp.Placed)
 	}
 	var z *bunny.Zone
 	if *zoneFile != "" {
@@ -146,6 +164,21 @@ func fetchOwned(url string) ([]bunny.Owned, error) {
 	return e.Owned, nil
 }
 
+func fetchPlacements(url string) (placements.Export, error) {
+	var e placements.Export
+	c := &http.Client{Timeout: 10 * time.Second}
+	resp, err := c.Get(url)
+	if err != nil {
+		return e, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return e, fmt.Errorf("%s", resp.Status)
+	}
+	err = json.NewDecoder(resp.Body).Decode(&e)
+	return e, err
+}
+
 // runOverrides: the public expose authority and the placement registry, one
 // unit (ROUTING-PLAN §8 step 7, containers/PLACEMENT-PLAN.md).
 func runOverrides(args []string) {
@@ -164,6 +197,10 @@ func runOverrides(args []string) {
 	knownHosts := fs.String("known-hosts", "", "known_hosts for the edge")
 	statusTmpl := fs.String("status-url-template", "http://{overlayIp}:9101/status.json", "host status url")
 	lockPath := fs.String("lock", "/run/fleet-edge-bunny/lock", "flock shared with dns-plan --apply")
+	tailnetDir := fs.String("dns-tailnet-dir", "/var/lib/fleet-edge-dns/tailnet", "tailnet dnsmasq hostsdir")
+	lanDir := fs.String("dns-lan-dir", "/var/lib/fleet-edge-dns/lan", "LAN dnsmasq hostsdir")
+	tailnetServer := fs.String("dns-tailnet-server", "", "tailnet dnsmasq IP:port for audit")
+	lanServer := fs.String("dns-lan-server", "127.0.0.1:9053", "LAN dnsmasq IP:port for audit")
 	every := fs.Duration("sweep", 30*time.Second, "sweep interval")
 	_ = fs.Parse(args)
 	inv, err := inventory.Load(*invFile)
@@ -215,8 +252,18 @@ func runOverrides(args []string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	var routing *reconcile.Reconciler
 	pl, err := placements.New(placements.Config{Inventory: inv, StateDir: *stateDir, Auth: au,
-		Status: placements.HTTPHostServices(poller.StatusURLFor)})
+		Status: placements.HTTPHostServices(poller.StatusURLFor), Notify: func() {
+			if routing != nil {
+				routing.Kick()
+			}
+		}})
+	if err != nil {
+		log.Fatal(err)
+	}
+	routing, err = reconcile.New(reconcile.Config{Inventory: inv, Source: func() (placements.Export, error) { return pl.Snapshot(), nil },
+		TailnetDir: *tailnetDir, LANDir: *lanDir, TailnetServer: *tailnetServer, LANServer: *lanServer, Edge: cfg.Edge})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -224,9 +271,11 @@ func runOverrides(args []string) {
 	defer stop()
 	go ov.Run(ctx, *every)
 	go pl.Run(ctx, *every)
+	go routing.Run(ctx, 30*time.Second)
 	// One listener, both APIs: h005 proxies /api/overrides and /api/placements
 	// to the same loopback port, and each export stays loopback-only.
 	root := http.NewServeMux()
+	root.Handle("/api/placements/routing", routing.Handler(au))
 	for _, s := range []struct {
 		export, api string
 		h           http.Handler

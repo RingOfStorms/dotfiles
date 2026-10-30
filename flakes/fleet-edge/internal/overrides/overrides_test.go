@@ -92,7 +92,7 @@ func (f *fakeEdge) Do(_ context.Context, r edgevhost.Request) ([]byte, error) {
 	case "list":
 		l := []edgevhost.Entry{}
 		for k, v := range f.files {
-			l = append(l, edgevhost.Entry{FQDN: k, Host: v.Host, Until: v.Until})
+			l = append(l, edgevhost.Entry{FQDN: k, Host: v.Host, Until: v.Until, Kind: v.Kind})
 		}
 		return json.Marshal(l)
 	}
@@ -682,6 +682,18 @@ func TestEdgeReloadPendingKeepsRemoving(t *testing.T) {
 	r.s.Sweep(context.Background())
 	if len(r.s.rows) != 0 {
 		t.Fatalf("sweep left %+v", r.s.rows)
+	}
+}
+
+// o002 files the placement reconciler owns are not expose leftovers; an
+// unknown expose file still is.
+func TestVerifyIgnoresPlacementVhosts(t *testing.T) {
+	r := newRig(t)
+	r.edge.files["photos.example.com"] = edgevhost.Request{Op: "add", Kind: edgevhost.KindPlacement, FQDN: "photos.example.com", Host: "h001"}
+	r.edge.files["stray.example.com"] = edgevhost.Request{Op: "add", FQDN: "stray.example.com", Host: "h001", Until: 1}
+	v := r.s.verify(context.Background())
+	if len(v.EdgeExtra) != 1 || v.EdgeExtra[0] != "stray.example.com" {
+		t.Fatalf("edgeExtra %v", v.EdgeExtra)
 	}
 }
 

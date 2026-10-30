@@ -1,0 +1,30 @@
+{{define "item"}}{{if eq .Kind "user"}}{{template "user" .}}{{else if eq .Kind "assistant"}}{{template "assistant" .}}{{else if eq .Kind "compaction"}}{{template "compaction" .}}{{else}}{{template "notice" .}}{{end}}{{end}}
+
+{{define "user"}}<div class="msg user"><div class="bubble">
+{{- if .Text}}<div class="utext">{{.Text}}</div>{{end}}
+{{- if .Images}}<div class="attach">🖼 {{.Images}} image{{if gt .Images 1}}s{{end}}</div>{{end}}
+{{- range .Files}}<div class="attach mono">@{{.}}</div>{{end -}}
+</div></div>{{end}}
+
+{{define "assistant"}}<div class="msg assistant">
+{{- range .Parts}}
+{{- if eq .Kind "thinking"}}<details class="think"><summary>thinking</summary><div class="md">{{md .Text}}</div></details>
+{{- else if eq .Kind "text"}}<div class="md">{{md .Text}}</div>
+{{- else}}{{template "tool" .Tool}}{{end}}
+{{- end}}
+{{- if eq .Stop "interrupted"}}<div class="stop">⊘ {{if .StopMessage}}{{.StopMessage}}{{else}}interrupted{{end}}</div>
+{{- else if eq .Stop "error"}}<div class="stop st-error">✗ {{if .StopMessage}}{{.StopMessage}}{{else}}error{{end}}</div>{{end -}}
+</div>{{end}}
+
+{{define "tool"}}<details class="tool st-{{.Status}}"><summary><span class="tglyph">{{toolGlyph .Status}}</span><span class="tname">{{.Name}}</span><span class="tsum">{{if .Intent}}{{.Intent}}{{else}}{{firstLine .Detail}}{{end}}</span></summary><div class="tbody">
+{{- if .Detail}}<pre class="tdetail">{{.Detail}}</pre>{{end}}
+{{- if .Args}}<pre class="targs">{{.Args}}</pre>{{end}}
+{{- if .Diff}}<pre class="tdiff">{{range diffLines .Diff}}<span class="{{.Class}}">{{.Text}}</span>
+{{end}}</pre>
+{{- else if .Output}}<pre class="tout">{{.Output}}</pre>
+{{- else if eq .Status "running"}}<div class="tpending">running…</div>{{end -}}
+</div></details>{{end}}
+
+{{define "notice"}}<details class="msg notice"><summary><span class="nlabel">{{noticeLabel .Label}}</span><span class="tsum">{{summaryLine .Text}}{{range .Files}} @{{.}}{{end}}</span></summary><div class="md">{{md (unwrap .Text)}}</div></details>{{end}}
+
+{{define "compaction"}}<details class="msg compaction"><summary>— {{.Label}} —</summary>{{if .Text}}<div class="md">{{md .Text}}</div>{{end}}</details>{{end}}

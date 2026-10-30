@@ -25,9 +25,11 @@ routes because those are facts about the service, but while it has no row the
 25565 forward does not exist, `computerboyz` has neither a DNS record nor an
 o002 vhost, and the dashboard lists it under "unplaced".
 
-Status: **phase 1 done** (registry + API + unit wiring, including reservation
-tokens, revision CAS, installed-vs-active health, fenced expiry and explicit
-recovery). Phases 2–6 below.
+Status: **phase 1 done**, **phase 2 done**, **phase 3 implemented, not deployed**.
+Phase 3 deploy order: **h005 first**, then **o002**. Until o002 deploys, its
+receiver refuses the placement pushes as reserved names. After o002 deploys,
+those names give 444 for up to approximately 30 seconds until h005's next pass.
+No deployment is part of this implementation. Phases 4–6 remain below.
 
 ---
 
@@ -42,9 +44,8 @@ under a mutex; the file is `{"revision": N, "rows": [...]}`, and `revision` is
 the registry-wide counter that outlives the rows) and `placements-audit.log`
 (one JSON line per request, refusals and rate-limited calls included). Same
 `StateDirectory` as the expose authority: both are h005-local runtime state
-owned by the same DynamicUser, and no other process opens the files — the
-dashboard (and, in phase 3, the reconciler) read the loopback export over HTTP,
-the same way `--overrides-url` already works (`main.go:55`).
+owned by the same DynamicUser. The dashboard reads the loopback export over
+HTTP; the phase-3 reconciler reads the registry in-process with `Snapshot()`.
 
 Callers authenticate exactly like `cnt expose` (`internal/authority`): a Zitadel
 machine token whose `sub` is in `fleet.global.overrideWriters`
@@ -501,18 +502,10 @@ and the inventory's declarative routes:
   (`networking.nix:320-333`), which still reads `/var/lib`, so no new
   permission, capability or reload path is needed, but the modes are load
   bearing.
-  - Only the IP half moves into the `hostsdir`. `local=/<fqdn>/` lines carry no
-    address, so `dnsRecords` keeps generating them; they exist only on the
-    **tailnet** instance (`networking.nix:49` maps `dnsRecords.tailnet`) — the
-    LAN instance answers from `host-record` and `server=` with no `local=` at
-    all. A name with `local=` plus a `hostsdir` entry answers locally instead of
-    following the public CNAME chain (verified: A answered, AAAA
-    `NOERROR`/empty), which is why `local=` must survive the removal of
-    `host-record`. Phase 5 therefore does not delete `dnsRecords`: it drops the
-    address fields, leaving the `local=` name list and the `public` CNAME list.
-    Both name lists filter on "has a placement", so an unplaced service keeps
-    its name out of the tailnet resolver entirely instead of shadowing the
-    public chain with nothing behind it.
+  - Both dnsmasq instances keep `local=/<fqdn>/` for every inventory route
+    name, with no host or placement filter. Only addresses move into the
+    hostsdirs; unplaced names answer locally without an A record rather than
+    following a public CNAME. Hand-kept host records remain declarative.
   - Of the three lists `dnsRecords` returns, `tailnet` (every non-local route →
     overlay IP) and `lan` (lan+public routes → LAN IP, only hosts that have one)
     depend on placement for the *address*. `public` targets `o002`/`home`
@@ -521,9 +514,8 @@ and the inventory's declarative routes:
     services", so the resolver feeds it the set of effective hosts (names only,
     no addresses) while the CNAME target stays declarative. `dns-plan` never
     learns a host.
-  - The LAN instance keeps its current shape — no `local=`, `server=` fallthrough
-    for everything not in a file — so nothing about LAN AAAA behaviour changes
-    in this phase.
+  - The LAN instance also reserves every inventory route name with `local=`.
+    Non-route names retain the existing external `server=` fallthrough.
   - This reverses the "No runtime path" call recorded in
     `ROUTING-PLAN.md:739-745` — the same paragraph already names this extension
     ("Revisit with `cnt expose`/`move` … where a hostsdir fed by fleet-edge is
@@ -532,9 +524,18 @@ and the inventory's declarative routes:
   - Ordering is add-before-remove with one file per name and no directory-wide
     rewrite, so a pass that dies halfway leaves the previous answers in place
     for every name it did not reach.
+  - Implemented in `internal/reconcile`, in the overrides unit: startup,
+    every 30 seconds, and non-blocking registry write notifications. Stale
+    rows and unknown/unaddressable hosts keep their last files. The static
+    `fleet-edge-dns` group grants the DynamicUser write access to 0775
+    hostsdirs; atomic files are chmod 0644 before rename.
+  - Authenticated `GET /api/placements/routing` compares files, actual A
+    answers from the overlay listener and `127.0.0.1:9053`, and o002's list.
+    `cnt audit` prints `== routing (h005)` and treats it as diagnostic only;
+    machines without a key omit the section quietly.
 - **o002 vhosts**: for each `public` + `via = edge` route whose service has an
   effective host, send the existing runtime receiver
-  (`internal/edgevhost.Request{Op: "add", FQDN, Host, Until: 0, MaxBody,
+  (`internal/edgevhost.Request{Op: "add", Kind: "placement", FQDN, Host, Until: 0, MaxBody,
   Websockets, Buffering, RequestBuffering, Timeouts}` over the same restricted
   SSH key, `/var/lib/fleet-edge-vhosts/<fqdn>.conf`, `nginx -t` + reload,
   `.reload-pending` marker). `Render` already produces the same block
@@ -546,6 +547,11 @@ and the inventory's declarative routes:
   it is built from o002's *own* `virtualHosts`, so today it refuses a runtime
   push of any container name; removing `containerVhosts` is what makes those
   names pushable. Hand vhosts stay reserved, unchanged.
+  Startup pushes every desired placement vhost; later passes list first and
+  add/fix before removing only placement-kind leftovers. Placement vhosts
+  have no expiry or rate limit, and expose audit ignores them. SSH pushes are
+  serialized with the expose authority. `edgeVirtualHosts` stays in lib.nix
+  for the eval test until phase 5.
 - A route that loses its placement, or drops to a non-`public` exposure, gets
   `Op: "remove"` and a reload. The push order is add-before-remove, and a host
   that stops answering never causes a removal — the host's own edge listener

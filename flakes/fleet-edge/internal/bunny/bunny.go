@@ -60,6 +60,10 @@ type Desired struct {
 	Value  string `json:"value"`
 	TTL    int    `json:"ttl"`
 	Source string `json:"source"` // e.g. "immich.web" or "hand"
+	// Service is the container service a generated route record belongs to
+	// ("" for hand-kept names). Such a record is published only while the
+	// placement registry places the service (ForPlacements).
+	Service string `json:"service,omitempty"`
 }
 
 // Spec is the build-time input (hosts/h005, JSON).
@@ -175,6 +179,27 @@ func (s *Spec) Validate() error {
 		}
 	}
 	return nil
+}
+
+// ForPlacements is the spec with the record set following the placement
+// registry (containers/PLACEMENT-PLAN.md §5): a route record whose service is
+// not placed contributes no name. It moves to Retire, so the live record is
+// deleted only while it is exactly the one the spec would have created; any
+// other record under that name is a retire-mismatch and blocks Apply. Values
+// stay declarative (o002/home), only membership changes. Hand records are
+// untouched. The receiver is not modified.
+func (s *Spec) ForPlacements(placed func(service string) bool) *Spec {
+	out := *s
+	out.Records = nil
+	out.Retire = append([]Retired(nil), s.Retire...)
+	for _, d := range s.Records {
+		if d.Service == "" || placed(d.Service) {
+			out.Records = append(out.Records, d)
+			continue
+		}
+		out.Retire = append(out.Retire, Retired{Name: d.Name, Type: d.Type, Value: d.Value})
+	}
+	return &out
 }
 
 func norm(v string) string { return strings.TrimSuffix(strings.ToLower(v), ".") }

@@ -1,8 +1,15 @@
 {{define "pane.html"}}{{template "head" .}}
+{{if eq .View "native"}}
+<div id="chat" class="chat" data-pane="{{.Slug}}">
+  <button type="button" class="earlier" data-earlier hidden>show earlier</button>
+  <div class="items" data-items></div>
+  <div class="working" data-working{{if ne .State "working"}} hidden{{end}}><span class="glyph working">⠿</span> working…</div>
+</div>
+{{else}}
 <pre id="frame" class="frame {{if .Fit}}fit{{else}}wrap{{end}}"
      data-pane="{{.Slug}}"
      data-fit="{{if .Fit}}1{{else}}0{{end}}">{{.Frame}}</pre>
-
+{{end}}
 
 <form id="compose" class="compose" hx-post="/p/{{.Slug}}/keys" hx-swap="none" method="post" action="/p/{{.Slug}}/keys">
   <textarea name="text" rows="1" placeholder="message the agent…" autocomplete="off" autocapitalize="sentences" spellcheck="false"></textarea>

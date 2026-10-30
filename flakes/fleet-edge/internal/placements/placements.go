@@ -136,6 +136,10 @@ type Config struct {
 	Auth      *authority.Auth // shared writer allowlist
 	Status    HostServices    // nil: host checks are skipped
 	Now       func() time.Time
+	// Notify is called (under the registry lock, so it must not block) after
+	// every write that changed the rows, so the routing reconciler cuts over
+	// on commit instead of on its next tick. nil: nobody listens.
+	Notify func()
 }
 
 // Service is the running registry.
@@ -268,6 +272,9 @@ func (st *stage) persist() error {
 		return err
 	}
 	st.s.rows, st.s.rev = st.rows, st.rev
+	if st.s.cfg.Notify != nil {
+		st.s.cfg.Notify()
+	}
 	return nil
 }
 
@@ -383,6 +390,42 @@ func (s *Service) export() Export {
 		if r.Conflict != "" {
 			e.Conflicts[r.Service] = r.Conflict
 		}
+	}
+	return e
+}
+
+// Stale reports whether service's row is fenced: a move outlived its lease, so
+// nobody knows which copy answers. Routing readers leave its names exactly as
+// they are (the last answer stands) until recover settles it.
+func (e Export) Stale(service string) bool {
+	for _, r := range e.Rows {
+		if r.Service == service {
+			return r.State == Stale
+		}
+	}
+	return false
+}
+
+// Placed reports whether service keeps its routing names: a host serves it
+// now, or its row is fenced (see Stale). An unplaced service has no name.
+func (e Export) Placed(service string) bool {
+	return e.Host[service] != "" || e.Stale(service)
+}
+
+// Snapshot is the export for an in-process reader (the routing reconciler in
+// the same unit): the same view as /internal/placements.json, with rows
+// copied so the caller never shares memory with the registry.
+func (s *Service) Snapshot() Export {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e := s.export()
+	for i, r := range e.Rows {
+		c := *r
+		if r.Previous != nil {
+			p := *r.Previous
+			c.Previous = &p
+		}
+		e.Rows[i] = &c
 	}
 	return e
 }

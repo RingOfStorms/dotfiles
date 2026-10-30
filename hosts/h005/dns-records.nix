@@ -49,7 +49,7 @@ let
   merge =
     what: gen: hand:
     let
-      genNames = map (r: r.fqdn) gen;
+      genNames = map (r: r.fqdn) generated.names;
       clash = builtins.filter (r: builtins.elem r.fqdn genNames) hand;
     in
     if clash != [ ] then
@@ -58,9 +58,9 @@ let
       gen ++ hand;
 in
 {
-  tailnet = merge "tailnet" generated.tailnet handTailnet;
-  # No hand LAN names left (trilium is tailnet-only; arr is generated).
-  lan = generated.lan;
+  names = generated.names;
+  tailnet = merge "tailnet" [ ] handTailnet;
+  lan = [ ];
   public = generated.public;
 
   # Desired bunny zone for `fleet-edge dns-plan` (ROUTING-PLAN §8 step 4).
@@ -81,7 +81,7 @@ in
         type = r.type;
         value = r.target;
         inherit ttl;
-        inherit (r) source;
+        inherit (r) source service;
       }) generated.public;
       hand = [
         {
@@ -102,13 +102,10 @@ in
       # o002 hand vhosts (hosts/oracle/o002/nginx.nix).
       ++ map (cname "o002") [
         "www"
-        "computerboyz"
         # Public sign-in for auth = oauth2-proxy routes (ROUTING-PLAN §8
         # step 6); o002 proxies only /oauth2/ to h005's edge listener.
         "sso-proxy"
       ]
-      # minecraft: router path (step 4, router forwards).
-      ++ map (cname "home") [ "minecraft" ]
       # *.share: local temporary sharing (FLOWS-AUDIT.md §c, fleet-share-serve).
       ++ map (cname "o002") [ "*.share" ];
       genNames = map (r: r.name) gen;

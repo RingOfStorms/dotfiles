@@ -14,16 +14,10 @@ let
   # /oauth2/ is reached here, never the tailnet sign-in vhost or 4180.
   h005EdgeIp = fleet.hosts.h005.overlayIp;
 
-  # Public `via = edge` routes of floating containers (ROUTING-PLAN §2.3,
-  # §8 step 3), generated from containers/*/service.nix. Each proxies to the
-  # service host's edge listener (<overlayIp>:8443).
+  # Floating-container public vhosts arrive through fleet-vhost-receive.
   containersLib = import ../../../containers/lib.nix;
   # oauth2-proxy cookie/identity hygiene for app-facing hand vhosts (shared with routes.go).
   inherit (containersLib) nginxSnippets;
-  containerVhosts = containersLib.edgeVirtualHosts {
-    dir = ../../../containers;
-    inherit (fleet) hosts;
-  };
 
   # TLS (ROUTING-PLAN §8 step 4): names listed here serve the
   # *.joshuabell.xyz + apex wildcard that h005 issues and pushes
@@ -169,12 +163,8 @@ in
             };
           };
         };
-        clash = builtins.attrNames (builtins.intersectAttrs handVhosts containerVhosts);
       in
-      assert lib.assertMsg (
-        clash == [ ]
-      ) "o002 nginx: ${toString clash} is both hand-kept and generated from containers routes";
-      lib.mapAttrs withTls (handVhosts // containerVhosts);
+      lib.mapAttrs withTls handVhosts;
 
     # STREAMS
     streamConfig = ''

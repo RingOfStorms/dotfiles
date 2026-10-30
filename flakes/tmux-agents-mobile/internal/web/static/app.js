@@ -4,7 +4,8 @@
   "use strict";
 
   const frame = document.getElementById("frame");
-  const pane = frame ? frame.dataset.pane : null;
+  const chat = document.getElementById("chat");
+  const pane = (frame || chat)?.dataset.pane ?? null;
 
   /* ---------------- compose ---------------- */
 
@@ -166,6 +167,150 @@
     el.addEventListener("click", () => {
       if (document.body.classList.contains("raw")) sink && sink.focus();
     });
+  }
+
+  /* ---------------- native conversation ---------------- */
+
+  const glyphs = {
+    input: ["!", "input"],
+    working: ["⠿", "working"],
+  };
+
+  function connectChat(el) {
+    const list = el.querySelector("[data-items]");
+    const earlier = el.querySelector("[data-earlier]");
+    const working = el.querySelector("[data-working]");
+    const nodes = new Map(); // item index -> element
+    let start = 0;
+    let follow = true;
+    let loading = false;
+
+    const atBottom = () => el.scrollHeight - el.scrollTop - el.clientHeight < 64;
+    el.addEventListener("scroll", () => {
+      follow = atBottom();
+    });
+    const stick = () => {
+      if (follow) el.scrollTop = el.scrollHeight;
+    };
+
+    // Each item arrives as server-rendered HTML. Disclosure state (an expanded
+    // tool call) survives re-renders of the same item by tool name + position.
+    function build(item) {
+      const wrap = document.createElement("div");
+      wrap.className = "item";
+      wrap.dataset.i = String(item.i);
+      wrap.innerHTML = item.html;
+      return wrap;
+    }
+
+    function openState(node) {
+      const out = [];
+      for (const d of node.querySelectorAll("details")) out.push(d.open);
+      return out;
+    }
+
+    function restoreOpen(node, state) {
+      const all = node.querySelectorAll("details");
+      for (let k = 0; k < all.length && k < state.length; k++) {
+        if (state[k]) all[k].open = true;
+      }
+    }
+
+    function upsert(item) {
+      const old = nodes.get(item.i);
+      // A change to an item above the loaded window shows up when the reader
+      // loads it.
+      if (!old && item.i < start) return;
+      const next = build(item);
+      if (old) {
+        restoreOpen(next, openState(old));
+        old.replaceWith(next);
+      } else {
+        // Items arrive in order, so a new one goes after every known one.
+        list.appendChild(next);
+      }
+      nodes.set(item.i, next);
+    }
+
+    function init(data) {
+      nodes.clear();
+      list.replaceChildren();
+      start = data.start;
+      for (const item of data.items) upsert(item);
+      earlier.hidden = start <= 0;
+      follow = true;
+      stick();
+    }
+
+    function prepend(data) {
+      const before = el.scrollHeight;
+      const frag = document.createDocumentFragment();
+      for (const item of data.items) {
+        if (nodes.has(item.i)) continue;
+        const node = build(item);
+        nodes.set(item.i, node);
+        frag.appendChild(node);
+      }
+      list.prepend(frag);
+      start = Math.min(start, data.start);
+      earlier.hidden = start <= 0;
+      // Keep the reader's place: the new content grows upwards.
+      el.scrollTop += el.scrollHeight - before;
+    }
+
+    earlier.addEventListener("click", async () => {
+      if (loading) return;
+      loading = true;
+      earlier.textContent = "loading…";
+      try {
+        const res = await fetch("/p/" + pane + "/chat/earlier?before=" + start, {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        if (res.ok) prepend(await res.json());
+      } catch (err) {
+        // offline: the button stays for another try
+      } finally {
+        loading = false;
+        earlier.textContent = "show earlier";
+      }
+    });
+
+    function setState(s) {
+      if (working) working.hidden = s.state !== "working";
+      const glyph = document.querySelector(".top .ctx-main .glyph");
+      if (glyph) {
+        let [ch, cls] = glyphs[s.state] || ["·", "none"];
+        if (s.state === "idle") [ch, cls] = s.unseen ? ["●", "done"] : ["○", "idle"];
+        glyph.textContent = ch;
+        glyph.className = "glyph " + cls;
+      }
+      stick();
+    }
+
+    const es = new EventSource("/p/" + pane + "/chat/events");
+    es.addEventListener("init", (e) => init(JSON.parse(e.data)));
+    es.addEventListener("items", (e) => {
+      for (const item of JSON.parse(e.data).items) upsert(item);
+      stick();
+    });
+    es.addEventListener("state", (e) => setState(JSON.parse(e.data)));
+    // No readable session (the agent exited, or never wrote one): the
+    // terminal view always works.
+    es.addEventListener("fallback", () => {
+      es.close();
+      location.replace("/p/" + pane + "?view=wrap");
+    });
+    es.addEventListener("gone", () => {
+      es.close();
+      location.replace("/");
+    });
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) location.replace("/");
+    };
+    // Content that changes height after insertion (images, fonts) should not
+    // strand a following reader above the bottom.
+    new ResizeObserver(stick).observe(list);
   }
 
   /* ---------------- raw keys ---------------- */
@@ -447,6 +592,7 @@
   }
 
   if (frame) connect(frame);
+  if (chat) connectChat(chat);
 
   // Installable app: the service worker only caches static assets. It needs a
   // secure context (https, or localhost during development).

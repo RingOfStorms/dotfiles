@@ -42,17 +42,17 @@ let
     no-hosts
     # Service names -> serving host's overlay IP (../dns-records.nix).
     ${lib.concatMapStringsSep "\n" (r: "host-record=${r.fqdn},${r.ip}") dnsRecords.tailnet}
+    hostsdir=${config.services.fleet-edge.overrides.dns.tailnetDir}
 
-    # Keep listed service names local for every RR type. `host-record` supplies
-    # the local A/PTR data; without this rule, AAAA/CNAME/HTTPS queries fall
-    # through to the public CNAME chain and can poison client resolver caches.
-    ${lib.concatMapStringsSep "\n" (r: "local=/${r.fqdn}/") dnsRecords.tailnet}
+    # Reserve every inventory route name for all RR types, even unplaced.
+    ${lib.concatMapStringsSep "\n" (r: "local=/${r.fqdn}/") (dnsRecords.names ++ dnsRecords.tailnet)}
     # Fallthrough: any other joshuabell.xyz name -> external resolvers
     # (domain-scoped; never AdGuard/127.0.0.1:53 -> no loop).
     ${lib.concatMapStringsSep "\n" (u: "server=/${fleet.global.domain}/${u}") net.dnsUpstreams.plainIp}
   '';
 in
 {
+  systemd.services.dnsmasq.after = [ "systemd-tmpfiles-setup.service" ];
   networking = {
     # My Switch seems to not let me change management vlan so this is assume native default here for proper routing
 
@@ -247,12 +247,10 @@ in
       # Local records: these names resolve to the configured IP. Any
       # joshuabell.xyz name NOT listed falls through to `server=` below.
       host-record = map (r: "${r.fqdn},${r.ip}") dnsRecords.lan;
+      hostsdir = config.services.fleet-edge.overrides.dns.lanDir;
 
-      # Keep listed names local for every RR type (same as the tailnet
-      # instance). Without this, AAAA/HTTPS for e.g. jellyfin fall through to
-      # `server=` below, get the public `CNAME o002`, and clients' resolvers
-      # (systemd-resolved) cache that chain and send LAN traffic out via o002.
-      local = map (r: "/${r.fqdn}/") dnsRecords.lan;
+      # Reserve every inventory route name, without a host filter.
+      local = map (r: "/${r.fqdn}/") (dnsRecords.names ++ dnsRecords.lan);
 
       # Fallthrough for joshuabell.xyz names not in host-record: forward to the
       # shared external plain-IP upstreams. Domain-scoped so dnsmasq only
@@ -322,6 +320,7 @@ in
     after = [
       "network.target"
       "tailscaled.service"
+      "systemd-tmpfiles-setup.service"
     ];
     wants = [ "tailscaled.service" ];
     wantedBy = [ "multi-user.target" ];

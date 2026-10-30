@@ -35,7 +35,7 @@
           pname = "tmux-agents-mobile";
           version = "0.1.0";
           src = ./.;
-          vendorHash = null;
+          vendorHash = "sha256-8zBX8NEzRfduIYJ2QZMSMwlCUlQaPGxzRfcB6zMhtuc=";
           nativeBuildInputs = [ pkgs.makeWrapper ];
           # The tmux integration tests start an isolated `tmux -L tamtest-…`
           # server; tmux must be on PATH inside the sandbox, and it needs a
@@ -45,7 +45,9 @@
           nativeCheckInputs = [
             pkgs.tmux
             pkgs.git
-          ];
+          ]
+          # The transcript locator tests walk the process tree with ps.
+          ++ lib.optional pkgs.stdenv.isLinux pkgs.procps;
           preCheck = ''
             export SHELL=${pkgs.bashInteractive}/bin/bash
             export TMUX_TMPDIR="$TMPDIR"
@@ -55,7 +57,18 @@
           '';
           postInstall = ''
             wrapProgram $out/bin/tmux-agents-mobile \
-              --suffix PATH : ${lib.makeBinPath [ pkgs.tmux pkgs.git pkgs.fzf ]} \
+              --suffix PATH : ${
+                lib.makeBinPath (
+                  [
+                    pkgs.tmux
+                    pkgs.git
+                    pkgs.fzf
+                  ]
+                  # ps: the native view walks the pane's process tree to find
+                  # the agent (macOS has /bin/ps).
+                  ++ lib.optional pkgs.stdenv.isLinux pkgs.procps
+                )
+              } \
               --set-default TAM_TMUX ${pkgs.tmux}/bin/tmux \
               --set-default TAM_AGENTS ${agentsBin}
           '';

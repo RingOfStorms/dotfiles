@@ -93,6 +93,41 @@ func TestRenderMatchesEdgeVirtualHosts(t *testing.T) {
 	}
 }
 
+// A placement vhost has no expiry, carries its kind in the header (so list
+// reports who owns it) and renders without the expose path's rate limit.
+func TestPlacementKind(t *testing.T) {
+	c := testCfg(t)
+	r := addReq()
+	r.Kind, r.Until = KindPlacement, 0
+	if err := c.Validate(r); err != nil {
+		t.Fatal(err)
+	}
+	out := c.Render(r)
+	if strings.Contains(out, "limit_req") || !strings.Contains(out, "fleet-edge placements") {
+		t.Errorf("render\n%s", out)
+	}
+	if e, ok := ParseHeader([]byte(out)); !ok || e.Kind != KindPlacement || e.Until != 0 {
+		t.Errorf("header %+v %v", e, ok)
+	}
+	r.Until = time.Now().Add(time.Hour).Unix()
+	if err := c.Validate(r); err == nil {
+		t.Error("placement with an expiry accepted")
+	}
+	r.Kind, r.Until = "other", 0
+	if err := c.Validate(r); err == nil {
+		t.Error("unknown kind accepted")
+	}
+	stubRunner(t, false)
+	r.Kind = KindPlacement
+	if err := c.Handle(r, nil); err != nil {
+		t.Fatal(err)
+	}
+	l, err := c.List()
+	if err != nil || len(l) != 1 || l[0].Kind != KindPlacement {
+		t.Fatalf("list %+v %v", l, err)
+	}
+}
+
 func TestAddRemoveIdempotent(t *testing.T) {
 	c := testCfg(t)
 	calls := stubRunner(t, false)
@@ -118,6 +153,123 @@ func TestAddRemoveIdempotent(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(c.Dir, "app.example.com.conf")); !os.IsNotExist(err) {
 		t.Fatal("file still there")
+	}
+}
+
+// A remove is fenced by owner: it deletes only a file whose header carries
+// the caller's kind (and host, if given); another owner's file is kept, the
+// caller sees "kept: owned by <kind>" and no error.
+func TestRemoveFencedByKind(t *testing.T) {
+	c := testCfg(t)
+	stubRunner(t, false)
+	conf := filepath.Join(c.Dir, "app.example.com.conf")
+	placement := addReq()
+	placement.Kind, placement.Until = KindPlacement, 0
+	expose := addReq()
+	remove := func(kind, host string) string {
+		t.Helper()
+		var buf bytes.Buffer
+		if err := c.Handle(&Request{Op: "remove", Kind: kind, FQDN: "app.example.com", Host: host}, &buf); err != nil {
+			t.Fatalf("remove kind %q host %q: %v", kind, host, err)
+		}
+		return buf.String()
+	}
+	exists := func() bool { _, err := os.Stat(conf); return err == nil }
+
+	// An expose remove leaves a placement file.
+	if err := c.Handle(placement, nil); err != nil {
+		t.Fatal(err)
+	}
+	if out := remove(KindExpose, ""); !exists() || !strings.HasPrefix(out, KeptPrefix+"placement") {
+		t.Fatalf("expose remove: exists=%v out %q", exists(), out)
+	}
+	// A matching kind on another host is kept too.
+	if out := remove(KindPlacement, "h002"); !exists() || !strings.HasPrefix(out, KeptPrefix+"placement") {
+		t.Fatalf("host-fenced remove: exists=%v out %q", exists(), out)
+	}
+	// A matching remove deletes.
+	if out := remove(KindPlacement, "h001"); exists() || out != "" {
+		t.Fatalf("placement remove: exists=%v out %q", exists(), out)
+	}
+
+	// A placement remove leaves an expose file.
+	if err := c.Handle(expose, nil); err != nil {
+		t.Fatal(err)
+	}
+	if out := remove(KindPlacement, ""); !exists() || !strings.HasPrefix(out, KeptPrefix+"expose") {
+		t.Fatalf("placement remove: exists=%v out %q", exists(), out)
+	}
+	if out := remove(KindExpose, ""); exists() || out != "" {
+		t.Fatalf("expose remove: exists=%v out %q", exists(), out)
+	}
+
+	if err := c.Handle(&Request{Op: "remove", Kind: "other", FQDN: "app.example.com"}, nil); err == nil {
+		t.Error("remove with an unknown kind accepted")
+	}
+}
+
+// A live expose override wins over a placement of the same name: the
+// receiver keeps the expose file on a placement add (no error) until it
+// expires; an expose add replaces a placement file.
+func TestPlacementAddKeepsLiveExpose(t *testing.T) {
+	c := testCfg(t)
+	stubRunner(t, false)
+	conf := filepath.Join(c.Dir, "app.example.com.conf")
+	expose := addReq()
+	placement := addReq()
+	placement.Kind, placement.Until = KindPlacement, 0
+	if err := c.Handle(expose, nil); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(conf)
+	var buf bytes.Buffer
+	if err := c.Handle(placement, &buf); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := os.ReadFile(conf)
+	if !bytes.Equal(before, after) || !strings.HasPrefix(buf.String(), KeptPrefix+"expose") {
+		t.Fatalf("placement add over live expose: out %q, changed=%v", buf.String(), !bytes.Equal(before, after))
+	}
+	// Expired expose (Expire has not run yet): the placement takes over.
+	dead := addReq()
+	dead.Until = time.Now().Add(-time.Minute).Unix()
+	_ = os.WriteFile(conf, []byte(c.Render(dead)), 0o644)
+	buf.Reset()
+	if err := c.Handle(placement, &buf); err != nil || buf.Len() != 0 {
+		t.Fatalf("placement add over expired expose: %v %q", err, buf.String())
+	}
+	if e, ok := c.current("app.example.com"); !ok || e.Kind != KindPlacement {
+		t.Fatalf("header %+v %v", e, ok)
+	}
+	// An expose add replaces a placement file.
+	if err := c.Handle(expose, nil); err != nil {
+		t.Fatal(err)
+	}
+	if e, ok := c.current("app.example.com"); !ok || e.Kind != KindExpose {
+		t.Fatalf("header %+v %v", e, ok)
+	}
+}
+
+// Through Receive (the forced command), a kept remove still exits 0.
+func TestReceiveKeptRemove(t *testing.T) {
+	c := testCfg(t)
+	stubRunner(t, false)
+	r := addReq()
+	r.Kind, r.Until = KindPlacement, 0
+	if err := c.Handle(r, nil); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(t.TempDir(), "cfg.json")
+	_ = os.WriteFile(p, []byte(`{"domain":"example.com","dir":"`+c.Dir+`","certDir":"/x","nginxTest":"test","nginxReload":"reload","hosts":{}}`), 0o644)
+	var out bytes.Buffer
+	if err := Receive(p, strings.NewReader(`{"op":"remove","fqdn":"app.example.com"}`), &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(out.String(), KeptPrefix+"placement") {
+		t.Fatalf("out %q", out.String())
+	}
+	if _, err := os.Stat(filepath.Join(c.Dir, "app.example.com.conf")); err != nil {
+		t.Fatal("placement file removed by an expose remove")
 	}
 }
 

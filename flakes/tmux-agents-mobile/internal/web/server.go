@@ -24,13 +24,14 @@ import (
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/watch"
 )
 
-//go:embed templates/*.html static/*
+//go:embed templates/*.html templates/chat/*.html static/*
 var assets embed.FS
 
 // Server holds the handlers' dependencies.
 type Server struct {
 	tmux   *tmux.Client
 	hub    *watch.Hub
+	chat   *watch.ChatHub
 	agents *agents.Provider
 	git    *diff.Git
 	dirs   *dirs.Index
@@ -43,12 +44,12 @@ type Server struct {
 // New wires the server. roots are the directories a new session may be created
 // in; a directory outside them is rejected, so the form is not a way to start a
 // shell anywhere on the machine.
-func New(t *tmux.Client, hub *watch.Hub, ag *agents.Provider, g *diff.Git, index *dirs.Index, roots []string, dev bool, log *slog.Logger) (*Server, error) {
+func New(t *tmux.Client, hub *watch.Hub, chat *watch.ChatHub, ag *agents.Provider, g *diff.Git, index *dirs.Index, roots []string, dev bool, log *slog.Logger) (*Server, error) {
 	tpl, err := template.New("").ParseFS(assets, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
-	return &Server{tmux: t, hub: hub, agents: ag, git: g, dirs: index, roots: roots, log: log, tpl: tpl, dev: dev}, nil
+	return &Server{tmux: t, hub: hub, chat: chat, agents: ag, git: g, dirs: index, roots: roots, log: log, tpl: tpl, dev: dev}, nil
 }
 
 // Handler returns the root handler with all routes and middleware applied.
@@ -57,6 +58,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /{$}", s.inbox)
 	mux.HandleFunc("GET /p/{pane}", s.panePage)
 	mux.HandleFunc("GET /p/{pane}/events", s.paneEvents)
+	mux.HandleFunc("GET /p/{pane}/chat/events", s.chatEvents)
+	mux.HandleFunc("GET /p/{pane}/chat/earlier", s.chatEarlier)
 	mux.HandleFunc("GET /p/{pane}/history", s.paneHistory)
 	mux.HandleFunc("POST /p/{pane}/keys", s.paneKeys)
 	mux.HandleFunc("POST /p/{pane}/seen", s.paneSeen)
