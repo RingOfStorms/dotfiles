@@ -27,9 +27,11 @@ o002 vhost, and the dashboard lists it under "unplaced".
 Status: **phase 1 done**, **phase 2 done**, **phase 3 implemented, not deployed**,
 **phase 4a implemented, not deployed**. Deploy **h005 first**, then **o002**.
 The stream layer rejects the old receiver's array reply without making changes.
-o002 seeds an empty stream directory at boot/activation from a Nix snapshot
-of its former static `3032 -> h001` stream, avoiding a cutover gap; thereafter
-the reconciler owns it. Before and after deployment (and a test move), run
+o002 seeds its stream directory once (first boot/activation, then writes a
+persisted `.seeded` marker) from a Nix snapshot of its former static
+`3032 -> h001` stream, avoiding a cutover gap; thereafter the reconciler owns
+it, and an empty directory stays closed. The directory is persisted, so the
+last-good placement survives reboot. Before and after deployment (and a test move), run
 `git ls-remote ssh://git@git.joshuabell.xyz:3032/<repo>`.
 No deployment or SSH verification is part of this implementation.
 
@@ -372,7 +374,7 @@ Derived-from-`s.host` Nix functions and their call sites:
 | `webSourcesByHost` | `lib.nix:533-604`, filtered by `s.host != null`; called `containers/host-module.nix:31` | 5 | Delete; the runtime firewall allowlist (see §7) supersedes it, and the module keeps only what depends on host trust |
 | `dnsRecords` | `lib.nix`, called `hosts/h005/dns-records.nix:12` → `hosts/h005/mods/networking.nix:22`; consumed at `:44` (`host-record`, tailnet), `:49` (`local=`, tailnet) and `:249` (`host-record`, LAN) | 3,5 | Phase 3: h005 writes per-name files into **two** runtime `hostsdir`s (`tailnet/`, `lan/`) from the registry; the `host-record` lines go away, the `local=` does not. Phase 5: **not** deleted — drop the `s.host != null` filter and the IP fields, keeping the `local=` name list and the `public` CNAME list |
 | h005 WAN forwards | `internal/wanforward`, `internal/reconcile` | 4a implemented | Static generator deleted. Root validates the registry-derived file and replaces one nft table atomically; port/protocol remain declarative |
-| o002's `streamConfig` | `hosts/oracle/o002/nginx.nix` | 4a implemented | Runtime include replaces the hard-coded target; `edgeStreamPorts` is placement-free admission, and boot/activation seed the pre-cutover stream when empty |
+| o002's `streamConfig` | `hosts/oracle/o002/nginx.nix` | 4a implemented | Runtime include replaces the hard-coded target; `edgeStreamPorts` is placement-free admission; boot/activation seed the pre-cutover stream once (`.seeded` marker) into the persisted `/var/lib/fleet-edge-streams` |
 | `DeclaredHost` | deleted; `state.ServiceView.BoundHost` (`flakes/fleet-edge/internal/state/state.go:261`, set in `binding` at `:666-671`), sorted `server/server.go:480`, host page `:694`, `dash/dash.go:158,189,225-231`, `topology/layout.go:442`; template `internal/server/templates/services.html:24-31` | 2,5 | Phase 2 done: the registry's binding wins, a service it does not name is "unplaced", and the page groups by it. Phase 5 drops the declarative fallback (`bound == nil`) and the `host` seed |
 | CLI `resolveHost` | `fleet-agent/internal/containers/main.go:502` | 2 | The answer, in order: `--host` > registry row > discovery. A fenced row that names no host — a `stale` reservation, or a first placement that has not committed (token set, `effective()` empty) — is refused ahead of both branches, naming the device holding the move, its destination and both settles: `--recover` (asks the hosts themselves) and `--set <h> --force` (takes the name over). Letting it through is how a deploy or start lands a second copy on a host the move may have stranded, ahead of any registry write that could refuse it. A binding onto a host that does not answer refuses and names both escapes (`--set <h> --force`, `--recover --force`); `--host` may not override a different live binding; the first `--host` deploy records it |
 | CLI `resolvedHost` | `main.go:563` | 2 | Registry row, else the declared `host`, else `""`; never probes and never refuses, so table/script builders can use it |

@@ -52,11 +52,14 @@ const KeptPrefix = "kept: owned by "
 
 // PendingMarker, ErrReloadPending and LockFile mirror edgevhost's, in this
 // receiver's own directory: one nginx reload serves http and stream, but each
-// receiver tracks its own debt.
+// receiver tracks its own debt. SeededMarker records that the one-shot
+// cutover seed (Seed) has run; once present, an empty directory means every
+// port is intentionally closed.
 const (
 	PendingMarker    = ".reload-pending"
 	ErrReloadPending = "reload pending"
 	LockFile         = ".lock"
+	SeededMarker     = ".seeded"
 )
 
 // Request is what h005 sends (one JSON object on stdin).
@@ -398,8 +401,12 @@ func (c *Config) Expire(reload bool) ([]string, error) {
 var staticStreamRe = regexp.MustCompile(`server\s*\{\s*listen\s+([0-9]{1,5});\s*proxy_pass\s+([0-9.]+):([0-9]{1,5});\s*\}`)
 
 // Seed installs the Nix-provided snapshot of the pre-cutover static stream
-// when no stream files exist, at boot and activation. The reconciler owns
-// subsequent changes. No nginx command runs before its service starts.
+// exactly once per edge: the first run (at boot or activation) seeds and
+// writes SeededMarker, and every later run is a no-op, even with no stream
+// files left (e.g. after the reconciler unplaced a service). A directory that
+// already holds stream files is taken as the reconciler's state and only gets
+// the marker. Dir must persist across reboots for this to hold. No nginx
+// command runs before its service starts.
 func (c *Config) Seed(nginxConf []byte) ([]Entry, error) {
 	if err := os.MkdirAll(c.Dir, 0o755); err != nil {
 		return nil, err
@@ -409,12 +416,24 @@ func (c *Config) Seed(nginxConf []byte) ([]Entry, error) {
 		return nil, err
 	}
 	defer unlock()
+	seeded := filepath.Join(c.Dir, SeededMarker)
+	if _, err := os.Stat(seeded); err == nil {
+		return nil, nil
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	markSeeded := func() error {
+		if err := writeAtomic(seeded, []byte(time.Now().UTC().Format(time.RFC3339)+"\n")); err != nil {
+			return fmt.Errorf("writing %s: %w", SeededMarker, err)
+		}
+		return nil
+	}
 	fs, err := c.files()
 	if err != nil {
 		return nil, err
 	}
 	if len(fs) > 0 {
-		return nil, nil
+		return nil, markSeeded()
 	}
 	byIP := map[string][]string{}
 	for h, ip := range c.Hosts {
@@ -430,16 +449,20 @@ func (c *Config) Seed(nginxConf []byte) ([]Entry, error) {
 		}
 		out = append(out, Entry{Port: port, Host: hosts[0], Kind: KindPlacement})
 	}
-	if len(out) == 0 {
-		return nil, nil
-	}
-	if err := c.setPending(); err != nil {
-		return nil, err
-	}
-	for _, e := range out {
-		if err := writeAtomic(c.path(e.Port), []byte(render(e, c.Hosts[e.Host]))); err != nil {
+	if len(out) > 0 {
+		if err := c.setPending(); err != nil {
 			return nil, err
 		}
+		for _, e := range out {
+			if err := writeAtomic(c.path(e.Port), []byte(render(e, c.Hosts[e.Host]))); err != nil {
+				return nil, err
+			}
+		}
+	}
+	// The marker follows the files: a crash in between leaves files and no
+	// marker, which the next run only marks.
+	if err := markSeeded(); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

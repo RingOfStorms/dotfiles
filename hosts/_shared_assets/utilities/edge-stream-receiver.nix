@@ -12,6 +12,7 @@ let
     nginxReload = "systemctl reload nginx";
   });
   # Snapshot of nginx.nix's pre-cutover stream; never derived from placement.
+  # Seeded once per edge (stream-seed writes ${dir}/.seeded); dir must persist.
   snapshot = pkgs.writeText "fleet-edge-stream-seed.conf" ''
     server { listen 3032; proxy_pass ${fleet.hosts.h001.overlayIp}:3032; }
   '';

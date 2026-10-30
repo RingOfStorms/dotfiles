@@ -43,6 +43,11 @@ in
       "/var/lib/acme"
       # Wildcard pushed by h005 (hosts/_shared_assets/utilities/wildcard-cert-receiver.nix).
       "/var/lib/fleet-cert"
+      # Runtime edge streams + the one-shot seed marker
+      # (hosts/_shared_assets/utilities/edge-stream-receiver.nix): last-good
+      # placement state must survive reboot, or boot would re-seed the
+      # pre-cutover 3032 -> h001 snapshot.
+      "/var/lib/fleet-edge-streams"
     ];
     files = shared.system.files ++ [ ];
     users."${primaryUser}" = {
