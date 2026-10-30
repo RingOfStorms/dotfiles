@@ -9,19 +9,6 @@
     stateVersion = "26.05";
   };
 
-  # Pinned SSH host keys of push targets (ssh-keyscan over the tailnet,
-  # 2026-10-21), used by wildcard-cert.nix and fleet-edge.nix. A rebuilt
-  # target needs its new key here before pushes work again.
-  pinnedHostKeys = {
-    o002 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAf4Tfw9fhqQ2oUwM7jGSkpvxdTCsFVlThVVpf8FoU08";
-    h001 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGTAz6n35c3r8kSuWJM1JzMVx6jK+0EBwpJA5eTIvy3N";
-    # ssh-keyscan over the tailnet, 2026-10-25 (design (a): wildcard goes to
-    # every host with routes).
-    h003 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAzlydzOQhB/ycXtem4Gxo/eaE2pe6dOFG9apTF+8Ps0";
-    joe = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILejNGZ7gVEnYur6CnHIGG3NNuFhCtT4imYaR7U/P5Kx";
-    lio = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFGp6oInUcGVnDl5axV1EHflMfZUiHxtqNa4eAuye/av";
-  };
-
   network = {
     routerEnable = true;
 

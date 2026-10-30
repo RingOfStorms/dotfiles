@@ -32,8 +32,7 @@ let
   # routeNamesByHost), plus joe and lio explicitly (FLOWS-AUDIT target
   # design (a): every container host terminates its own TLS, including
   # low-route-count hosts not yet carrying a non-local http route), plus
-  # o002 (the public edge). Pinned host keys: _constants.nix
-  # pinnedHostKeys.
+  # o002 (the public edge). Pinned host keys: fleet.nix hosts.<h>.sshHostKey.
   routeHosts = builtins.attrNames (
     (import ../../containers/lib.nix).routeNamesByHost ../../containers
   );
@@ -51,7 +50,7 @@ let
       name = h;
       value = {
         ip = fleet.hosts.${h}.overlayIp;
-        hostKey = constants.pinnedHostKeys.${h};
+        hostKey = fleet.hosts.${h}.sshHostKey;
       };
     }) targetNames
   );

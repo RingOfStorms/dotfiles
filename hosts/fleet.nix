@@ -86,6 +86,13 @@ rec {
   #   deployVia   - "overlay": deploy_<host> targets root@overlayIp, not the lanIp.
   #                 Keeps deployment on the tailnet even when a host permits
   #                 home LAN :22 as a low-trust-filtered fallback.
+  #   sshHostKey  - the host's ed25519 SSH host public key (`/etc/ssh/` or, on
+  #                 impermanence hosts, `/persist/etc/ssh/ssh_host_ed25519_key.pub`).
+  #                 mkHost writes every registered key into each host's
+  #                 /etc/ssh/ssh_known_hosts (name, overlayIp, lanIp, publicIp),
+  #                 so fleet hosts trust each other without TOFU; h005 pins its
+  #                 push targets with it. A reinstalled host with a fresh
+  #                 identity needs its new key here.
   hosts = {
     h001 = {
       user = "luser";
@@ -95,6 +102,7 @@ rec {
       role = "server";
       alwaysOn = true;
       deployVia = "overlay";
+      sshHostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGTAz6n35c3r8kSuWJM1JzMVx6jK+0EBwpJA5eTIvy3N";
     };
     # Containers host (router until 2026-10-15, re-imaged; hosts/h003/readme.md).
     # LAN by plain DHCP; services are reached over the tailnet.
@@ -104,6 +112,7 @@ rec {
       trust = "high";
       role = "server";
       alwaysOn = true;
+      sshHostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAzlydzOQhB/ycXtem4Gxo/eaE2pe6dOFG9apTF+8Ps0";
     };
     # NAS (successor of the retired h002). LAN address is a static DHCP
     # reservation on h005 (hosts/h005/_constants.nix).
@@ -116,6 +125,7 @@ rec {
       alwaysOn = true;
       deployVia = "overlay";
       replaces = [ "h002" ];
+      sshHostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB46dKpPBIZ053TtuptHCsLim6d1kUUvk8AFgBuvsw4v";
     };
     # Router (replaced h003 on 2026-10-15, h005/readme.md).
     h005 = {
@@ -125,6 +135,7 @@ rec {
       trust = "high";
       role = "server";
       alwaysOn = true;
+      sshHostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILvEmFpmjdEz5ciLQy7qN/2QMVDoudUguOctNPTAyT9e";
     };
     i001 = {
       user = "luser";
@@ -134,6 +145,7 @@ rec {
       role = "workstation";
       alwaysOn = false;
       deployVia = "overlay";
+      sshHostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDtKjRlm2ySoZeQH0OpMbeqk6fF6FKRJMpF3rblX/5Wn";
     };
     joe = {
       user = "josh";
@@ -143,6 +155,7 @@ rec {
       role = "workstation";
       alwaysOn = false;
       deployVia = "overlay";
+      sshHostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILejNGZ7gVEnYur6CnHIGG3NNuFhCtT4imYaR7U/P5Kx";
     };
     juni = {
       user = "josh";
@@ -159,6 +172,7 @@ rec {
       trust = "high";
       role = "workstation";
       alwaysOn = false;
+      sshHostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFGp6oInUcGVnDl5axV1EHflMfZUiHxtqNa4eAuye/av";
     };
     oren = {
       user = "josh";
@@ -182,6 +196,7 @@ rec {
       role = "server";
       alwaysOn = true;
       flakePath = "hosts/oracle/o002";
+      sshHostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAf4Tfw9fhqQ2oUwM7jGSkpvxdTCsFVlThVVpf8FoU08";
     };
     t = {
       user = "joshua.bell";
@@ -502,6 +517,19 @@ rec {
           networking.hostName = hostName;
           programs.nh.flake = "/home/${primaryUser}/.config/nixos-config/hosts/${hostName}";
           nixpkgs.config.allowUnfree = true;
+
+          # Fleet host keys from the registry, so root/system ssh between
+          # fleet hosts verifies without TOFU (BatchMode `cnt` runs included).
+          # Matches the names ssh is given: MagicDNS short name and the IPs.
+          programs.ssh.knownHosts = lib.mapAttrs (name: h: {
+            hostNames = [
+              name
+            ]
+            ++ lib.optional (h ? overlayIp) h.overlayIp
+            ++ lib.optional (h ? lanIp) h.lanIp
+            ++ lib.optional (h ? publicIp) h.publicIp;
+            publicKey = h.sshHostKey;
+          }) (lib.filterAttrs (_: h: h ? sshHostKey) hosts);
 
           users.mutableUsers = mutableUsers;
 
