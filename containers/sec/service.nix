@@ -9,7 +9,6 @@
   name = "sec";
   kind = "nixos";
   description = "sec secrets manager server (secrets.joshuabell.xyz)";
-  host = "h001";
 
   persist = {
     # sec.db + db.key (0400 root). The SQLite file is snapshotted by the

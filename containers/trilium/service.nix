@@ -6,7 +6,6 @@
   name = "trilium";
   kind = "nixos";
   description = "Trilium notes (notes.joshuabell.xyz, behind the fleet oauth2-proxy)";
-  host = "h001";
 
   persist = {
     data = "/var/lib/trilium"; # document.db (+wal), backups, session secret

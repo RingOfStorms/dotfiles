@@ -560,28 +560,27 @@ func fleetPlacementNow() *fleetPlacement {
 // admission: every host discovery found it installed on (a stale copy on an
 // old host still dials out from that host's overlay IP), nothing when every
 // host answered and nobody has it, or -- when any host failed to answer and
-// the name was found nowhere -- the declared host, with known = false: a
+// the name was found nowhere -- the bound host, with known = false: a
 // partial sweep cannot rule out that the caller is running on the host that
 // did not answer. Pairs this process retired are never reported, not even
 // through that fallback: a copy it just removed must not come back because
 // somebody else's probe failed.
-func (p *fleetPlacement) places(name, declared string) (hosts []string, known bool) {
+func (p *fleetPlacement) places(name, bound string) (hosts []string, known bool) {
 	if p == nil {
-		// No discovery (--dry-run): the declared host stands in, so the
-		// printed script stays offline.
-		if retired[name][declared] {
+		// No discovery (--dry-run): only an available registry binding can stand in.
+		if bound == "" || retired[name][bound] {
 			return nil, true
 		}
-		return []string{declared}, true
+		return []string{bound}, true
 	}
 	if hosts := p.found[name]; len(hosts) > 0 {
 		return hosts, true
 	}
 	if len(p.down) > 0 {
-		if retired[name][declared] {
-			return nil, true
+		if bound == "" || retired[name][bound] {
+			return nil, false
 		}
-		return []string{declared}, false
+		return []string{bound}, false
 	}
 	return nil, true
 }
@@ -598,19 +597,13 @@ func (p *fleetPlacement) places(name, declared string) (hosts []string, known bo
 //	web <addr|cidr>   -> @src (v4) / @src6 (v6)
 //	weblan <cidr>     -> @src_lan
 //
-// An http route with no `allow` admits the whole tailnet range (the same
-// literal lib.nix webSourcesByHost uses for the build-time half); one with
-// `allow` admits exactly the named hosts' overlay IPs, and an unknown name
-// is skipped (fail closed). A net.uses caller of an http route is admitted
-// too, from every host its live discovery puts it on: nothing for this host
-// (@guest-egress already accepts the guest address), else that host's overlay
-// IP. A caller every host answered for but nobody has is admitted nowhere --
-// it was destroyed, so falling back to its declared host would undo the
-// withdraw. Only an inconclusive sweep falls back to the declared host. The
-// CLI refreshes this on deploy, move and destroy (main.go refreshCallers),
-// retiring the pair it removed so one destroyed copy does not take a
-// surviving copy's admission with it; the build-time half is lib.nix
-// webSourcesByHost.
+// An http route without allow admits the whole tailnet; an allow list admits
+// only named overlay IPs. Unknown names fail closed. net.uses callers are
+// admitted from every discovered host (except this host, where guest-egress
+// already accepts the guest address). A complete sweep finding no copy
+// withdraws admission; an inconclusive sweep uses the registry binding.
+// Deploy, move and destroy refresh these files and retire removed pairs so
+// destroying one copy does not withdraw admission from surviving copies.
 func srcPortLines(s Service, host string) []string {
 	if inv == nil {
 		return nil
@@ -639,30 +632,24 @@ func srcPortLines(s Service, host string) []string {
 			add(hostOverlayIP(a))
 		}
 		// LAN clients reach the vhost directly unless the route is only
-		// published through the router (minecraft), as in webSourcesByHost.
+		// published through the router (minecraft).
 		if (r.Exposure == "lan" || r.Exposure == "public") && !slices.Contains(r.Via, "router") {
 			lan = true
 		}
 	}
 	// net.uses lands on the callee's nginx (ROUTING-PLAN §8 step 5). Only
 	// http: tcp/udp uses are covered by netExceptions' egress elements,
-	// which are what fleet-net matches for those flows. Where a caller runs
-	// comes from discovery, not from its `host` field: a service moved
-	// without a repo update must still reach the callee's vhost, and one
-	// installed twice is admitted from both hosts.
+	// which are what fleet-net matches for those flows. Discovery includes
+	// every installed copy; only an inconclusive sweep uses the registry.
 	if len(inv.Services) > 0 {
 		fp := fleetPlacementNow()
 		admitCaller := func(c Service, entry string) {
-			places, known := fp.places(c.Name, c.Host)
+			bound := resolvedHost(c)
+			places, known := fp.places(c.Name, bound)
 			if !known {
-				// A host did not answer, so the fleet cannot contradict the
-				// declaration: fall back to it rather than cut the caller off.
-				fmt.Fprintf(os.Stderr, "warning: %s uses %s but was not discovered (a host did not answer); admitting its declared host %s\n", c.Name, entry, c.Host)
-				places = []string{c.Host}
+				fmt.Fprintf(os.Stderr, "warning: %s uses %s but was not discovered (a host did not answer); admitting its bound host %s\n", c.Name, entry, bound)
 			} else if len(places) == 0 {
-				// Every host answered and none has it: destroyed, or not yet
-				// deployed. Admitting the declaration here would re-admit a
-				// service that `cnt destroy` just withdrew.
+				// A complete sweep found no installed copy.
 				fmt.Fprintf(os.Stderr, "note: %s uses %s but is installed on no host; not admitting it\n", c.Name, entry)
 				return
 			}

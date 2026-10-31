@@ -66,7 +66,6 @@ func (r Route) GroupStr() string { return Str(r.Group) }
 type Service struct {
 	Name        string            `json:"name"`
 	Kind        string            `json:"kind"`
-	Host        string            `json:"host"`
 	Description string            `json:"description"`
 	Persist     map[string]string `json:"persist"`
 	TCPPorts    []int             `json:"tcpPorts"`
@@ -132,9 +131,8 @@ func Parse(b []byte) (*Inventory, error) {
 }
 
 // PolledHosts returns the hosts that run a status/fleet-agent endpoint:
-// inventory agentHosts (plus any host in Hosts with a declared Role), or
-// containerHosts, or (if both are empty) every host with at least one
-// service. Only names present in Hosts are returned, sorted.
+// inventory agentHosts, hosts with a declared Role, and containerHosts.
+// Only names present in Hosts are returned, sorted.
 func (inv *Inventory) PolledHosts() []string {
 	set := map[string]bool{}
 	for _, h := range inv.AgentHosts {
@@ -145,16 +143,8 @@ func (inv *Inventory) PolledHosts() []string {
 			set[name] = true
 		}
 	}
-	if len(inv.ContainerHosts) > 0 {
-		for _, h := range inv.ContainerHosts {
-			set[h] = true
-		}
-	} else if len(set) == 0 {
-		for _, s := range inv.Services {
-			if s.Host != "" {
-				set[s.Host] = true
-			}
-		}
+	for _, h := range inv.ContainerHosts {
+		set[h] = true
 	}
 	var out []string
 	for h := range set {

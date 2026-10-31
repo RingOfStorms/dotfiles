@@ -11,10 +11,9 @@
     # LAN subnet for `exposure = "lan"` routes (nginx-acl-lan.conf).
     nginx.acl.lan = [ "10.12.14.0/24" ];
     # Hand-written vhosts in mods/arr-nginx.nix (:34-38) admit the whole
-    # tailnet, and the inventory cannot see them, so the generated 80/443
-    # sources (containers/lib.nix webSourcesByHost) are widened back to the
-    # full tailnet here rather than dropping arr's clients (ROUTING-PLAN
-    # 8.2). Narrow this when arr moves to a `routes` declaration.
+    # tailnet, so these explicit 80/443 sources preserve their clients.
+    # Placement-driven routes use runtime sets instead (ROUTING-PLAN 8.2).
+    # Narrow this when arr moves to a routes declaration.
     nginx.extraWebSources = [
       "100.64.0.0/10"
       "fd7a:115c:a1e0::/48"

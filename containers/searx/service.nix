@@ -4,7 +4,6 @@
   name = "searx";
   kind = "nixos";
   description = "SearXNG metasearch (private, used by open-webui)";
-  host = "h001";
 
   persist = {
     data = "/var/lib/searx"; # secret-key.env

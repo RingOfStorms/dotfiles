@@ -8,7 +8,6 @@
   name = "paperless";
   kind = "nixos";
   description = "Paperless-ngx documents (docs.joshuabell.xyz)";
-  host = "h001";
   requires = [ "wd10" ];
 
   persist = {

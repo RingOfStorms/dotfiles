@@ -366,6 +366,14 @@ outage with no Nix-level trace.
 
 Derived-from-`s.host` Nix functions and their call sites:
 
+Phase 5 is implemented, not deployed: the four placement-derived generators
+below are deleted; `dnsRecords { dir; }` retains only names/public membership.
+CLI `resolvedHost` and dashboard bindings now use only the registry, discovery
+probes inventory container hosts plus registry hosts, and dry-run requires an
+explicit `--host` (moves require `--from` when no binding is available).
+The legacy declared-host status note and detail suffix are gone.
+
+
 | Consumer | Site | Phase | Change |
 |---|---|---|---|
 | `edgeRoutes` | `lib.nix`, filtered by `r.service.host != null` | 5 | Delete; o002 vhosts come from the runtime reconciler |
@@ -690,13 +698,20 @@ on anything stored in h001's Nix.
 | **3** | Reconciler: two DNS `hostsdir`s (tailnet overlay IPs, LAN IPs) written from the registry export, o002 runtime vhosts, `dns-plan` keeps its declarative input (only the CNAME *set* follows the registry, and an unplaced service contributes no name). Writers **done**: `h001`, `h003` and `joe` are in `overrideWriters` (`hosts/fleet.nix:54-62`) by their sec-agent machine userIds, subs unique, and h005's `fleet-edge.nix` maps each to its `overlayIp` | `flakes/fleet-edge/internal/{reconcile,dnsplan,server}`, `hosts/h005/{dns-records.nix,mods/networking.nix}`, `hosts/oracle/o002/nginx.nix`, `hosts/fleet.nix` | High: DNS and o002 are shared. Fail-closed ordering (add before remove, keep the old answer when a host is unreachable) and `cnt audit` checks |
 | **4 (done)** | Move rebind, in `cmdMove` (`move.go:344-554`) + `movestate.go`: reserve on the destination before any host is touched (resume only with a token the caller holds: local move-state file or `--resume-token`), `renew` around the final backup and between the long steps, commit after the restore check and first backup, retire just before the switch; rollback with the token on any failure before the commit (ownership confirmed first, unforced `DELETE`, target down, source restarted), `--recover` after it, and a takeover or unconfirmable ownership stops the move with both hosts untouched. `moveWarning` and its test deleted; the help text and `move.go`'s head comment describe the steps | `flakes/fleet-agent/internal/containers/{move.go,movestate.go,movestate_test.go,move_test.go,main.go,transfer_test.go}`, `containers/{README.md,PLACEMENT-PLAN.md}` | High: irreversible step, so the order is the design. Dry-run prints the same steps without touching the registry; the recorded path, the rollback, the takeovers, the resume and the refusals each have a test against a fake registry |
 | **4a (implemented, not deployed)** | Non-HTTP public routes follow placement: o002 stream receiver, boot seed/expire and timer; h005 validated atomic WAN forwarding; stream/WAN audit | `flakes/fleet-edge/internal/{edgestream,wanforward,reconcile}`, CLI audit, receiver and host Nix modules, `containers/lib.nix`, `containers/tests/edge-streams.nix` | Deploy h005 first (old receiver fails closed), then o002 (seed avoids a gap). Verify `git ls-remote ssh://git@git.joshuabell.xyz:3032/<repo>` before and after deployment and a test move |
-| **5** | Nix stops declaring placement: remove the `host` line from all 20 `service.nix` files (19 name a host, `minecraft` is `null`) and the `host = null` default in `lib.nix`, delete the functions in §4, delete the stale `computerboyz`/`minecraft` hand DNS, runtime firewall allowlist (with `fw-narrow`), cert targets pinned | `containers/*/service.nix`, `containers/lib.nix`, `containers/host-module.nix`, `containers/flake.nix` inventory, `hosts/h005/{dns-records,wildcard-cert}.nix`, `containers/tests/edge-vhosts.nix` | High, and the point of no return; done last so every reader already ignores the field |
+| **5 (implemented, not deployed)** | Removed service host metadata and declarative placement readers; retained placement-free DNS names/public membership, runtime firewall admission and pinned cert targets; CLI/dashboard/expose use registry bindings | Container manifests/library/module/inventory/tests, h005 DNS/certs, fleet-agent and fleet-edge | Deploy in the order and with the admission gate below |
 | **6** | Docs: `containers/README.md`, `containers/minecraft/README.md` (drop the "point computerboyz / set host" move instructions), `ROUTING-PLAN.md` (§5.2 table, §5.3, §8 step 9, the §8 step 4 "no runtime path" paragraph), `flakes/fleet-edge/README.md` | docs | Low |
 
 Each phase is one deployable cutover: phase *n* leaves the tree working with
 every caller migrated, and no phase adds a field or an alias that a later phase
 has to remember to delete. 4a is separate from 4 because it touches the public
 edge and can land before or after the move rebind, but not during one.
+
+### Phase 5 deploy notes
+
+- Switch **h005 first** (fleet-edge and inventory together), then **h003, joe, h001, lio**.
+- Before switching h003 or joe, `nft list set inet nixos-fw src` must contain the service's `web` ports-file sources. If absent, run `cnt deploy hello-nixos` on h003 or `cnt deploy localai` on joe first to populate runtime admission.
+- This phase is implemented, not deployed; no switch or remote verification was performed.
+
 
 ## 10. Open items
 

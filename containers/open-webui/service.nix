@@ -5,7 +5,6 @@
   name = "open-webui";
   kind = "nixos";
   description = "Open WebUI (chat.joshuabell.xyz)";
-  host = "h001";
 
   persist = {
     data = "/var/lib/private/open-webui"; # DynamicUser state (webui.db, uploads, vector db)

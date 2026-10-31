@@ -7,7 +7,6 @@
   name = "dawarich";
   kind = "nixos";
   description = "Dawarich location history (location.joshuabell.xyz)";
-  host = "h001";
 
   persist = {
     data = "/var/lib/dawarich"; # uploads/imports, storage, secrets/secret-key-base

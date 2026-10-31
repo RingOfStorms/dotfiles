@@ -28,23 +28,9 @@ let
   shareDomain = "share.${domain}";
   certDir = config.security.acme.certs.${domain}.directory;
   shareCertDir = config.security.acme.certs.${shareDomain}.directory;
-  # Push targets: every host with container routes (containers/lib.nix
-  # routeNamesByHost), plus joe and lio explicitly (FLOWS-AUDIT target
-  # design (a): every container host terminates its own TLS, including
-  # low-route-count hosts not yet carrying a non-local http route), plus
-  # o002 (the public edge). Pinned host keys: fleet.nix hosts.<h>.sshHostKey.
-  routeHosts = builtins.attrNames (
-    (import ../../containers/lib.nix).routeNamesByHost ../../containers
-  );
-  targetNames = lib.unique (
-    routeHosts
-    ++ [
-      "joe"
-      "lio"
-      "h003" # container host with backups but no routes yet: must terminate TLS before a `move` lands
-      "o002"
-    ]
-  );
+  # Push to every container host and the public edge, independent of placement.
+  # Pinned host keys: fleet.nix hosts.<h>.sshHostKey.
+  targetNames = [ "h001" "h003" "joe" "lio" "o002" ];
   targets = builtins.listToAttrs (
     map (h: {
       name = h;

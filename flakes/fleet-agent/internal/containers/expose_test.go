@@ -54,7 +54,7 @@ func TestSplitAudit(t *testing.T) {
 }
 
 func exposeSvc() Service {
-	return Service{Name: "app", Host: "h001", Routes: map[string]Route{
+	return Service{Name: "app", Routes: map[string]Route{
 		"web": httpRoute("app", 8000, "tailnet", "native"),
 		"raw": {Port: 9000, Proto: "tcp", Exposure: "tailnet", Auth: sp("native")},
 		"pub": httpRoute("pub", 8001, "public", "native"),

@@ -28,7 +28,7 @@ func sample() state.Merged {
 	inv := &inventory.Inventory{
 		Services: map[string]inventory.Service{
 			"photos": {
-				Name: "photos", Kind: "nixos", Host: "h001", Description: "immich",
+				Name: "photos", Kind: "nixos", Description: "immich",
 				Routes: map[string]inventory.Route{
 					"web": {FQDN: strp("photos.joshuabell.xyz"), URL: strp("https://photos.joshuabell.xyz"), Exposure: "public", Auth: strp("native"), Via: []string{"edge"}},
 				},
@@ -38,11 +38,12 @@ func sample() state.Merged {
 			"h001": {User: "root"},
 			"gp3":  {User: "josh"},
 		},
+		ContainerHosts: []string{"h001"},
 	}
 	polls := map[string]state.HostPoll{
 		"h001": {Host: "h001", OK: true, PolledAt: time.Now()},
 	}
-	return state.Merge(inv, polls, nil)
+	return state.Merge(inv, polls, map[string]string{"photos": "h001"})
 }
 
 func TestHandleIndexRenders(t *testing.T) {
@@ -194,9 +195,9 @@ func TestBackgroundFile(t *testing.T) {
 func TestServicesShowBackupAge(t *testing.T) {
 	inv := &inventory.Inventory{
 		Services: map[string]inventory.Service{
-			"fresh": {Name: "fresh", Kind: "nixos", Host: "h001"},
-			"old":   {Name: "old", Kind: "nixos", Host: "h001"},
-			"never": {Name: "never", Kind: "nixos", Host: "h001"},
+			"fresh": {Name: "fresh", Kind: "nixos"},
+			"old":   {Name: "old", Kind: "nixos"},
+			"never": {Name: "never", Kind: "nixos"},
 		},
 		Hosts: map[string]inventory.Host{"h001": {User: "root"}},
 	}
@@ -206,7 +207,7 @@ func TestServicesShowBackupAge(t *testing.T) {
 		"old":   {Active: "active", LastBackup: now.Add(-50 * time.Hour).Format(time.RFC3339)},
 		"never": {Active: "active"},
 	}}}}
-	srv := New(fakeSource{m: state.Merge(inv, polls, nil)}, Config{})
+	srv := New(fakeSource{m: state.Merge(inv, polls, map[string]string{"fresh": "h001", "old": "h001", "never": "h001"})}, Config{})
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
 	body := w.Body.String()
@@ -391,9 +392,9 @@ func (b boundSource) CurrentBound(bound map[string]string) state.Merged {
 func TestServicesBoundHostFromRegistry(t *testing.T) {
 	inv := &inventory.Inventory{
 		Services: map[string]inventory.Service{
-			"photos":    {Name: "photos", Kind: "nixos", Host: "h001"},
-			"orphan":    {Name: "orphan", Kind: "nixos", Host: "h001"},
-			"elsewhere": {Name: "elsewhere", Kind: "nixos", Host: "h001"},
+			"photos":    {Name: "photos", Kind: "nixos"},
+			"orphan":    {Name: "orphan", Kind: "nixos"},
+			"elsewhere": {Name: "elsewhere", Kind: "nixos"},
 		},
 		Hosts: map[string]inventory.Host{"h001": {User: "root"}},
 	}
@@ -439,7 +440,7 @@ func TestServicesBoundHostFromRegistry(t *testing.T) {
 
 func TestServicesNoRegistryMeansUnplaced(t *testing.T) {
 	inv := &inventory.Inventory{
-		Services: map[string]inventory.Service{"photos": {Name: "photos", Kind: "nixos", Host: "h001"}},
+		Services: map[string]inventory.Service{"photos": {Name: "photos", Kind: "nixos"}},
 		Hosts:    map[string]inventory.Host{"h001": {User: "root"}},
 	}
 	srv := New(boundSource{inv: inv}, Config{})
@@ -452,7 +453,7 @@ func TestServicesNoRegistryMeansUnplaced(t *testing.T) {
 
 func TestServicesUnreachableRegistryIsUnplaced(t *testing.T) {
 	inv := &inventory.Inventory{
-		Services: map[string]inventory.Service{"photos": {Name: "photos", Kind: "nixos", Host: "h001"}},
+		Services: map[string]inventory.Service{"photos": {Name: "photos", Kind: "nixos"}},
 		Hosts:    map[string]inventory.Host{"h001": {User: "root"}},
 	}
 	reg := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))

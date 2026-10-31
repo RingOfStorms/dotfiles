@@ -371,7 +371,10 @@ func cmdMove(args []string) error {
 		}
 	}
 	if from == "" {
-		from = s.Host
+		from = boundHost(s.Name)
+		if from == "" {
+			return fmt.Errorf("%s: --dry-run requires --from when no registry binding is available", s.Name)
+		}
 	}
 	if !slices.Contains(containerHosts(), to) {
 		return fmt.Errorf("%s is not a container host; add it to containerHosts in containers/flake.nix (and import the host module there) so discovery can see it", to)

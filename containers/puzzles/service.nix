@@ -4,7 +4,6 @@
   name = "puzzles";
   kind = "nixos";
   description = "Puzzles server (puzzles.joshuabell.xyz)";
-  host = "h001";
 
   persist = {
     data = "/var/lib/puzzles-server"; # data.db, auxiliary.db, storage/

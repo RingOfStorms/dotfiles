@@ -92,7 +92,7 @@ PATH="${extra:+$extra:}` + r.bin + `:$PATH" eval "$script"
 	t.Cleanup(func() { retired = map[string]map[string]bool{} })
 	inv = &Inventory{
 		DataRoot:       r.root,
-		Services:       map[string]Service{"svc": {Name: "svc", Dir: "svc", Kind: "podman", Host: "src"}},
+		Services:       map[string]Service{"svc": {Name: "svc", Dir: "svc", Kind: "podman"}},
 		Hosts:          map[string]Host{"src": {User: "root"}, "dst": {User: "root"}},
 		ContainerHosts: []string{"src", "dst"},
 	}
@@ -278,7 +278,7 @@ func fakeFleet(installed map[string][]string, down ...string) func(context.Conte
 }
 
 func TestMoveSourceThroughLocate(t *testing.T) {
-	s := Service{Name: "mc", Dir: "mc", Host: "h003"}
+	s := Service{Name: "mc", Dir: "mc"}
 	inv = &Inventory{Services: map[string]Service{"mc": s}, ContainerHosts: []string{"h001", "h003", "lio"}}
 	if from, err := moveSource(s, locate(s, fakeFleet(map[string][]string{"h001": {"mc"}}))); err != nil || from != "h001" {
 		t.Errorf("source should be where it is installed: %q %v", from, err)
@@ -454,8 +454,7 @@ func TestStatusDetail(t *testing.T) {
 	t.Cleanup(func() { mutableUnits, nginxDir, inv = oldM, oldN, oldInv })
 	mutableUnits, nginxDir = d+"/units", d+"/nginx"
 	inv = &Inventory{DataRoot: d + "/srv"}
-	s := Service{Name: "hello-podman", Kind: "podman", Description: "test", Host: "lio",
-		Persist: map[string]string{"data": "/data", "gone": "/x"}, TCPPorts: []int{8082}}
+	s := Service{Name: "hello-podman", Kind: "podman", Description: "test", Persist: map[string]string{"data": "/data", "gone": "/x"}, TCPPorts: []int{8082}}
 	for _, p := range []string{mutableUnits + "/multi-user.target.wants", nginxDir, d + "/srv/hello-podman/data"} {
 		must(t, os.MkdirAll(p, 0o755))
 	}
@@ -485,8 +484,8 @@ func TestHostForReadLocal(t *testing.T) {
 	oldM, oldG, oldL := mutableUnits, gcroots, localHost
 	mutableUnits, gcroots, localHost = dir, dir, "joe"
 	defer func() { mutableUnits, gcroots, localHost = oldM, oldG, oldL }()
-	pod := Service{Name: "localai", Kind: "podman", Host: "joe"}
-	nix := Service{Name: "mc", Kind: "nixos", Host: "h003"}
+	pod := Service{Name: "localai", Kind: "podman"}
+	nix := Service{Name: "mc", Kind: "nixos"}
 	if installedHere(pod) || installedHere(nix) {
 		t.Fatal("nothing installed yet")
 	}
@@ -703,9 +702,9 @@ esac
 func TestStatusUnknownLast(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	inv = &Inventory{Services: map[string]Service{
-		"zz": {Name: "zz", Host: "h001", Kind: "nixos"},
-		"mc": {Name: "mc", Host: "h003", Kind: "nixos"},
-	}}
+		"zz": {Name: "zz", Kind: "nixos"},
+		"mc": {Name: "mc", Kind: "nixos"},
+	}, ContainerHosts: []string{"h001", "h003"}}
 	out := renderStatus(false, fakeFleet(map[string][]string{"h001": {"zz", "atuin"}, "h003": {"mc"}}))
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	var order []string
@@ -731,7 +730,7 @@ func TestRenderDetailDataUnavailable(t *testing.T) {
 func TestStatusProbesRegisteredHosts(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	inv = &Inventory{
-		Services:       map[string]Service{"mc": {Name: "mc", Host: "h003", Kind: "nixos"}},
+		Services:       map[string]Service{"mc": {Name: "mc", Kind: "nixos"}},
 		ContainerHosts: []string{"h004", "h003"},
 	}
 	out := renderStatus(false, fakeFleet(map[string][]string{"h004": {"mc+"}}))

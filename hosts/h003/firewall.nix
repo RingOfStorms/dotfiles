@@ -1,12 +1,8 @@
 # h003 does not trust tailscale0 (ROUTING-PLAN §5.1). 80/443 are generated
-# by the containers host module (ROUTING-PLAN §8 step 2): the build-time
-# sources are the http routes declared with host = "h003" in the inventory
-# (containers/lib.nix webSourcesByHost) plus nginx.extraWebSources. The
-# runtime half is written per service by `containers deploy` from that
-# service's own routes, so a service moved here is admitted without h003
-# declaring it. LAN clients on 80/443 arrive through the runtime `@src_lan`
-# rule: h003 has no lanIp, so the build-time LAN accept the host module emits
-# for hosts with one is not generated here, and the runtime set covers it.
+# by the containers host module (ROUTING-PLAN §8 step 2), using runtime sets
+# filled per service by cnt deploy. Only explicit nginx.extraWebSources
+# remain build-time literals. LAN clients use @src_lan; h003 has no lanIp
+# and therefore no static LAN accept.
 # SSH is explicit below, not the global hardening.nix allow: 41641/udp, icmp
 # and the `containers` temp-ports set stay open on every interface (global
 # rules unrelated to this step).

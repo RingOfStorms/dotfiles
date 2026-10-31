@@ -34,7 +34,7 @@ func resolutionRig(t *testing.T, bound map[string]string, rows map[string]placem
 		registryCache = nil
 	})
 	inv = &Inventory{
-		Services:       map[string]Service{"svc": {Name: "svc", Dir: "svc", Kind: "podman", Host: "src"}},
+		Services:       map[string]Service{"svc": {Name: "svc", Dir: "svc", Kind: "podman"}},
 		Hosts:          map[string]Host{"src": {User: "root"}, "dst": {User: "root"}},
 		ContainerHosts: []string{"src", "dst"},
 	}
@@ -69,7 +69,6 @@ func TestResolveHostMatrix(t *testing.T) {
 		installed map[string][]string
 		down      []string
 		host      string // --host
-		noDecl    bool   // service.nix declares no host
 		dry       bool
 		wantHost  string
 		wantRec   bool
@@ -117,17 +116,12 @@ func TestResolveHostMatrix(t *testing.T) {
 		{name: "--host matches the binding", bound: map[string]string{"svc": "dst"}, host: "dst",
 			wantHost: "dst"},
 		{name: "dry-run --host", host: "dst", dry: true, wantHost: "dst"},
-		{name: "dry-run declared host", dry: true, wantHost: "src"},
-		{name: "dry-run with nothing to plan against", dry: true, noDecl: true,
-			wantErr: "no --host; nothing to plan against"},
+		{name: "dry-run requires explicit host", dry: true, wantErr: "--dry-run requires --host"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			probes := resolutionRig(t, c.bound, c.rows, c.installed, c.down...)
 			s := inv.Services["svc"]
-			if c.noDecl {
-				s.Host = ""
-			}
 			if c.dry {
 				dryRun = true
 			}
@@ -620,8 +614,8 @@ func TestReadPlacementsUnreadableKeyWarnsOnce(t *testing.T) {
 	}
 }
 
-// A registry that fails the request: one warning, the read-only path keeps
-// the declared host, and a discovery fallthrough in resolveHost says why.
+// A failed registry request warns; read-only resolution has no binding,
+// while resolveHost falls through to discovery and says why.
 func TestReadPlacementsRequestFailureWarnsAndFallsBack(t *testing.T) {
 	resolutionRig(t, nil, nil, map[string][]string{"src": {"svc"}})
 	buf := registryWarnRig(t)
@@ -635,8 +629,8 @@ func TestReadPlacementsRequestFailureWarnsAndFallsBack(t *testing.T) {
 	placementNow = func(verify bool) *placementView { return readPlacements(client, verify) }
 
 	s := inv.Services["svc"]
-	if h := resolvedHost(s); h != s.Host {
-		t.Fatalf("resolvedHost = %q, want the declared %q", h, s.Host)
+	if h := resolvedHost(s); h != "" {
+		t.Fatalf("resolvedHost = %q, want no binding", h)
 	}
 	var h string
 	out := captureStderr(t, func() {
@@ -699,5 +693,28 @@ func TestCmdPlaceImportNamesSilentHostWhenAllSkipped(t *testing.T) {
 	}
 	if !strings.Contains(out, "undecided: svc (a host did not answer: dst)") {
 		t.Errorf("output does not name the silent host dst:\n%s", out)
+	}
+}
+
+func bindServices(t *testing.T, hosts map[string]string) {
+	t.Helper()
+	old, cache := placementNow, registryCache
+	t.Cleanup(func() { placementNow, registryCache = old, cache })
+	placementNow = func(bool) *placementView { return &placementView{Host: hosts} }
+	registryCache = nil
+}
+
+func TestRegistryOnlyResolutionAndDryMove(t *testing.T) {
+	resolutionRig(t, map[string]string{"svc": "dst"}, nil, nil)
+	if h := resolvedHost(inv.Services["svc"]); h != "dst" {
+		t.Fatalf("binding = %q", h)
+	}
+	if h := resolvedHost(Service{Name: "unplaced"}); h != "" {
+		t.Fatalf("unplaced = %q", h)
+	}
+	dryRun = true
+	registryCache = nil
+	if err := cmdMove([]string{"svc", "--to", "dst"}); err == nil || !strings.Contains(err.Error(), "requires --from") {
+		t.Fatalf("dry move without source: %v", err)
 	}
 }

@@ -4,7 +4,6 @@
   name = "atuin";
   kind = "nixos";
   description = "atuin shell-history sync server (atuin.joshuabell.xyz)";
-  host = "h001";
 
   persist = {
     # PG 17 cluster in ./17 (copied 1:1 from the old /var/lib/atuin/postgres)

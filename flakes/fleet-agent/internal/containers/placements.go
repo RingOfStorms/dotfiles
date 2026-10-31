@@ -101,7 +101,7 @@ func fetchPlacements(verify bool) *placementView {
 // the caller discovers instead. A key that is there but cannot be used (not
 // root: EACCES), or a registry that fails the request, also returns nil, but
 // says so once (registryNotConsulted): falling back silently would hide that
-// the answer came from discovery and the declared host, not the registry.
+// the answer came from discovery, not the registry.
 func readPlacements(client func() (*edgeClient, error), verify bool) *placementView {
 	c, err := client()
 	if err != nil {
@@ -146,7 +146,7 @@ func registryNotConsulted(err error) {
 		return
 	}
 	registryWarned = true
-	fmt.Fprintf(registryWarnOut, "warning: placement registry not consulted (%v); %s. Falling back to discovery and the declared host\n", err, registryHint)
+	fmt.Fprintf(registryWarnOut, "warning: placement registry not consulted (%v); %s. Falling back to discovery; no registry binding is available\n", err, registryHint)
 }
 
 // registryUnconsulted is the reason the registry could not be read in this

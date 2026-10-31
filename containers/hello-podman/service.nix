@@ -5,9 +5,6 @@
   kind = "podman";
   description = "test: nginx splash page in a podman container";
 
-  # Where it should run. After `containers move`, update this and push.
-  host = "lio";
-
   # Survives restarts and travels with `move`. Unused by nginx; drop marker
   # files in /srv/containers/hello-podman/data to see them follow a move.
   persist = {

@@ -169,7 +169,8 @@ let
           # The serving host's nginx renders allow as per-host `allow
           # <overlayIp>; # allow: <host>` lines plus `deny all;` instead of
           # the tailnet ACL include (cli/routes.go routesVhost), and
-          # webSourcesByHost feeds the same overlay IPs to the host firewall.
+          # `cnt deploy` feeds the same overlay IPs to the host firewall's
+          # runtime @src set (routes.go srcPortLines).
           bad = isHttp && (r.allow or [ ]) != [ ] && exposure != "tailnet";
           msg = "allow on http routes is only implemented for exposure = \"tailnet\"";
         }
@@ -394,18 +395,9 @@ let
     let
       s = {
         kind = "nixos";
-        # DEPRECATED build-time seed (PLACEMENT-PLAN.md §4/§9). Placement is
-        # runtime now: the fleet-edge registry is the source of truth and `cnt`
-        # resolves a service's host from it. `host` survives only so the
-        # remaining Nix builders below can keep deriving from it until phase 5
-        # deletes the field and every reader in one cutover:
-        #   edgeRoutes, edgeVirtualHosts, routeNamesByHost/tlsNamesByHost,
-        #   webSourcesByHost, dnsRecords,
-        #   host-module.nix's httpExposureByHost, containers/flake.nix's
-        #   containerHosts comment.
-        # Do not add a reader, and do not add a `host` to a new service.nix:
-        # record the destination with `cnt place <svc> --set <host>` instead.
-        host = null;
+        # No `host`: placement is runtime (PLACEMENT-PLAN.md). The fleet-edge
+        # registry is the source of truth; record a destination with
+        # `cnt place <svc> --set <host>` or `cnt deploy <svc> --host <host>`.
         persist = { };
         tcpPorts = [ ];
         requires = [ ];
@@ -451,30 +443,14 @@ let
     in
     checkNetIndexes (map (d: normalize (import (dir + "/${d}/service.nix"))) dirs);
 
-  # Public http routes reached through the edge (o002), each with `service`.
-  # DEPRECATED reader of the `host` seed: a service with `host = null` is
-  # skipped because build time cannot know where it runs. The registry does;
-  # phase 5 deletes this function and o002's vhosts come from the reconciler.
-  edgeRoutes =
-    dir:
-    builtins.filter
-      (
-        r:
-        r.proto == "http" && r.exposure == "public" && builtins.elem "edge" r.via && r.service.host != null
-      )
-      (
-        builtins.concatMap (s: map (r: r // { service = s; }) (builtins.attrValues s.routes)) (
-          allServices dir
-        )
-      );
-
   # Tailnet peers a host's own http vhosts must not serve: o002 (the public
   # edge, which reaches them through its edge listener instead) and the
   # low-trust nodes (hosts/fleet.nix trust = "low"). ROUTING-PLAN 8.2.
-  # Container hosts do not need this: webSourcesByHost lists exactly who may
-  # reach them. h005 does, because its vhosts (fleet-edge dashboard,
-  # oauth2-proxy sso-proxy) are hand-written and sso-proxy must stay
-  # reachable from devices that are not in fleet.nix at all (phones).
+  # Container hosts do not need this: their 80/443 admission is the runtime
+  # @src set `cnt deploy` fills per service. h005 does, because its vhosts
+  # (fleet-edge dashboard, oauth2-proxy sso-proxy) are hand-written and
+  # sso-proxy must stay reachable from devices that are not in fleet.nix at
+  # all (phones).
   tailnetExcludedOverlayIps =
     hosts:
     builtins.filter (ip: ip != null) (
@@ -509,81 +485,6 @@ let
       throw "webSourcesIps: family must be \"v4\" or \"v6\""
     else
       builtins.filter (s: isV4 s == (family == "v4")) sources;
-
-  # The build-time half of the 80/443 admission (ROUTING-PLAN 8.2) for this
-  # host's own internal nginx: literal `ip saddr` rules from the routes the
-  # inventory declares for it, instead of a blanket
-  # `ip saddr 100.64.0.0/10 accept`. The runtime half (`@src`/`@src6`/
-  # `@src_lan`) is written per service by `containers deploy` from that
-  # service's own routes, so this map only covers what is declared here at
-  # build time. nginx still enforces the per-vhost exposure ACL; both are only
-  # the TCP admission.
-  #   dir    the containers directory
-  #   extra  per-host additions for hand vhosts outside the inventory
-  #          (h001's arr media-health aliases)
-  #   hosts  fleet.nix hosts (overlayIp)
-  # Returns { <host> = { tailnet = [ addr-or-cidr ]; lan = bool; }; },
-  # sorted and deduped, omitting hosts with nothing to admit:
-  #   tailnet  `100.64.0.0/10` for a route without `allow`, else the
-  #            overlay IP of every host it names
-  #   lan      the host also serves LAN clients directly on 80/443 (a
-  #            lan/public route that is not `via = [ "router" ]`).
-  # Not covered: a `via = [ "router" ]` public route's LAN clients, which
-  # h005 DNATs and which arrive with the WAN source (see ROUTING-PLAN 8.2).
-  webSourcesByHost =
-    {
-      dir,
-      extra ? { },
-      hosts ? fleetHosts.hosts,
-    }:
-    let
-      routes = builtins.filter (r: r.proto == "http" && r.exposure != "local") (
-        builtins.concatMap (s: map (r: r // { inherit (s) host; }) (builtins.attrValues s.routes)) (
-          builtins.filter (s: s.host != null) (allServices dir)
-        )
-      );
-      allowIps =
-        r:
-        map (
-          n:
-          hosts.${n}.overlayIp
-            or (throw "webSourcesByHost: ${r.fqdn}: allow names ${n}, which has no overlayIp in fleet.nix")
-        ) r.allow;
-      # No allow list means every tailnet node may reach nginx (it still
-      # enforces the per-vhost ACL); an allow list narrows admission to it.
-      sourcesOf = r: if r.allow == [ ] then [ "100.64.0.0/10" ] else allowIps r;
-      computed = builtins.mapAttrs (_: rs: {
-        tailnet = builtins.concatMap sourcesOf rs;
-        lan = builtins.any (
-          r: (r.exposure == "lan" || r.exposure == "public") && !(builtins.elem "router" r.via)
-        ) rs;
-      }) (builtins.groupBy (r: r.host) routes);
-      merged =
-        builtins.mapAttrs (h: v: {
-          tailnet = v.tailnet ++ (extra.${h}.tailnet or [ ]);
-          lan = v.lan || (extra.${h}.lan or false);
-        }) computed
-        // builtins.mapAttrs (_: e: {
-          tailnet = e.tailnet or [ ];
-          lan = e.lan or false;
-        }) (builtins.removeAttrs extra (builtins.attrNames computed));
-      out = builtins.mapAttrs (_: v: {
-        tailnet = builtins.sort builtins.lessThan (
-          builtins.attrNames (
-            builtins.listToAttrs (
-              map (s: {
-                name = s;
-                value = null;
-              }) v.tailnet
-            )
-          )
-        );
-        inherit (v) lan;
-      }) merged;
-    in
-    builtins.removeAttrs out (
-      builtins.filter (h: out.${h}.tailnet == [ ] && !out.${h}.lan) (builtins.attrNames out)
-    );
 in
 {
   inherit
@@ -593,7 +494,6 @@ in
     normalize
     normalizeRoute
     edgePort
-    edgeRoutes
     nginxSnippets
     netHostAddress
     checkNetIndexes
@@ -601,74 +501,7 @@ in
     tailnetExcludedOverlayIps
     validWebSource
     webSourcesIps
-    webSourcesByHost
     ;
-
-  # services.nginx.virtualHosts for the public edge (o002), generated from
-  # every public `via = edge` http route (ROUTING-PLAN §2.3, §8 step 3).
-  # Each proxies over the tailnet to the service host's edge listener
-  # (<overlayIp>:edgePort), which admits only the edge's overlay IP and
-  # serves only routes that are public there right now.
-  #   dir    the containers directory (inputs.containers.outPath or ./.)
-  #   hosts  fleet.nix hosts (overlay IPs)
-  #   tls    TLS attrs merged into every vhost; default per-name http-01
-  #          (o002 holds no bunny key, so no wildcard there yet; §8 step 4).
-  edgeVirtualHosts =
-    {
-      dir,
-      hosts,
-      tls ? {
-        enableACME = true;
-        forceSSL = true;
-      },
-    }:
-    builtins.listToAttrs (
-      map (
-        r:
-        let
-          h = r.service.host;
-          ip =
-            hosts.${h}.overlayIp
-              or (throw "edgeVirtualHosts: ${r.fqdn}: host ${h} has no overlayIp in fleet.nix");
-        in
-        {
-          name = r.fqdn;
-          value = tls // {
-            locations."/" = {
-              proxyPass = "http://${ip}:${toString edgePort}";
-              proxyWebsockets = r.websockets;
-              extraConfig = ''
-                # generated: containers ${r.service.name} (lib.nix edgeVirtualHosts)
-                client_max_body_size ${r.maxBody};
-                proxy_buffering ${if r.buffering then "on" else "off"};
-                proxy_request_buffering ${if r.requestBuffering then "on" else "off"};
-                proxy_read_timeout ${r.timeouts};
-                proxy_send_timeout ${r.timeouts};
-              '';
-            };
-          };
-        }
-      ) (edgeRoutes dir)
-    );
-
-  # TLS names per serving host: every exposed (non-local) http route's fqdn,
-  # grouped by its service's host, each list sorted. Each host's own nginx
-  # terminates TLS for these names. h005's cert push
-  # (hosts/h005/wildcard-cert.nix) derives its targets and the per-host
-  # SANs of low-trust hosts from this. Services without a host are skipped.
-  routeNamesByHost =
-    dir:
-    let
-      routes = builtins.filter (r: r.proto == "http" && r.exposure != "local") (
-        builtins.concatMap (s: map (r: r // { inherit (s) host; }) (builtins.attrValues s.routes)) (
-          builtins.filter (s: s.host != null) (allServices dir)
-        )
-      );
-    in
-    builtins.mapAttrs (_: rs: builtins.sort builtins.lessThan (map (r: r.fqdn) rs)) (
-      builtins.groupBy (r: r.host) routes
-    );
-
   # ROUTING-PLAN §8 step 2: explicit per-host firewall, generated from the
   # inventory instead of hand-written global allows ("every host trusts
   # tailscale0" is gone; this is what replaces the blanket 22/80/443).
@@ -735,20 +568,12 @@ in
       }) -- this would lock out ssh from lio; computed list: [ ${builtins.concatStringsSep ", " ips} ]";
     };
 
-  # DNS records for every exposed route, from service.nix
-  # (ROUTING-PLAN §2.1, §8 step 4). Build-time: h005 (tailnet + LAN
-  # dnsmasq) and the bunny reconciler read this, so a record changes when
-  # h005 is rebuilt from a tree with the new service.nix.
+  # Placement-free DNS route names and public CNAME membership. h005 keeps
+  # local= declarations from names; runtime reconciliation supplies host IPs.
   #   dir    the containers directory
-  #   hosts  fleet.nix hosts (overlayIp, lanIp)
-  # Returns lists of { fqdn; source; ... }, sorted by fqdn:
-  #   tailnet  every non-local route -> its host's overlay IP
-  #   lan      lan + public routes -> its host's LAN IP (hosts without a
-  #            lanIp get no LAN record: LAN clients fall through to public)
-  #   public   public routes -> CNAME o002 (via edge) or home (via router)
-  # Route names and public membership are independent of placement.
+  # Returns names and public lists sorted by fqdn, with source and service.
   dnsRecords =
-    { dir, hosts }:
+    { dir }:
     let
       routes = builtins.filter (r: r.exposure != "local" && r.fqdn != null) (
         builtins.concatMap (
@@ -759,21 +584,10 @@ in
             // {
               source = "${s.name}.${n}";
               service = s.name;
-              host = s.host;
             }
           ) (builtins.attrNames s.routes)
         ) (allServices dir)
       );
-      hostIp =
-        r: field:
-        (hosts.${r.host} or (throw "dnsRecords: ${r.source}: host ${r.host} is not in fleet.nix")).${field}
-          or null;
-      overlayIp =
-        r:
-        let
-          ip = hostIp r "overlayIp";
-        in
-        if ip == null then throw "dnsRecords: ${r.source}: host ${r.host} has no overlayIp" else ip;
       sortByName = builtins.sort (a: b: a.fqdn < b.fqdn);
       dups =
         l:
@@ -790,24 +604,6 @@ in
     in
     {
       names = checked (map (r: { inherit (r) fqdn source service; }) routes);
-      tailnet = checked (
-        map (r: {
-          inherit (r) fqdn source;
-          ip = overlayIp r;
-        }) (builtins.filter (r: r.host != null) routes)
-      );
-      lan = checked (
-        map
-          (r: {
-            inherit (r) fqdn source;
-            ip = hostIp r "lanIp";
-          })
-          (
-            builtins.filter (
-              r: r.host != null && (r.exposure == "lan" || r.exposure == "public") && hostIp r "lanIp" != null
-            ) routes
-          )
-      );
       public = checked (
         map (r: {
           inherit (r) fqdn source service;

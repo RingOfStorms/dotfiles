@@ -16,11 +16,11 @@ func sampleInventory() *inventory.Inventory {
 	return &inventory.Inventory{
 		Services: map[string]inventory.Service{
 			"jellyfin": {
-				Name: "jellyfin", Kind: "nixos", Host: "h001",
+				Name: "jellyfin", Kind: "nixos",
 				Description: "media server",
 			},
 			"photos": {
-				Name: "photos", Kind: "nixos", Host: "h001",
+				Name: "photos", Kind: "nixos",
 				Description: "immich",
 				Routes: map[string]inventory.Route{
 					"web": {Port: 2283, FQDN: strp("photos.joshuabell.xyz"), Exposure: "public", Auth: strp("native"), Via: []string{"edge"}},
@@ -30,6 +30,7 @@ func sampleInventory() *inventory.Inventory {
 		Hosts: map[string]inventory.Host{
 			"h001": {User: "root", OverlayIP: strp("100.64.0.13"), LanIP: strp("10.12.14.5")},
 		},
+		ContainerHosts: []string{"h001"},
 	}
 }
 
@@ -46,7 +47,7 @@ func TestMergeWithGoodPoll(t *testing.T) {
 			},
 		},
 	}
-	m := Merge(inv, polls, nil)
+	m := Merge(inv, polls, sampleBindings())
 	if len(m.Services) != 2 {
 		t.Fatalf("expected 2 services, got %d", len(m.Services))
 	}
@@ -78,7 +79,7 @@ func TestMergeUnreachableHost(t *testing.T) {
 	polls := map[string]HostPoll{
 		"h001": {Host: "h001", OK: false, Error: "context deadline exceeded", PolledAt: time.Now()},
 	}
-	m := Merge(inv, polls, nil)
+	m := Merge(inv, polls, sampleBindings())
 	for _, sv := range m.Services {
 		if sv.Active != "unknown" {
 			t.Fatalf("expected unknown active when host unreachable, got %+v", sv)
@@ -94,7 +95,7 @@ func TestMergeUnreachableHost(t *testing.T) {
 
 func TestMergeNoPollYet(t *testing.T) {
 	inv := sampleInventory()
-	m := Merge(inv, map[string]HostPoll{}, nil)
+	m := Merge(inv, map[string]HostPoll{}, sampleBindings())
 	if len(m.Services) != 2 {
 		t.Fatalf("expected 2 services, got %d", len(m.Services))
 	}
@@ -128,11 +129,12 @@ func TestPolledHostsContainerHosts(t *testing.T) {
 	}
 }
 
-func TestPolledHostsFallbackToServiceHosts(t *testing.T) {
+func TestPolledHostsWithoutConfiguredHosts(t *testing.T) {
 	inv := sampleInventory()
+	inv.ContainerHosts = nil
 	inv.Hosts["gp3"] = inventory.Host{OverlayIP: strp("100.64.0.15")}
 	got := inv.PolledHosts()
-	if len(got) != 1 || got[0] != "h001" {
+	if len(got) != 0 {
 		t.Fatalf("got %v", got)
 	}
 }
@@ -146,7 +148,7 @@ func TestMergeNoEndpointHost(t *testing.T) {
 		"h001": {Host: "h001", OK: true, PolledAt: time.Now()},
 		"gp3":  {Host: "gp3", OK: false, Error: "refused", PolledAt: time.Now()},
 	}
-	m := Merge(inv, polls, nil)
+	m := Merge(inv, polls, sampleBindings())
 	for _, h := range m.Hosts {
 		switch h.Host {
 		case "h001":
@@ -174,7 +176,7 @@ func TestMergeContainerHostIsDeclared(t *testing.T) {
 		"h003": {Host: "h003", OK: true, PolledAt: time.Now()},
 		"gp3":  {Host: "gp3", OK: true, PolledAt: time.Now()},
 	}
-	m := MergeAt(inv, polls, time.Now(), nil)
+	m := MergeAt(inv, polls, time.Now(), sampleBindings())
 	want := map[string]bool{"h001": true, "h003": true, "gp3": false}
 	if len(m.Hosts) != len(want) {
 		t.Fatalf("expected %d hosts, got %+v", len(want), m.Hosts)
@@ -193,7 +195,7 @@ func TestMergeContainerHostWithoutServices(t *testing.T) {
 		Hosts:          map[string]inventory.Host{"h003": {OverlayIP: strp("100.64.0.4")}},
 		ContainerHosts: []string{"h003"},
 	}
-	m := MergeAt(inv, map[string]HostPoll{}, time.Now(), nil)
+	m := MergeAt(inv, map[string]HostPoll{}, time.Now(), sampleBindings())
 	if len(m.Hosts) != 1 || !m.Hosts[0].ContainerHost {
 		t.Fatalf("expected declared container host, got %+v", m.Hosts)
 	}
@@ -202,7 +204,7 @@ func TestMergeContainerHostWithoutServices(t *testing.T) {
 func TestMergeBoundHost(t *testing.T) {
 	inv := sampleInventory() // jellyfin and photos, both declared on h001
 	// No registry map at all: the declaration is all there is.
-	m := MergeAt(inv, map[string]HostPoll{}, time.Now(), nil)
+	m := MergeAt(inv, map[string]HostPoll{}, time.Now(), sampleBindings())
 	for _, svc := range m.Services {
 		if svc.BoundHost != "h001" {
 			t.Fatalf("%s: boundHost = %q, want the declared h001", svc.Name, svc.BoundHost)
@@ -245,9 +247,9 @@ func TestPollOnceOnlyPolledHosts(t *testing.T) {
 
 func TestMergeBackupAge(t *testing.T) {
 	inv := sampleInventory()
-	inv.Services["old"] = inventory.Service{Name: "old", Kind: "nixos", Host: "h001"}
-	inv.Services["never"] = inventory.Service{Name: "never", Kind: "nixos", Host: "h001"}
-	inv.Services["bad"] = inventory.Service{Name: "bad", Kind: "nixos", Host: "h001"}
+	inv.Services["old"] = inventory.Service{Name: "old", Kind: "nixos"}
+	inv.Services["never"] = inventory.Service{Name: "never", Kind: "nixos"}
+	inv.Services["bad"] = inventory.Service{Name: "bad", Kind: "nixos"}
 	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
 	polls := map[string]HostPoll{"h001": {Host: "h001", OK: true, Status: &HostStatus{Services: map[string]ServiceStatus{
 		"jellyfin": {Active: "active", LastBackup: "2026-10-22T03:05:00-05:00"}, // 08:05Z: 3h55m
@@ -255,7 +257,7 @@ func TestMergeBackupAge(t *testing.T) {
 		"never":    {Active: "active"},
 		"bad":      {Active: "active", LastBackup: "yesterday"},
 	}}}}
-	m := MergeAt(inv, polls, now, nil)
+	m := MergeAt(inv, polls, now, sampleBindings())
 	got := map[string]ServiceView{}
 	for _, s := range m.Services {
 		got[s.Name] = s
@@ -274,7 +276,7 @@ func TestMergeBackupAge(t *testing.T) {
 	}
 	// exactly 36h is not stale yet
 	polls["h001"].Status.Services["old"] = ServiceStatus{LastBackup: "2026-10-21T00:00:00Z"}
-	if v := MergeAt(inv, polls, now, nil); func() string {
+	if v := MergeAt(inv, polls, now, sampleBindings()); func() string {
 		for _, s := range v.Services {
 			if s.Name == "old" {
 				return s.Backup
@@ -285,7 +287,7 @@ func TestMergeBackupAge(t *testing.T) {
 		t.Error("36h exactly flagged stale")
 	}
 	// unreachable host: unknown
-	m = MergeAt(inv, map[string]HostPoll{"h001": {Host: "h001", OK: false}}, now, nil)
+	m = MergeAt(inv, map[string]HostPoll{"h001": {Host: "h001", OK: false}}, now, sampleBindings())
 	for _, s := range m.Services {
 		if s.Backup != "unknown" {
 			t.Errorf("%s: %q with the host down", s.Name, s.Backup)
@@ -476,4 +478,8 @@ func TestMaxPrimaryTempC(t *testing.T) {
 			}
 		})
 	}
+}
+
+func sampleBindings() map[string]string {
+	return map[string]string{"jellyfin": "h001", "photos": "h001", "old": "h001", "never": "h001", "bad": "h001"}
 }

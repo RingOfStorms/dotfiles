@@ -189,14 +189,14 @@ func newRig(t *testing.T) *rig {
 		idp:  newTestIdP(t)}
 	tb := true
 	inv := &inventory.Inventory{Services: map[string]inventory.Service{
-		"app": {Name: "app", Host: "h001", Routes: map[string]inventory.Route{
+		"app": {Name: "app", Routes: map[string]inventory.Route{
 			"web":   {Proto: "http", Exposure: "tailnet", Auth: sp("native"), FQDN: sp("app.example.com"), MaxBody: "100m", Timeouts: "60s", Websockets: true, RequestBuffering: &tb},
 			"open":  {Proto: "http", Exposure: "tailnet", Auth: sp("none"), FQDN: sp("open.example.com"), MaxBody: "1m", Timeouts: "60s"},
 			"gated": {Proto: "http", Exposure: "tailnet", Auth: sp("oauth2-proxy"), FQDN: sp("gated.example.com"), MaxBody: "1m", Timeouts: "60s"},
 		}},
-		"pub":  {Name: "pub", Host: "h001", Routes: map[string]inventory.Route{"web": {Proto: "http", Exposure: "public", Auth: sp("native"), FQDN: sp("pub.example.com"), MaxBody: "1m", Timeouts: "60s"}}},
-		"decl": {Name: "decl", Host: "h001", Routes: map[string]inventory.Route{"web": {Proto: "http", Exposure: "tailnet", Auth: sp("native"), FQDN: sp("www.example.com"), MaxBody: "1m", Timeouts: "60s"}}},
-		"tcp":  {Name: "tcp", Host: "h001", Routes: map[string]inventory.Route{"ssh": {Proto: "tcp", Exposure: "tailnet"}}},
+		"pub":  {Name: "pub", Routes: map[string]inventory.Route{"web": {Proto: "http", Exposure: "public", Auth: sp("native"), FQDN: sp("pub.example.com"), MaxBody: "1m", Timeouts: "60s"}}},
+		"decl": {Name: "decl", Routes: map[string]inventory.Route{"web": {Proto: "http", Exposure: "tailnet", Auth: sp("native"), FQDN: sp("www.example.com"), MaxBody: "1m", Timeouts: "60s"}}},
+		"tcp":  {Name: "tcp", Routes: map[string]inventory.Route{"ssh": {Proto: "tcp", Exposure: "tailnet"}}},
 	}}
 	verifier, err := auth.New(auth.Config{
 		Zitadel:    auth.ZitadelConfig{Issuer: r.idp.srv.URL, ProjectID: project},
@@ -208,6 +208,7 @@ func newRig(t *testing.T) *rig {
 	}
 	s, err := New(Config{
 		Inventory: inv, Spec: &bunny.Spec{Zone: "example.com", Records: []bunny.Desired{{Name: "www", Type: "CNAME", Value: "o002.example.com", Source: "hand"}}},
+		Bound:  func(string) string { return "h001" },
 		Domain: "example.com", Target: "o002.example.com", StateDir: t.TempDir(),
 		Verifier: verifier,
 		Writers:  map[string]Writer{"oren": {Sub: orenSub, Peer: orenPeer}, "lio": {Sub: lioSub, Peer: lioPeer}},
@@ -362,7 +363,7 @@ func TestCheckRefusals(t *testing.T) {
 		{"pub", "web", "h001", "already public"},
 		{"decl", "web", "h001", "declared in the public spec"},
 		{"tcp", "ssh", "h001", "http"},
-		{"app", "web", "lio", "inventory has host"},
+		{"app", "web", "lio", "registry has bound host"},
 		{"app", "nope", "h001", "no route"},
 		{"ghost", "web", "h001", "unknown service"},
 	} {
@@ -373,6 +374,33 @@ func TestCheckRefusals(t *testing.T) {
 	}
 	if len(r.dns.log)+len(r.edge.files) != 0 {
 		t.Fatal("refusal touched dns/edge")
+	}
+}
+
+func TestCheckFollowsRegistryBinding(t *testing.T) {
+	r := newRig(t)
+	host := "lio"
+	r.s.cfg.Bound = func(string) string { return host }
+	req := Request{Service: "app", Route: "web", Host: "lio"}
+	check := func() error {
+		_, _, err := Check(r.s.cfg.Inventory, r.s.cfg.Spec, r.s.cfg.Domain, r.s.cfg.Bound, req)
+		return err
+	}
+	if err := check(); err != nil {
+		t.Fatal(err)
+	}
+	host = "h001"
+	if err := check(); err == nil {
+		t.Fatal("old binding accepted after move")
+	}
+	host = ""
+	req.Host = ""
+	if err := check(); err == nil {
+		t.Fatal("unplaced service accepted")
+	}
+	r.s.cfg.Bound = nil
+	if err := check(); err == nil {
+		t.Fatal("missing registry accepted")
 	}
 }
 

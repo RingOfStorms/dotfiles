@@ -6,7 +6,6 @@
   name = "forgejo";
   kind = "nixos";
   description = "Forgejo git forge (git.joshuabell.xyz, ssh :3032)";
-  host = "h001";
 
   persist = {
     data = "/var/lib/forgejo"; # repositories, custom/conf/app.ini + secrets, lfs, avatars

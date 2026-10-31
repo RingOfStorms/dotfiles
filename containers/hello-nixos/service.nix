@@ -5,9 +5,6 @@
   kind = "nixos";
   description = "test: nginx splash page in an nspawn container";
 
-  # Where it should run. After `containers move`, update this and push.
-  host = "h003";
-
   # Survives restarts and travels with `move`. Unused by nginx; drop marker
   # files in /srv/containers/hello-nixos/data to see them follow a move.
   persist = {

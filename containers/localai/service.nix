@@ -16,7 +16,6 @@
   name = "localai";
   kind = "podman";
   description = "LocalAI image generation API (GPU)";
-  host = "joe";
   # --device=nvidia.com/gpu=all below needs the CDI spec on the host.
   requires = [ "nvidia" ];
 

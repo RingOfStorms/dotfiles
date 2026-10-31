@@ -6,7 +6,6 @@
   name = "litellm";
   kind = "nixos";
   description = "LiteLLM proxy (tailnet, litellm.joshuabell.xyz)";
-  host = "h001";
 
   persist = {
     # DynamicUser state: github_copilot token dir, .config, caches.

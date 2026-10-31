@@ -1466,11 +1466,11 @@
     "tmux-agents": {
       "locked": {
         "dir": "flakes/tmux-agents",
-        "lastModified": 1793340120,
-        "narHash": "sha256-Cy2jrEEmIpS4NAuVm5wXPpi+JjSuuO8zUhdGfA94aZo=",
+        "lastModified": 1793401678,
+        "narHash": "sha256-WlGuZAyZSznDjAI5siGcSiEAyid72MEEd3IpU/iLXyE=",
         "ref": "refs/heads/master",
-        "rev": "ae990a6aaf8753a65f5af4b4b4ff5c0f889cb67e",
-        "revCount": 2456,
+        "rev": "04e006bd5cd647dbe65f0dbd85353db358b213b8",
+        "revCount": 2473,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -1488,11 +1488,11 @@
       },
       "locked": {
         "dir": "flakes/tmux-agents-mobile",
-        "lastModified": 1793340120,
-        "narHash": "sha256-Cy2jrEEmIpS4NAuVm5wXPpi+JjSuuO8zUhdGfA94aZo=",
+        "lastModified": 1793401678,
+        "narHash": "sha256-WlGuZAyZSznDjAI5siGcSiEAyid72MEEd3IpU/iLXyE=",
         "ref": "refs/heads/master",
-        "rev": "ae990a6aaf8753a65f5af4b4b4ff5c0f889cb67e",
-        "revCount": 2456,
+        "rev": "04e006bd5cd647dbe65f0dbd85353db358b213b8",
+        "revCount": 2473,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },

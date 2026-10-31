@@ -93,9 +93,10 @@ func TestPortOpenScriptCombos(t *testing.T) {
 }
 
 func TestPortGuards(t *testing.T) {
+	bindServices(t, map[string]string{"sec": "h001", "mc": "h001"})
 	svcs := map[string]Service{
-		"sec": {Name: "sec", Host: "h001", Routes: map[string]Route{"web": httpRoute("secrets", 8300, "public", "native-oidc")}},
-		"mc":  {Name: "mc", Host: "h001", TCPPorts: []int{25565}, Routes: map[string]Route{"q": {Port: 25566, Proto: "udp", Exposure: "tailnet"}}},
+		"sec": {Name: "sec", Routes: map[string]Route{"web": httpRoute("secrets", 8300, "public", "native-oidc")}},
+		"mc":  {Name: "mc", TCPPorts: []int{25565}, Routes: map[string]Route{"q": {Port: 25566, Proto: "udp", Exposure: "tailnet"}}},
 	}
 	mc := svcs["mc"]
 	if _, err := portGuards(mc, portReq{Port: 8300, Proto: "tcp"}, "h001", svcs); err == nil || !strings.Contains(err.Error(), "sec.web") {

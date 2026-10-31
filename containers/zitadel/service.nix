@@ -10,7 +10,6 @@
   name = "zitadel";
   kind = "nixos";
   description = "Zitadel SSO (sso.joshuabell.xyz)";
-  host = "h001";
 
   persist = {
     # PG 17 cluster in ./17, copied 1:1 from /var/lib/zitadel/postgres.

@@ -80,15 +80,9 @@
       inventory = {
         inherit services;
         hosts = (import ../hosts/fleet.nix).hosts;
-        # Hosts that run (or may run) floating containers; the CLI probes them
-        # to find where a service is installed. The CLI also probes every host
-        # the placement registry knows and, while `host` is still a build-time
-        # seed, every host a service.nix declares (PLACEMENT-PLAN.md §6), so
-        # this list must name the hosts that hold a service and nothing else —
-        # a host that only ever held one would otherwise vanish from discovery
-        # once phase 5 drops the declared-host loop. Laptops stay unlisted
-        # except `joe`, which runs localai. A host that is offline only
-        # matters for the services placed on it.
+        # Hosts that may run floating containers. Discovery probes these plus
+        # every host known to the placement registry, never service metadata.
+        # Keep eligible hosts listed even before their first placement.
         containerHosts = [
           "h001"
           "h003"

@@ -5,7 +5,6 @@
   name = "vaultwarden";
   kind = "nixos";
   description = "vaultwarden password manager (vault.joshuabell.xyz)";
-  host = "h001";
 
   persist = {
     data = "/var/lib/vaultwarden"; # db.sqlite3, rsa_key, attachments, sends

@@ -8,7 +8,6 @@
   name = "life";
   kind = "nixos";
   description = "Life server (life.joshuabell.xyz)";
-  host = "h001";
 
   persist = {
     state = "/var/lib/life"; # blobs, releases, nightly logical backups

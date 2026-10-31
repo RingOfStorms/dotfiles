@@ -656,13 +656,9 @@ func MergeAt(inv *inventory.Inventory, polls map[string]HostPoll, now time.Time,
 	return mergeWithLast(inv, polls, nil, now, bound)
 }
 
-// binding returns the host a service resolves to now: the registry's binding
-// when one was supplied (absent = unplaced), else the declaration.
+// binding returns only the registry binding; absent means unplaced.
 func binding(bound map[string]string, svc inventory.Service) string {
-	if bound != nil {
-		return bound[svc.Name]
-	}
-	return svc.Host
+	return bound[svc.Name]
 }
 
 func mergeWithLast(inv *inventory.Inventory, polls map[string]HostPoll, last map[string]lastKnownHost, now time.Time, bound map[string]string) Merged {

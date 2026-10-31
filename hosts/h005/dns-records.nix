@@ -11,7 +11,6 @@ let
   h001 = fleet.hosts.h001;
   generated = (import ../../containers/lib.nix).dnsRecords {
     dir = ../../containers;
-    inherit (fleet) hosts;
   };
 
   # notes is a generated route now (containers/trilium). sso-proxy is the

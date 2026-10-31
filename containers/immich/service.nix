@@ -7,7 +7,6 @@
   name = "immich";
   kind = "nixos";
   description = "Immich photos (photos.joshuabell.xyz)";
-  host = "h001";
   requires = [ "wd10" ];
 
   persist = {

@@ -7,7 +7,6 @@ const sampleNoRoutes = `{
     "jellyfin": {
       "name": "jellyfin",
       "kind": "nixos",
-      "host": "h001",
       "description": "media server",
       "persist": {},
       "tcpPorts": [8096],
@@ -26,7 +25,6 @@ const sampleWithRoutes = `{
     "photos": {
       "name": "photos",
       "kind": "nixos",
-      "host": "h001",
       "description": "immich",
       "persist": {},
       "tcpPorts": [2283],
@@ -64,9 +62,6 @@ func TestParseNoRoutes(t *testing.T) {
 	}
 	if svc.Routes != nil {
 		t.Fatalf("expected nil routes, got %v", svc.Routes)
-	}
-	if svc.Host != "h001" {
-		t.Fatalf("expected host h001, got %q", svc.Host)
 	}
 	h, ok := inv.Hosts["h001"]
 	if !ok {

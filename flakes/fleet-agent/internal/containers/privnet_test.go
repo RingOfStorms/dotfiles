@@ -12,7 +12,7 @@ import (
 
 func privSvc(name string, idx int) Service {
 	ip := "10.233." + strconv.Itoa(idx) + ".2"
-	return Service{Name: name, Kind: "nixos", Host: "h001", Net: Net{Private: true, Index: &idx, IP: &ip}}
+	return Service{Name: name, Kind: "nixos", Net: Net{Private: true, Index: &idx, IP: &ip}}
 }
 
 func TestPrivateVhostUpstream(t *testing.T) {
@@ -54,6 +54,7 @@ func TestPortsFileLines(t *testing.T) {
 }
 
 func TestAuditPrivateStale(t *testing.T) {
+	bindServices(t, map[string]string{"puzzles": "h001"})
 	s := privSvc("puzzles", 2)
 	s.Routes = map[string]Route{"web": httpRoute("puzzles", 8093, "public", "native")}
 	ss := `tcp   LISTEN 0      4096       127.0.0.1:8093       0.0.0.0:*    users:(("puzzles-server",pid=7,fd=3))
@@ -76,6 +77,7 @@ func TestPortGuardPrivate(t *testing.T) {
 }
 
 func TestNetExceptionsAndCallers(t *testing.T) {
+	bindServices(t, map[string]string{"open-webui": "h001", "litellm": "h001", "searx": "h001", "remote": "h003"})
 	old := inv
 	defer func() { inv = old }()
 	ov := "100.64.0.13"
@@ -87,7 +89,7 @@ func TestNetExceptionsAndCallers(t *testing.T) {
 	lit.Routes = map[string]Route{"web": httpRoute("litellm", 8094, "tailnet", "native")}
 	sx := privSvc("searx", 8)
 	sx.Routes = map[string]Route{"api": {Port: 8889, Proto: "tcp", Exposure: "tailnet"}}
-	rem := Service{Name: "remote", Host: "h003", Routes: map[string]Route{"web": httpRoute("remote", 1, "public", "native")}}
+	rem := Service{Name: "remote", Routes: map[string]Route{"web": httpRoute("remote", 1, "public", "native")}}
 	inv = &Inventory{
 		Services: map[string]Service{"open-webui": ow, "litellm": lit, "searx": sx, "remote": rem},
 		Hosts:    map[string]Host{"h001": {OverlayIP: &ov}, "h003": {OverlayIP: &ov3}},

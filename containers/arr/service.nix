@@ -5,7 +5,6 @@
 {
   name = "arr";
   kind = "nixos";
-  host = "h001";
   description = "nixarr media stack + kavita + media-integrity";
   # Media lives on the h004 NAS (bound in, not backed up here); jellyfin
   # transcodes on the Intel iGPU.

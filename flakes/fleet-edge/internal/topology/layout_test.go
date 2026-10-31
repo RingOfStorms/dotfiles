@@ -25,9 +25,9 @@ var at = time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
 func testInventory() *inventory.Inventory {
 	return &inventory.Inventory{
 		Services: map[string]inventory.Service{
-			"jellyfin": {Name: "jellyfin", Kind: "nixos", Host: "h001", Description: "media"},
+			"jellyfin": {Name: "jellyfin", Kind: "nixos", Description: "media"},
 			"photos": {
-				Name: "photos", Kind: "nixos", Host: "h001",
+				Name: "photos", Kind: "nixos",
 				Routes: map[string]inventory.Route{
 					"web": {Port: 2283, FQDN: strp("photos.example"), Exposure: "public", Via: []string{"edge"}},
 				},
@@ -128,7 +128,7 @@ func edge(t *testing.T, d Diagram, from, to, kind string) Edge {
 // --- stations and state ----------------------------------------------------
 
 func TestBuildDeclaredContainerHostWithNoContainers(t *testing.T) {
-	m := state.MergeAt(testInventory(), allPolls(), at, nil)
+	m := state.MergeAt(testInventory(), allPolls(), at, testBindings())
 	d := Build(testSpec(), m, at)
 
 	n, ok := nodesByID(d)["h003"]
@@ -153,7 +153,7 @@ func TestBuildDeclaredContainerHostWithNoContainers(t *testing.T) {
 }
 
 func TestBuildContainerHostFromServiceHost(t *testing.T) {
-	m := state.MergeAt(testInventory(), allPolls(), at, nil)
+	m := state.MergeAt(testInventory(), allPolls(), at, testBindings())
 	d := Build(testSpec(), m, at)
 
 	n := nodesByID(d)["h001"]
@@ -179,7 +179,7 @@ func TestBuildContainerHostFromServiceHost(t *testing.T) {
 }
 
 func TestBuildPollOnlyHostIsNotContainerHost(t *testing.T) {
-	m := state.MergeAt(testInventory(), allPolls(), at, nil)
+	m := state.MergeAt(testInventory(), allPolls(), at, testBindings())
 	d := Build(testSpec(), m, at)
 
 	n := nodesByID(d)["gp3"]
@@ -198,7 +198,7 @@ func TestBuildEdgesLiveOnlyBetweenPresentNodes(t *testing.T) {
 	inv := testInventory()
 	polls := allPolls()
 	delete(polls, "gp3") // gp3 is now down
-	d := Build(testSpec(), state.MergeAt(inv, polls, at, nil), at)
+	d := Build(testSpec(), state.MergeAt(inv, polls, at, testBindings()), at)
 
 	if e := edge(t, d, "internet", "h001", "agent"); !e.Live {
 		t.Error("online host must have a live edge")
@@ -226,7 +226,7 @@ func TestBuildEdgesLiveOnlyBetweenPresentNodes(t *testing.T) {
 // up, and its LAST known numbers are not shown as current readings.
 func TestBuildOfflineHostIsNotLiveAndHasNoMetrics(t *testing.T) {
 	inv := testInventory()
-	d := Build(testSpec(), state.MergeAt(inv, nil, at, nil), at)
+	d := Build(testSpec(), state.MergeAt(inv, nil, at, testBindings()), at)
 
 	n := nodesByID(d)["h001"]
 	if n.live {
@@ -243,7 +243,7 @@ func TestBuildOfflineHostIsNotLiveAndHasNoMetrics(t *testing.T) {
 }
 
 func TestBuildNodeInfoCarriesFullMetrics(t *testing.T) {
-	m := state.MergeAt(testInventory(), allPolls(), at, nil)
+	m := state.MergeAt(testInventory(), allPolls(), at, testBindings())
 	d := Build(testSpec(), m, at)
 
 	if !nodesByID(d)["h001"].live {
@@ -266,7 +266,7 @@ func TestBuildNodeInfoCarriesFullMetrics(t *testing.T) {
 
 func TestBuildServiceOnDownHostHasNoMetrics(t *testing.T) {
 	inv := testInventory()
-	d := Build(testSpec(), state.MergeAt(inv, map[string]state.HostPoll{}, at, nil), at)
+	d := Build(testSpec(), state.MergeAt(inv, map[string]state.HostPoll{}, at, testBindings()), at)
 
 	ni := infoByID(t, d)["h001"]
 	if ni.State != "down" {
@@ -284,7 +284,7 @@ func TestBuildServiceOnDownHostHasNoMetrics(t *testing.T) {
 // --- derived edges and spec resolution -------------------------------------
 
 func TestBuildDerivedEdges(t *testing.T) {
-	m := state.MergeAt(testInventory(), allPolls(), at, nil)
+	m := state.MergeAt(testInventory(), allPolls(), at, testBindings())
 	d := Build(testSpec(), m, at)
 
 	edge(t, d, "internet", "h001", "agent")
@@ -303,7 +303,7 @@ func TestBuildDerivedEdges(t *testing.T) {
 func TestBuildSkipsEmptyHubs(t *testing.T) {
 	spec := testSpec()
 	spec.Hubs = Hubs{}
-	m := state.MergeAt(testInventory(), allPolls(), at, nil)
+	m := state.MergeAt(testInventory(), allPolls(), at, testBindings())
 	d := Build(spec, m, at)
 	if len(d.Edges) != 0 {
 		t.Fatalf("no hubs, no derived edges: %+v", d.Edges)
@@ -319,7 +319,7 @@ func TestBuildSkipsLinksToUnknownNodes(t *testing.T) {
 		{From: "ghost", To: "h001", Kind: "ethernet"},
 		{From: "internet", To: "nope", Kind: "wan"},
 	}
-	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, testBindings()), at)
 	for _, e := range d.Edges {
 		if e.From == "ghost" || e.To == "ghost" || e.To == "nope" {
 			t.Errorf("edge to an unresolved node drawn: %+v", e)
@@ -335,7 +335,7 @@ func TestBuildSkipsNodeWithMissingHostBinding(t *testing.T) {
 		Columns: []Column{{ID: "c", Zones: []Zone{{ID: "fleet", Label: "Fleet", Flex: 1}}}},
 		Nodes:   []NodeSpec{{Host: "gone", Zone: "fleet"}},
 	}
-	m := state.MergeAt(testInventory(), allPolls(), at, nil)
+	m := state.MergeAt(testInventory(), allPolls(), at, testBindings())
 	d := Build(spec, m, at)
 	if len(d.Nodes) != 0 {
 		t.Fatalf("node bound to a vanished host must be skipped: %+v", d.Nodes)
@@ -350,7 +350,7 @@ func TestBuildStaticNodeWithoutLabelFallsBackToID(t *testing.T) {
 		Columns: []Column{{ID: "c", Zones: []Zone{{ID: "fleet", Label: "Fleet", Flex: 1}}}},
 		Nodes:   []NodeSpec{{ID: "switch", Zone: "fleet"}},
 	}
-	d := Build(spec, state.MergeAt(testInventory(), nil, at, nil), at)
+	d := Build(spec, state.MergeAt(testInventory(), nil, at, testBindings()), at)
 	if len(d.Nodes) != 1 || d.Nodes[0].Label != "switch" {
 		t.Fatalf("nodes = %+v", d.Nodes)
 	}
@@ -359,7 +359,7 @@ func TestBuildStaticNodeWithoutLabelFallsBackToID(t *testing.T) {
 func TestBuildDegenerateLayoutStaysSane(t *testing.T) {
 	spec := testSpec()
 	spec.Width = 0
-	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, testBindings()), at)
 	// No width means the default one is split across the columns. Gutters
 	// that need room for lanes take it from column slack first; the diagram
 	// grows past the default only when slack runs out.
@@ -387,7 +387,7 @@ func TestBuildDegenerateLayoutStaysSane(t *testing.T) {
 
 	// A column with no zones contributes nothing to the layout.
 	spec.Columns = append([]Column{{ID: "empty"}}, spec.Columns...)
-	got := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	got := Build(spec, state.MergeAt(testInventory(), allPolls(), at, testBindings()), at)
 	if len(got.Zones) != len(d.Zones) {
 		t.Errorf("empty column changed the region count: %d vs %d", len(got.Zones), len(d.Zones))
 	}
@@ -419,7 +419,7 @@ func TestColumnsShareWidthNotHeight(t *testing.T) {
 		},
 		DefaultZone: "fleet",
 	}
-	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, testBindings()), at)
 	if len(d.Columns) != 2 {
 		t.Fatalf("columns = %+v", d.Columns)
 	}
@@ -454,7 +454,7 @@ func TestZoneFlexSharesColumnLeftoverOnly(t *testing.T) {
 		}}},
 		DefaultZone: "grow",
 	}
-	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, testBindings()), at)
 	fixed, ok := zoneByID(d, "fixed")
 	if !ok {
 		t.Fatal("fixed zone missing")
@@ -491,7 +491,7 @@ func TestDiagramHeightIsTheTallestColumn(t *testing.T) {
 		}}},
 		DefaultZone: "one",
 	}
-	m := state.MergeAt(testInventory(), allPolls(), at, nil)
+	m := state.MergeAt(testInventory(), allPolls(), at, testBindings())
 	ds, dt := Build(short, m, at), Build(tall, m, at)
 	if dt.Height <= ds.Height {
 		t.Errorf("three regions %d high, one region %d high", dt.Height, ds.Height)
@@ -517,7 +517,7 @@ func TestStackLayoutKeepsSpecOrder(t *testing.T) {
 	for _, id := range order {
 		spec.Nodes = append(spec.Nodes, NodeSpec{ID: id, Zone: "rack"})
 	}
-	d := Build(spec, state.MergeAt(testInventory(), nil, at, nil), at)
+	d := Build(spec, state.MergeAt(testInventory(), nil, at, testBindings()), at)
 	nodes := nodesByID(d)
 	prev := -1
 	for _, id := range order {
@@ -546,7 +546,7 @@ func TestColumnFillReadsDownThenAcross(t *testing.T) {
 	}
 	// No DefaultZone and an empty inventory: only these six stations are laid
 	// out, so the fill order is the thing under test and nothing else.
-	d := Build(spec, state.MergeAt(&inventory.Inventory{}, nil, at, nil), at)
+	d := Build(spec, state.MergeAt(&inventory.Inventory{}, nil, at, testBindings()), at)
 	nodes := nodesByID(d)
 	// Six stations, two across: "column" fill reads down the first column,
 	// then the next, so rack order survives the wrap.
@@ -573,7 +573,7 @@ func TestStationsWrapToTheRegionWidth(t *testing.T) {
 	if err := spec.Validate(testInventory()); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
-	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, testBindings()), at)
 	z, ok := zoneByID(d, "fleet")
 	if !ok {
 		t.Fatal("fleet zone missing")
@@ -601,7 +601,7 @@ func TestBuildNodesFitTheirZone(t *testing.T) {
 	if err := spec.Validate(testInventory()); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
-	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, testBindings()), at)
 	if len(d.Nodes) != 3 {
 		t.Fatalf("expected the three hosts placed, got %+v", d.Nodes)
 	}
@@ -631,24 +631,24 @@ func TestBuildNodesFitTheirZone(t *testing.T) {
 func routeInventory() *inventory.Inventory {
 	return &inventory.Inventory{
 		Services: map[string]inventory.Service{
-			"gitea": {Name: "gitea", Host: "h004", Routes: map[string]inventory.Route{
+			"gitea": {Name: "gitea", Routes: map[string]inventory.Route{
 				"web": {Port: 3000, FQDN: strp("git.example"), Exposure: "public", Via: []string{"edge"}},
 			}},
-			"router-ui": {Name: "router-ui", Host: "h004", Routes: map[string]inventory.Route{
+			"router-ui": {Name: "router-ui", Routes: map[string]inventory.Route{
 				"web": {Port: 8443, FQDN: strp("www.example"), Exposure: "public", Via: []string{"router"}},
 			}},
-			"vault": {Name: "vault", Host: "h004", Routes: map[string]inventory.Route{
+			"vault": {Name: "vault", Routes: map[string]inventory.Route{
 				"web": {Port: 8200, Exposure: "local"},
 			}},
-			"litellm": {Name: "litellm", Host: "h001", Routes: map[string]inventory.Route{
+			"litellm": {Name: "litellm", Routes: map[string]inventory.Route{
 				"web": {Port: 4000, FQDN: strp("location.example"), Exposure: "public", Via: []string{"edge"}},
 			}},
-			"trilium": {Name: "trilium", Host: "h001", Routes: map[string]inventory.Route{
+			"trilium": {Name: "trilium", Routes: map[string]inventory.Route{
 				"web": {Port: 8080, FQDN: strp("notes.example"), Exposure: "tailnet"},
 			}},
 			// Same FQDN as gitea, served from a second host: one name, one
 			// marker, and the first owner in host order wins.
-			"mirror": {Name: "mirror", Host: "h003", Routes: map[string]inventory.Route{
+			"mirror": {Name: "mirror", Routes: map[string]inventory.Route{
 				"web": {Port: 80, FQDN: strp("git.example"), Exposure: "public", Via: []string{"edge"}},
 			}},
 		},
@@ -689,7 +689,7 @@ func routeSpec() *Spec {
 }
 
 func TestRouteCloudsClassifyByExposureAndOrigin(t *testing.T) {
-	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, nil), at)
+	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, testBindings()), at)
 	if len(d.RouteWeb) == 0 {
 		t.Fatal("no public markers")
 	}
@@ -745,7 +745,7 @@ func TestRouteCloudsClassifyByExposureAndOrigin(t *testing.T) {
 
 // One public FQDN is one marker, however many routes or aliases serve it.
 func TestOneMarkerPerFQDN(t *testing.T) {
-	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, nil), at)
+	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, testBindings()), at)
 	count := map[string]int{}
 	for _, m := range d.RouteWeb {
 		count[m.FQDN]++
@@ -816,7 +816,7 @@ func TestEmptyRegistryOverlayZoneSaysWhy(t *testing.T) {
 // A region that did draw its names stays silent: the caption is for an empty
 // region, not a permanent subtitle.
 func TestPlacedOverlayZoneHasNoNote(t *testing.T) {
-	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, nil), at)
+	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, testBindings()), at)
 	if len(d.OverlayWeb) == 0 {
 		t.Fatal("no overlay markers with the declarative bindings")
 	}
@@ -831,14 +831,12 @@ func TestPlacedOverlayZoneHasNoNote(t *testing.T) {
 // never pins a name to whichever host happened to be first.
 func TestOwningHostChangeRebindsMarker(t *testing.T) {
 	before := routeInventory()
-	dBefore := Build(routeSpec(), state.MergeAt(before, nil, at, nil), at)
+	dBefore := Build(routeSpec(), state.MergeAt(before, nil, at, testBindings()), at)
 
 	after := routeInventory()
-	moved := after.Services["gitea"]
-	delete(after.Services, "gitea")
-	moved.Host = "h001"
-	after.Services["gitea"] = moved
-	dAfter := Build(routeSpec(), state.MergeAt(after, nil, at, nil), at)
+	bound := testBindings()
+	bound["gitea"] = "h001"
+	dAfter := Build(routeSpec(), state.MergeAt(after, nil, at, bound), at)
 
 	pick := func(d Diagram, svc string) (RouteMarker, bool) {
 		for _, m := range d.RouteWeb {
@@ -877,7 +875,7 @@ func TestOwningHostChangeRebindsMarker(t *testing.T) {
 // The public brace is a real curly brace with a separate collector lead into
 // the edge hub; the overlay is one bundled trunk with one branch per host.
 func TestBraceAndCollectorPaths(t *testing.T) {
-	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, nil), at)
+	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, testBindings()), at)
 	if d.RouteBrace == nil {
 		t.Fatal("no public brace")
 	}
@@ -997,7 +995,7 @@ func distinctOverlayHosts(ms []RouteMarker) map[string]bool {
 // The route document is valid JSON carrying both groups, their markers, the
 // braces and the catalogue — the client joins nothing else.
 func TestRouteMetaIsCompleteJSON(t *testing.T) {
-	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, nil), at)
+	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, testBindings()), at)
 	var doc struct {
 		Groups []struct {
 			ID        string `json:"id"`
@@ -1047,7 +1045,7 @@ func TestRouteMetaIsCompleteJSON(t *testing.T) {
 // A DNS-only name never animates and never claims an owner, and the catalogue
 // marks exactly the names a route actually serves.
 func TestDNSOnlyRecordIsFaintAndUnowned(t *testing.T) {
-	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, nil), at)
+	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, testBindings()), at)
 	declared := map[string]bool{}
 	for _, r := range d.PublicZone.Records {
 		declared[r.Name] = r.Declared
@@ -1076,7 +1074,7 @@ func TestDNSOnlyRecordIsFaintAndUnowned(t *testing.T) {
 // A host serving several names carries every one of them, each with its own
 // exposure and entry point; the station still shows counts, not names.
 func TestServiceExposureAndRouteOrigin(t *testing.T) {
-	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, nil), at)
+	d := Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, testBindings()), at)
 
 	svcs := map[string]ServiceInfo{}
 	for _, s := range infoByID(t, d)["h004"].Services {
@@ -1178,7 +1176,7 @@ func TestOneRingPerPrimaryMount(t *testing.T) {
 	}, state.MergeAt(&inventory.Inventory{Hosts: hosts}, map[string]state.HostPoll{"h004": {
 		Host: "h004", OK: true, PolledAt: at,
 		Status: &state.HostStatus{Host: "h004", Filesystems: fs},
-	}}, at, nil), at)
+	}}, at, testBindings()), at)
 
 	n := nodesByID(d)["h004"]
 	// "/", "/mnt/bulk" and "/mnt/pool" are primaries; the two submounts are
@@ -1501,7 +1499,7 @@ func TestValidateColumnWidthsMatchLayout(t *testing.T) {
 	if err := spec.Validate(testInventory()); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
-	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, testBindings()), at)
 	widths := columnWidths(spec.Columns, spec.Width)
 	if len(d.Columns) != len(widths) {
 		t.Fatalf("columns = %d, widths = %d", len(d.Columns), len(widths))
@@ -1546,7 +1544,7 @@ func TestValidateHiddenHostIsNotDrawn(t *testing.T) {
 	if err := spec.Validate(testInventory()); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
-	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, testBindings()), at)
 	if _, ok := nodesByID(d)["h003"]; ok {
 		t.Fatal("hidden host must not be auto-placed")
 	}
@@ -1560,7 +1558,7 @@ func TestDefaultZoneAutoPlacesUnknownHost(t *testing.T) {
 		DefaultZone: "fleet",
 		Nodes:       []NodeSpec{{Host: "h001", Zone: "fleet"}},
 	}
-	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, testBindings()), at)
 	for _, h := range []string{"h001", "h003", "gp3"} {
 		if _, ok := nodesByID(d)[h]; !ok {
 			t.Errorf("%s was not auto-placed", h)
@@ -1582,7 +1580,7 @@ func TestStationGeometryStaysInsideTheBox(t *testing.T) {
 			Badges: []string{"tailnet", "VLAN 20"},
 		}},
 	}
-	d := Build(spec, state.MergeAt(testInventory(), map[string]state.HostPoll{}, at, nil), at)
+	d := Build(spec, state.MergeAt(testInventory(), map[string]state.HostPoll{}, at, testBindings()), at)
 
 	n := nodesByID(d)["h001"]
 	if n.W != stationW {
@@ -1633,7 +1631,7 @@ func TestStationLabelClearsTheHead(t *testing.T) {
 	inv := testInventory()
 	inv.Hosts["h001"] = inventory.Host{Role: "server", OverlayIP: strp("100.64.0.13")}
 	polls := map[string]state.HostPoll{"h001": testPoll("h001", at)}
-	d := Build(spec, state.MergeAt(inv, polls, at, nil), at)
+	d := Build(spec, state.MergeAt(inv, polls, at, testBindings()), at)
 
 	for _, id := range []string{"h001", "apc1"} {
 		n := nodesByID(d)[id]
@@ -1667,7 +1665,7 @@ func TestStationServiceCountsAndFailure(t *testing.T) {
 			},
 		},
 	}
-	d := Build(routeSpec(), state.MergeAt(inv, map[string]state.HostPoll{"h004": poll}, at, nil), at)
+	d := Build(routeSpec(), state.MergeAt(inv, map[string]state.HostPoll{"h004": poll}, at, testBindings()), at)
 
 	n := nodesByID(d)["h004"]
 	if n.SvcCount != 3 || n.SvcFailed != 2 {
@@ -1753,7 +1751,7 @@ func TestSegmentSpansItsRegion(t *testing.T) {
 			{Host: "h001", Zone: "lan"},
 		},
 	}
-	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, nil), at)
+	d := Build(spec, state.MergeAt(testInventory(), allPolls(), at, testBindings()), at)
 	z, ok := zoneByID(d, "lan")
 	if !ok {
 		t.Fatal("lan zone missing")
@@ -1811,7 +1809,7 @@ func TestLanFabricConnectsSwitchesAndHosts(t *testing.T) {
 			"h001": {OverlayIP: strp("100.64.0.13"), LanIP: strp("10.12.14.5")},
 		},
 	}
-	d := Build(spec, state.MergeAt(inv, nil, at, nil), at)
+	d := Build(spec, state.MergeAt(inv, nil, at, testBindings()), at)
 
 	// The graph is undirected for reachability: a dashed attachment claims a
 	// shared segment, not a direction.
@@ -1961,9 +1959,9 @@ func denseSpec() *Spec {
 // basic spec, both route clouds, and the dense rack.
 func laneFixtures() map[string]Diagram {
 	return map[string]Diagram{
-		"basic":  Build(testSpec(), state.MergeAt(testInventory(), allPolls(), at, nil), at),
-		"routes": Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, nil), at),
-		"dense":  Build(denseSpec(), state.MergeAt(&inventory.Inventory{}, nil, at, nil), at),
+		"basic":  Build(testSpec(), state.MergeAt(testInventory(), allPolls(), at, testBindings()), at),
+		"routes": Build(routeSpec(), state.MergeAt(routeInventory(), nil, at, testBindings()), at),
+		"dense":  Build(denseSpec(), state.MergeAt(&inventory.Inventory{}, nil, at, testBindings()), at),
 	}
 }
 
@@ -2052,4 +2050,8 @@ func TestLaneAnchorsAreDistinct(t *testing.T) {
 			claim(e.To, who, x1, y1)
 		}
 	}
+}
+
+func testBindings() map[string]string {
+	return map[string]string{"jellyfin": "h001", "photos": "h001", "gitea": "h004", "router-ui": "h004", "vault": "h004", "litellm": "h001", "trilium": "h001", "mirror": "h003"}
 }

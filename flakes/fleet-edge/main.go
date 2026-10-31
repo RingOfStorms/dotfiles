@@ -254,10 +254,6 @@ func runOverrides(args []string) {
 	}
 	poller := state.NewPoller(inv, *statusTmpl, 5*time.Second)
 	cfg.Status = overrides.HTTPStatus(poller.StatusURLFor)
-	ov, err := overrides.New(cfg)
-	if err != nil {
-		log.Fatal(err)
-	}
 	var routing *reconcile.Reconciler
 	pl, err := placements.New(placements.Config{Inventory: inv, StateDir: *stateDir, Auth: au,
 		Status: placements.HTTPHostServices(poller.StatusURLFor), Notify: func() {
@@ -265,6 +261,11 @@ func runOverrides(args []string) {
 				routing.Kick()
 			}
 		}})
+	if err != nil {
+		log.Fatal(err)
+	}
+	cfg.Bound = func(service string) string { return pl.Snapshot().Host[service] }
+	ov, err := overrides.New(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}

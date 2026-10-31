@@ -118,6 +118,7 @@ type HostOverride struct {
 // Config wires a Service.
 type Config struct {
 	Inventory *inventory.Inventory
+	Bound     func(string) string // current effective registry binding; empty = unplaced
 	Spec      *bunny.Spec
 	Domain    string // fleet domain, = Spec.Zone
 	Target    string // CNAME value, e.g. o002.joshuabell.xyz
@@ -239,7 +240,7 @@ type Request struct {
 // Check validates a request against the inventory and public spec, the same
 // rules as lib.nix and the CLI's exposeCheck. It returns the route and the
 // zone-relative name.
-func Check(inv *inventory.Inventory, spec *bunny.Spec, domain string, req Request) (inventory.Route, string, error) {
+func Check(inv *inventory.Inventory, spec *bunny.Spec, domain string, bound func(string) string, req Request) (inventory.Route, string, error) {
 	var zero inventory.Route
 	svc, ok := inv.Services[req.Service]
 	if !ok {
@@ -250,8 +251,12 @@ func Check(inv *inventory.Inventory, spec *bunny.Spec, domain string, req Reques
 		return zero, "", fmt.Errorf("%s has no route %q", req.Service, req.Route)
 	}
 	where := req.Service + "." + req.Route
-	if svc.Host == "" || svc.Host != req.Host {
-		return zero, "", fmt.Errorf("%s: h005's inventory has host %q, the CLI says %q (rebuild h005 after deploys/moves)", where, svc.Host, req.Host)
+	host := ""
+	if bound != nil {
+		host = bound(req.Service)
+	}
+	if host == "" || host != req.Host {
+		return zero, "", fmt.Errorf("%s: registry has bound host %q, the CLI says %q (check cnt place)", where, host, req.Host)
 	}
 	if r.Proto != "http" {
 		return zero, "", fmt.Errorf("%s: only http routes can be exposed publicly", where)
@@ -449,7 +454,7 @@ func (s *Service) prepare(req Request, dev string) (*Row, error) {
 	if req.Until != 0 && req.Until <= now {
 		return nil, fail(400, "until is in the past")
 	}
-	rt, name, err := Check(s.cfg.Inventory, s.cfg.Spec, s.cfg.Domain, req)
+	rt, name, err := Check(s.cfg.Inventory, s.cfg.Spec, s.cfg.Domain, s.cfg.Bound, req)
 	if err != nil {
 		return nil, fail(409, "%v", err)
 	}
@@ -633,7 +638,7 @@ func (s *Service) commit(ctx context.Context, req Request, dev string) (*Row, er
 	if o.State == Removing {
 		return o, fail(409, "%s is being removed", req.Service)
 	}
-	if _, _, err := Check(s.cfg.Inventory, s.cfg.Spec, s.cfg.Domain, req); err != nil {
+	if _, _, err := Check(s.cfg.Inventory, s.cfg.Spec, s.cfg.Domain, s.cfg.Bound, req); err != nil {
 		return o, fail(409, "%v", err)
 	}
 	if req.Until != o.Until {

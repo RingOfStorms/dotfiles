@@ -36,17 +36,17 @@ func TestLetter(t *testing.T) {
 func TestBuildMergesLinksAndRoutes(t *testing.T) {
 	inv := &inventory.Inventory{
 		Services: map[string]inventory.Service{
-			"forgejo": {Name: "forgejo", Host: "h001", Description: "git", Routes: map[string]inventory.Route{
+			"forgejo": {Name: "forgejo", Description: "git", Routes: map[string]inventory.Route{
 				"web": {Name: strp("git"), URL: strp("https://git.example"), Exposure: "public"},
 				"ssh": {Port: 22, Proto: "tcp"},
 			}},
-			"atuin": {Name: "atuin", Host: "h001", Routes: map[string]inventory.Route{
+			"atuin": {Name: "atuin", Routes: map[string]inventory.Route{
 				"web": {Name: strp("atuin"), URL: strp("https://atuin.example"), Icon: strp("atuin")},
 			}},
 		},
 		Hosts: map[string]inventory.Host{"h001": {}},
 	}
-	m := state.Merge(inv, nil, nil)
+	m := state.Merge(inv, nil, map[string]string{"forgejo": "h001", "atuin": "h001"})
 	links := []Link{
 		{Name: "Git", URL: "https://git.example/", Icon: "forgejo", Group: "Apps"},
 		{Name: "Radarr", URL: "http://h001:7878", Group: "Media"},
@@ -87,10 +87,10 @@ func TestLoadLinks(t *testing.T) {
 func TestHostInference(t *testing.T) {
 	inv := &inventory.Inventory{
 		Services: map[string]inventory.Service{
-			"immich": {Name: "immich", Host: "h001", Routes: map[string]inventory.Route{
+			"immich": {Name: "immich", Routes: map[string]inventory.Route{
 				"web": {Name: strp("photos"), URL: strp("https://photos.example.com")},
 			}},
-			"localai": {Name: "localai", Host: "joe", Routes: map[string]inventory.Route{
+			"localai": {Name: "localai", Routes: map[string]inventory.Route{
 				"web": {Name: strp("localai"), URL: strp("https://localai.ts.example.com/api")},
 			}},
 		},
@@ -100,7 +100,7 @@ func TestHostInference(t *testing.T) {
 			"joe":  {},
 		},
 	}
-	m := state.Merge(inv, nil, nil)
+	m := state.Merge(inv, nil, map[string]string{"immich": "h001", "localai": "joe"})
 	ix := NewHostIndex(m)
 	cases := map[string]string{
 		"http://h001.net.example.com:7878":     "h001",
@@ -144,7 +144,7 @@ func TestHostInference(t *testing.T) {
 func TestLinkHostPrecedence(t *testing.T) {
 	inv := &inventory.Inventory{
 		Services: map[string]inventory.Service{
-			"immich": {Name: "immich", Host: "h001", Routes: map[string]inventory.Route{
+			"immich": {Name: "immich", Routes: map[string]inventory.Route{
 				"web": {Name: strp("photos"), URL: strp("https://photos.example.com")},
 			}},
 		},
@@ -152,7 +152,7 @@ func TestLinkHostPrecedence(t *testing.T) {
 			"h001": {}, "h002": {}, "h005": {LanIP: strp("10.12.14.1")},
 		},
 	}
-	m := state.Merge(inv, nil, nil)
+	m := state.Merge(inv, nil, map[string]string{"immich": "h001"})
 	links := []Link{
 		// inventory route host beats explicit host
 		{Name: "Photos", URL: "https://photos.example.com/", Host: "h002"},
@@ -175,16 +175,16 @@ func TestLinkHostPrecedence(t *testing.T) {
 func TestBuildRouteGroupAndLinkExposure(t *testing.T) {
 	inv := &inventory.Inventory{
 		Services: map[string]inventory.Service{
-			"life": {Name: "life", Host: "h001", Routes: map[string]inventory.Route{
+			"life": {Name: "life", Routes: map[string]inventory.Route{
 				"web": {Name: strp("life"), URL: strp("https://life.example"), Exposure: "public", Group: strp("Personal")},
 			}},
-			"git": {Name: "git", Host: "h001", Routes: map[string]inventory.Route{
+			"git": {Name: "git", Routes: map[string]inventory.Route{
 				"web": {Name: strp("git"), URL: strp("https://git.example"), Exposure: "public"},
 			}},
 		},
 		Hosts: map[string]inventory.Host{"h001": {}},
 	}
-	m := state.Merge(inv, nil, nil)
+	m := state.Merge(inv, nil, map[string]string{"life": "h001", "git": "h001"})
 	links := []Link{
 		{Name: "Git", URL: "https://git.example", Group: "Dev", Exposure: "tailnet"}, // route wins
 		{Name: "AdGuard", URL: "http://10.0.0.1:3000", Group: "Net", Exposure: "lan", Host: "h005"},

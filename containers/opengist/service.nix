@@ -8,7 +8,6 @@
   name = "opengist";
   kind = "podman";
   description = "Opengist pastebin (gist.joshuabell.xyz)";
-  host = "h001";
 
   persist = {
     data = "/opengist";

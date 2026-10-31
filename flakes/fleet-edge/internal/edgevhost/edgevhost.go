@@ -7,8 +7,8 @@
 // whose forced command is `fleet-vhost-receive` (hosts/edge-vhost-receiver.nix).
 // The receiver never accepts nginx text: it validates the request against its
 // build-time Config (domain, fleet host -> overlay IP map, names o002 already
-// serves) and renders the server block itself, like lib.nix
-// edgeVirtualHosts: proxy to http://<overlayIp>:8443, the pushed wildcard,
+// serves) and renders the server block itself: proxy to the bound host's
+// http://<overlayIp>:8443 listener, the pushed wildcard, and
 // a limit_req zone. Every change is `nginx -t`-checked and rolled back on
 // failure. Expiry is also local: each file carries its deadline in a header
 // line and `fleet-edge vhost-expire` (timer, and at boot before nginx)
@@ -189,8 +189,7 @@ func (c *Config) Render(r *Request) string {
 	fmt.Fprintf(&b, "server {\n  listen 80;\n  listen [::]:80;\n  server_name %s;\n  location / { return 301 https://$host$request_uri; }\n}\n", r.FQDN)
 	fmt.Fprintf(&b, "server {\n  listen 443 ssl;\n  listen [::]:443 ssl;\n  server_name %s;\n", r.FQDN)
 	fmt.Fprintf(&b, "  ssl_certificate %s/fullchain.pem;\n  ssl_certificate_key %s/key.pem;\n", c.CertDir, c.CertDir)
-	// A placement vhost is the block lib.nix edgeVirtualHosts used to emit at
-	// eval time, which had no rate limit; only the temporary expose path does.
+	// Permanent placement vhosts have no rate limit; only temporary exposes do.
 	if c.LimitZone != "" && r.Kind != KindPlacement {
 		fmt.Fprintf(&b, "  limit_req zone=%s burst=100 nodelay;\n", c.LimitZone)
 	}

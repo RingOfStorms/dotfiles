@@ -24,26 +24,14 @@ let
   mutable = "/etc/systemd-mutable/system";
   thisHost = config.networking.hostName;
   fleetLib = import ./lib.nix;
-  # ROUTING-PLAN 8.2: the 80/443 sources this host's firewall admits for its
-  # own internal nginx, computed from the inventory this host declares plus
-  # nginx.extraWebSources (hand vhosts outside it). These are the build-time
-  # literals; the runtime half (`@src`/`@src6`/`@src_lan`) is written per
-  # service by `containers deploy` from that service's routes. nginx still
-  # enforces the per-vhost exposure ACL; this is only the TCP admission.
-  webSources =
-    (fleetLib.webSourcesByHost {
-      dir = ./.;
-      extra.${thisHost}.tailnet = cfg.nginx.extraWebSources;
-    }).${thisHost} or {
-      tailnet = [ ];
-      lan = false;
-    };
+  # Only hand-written vhosts have build-time source literals. Placement-driven
+  # admission comes exclusively from the runtime @src/@src6/@src_lan sets.
   webSources4 = fleetLib.webSourcesIps {
-    sources = webSources.tailnet;
+    sources = cfg.nginx.extraWebSources;
     family = "v4";
   };
   webSources6 = fleetLib.webSourcesIps {
-    sources = webSources.tailnet;
+    sources = cfg.nginx.extraWebSources;
     family = "v6";
   };
   # nginx allow list for nginx.acl (ROUTING-PLAN §2.1), deny-by-default.
@@ -1052,31 +1040,10 @@ in
             "tailscaled-autoconnect.service"
           ];
         };
-        # LAN: this host's own lanIp must exist (it's physically on the
-        # LAN) and either a `routes` lan/public route or a legacy LAN ACL
-        # (nginx.acl.lan != []) says so. Matched by source subnet
-        # (fleet.global.lanSubnet), not `lanInterface` (that option is
-        # unset on every host today, left for `cnt port --iface lan`
-        # instead) -- h001 currently depends on exactly this: h005's
-        # dnsmasq hands LAN clients h001's lanIp for lan/public routes, so
-        # without this rule every LAN client would be cut off.
-        #
-        # Tailnet half (ROUTING-PLAN 8.2): the sources computed by
-        # lib.nix webSourcesByHost from the http routes this host declares --
-        # `100.64.0.0/10` for a route with no `allow`, the named hosts'
-        # overlay IPs for a route with one, plus nginx.extraWebSources for
-        # hand-written vhosts outside the inventory (h001's arr
-        # media-health aliases, h005's own vhosts). Those literals reflect
-        # the inventory at build time; the `@src*` sets are the runtime
-        # half: `containers deploy` writes `web <addr>`/`weblan <cidr>`
-        # lines into *that service's* ports file, computed from its own
-        # routes at the host it is being deployed to, and applyPorts refills
-        # the sets from every ports file on each run -- so a service
-        # deployed or moved onto a host built before it existed still gets
-        # admitted, without a rebuild, and admission follows the service
-        # rather than its declared host. nginx still enforces the per-vhost
-        # exposure ACL (nginx.acl); this is only the TCP admission, which is
-        # why narrowing it is safe.
+        # Hand-written vhosts retain their explicit LAN ACL and extraWebSources.
+        # Placement-driven admission uses only @src/@src6/@src_lan: cnt deploy
+        # writes web/weblan lines per service and applyPorts refills the sets.
+        # nginx still enforces the per-vhost exposure ACL; this is TCP admission.
         #
         # ve-* guests whose packet already `return`ed out of fleet-net's
         # guest-in chain (fleet-net.nft, priority -5) on an `@egress` match
@@ -1102,7 +1069,7 @@ in
           (lib.mkIf
             (
               cfg.nginx.openFirewall
-              && (webSources.lan || cfg.nginx.acl.lan != [ ])
+              && cfg.nginx.acl.lan != [ ]
               && (fleet.hosts.${thisHost}.lanIp or null) != null
             )
             ''

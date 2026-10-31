@@ -29,7 +29,6 @@ type Service struct {
 	Name        string            `json:"name"`
 	Dir         string            `json:"dir"`
 	Kind        string            `json:"kind"`
-	Host        string            `json:"host"`
 	Description string            `json:"description"`
 	Persist     map[string]string `json:"persist"`
 	TCPPorts    []int             `json:"tcpPorts"`
@@ -579,12 +578,7 @@ func resolveHost(s Service, f flags) (string, bool, error) {
 		return h, true, nil
 	}
 	if dryRun {
-		// No probing and no writes: the declared host keeps the printed
-		// script offline, as it always has.
-		if s.Host == "" {
-			return "", false, fmt.Errorf("%s has no host in service.nix and no --host; nothing to plan against", s.Name)
-		}
-		return s.Host, false, nil
+		return "", false, fmt.Errorf("%s: --dry-run requires --host; nothing to plan against", s.Name)
 	}
 	if bound != "" {
 		p := locate(s, fleetProbe)
@@ -612,19 +606,10 @@ func resolveHost(s Service, f flags) (string, bool, error) {
 	return p.found[0], true, nil
 }
 
-// resolvedHost is the host a service really runs on: the registry's binding
-// when it has one, else the declared `host` (a build-time seed until phase 5).
-// Unlike resolveHost it never probes and never refuses: its callers build
-// tables and deploy scripts, where a discovery sweep per service would be
-// absurd and a refusal would leave a cell blank. Under --dry-run the registry
-// is not read either, so a printed plan stays offline. A registry that could
-// not be read (a key this user may not read, a failed request) falls back to
-// the declared host too, after the one warning readPlacements prints.
+// resolvedHost returns the registry binding, or empty when unplaced or unreadable.
+// It never probes; dry-run stays offline and has no implicit placement.
 func resolvedHost(s Service) string {
-	if h := boundHost(s.Name); h != "" {
-		return h
-	}
-	return s.Host
+	return boundHost(s.Name)
 }
 
 // hostFor is resolveHost for commands that cannot report an error.
@@ -696,9 +681,8 @@ type placement struct {
 }
 
 // containerHosts are the hosts that may run services, and therefore the hosts
-// discovery probes: the inventory's containerHosts, every host the placement
-// registry knows about (so a host that only ever held one service is still
-// probed), and — while `host` remains a build-time seed — every declared host.
+// discovery probes: the inventory's containerHosts and every host the placement
+// registry knows about (including previous bindings).
 // A host that appears in none of those can still be acted on with --host.
 func containerHosts() []string {
 	set := map[string]bool{}
@@ -707,11 +691,6 @@ func containerHosts() []string {
 	}
 	for _, h := range registryHosts() {
 		set[h] = true
-	}
-	for _, s := range inv.Services {
-		if s.Host != "" {
-			set[s.Host] = true
-		}
 	}
 	hosts := make([]string, 0, len(set))
 	for h := range set {
@@ -895,7 +874,7 @@ func renderStatus(all bool, probe func(context.Context, string) ([]row, error)) 
 
 	var b strings.Builder
 	tw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(tw, "SERVICE\tKIND\tDECLARED\tHOST\t%s\tUP\tMEM\tNOTE\n", colorState("STATE"))
+	fmt.Fprintf(tw, "SERVICE\tKIND\tBOUND\tHOST\t%s\tUP\tMEM\tNOTE\n", colorState("STATE"))
 	names := map[string]bool{}
 	for n := range inv.Services {
 		names[n] = true
@@ -927,10 +906,10 @@ func renderStatus(all bool, probe func(context.Context, string) ([]row, error)) 
 		rows := running[n]
 		if len(rows) == 0 {
 			note := ""
-			if _, bad := hostErr[s.Host]; bad {
+			if _, bad := hostErr[resolvedHost(s)]; bad {
 				note = "host unreachable"
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", n, s.Kind, dash(s.Host), "-", colorState("not installed"), "-", "-", note)
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", n, s.Kind, dash(resolvedHost(s)), "-", colorState("not installed"), "-", "-", note)
 			continue
 		}
 		for _, r := range rows {
@@ -940,12 +919,10 @@ func renderStatus(all bool, probe func(context.Context, string) ([]row, error)) 
 				note = "not in repo"
 			case bound != "" && r.host != bound:
 				note = "!! placed on " + bound + ": this is a stray copy (cnt place " + n + " --set " + r.host + " to move the binding)"
-			case bound == "" && s.Host != "" && r.host != s.Host:
-				note = "!! declared " + s.Host + ": set host = \"" + r.host + "\" in service.nix"
 			case len(rows) > 1:
 				note = "installed on several hosts"
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", n, r.kind, dash(s.Host), r.host, colorState(r.state), r.since, r.mem, note)
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", n, r.kind, dash(resolvedHost(s)), r.host, colorState(r.state), r.since, r.mem, note)
 		}
 	}
 	tw.Flush()
@@ -1199,9 +1176,10 @@ func refreshCallers(caller Service) {
 	}
 	done := map[string]bool{}
 	for _, t := range callees {
-		hosts, known := fp.places(t.Name, t.Host)
+		bound := resolvedHost(t)
+		hosts, known := fp.places(t.Name, bound)
 		if !known {
-			fmt.Fprintf(os.Stderr, "warning: %s was not discovered (a host did not answer); refreshing its admission of %s on its declared host %s\n", t.Name, caller.Name, t.Host)
+			fmt.Fprintf(os.Stderr, "warning: %s was not discovered (a host did not answer); refreshing its admission of %s on its bound host %s\n", t.Name, caller.Name, bound)
 		}
 		if len(hosts) == 0 {
 			fmt.Fprintf(os.Stderr, "warning: %s is installed on no host; its admission of %s is not refreshed\n", t.Name, caller.Name)
@@ -2070,12 +2048,8 @@ func renderDetail(s Service, h, out string) string {
 		}
 	}
 	var b strings.Builder
-	declared := s.Host
-	if declared == "" {
-		declared = "(none)"
-	}
 	fmt.Fprintf(&b, "%s  (%s)  %s\n", s.Name, s.Kind, s.Description)
-	fmt.Fprintf(&b, "  host        %s  (declared: %s)\n", h, declared)
+	fmt.Fprintf(&b, "  host        %s\n", h)
 	fmt.Fprintf(&b, "  unit        %s\n", unitOf(s))
 	if kv["Installed"] != "yes" {
 		b.WriteString("  state       not installed on this host\n")

@@ -473,10 +473,11 @@ func TestParseSS(t *testing.T) {
 }
 
 func TestAuditListeners(t *testing.T) {
+	bindServices(t, map[string]string{"forgejo": "h001", "immich": "h001", "mc": "h003"})
 	svcs := []Service{
-		{Name: "forgejo", Host: "h001", TCPPorts: []int{3032}},
-		{Name: "immich", Host: "h001", Routes: map[string]Route{"ml": {Port: 3003, Proto: "http", Exposure: "local"}}},
-		{Name: "mc", Host: "h003", Routes: map[string]Route{"game": {Port: 25565, Proto: "udp", Exposure: "public"}}},
+		{Name: "forgejo", TCPPorts: []int{3032}},
+		{Name: "immich", Routes: map[string]Route{"ml": {Port: 3003, Proto: "http", Exposure: "local"}}},
+		{Name: "mc", Routes: map[string]Route{"game": {Port: 25565, Proto: "udp", Exposure: "public"}}},
 	}
 	rows := auditListeners(parseSS(ssSample), svcs, "h001")
 	got := map[string]string{}
@@ -511,11 +512,12 @@ func TestAuditListeners(t *testing.T) {
 }
 
 func TestAuditListenersHTTPBackendMustBeLoopback(t *testing.T) {
+	bindServices(t, map[string]string{"sec": "h001", "mc": "h001"})
 	svcs := []Service{
-		{Name: "sec", Host: "h001", Routes: map[string]Route{
+		{Name: "sec", Routes: map[string]Route{
 			"web": {Port: 8300, Proto: "http", Exposure: "public", Auth: sp("native-oidc")},
 		}},
-		{Name: "mc", Host: "h001", Routes: map[string]Route{
+		{Name: "mc", Routes: map[string]Route{
 			"game": {Port: 25565, Proto: "tcp", Exposure: "public"},
 		}},
 	}
@@ -595,7 +597,7 @@ tcp   LISTEN 0      4096         0.0.0.0:5355       0.0.0.0:*    users:(("other"
 }
 
 func TestRoutesTable(t *testing.T) {
-	tbl := routesTable([]Service{{Name: "sec", Host: "h001", Routes: map[string]Route{"web": httpRoute("secrets", 8300, "public", "native-oidc")}}})
+	tbl := routesTable([]Service{{Name: "sec", Routes: map[string]Route{"web": httpRoute("secrets", 8300, "public", "native-oidc")}}})
 	if !strings.Contains(tbl, "secrets.joshuabell.xyz") || !strings.Contains(tbl, "native-oidc") || !strings.Contains(tbl, "edge") {
 		t.Errorf("table:\n%s", tbl)
 	}
@@ -621,7 +623,7 @@ func TestCmdAuditStdin(t *testing.T) {
 	oldInv := inv
 	t.Cleanup(func() { inv = oldInv })
 	inv = &Inventory{Services: map[string]Service{
-		"mc": {Name: "mc", Host: "h001", TCPPorts: []int{25565}},
+		"mc": {Name: "mc", TCPPorts: []int{25565}},
 	}}
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -906,7 +908,7 @@ func TestSrcPortLines(t *testing.T) {
 	// A caller with no http route of its own contributes no lines: the
 	// admission it needs is written into the callee's ports file.
 	inv.LanSubnet = "10.12.14.0/24"
-	life := Service{Name: "life", Host: "h001", Net: Net{Private: true, IP: sp("10.233.4.2"),
+	life := Service{Name: "life", Net: Net{Private: true, IP: sp("10.233.4.2"),
 		Uses: []string{"zitadel.web"}}}
 	if got := srcPortLines(life, "h001"); got != nil {
 		t.Errorf("caller: got %v, want nil", got)
@@ -943,6 +945,7 @@ func TestPrepareScriptWebSources(t *testing.T) {
 // localHost is pinned away from every test host so the sweep probes them all
 // instead of shortcutting to this machine's gcroots.
 func useRig(t *testing.T, svcs map[string]Service, installed map[string][]string, down ...string) {
+	bindServices(t, map[string]string{"app": "h001", "life": "h001"})
 	t.Helper()
 	oldInv, oldDry, oldLocal, orig, oldRetired := inv, dryRun, localHost, fleetProbe, retired
 	t.Cleanup(func() {
@@ -991,24 +994,24 @@ func captureStderr(t *testing.T, f func()) string {
 
 // allowCallee is an http vhost that only lio may read, so every other web
 // line in its ports file is a net.uses admission.
-func allowCallee(host string) Service {
+func allowCallee() Service {
 	r := httpRoute("app", 8300, "tailnet", "native")
 	r.Allow = []string{"lio"}
-	return Service{Name: "app", Host: host, Routes: map[string]Route{"web": r}}
+	return Service{Name: "app", Routes: map[string]Route{"web": r}}
 }
 
-func usingCaller(declared string) Service {
-	return Service{Name: "life", Host: declared, Net: Net{Private: true, IP: sp("10.233.4.2"),
+func usingCaller() Service {
+	return Service{Name: "life", Net: Net{Private: true, IP: sp("10.233.4.2"),
 		Uses: []string{"app.web"}}}
 }
 
 // The callee admits the caller where discovery finds it, not where its
 // service.nix says: a moved caller still reaches the vhost.
 func TestSrcPortLinesUsesCallerHost(t *testing.T) {
-	callee := allowCallee("h003")
+	callee := allowCallee()
 	// Declared h001, actually running on gp3: h001's overlay IP must not be
 	// admitted, gp3's must.
-	useRig(t, map[string]Service{"app": callee, "life": usingCaller("h001")},
+	useRig(t, map[string]Service{"app": callee, "life": usingCaller()},
 		map[string][]string{"h003": {"app+"}, "gp3": {"life+"}})
 	if got, want := strings.Join(srcPortLines(callee, "h003"), "|"), "web 100.64.0.1|web 100.64.0.15"; got != want {
 		t.Errorf("caller on gp3: got %q want %q", got, want)
@@ -1019,8 +1022,8 @@ func TestSrcPortLinesUsesCallerHost(t *testing.T) {
 // one) may dial out from either, so both hosts are admitted and the declared
 // host of neither is not.
 func TestSrcPortLinesUsesEveryCallerHost(t *testing.T) {
-	callee := allowCallee("h003")
-	useRig(t, map[string]Service{"app": callee, "life": usingCaller("h001")},
+	callee := allowCallee()
+	useRig(t, map[string]Service{"app": callee, "life": usingCaller()},
 		map[string][]string{"h003": {"app+"}, "h001": {"life+"}, "gp3": {"life+"}})
 	if got, want := strings.Join(srcPortLines(callee, "h003"), "|"), "web 100.64.0.1|web 100.64.0.13|web 100.64.0.15"; got != want {
 		t.Errorf("caller on h001 and gp3: got %q want %q", got, want)
@@ -1030,8 +1033,8 @@ func TestSrcPortLinesUsesEveryCallerHost(t *testing.T) {
 // A caller on the callee's own host needs nothing in @src: @guest-egress
 // already accepts the guest address, and nginx allows the guest IP.
 func TestSrcPortLinesUsesSameHost(t *testing.T) {
-	callee := allowCallee("h001")
-	useRig(t, map[string]Service{"app": callee, "life": usingCaller("h001")},
+	callee := allowCallee()
+	useRig(t, map[string]Service{"app": callee, "life": usingCaller()},
 		map[string][]string{"h001": {"app+", "life+"}})
 	if got, want := strings.Join(srcPortLines(callee, "h001"), "|"), "web 100.64.0.1"; got != want {
 		t.Errorf("caller on the callee host: got %q want %q", got, want)
@@ -1042,17 +1045,17 @@ func TestSrcPortLinesUsesSameHost(t *testing.T) {
 }
 
 // A sweep that lost a host cannot confirm the caller is nowhere, so it is
-// admitted by its declared host, with a warning. That holds whether the host
-// that failed was the declared one or some other: the caller may be running
+// admitted by its bound host, with a warning. That holds whether the host
+// that failed was the bound one or some other: the caller may be running
 // on the box that did not answer.
 func TestSrcPortLinesUsesPartialDiscovery(t *testing.T) {
 	for _, c := range []struct{ name, down string }{
-		{"declared host down", "h001"},
+		{"bound host down", "h001"},
 		{"other host down", "gp3"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			callee := allowCallee("h003")
-			useRig(t, map[string]Service{"app": callee, "life": usingCaller("h001")},
+			callee := allowCallee()
+			useRig(t, map[string]Service{"app": callee, "life": usingCaller()},
 				map[string][]string{"h003": {"app+"}}, c.down)
 			var got []string
 			out := captureStderr(t, func() { got = srcPortLines(callee, "h003") })
@@ -1067,11 +1070,11 @@ func TestSrcPortLinesUsesPartialDiscovery(t *testing.T) {
 }
 
 // Every host answered and nobody has the caller: it was destroyed (or never
-// deployed), so nothing is admitted. Falling back to the declared host here
+// deployed), so nothing is admitted. Falling back to the bound host here
 // would re-admit a service that `cnt destroy` has just withdrawn.
 func TestSrcPortLinesUsesAbsentCaller(t *testing.T) {
-	callee := allowCallee("h003")
-	useRig(t, map[string]Service{"app": callee, "life": usingCaller("h001")},
+	callee := allowCallee()
+	useRig(t, map[string]Service{"app": callee, "life": usingCaller()},
 		map[string][]string{"h003": {"app+"}})
 	var got []string
 	out := captureStderr(t, func() { got = srcPortLines(callee, "h003") })
@@ -1093,7 +1096,7 @@ func TestPlacesRequiresCompleteSweep(t *testing.T) {
 		known bool
 	}{
 		{"complete, absent", fleetPlacement{found: map[string][]string{}, down: map[string]bool{}}, nil, true},
-		{"declared host down", fleetPlacement{found: map[string][]string{},
+		{"bound host down", fleetPlacement{found: map[string][]string{},
 			down: map[string]bool{"h001": true}}, []string{"h001"}, false},
 		{"other host down", fleetPlacement{found: map[string][]string{},
 			down: map[string]bool{"gp3": true}}, []string{"h001"}, false},
@@ -1114,11 +1117,11 @@ func TestPlacesRequiresCompleteSweep(t *testing.T) {
 // net.uses of a tcp route, or of a route that does not exist, is not a
 // nginx admission: netExceptions covers the former, lib.nix the latter.
 func TestSrcPortLinesUsesNonHTTP(t *testing.T) {
-	callee := Service{Name: "app", Host: "h001", Routes: map[string]Route{
+	callee := Service{Name: "app", Routes: map[string]Route{
 		"web":  httpRoute("app", 8300, "local", "native"),
 		"game": {Port: 25565, Proto: "tcp", Exposure: "public", Via: []string{"router"}},
 	}}
-	caller := Service{Name: "life", Host: "h001", Net: Net{Private: true, IP: sp("10.233.4.2"),
+	caller := Service{Name: "life", Net: Net{Private: true, IP: sp("10.233.4.2"),
 		Uses: []string{"app.game", "app.nosuch"}}}
 	useRig(t, map[string]Service{"app": callee, "life": caller},
 		map[string][]string{"h001": {"app+"}, "gp3": {"life+"}})
@@ -1134,8 +1137,7 @@ func TestSrcPortLinesUsesNonHTTP(t *testing.T) {
 func TestRefreshScript(t *testing.T) {
 	// One http route open to the whole tailnet, so the fresh admission is a
 	// single predictable line.
-	callee := Service{Name: "app", Host: "h001",
-		Routes: map[string]Route{"web": httpRoute("app", 8300, "tailnet", "native")}}
+	callee := Service{Name: "app", Routes: map[string]Route{"web": httpRoute("app", 8300, "tailnet", "native")}}
 
 	for _, c := range []struct {
 		name string
@@ -1216,9 +1218,8 @@ func TestRefreshScript(t *testing.T) {
 // rewrites its ports file: the callee itself keeps running.
 func TestRefreshCallersUsesCalleeHost(t *testing.T) {
 	r := newRig(t)
-	callee := allowCallee("src") // declared src, actually running on dst
-	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Host: "dst",
-		Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
+	callee := allowCallee() // actually running on dst
+	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
 	installed := fakeFleet(map[string][]string{"dst": {"app+", "svc+"}}, "src")
 	oldProbe := fleetProbe
 	t.Cleanup(func() { fleetProbe = oldProbe; resetFleetPlacement() })
@@ -1270,9 +1271,8 @@ func TestRefreshCallersUsesCalleeHost(t *testing.T) {
 // caller is not on needs the caller's overlay IP.
 func TestRefreshCallersEveryCalleeHost(t *testing.T) {
 	r := newRig(t)
-	callee := allowCallee("src")
-	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Host: "dst",
-		Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
+	callee := allowCallee()
+	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
 	oldProbe := fleetProbe
 	t.Cleanup(func() { fleetProbe = oldProbe; resetFleetPlacement() })
 	fleetProbe = fakeFleet(map[string][]string{"src": {"app+"}, "dst": {"app+", "svc+"}})
@@ -1310,9 +1310,8 @@ func TestRefreshCallersEveryCalleeHost(t *testing.T) {
 // file, not re-point it at the caller's declared host: the service is gone.
 func TestDestroyWithdrawsCallerAdmission(t *testing.T) {
 	r := newRig(t)
-	callee := allowCallee("src")
-	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Host: "dst",
-		Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
+	callee := allowCallee()
+	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
 	oldProbe := fleetProbe
 	t.Cleanup(func() { fleetProbe = oldProbe; resetFleetPlacement() })
 	fleetProbe = fakeFleet(map[string][]string{"src": {"app+"}})
@@ -1338,15 +1337,14 @@ func TestDestroyWithdrawsCallerAdmission(t *testing.T) {
 // says it is gone, and that must keep its admission out.
 func TestDestroyedCallerStaysWithdrawn(t *testing.T) {
 	r := newRig(t)
-	callee := allowCallee("src")
-	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Host: "dst",
-		Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
+	callee := allowCallee()
+	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
 	// dst keeps the overlay IP the stale copy dialled out as, so admitting the
 	// declared host would put the withdrawn address straight back.
 	hosts := map[string]Host{"src": {User: "root", OverlayIP: sp("100.64.0.1")},
 		"dst": {User: "root", OverlayIP: sp("100.64.0.12")}}
 	reload := func() { // what loadInventory does on the next command
-		inv = &Inventory{DataRoot: r.root, Hosts: hosts,
+		inv = &Inventory{DataRoot: r.root, Hosts: hosts, ContainerHosts: []string{"src", "dst"},
 			Services: map[string]Service{"app": callee, "svc": caller}}
 		resetFleetPlacement()
 	}
@@ -1372,14 +1370,12 @@ func TestDestroyedCallerStaysWithdrawn(t *testing.T) {
 	}
 }
 
-// The declared-host fallback must respect the retirement too: destroy the only
-// copy and have an unrelated host fail to answer, and the fallback would put
-// the removed copy straight back on its declared host.
+// The registry fallback must respect retirement too: a removed pair cannot
+// return just because an unrelated host fails to answer.
 func TestDestroyedCallerNotReadmittedByFallback(t *testing.T) {
 	r := newRig(t)
-	callee := allowCallee("src")
-	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Host: "dst",
-		Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
+	callee := allowCallee()
+	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
 	inv.ContainerHosts = []string{"src", "dst", "h003"}
 	inv.Services = map[string]Service{"app": callee, "svc": caller}
 	inv.Hosts = map[string]Host{
@@ -1413,9 +1409,8 @@ func TestDestroyedCallerNotReadmittedByFallback(t *testing.T) {
 // the destroyed copy, as a host that has not caught up would.
 func TestDestroyOneCopyKeepsTheOther(t *testing.T) {
 	r := newRig(t)
-	callee := allowCallee("src")
-	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Host: "dst",
-		Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
+	callee := allowCallee()
+	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
 	oldProbe := fleetProbe
 	t.Cleanup(func() { fleetProbe = oldProbe; resetFleetPlacement() })
 	fleetProbe = fakeFleet(map[string][]string{
@@ -1451,9 +1446,8 @@ func TestDestroyOneCopyKeepsTheOther(t *testing.T) {
 func strayRig(t *testing.T, row placementRow) (*rig, Service, string) {
 	t.Helper()
 	r := newRig(t)
-	callee := allowCallee("src")
-	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Host: "h001",
-		Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
+	callee := allowCallee()
+	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
 	fleetProbe = fakeFleet(map[string][]string{
 		"src":  {"app+"},
 		"h001": {"svc+"},
@@ -1598,10 +1592,8 @@ func TestDestroyRefusals(t *testing.T) {
 // trigger a discovery sweep or any ssh.
 func TestRefreshCallersIgnoresNonHTTP(t *testing.T) {
 	r := newRig(t)
-	callee := Service{Name: "app", Dir: "app", Kind: "podman", Host: "dst",
-		Routes: map[string]Route{"game": {Port: 25565, Proto: "tcp", Exposure: "public", Via: []string{"router"}}}}
-	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Host: "dst",
-		Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.game", "nosuch.web"}}}
+	callee := Service{Name: "app", Dir: "app", Kind: "podman", Routes: map[string]Route{"game": {Port: 25565, Proto: "tcp", Exposure: "public", Via: []string{"router"}}}}
+	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.game", "nosuch.web"}}}
 	oldProbe := fleetProbe
 	t.Cleanup(func() { fleetProbe = oldProbe; resetFleetPlacement() })
 	fleetProbe = func(context.Context, string) ([]row, error) {
