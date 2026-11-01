@@ -17,6 +17,7 @@ package edgevhost
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -239,9 +240,10 @@ var Runner = func(cmd string) error {
 func (c *Config) path(fqdn string) string { return filepath.Join(c.Dir, fqdn+".conf") }
 
 // PendingMarker is written (atomically) before any change to Dir and
-// removed only after nginx -t and the reload both succeeded. While it
-// exists, nginx may still serve a site whose file is already gone, so
-// every operation retries the reload first and reports failure.
+// removed only after nginx -t and the reload both succeeded, and only if no
+// later change re-armed it meanwhile (see settle). While it exists, nginx may
+// still serve a site whose file is already gone, so every operation retries
+// the reload first and reports failure.
 const PendingMarker = ".reload-pending"
 
 // ErrReloadPending prefixes errors while the marker stays set (h005 and
@@ -275,67 +277,118 @@ func (c *Config) Pending() bool {
 	return err == nil
 }
 
-func (c *Config) setPending() error {
+// setPending arms the marker with a fresh token (time, pid, nonce) and
+// returns it. settle clears the marker only while it still holds the token
+// it reloaded for, so a change made during that reload keeps its own debt.
+func (c *Config) setPending() (string, error) {
+	var nonce [8]byte
+	_, _ = rand.Read(nonce[:])
+	tok := fmt.Sprintf("%s %d %x\n", time.Now().UTC().Format(time.RFC3339Nano), os.Getpid(), nonce)
 	tmp := c.marker() + ".new"
-	if err := os.WriteFile(tmp, []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0o644); err != nil {
-		return fmt.Errorf("writing %s: %w", PendingMarker, err)
+	if err := os.WriteFile(tmp, []byte(tok), 0o644); err != nil {
+		return "", fmt.Errorf("writing %s: %w", PendingMarker, err)
 	}
 	if err := os.Rename(tmp, c.marker()); err != nil {
-		return fmt.Errorf("writing %s: %w", PendingMarker, err)
+		return "", fmt.Errorf("writing %s: %w", PendingMarker, err)
 	}
-	return nil
+	return tok, nil
 }
 
-// reload runs nginx -t and the reload; the marker is cleared only if both
-// succeed.
-func (c *Config) reload() error {
+// underLock runs fn holding the dir lock; fn returns the marker token settle
+// must reload for ("" if nothing is owed).
+func (c *Config) underLock(fn func() (string, error)) (string, error) {
+	unlock, err := c.lock()
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+	return fn()
+}
+
+// owed (under the lock) runs nginx -t if a reload is owed and returns the
+// marker's token ("" if none).
+func (c *Config) owed() (string, error) {
+	b, err := os.ReadFile(c.marker())
+	if os.IsNotExist(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("%s: reading marker: %v", ErrReloadPending, err)
+	}
 	if err := Runner(c.NginxTest); err != nil {
-		return fmt.Errorf("%s: nginx -t: %v", ErrReloadPending, err)
+		return "", fmt.Errorf("%s: nginx -t: %v", ErrReloadPending, err)
+	}
+	return string(b), nil
+}
+
+// settle runs the reload owed for tok ("" = none) WITHOUT the dir lock: the
+// blocking `systemctl reload nginx` waits behind a queued nginx start, which
+// is ordered after fleet-vhost-expire-boot, which takes this lock. Only once
+// the reload has succeeded does it re-take the lock and remove the marker,
+// and only if the marker still holds tok: a change made meanwhile re-armed
+// it, and that debt stays until its own reload succeeds.
+func (c *Config) settle(tok string) error {
+	if tok == "" {
+		return nil
 	}
 	if err := Runner(c.NginxReload); err != nil {
 		return fmt.Errorf("%s: nginx reload: %v", ErrReloadPending, err)
 	}
-	if err := os.Remove(c.marker()); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("%s: clearing marker: %v", ErrReloadPending, err)
-	}
-	return nil
+	_, err := c.underLock(func() (string, error) {
+		b, err := os.ReadFile(c.marker())
+		if os.IsNotExist(err) || (err == nil && string(b) != tok) {
+			return "", nil
+		}
+		if err == nil {
+			err = os.Remove(c.marker())
+		}
+		if err != nil && !os.IsNotExist(err) {
+			return "", fmt.Errorf("%s: clearing marker: %v", ErrReloadPending, err)
+		}
+		return "", nil
+	})
+	return err
 }
 
-// flush retries an owed reload (no-op without the marker).
+// flush retries an owed reload (no-op without the marker). Call it without
+// the lock held.
 func (c *Config) flush() error {
-	if !c.Pending() {
-		return nil
+	tok, err := c.underLock(c.owed)
+	if err != nil {
+		return err
 	}
-	return c.reload()
+	return c.settle(tok)
 }
 
-// swap replaces (content != nil) or removes the file for fqdn, runs nginx -t,
-// and reloads. On a failed test the previous file is restored. The marker
-// is set before the file changes, so a failed reload (or a crash) is retried
-// by the next call, including "already gone" and identical no-ops.
-func (c *Config) swap(fqdn string, content []byte) error {
+// swap (under the lock) replaces (content != nil) or removes the file for
+// fqdn and runs nginx -t; on a failed test the previous file is restored. It
+// returns the token for settle. The marker is set before the file changes,
+// so a failed reload (or a crash) is retried by the next call, including
+// "already gone" and identical no-ops.
+func (c *Config) swap(fqdn string, content []byte) (string, error) {
 	p := c.path(fqdn)
 	old, oldErr := os.ReadFile(p)
 	if content != nil && oldErr == nil && bytes.Equal(old, content) {
-		return c.flush() // identical: only an owed reload
+		return c.owed() // identical: only an owed reload
 	}
 	if content == nil && oldErr != nil {
-		return c.flush() // already gone: nginx may still serve it
+		return c.owed() // already gone: nginx may still serve it
 	}
 	wasPending := c.Pending()
-	if err := c.setPending(); err != nil {
-		return err
+	tok, err := c.setPending()
+	if err != nil {
+		return "", err
 	}
 	if content != nil {
 		tmp := p + ".new"
 		if err := os.WriteFile(tmp, content, 0o644); err != nil {
-			return err
+			return "", err
 		}
 		if err := os.Rename(tmp, p); err != nil {
-			return err
+			return "", err
 		}
 	} else if err := os.Remove(p); err != nil {
-		return err
+		return "", err
 	}
 	if err := Runner(c.NginxTest); err != nil {
 		if oldErr == nil {
@@ -346,15 +399,9 @@ func (c *Config) swap(fqdn string, content []byte) error {
 		if !wasPending {
 			_ = os.Remove(c.marker()) // dir is back to what nginx serves
 		}
-		return fmt.Errorf("nginx -t failed, %s restored: %v", fqdn, err)
+		return "", fmt.Errorf("nginx -t failed, %s restored: %v", fqdn, err)
 	}
-	if err := Runner(c.NginxReload); err != nil {
-		return fmt.Errorf("%s: nginx reload: %v", ErrReloadPending, err)
-	}
-	if err := os.Remove(c.marker()); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("%s: clearing marker: %v", ErrReloadPending, err)
-	}
-	return nil
+	return tok, nil
 }
 
 // List returns installed entries, sorted by fqdn.
@@ -380,9 +427,10 @@ func (c *Config) List() ([]Entry, error) {
 	return out, nil
 }
 
-// Handle executes one request under the dir lock; list output goes to w as
-// JSON. Both writes are fenced by owner, checked against the current file
-// while the lock is held:
+// Handle executes one request under the dir lock, then runs the owed reload
+// after releasing it (settle); list output goes to w as JSON. Both writes
+// are fenced by owner, checked against the current file while the lock is
+// held:
 //   - a placement add over a live expose file (Entry.LiveExpose) is kept;
 //   - a remove deletes only a file owned by r.Kind (and r.Host, if set).
 //
@@ -393,36 +441,41 @@ func (c *Config) Handle(r *Request, w io.Writer) error {
 	if err := c.Validate(r); err != nil {
 		return err
 	}
-	unlock, err := c.lock()
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	switch r.Op {
-	case "list":
+	if r.Op == "list" {
 		if err := c.flush(); err != nil {
 			return err
 		}
+		unlock, err := c.lock()
+		if err != nil {
+			return err
+		}
+		defer unlock()
 		l, err := c.List()
 		if err != nil {
 			return err
 		}
 		return json.NewEncoder(w).Encode(l)
-	case "add":
-		now := time.Now()
-		if r.Until != 0 && r.Until <= now.Unix() {
-			return errors.New("until is in the past")
+	}
+	tok, err := c.underLock(func() (string, error) {
+		if r.Op == "add" {
+			now := time.Now()
+			if r.Until != 0 && r.Until <= now.Unix() {
+				return "", errors.New("until is in the past")
+			}
+			if e, ok := c.current(r.FQDN); ok && r.Kind == KindPlacement && e.LiveExpose(now) {
+				return c.kept(w, e)
+			}
+			return c.swap(r.FQDN, []byte(c.Render(r)))
 		}
-		if e, ok := c.current(r.FQDN); ok && r.Kind == KindPlacement && e.LiveExpose(now) {
-			return c.kept(w, e)
-		}
-		return c.swap(r.FQDN, []byte(c.Render(r)))
-	default:
 		if e, ok := c.current(r.FQDN); ok && (e.Kind != r.Kind || (r.Host != "" && e.Host != r.Host)) {
 			return c.kept(w, e)
 		}
 		return c.swap(r.FQDN, nil)
+	})
+	if err != nil {
+		return err
 	}
+	return c.settle(tok)
 }
 
 // current is the header of fqdn's file, if it exists and parses.
@@ -434,58 +487,60 @@ func (c *Config) current(fqdn string) (Entry, bool) {
 	return ParseHeader(b)
 }
 
-// kept reports a fenced no-op on w and retries an owed reload.
-func (c *Config) kept(w io.Writer, e Entry) error {
+// kept (under the lock) reports a fenced no-op on w and returns an owed
+// reload's token.
+func (c *Config) kept(w io.Writer, e Entry) (string, error) {
 	if w != nil {
 		fmt.Fprintf(w, "%s%s on %s\n", KeptPrefix, KindName(e.Kind), e.Host)
 	}
-	return c.flush()
+	return c.owed()
 }
 
 // Expire removes files whose until has passed (and unparseable ones: fail
-// closed), then tests and reloads once. The marker is set before any
-// removal, and the reload also runs when only the marker is left (a
-// previous run removed the files but its reload failed). With
-// reload=false (boot, before nginx) the marker is left for the next run.
+// closed), then tests and (after releasing the lock) reloads once. The
+// marker is set before any removal, and the reload also runs when only the
+// marker is left (a previous run removed the files but its reload failed).
+// With reload=false (boot, before nginx) the marker is left for the next run.
 func (c *Config) Expire(now time.Time, reload bool) ([]string, error) {
-	unlock, err := c.lock()
-	if err != nil {
-		return nil, err
-	}
-	defer unlock()
-	m, err := filepath.Glob(filepath.Join(c.Dir, "*.conf"))
-	if err != nil {
-		return nil, err
-	}
-	var doomed []string
-	for _, p := range m {
-		b, err := os.ReadFile(p)
-		e, ok := ParseHeader(b)
-		if err == nil && ok && (e.Until == 0 || now.Unix() < e.Until) {
-			continue
-		}
-		doomed = append(doomed, p)
-	}
-	if len(doomed) > 0 {
-		if err := c.setPending(); err != nil {
-			return nil, err
-		}
-	}
 	var gone []string
-	for _, p := range doomed {
-		if os.Remove(p) == nil {
-			gone = append(gone, filepath.Base(p))
+	tok, err := c.underLock(func() (string, error) {
+		m, err := filepath.Glob(filepath.Join(c.Dir, "*.conf"))
+		if err != nil {
+			return "", err
 		}
-	}
-	if tmps, _ := filepath.Glob(filepath.Join(c.Dir, "*.conf.new")); len(tmps) > 0 {
-		for _, t := range tmps {
-			_ = os.Remove(t)
+		var doomed []string
+		for _, p := range m {
+			b, err := os.ReadFile(p)
+			e, ok := ParseHeader(b)
+			if err == nil && ok && (e.Until == 0 || now.Unix() < e.Until) {
+				continue
+			}
+			doomed = append(doomed, p)
 		}
+		if len(doomed) > 0 {
+			if _, err := c.setPending(); err != nil {
+				return "", err
+			}
+		}
+		for _, p := range doomed {
+			if os.Remove(p) == nil {
+				gone = append(gone, filepath.Base(p))
+			}
+		}
+		if tmps, _ := filepath.Glob(filepath.Join(c.Dir, "*.conf.new")); len(tmps) > 0 {
+			for _, t := range tmps {
+				_ = os.Remove(t)
+			}
+		}
+		if !reload {
+			return "", nil
+		}
+		return c.owed()
+	})
+	if err != nil {
+		return gone, err
 	}
-	if !reload {
-		return gone, nil
-	}
-	return gone, c.flush()
+	return gone, c.settle(tok)
 }
 
 // LoadConfig reads the receiver config.
@@ -500,6 +555,9 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if c.Domain == "" || c.Dir == "" || c.CertDir == "" || c.NginxTest == "" || c.NginxReload == "" {
 		return nil, fmt.Errorf("%s: domain, dir, certDir, nginxTest and nginxReload are required", path)
+	}
+	if strings.Contains(c.NginxReload, "--no-block") {
+		return nil, fmt.Errorf("%s: nginxReload must not use --no-block: the marker is cleared on its exit status", path)
 	}
 	return &c, nil
 }

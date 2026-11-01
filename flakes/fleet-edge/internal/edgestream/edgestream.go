@@ -21,6 +21,7 @@ package edgestream
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -184,38 +185,87 @@ func (c *Config) Pending() bool {
 	return err == nil
 }
 
-func (c *Config) setPending() error {
+// setPending arms the marker with a fresh token (time, pid, nonce) and
+// returns it. settle clears the marker only while it still holds the token
+// it reloaded for, so a change made during that reload keeps its own debt.
+func (c *Config) setPending() (string, error) {
+	var nonce [8]byte
+	_, _ = rand.Read(nonce[:])
+	tok := fmt.Sprintf("%s %d %x\n", time.Now().UTC().Format(time.RFC3339Nano), os.Getpid(), nonce)
 	tmp := c.marker() + ".new"
-	if err := os.WriteFile(tmp, []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0o644); err != nil {
-		return fmt.Errorf("writing %s: %w", PendingMarker, err)
+	if err := os.WriteFile(tmp, []byte(tok), 0o644); err != nil {
+		return "", fmt.Errorf("writing %s: %w", PendingMarker, err)
 	}
 	if err := os.Rename(tmp, c.marker()); err != nil {
-		return fmt.Errorf("writing %s: %w", PendingMarker, err)
+		return "", fmt.Errorf("writing %s: %w", PendingMarker, err)
 	}
-	return nil
+	return tok, nil
 }
 
-// reload runs nginx -t and the reload; the marker is cleared only if both
-// succeed.
-func (c *Config) reload() error {
+// underLock runs fn holding the dir lock; fn returns the marker token settle
+// must reload for ("" if nothing is owed).
+func (c *Config) underLock(fn func() (string, error)) (string, error) {
+	unlock, err := c.lock()
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+	return fn()
+}
+
+// owed (under the lock) runs nginx -t if a reload is owed and returns the
+// marker's token ("" if none).
+func (c *Config) owed() (string, error) {
+	b, err := os.ReadFile(c.marker())
+	if os.IsNotExist(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("%s: reading marker: %v", ErrReloadPending, err)
+	}
 	if err := Runner(c.NginxTest); err != nil {
-		return fmt.Errorf("%s: nginx -t: %v", ErrReloadPending, err)
+		return "", fmt.Errorf("%s: nginx -t: %v", ErrReloadPending, err)
+	}
+	return string(b), nil
+}
+
+// settle runs the reload owed for tok ("" = none) WITHOUT the dir lock: the
+// blocking `systemctl reload nginx` waits behind a queued nginx start, which
+// is ordered after fleet-stream-expire-boot, which takes this lock. Only once
+// the reload has succeeded does it re-take the lock and remove the marker,
+// and only if the marker still holds tok: a change made meanwhile re-armed
+// it, and that debt stays until its own reload succeeds.
+func (c *Config) settle(tok string) error {
+	if tok == "" {
+		return nil
 	}
 	if err := Runner(c.NginxReload); err != nil {
 		return fmt.Errorf("%s: nginx reload: %v", ErrReloadPending, err)
 	}
-	if err := os.Remove(c.marker()); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("%s: clearing marker: %v", ErrReloadPending, err)
-	}
-	return nil
+	_, err := c.underLock(func() (string, error) {
+		b, err := os.ReadFile(c.marker())
+		if os.IsNotExist(err) || (err == nil && string(b) != tok) {
+			return "", nil
+		}
+		if err == nil {
+			err = os.Remove(c.marker())
+		}
+		if err != nil && !os.IsNotExist(err) {
+			return "", fmt.Errorf("%s: clearing marker: %v", ErrReloadPending, err)
+		}
+		return "", nil
+	})
+	return err
 }
 
-// flush retries an owed reload (no-op without the marker).
+// flush retries an owed reload (no-op without the marker). Call it without
+// the lock held.
 func (c *Config) flush() error {
-	if !c.Pending() {
-		return nil
+	tok, err := c.underLock(c.owed)
+	if err != nil {
+		return err
 	}
-	return c.reload()
+	return c.settle(tok)
 }
 
 func writeAtomic(p string, content []byte) error {
@@ -229,29 +279,30 @@ func writeAtomic(p string, content []byte) error {
 	return os.Rename(tmp, p)
 }
 
-// swap replaces (content != nil) or removes the file for port, runs nginx -t
-// and reloads; a failed test restores the previous file. The marker is set
-// before the file changes, so a failed reload (or a crash) is retried by the
-// next call.
-func (c *Config) swap(port int, content []byte) error {
+// swap (under the lock) replaces (content != nil) or removes the file for
+// port and runs nginx -t; a failed test restores the previous file. It
+// returns the token for settle. The marker is set before the file changes,
+// so a failed reload (or a crash) is retried by the next call.
+func (c *Config) swap(port int, content []byte) (string, error) {
 	p := c.path(port)
 	old, oldErr := os.ReadFile(p)
 	if content != nil && oldErr == nil && bytes.Equal(old, content) {
-		return c.flush()
+		return c.owed()
 	}
 	if content == nil && oldErr != nil {
-		return c.flush()
+		return c.owed()
 	}
 	wasPending := c.Pending()
-	if err := c.setPending(); err != nil {
-		return err
+	tok, err := c.setPending()
+	if err != nil {
+		return "", err
 	}
 	if content != nil {
 		if err := writeAtomic(p, content); err != nil {
-			return err
+			return "", err
 		}
 	} else if err := os.Remove(p); err != nil {
-		return err
+		return "", err
 	}
 	if err := Runner(c.NginxTest); err != nil {
 		if oldErr == nil {
@@ -262,15 +313,9 @@ func (c *Config) swap(port int, content []byte) error {
 		if !wasPending {
 			_ = os.Remove(c.marker())
 		}
-		return fmt.Errorf("nginx -t failed, :%d restored: %v", port, err)
+		return "", fmt.Errorf("nginx -t failed, :%d restored: %v", port, err)
 	}
-	if err := Runner(c.NginxReload); err != nil {
-		return fmt.Errorf("%s: nginx reload: %v", ErrReloadPending, err)
-	}
-	if err := os.Remove(c.marker()); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("%s: clearing marker: %v", ErrReloadPending, err)
-	}
-	return nil
+	return tok, nil
 }
 
 // files maps every *.stream file in Dir to its content (nil if unreadable).
@@ -314,85 +359,93 @@ func (c *Config) current(port int) (Entry, bool) {
 	return ParseHeader(b)
 }
 
-// Handle executes one request under the dir lock; list output goes to w as
-// JSON. A remove deletes only a file owned by r.Kind (and r.Host, if set);
-// otherwise it writes KeptPrefix to w and returns nil. A file without a
-// parseable header has no owner and may be replaced or removed.
+// Handle executes one request under the dir lock, then runs the owed reload
+// after releasing it (settle); list output goes to w as JSON. A remove
+// deletes only a file owned by r.Kind (and r.Host, if set); otherwise it
+// writes KeptPrefix to w and returns nil. A file without a parseable header
+// has no owner and may be replaced or removed.
 func (c *Config) Handle(r *Request, w io.Writer) error {
 	if err := c.Validate(r); err != nil {
 		return err
 	}
-	unlock, err := c.lock()
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	switch r.Op {
-	case "list":
+	if r.Op == "list" {
 		if err := c.flush(); err != nil {
 			return err
 		}
+		unlock, err := c.lock()
+		if err != nil {
+			return err
+		}
+		defer unlock()
 		l, err := c.List()
 		if err != nil {
 			return err
 		}
 		return json.NewEncoder(w).Encode(List{Streams: l})
-	case "add":
-		return c.swap(r.Port, []byte(c.Render(r)))
-	default:
+	}
+	tok, err := c.underLock(func() (string, error) {
+		if r.Op == "add" {
+			return c.swap(r.Port, []byte(c.Render(r)))
+		}
 		if e, ok := c.current(r.Port); ok && (e.Kind != r.Kind || (r.Host != "" && e.Host != r.Host)) {
 			if w != nil {
 				fmt.Fprintf(w, "%s%s on %s\n", KeptPrefix, e.Kind, e.Host)
 			}
-			return c.flush()
+			return c.owed()
 		}
 		return c.swap(r.Port, nil)
+	})
+	if err != nil {
+		return err
 	}
+	return c.settle(tok)
 }
 
 // Expire removes the files this config cannot vouch for (unparseable, a port
 // no longer allowed, a host no longer known, a header that disagrees with the
-// file name) and crash-left temp files, then tests and reloads once. With
-// reload=false (boot, before nginx) the marker is left for the next run.
+// file name) and crash-left temp files, then tests and (after releasing the
+// lock) reloads once. With reload=false (boot, before nginx) the marker is
+// left for the next run.
 func (c *Config) Expire(reload bool) ([]string, error) {
-	unlock, err := c.lock()
-	if err != nil {
-		return nil, err
-	}
-	defer unlock()
-	fs, err := c.files()
-	if err != nil {
-		return nil, err
-	}
-	var doomed []string
-	for p, b := range fs {
-		e, ok := ParseHeader(b)
-		if ok && c.allowed(e.Port) && c.path(e.Port) == p && validIP(c.Hosts[e.Host]) {
-			continue
-		}
-		doomed = append(doomed, p)
-	}
-	sort.Strings(doomed)
-	if len(doomed) > 0 {
-		if err := c.setPending(); err != nil {
-			return nil, err
-		}
-	}
 	var gone []string
-	for _, p := range doomed {
-		if os.Remove(p) == nil {
-			gone = append(gone, filepath.Base(p))
+	tok, err := c.underLock(func() (string, error) {
+		fs, err := c.files()
+		if err != nil {
+			return "", err
 		}
-	}
-	if tmps, _ := filepath.Glob(filepath.Join(c.Dir, "*.stream.new")); len(tmps) > 0 {
-		for _, t := range tmps {
-			_ = os.Remove(t)
+		var doomed []string
+		for p, b := range fs {
+			e, ok := ParseHeader(b)
+			if ok && c.allowed(e.Port) && c.path(e.Port) == p && validIP(c.Hosts[e.Host]) {
+				continue
+			}
+			doomed = append(doomed, p)
 		}
+		sort.Strings(doomed)
+		if len(doomed) > 0 {
+			if _, err := c.setPending(); err != nil {
+				return "", err
+			}
+		}
+		for _, p := range doomed {
+			if os.Remove(p) == nil {
+				gone = append(gone, filepath.Base(p))
+			}
+		}
+		if tmps, _ := filepath.Glob(filepath.Join(c.Dir, "*.stream.new")); len(tmps) > 0 {
+			for _, t := range tmps {
+				_ = os.Remove(t)
+			}
+		}
+		if !reload {
+			return "", nil
+		}
+		return c.owed()
+	})
+	if err != nil {
+		return gone, err
 	}
-	if !reload {
-		return gone, nil
-	}
-	return gone, c.flush()
+	return gone, c.settle(tok)
 }
 
 // staticStreamRe matches a hand-written stream server that does nothing but
@@ -450,7 +503,7 @@ func (c *Config) Seed(nginxConf []byte) ([]Entry, error) {
 		out = append(out, Entry{Port: port, Host: hosts[0], Kind: KindPlacement})
 	}
 	if len(out) > 0 {
-		if err := c.setPending(); err != nil {
+		if _, err := c.setPending(); err != nil {
 			return nil, err
 		}
 		for _, e := range out {
@@ -479,6 +532,9 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if c.Dir == "" || c.NginxTest == "" || c.NginxReload == "" {
 		return nil, fmt.Errorf("%s: dir, nginxTest and nginxReload are required", path)
+	}
+	if strings.Contains(c.NginxReload, "--no-block") {
+		return nil, fmt.Errorf("%s: nginxReload must not use --no-block: the marker is cleared on its exit status", path)
 	}
 	for _, p := range c.Ports {
 		if p < 1 || p > 65535 {

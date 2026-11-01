@@ -365,3 +365,109 @@ func TestInvalidAddress(t *testing.T) {
 		t.Fatal("invalid IP accepted")
 	}
 }
+
+// lockFree reports whether the dir lock can be taken now, which is what
+// fleet-stream-expire-boot (Before=nginx) needs while a reload is queued.
+func lockFree(t *testing.T, c *Config) bool {
+	t.Helper()
+	f, err := os.OpenFile(filepath.Join(c.Dir, LockFile), os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	return syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) == nil
+}
+
+// Regression (17818b7a): a reload that systemd queued and then failed must
+// leave the marker, and a later flush (the expire timer) must retry it. The
+// reload runs without the dir lock, so it may wait for the boot expire unit.
+func TestQueuedReloadFailureStaysPendingAndRetried(t *testing.T) {
+	c := testCfg(t)
+	stubRunner(t, false)
+	if err := c.Handle(addReq(), nil); err != nil {
+		t.Fatal(err)
+	}
+	var calls []string
+	reloadOK := false
+	Runner = func(cmd string) error {
+		calls = append(calls, cmd)
+		if cmd != "reload" {
+			return nil
+		}
+		if !lockFree(t, c) {
+			t.Error("reload ran under the dir lock")
+		}
+		if !reloadOK {
+			return errors.New("Job for nginx.service failed")
+		}
+		return nil
+	}
+	rm := &Request{Op: "remove", Kind: KindPlacement, Port: 3032, Host: "h001"}
+	if err := c.Handle(rm, nil); err == nil || !strings.Contains(err.Error(), ErrReloadPending) {
+		t.Fatalf("remove with failing reload: %v", err)
+	}
+	if !c.Pending() {
+		t.Fatal("failed reload cleared the marker")
+	}
+	if _, err := c.Expire(true); err == nil || !c.Pending() {
+		t.Fatalf("expire with failing reload: %v pending %v", err, c.Pending())
+	}
+	reloadOK = true
+	n := len(calls)
+	if gone, err := c.Expire(true); err != nil || len(gone) != 0 || c.Pending() {
+		t.Fatalf("retry: gone %v err %v pending %v", gone, err, c.Pending())
+	}
+	if strings.Join(calls[n:], ",") != "test,reload" {
+		t.Fatalf("retry calls %v", calls[n:])
+	}
+}
+
+// A change made while an unlocked reload runs re-arms the marker; the older
+// reload's success must not clear that newer debt.
+func TestChangeDuringReloadKeepsNewerMarker(t *testing.T) {
+	c := testCfg(t)
+	old := Runner
+	t.Cleanup(func() { Runner = old })
+	reloads := 0
+	Runner = func(cmd string) error {
+		if cmd != "reload" {
+			return nil
+		}
+		reloads++
+		switch reloads {
+		case 1: // the add's reload: h005 removes the port meanwhile
+			if !lockFree(t, c) {
+				t.Fatal("reload ran under the dir lock")
+			}
+			rm := &Request{Op: "remove", Kind: KindPlacement, Port: 3032}
+			if err := c.Handle(rm, nil); err == nil {
+				t.Error("nested remove: want reload pending")
+			}
+		case 2: // the remove's own reload fails
+			return errors.New("down")
+		}
+		return nil
+	}
+	if err := c.Handle(addReq(), nil); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	if _, err := os.Stat(c.path(3032)); !os.IsNotExist(err) {
+		t.Fatalf("remove not applied: %v", err)
+	}
+	if !c.Pending() {
+		t.Fatal("older reload cleared the newer marker")
+	}
+	if err := c.Handle(&Request{Op: "list"}, &bytes.Buffer{}); err != nil || c.Pending() || reloads != 3 {
+		t.Fatalf("list flush: %v pending %v reloads %d", err, c.Pending(), reloads)
+	}
+}
+
+func TestLoadConfigRefusesNoBlockReload(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "c.json")
+	if err := os.WriteFile(p, []byte(`{"dir":"/x","nginxTest":"t","nginxReload":"systemctl reload --no-block nginx"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadConfig(p); err == nil || !strings.Contains(err.Error(), "--no-block") {
+		t.Fatalf("want --no-block refused, got %v", err)
+	}
+}

@@ -47,10 +47,11 @@ let
       certDir = config.fleet.wildcardCertDir;
       # Same -c trick as wildcard-cert-receiver.nix: test what nginx runs.
       nginxTest = ''"${nginxCfg.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
-      # --no-block: the receiver runs this under its dir flock; waiting for the
-      # job would deadlock against fleet-vhost-expire-boot (Before=nginx),
-      # which blocks on the same flock. nginx -t has already passed.
-      nginxReload = "systemctl reload --no-block nginx";
+      # Blocking: the receiver clears .reload-pending on its exit status. It
+      # runs after the dir flock is released (edgevhost settle), so a reload
+      # queued behind fleet-vhost-expire-boot (Before=nginx, takes the same
+      # flock) cannot deadlock. Never --no-block (LoadConfig refuses it).
+      nginxReload = "systemctl reload nginx";
     }
   );
 
