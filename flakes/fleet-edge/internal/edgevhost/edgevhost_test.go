@@ -11,13 +11,19 @@ import (
 	"time"
 )
 
+func TestMain(m *testing.M) {
+	// Confirm every reload at once; tests stub Probe where they exercise it.
+	Probe = func(*Config) (func() (bool, error), error) { return func() (bool, error) { return true, nil }, nil }
+	os.Exit(m.Run())
+}
+
 func testCfg(t *testing.T) *Config {
 	t.Helper()
 	return &Config{
 		Domain: "example.com", Dir: t.TempDir(), CertDir: "/var/lib/fleet-cert/example.com/current",
 		Hosts:     map[string]string{"h001": "100.64.0.13"},
 		Reserved:  []string{"www.example.com"},
-		NginxTest: "test", NginxReload: "reload", LimitZone: "fleet_edge_rt",
+		NginxTest: "test", NginxReload: "reload", NginxMainPID: "pid", LimitZone: "fleet_edge_rt",
 	}
 }
 
@@ -261,7 +267,7 @@ func TestReceiveKeptRemove(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := filepath.Join(t.TempDir(), "cfg.json")
-	_ = os.WriteFile(p, []byte(`{"domain":"example.com","dir":"`+c.Dir+`","certDir":"/x","nginxTest":"test","nginxReload":"reload","hosts":{}}`), 0o644)
+	_ = os.WriteFile(p, []byte(`{"domain":"example.com","dir":"`+c.Dir+`","certDir":"/x","nginxTest":"test","nginxReload":"reload","nginxMainPid":"pid","hosts":{}}`), 0o644)
 	var out bytes.Buffer
 	if err := Receive(p, strings.NewReader(`{"op":"remove","fqdn":"app.example.com"}`), &out); err != nil {
 		t.Fatal(err)
@@ -333,7 +339,7 @@ func TestExpireLocal(t *testing.T) {
 func TestReceiveRejectsUnknownFields(t *testing.T) {
 	c := testCfg(t)
 	p := filepath.Join(t.TempDir(), "cfg.json")
-	_ = os.WriteFile(p, []byte(`{"domain":"example.com","dir":"`+c.Dir+`","certDir":"/x","nginxTest":"test","nginxReload":"reload","hosts":{}}`), 0o644)
+	_ = os.WriteFile(p, []byte(`{"domain":"example.com","dir":"`+c.Dir+`","certDir":"/x","nginxTest":"test","nginxReload":"reload","nginxMainPid":"pid","hosts":{}}`), 0o644)
 	if err := Receive(p, strings.NewReader(`{"op":"list","raw":"server{}"}`), &bytes.Buffer{}); err == nil {
 		t.Fatal("unknown field accepted")
 	}
@@ -557,11 +563,40 @@ func TestChangeDuringReloadKeepsNewerMarker(t *testing.T) {
 
 func TestLoadConfigRefusesNoBlockReload(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "c.json")
-	cfg := `{"domain":"example.com","dir":"/x","certDir":"/c","nginxTest":"t","nginxReload":"systemctl reload --no-block nginx"}`
+	cfg := `{"domain":"example.com","dir":"/x","certDir":"/c","nginxTest":"t","nginxReload":"systemctl reload --no-block nginx","nginxMainPid":"p"}`
 	if err := os.WriteFile(p, []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := LoadConfig(p); err == nil || !strings.Contains(err.Error(), "--no-block") {
 		t.Fatalf("want --no-block refused, got %v", err)
+	}
+}
+
+// `systemctl reload nginx` exits 0 once nginx -t passed and SIGHUP was sent;
+// the master may still keep its old config. Until Probe confirms, the marker
+// stays and a later flush reloads again.
+func TestUnconfirmedReloadStaysPendingAndRetried(t *testing.T) {
+	c := testCfg(t)
+	stubRunner(t, false)
+	oldProbe, oldTimeout := Probe, ConfirmTimeout
+	t.Cleanup(func() { Probe, ConfirmTimeout = oldProbe, oldTimeout })
+	ConfirmTimeout = 20 * time.Millisecond
+	loaded, probes := false, 0
+	Probe = func(*Config) (func() (bool, error), error) {
+		probes++
+		return func() (bool, error) { return loaded, nil }, nil
+	}
+	if err := c.Handle(addReq(), nil); err == nil || !strings.Contains(err.Error(), ErrReloadPending) {
+		t.Fatalf("unconfirmed reload: want reload pending, got %v", err)
+	}
+	if !c.Pending() {
+		t.Fatal("unconfirmed reload cleared the marker")
+	}
+	if _, err := c.Expire(time.Now(), true); err == nil || !c.Pending() || probes != 2 {
+		t.Fatalf("expire, still unconfirmed: %v pending %v probes %d", err, c.Pending(), probes)
+	}
+	loaded = true
+	if err := c.Handle(&Request{Op: "list"}, &bytes.Buffer{}); err != nil || c.Pending() || probes != 3 {
+		t.Fatalf("list flush: %v pending %v probes %d", err, c.Pending(), probes)
 	}
 }

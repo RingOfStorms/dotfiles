@@ -37,6 +37,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/nginxgen"
 )
 
 // HeaderPrefix starts the first line of every rendered file.
@@ -94,6 +96,9 @@ type Config struct {
 	// NginxTest and NginxReload are shell commands (exit 0 = ok).
 	NginxTest   string `json:"nginxTest"`
 	NginxReload string `json:"nginxReload"`
+	// NginxMainPID is a shell command printing the nginx master's pid; settle
+	// watches its workers to confirm a reload loaded the new config.
+	NginxMainPID string `json:"nginxMainPid"`
 }
 
 func validIP(s string) bool {
@@ -161,6 +166,21 @@ var Runner = func(cmd string) error {
 	c.Stdout, c.Stderr = os.Stderr, os.Stderr
 	return c.Run()
 }
+
+// Probe snapshots nginx before a reload and returns a check reporting
+// whether nginx has since loaded a config read after the snapshot (var for
+// tests; see internal/nginxgen).
+var Probe = func(c *Config) (func() (bool, error), error) {
+	w, err := nginxgen.Watch(c.NginxMainPID)
+	if err != nil {
+		return nil, err
+	}
+	return w.Applied, nil
+}
+
+// ConfirmTimeout bounds settle's wait for Probe (var for tests). A failing
+// bind alone holds the nginx master ~2.5s (five 500ms retries).
+var ConfirmTimeout = 15 * time.Second
 
 func (c *Config) path(port int) string { return filepath.Join(c.Dir, strconv.Itoa(port)+".stream") }
 func (c *Config) marker() string       { return filepath.Join(c.Dir, PendingMarker) }
@@ -231,16 +251,28 @@ func (c *Config) owed() (string, error) {
 
 // settle runs the reload owed for tok ("" = none) WITHOUT the dir lock: the
 // blocking `systemctl reload nginx` waits behind a queued nginx start, which
-// is ordered after fleet-stream-expire-boot, which takes this lock. Only once
-// the reload has succeeded does it re-take the lock and remove the marker,
-// and only if the marker still holds tok: a change made meanwhile re-armed
-// it, and that debt stays until its own reload succeeds.
+// is ordered after fleet-stream-expire-boot, which takes this lock. The
+// reload's exit status only says nginx -t passed and the master got SIGHUP;
+// the master can still fail to load the config (e.g. bind() of a new port
+// that is taken) and keep the old one. So settle waits until Probe confirms
+// nginx serves a config loaded after the reload (or ConfirmTimeout passes:
+// the marker stays and the error is a pending one). Only then does it
+// re-take the lock and remove the marker, and only if the marker still holds
+// tok: a change made meanwhile re-armed it, and that debt stays until its
+// own reload is confirmed.
 func (c *Config) settle(tok string) error {
 	if tok == "" {
 		return nil
 	}
+	applied, perr := Probe(c)
 	if err := Runner(c.NginxReload); err != nil {
 		return fmt.Errorf("%s: nginx reload: %v", ErrReloadPending, err)
+	}
+	if perr != nil {
+		return fmt.Errorf("%s: watching nginx: %v", ErrReloadPending, perr)
+	}
+	if err := nginxgen.Await(applied, ConfirmTimeout); err != nil {
+		return fmt.Errorf("%s: %v", ErrReloadPending, err)
 	}
 	_, err := c.underLock(func() (string, error) {
 		b, err := os.ReadFile(c.marker())
@@ -530,11 +562,11 @@ func LoadConfig(path string) (*Config, error) {
 	if err := json.Unmarshal(b, &c); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	if c.Dir == "" || c.NginxTest == "" || c.NginxReload == "" {
-		return nil, fmt.Errorf("%s: dir, nginxTest and nginxReload are required", path)
+	if c.Dir == "" || c.NginxTest == "" || c.NginxReload == "" || c.NginxMainPID == "" {
+		return nil, fmt.Errorf("%s: dir, nginxTest, nginxReload and nginxMainPid are required", path)
 	}
 	if strings.Contains(c.NginxReload, "--no-block") {
-		return nil, fmt.Errorf("%s: nginxReload must not use --no-block: the marker is cleared on its exit status", path)
+		return nil, fmt.Errorf("%s: nginxReload must not use --no-block: settle confirms the reload only after it ran", path)
 	}
 	for _, p := range c.Ports {
 		if p < 1 || p > 65535 {

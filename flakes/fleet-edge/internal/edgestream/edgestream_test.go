@@ -9,12 +9,22 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 )
+
+// realProbe is the production Probe; TestMain stubs Probe to confirm every
+// reload at once, so tests only exercise it where they ask to.
+var realProbe = Probe
+
+func TestMain(m *testing.M) {
+	Probe = func(*Config) (func() (bool, error), error) { return func() (bool, error) { return true, nil }, nil }
+	os.Exit(m.Run())
+}
 
 func testCfg(t *testing.T) *Config {
 	t.Helper()
 	return &Config{Dir: t.TempDir(), Hosts: map[string]string{"h001": "100.64.0.13", "h003": "100.64.0.20"},
-		Ports: []int{3032}, NginxTest: "test", NginxReload: "reload"}
+		Ports: []int{3032}, NginxTest: "test", NginxReload: "reload", NginxMainPID: "pid"}
 }
 
 func addReq() *Request { return &Request{Op: "add", Kind: KindPlacement, Port: 3032, Host: "h001"} }
@@ -464,10 +474,65 @@ func TestChangeDuringReloadKeepsNewerMarker(t *testing.T) {
 
 func TestLoadConfigRefusesNoBlockReload(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "c.json")
-	if err := os.WriteFile(p, []byte(`{"dir":"/x","nginxTest":"t","nginxReload":"systemctl reload --no-block nginx"}`), 0o644); err != nil {
+	if err := os.WriteFile(p, []byte(`{"dir":"/x","nginxTest":"t","nginxReload":"systemctl reload --no-block nginx","nginxMainPid":"p"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := LoadConfig(p); err == nil || !strings.Contains(err.Error(), "--no-block") {
 		t.Fatalf("want --no-block refused, got %v", err)
+	}
+}
+
+func TestLoadConfigRequiresMainPID(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "c.json")
+	if err := os.WriteFile(p, []byte(`{"dir":"/x","nginxTest":"t","nginxReload":"r"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadConfig(p); err == nil || !strings.Contains(err.Error(), "nginxMainPid") {
+		t.Fatalf("want nginxMainPid required, got %v", err)
+	}
+}
+
+// `systemctl reload nginx` exits 0 once nginx -t passed and SIGHUP was sent;
+// the master may still keep its old config (e.g. the new port is taken).
+// Until Probe confirms, the marker stays and a later flush reloads again.
+func TestUnconfirmedReloadStaysPendingAndRetried(t *testing.T) {
+	c := testCfg(t)
+	calls := stubRunner(t, false)
+	oldProbe, oldTimeout := Probe, ConfirmTimeout
+	t.Cleanup(func() { Probe, ConfirmTimeout = oldProbe, oldTimeout })
+	ConfirmTimeout = 20 * time.Millisecond
+	loaded := false // whether the master's next HUP loads the config
+	reloads, probes := 0, 0
+	Probe = func(*Config) (func() (bool, error), error) {
+		probes++
+		if probes != reloads+1 {
+			t.Errorf("probe %d not taken before reload %d", probes, reloads+1)
+		}
+		return func() (bool, error) { return loaded && reloads == probes, nil }, nil
+	}
+	Runner = func(cmd string) error {
+		*calls = append(*calls, cmd)
+		if cmd == "reload" {
+			reloads++
+		}
+		return nil // the reload job "succeeds" either way
+	}
+	if err := c.Handle(addReq(), nil); err == nil || !strings.Contains(err.Error(), ErrReloadPending) {
+		t.Fatalf("unconfirmed reload: want reload pending, got %v", err)
+	}
+	if !c.Pending() {
+		t.Fatal("unconfirmed reload cleared the marker")
+	}
+	if _, err := c.Expire(true); err == nil || !c.Pending() || reloads != 2 {
+		t.Fatalf("expire, still unconfirmed: %v pending %v reloads %d", err, c.Pending(), reloads)
+	}
+	loaded = true
+	if err := c.Handle(&Request{Op: "list"}, &bytes.Buffer{}); err != nil || c.Pending() || reloads != 3 {
+		t.Fatalf("list flush: %v pending %v reloads %d", err, c.Pending(), reloads)
+	}
+	probeErr := errors.New("no master")
+	Probe = func(*Config) (func() (bool, error), error) { return nil, probeErr }
+	if err := c.Handle(&Request{Op: "remove", Kind: KindPlacement, Port: 3032}, nil); err == nil || !strings.Contains(err.Error(), "no master") || !c.Pending() {
+		t.Fatalf("probe error: %v pending %v", err, c.Pending())
 	}
 }

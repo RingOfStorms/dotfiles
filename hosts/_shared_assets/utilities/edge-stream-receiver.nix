@@ -9,11 +9,15 @@ let
   receiverConfig = pkgs.writeText "fleet-edge-stream.json" (builtins.toJSON {
     inherit dir hosts ports;
     nginxTest = ''"${nginx.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
-    # Blocking: the receiver clears .reload-pending on its exit status. It
-    # runs after the dir flock is released (edgestream settle), so a reload
-    # queued behind fleet-stream-expire-boot (Before=nginx, takes the same
-    # flock) cannot deadlock. Never --no-block (LoadConfig refuses it).
+    # Blocking, and its exit status is not enough: ExecReload is nginx -t
+    # plus kill -HUP, and the master can still fail to load the config (e.g.
+    # a taken port). The receiver clears .reload-pending only once
+    # nginxMainPid's workers have been replaced (internal/nginxgen). It runs
+    # after the dir flock is released (edgestream settle), so a reload queued
+    # behind fleet-stream-expire-boot (Before=nginx, takes the same flock)
+    # cannot deadlock. Never --no-block (LoadConfig refuses it).
     nginxReload = "systemctl reload nginx";
+    nginxMainPid = "systemctl show -p MainPID --value nginx";
   });
   # Snapshot of nginx.nix's pre-cutover stream; never derived from placement.
   # Seeded once per edge (stream-seed writes ${dir}/.seeded); dir must persist.
