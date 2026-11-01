@@ -627,9 +627,13 @@ func srcPortLines(s Service, host string) []string {
 		}
 		if len(r.Allow) == 0 {
 			add("100.64.0.0/10")
+			add("fd7a:115c:a1e0::/48")
 		}
 		for _, a := range r.Allow {
 			add(hostOverlayIP(a))
+			if ip := inv.Hosts[a].OverlayIP6; ip != nil {
+				add(*ip)
+			}
 		}
 		// LAN clients reach the vhost directly unless the route is only
 		// published through the router (minecraft).

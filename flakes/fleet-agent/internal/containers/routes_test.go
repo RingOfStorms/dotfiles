@@ -374,6 +374,7 @@ func TestPrepareScriptRoutes(t *testing.T) {
 	if !strings.Contains(ps, `printf %s 'tcp 7000
 udp 9000
 web 100.64.0.0/10
+web fd7a:115c:a1e0::/48
 ' > /var/lib/fleet-containers/ports/sec`) {
 		t.Errorf("ports file wrong:\n%s", ps)
 	}
@@ -856,9 +857,9 @@ func TestSrcPortLines(t *testing.T) {
 		t.Errorf("no routes: got %v, want nil", got)
 	}
 
-	// No allow: the whole tailnet range, the same literal lib.nix uses.
+	// No allow: both whole-tailnet ranges.
 	s := Service{Name: "trilium", Routes: map[string]Route{"web": httpRoute("notes", 8300, "tailnet", "native")}}
-	if got, want := strings.Join(srcPortLines(s, "lio"), "|"), "web 100.64.0.0/10"; got != want {
+	if got, want := strings.Join(srcPortLines(s, "lio"), "|"), "web 100.64.0.0/10|web fd7a:115c:a1e0::/48"; got != want {
 		t.Errorf("no allow: got %q want %q", got, want)
 	}
 
@@ -868,6 +869,18 @@ func TestSrcPortLines(t *testing.T) {
 	s = Service{Name: "trilium", Routes: map[string]Route{"web": r}}
 	if got, want := strings.Join(srcPortLines(s, "lio"), "|"), "web 100.64.0.1|web 100.64.0.15"; got != want {
 		t.Errorf("allow: got %q want %q", got, want)
+	}
+
+	// Restricted routes admit only recorded IPv6 addresses, never the /48.
+	lio6 := "fd7a:115c:a1e0::1"
+	inv.Hosts["lio"] = Host{OverlayIP: &lio, OverlayIP6: &lio6}
+	s.Routes["other"] = r // Duplicate routes must not duplicate source entries.
+	if got, want := strings.Join(srcPortLines(s, "lio"), "|"), "web 100.64.0.1|web 100.64.0.15|web fd7a:115c:a1e0::1"; got != want {
+		t.Errorf("dual-stack allow: got %q want %q", got, want)
+	}
+	inv.Hosts["lio"] = Host{OverlayIP6: &lio6}
+	if got, want := strings.Join(srcPortLines(s, "lio"), "|"), "web 100.64.0.15|web fd7a:115c:a1e0::1"; got != want {
+		t.Errorf("IPv6-only allow: got %q want %q", got, want)
 	}
 
 	// Deployed onto a host that declares no services: the lines still come
@@ -887,13 +900,13 @@ func TestSrcPortLines(t *testing.T) {
 	r = httpRoute("dash", 8080, "lan", "native")
 	r.Via = nil
 	s = Service{Name: "dash", Routes: map[string]Route{"web": r}}
-	if got, want := strings.Join(srcPortLines(s, "h003"), "|"), "web 100.64.0.0/10|weblan 10.12.14.0/24"; got != want {
+	if got, want := strings.Join(srcPortLines(s, "h003"), "|"), "web 100.64.0.0/10|web fd7a:115c:a1e0::/48|weblan 10.12.14.0/24"; got != want {
 		t.Errorf("lan: got %q want %q", got, want)
 	}
 	r = httpRoute("minecraft", 8080, "public", "native")
 	r.Via = []string{"router"}
 	s = Service{Name: "minecraft", Routes: map[string]Route{"web": r}}
-	if got, want := strings.Join(srcPortLines(s, "h003"), "|"), "web 100.64.0.0/10"; got != want {
+	if got, want := strings.Join(srcPortLines(s, "h003"), "|"), "web 100.64.0.0/10|web fd7a:115c:a1e0::/48"; got != want {
 		t.Errorf("via router: got %q want %q", got, want)
 	}
 	// No lanSubnet: no weblan line (an empty element would be a syntax
@@ -902,7 +915,7 @@ func TestSrcPortLines(t *testing.T) {
 	r = httpRoute("dash", 8080, "lan", "native")
 	r.Via = nil
 	s = Service{Name: "dash", Routes: map[string]Route{"web": r}}
-	if got, want := strings.Join(srcPortLines(s, "h003"), "|"), "web 100.64.0.0/10"; got != want {
+	if got, want := strings.Join(srcPortLines(s, "h003"), "|"), "web 100.64.0.0/10|web fd7a:115c:a1e0::/48"; got != want {
 		t.Errorf("empty lanSubnet: got %q want %q", got, want)
 	}
 	// A caller with no http route of its own contributes no lines: the
@@ -924,7 +937,7 @@ func TestPrepareScriptWebSources(t *testing.T) {
 	inv = &Inventory{DataRoot: "/srv/containers", Hosts: map[string]Host{}, LanSubnet: "10.12.14.0/24"}
 	s := Service{Name: "sec", Routes: map[string]Route{"web": httpRoute("secrets", 8300, "public", "native-oidc")}}
 	ps := prepareScript(s, "h001")
-	want := "web 100.64.0.0/10\nweblan 10.12.14.0/24\n"
+	want := "web 100.64.0.0/10\nweb fd7a:115c:a1e0::/48\nweblan 10.12.14.0/24\n"
 	printf := strings.Index(ps, "printf %s '")
 	prune := strings.Index(ps, "while read -r pr po mode _")
 	i := strings.Index(ps, want)
@@ -1136,7 +1149,7 @@ func TestSrcPortLinesUsesNonHTTP(t *testing.T) {
 // callee host: no deploy, no site rewrite, no restart of the callee.
 func TestRefreshScript(t *testing.T) {
 	// One http route open to the whole tailnet, so the fresh admission is a
-	// single predictable line.
+	// predictable pair of IPv4/IPv6 lines.
 	callee := Service{Name: "app", Routes: map[string]Route{"web": httpRoute("app", 8300, "tailnet", "native")}}
 
 	for _, c := range []struct {
@@ -1148,10 +1161,10 @@ func TestRefreshScript(t *testing.T) {
 	}{
 		{"rewrites web lines and keeps the rest",
 			"guest ve-app\ntcp 9000 dnat 10.233.9.2 100.64.0.13\nweb 100.64.0.99\nweblan 10.9.9.0/24\n", false,
-			"guest ve-app\ntcp 9000 dnat 10.233.9.2 100.64.0.13\nweb 100.64.0.0/10\n", ""},
+			"guest ve-app\ntcp 9000 dnat 10.233.9.2 100.64.0.13\nweb 100.64.0.0/10\nweb fd7a:115c:a1e0::/48\n", ""},
 		{"keeps a file without a trailing newline",
 			"guest ve-app\nweb 100.64.0.99", false,
-			"guest ve-app\nweb 100.64.0.0/10\n", ""},
+			"guest ve-app\nweb 100.64.0.0/10\nweb fd7a:115c:a1e0::/48\n", ""},
 		{"missing file", "", false, "",
 			"has no ports file on h001 yet; its net.uses admission is unchanged"},
 		{"failed write restores the previous file",

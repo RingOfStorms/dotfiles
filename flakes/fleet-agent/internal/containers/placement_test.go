@@ -558,6 +558,46 @@ func TestDispatchPlaceHelp(t *testing.T) {
 	}
 }
 
+func TestCommandHelp(t *testing.T) {
+	var buf strings.Builder
+	oldOut, oldRepo, oldUser, oldDry := usageOut, repo, sshUser, dryRun
+	usageOut = &buf
+	t.Cleanup(func() {
+		usageOut, repo, sshUser, dryRun = oldOut, oldRepo, oldUser, oldDry
+	})
+	commands := []string{
+		"ls", "list", "status", "info", "show", "watch", "tui", "logs", "log",
+		"deploy", "update", "start", "stop", "restart", "online", "attach", "shell",
+		"backup", "restore", "move", "place", "restore-check", "health", "destroy", "rm",
+		"routes", "audit", "port", "expose", "expose-expire", "check-idmap", "inventory",
+	}
+	for _, help := range []string{"--help", "-h"} {
+		t.Run("global/"+help, func(t *testing.T) {
+			buf.Reset()
+			Run([]string{help})
+			if !strings.Contains(buf.String(), "usage: fleet containers") {
+				t.Fatalf("global %s did not print usage: %q", help, buf.String())
+			}
+		})
+		for _, cmd := range commands {
+			t.Run(cmd+"/"+help, func(t *testing.T) {
+				buf.Reset()
+				Run([]string{cmd, help})
+				if !strings.Contains(buf.String(), "usage: fleet containers") {
+					t.Fatalf("%s %s did not print usage: %q", cmd, help, buf.String())
+				}
+			})
+		}
+		t.Run("nested/"+help, func(t *testing.T) {
+			buf.Reset()
+			Run([]string{"port", "open", "sec", help})
+			if !strings.Contains(buf.String(), "usage: fleet containers") {
+				t.Fatalf("nested help did not print usage: %q", buf.String())
+			}
+		})
+	}
+}
+
 // ------------------------------------------------- registry not consulted
 
 // registryWarnRig resets the once-per-process "not consulted" warning and

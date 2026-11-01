@@ -15,7 +15,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -355,10 +354,6 @@ func registryHosts() []string {
 //	cnt place --import            adopt every service discovery finds exactly once
 //	cnt place <svc> --recover --token <t>  settle the move that holds <t>
 func cmdPlace(args []string) error {
-	if slices.Contains(args, "--help") || slices.Contains(args, "-h") {
-		placeUsage()
-		return nil
-	}
 	f := parse(args, "verify", "import", "force", "adopt", "recover", "list")
 	if f.bools["import"] {
 		return cmdPlaceImport(f)

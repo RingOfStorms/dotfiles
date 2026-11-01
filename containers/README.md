@@ -192,6 +192,10 @@ reload fails, the previous `<svc>.conf` is put back and the rejected one is
 kept as `<svc>.conf.broken`. Removing the block from `service.nix` (or `destroy`/`move`) deletes
 the file and reloads. No host rebuild is involved.
 
+All `cnt` subcommands accept `--help` or `-h` without loading inventory or
+contacting hosts; these flags also work before the subcommand. Arguments
+after `--` are passed through rather than interpreted as CLI help.
+
 ### Routes (ROUTING-PLAN.md §2, step 1)
 
 `routes` in `service.nix` replaces the `nginx` string. A service sets
@@ -227,6 +231,12 @@ in `<svc>.conf` (:80/:443 v4+v6, wildcard cert, proxy to
 != `local` are added to the ports file like `tcpPorts`. For now `tailnet`,
 `lan` and `public` produce the same vhost; the listener split, `allow` and
 the edge/DNS side are later steps of the plan. `local` produces nothing.
+
+The runtime ports file admits tailnet-wide HTTP routes from both
+`100.64.0.0/10` and `fd7a:115c:a1e0::/48`. Routes with an `allow` list instead
+admit only those hosts' `overlayIp` and optional `overlayIp6` inventory
+addresses; missing IPv6 addresses never widen admission to the whole /48.
+The host module applies IPv4 `web` lines to `@src` and IPv6 lines to `@src6`.
 
 `auth = "oauth2-proxy"` routes (any exposure, public included: sso-proxy has
 been public via o002 since 2026-10-28, so a public or `cnt expose`d gated

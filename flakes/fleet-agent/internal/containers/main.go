@@ -69,7 +69,7 @@ type Host struct {
 	User      string  `json:"user"`
 	OverlayIP *string `json:"overlayIp"`
 	LanIP     *string `json:"lanIp"`
-	// Optional tailnet v6 (not in fleet.nix today; used by `cnt port --from`).
+	// Optional tailnet v6 (not in fleet.nix today; web admission and port --from).
 	OverlayIP6 *string `json:"overlayIp6"`
 }
 
@@ -219,7 +219,7 @@ global flags (or env):
 func Run(args []string) {
 	repo = envOr("CONTAINERS_REPO", defaultRepo)
 	sshUser = os.Getenv("CONTAINERS_SSH_USER")
-	for len(args) > 0 && strings.HasPrefix(args[0], "--") {
+	for len(args) > 0 && (strings.HasPrefix(args[0], "--") || args[0] == "-h") {
 		switch args[0] {
 		case "--repo":
 			repo, args = need(args), args[2:]
@@ -227,7 +227,7 @@ func Run(args []string) {
 			sshUser, args = need(args), args[2:]
 		case "--dry-run":
 			dryRun, args = true, args[1:]
-		case "--help":
+		case "--help", "-h":
 			usage()
 			return
 		default:
@@ -251,6 +251,21 @@ func Run(args []string) {
 
 // dispatch runs one subcommand; known is false for a command it does not have.
 func dispatch(cmd string, rest []string) (known bool, err error) {
+	// Handle help before any command parses flags, loads inventory or makes
+	// remote calls. Arguments after -- belong to the invoked program.
+	for _, arg := range rest {
+		if arg == "--" {
+			break
+		}
+		if arg == "--help" || arg == "-h" {
+			if cmd == "place" {
+				placeUsage()
+			} else {
+				usage()
+			}
+			return true, nil
+		}
+	}
 	switch cmd {
 	case "ls", "list":
 		err = cmdStatus(rest, false)
