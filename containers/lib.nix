@@ -303,9 +303,14 @@ let
   #            That file is refreshed after a deploy, move or destroy.
   #   egress = [ "10.12.14.181:9010/tcp" ]   a fixed LAN/tailnet endpoint.
   # For kind = "podman", `index` instead picks a static address on the
-  # shared fleet-noinet bridge (10.89.250.<N>, a separate fleet-wide-unique
+  # shared fleet-noinet bridge (10.89.250.100+N, a separate fleet-wide-unique
   # space): podman doesn't have a per-service veth, so the static --ip
-  # stands in for one. uses/egress aren't implemented for podman yet.
+  # stands in for one. uses/egress mean the same; their ports-file `allow`
+  # lines key on that IP instead of ve-<name>, 10.89.250.1 (the bridge
+  # gateway) is the local host address, and net.uses also opens the
+  # bridge's DNS (aardvark on 10.89.250.1:53) so the route names resolve.
+  # The bridge has no internet path, so a private podman service needs
+  # internet = false: uses/egress are its only ways out.
   netHostAddress = "10.233.0.1";
   normalizeNet =
     s:
@@ -347,12 +352,16 @@ let
             egress = [ ];
           }
       )
+    else if badUse != [ ] then
+      fail "uses entry ${builtins.toJSON (builtins.head badUse)} is not \"<service>.<route>\""
+    else if badEgress != [ ] then
+      fail "egress entry ${builtins.toJSON (builtins.head badEgress)} is not \"<ipv4>:<port>/<tcp|udp>\""
     else if s.kind == "podman" then
       (
         if !(builtins.isInt n.index) || n.index < 1 || n.index > 154 then
           fail "index must be an integer 1-154 (fleet-wide unique within kind, never reuse one)"
-        else if n.uses != [ ] || n.egress != [ ] then
-          fail "uses/egress are not implemented for kind = \"podman\""
+        else if s.internet then
+          fail "kind = \"podman\" needs internet = false (the fleet-noinet bridge has no internet path; declare uses/egress for what it must reach)"
         else
           {
             private = true;
@@ -376,10 +385,6 @@ let
       fail "service name must be <= 11 characters (veth ve-<name>)"
     else if s.tcpPorts != [ ] || s.udpPorts != [ ] then
       fail "tcpPorts/udpPorts don't reach a private guest; declare tcp/udp routes instead (they get DNAT)"
-    else if badUse != [ ] then
-      fail "uses entry ${builtins.toJSON (builtins.head badUse)} is not \"<service>.<route>\""
-    else if badEgress != [ ] then
-      fail "egress entry ${builtins.toJSON (builtins.head badEgress)} is not \"<ipv4>:<port>/<tcp|udp>\""
     else
       {
         private = true;
@@ -450,7 +455,8 @@ let
         # false: podman services join the fleet-noinet network (host-module.nix);
         # nixos services need net.private and get their veth in the host's
         # fleet-net @noinet set. Published ports/routes still work; the
-        # container cannot open any connection (podman: not even DNS).
+        # container cannot open any connection beyond its net.uses/net.egress
+        # (nixos keeps DNS; podman only gets DNS with net.uses).
         internet = true;
         description = "";
       }
@@ -607,7 +613,14 @@ in
       );
       ips6 = builtins.filter (ip: ip != null) (
         builtins.concatMap (
-          h: if (h.trust or null) == "low" then [ (h.lanIp6 or null) (h.overlayIp6 or null) ] else [ ]
+          h:
+          if (h.trust or null) == "low" then
+            [
+              (h.lanIp6 or null)
+              (h.overlayIp6 or null)
+            ]
+          else
+            [ ]
         ) (builtins.attrValues hosts)
       );
     in
@@ -616,8 +629,12 @@ in
       content = ''
         chain input {
           type filter hook input priority -10; policy accept;
-          ${lib.optionalString (ips != [ ]) ''ip saddr { ${builtins.concatStringsSep ", " ips} } tcp dport 22 counter drop comment "M3: low-trust LAN devices must not reach ${host} SSH"''}
-          ${lib.optionalString (ips6 != [ ]) ''ip6 saddr { ${builtins.concatStringsSep ", " ips6} } tcp dport 22 counter drop comment "M3: low-trust IPv6 devices must not reach ${host} SSH"''}
+          ${lib.optionalString (ips != [ ])
+            ''ip saddr { ${builtins.concatStringsSep ", " ips} } tcp dport 22 counter drop comment "M3: low-trust LAN devices must not reach ${host} SSH"''
+          }
+          ${lib.optionalString (ips6 != [ ])
+            ''ip6 saddr { ${builtins.concatStringsSep ", " ips6} } tcp dport 22 counter drop comment "M3: low-trust IPv6 devices must not reach ${host} SSH"''
+          }
         }
       '';
     };
@@ -639,9 +656,13 @@ in
     }:
     {
       assertion =
-        ips != [ ] && builtins.elem (hosts.lio.overlayIp or null) ips
-        && ips6 != [ ] && builtins.elem (hosts.lio.overlayIp6 or null) ips6;
-      message = "ROUTING-PLAN §8 step 2: ${host}'s generated ssh allow-list is empty or excludes lio's overlay IP in IPv4 or IPv6 -- this would lock out ssh from lio; computed lists: ${builtins.toJSON { inherit ips ips6; }}";
+        ips != [ ]
+        && builtins.elem (hosts.lio.overlayIp or null) ips
+        && ips6 != [ ]
+        && builtins.elem (hosts.lio.overlayIp6 or null) ips6;
+      message = "${host}'s generated ssh allow-list is empty or excludes lio's overlay IP in IPv4 or IPv6 -- this would lock out ssh from lio; computed lists: ${
+        builtins.toJSON { inherit ips ips6; }
+      }";
     };
 
   # Placement-free DNS route names and public CNAME membership. h005 keeps
@@ -690,14 +711,29 @@ in
     };
 
   # Placement-free admission list for the edge's runtime TCP stream receiver.
-  edgeStreamPorts = dir:
-    builtins.sort builtins.lessThan (builtins.attrValues (builtins.listToAttrs (
-      builtins.concatMap (s: map (r: { name = toString r.port; value = r.port; })
-        (builtins.filter (r: r.exposure == "public" && r.proto == "tcp" && builtins.elem "edge" r.via)
-          (builtins.attrValues s.routes))) (allServices dir)
-    )));
+  edgeStreamPorts =
+    dir:
+    builtins.sort builtins.lessThan (
+      builtins.attrValues (
+        builtins.listToAttrs (
+          builtins.concatMap (
+            s:
+            map
+              (r: {
+                name = toString r.port;
+                value = r.port;
+              })
+              (
+                builtins.filter (r: r.exposure == "public" && r.proto == "tcp" && builtins.elem "edge" r.via) (
+                  builtins.attrValues s.routes
+                )
+              )
+          ) (allServices dir)
+        )
+      )
+    );
 
-  # Edge login hardening (ROUTING-PLAN §6 req 4). A route's loginPaths become
+  # Edge login hardening. A route's loginPaths become
   # one `location ~* ^(<paths>)/?$` in its o002 vhost (fleet-edge
   # internal/edgevhost Render, placements and public exposes alike) with the
   # same proxy settings as `/`, plus: the strict `zone` (burst 5, 429 when
@@ -839,19 +875,32 @@ in
           modifier = "rw";
         }) devices;
         config =
-          { lib, ... }:
+          { lib, ... }@guest:
           {
             imports = [
               config
               (
                 if svc.net.private then
                   {
-                    # The guest firewall
-                    # admits only the exposed route ports (host nginx or DNAT).
+                    # The guest firewall admits only the exposed route ports
+                    # (host nginx or DNAT), plus `cnt port open` ports: the
+                    # host adds them to the cnt-guest set (cnt-guest.nft),
+                    # which needs the nftables firewall. A guest that keeps
+                    # iptables (nftables.enable = false, e.g. for iptables
+                    # extraCommands) gets no set and port open refuses it.
                     # DNS goes to the host's resolved stub on the veth, so the
                     # guest gets the same split-horizon answers as the host.
                     networking.useHostResolvConf = lib.mkForce false;
                     networking.nameservers = [ netHostAddress ];
+                    networking.nftables.enable = lib.mkDefault true;
+                    networking.nftables.tables = lib.mkIf guest.config.networking.nftables.enable {
+                      nixos-fw.content = lib.mkAfter (
+                        builtins.readFile ../flakes/fleet-agent/internal/containers/cnt-guest.nft
+                      );
+                    };
+                    networking.firewall.extraInputRules = lib.mkIf guest.config.networking.nftables.enable ''
+                      jump cnt-guest-input
+                    '';
                     networking.firewall.allowedTCPPorts = portsOf "http" ++ portsOf "tcp";
                     networking.firewall.allowedUDPPorts = portsOf "udp";
                   }

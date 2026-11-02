@@ -1,9 +1,10 @@
 # One instance for every `auth = "oauth2-proxy"` route on any container
 # host. Three ways in:
 #   - auth_request subrequests and /oauth2/* from the host vhosts
-#     (containers/cli/routes.go, oauth2Upstream) hit 100.64.0.3:4180
-#     directly over the tailnet. The firewall admits 4180 only from the
-#     container hosts, and only those may send X-Forwarded-* (trustedProxyIP).
+#     (flakes/fleet-agent/internal/containers/routes.go, oauth2Upstream)
+#     hit 100.64.0.3:4180 directly over the tailnet. The firewall admits
+#     4180 only from the container hosts, and only those may send
+#     X-Forwarded-* (trustedProxyIP).
 #   - Browser login over the tailnet: sso-proxy.joshuabell.xyz resolves to
 #     h005 for tailnet/LAN clients (tailnet DNS); h005's nginx terminates
 #     TLS with the wildcard from wildcard-cert.nix.

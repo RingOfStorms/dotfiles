@@ -28,9 +28,34 @@ So a second instance can be **2 OCPU / 12 GB** with up to ~130 GB boot volume.
 
 | Service | Notes |
 |---|---|
-| nginx public edge | `o002/nginx.nix`: public vhosts to fleet hosts, forgejo SSH stream on 3032, per-name ACME (planned: generated sites + wildcard, `containers/ROUTING-PLAN.md`) |
+| nginx public edge | `o002/nginx.nix`: hand vhosts (apex, `www`, `headscale`, `sso-proxy`), runtime vhosts and streams pushed by h005, the wildcard pushed by h005, login rate limits and fail2ban |
 | headscale | `o002/headscale.nix`: tailnet control plane and ACL |
 | Per-host agents | sec-agent, fail2ban, tailscaled |
+
+### o002 edge
+
+- **Runtime vhosts**: h005's fleet-edge pushes every public `via = edge` route of a placed service, and every
+  `cnt expose --exposure public` override, to the `fleet-edge-receive` forced-command key. The receiver writes
+  `/var/lib/fleet-edge-vhosts/<fqdn>.conf`, runs `nginx -t` and reloads; a failed reload leaves a `.reload-pending`
+  marker that is retried. Each vhost proxies to `http://<host overlayIp>:8443` with the route's `Host`. Names o002
+  declares itself are reserved and refused. Expose vhosts expire (a boot unit drops expired files before nginx
+  starts); placement vhosts have no expiry.
+- **Runtime streams**: public `proto = tcp` edge routes (forgejo's SSH on 3032) arrive the same way as
+  `/var/lib/fleet-edge-streams/<port>.stream`, included by `streamConfig`. The directory is persisted, so the last
+  good placement survives a reboot. Removing a stream deletes its file, since nginx `stream` has no `return`. The
+  firewall's 3032 is admission, not placement; eval assertions require every stream port in `allowedTCPPorts` and
+  reject 80, 443 and 22.
+- **`sso-proxy`** serves only `/oauth2/` (start, callback, sign_out, auth), proxied to h005's oauth2-proxy edge
+  listener on `:8443`. Every other path returns 444.
+- **Wildcard certificate**: o002 holds no DNS API credential. h005 issues `*.joshuabell.xyz` (plus `*.share`, o002
+  only) and pushes it over a restricted root key; `wildcard-cert-receiver.nix` validates it, swaps the files under
+  `/var/lib/fleet-cert/` and reloads nginx. Hand vhosts covered by the wildcard use it instead of per-name ACME.
+- **Rate limits**: an expose vhost carries the global zone (`fleet_edge_rt`, 20 r/s per client IP, burst 100) on the
+  whole server. A placement vhost has no server-wide limit. Every route's `loginPaths` (exact, case-insensitive)
+  get the global zone plus the strict `fleet_edge_login` zone (6 r/min per client IP, burst 5, 429 on excess) and the
+  login log `/var/log/nginx/fleet-edge-login.log`.
+- **fail2ban**: one `fleet-login-<service>` jail per service with login paths (vaultwarden, immich, and jellyfin in
+  `arr`) reads the login log: 5 failures in 10 minutes ban for 1h, growing ×4 per repeat offence up to 168h.
 
 ---
 

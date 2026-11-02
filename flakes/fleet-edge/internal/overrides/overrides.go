@@ -294,11 +294,6 @@ func Check(inv *inventory.Inventory, spec *bunny.Spec, domain string, bound func
 			return zero, "", fmt.Errorf("%s: %s is declared in the public spec (%s)", where, fq, d.Source)
 		}
 	}
-	for _, e := range spec.External {
-		if strings.EqualFold(e, name) {
-			return zero, "", fmt.Errorf("%s: %s is an external name", where, fq)
-		}
-	}
 	// Retire-listed names are allowed: the override owns its record by id
 	// and bunny.PlanWith never retires an owned record.
 	return r, name, nil

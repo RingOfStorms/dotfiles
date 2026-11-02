@@ -291,7 +291,6 @@
       records: Array.isArray(dns.records) ? dns.records : [],
       available: !!dns.available,
       zone: dns.zone || "",
-      external: Array.isArray(dns.external) ? dns.external : [],
     };
   };
 

@@ -1,0 +1,21 @@
+# `cnt port open` on a net.private NixOS guest, guest side. The host DNAT
+# (cnt-port.nft) delivers the port to the guest, whose own firewall admits
+# only the declared route ports. lib.nix appends this to the guest's
+# inet nixos-fw table and jumps here from extraInputRules. port.go adds
+# "proto . port" elements from the host
+# (nsenter -t <machinectl Leader> -n nft ...), with the forward's timeout
+# and comment "svc=<svc>". The kernel expires them. A guest firewall
+# reload or restart recreates the set empty (fail closed). Checked by
+# portpkt_test.go against a real kernel.
+set cnt-guest {
+  comment "cnt port open (net.private): proto . port the host forwards here"
+  type inet_proto . inet_service
+  flags timeout
+}
+chain cnt-guest-input {
+  # Only forwarded clients: in on the veth from the host (eth0) and from
+  # outside the container range. DNAT keeps the client's address (the host
+  # masquerades only out of non-ve interfaces), so neither the host itself
+  # (10.233.0.1) nor another guest reaches a temporary port.
+  iifname "eth0" ip saddr != 10.233.0.0/16 meta l4proto . th dport @cnt-guest accept
+}

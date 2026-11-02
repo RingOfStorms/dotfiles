@@ -1,5 +1,5 @@
 {
-  description = "fleet-edge - read-only fleet dashboard (ROUTING-PLAN.md §5.2/§5.4)";
+  description = "fleet-edge - fleet dashboard, placement registry and edge authority";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -75,7 +75,7 @@
               default = "127.0.0.1:8099";
               description = ''
                 Address the dashboard binds to. Intended to sit behind nginx
-                (ROUTING-PLAN.md §5.4: tailnet-only, oauth2-proxy gated);
+                (tailnet-only, gated by oauth2-proxy);
                 never bind to a public address directly.
               '';
             };
@@ -182,8 +182,7 @@
             overrides = {
               enable = lib.mkEnableOption ''
                 the public `cnt expose` authority and the placement registry
-                (fleet-edge-overrides, own unit and state);
-                see containers/PLACEMENT-PLAN.md
+                (fleet-edge-overrides, own unit and state; see README.md)
               '';
               listen = lib.mkOption {
                 type = lib.types.str;
@@ -356,7 +355,7 @@
                 kind,flex,layout,cols,fill,box,group}}, nodes[]{id,host,
                 label,kind,zone,segment,role,badges[],lines[],href},
                 links[]{from,to,kind,label}, dns{zone,records[]{name,type,
-                value,ttl,external},external[]}, defaultZone, hide[] and
+                value,dynamic,ttl}}, defaultZone, hide[] and
                 hubs{tailnet,edge,router,dashboard}. A column owns a share of
                 the width and its own height; a zone inside it owns a share of
                 that column's leftover. Hosts, container placement, public
@@ -390,7 +389,7 @@
                 knownHosts = pkgs.writeText "fleet-edge-edge-known-hosts" o.knownHosts;
               in
               {
-                description = "fleet-edge expose overrides and placement registry (ROUTING-PLAN §8 step 7)";
+                description = "fleet-edge expose overrides and placement registry";
                 wantedBy = [ "multi-user.target" ];
                 after = [ "network-online.target" "systemd-tmpfiles-setup.service" ];
                 wants = [ "network-online.target" ];

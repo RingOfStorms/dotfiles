@@ -1,7 +1,7 @@
 # h005
 
-Router for my home network (replaces h003 as router). Once h005 has taken over, h003 is re-imaged onto
-the fleet's encrypted bcachefs + impermanence layout (Phase 6).
+Router for my home network (took over from h003). h003 is to be re-imaged onto the fleet's encrypted
+bcachefs + impermanence layout (Phase 6).
 
 > This plan was originally written as `h004`. That name now belongs to the h002 NAS rebuild
 > (`hosts/h004/`), so the router is h005.
@@ -30,18 +30,45 @@ The one host meant to run services on bare metal (networking only).
 | NUT (upsd, upsmon) | `mods/ups.nix` |
 | ISP speedtest (timer) | `mods/speedtest.nix` |
 | Per-host agents | sec-agent, fail2ban, tailscaled |
+| fleet-edge (dashboard, placement registry, expose authority, runtime DNS, public DNS, WAN forwards) | `fleet-edge.nix`, `dns-records.nix`, `router-forwards.nix` |
+| Fleet oauth2-proxy + `sso-proxy` sign-in host | `oauth2-proxy.nix` |
+| Wildcard certificate (ACME) and push | `wildcard-cert.nix` |
 
-Planned (`containers/ROUTING-PLAN.md`): `fleet-edge` (DNS records, ACME,
-router forwards, dashboard) and the fleet oauth2-proxy.
+fleet-edge, the placement-driven tailnet/LAN DNS and the WAN forwards are live. h005 is the only holder of the
+bunny key, so it issues the wildcard and writes the public records. The service and runtime-routing design is in
+[`flakes/fleet-edge/README.md`](../../flakes/fleet-edge/README.md) and [`containers/README.md`](../../containers/README.md).
+
+### Fleet oauth2-proxy
+
+One oauth2-proxy serves the whole fleet, listening on `100.64.0.3:4180`. The firewall admits 4180 only from the
+container hosts. Gated vhosts on every host `auth_request` it directly over the tailnet. It fails closed: if h005 or the
+proxy is unreachable, `auth_request` fails and nginx returns 500, never the app.
+
+- **Sign-in host**: `sso-proxy.joshuabell.xyz` is the only redirect URI in Zitadel, so a new gated route needs no
+  Zitadel change. Every gated vhost sends a 401 to `https://sso-proxy.joshuabell.xyz/oauth2/start?rd=…`. Tailnet
+  clients resolve it to h005's nginx on the overlay IP. Public DNS sends it to o002, which proxies only `/oauth2/` to
+  h005's dedicated edge listener (`:8443`), admitted from o002's overlay addresses only.
+- **Cookie scope**: one encrypted `_oauth2_proxy` cookie on `.joshuabell.xyz` (Secure, HttpOnly, SameSite=Lax, 168h,
+  refresh 12h, `whitelist-domain=.joshuabell.xyz`). Because the browser sends it to every subdomain, the zone has no
+  external targets, and every generated vhost strips `_oauth2_proxy*` cookies before proxying and overwrites
+  `X-Auth-Request-*` itself. If external targets are ever needed in the zone, switch to host-scoped cookies first.
+
+### Wildcard certificate
+
+`wildcard-cert.nix` issues `joshuabell.xyz` + `*.joshuabell.xyz` by DNS-01 with the bunny key. `wildcard-push` sends
+the pair over a restricted root SSH key with pinned host keys to five targets, `h001`, `h003`, `joe`, `lio` and `o002`,
+after each issue or renewal and daily. The list is host membership (the container hosts plus the public edge), not
+placement, so a move never needs a new cert or target. The receiver validates expiry and the key match, swaps the
+files and reloads nginx. The `*.share` wildcard goes only to o002.
+
 ## Migration plan: h003 → h005
 
 Goal: move all router duties off h003 so h003 can become an agent worker. Keep h003 intact as a rollback until h005 has run cleanly for about a week.
 
-**Config prepared, not activated:** `_constants.nix` has `network.routerEnable = false`.
-The bench configuration runs plain DHCP clients and imports no router modules. The
-gate also excludes router-only secrets and state mounts. With it enabled, `mods/`
-provides VLAN gateways, DHCP, split DNS, AdGuard, NAT/firewall, DDNS, NUT and
-`h005-isp-speedtest`. Keep it **false** until preparing the coordinated cutover.
+**Router gate:** `_constants.nix` `network.routerEnable` gates the complete router stack (now `true`).
+With it off, the configuration runs plain DHCP clients and imports no router modules; the gate also excludes
+router-only secrets and state mounts. With it on, `mods/` provides VLAN gateways, DHCP, split DNS, AdGuard,
+NAT/firewall, DDNS, NUT and `h005-isp-speedtest`.
 
 **Checked 2026-10-15:** bench and router-enabled system closures build. A throwaway
 user/network-namespace smoke loaded the generated nftables rules and ran the real
@@ -76,7 +103,7 @@ the bench DHCP identity with a newly generated one. Do not seed it from h003.
 | ISP speedtest → Home Assistant | `mods/speedtest.nix` | h005 secret `machines/by-host/h005/hass_isp_speedtest_token` (Zitadel machine user `395294573078773763`); value updated by the user 2026-10-15, hydrated in router mode |
 | `omada` serial alias, picocom | h003 `flake.nix` | Optional, not ported; needs USB to the switch console (all 3 USB-A ports are used by the key stick and UPSes) |
 | nginx squaremap proxy on the overlay IP | `containers.nix` | **Not moving.** Minecraft is inactive since 2026-10-15 (backup on h001, `containers/minecraft/README.md`), so no squaremap proxy. |
-| Minecraft port forward (TCP 25565) | `containers.nix` → firewall | **Not moving** (Minecraft inactive). Add a DNAT on h005 if it is ever brought back. |
+| Minecraft port forward (TCP 25565) | `containers.nix` → firewall | **Not moving** as a static rule. fleet-edge writes WAN forwards from the placement registry, so a placed `minecraft` gets its 25565 forward automatically. |
 
 ### Things that reference h003 elsewhere
 
@@ -138,7 +165,7 @@ shutdown or reboot test was performed; those are separate maintenance actions.
 - From a VLAN 10 host: reach the switch at `10.12.16.2`.
 - VLAN 20 → VLAN 10 is blocked; VLAN 10 → VLAN 20 is blocked (IPv4 **and** IPv6).
 - Tailscale: from a remote device, `dig @100.64.0.3 media.joshuabell.xyz` returns `100.64.0.13`; verify Headscale split DNS uses h005. No tailnet-to-LAN forwarding is provided.
-- Port forwards: none needed today (Minecraft inactive).
+- Port forwards: `nft list table ip fleet-wan-forwards` matches the placed `via = router` routes (none while Minecraft is unplaced).
 - Speedtest result arrives in Home Assistant.
 - Throughput: a speed test from a LAN client close to the ISP plan (~1.5 Gbps). Check h005 CPU in `htop` during the test.
 - Fanless temps under load: `sensors` (the case runs 55–70 °C by design).
@@ -180,4 +207,4 @@ Today h003 is LUKS + btrfs with a keyfile copied into the initrd (`hosts/h003/ha
 7. Make a USB key stick for h003 (`usb_key.md`). It stays plugged in if h003 must reboot unattended.
 8. Boot the installer and run disko (`encrypted = true`, target `/dev/disk/by-id/nvme-…`). Record the UUIDs in `ringofstorms.impermanence.disk` with `usbKey = true`. Copy the step 5 files into `/mnt/persist` (SSH keys in `/mnt/persist/etc/ssh/`), then `nixos-install --flake`.
 9. Verify: unlocks from the USB key with no prompt; `/` is wiped on reboot while `/persist` keeps its contents; tailnet node and SSH host key unchanged; restore the step 2 state and start the workloads again.
-10. Update `hosts/h003/readme.md` (disk layout table like `hosts/i001/readme.md`) and the host roles in `containers/ROUTING-PLAN.md`.
+10. Update `hosts/h003/readme.md` (disk layout table like `hosts/i001/readme.md`).

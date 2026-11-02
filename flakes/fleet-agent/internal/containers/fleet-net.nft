@@ -13,6 +13,10 @@ set egress {
   comment "net.uses / net.egress exceptions: guest . daddr . proto . port (ports files)"
   type ifname . ipv4_addr . inet_proto . inet_service
 }
+set egress_src {
+  comment "net.uses / net.egress of podman services: static fleet-noinet IP . daddr . proto . port (ports files)"
+  type ipv4_addr . ipv4_addr . inet_proto . inet_service
+}
 set blocked4 {
   comment "never reachable from a guest (beyond DNAT routes and net.egress)"
   type ipv4_addr
@@ -65,5 +69,6 @@ chain guest-ingress {
   ct state established,related return
   ct status dnat return comment "declared tcp/udp route / podman published port"
   iifname . ip daddr . meta l4proto . th dport @egress return comment "net.uses / net.egress"
+  iifname "fleet-noinet" ip saddr . ip daddr . meta l4proto . th dport @egress_src return comment "podman net.uses (static bridge IP)"
   counter drop comment "no direct routing to guests"
 }

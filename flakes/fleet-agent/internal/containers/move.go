@@ -578,7 +578,7 @@ func finishMove(s Service, from, to string, st *moveState) error {
 		if err != nil {
 			return fmt.Errorf("reading exposure overrides before retiring %s: %w", from, err)
 		}
-		if err := carryOverride(s, ovs, to); err != nil {
+		if err := carryOverride(s, ovs.Overrides, to); err != nil {
 			return fmt.Errorf("carrying exposure to %s (source left installed; rerun move): %w", to, err)
 		}
 	}

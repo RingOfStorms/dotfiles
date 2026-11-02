@@ -770,7 +770,7 @@ registration.
     rewrite it);
   - `ideas/restic_backups.md` (records the opposite decision);
   - `ideas/h004_erasure.md` ("backups live on B2, not h004");
-  - `ROUTING-PLAN.md` §9.1/§9.3, handed to whoever owns that file at the time.
+  - `containers/sec/README.md` (break-glass kit and cold restore).
 - **Risk: low.** Each earlier phase already updates the docs it changes.
 
 ## 9. Legacy repo `7f023d4a`
@@ -791,7 +791,7 @@ registration.
   current subject lives there.
 - **Cost:** about 1.0 TB stored until then (491.7 GiB legacy + about 516 GiB
   new) ≈ $7/mo. After that, about $3.6/mo.
-- **Break-glass record** (`ROUTING-PLAN.md` §9.3): each pusher's bucket key, one
+- **Break-glass record** (`containers/sec/README.md`, break-glass kit): each pusher's bucket key, one
   password per subject, and the legacy password + read-only key until deletion.
 
 ## 10. Open decisions

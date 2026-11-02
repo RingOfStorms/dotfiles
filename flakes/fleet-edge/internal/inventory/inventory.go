@@ -1,6 +1,7 @@
 // Package inventory parses the fleet inventory JSON produced by
 // `nix eval --json <containers-flake>#inventory`. The shape is defined by
-// containers/flake.nix and containers/cli/main.go; routes is optional.
+// containers/flake.nix and flakes/fleet-agent/internal/containers/main.go
+// (Inventory, Service); routes is optional.
 package inventory
 
 import (

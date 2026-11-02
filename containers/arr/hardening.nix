@@ -101,6 +101,10 @@ let
   };
 in
 {
+  # arr-lo-guard is iptables, so this guest keeps the iptables firewall
+  # (lib.nix defaults private guests to nftables). It has no cnt-guest set:
+  # `cnt port open arr` refuses.
+  networking.nftables.enable = false;
   networking.firewall.extraCommands =
     setup "iptables" [
       "-m addrtype --dst-type LOCAL"

@@ -100,6 +100,12 @@ let
   #   guest <ve-iface>                    net.private guest (isolated, fleet-net @guests)
   #   noinet <ve-iface>                   private guest with internet = false
   #   allow <ve-iface> <ipv4> <tcp|udp> <port>   net.uses / net.egress exception
+  #   allow <podman ipv4> <ipv4> <tcp|udp> <port>   same for a net.private podman
+  #                                       service, keyed on its static fleet-noinet
+  #                                       IP (10.89.250.x; no per-service veth):
+  #                                       fleet-noinet @allow, nixos-fw
+  #                                       @podman-egress, and with privateNetwork
+  #                                       fleet-net @egress_src, nat @uses_src
   #   web <addr|cidr>                     source for the internal 80/443 rules
   #                                       (@src ipv4 or @src6 ipv6), written by
   #                                       `cnt deploy` from the service's routes
@@ -108,7 +114,8 @@ let
   #                                       `cnt deploy`/`move`/`destroy` of such
   #                                       a caller
   #   weblan <cidr>                       LAN clients on 80/443 (@src_lan)
-  # @routes, @routes_lan, @routes_at, @routes_from, @guests, @noinet, @egress
+  # @routes, @routes_lan, @routes_at, @routes_from, @guests, @noinet, @egress,
+  # @egress_src, @uses, @uses_src, fleet-noinet @allow, nixos-fw @podman-egress
   # and @src, @src6, @src_lan are flushed and refilled on every run, so a
   # redeploy or a removed ports file drops stale entries.
   applyPorts = pkgs.writeShellScript "fleet-containers-apply-ports" ''
@@ -123,19 +130,47 @@ let
       $nft flush map ip fleet-net-nat routes_at
       $nft flush map ip fleet-net-nat routes_from
       $nft flush set ip fleet-net-nat uses
+      $nft flush set ip fleet-net-nat uses_src
       $nft flush set inet fleet-net guests
       $nft flush set inet fleet-net noinet
       $nft flush set inet fleet-net egress
+      $nft flush set inet fleet-net egress_src
       $nft flush set inet nixos-fw guest-egress 2>/dev/null || true
     fi
-    # Web admission sources (ROUTING-PLAN 8.2) are not private-network
+    # Web admission sources (@src/@src6/@src_lan) are not private-network
     # specific: flush outside the gate above. Missing sets (a host without
     # the nginx module) are not an error.
     $nft flush set inet nixos-fw src 2>/dev/null || true
     $nft flush set inet nixos-fw src6 2>/dev/null || true
     $nft flush set inet nixos-fw src_lan 2>/dev/null || true
+    # podman net.uses/net.egress don't need privateNetwork (joe): fleet-noinet
+    # and the nixos-fw set exist wherever this module is on.
+    $nft flush set inet fleet-noinet allow 2>/dev/null || true
+    $nft flush set inet nixos-fw podman-egress 2>/dev/null || true
     for f in ${stateDir}/ports/*; do
       while read -r proto port mode ip rest; do
+        if [ "$proto" = allow ]; then
+          case "''${port:-}" in
+            10.89.250.*)
+              case "$port" in *[!0-9.]*) continue ;; esac
+              case "''${mode:-}" in *[!0-9.]*|"") continue ;; esac
+              case "''${ip:-}" in tcp|udp) ;; *) continue ;; esac
+              case "''${rest:-}" in ""|*[!0-9]*) continue ;; esac
+              el="$port . $mode . $ip . $rest"
+              $nft add element inet fleet-noinet allow "{ $el }" \
+                || echo "containers: could not add $el to fleet-noinet @allow (from $f)" >&2
+              $nft add element inet nixos-fw podman-egress "{ $el }" \
+                || echo "containers: could not add $el to nixos-fw @podman-egress (from $f)" >&2
+              if [ "$fleetnet" = 1 ]; then
+                $nft add element ip fleet-net-nat uses_src "{ $el }" \
+                  || echo "containers: could not add $el to nat @uses_src (from $f)" >&2
+                $nft add element inet fleet-net egress_src "{ $el }" \
+                  || echo "containers: could not add $el to @egress_src (from $f)" >&2
+              fi
+              continue
+              ;;
+          esac
+        fi
         case "$proto" in
           web|weblan)
             # Fail closed on anything that is not a plain address/CIDR.
@@ -465,8 +500,7 @@ in
           Drop edge peers on the internal :80/:443 listener (generated vhosts
           return 444 when $fleet_edge_peer is 1). Turn on only once the edge
           proxies to the edge listener, or public names break.
-          On by default: o002 proxies all public routes to the edge listener
-          (ROUTING-PLAN §8 step 3).
+          On by default: o002 proxies all public routes to the edge listener.
         '';
       };
     };
@@ -698,14 +732,14 @@ in
       type = lib.types.bool;
       default = true;
       description = ''
-        Generate the per-host firewall admission for TCP 80/443 (ROUTING-PLAN
-        8.2): the build-time tailnet sources computed from the routes the
-        inventory declares for this host, plus the runtime `@src*` sets that
-        `containers deploy` fills per service, and on hosts serving LAN
-        clients the LAN subnet. The generated vhosts gate access themselves
-        (nginx.acl exposure ACLs), so the firewall only needs to let them in.
-        Turn off to write the rules per interface in the host config instead
-        (this also drops extraWebSources).
+        Generate the per-host firewall admission for TCP 80/443: the runtime
+        `@src`/`@src6`/`@src_lan` sets that `cnt deploy` fills from the routes
+        of the services placed on this host (no rebuild), the static
+        extraWebSources, and on hosts serving LAN clients the LAN subnet. The
+        generated vhosts gate access themselves (nginx.acl exposure ACLs), so
+        the firewall only needs to let them in. Turn off to write the rules
+        per interface in the host config instead (this also drops
+        extraWebSources).
       '';
     };
     nginx.extraWebSources = lib.mkOption {
@@ -717,7 +751,7 @@ in
       ];
       description = ''
         Extra sources admitted on TCP 80/443 for this host's internal nginx,
-        on top of the ones derived from the inventory (ROUTING-PLAN 8.2).
+        on top of the runtime ones `cnt deploy` derives from the inventory.
         For hand-written vhosts outside the inventory, whose clients are not
         visible to the route computation. IPv4/IPv6 addresses or CIDR blocks;
         gated by nginx.openFirewall.
@@ -814,10 +848,14 @@ in
             flags interval,timeout
           }
           set guest-egress {
-            comment "ROUTING-PLAN 8.2: mirror of fleet-net egress; admits net.uses/net.egress guest flows only"
+            comment "mirror of fleet-net egress; admits net.uses/net.egress guest flows only"
             type ifname . ipv4_addr . inet_proto . inet_service
           }
-          # ROUTING-PLAN 8.2 web admission, refilled by applyPorts on every
+          set podman-egress {
+            comment "net.uses/net.egress of net.private podman services: static fleet-noinet IP . daddr . proto . port"
+            type ipv4_addr . ipv4_addr . inet_proto . inet_service
+          }
+          # Web admission sources for TCP 80/443, refilled by applyPorts on every
           # run (cnt deploy adds a new vhost's source here, no rebuild).
           set src {
             comment "web sources: tailnet ipv4 (cnt deploy)"
@@ -923,6 +961,10 @@ in
         # Units check this table exists before starting (fail closed).
         # `containers online <svc>` puts the container IP in @online with a
         # timeout; a firewall reload empties the set (fail closed again).
+        # @allow holds the net.uses/net.egress exceptions of net.private
+        # podman services (ports-file `allow <static IP> ...`, applyPorts),
+        # the podman counterpart of fleet-net's per-veth @egress: podman has
+        # no ve-<name>, so the static --ip identifies the service.
         networking.nftables.tables.fleet-noinet = {
           family = "inet";
           content = ''
@@ -930,18 +972,24 @@ in
               type ipv4_addr
               flags timeout
             }
+            set allow {
+              comment "net.private podman net.uses/net.egress: static IP . daddr . proto . port (ports files)"
+              type ipv4_addr . ipv4_addr . inet_proto . inet_service
+            }
             chain forward {
               type filter hook forward priority filter - 10; policy accept;
               iifname "fleet-noinet" ip saddr @online accept
+              iifname "fleet-noinet" ip saddr . ip daddr . meta l4proto . th dport @allow accept comment "net.uses / net.egress"
               iifname "fleet-noinet" ct direction original drop
             }
             chain input {
               type filter hook input priority filter - 10; policy accept;
               iifname "fleet-noinet" ip saddr @online accept
+              iifname "fleet-noinet" ip saddr . ip daddr . meta l4proto . th dport @allow accept comment "net.uses / net.egress (this host's nginx, aardvark DNS)"
               iifname "fleet-noinet" ct direction original drop
             }
-            # net.private guests/podman services are reached by nginx only
-            # (ROUTING-PLAN 8 step 5); without this, any local user/process
+            # net.private guests/podman services are reached by nginx (and
+            # their DNAT routes) only; without this, any local user/process
             # on this host could curl 10.233.x.2 or 10.89.250.1xx directly.
             # root stays trusted: restic/backup hooks, cnt health checks and
             # the nat-output guest redirect (fleet-net-nat.nft) all run as
@@ -982,17 +1030,25 @@ in
           '';
         };
 
-        # DNS (aardvark-dns on the bridge) for containers that are online.
-        # Only reachable here once the chain above let the packet through.
-        # Then the `cnt port` sets declared above.
+        # DNS (aardvark-dns on the bridge) for containers that are online
+        # or have net.uses. Only reachable here once the chain above let the
+        # packet through. podman net.uses/net.egress (fleet-noinet @allow
+        # admitted them at priority -10) must also pass nixos-fw: exact
+        # tuples, keyed on the static bridge IP. Then the `cnt port` sets
+        # declared above.
         networking.firewall.extraInputRules = ''
           iifname "fleet-noinet" meta l4proto { tcp, udp } th dport 53 accept
+          iifname "fleet-noinet" ip saddr . ip daddr . meta l4proto . th dport @podman-egress accept comment "net.private podman net.uses/net.egress to this host"
           iifname . meta l4proto . th dport @cnt-tmp accept comment "cnt port"
           "any" . meta l4proto . th dport @cnt-tmp accept comment "cnt port --iface any"
           iifname . meta l4proto . th dport . ip saddr @cnt-tmp4 accept comment "cnt port --from"
           "any" . meta l4proto . th dport . ip saddr @cnt-tmp4 accept comment "cnt port --iface any --from"
           iifname . meta l4proto . th dport . ip6 saddr @cnt-tmp6 accept comment "cnt port --from v6"
           "any" . meta l4proto . th dport . ip6 saddr @cnt-tmp6 accept comment "cnt port --iface any --from v6"
+        '';
+        # Only used where networking.firewall.filterForward is on (h003).
+        networking.firewall.extraForwardRules = ''
+          iifname "fleet-noinet" ip saddr . ip daddr . meta l4proto . th dport @podman-egress accept comment "net.private podman net.uses/net.egress"
         '';
       }
 
@@ -1027,18 +1083,19 @@ in
         #
         # A guest allowed by fleet-net at priority -5 must also pass nixos-fw
         # at priority 0. Mirror exact egress tuples here, not a blanket ve-*
-        # allow, so guests can reach declared host nginx routes.
+        # allow, so guests reach only the nginx routes they declare in
+        # net.uses/net.egress.
         networking.firewall.extraInputRules = lib.mkMerge [
           (lib.mkIf (cfg.nginx.openFirewall && webSources4 != [ ]) ''
-            ip saddr { ${lib.concatStringsSep ", " webSources4} } tcp dport { 80, 443 } accept comment "generated: http route sources, inventory (ROUTING-PLAN 8.2)"
+            ip saddr { ${lib.concatStringsSep ", " webSources4} } tcp dport { 80, 443 } accept comment "generated: http sources, extraWebSources"
           '')
           (lib.mkIf (cfg.nginx.openFirewall && webSources6 != [ ]) ''
-            ip6 saddr { ${lib.concatStringsSep ", " webSources6} } tcp dport { 80, 443 } accept comment "generated: http route sources, inventory (ROUTING-PLAN 8.2)"
+            ip6 saddr { ${lib.concatStringsSep ", " webSources6} } tcp dport { 80, 443 } accept comment "generated: http sources, extraWebSources"
           '')
           (lib.mkIf cfg.nginx.openFirewall ''
-            ip saddr @src tcp dport { 80, 443 } accept comment "generated: http route sources, runtime (cnt deploy; ROUTING-PLAN 8.2)"
-            ip6 saddr @src6 tcp dport { 80, 443 } accept comment "generated: http route sources, runtime (cnt deploy; ROUTING-PLAN 8.2)"
-            ip saddr @src_lan tcp dport { 80, 443 } accept comment "generated: LAN http sources, runtime (cnt deploy; ROUTING-PLAN 8.2)"
+            ip saddr @src tcp dport { 80, 443 } accept comment "generated: http route sources, runtime (cnt deploy)"
+            ip6 saddr @src6 tcp dport { 80, 443 } accept comment "generated: http route sources, runtime (cnt deploy)"
+            ip saddr @src_lan tcp dport { 80, 443 } accept comment "generated: LAN http sources, runtime (cnt deploy)"
           '')
           (lib.mkIf
             (
@@ -1047,11 +1104,11 @@ in
               && (fleet.hosts.${thisHost}.lanIp or null) != null
             )
             ''
-              ip saddr ${fleet.global.lanSubnet} tcp dport { 80, 443 } accept comment "generated: LAN http routes (ROUTING-PLAN 8.2)"
+              ip saddr ${fleet.global.lanSubnet} tcp dport { 80, 443 } accept comment "generated: LAN http routes"
             ''
           )
           (lib.mkIf cfg.nginx.openFirewall ''
-            iifname . ip daddr . meta l4proto . th dport @guest-egress accept comment "generated: guest net.uses/net.egress to this host's own nginx (ROUTING-PLAN 8.2)"
+            iifname . ip daddr . meta l4proto . th dport @guest-egress accept comment "generated: guest net.uses/net.egress to this host's own nginx"
           '')
         ];
       })
@@ -1125,7 +1182,7 @@ in
             fam = if lib.hasInfix ":" p then "ip6" else "ip";
           in
           ''
-            iifname "tailscale0" ${fam} saddr ${p} tcp dport ${toString cfg.nginx.edge.port} accept comment "nginx edge listener (ROUTING-PLAN 2.3)"
+            iifname "tailscale0" ${fam} saddr ${p} tcp dport ${toString cfg.nginx.edge.port} accept comment "nginx edge listener"
           ''
         ) cfg.nginx.edge.peers;
         systemd.services.nginx.serviceConfig.ReadOnlyPaths = [ "${stateDir}/nginx" ];
@@ -1212,14 +1269,14 @@ in
         # `cnt move` checks this marker on the target (fleet-restic present).
         environment.etc."fleet-containers/backup".text = "fleet-backup stamps: ${backupStampDir}\n";
         systemd.services.fleet-backup = backupUnit // {
-          description = "restic backup of floating containers (ROUTING-PLAN §9.1)";
+          description = "restic backup of floating containers";
           serviceConfig = backupUnit.serviceConfig // {
             ExecStart = backupScript;
           };
         };
         # One service now, no prune (`cnt move`): systemctl start fleet-backup-svc@puzzles
         systemd.services."fleet-backup-svc@" = backupUnit // {
-          description = "restic backup of floating container %i (ROUTING-PLAN §9.1)";
+          description = "restic backup of floating container %i";
           serviceConfig = backupUnit.serviceConfig // {
             ExecStart = "${backupScript} %i";
           };

@@ -76,7 +76,7 @@ func liveZone() Zone {
 		{ID: 2, Type: 0, Name: "docs", Value: "100.64.0.13", TTL: 3600},        // retire
 		{ID: 3, Type: 2, Name: "kura", Value: "o002.example.com", TTL: 3600},   // retire
 		{ID: 4, Type: 4, Name: "", Value: "mx.mail.example", TTL: 3600},        // unmanaged
-		{ID: 5, Type: 0, Name: "home", Value: "9.9.9.9", TTL: 60},              // external
+		{ID: 5, Type: 0, Name: "home", Value: "9.9.9.9", TTL: 60},              // dynamic
 	}}
 }
 
@@ -86,8 +86,8 @@ func applySpec() *Spec {
 		Records: []Desired{
 			{Name: "photos", Type: "CNAME", Value: "o002.example.com", TTL: 300},
 			{Name: "git", Type: "CNAME", Value: "o002.example.com", TTL: 300}, // create
+			{Name: "home", Type: "A", TTL: 300, Dynamic: WANIPv4},             // dynamic: left to DDNS
 		},
-		External: []string{"home"},
 		Retire: []Retired{
 			{Name: "docs", Type: "A", Value: "100.64.0.13"},
 			{Name: "kura", Type: "CNAME", Value: "o002.example.com."},

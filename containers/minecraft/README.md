@@ -23,17 +23,23 @@ Velocity proxy and two Paper servers, run as a `nixos`-kind floating container
 (see `../README.md`).
 
 ```
-Players :25565 -> Velocity (proxy, auth, routing)
-                    ├── survival :25566  (127.0.0.1, primary, Paper)
-                    └── creative :25567  (127.0.0.1, plugin experiments)
-squaremap :8080  -> host nginx (https://computerboyz.joshuabell.xyz/, edge listener)
+Players :25565 -> h005 WAN DNAT -> host LAN IP :25565 -> host DNAT -> guest
+                  10.233.18.2:25565: Velocity (proxy, auth, routing)
+                    ├── survival :25566  (guest 127.0.0.1, primary, Paper)
+                    └── creative :25567  (guest 127.0.0.1, plugin experiments)
+squaremap :8080  <- host nginx (https://computerboyz.joshuabell.xyz/, edge listener)
                  <- o002 terminates TLS and proxies over the tailnet
-PostgreSQL 17 (127.0.0.1:5432, trust): LuckPerms, shared by all three
+PostgreSQL 17 (guest 127.0.0.1:5432, trust): LuckPerms, shared by all three
 ```
 
-The container shares the host network. The host opens only 25565, at runtime
-(the `game` route). 8080 is reached through the vhost `cnt deploy` generates
-from the `web` route.
+Private network (`net.index = 18`): the guest is `10.233.18.2` on every host,
+and its firewall admits only 25565 and 8080. The `game` route is a public
+`via = router` tcp route: fleet-edge on h005 forwards WAN :25565 to the placed
+host's LAN IP, and that host's ports file line `tcp 25565 dnat 10.233.18.2`
+DNATs it to the guest (any interface, so LAN and tailnet clients reach it
+too). 8080 is reached through the vhost `cnt deploy` generates from the `web`
+route, which proxies to `10.233.18.2:8080`. Postgres and the Paper backends
+are on the guest's own loopback, unreachable from the host.
 
 ## Data
 

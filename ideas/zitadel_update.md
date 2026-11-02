@@ -10,7 +10,7 @@ Zitadel now runs as a **floating container** at `containers/zitadel/` (migrated 
 | **Pinned Zitadel version** | **2.71.7** via `guestpkgs.url = "github:nixos/nixpkgs/331800de5053fcebacf6813adb5db9c9dca22a0c"` (`containers/zitadel/flake.nix:12`) |
 | **Data layout on host (`h001`)** | `/srv/containers/zitadel/{postgres,pgdumps,keys}` (`containers/zitadel/service.nix:31-35`, idmapped ext4) |
 | **Masterkey (`M7`)** | ✅ **Done:** Tightened to `0400 zitadel:zitadel` via tmpfiles at `/var/lib/zitadel-keys/masterkey` (`containers/zitadel/container.nix:37,83`) |
-| **Backups & Cold-Restore (`ROUTING-PLAN.md` §9.3)** | ✅ **Done (2026-10-22):** Nightly `fleet-backup` (`svc:zitadel` to B2), plus independent off-repo copy of `sec` and `zitadel` and verified cold-restore test using break-glass keys |
+| **Backups & Cold-Restore** | ✅ **Done (2026-10-22):** Nightly `fleet-backup` (`svc:zitadel` to B2), plus independent off-repo copy of `sec` and `zitadel` and verified cold-restore test using break-glass keys |
 | **Inline `FirstInstance` password** | ⚠️ **Still present:** `Password = "Password1!"` in `containers/zitadel/container.nix:70` (only used on empty DB init, but should be removed from the Nix store during the upgrade) |
 | **Target upstream versions** | Intermediate **v3.4.x** (`≥ 3.4.15`) → Latest **v4.x** (`≥ 4.19.1`; skip `4.18.0` due to upstream setup bug) |
 | **Packaging starting point** | [nixpkgs PR #561044](https://github.com/NixOS/nixpkgs/pull/561044) (packages Zitadel 4.x + Login V2 from source) or checksum-pinned upstream Linux release binary inside `containers/zitadel/flake.nix` |

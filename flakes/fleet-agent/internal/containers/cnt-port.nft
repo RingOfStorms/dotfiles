@@ -1,0 +1,46 @@
+# `cnt port open` on a net.private service: a temporary DNAT from a host
+# port to the guest, with the same scoping as the cnt-tmp* sets of inet
+# nixos-fw. port.go embeds this file and loads it on the host when the
+# table is missing (the host module doesn't declare it). The kernel expires
+# the elements; a firewall reload (flushRuleset) drops the whole table
+# (fail closed). Each element carries comment "svc=<svc>". The *-any maps
+# are --iface any (a constant can't start a dnat map key, unlike the
+# nixos-fw `"any" . ...` set lookups). v4 only: guests have no IPv6.
+# Checked by port_test.go.
+table ip cnt-port {
+  map cnt-fwd {
+    comment "cnt port open (net.private): ifname . proto . port -> guest"
+    type ifname . inet_proto . inet_service : ipv4_addr
+    flags timeout
+  }
+  map cnt-fwd4 {
+    comment "cnt port open --from (net.private): ifname . proto . port . saddr -> guest"
+    type ifname . inet_proto . inet_service . ipv4_addr : ipv4_addr
+    flags interval,timeout
+  }
+  map cnt-fwd-any {
+    comment "cnt port open --iface any (net.private): proto . port -> guest"
+    type inet_proto . inet_service : ipv4_addr
+    flags timeout
+  }
+  map cnt-fwd4-any {
+    comment "cnt port open --iface any --from (net.private): proto . port . saddr -> guest"
+    type inet_proto . inet_service . ipv4_addr : ipv4_addr
+    flags interval,timeout
+  }
+  # After fleet-net-nat (dstnat): a declared tcp/udp route keeps its port.
+  # The first nat binding wins, so nothing here overrides it. Forwarded
+  # flows pass fleet-net forward as ct status dnat, like declared routes.
+  chain prerouting {
+    type nat hook prerouting priority dstnat + 10; policy accept;
+    # Never from guests: a container must not reach another guest through
+    # a temporary forward on the host's bridge address.
+    iifname "ve-*" return
+    iifname "podman*" return
+    iifname "fleet-noinet" return
+    fib daddr type local dnat ip to iifname . meta l4proto . th dport . ip saddr map @cnt-fwd4
+    fib daddr type local dnat ip to meta l4proto . th dport . ip saddr map @cnt-fwd4-any
+    fib daddr type local dnat ip to iifname . meta l4proto . th dport map @cnt-fwd
+    fib daddr type local dnat ip to meta l4proto . th dport map @cnt-fwd-any
+  }
+}

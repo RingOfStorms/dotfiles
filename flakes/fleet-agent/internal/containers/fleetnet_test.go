@@ -50,7 +50,7 @@ func TestFleetNetIngressGuard(t *testing.T) {
 			t.Errorf("accept in guest-ingress skips nixos-fw: %q", l)
 		}
 	}
-	for _, want := range []string{"ct state established,related return", "ct status dnat return", "@egress return"} {
+	for _, want := range []string{"ct state established,related return", "ct status dnat return", "@egress return", `iifname "fleet-noinet" ip saddr . ip daddr . meta l4proto . th dport @egress_src return`} {
 		if !strings.Contains(in, want) {
 			t.Errorf("guest-ingress lacks %q", want)
 		}
@@ -68,7 +68,8 @@ func TestFleetNetLoad(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "net.nft")
 	body := "table inet fleet-net {\n" + fleetNetRules(t) + "\n}\n" +
 		"add element inet fleet-net guests { \"ve-arr\" }\n" +
-		"add element inet fleet-net egress { \"ve-x\" . 10.233.7.2 . tcp . 8094 }\n"
+		"add element inet fleet-net egress { \"ve-x\" . 10.233.7.2 . tcp . 8094 }\n" +
+		"add element inet fleet-net egress_src { 10.89.250.102 . 10.233.7.2 . tcp . 8094 }\n"
 	if err := os.WriteFile(f, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}

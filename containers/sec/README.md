@@ -66,3 +66,27 @@ The old dirs (`/var/lib/zitadel`, `/var/lib/secrets_manager`) were archived
 to `/root/retired-2026-10-22-zitadel-sec.tar.zst` on h001 and deleted on
 2026-10-22 (step 7 above). `secrets_manager_hydrated` is unrelated and was
 not touched.
+
+## Break-glass kit and cold restore
+
+The kit lives outside the fleet, in the password manager, and holds **keys
+only**:
+
+- the restic env (repository, password, backend credentials);
+- sec's encryption key, `/srv/containers/sec/data/db.key`;
+- zitadel's master key, `/srv/containers/zitadel/keys/masterkey` (32 raw
+  bytes, stored base64);
+- the emergency ssh key `root_fleet_backup`, whose public half is authorized
+  for root on every host by the common `hardening.nix`.
+
+The keys decrypt data but don't contain it. `sec.db` and zitadel's
+PostgreSQL state otherwise exist only on the bound host and in the one restic
+repository. A second, independent copy of `/srv/containers/sec/data` and
+`/srv/containers/zitadel/{pgdumps,keys}` shares neither that repo nor its
+credentials (e.g. a second restic repo on h004, or a periodic encrypted
+export); without it, a damaged repo plus a lost host means key recovery only,
+no restore.
+
+**Cold-restore test**, on a spare host, twice: once from a restic snapshot,
+once from the independent copy plus the password-manager keys alone. It
+passes when a zitadel login works and a sec-agent fetches its secrets.

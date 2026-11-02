@@ -49,20 +49,20 @@ in
   # Exclusions precede the broad HTTP accept so low-trust peers cannot
   # inherit access intended for tailnet clients, including unlisted phones.
   networking.firewall.extraInputRules = ''
-    iifname "tailscale0" ip saddr { ${lib.concatStringsSep ", " highTrustIps} } tcp dport 22 accept comment "generated: ssh, high-trust tailnet only (ROUTING-PLAN 8.2)"
-    iifname "tailscale0" ip6 saddr { ${lib.concatStringsSep ", " highTrustIps6} } tcp dport 22 accept comment "generated: ssh, high-trust tailnet only (ROUTING-PLAN 8.2, v6)"
+    iifname "tailscale0" ip saddr { ${lib.concatStringsSep ", " highTrustIps} } tcp dport 22 accept comment "generated: ssh, high-trust tailnet only"
+    iifname "tailscale0" ip6 saddr { ${lib.concatStringsSep ", " highTrustIps6} } tcp dport 22 accept comment "generated: ssh, high-trust tailnet only (v6)"
     ${lib.concatMapStrings (
       ip:
-      ''iifname "tailscale0" ip saddr ${ip} tcp dport { 80, 443 } drop comment "generated: h005 own http, excluded (ROUTING-PLAN 8.2)"''
+      ''iifname "tailscale0" ip saddr ${ip} tcp dport { 80, 443 } drop comment "generated: h005 own http, excluded"''
       + "\n"
     ) excludedTailnetHttpIps}
     ${lib.concatMapStrings (
       ip:
-      ''iifname "tailscale0" ip6 saddr ${ip} tcp dport { 80, 443 } drop comment "generated: h005 own http, excluded (ROUTING-PLAN 8.2, v6)"''
+      ''iifname "tailscale0" ip6 saddr ${ip} tcp dport { 80, 443 } drop comment "generated: h005 own http, excluded (v6)"''
       + "\n"
     ) excludedTailnetHttpIps6}
-    iifname "tailscale0" ip saddr 100.64.0.0/10 tcp dport { 80, 443 } accept comment "generated: h005 own http, tailnet (ROUTING-PLAN 8.2)"
-    iifname "tailscale0" ip6 saddr fd7a:115c:a1e0::/48 tcp dport { 80, 443 } accept comment "generated: h005 own http, tailnet (ROUTING-PLAN 8.2, v6)"
+    iifname "tailscale0" ip saddr 100.64.0.0/10 tcp dport { 80, 443 } accept comment "generated: h005 own http, tailnet"
+    iifname "tailscale0" ip6 saddr fd7a:115c:a1e0::/48 tcp dport { 80, 443 } accept comment "generated: h005 own http, tailnet (v6)"
   '';
 
   assertions = [

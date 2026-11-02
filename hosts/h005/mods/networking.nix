@@ -16,19 +16,20 @@ let
   # headscale routes joshuabell.xyz split-DNS to this IP (see o002/headscale.nix).
   selfOverlay = constants.host.overlayIp; # h005 (100.64.0.3)
 
-  # Service names: generated from containers/*/service.nix routes plus the
-  # few hand-kept ones (../dns-records.nix). Tailnet answers are the serving
-  # host's overlay IP; LAN answers its LAN IP.
+  # Service names: the route names of containers/*/service.nix plus the few
+  # hand-kept tailnet records (../dns-records.nix). Container answers are
+  # runtime: fleet-edge writes each placed route's host IP into the hostsdir
+  # (overlay IP for tailnet clients, LAN IP for LAN clients), and every route
+  # name is reserved with local= so an unplaced one answers nothing.
   dnsRecords = import ../dns-records.nix { inherit fleet; };
 
-  # Tailnet clients get the OVERLAY ip of the host serving each listed name
-  # (h001 or lio) so they're reachable from ANY tailnet client (home or
-  # remote), unlike the LAN answer the AdGuard/9053 path gives non-tailnet LAN
-  # clients.
+  # Tailnet clients get the OVERLAY ip of the host serving each name, so it
+  # is reachable from ANY tailnet client (home or remote), unlike the LAN
+  # answer the AdGuard/9053 path gives non-tailnet LAN clients.
   tailnetDnsmasqConf = pkgs.writeText "dnsmasq-tailnet.conf" ''
     # dnsmasq — TAILNET DNS-split instance (separate from the LAN instance).
-    # Answers listed *.joshuabell.xyz service names for tailnet clients with
-    # the OVERLAY ip of the host that serves them (h001 or lio).
+    # Answers *.joshuabell.xyz service names for tailnet clients with the
+    # OVERLAY ip of the host that serves them.
     # Bound ONLY to the overlay IP so it never affects LAN/DHCP DNS.
     # bind-dynamic (not bind-interfaces) tolerates the overlay IP appearing
     # AFTER dnsmasq starts (tailscaled boot race) — dnsmasq picks it up when
@@ -40,7 +41,7 @@ let
     # (No dhcp-range defined here, so this instance serves no DHCP.)
     no-resolv
     no-hosts
-    # Service names -> serving host's overlay IP (../dns-records.nix).
+    # Hand-kept names -> their overlay IP; placed routes come from hostsdir.
     ${lib.concatMapStringsSep "\n" (r: "host-record=${r.fqdn},${r.ip}") dnsRecords.tailnet}
     hostsdir=${config.services.fleet-edge.overrides.dns.tailnetDir}
 
@@ -306,10 +307,9 @@ in
   # ── Second dnsmasq instance: TAILNET DNS split ─────────────────────
   # The NixOS services.dnsmasq module is single-instance, and a single dnsmasq
   # can't answer the SAME name two different ways by source. LAN clients need
-  # media/jellyfin -> 10.12.14.10 (via AdGuard -> the :9053 instance above);
-  # tailnet clients need listed *.joshuabell.xyz names -> the serving host's
-  # OVERLAY ip (h001 or lio) so the names are reachable from anywhere on the
-  # tailnet.
+  # service names -> the serving host's LAN IP (via AdGuard -> the :9053
+  # instance above); tailnet clients need them -> the serving host's OVERLAY
+  # ip so the names are reachable from anywhere on the tailnet.
   #
   # So this is a SEPARATE dnsmasq bound ONLY to this host's (h005) overlay IP
   # (constants.host.overlayIp:53). headscale split-DNS routes joshuabell.xyz here for tailnet

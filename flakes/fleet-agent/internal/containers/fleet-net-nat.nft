@@ -23,6 +23,10 @@ set uses {
   comment "net.uses / net.egress of local guests: ve-iface . daddr . proto . port"
   type ifname . ipv4_addr . inet_proto . inet_service
 }
+set uses_src {
+  comment "net.uses / net.egress of local podman services: static fleet-noinet IP . daddr . proto . port"
+  type ipv4_addr . ipv4_addr . inet_proto . inet_service
+}
 set lan_src {
   comment "the host's LAN subnets (nginx.acl.lan, v4); 0.0.0.0/32 when none"
   type ipv4_addr
@@ -37,13 +41,14 @@ set edge {
 chain prerouting {
   type nat hook prerouting priority dstnat; policy accept;
   fib daddr type local jump tailnet comment "tailnet routes: only real tailnet peers"
-  # Never from guests (ve-*, podman*): a container must not reach another
-  # guest through a public/lan route on the host's bridge address
-  # (10.233.0.1:3032 etc.), which guest-fwd would pass as ct status dnat.
-  # Declared same-host net.uses go to the guest IP directly (@egress).
+  # Never from guests (ve-*, podman*, fleet-noinet): a container must not
+  # reach another guest through a public/lan route on the host's bridge
+  # address (10.233.0.1:3032 etc.), which guest-fwd would pass as ct status
+  # dnat. Declared same-host net.uses go to the guest IP directly (@egress,
+  # @egress_src).
   # lan routes (H4): LAN sources only; tailnet peers get them in tailnet-peer.
-  iifname != "ve-*" iifname != "podman*" iifname != "tailscale0" ip saddr @lan_src fib daddr type local dnat ip to meta l4proto . th dport map @routes_lan
-  iifname != "ve-*" iifname != "podman*" fib daddr type local dnat ip to meta l4proto . th dport map @routes
+  iifname != "ve-*" iifname != "podman*" iifname != "fleet-noinet" iifname != "tailscale0" ip saddr @lan_src fib daddr type local dnat ip to meta l4proto . th dport map @routes_lan
+  iifname != "ve-*" iifname != "podman*" iifname != "fleet-noinet" fib daddr type local dnat ip to meta l4proto . th dport map @routes
 }
 chain tailnet {
   # When no tailnet map matches, control returns to prerouting so public
@@ -53,8 +58,11 @@ chain tailnet {
   # not the edge. A LAN packet sent to the overlay IP (h001 as next hop, or
   # spoofed) has the wrong iif; o002 is an internet-facing edge, not a peer.
   iifname "tailscale0" ip saddr 100.64.0.0/10 ip saddr != @edge jump tailnet-peer
-  # Declared local guest callers (net.uses of the route).
+  # Declared local guest callers (net.uses of the route): nixos by veth,
+  # podman by its static bridge IP (only on its own bridge, not spoofable
+  # from another interface).
   iifname . ip daddr . meta l4proto . th dport @uses jump tailnet-guest
+  iifname "fleet-noinet" ip saddr . ip daddr . meta l4proto . th dport @uses_src jump tailnet-guest
 }
 chain tailnet-peer {
   dnat ip to ip saddr . ip daddr . meta l4proto . th dport map @routes_from

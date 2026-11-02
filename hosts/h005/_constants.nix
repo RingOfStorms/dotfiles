@@ -205,8 +205,6 @@
     };
 
     ddns = {
-      hostname = "home";
-      domain = "joshuabell.xyz";
       # Check interval in minutes
       interval = 5;
       tokenPath = "/var/lib/secrets_manager_hydrated/bunny_rw_dns_2026-03-15";

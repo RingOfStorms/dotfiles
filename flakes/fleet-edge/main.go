@@ -336,6 +336,9 @@ func main() {
 		case "dns-plan":
 			dnsPlan(os.Args[2:])
 			return
+		case "ddns":
+			bunny.RunDDNS(os.Args[2:])
+			return
 		case "overrides":
 			runOverrides(os.Args[2:])
 			return

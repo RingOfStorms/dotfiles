@@ -128,9 +128,8 @@ func usage() {
 usage: fleet containers [global flags] <command> [args]
 
 commands:
-  ls [--all]                   where each service runs, declared host vs actual
+  ls [--all]                   where each service runs: bound host vs actual host
   status <svc> [--host h]      details: state, ports, nginx site, data dirs (what a backup holds)
-| status [--all]          where each service runs, declared host vs actual
   watch [--all] [-n secs]      refreshing status view (q / ctrl-c to quit)
   logs <svc> [-n N] [--no-follow] [--host h] [--unit]
                                stream logs (inside the container; --unit = nspawn unit)
@@ -186,8 +185,9 @@ commands:
   port open <svc> <port>/<tcp|udp> --for DUR [--from host|cidr]... [--iface tailnet|lan|any]
             [--host h] [--force-backend]
                                open a port for a while (max 24h); nft set elements that the
-                               kernel expires (no other state). --iface default tailnet
-  port ls [host...]            temporarily open ports, their service and time left
+                               kernel expires (no other state). --iface default tailnet.
+                               net.private service: a temporary DNAT to the guest IP instead (v4)
+  port ls [host...]            temporarily open ports/forwards, their service and time left
   port close <svc> <port>/<proto> [--from ...] [--iface ...] [--host h]
                                close one early (same --from/--iface as the open)
   expose <svc>[.<route>] --exposure tailnet|lan|public --for DUR|forever [--reason TEXT] [--host h]

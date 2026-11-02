@@ -18,8 +18,8 @@ func spec() *Spec {
 			{Name: "git", Type: "CNAME", Value: "o002.example.com", TTL: 300, Source: "forgejo.web"},
 			{Name: "new", Type: "CNAME", Value: "o002.example.com", TTL: 300, Source: "x.web"},
 			{Name: "docs", Type: "CNAME", Value: "o002.example.com", TTL: 300, Source: "p.web"},
+			{Name: "home", Type: "A", TTL: 300, Source: "hand", Dynamic: WANIPv4},
 		},
-		External: []string{"home"},
 	}
 }
 
@@ -50,7 +50,7 @@ func TestPlan(t *testing.T) {
 		"git/CNAME":    Update,
 		"new/CNAME":    Create,
 		"docs/CNAME":   Conflict, // A record in the way: never replaced silently
-		"home/A":       External,
+		"home/A":       Dynamic,  // value is DDNS's; dns-plan never writes it
 		"/TXT":         Unmanaged,
 	}
 	for k, a := range want {
@@ -100,7 +100,7 @@ func TestForPlacements(t *testing.T) {
 			t.Errorf("%s: got %q want %q", k, m[k].Action, a)
 		}
 	}
-	if len(s.Records) != 5 || len(s.Retire) != 0 {
+	if len(s.Records) != 6 || len(s.Retire) != 0 {
 		t.Errorf("input spec changed: %+v", s)
 	}
 	if _, err := Ops(1, PlanWith(f, z, nil)); err == nil {
@@ -124,13 +124,25 @@ func TestValidate(t *testing.T) {
 	if err := s.Validate(); err == nil {
 		t.Fatal("ttl 5 accepted")
 	}
+	for name, d := range map[string]Desired{
+		"dynamic with value": {Name: "wan", Type: "A", Value: "1.2.3.4", TTL: 300, Dynamic: WANIPv4},
+		"dynamic wrong type": {Name: "wan", Type: "AAAA", TTL: 300, Dynamic: WANIPv4},
+		"unknown kind":       {Name: "wan", Type: "A", TTL: 300, Dynamic: "lan-ipv4"},
+		"empty value":        {Name: "wan", Type: "A", TTL: 300},
+	} {
+		s = spec()
+		s.Records = append(s.Records, d)
+		if s.Validate() == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
 }
 
 func TestRender(t *testing.T) {
 	var b bytes.Buffer
 	Render(&b, "example.com", Plan(spec(), zone()))
 	out := b.String()
-	for _, s := range []string{"create    new", "1 create, 1 update, 0 retire, 1 conflict, 0 retire-mismatch, 2 keep, 0 override, 1 external, 1 unmanaged", "unmanaged @"} {
+	for _, s := range []string{"create    new", "1 create, 1 update, 0 retire, 1 conflict, 0 retire-mismatch, 2 keep, 0 override, 1 dynamic, 1 unmanaged", "unmanaged @", "dynamic   home           A      5.6.7.8 ttl=300  (<wan-ipv4> ttl=300, written by ddns)"} {
 		if !strings.Contains(out, s) {
 			t.Errorf("missing %q in\n%s", s, out)
 		}

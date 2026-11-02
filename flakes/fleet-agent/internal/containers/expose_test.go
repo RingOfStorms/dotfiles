@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -220,11 +221,11 @@ func TestExposeResetClearsEverywhere(t *testing.T) {
 		"h001": {{Service: "app", Route: "web", Exposure: "lan", Baseline: "tailnet"}, {Service: "other", Route: "web", Exposure: "lan"}},
 		"lio":  {{Service: "app", Route: "web", Exposure: "public", Baseline: "tailnet"}}, // stale copy after a move
 	}
-	list := func(h string) ([]override, error) {
+	list := func(h string) (hostOverrideState, error) {
 		if h == "down" {
-			return nil, errors.New("ssh: timeout")
+			return hostOverrideState{}, errors.New("ssh: timeout")
 		}
-		return hostOv[h], nil
+		return hostOverrideState{Overrides: hostOv[h]}, nil
 	}
 	var revoked []string
 	revokeHost := func(h string) error {
@@ -253,11 +254,11 @@ func TestExposeResetClearsEverywhere(t *testing.T) {
 
 func TestExposeResetReportsWhatIsLeft(t *testing.T) {
 	none := func(string) error { return nil }
-	empty := func(h string) ([]override, error) {
+	empty := func(h string) (hostOverrideState, error) {
 		if h == "down" {
-			return nil, errors.New("ssh: timeout")
+			return hostOverrideState{}, errors.New("ssh: timeout")
 		}
-		return nil, nil
+		return hostOverrideState{}, nil
 	}
 	// h005 unreachable: the hosts are still cleared, but reset fails.
 	err := exposeReset(nil, errNoToken, "app", []string{"h001"}, empty, none)
@@ -276,8 +277,8 @@ func TestExposeResetReportsWhatIsLeft(t *testing.T) {
 		t.Errorf("leftover h005 row must fail: %v", err)
 	}
 	// The host revert fails: still listed afterwards.
-	stuckHost := func(string) ([]override, error) {
-		return []override{{Service: "app", Route: "web", Exposure: "lan"}}, nil
+	stuckHost := func(string) (hostOverrideState, error) {
+		return hostOverrideState{Overrides: []override{{Service: "app", Route: "web", Exposure: "lan"}}}, nil
 	}
 	err = exposeReset(&resetEdge{}, nil, "app", []string{"h001"}, stuckHost, func(string) error { return errors.New("nginx -t") })
 	if err == nil || !strings.Contains(err.Error(), "h001: revoke: nginx -t") || !strings.Contains(err.Error(), "h001 still has app.web lan") {
@@ -378,7 +379,7 @@ func TestDeployDropsOverride(t *testing.T) {
 
 func TestOverridesInRoutesTable(t *testing.T) {
 	now := time.Unix(1000, 0)
-	tbl := routesTableWith([]Service{exposeSvc()}, []override{{Service: "app", Route: "web", Exposure: "lan", Baseline: "tailnet", Until: 1180}}, now)
+	tbl := routesTableWith([]Service{exposeSvc()}, []override{{Service: "app", Route: "web", Exposure: "lan", Baseline: "tailnet", Until: 1180}}, nil, now)
 	if !strings.Contains(tbl, "lan (OVERRIDDEN from tailnet, 3m0s left)") {
 		t.Errorf("table:\n%s", tbl)
 	}
@@ -794,5 +795,80 @@ func TestListReportsReloadPending(t *testing.T) {
 	}
 	if !strings.Contains(overridesListScript, ".reload-pending") {
 		t.Fatal("list script ignores the marker")
+	}
+}
+
+// listLocal runs the real list script against the test overridesDir.
+func listLocal(t *testing.T) func(string) (hostOverrideState, error) {
+	return func(h string) (hostOverrideState, error) {
+		sc := strings.ReplaceAll(overridesListScript, "/var/lib/fleet-containers/overrides", overridesDir)
+		out, err := exec.Command("sh", "-c", sc).Output()
+		if err != nil {
+			return hostOverrideState{}, err
+		}
+		return parseHostOverrides(string(out), h), nil
+	}
+}
+
+// Regression: a revert whose reload failed used to delete the override dir,
+// so the next `--reset` saw nothing and reported clean while nginx still
+// served the widened vhost.
+func TestResetAfterFailedReloadNotClean(t *testing.T) {
+	r := newExpireRig(t)
+	r.setup("app", "lan", time.Now().Unix()+3600)
+	r.setup("other", "lan", time.Now().Unix()+3600)
+	r.reloadOK = false
+	revokes := 0
+	revoke := func(string) error { revokes++; return cmdExposeExpire([]string{"--now", "app"}) }
+	if err := exposeReset(&resetEdge{}, nil, "app", []string{"h001"}, listLocal(t), revoke); err == nil {
+		t.Fatal("reset with a failed reload reported clean")
+	}
+	st, _ := listLocal(t)("h001")
+	if !st.Pending || !slices.Equal(st.Reverted, []string{"app"}) || len(st.Overrides) != 1 || st.Overrides[0].Service != "other" {
+		t.Fatalf("after failed reload: %+v", st)
+	}
+	// Retry while the reload still fails: still not clean (the bug said clean).
+	err := exposeReset(&resetEdge{}, nil, "app", []string{"h001"}, listLocal(t), revoke)
+	if err == nil || !strings.Contains(err.Error(), "reload still pending") || revokes != 2 {
+		t.Fatalf("second reset: %v (revokes %d)", err, revokes)
+	}
+	// Reload works again: the retry clears it.
+	r.reloadOK = true
+	r.ran = nil
+	if err := exposeReset(&resetEdge{}, nil, "app", []string{"h001"}, listLocal(t), revoke); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	if revokes != 3 || r.reloads() != 1 || reloadPending() {
+		t.Fatalf("revokes %d ran %v pending %v", revokes, r.ran, reloadPending())
+	}
+	if _, err := os.Stat(filepath.Join(overridesDir, "app")); !os.IsNotExist(err) {
+		t.Fatal("orphan dir left after a good reload")
+	}
+	if _, err := os.Stat(filepath.Join(overridesDir, "other", "override.json")); err != nil {
+		t.Fatal("other service's override removed")
+	}
+	if b, _ := os.ReadFile(filepath.Join(nginxDir, "app.conf")); string(b) != "BASE" {
+		t.Fatalf("site %q", b)
+	}
+	// Clean now: nothing to revoke.
+	if err := exposeReset(&resetEdge{}, nil, "app", []string{"h001"}, listLocal(t), revoke); err != nil || revokes != 3 {
+		t.Fatalf("clean reset: %v revokes %d", err, revokes)
+	}
+}
+
+func TestExpireKeepsReexposedDirOnClear(t *testing.T) {
+	r := newExpireRig(t)
+	r.setup("app", "lan", 1)
+	r.reloadOK = false
+	_ = cmdExposeExpire([]string{"--all"})
+	// Re-exposed while the reload is owed: the new override survives the flush.
+	r.setup("app", "lan", time.Now().Unix()+3600)
+	r.reloadOK = true
+	must(t, cmdExposeExpire([]string{"--all"}))
+	if _, err := os.Stat(filepath.Join(overridesDir, "app", "override.json")); err != nil {
+		t.Fatal("re-exposed override removed")
+	}
+	if _, err := os.Stat(filepath.Join(overridesDir, "app", revertedFile)); !os.IsNotExist(err) {
+		t.Fatal("stale reverted marker kept")
 	}
 }

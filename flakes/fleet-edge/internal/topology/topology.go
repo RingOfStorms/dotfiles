@@ -150,9 +150,8 @@ type LinkSpec struct {
 
 // DNS is the public zone: the records bunny serves for this domain.
 type DNS struct {
-	Zone     string      `json:"zone"`
-	Records  []DNSRecord `json:"records"`
-	External []string    `json:"external"`
+	Zone    string      `json:"zone"`
+	Records []DNSRecord `json:"records"`
 }
 
 // DNSRecord is one record of the public zone. It is also the layout's output
@@ -162,8 +161,11 @@ type DNSRecord struct {
 	// Name is the record name relative to the zone ("git", "*.share").
 	Name string `json:"name"`
 	Type string `json:"type"`
-	// Value is the target: a CNAME target FQDN, or an A/AAAA address.
+	// Value is the target: a CNAME target FQDN, or an A/AAAA address. It is
+	// empty for a dynamic record.
 	Value string `json:"value"`
+	// Dynamic names the runtime source of the value (bunny.WANIPv4).
+	Dynamic string `json:"dynamic,omitempty"`
 	// TTL is kept for the dns-plan document; the diagram ignores it.
 	TTL int `json:"ttl,omitempty"`
 	// Source names the file/route that declared the record.
@@ -471,7 +473,7 @@ func (d *DNS) validate() error {
 		default:
 			return fmt.Errorf("topology: dns record %q has unknown type %q", r.Name, r.Type)
 		}
-		if r.Value == "" {
+		if r.Value == "" && r.Dynamic == "" {
 			return fmt.Errorf("topology: dns record %q has no value", r.Name)
 		}
 		key := r.Name + "/" + r.Type

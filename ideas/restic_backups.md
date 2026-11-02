@@ -7,14 +7,14 @@ Architecture: **Direct to Backblaze B2** (`s3:https://<b2-endpoint>/<bucket>/...
 ### What is Deployed & Verified
 
 1. **Per-Service Floating Container Backups (`ringofstorms.containers.backup` / `fleet-backup.service`):**
-   - Configured in `containers/host-module.nix` (see `containers/ROUTING-PLAN.md` §9.1), enabled on `h001` (`hosts/h001/floating-containers.nix:23-26`) and `lio` (`hosts/lio/flake.nix:94`).
+   - Configured in `containers/host-module.nix` (see `containers/README.md`, "Nightly restic"), enabled on `h001` (`hosts/h001/floating-containers.nix:23-26`) and `lio` (`hosts/lio/flake.nix:94`).
    - Runs nightly at `03:00`. For each service in `/srv/containers/<svc>`, runs pre-backup hooks (`postgresqlBackup`, custom `backupHooks`), snapshots SQLite files via `.backup`, backs up to B2 tagged `svc:<name>`, prunes per-service snapshots, and writes a timestamp read by `fleet-agent` (`/status.json`) and rendered in the `fleet-edge` dashboard on `h005` (flags stale after 36h).
    - Verified 2026-10-22 across all 17 services on `h001`; `cnt restore-check <svc>` verifies SQLite `PRAGMA integrity_check` and PG dump completeness.
 2. **`h001` Host-Only Media/Archive Backup (`hosts/h001/mods/restic-backup.nix`):**
    - Runs nightly at `03:00` (`restic-backups-h001.service`), tagged `h001` (`--group-by host,tags`, `--retry-lock 2h`).
    - Backs up `/drives/wd10/immich/media` (excluding regenerable `thumbs` and `encoded-video`), `/drives/wd10/paperless` (excluding `thumbnails`), and `/home/luser/backups`.
    - Prunes nightly (`--keep-daily 7 --keep-weekly 5 --keep-monthly 12 --keep-yearly 3`).
-3. **Break-Glass Keys & Cold-Restore Verification (`ROUTING-PLAN.md` §9.3):**
+3. **Break-Glass Keys & Cold-Restore Verification:**
    - Completed 2026-10-22: restic B2 env, `sec` encryption key (`/srv/containers/sec/data/db.key`), Zitadel masterkey (32 bytes), and `root_fleet_backup` SSH key are stored outside the fleet in the password manager, alongside an independent data copy of `sec` and `zitadel` and a verified cold restore.
 4. **Legacy Rsync Module Retired:**
    - `flakes/common/nix_modules/backup.nix` (`ros-backup` to `h004`) has been removed; `h004` exports `/data/nixarr` only.
@@ -98,7 +98,7 @@ Architecture: **Direct to Backblaze B2** (`s3:https://<b2-endpoint>/<bucket>/...
 ```
 
 ### 2. ~~Enable `ringofstorms.containers.backup` on `h003`~~ (done 2026-10-23; `joe` still open)
-`cnt move <svc> --to <host>` enforces that both source and target hosts have `ringofstorms.containers.backup` configured (`ROUTING-PLAN.md` §9.1), which makes that host a failover target (`ideas/resilience.md`) or a place to evacuate `h001` to for its impermanence re-image (`ideas/impermanence_everywhere.md`).
+`cnt move <svc> --to <host>` enforces that both source and target hosts have `ringofstorms.containers.backup` configured (`containers/README.md`, "Nightly restic"), which makes that host a failover target (`ideas/resilience.md`) or a place to evacuate `h001` to for its impermanence re-image (`ideas/impermanence_everywhere.md`).
 Done on `h003`: `hosts/h003/containers.nix` has `backup.enable = true` and `hosts/h003/sec-agent.nix` hydrates `restic_h001_env_2026-10-01` into `ringofstorms.containers.backup.environmentFile`. `joe` still needs the same two edits (it is low-trust, so granting it the shared repo key is a separate decision).
 
 ### 3. `o002` Headscale State Backup

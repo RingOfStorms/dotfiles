@@ -28,7 +28,8 @@ func TestNatRulesGuards(t *testing.T) {
 		`fib daddr type local jump tailnet`,
 		`iifname "tailscale0" ip saddr 100.64.0.0/10 ip saddr != @edge jump tailnet-peer`,
 		`iifname . ip daddr . meta l4proto . th dport @uses jump tailnet-guest`,
-		`iifname != "ve-*" iifname != "podman*" fib daddr type local dnat ip to meta l4proto . th dport map @routes`,
+		`iifname "fleet-noinet" ip saddr . ip daddr . meta l4proto . th dport @uses_src jump tailnet-guest`,
+		`iifname != "ve-*" iifname != "podman*" iifname != "fleet-noinet" fib daddr type local dnat ip to meta l4proto . th dport map @routes`,
 	} {
 		if !strings.Contains(r, want) {
 			t.Errorf("missing guard %q", want)
@@ -74,7 +75,8 @@ func TestNatRulesLoad(t *testing.T) {
 		"add element ip fleet-net-nat routes_from { 100.64.0.1 . 100.64.0.13 . tcp . 5432 : 10.233.15.2 }\n" +
 		"add element ip fleet-net-nat routes { tcp . 3032 : 10.233.11.2 }\n" +
 		"add element ip fleet-net-nat routes_lan { tcp . 25565 : 10.233.11.2 }\n" +
-		"add element ip fleet-net-nat uses { \"ve-x\" . 100.64.0.13 . tcp . 8090 }\n"
+		"add element ip fleet-net-nat uses { \"ve-x\" . 100.64.0.13 . tcp . 8090 }\n" +
+		"add element ip fleet-net-nat uses_src { 10.89.250.102 . 100.64.0.13 . tcp . 8090 }\n"
 	if err := os.WriteFile(f, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +111,7 @@ func TestNatRulesTailnetFallsThrough(t *testing.T) {
 func TestNatRulesLanScoped(t *testing.T) {
 	r := natRules(t)
 	pre := between(r, "chain prerouting {", "}")
-	want := `iifname != "ve-*" iifname != "podman*" iifname != "tailscale0" ip saddr @lan_src fib daddr type local dnat ip to meta l4proto . th dport map @routes_lan`
+	want := `iifname != "ve-*" iifname != "podman*" iifname != "fleet-noinet" iifname != "tailscale0" ip saddr @lan_src fib daddr type local dnat ip to meta l4proto . th dport map @routes_lan`
 	if !strings.Contains(pre, want) {
 		t.Fatalf("prerouting lacks the scoped lan rule:\n%s", pre)
 	}

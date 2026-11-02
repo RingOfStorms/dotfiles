@@ -22,10 +22,10 @@ One binary, `fleet-edge`, runs as several processes:
 
 ## Alerts and TLS expiry
 
-`services.fleet-edge.alerts.ntfyUrl` (CLI `--ntfy-url`, environment
-`FLEET_EDGE_NTFY_URL`) is the complete ntfy topic URL; empty disables sends.
-No pre-existing ntfy endpoint/topic was found in this repository, so deployment
-must supply it explicitly. `alerts.healthDownMinutes` defaults to 5.
+Alerts go to ntfy. `services.fleet-edge.alerts.ntfyUrl` (CLI `--ntfy-url`,
+environment `FLEET_EDGE_NTFY_URL`) is the complete ntfy topic URL; empty
+disables sends, so alerts are opt-in per deployment.
+`alerts.healthDownMinutes` defaults to 5.
 
 Every minute, placed services are checked for a backup stamp older than 36h,
 continuous non-active/unknown status or failing declared HTTP health endpoints,
@@ -115,20 +115,32 @@ are per host, so a row records which device changed it. Every request,
 refusals included, is a line in the audit log.
 
 **Expose overrides** (`internal/overrides`): `cnt expose` raises a route's
-exposure for a while. A public override creates a bunny CNAME (TTL 60, deleted
-by record id only while name, type and value still match) and pushes an o002
-vhost; h005 owns the expiry and the sweep re-pushes live rows.
+exposure for a while. A public override is applied in a fixed order: the
+request is validated against the built-in inventory and `publicSpec` and
+reserved, the service host must report the public override in its status,
+then h005 creates the bunny CNAME (TTL 60) and finally pushes the o002 vhost.
+Removal runs the other way: o002 vhost, then the CNAME (deleted by record id
+only while name, type and value still match), then the row. `--for`
+defaults to **8h**; any duration is allowed, and `--for forever` means no
+expiry. There is no cap on the number of overrides; the only throttle is a
+per-host write limit of **30 writes per 10 minutes** (then 429 with
+`Retry-After`; reads are never limited), shared with the placement API.
+h005 owns expiry: a **30 s sweep** (also at startup) removes expired rows
+(o002, then DNS), retries rows stuck in `removing`, and re-pushes live rows.
+Expose vhosts carry the global edge rate limit on the whole server.
 
 **Placement registry** (`internal/placements`): which host runs each
 service. `placements.json` holds the rows and a registry-wide `revision`
 counter. A row is `prepared` (a move reserved it), `committed`, `retiring`
-(the source is being uninstalled) or `stale` (a reservation whose lease
-expired). `GET /internal/placements.json` exports `{rows, host, conflicts}`,
-where `host` is each service's effective host and an absent entry means
-unplaced. The API (`/api/placements`): `import`, `reserve`, `commit`,
-`retire`, `renew`, `recover`, `DELETE <svc>` (rollback), `GET [?verify=1]`,
-and `GET /api/placements/routing` for the audit. A 30 s sweep observes the
-hosts' status endpoints. See [Design notes](#design-notes) for the rules.
+(the source is being uninstalled) or `stale` (a reservation whose
+**30-minute lease** expired; `cnt move` renews the lease as it advances, so
+a slow move does not go stale). `GET /internal/placements.json` exports
+`{rows, host, conflicts}`, where `host` is each service's effective host and
+an absent entry means unplaced. The API (`/api/placements`): `import`,
+`reserve`, `commit`, `retire`, `renew`, `recover`, `DELETE <svc>` (rollback),
+`GET [?verify=1]`, and `GET /api/placements/routing` for the audit. A 30 s
+sweep observes the hosts' status endpoints. See [Design notes](#design-notes)
+for the rules.
 
 **Reconciler** (`internal/reconcile`): runs at startup, every 30 s and after
 every registry write, and makes these follow the effective hosts:
@@ -141,18 +153,31 @@ every registry write, and makes these follow the effective hosts:
 - **o002 vhosts**: each `public` + `via = edge` http route of a placed
   service is pushed as a `kind: placement` request to o002's vhost receiver
   (`proxy_pass http://<overlayIp>:8443`, the wildcard cert, the route's
-  body/buffering/timeout/websocket settings). Placement vhosts have no expiry.
+  body/buffering/timeout/websocket settings). Placement vhosts have no expiry
+  and no server-wide rate limit: they rely only on the global zone and the
+  strict login zone on the route's `loginPaths`, plus o002's fail2ban login
+  jails.
 - **o002 streams**: each `public` + `via = edge` + `proto = tcp` route
   (forgejo ssh :3032) is pushed to o002's stream receiver, which writes
   `/var/lib/fleet-edge-streams/<port>.stream`
   (`server { listen <port>; proxy_pass <overlayIp>:<port>; }`). o002's
   firewall admits the port declaratively (`edgeStreamPorts`); only the
-  destination is runtime.
+  destination is runtime. Eval assertions on o002 require every stream port
+  in `allowedTCPPorts` and reject 80, 443 and 22. Streams go through the edge
+  rather than a router forward because o002 already is the public address
+  for these names: a DNAT would move the port's public identity to whichever
+  home host holds the service and expose the home IP, while the stream lets
+  forgejo move (or h001 be reinstalled) without touching the router or the
+  service's Nix.
 - **WAN forwards**: each `public` + `via = router` tcp/udp route of a placed
   service is written to `/var/lib/fleet-edge-forwards/forwards.json`. Root's
   `forwards-apply` (path unit, nftables start/reload hooks) validates it
   against the inventory, derives LAN IPs, and replaces
-  `table ip fleet-wan-forwards` in one `nft -f` under flock.
+  `table ip fleet-wan-forwards` in one `nft -f` under flock. Forwards are
+  IPv4 only and there is no hairpin NAT (LAN clients get the LAN answer from
+  h005's DNS instead). They fail closed: a missing file is an empty table, an
+  unplaced service has no forward, and invalid data leaves the applied table
+  unchanged and exits nonzero.
 - `cnt audit` prints `GET /api/placements/routing`: file contents, live A
   answers from both dnsmasq listeners, o002's vhost and stream lists, and the
   written vs applied forwards.
@@ -160,7 +185,9 @@ every registry write, and makes these follow the effective hosts:
 **Public DNS** (`internal/bunny`, `dns-plan`): `hosts/h005/dns-records.nix`
 `publicSpec` declares names; effective registry placement filters service
 membership in the desired zone. Only h005 holds the bunny key. `dns-plan`
-reports create / update / keep / conflict / external / unmanaged; `--apply`
+reports create / update / keep / conflict / dynamic / unmanaged (plus
+retire, retire-mismatch and override); dynamic records are the DDNS-managed
+ones (`home`, from the router's WAN IPv4) that `dns-plan` never writes; `--apply`
 executes only create/update rows and exact-match retires, refuses the whole
 run on any conflict, and never deletes a record the spec does not own.
 
@@ -486,8 +513,8 @@ instead of guessed.
 | `columns[].zones[]{id,label,kind,flex,layout,cols,fill,box,group}` | regions stacked top to bottom; `flex` shares the column's leftover height (0 means natural content height) |
 | `nodes[]{id,host,label,kind,zone,role,badges[],lines[],href,segment}` | station placement and non-derived detail; `id` defaults to `host`, role/badges remain in tooltips and the popover, `segment` draws a fabric bar rather than a device head |
 | `links[]{from,to,kind,label}` | declared connection between node ids; the label is available in its tooltip and wiring detail |
-| `dns{zone,external[],records[]}` | public DNS catalogue; external names are managed elsewhere |
-| `dns.records[]{name,type,value,ttl,source,declared,host,service,route}` | relative name, record type and target, optional TTL/source; ownership fields are derived from declared routes, not hand-assigned |
+| `dns{zone,records[]}` | public DNS catalogue |
+| `dns.records[]{name,type,value,dynamic,ttl,source,declared,host,service,route}` | relative name, record type and target, optional TTL/source; a dynamic record has no value and names its runtime source (`wan-ipv4`, written by DDNS); ownership fields are derived from declared routes, not hand-assigned |
 | `defaultZone` | station zone receiving inventory hosts not explicitly placed; empty leaves them out |
 | `hide[]` | inventory hosts excluded from automatic placement |
 | `hubs{tailnet,edge,router,dashboard}` | node ids for derived edge families; empty skips that family (h005 uses `edge = "o002"`, `dashboard = "h005"`, empty `tailnet`/`router`) |

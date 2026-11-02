@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func sp(s string) *string { return &s }
@@ -36,7 +37,7 @@ server {
     return 444;
   }
   client_max_body_size 64k;
-  # Strip oauth2-proxy cookies before the backend (ROUTING-PLAN §4).
+  # Strip oauth2-proxy cookies before the backend: the backend never sees the session.
   set $fleet_cookie $http_cookie;
   if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
     set $fleet_cookie $1$2;
@@ -87,7 +88,7 @@ server {
     return 444;
   }
   client_max_body_size 64k;
-  # Strip oauth2-proxy cookies before the backend (ROUTING-PLAN §4).
+  # Strip oauth2-proxy cookies before the backend: the backend never sees the session.
   set $fleet_cookie $http_cookie;
   if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
     set $fleet_cookie $1$2;
@@ -143,7 +144,7 @@ server {
   }
   include /etc/fleet-containers/nginx-acl-tailnet.conf;
   client_max_body_size 100m;
-  # Strip oauth2-proxy cookies before the backend (ROUTING-PLAN §4).
+  # Strip oauth2-proxy cookies before the backend: the backend never sees the session.
   set $fleet_cookie $http_cookie;
   if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
     set $fleet_cookie $1$2;
@@ -200,7 +201,7 @@ server {
   }
   include /etc/fleet-containers/nginx-acl-tailnet.conf;
   client_max_body_size 0;
-  # Strip oauth2-proxy cookies before the backend (ROUTING-PLAN §4).
+  # Strip oauth2-proxy cookies before the backend: the backend never sees the session.
   set $fleet_cookie $http_cookie;
   if ($fleet_cookie ~ "^(.*?)(?:^|;\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$") {
     set $fleet_cookie $1$2;
@@ -222,7 +223,7 @@ server {
   if ($fleet_cookie ~ "^;\s*(.*)$") {
     set $fleet_cookie $1;
   }
-  # auth = oauth2-proxy: fleet oauth2-proxy on h005 (ROUTING-PLAN §8 step 6).
+  # auth = oauth2-proxy: fleet oauth2-proxy on h005.
   location = /oauth2/auth {
     proxy_pass http://100.64.0.3:4180/oauth2/auth?allowed_groups=notes;
     proxy_pass_request_body off;
@@ -603,6 +604,76 @@ func TestRoutesTable(t *testing.T) {
 	}
 }
 
+func TestRoutesTableNetAndDNSEdge(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/placements/routing":
+			fmt.Fprint(w, `{"checks":[
+{"layer":"lan","fqdn":"secrets.joshuabell.xyz","status":"ok"},
+{"layer":"tailnet","fqdn":"secrets.joshuabell.xyz","status":"ok"},
+{"layer":"edge","fqdn":"secrets.joshuabell.xyz","status":"ok"},
+{"layer":"tailnet","fqdn":"notes.joshuabell.xyz","status":"missing"},
+{"layer":"stream","fqdn":"tcp/3032","status":"ok"},
+{"layer":"wan","fqdn":"udp/25565","status":"pending"}],"errors":[]}`)
+		case "/api/overrides":
+			if r.URL.Query().Get("verify") != "1" {
+				t.Errorf("overrides without verify: %v", r.URL)
+			}
+			fmt.Fprint(w, `{"rows":[{"service":"pics","route":"web","state":"committed","dns":"ok","edge":true}],"verify":{"edge":{"pics":"reload pending"}}}`)
+		default:
+			t.Errorf("unexpected %s", r.URL)
+		}
+	}))
+	defer srv.Close()
+	st := fetchRouteState(func() (*edgeClient, error) { return &edgeClient{base: srv.URL, http: srv.Client(), token: "test"}, nil })
+	if st == nil {
+		t.Fatal("no state")
+	}
+	idx := 7
+	svcs := []Service{
+		{Name: "sec", Routes: map[string]Route{"web": httpRoute("secrets", 8300, "public", "native-oidc")}},
+		{Name: "trilium", Net: Net{Private: true, Index: &idx}, Routes: map[string]Route{"web": httpRoute("notes", 80, "tailnet", "oauth2-proxy")}},
+		{Name: "pics", Routes: map[string]Route{"web": httpRoute("pics", 80, "tailnet", "native")}},
+		{Name: "forgejo", Routes: map[string]Route{"ssh": {Port: 3032, Proto: "tcp", Exposure: "public", Via: []string{"edge"}}}},
+		{Name: "mc", Routes: map[string]Route{"game": {Port: 25565, Proto: "udp", Exposure: "public", Via: []string{"router"}}}},
+	}
+	tbl := routesTableWith(svcs, nil, st, time.Now())
+	lines := strings.Split(tbl, "\n")
+	want := map[string][]string{
+		"sec ":     {"host", "dns ok, edge ok"},
+		"trilium ": {"private", "dns missing(tailnet), edge -"},
+		"pics ":    {"host", "dns ok, edge reload pending"},
+		"forgejo ": {"host", "dns -, edge ok"},
+		"mc ":      {"host", "dns -, edge pending(wan)"},
+	}
+	if !strings.Contains(lines[0], "NET") || !strings.Contains(lines[0], "DNS/EDGE") {
+		t.Fatalf("header: %s", lines[0])
+	}
+	for prefix, cells := range want {
+		found := false
+		for _, l := range lines {
+			if strings.HasPrefix(l, prefix) {
+				found = true
+				for _, c := range cells {
+					if !strings.Contains(l, c) {
+						t.Errorf("%s: want %q in %q", prefix, c, l)
+					}
+				}
+			}
+		}
+		if !found {
+			t.Errorf("no row %s:\n%s", prefix, tbl)
+		}
+	}
+	// Unknown state: "?" and the routing report error is not fatal.
+	if !strings.Contains(routesTable(svcs[:1]), "?") {
+		t.Error("nil state must show ?")
+	}
+	if fetchRouteState(func() (*edgeClient, error) { return nil, errNoToken }) != nil {
+		t.Error("no credentials must give nil state")
+	}
+}
+
 func TestSudoNeedsPassword(t *testing.T) {
 	cases := []struct {
 		err  error
@@ -922,8 +993,8 @@ func TestSrcPortLines(t *testing.T) {
 		t.Errorf("local-only: got %v, want nil", got)
 	}
 
-	// LAN: a lan route opens @src_lan; a public route via the router does
-	// not (its LAN clients arrive with the WAN source).
+	// LAN: a lan route opens @src_lan, and so does a public route that is
+	// only published through the router (LAN clients resolve its LAN IP).
 	r = httpRoute("dash", 8080, "lan", "native")
 	r.Via = nil
 	s = Service{Name: "dash", Routes: map[string]Route{"web": r}}
@@ -933,7 +1004,7 @@ func TestSrcPortLines(t *testing.T) {
 	r = httpRoute("minecraft", 8080, "public", "native")
 	r.Via = []string{"router"}
 	s = Service{Name: "minecraft", Routes: map[string]Route{"web": r}}
-	if got, want := strings.Join(srcPortLines(s, "h003"), "|"), "web 100.64.0.0/10|web fd7a:115c:a1e0::/48"; got != want {
+	if got, want := strings.Join(srcPortLines(s, "h003"), "|"), "web 100.64.0.0/10|web fd7a:115c:a1e0::/48|weblan 10.12.14.0/24"; got != want {
 		t.Errorf("via router: got %q want %q", got, want)
 	}
 	// No lanSubnet: no weblan line (an empty element would be a syntax
@@ -1672,5 +1743,83 @@ func TestRoutingAudit(t *testing.T) {
 	printRoutingAudit(&out, func() (*edgeClient, error) { return nil, errors.New("unreachable") })
 	if !strings.Contains(out.String(), "pending: unreachable") {
 		t.Fatal(out.String())
+	}
+}
+
+// A net.private podman service has no ve-<name>: its ports file keys the
+// net.uses/net.egress allow lines on its static fleet-noinet IP, with the
+// bridge gateway 10.89.250.1 as this host's local address, plus the bridge's
+// DNS for the route names. No guest/noinet lines (the bridge is its
+// isolation). A nixos caller of a same-host podman route goes straight to
+// the static IP.
+func TestNetExceptionsPodman(t *testing.T) {
+	bindServices(t, map[string]string{"gist": "h001", "litellm": "h001", "searx": "h001", "remote": "h003", "webui": "h001"})
+	old := inv
+	defer func() { inv = old }()
+	ov, ov3 := "100.64.0.13", "100.64.0.17"
+	f := false
+	gip := "10.89.250.102"
+	gidx := 2
+	gist := Service{Name: "gist", Kind: "podman", Internet: &f, Net: Net{Private: true, Index: &gidx, IP: &gip,
+		Uses:   []string{"litellm.web", "searx.api", "remote.web"},
+		Egress: []string{"10.12.14.181:9010/tcp"}}}
+	gist.Routes = map[string]Route{"web": httpRoute("gist", 6157, "public", "native")}
+	lit := privSvc("litellm", 7)
+	lit.Routes = map[string]Route{"web": httpRoute("litellm", 8094, "tailnet", "native")}
+	sx := privSvc("searx", 8)
+	sx.Routes = map[string]Route{"api": {Port: 8889, Proto: "tcp", Exposure: "tailnet"}}
+	rem := Service{Name: "remote", Routes: map[string]Route{"web": httpRoute("remote", 1, "public", "native")}}
+	webui := privSvc("webui", 6)
+	webui.Net.Uses = []string{"gist.web"}
+	inv = &Inventory{
+		Services: map[string]Service{"gist": gist, "litellm": lit, "searx": sx, "remote": rem, "webui": webui},
+		Hosts:    map[string]Host{"h001": {OverlayIP: &ov}, "h003": {OverlayIP: &ov3}},
+	}
+	got := strings.Join(portsFileLines(gist, "h001"), "\n")
+	want := strings.Join([]string{
+		"allow 10.89.250.102 10.89.250.1 udp 53",
+		"allow 10.89.250.102 10.89.250.1 tcp 53",
+		"allow 10.89.250.102 10.233.7.2 tcp 8094",
+		"allow 10.89.250.102 10.89.250.1 tcp 80",
+		"allow 10.89.250.102 10.89.250.1 tcp 443",
+		"allow 10.89.250.102 100.64.0.13 tcp 80",
+		"allow 10.89.250.102 100.64.0.13 tcp 443",
+		"allow 10.89.250.102 10.233.8.2 tcp 8889",
+		"allow 10.89.250.102 10.89.250.1 tcp 8889",
+		"allow 10.89.250.102 100.64.0.13 tcp 8889",
+		"allow 10.89.250.102 100.64.0.17 tcp 80",
+		"allow 10.89.250.102 100.64.0.17 tcp 443",
+		"allow 10.89.250.102 10.12.14.181 tcp 9010",
+	}, "\n")
+	if got != want {
+		t.Fatalf("podman ports file:\n%s\nwant\n%s", got, want)
+	}
+	for _, bad := range []string{"ve-", "guest", "noinet", "10.233.0.1 "} {
+		if strings.Contains(got, bad) {
+			t.Errorf("podman ports file must not contain %q:\n%s", bad, got)
+		}
+	}
+	// Egress only: no DNS (it names no route), same tuple as nixos.
+	gist.Net.Uses = nil
+	if got := strings.Join(netExceptions(gist, "h001"), "|"); got != "allow 10.89.250.102 10.12.14.181 tcp 9010" {
+		t.Errorf("egress-only podman: got %q", got)
+	}
+	// Without its static IP (an older inventory) nothing is allowed.
+	gist.Net.IP = nil
+	gist.Net.Egress = []string{"10.12.14.181:9010/tcp"}
+	if got := netExceptions(gist, "h001"); got != nil {
+		t.Errorf("podman without IP: got %v", got)
+	}
+	// nixos caller -> same-host podman route: the static IP, then nginx.
+	got = strings.Join(netExceptions(webui, "h001"), "\n")
+	want = strings.Join([]string{
+		"allow ve-webui 10.89.250.102 tcp 6157",
+		"allow ve-webui 10.233.0.1 tcp 80",
+		"allow ve-webui 10.233.0.1 tcp 443",
+		"allow ve-webui 100.64.0.13 tcp 80",
+		"allow ve-webui 100.64.0.13 tcp 443",
+	}, "\n")
+	if got != want {
+		t.Fatalf("nixos -> podman:\n%s\nwant\n%s", got, want)
 	}
 }

@@ -23,6 +23,9 @@ Both use the same model:
   block. `containers deploy` writes it to `/var/lib/fleet-containers/nginx/<name>.conf` and
   reloads nginx. Raw ports (`tcpPorts`/`udpPorts`) are opened at runtime in
   the nftables `temp-ports` set and re-applied after each firewall reload.
+- **Private network.** With `net.private` (every inventory service) a
+  container gets a fixed address of its own and nginx proxies to it; see
+  [Private networking](#private-networking).
 
 Host SSH allow-lists are generated separately from inventory `overlayIp`
 and `overlayIp6`; both must include lio. Low-trust IPv6 peers are dropped
@@ -63,15 +66,19 @@ containers/
    Options (all optional):
 
    ```nix
-   ringofstorms.containers.nginx.enable = true;              # nginx + include dir (off by default)
-   ringofstorms.fleetAgent = { enable = true; listen = "100.64.0.13:9101"; };  # read-only GET /status.json & /logs.json for fleet-edge
-   ringofstorms.containers.privateNetwork.enable = false;    # NAT/forward for ve-* (privateNetwork containers)
-   ringofstorms.containers.privateNetwork.externalInterface = "enp1s0";
+   ringofstorms.containers.nginx.enable = true;           # nginx + include dir (default true)
+   ringofstorms.containers.privateNetwork.enable = true;  # host side for net.private nixos guests (default false)
+   ringofstorms.containers.backup.enable = true;          # nightly restic, see below (default false)
+   ringofstorms.containers.lanInterface = "enp3s0";       # enables `cnt port open --iface lan`
+   ringofstorms.fleetAgent.listen = "100.64.0.13:9101";   # status/logs for fleet-edge; default on, at the overlay IP
    ```
 
-   For a host that is itself a router with `filterForward` (h003), keep
-   services on the host network (the default) or enable `privateNetwork`,
-   which puts accept rules for `ve-*` at the top of the forward chain.
+   A host that runs a `net.private` nixos service needs `privateNetwork.enable`
+   (h001, h003 and lio have it); without it the ports-file `guest`, `noinet`,
+   `allow` and `dnat` lines are skipped with a warning. On a host with
+   `networking.firewall.filterForward` (h003) the module also adds nixos-fw
+   forward accepts for `ve-*` egress, DNATed flows into `ve-*` and podman
+   `net.uses`; fleet-net has already dropped what must not pass.
 
 ## The `fleet containers` (`cnt`) CLI
 
@@ -107,10 +114,11 @@ must be able to fetch that ref, so pair it with `deploy --local`).
 | `containers port open <svc> <port>/<tcp\|udp> --for <dur> [--from <host\|cidr>]... [--iface tailnet\|lan\|any] [--host h]` | open a port temporarily (see [Temporary ports](#temporary-ports-cnt-port)) |
 | `containers port ls [host...]` / `port close <svc> <port>/<proto> [--from ...] [--iface ...]` | list / close them early |
 | `containers expose <svc>[.<route>] --exposure tailnet\|lan\|public --for DUR\|forever [--reason T]` | widen one http route on its host for a while. tailnet/lan: `--for` required, max 24h; the host reverts it at expiry (transient timer, plus `fleet-containers-expose-expire` at boot and every minute). `public`: fleet-edge on h005 adds the public CNAME and pushes an o002 runtime vhost (default 8h, any duration ≥ 1m or `forever`; h005 owns the expiry). Public expose (and `--revoke` of one) signs with this machine's key (`/machine-key.json`, root-only), so run `sudo fleet containers expose ...`: the `cnt` alias does not expand under sudo. `expose --list [host...]` / `expose --revoke <svc>`; `deploy` drops an override; `routes` and `audit` show them |
-| `containers expose --reset <svc>` | clear the fleet-edge override API row and every host-local override; report unreachable hosts or remaining state as errors |
+| `containers expose --reset <svc>` | clear the fleet-edge override API row and every host-local override. A host whose revert still owes the nginx reload is revoked again, which retries the reload; the final re-read counts a pending reload as remaining state. Unreachable hosts or remaining state are reported as errors |
 
 `cnt move` carries tailnet/LAN overrides to the destination with their original
-deadline before removing the source. Public overrides must be revoked first.
+deadline (the clock does not restart) before removing the source. Public
+overrides must be revoked first.
 LAN DNS follows the bound host's unexpired LAN override on the next reconcile
 pass (30 seconds); expiry removes the additional LAN answer.
 
@@ -124,7 +132,9 @@ is the only record of which host a service belongs to; `service.nix` has no
 `cnt place` shows the rows, `cnt place <svc> --host <h>` records a first
 placement, `cnt place <svc> --set <h>` moves the binding, `cnt place <svc>
 --adopt` adopts the one copy discovery finds, `cnt place --verify` checks every
-bound service against what the hosts actually run.
+bound service against what the hosts actually run. Row states, tokens,
+revisions, the sweep and the API are in `flakes/fleet-edge/README.md`
+(Placement registry).
 
 Everything that has to follow a service reads the registry, not Nix: the
 tailnet and LAN DNS answers, the public CNAME set, the o002 vhosts and TCP
@@ -188,7 +198,10 @@ unloaded service is still found.
   `attach`, `shell` and `online` keep the local fast path.
 - New container host: import the module there *and* add it to
   `containerHosts`, or discovery never probes it and `move --to` it is
-  refused.
+  refused. Give it a Zitadel machine user in `fleet.global.overrideWriters`
+  (`hosts/fleet.nix`) too: registry writes are authenticated per machine, so
+  `sudo fleet containers …` run on a host that is not listed cannot record or
+  change a placement.
 - `move` records itself in the placement registry: it reserves the destination
   before touching any host, commits after the restore check and first backup,
   and retires the source just before uninstalling it. A row another client has
@@ -198,6 +211,23 @@ unloaded service is still found.
   committed with no token (no previous binding) could be anyone's, so the move
   stops with both hosts untouched and the token kept, and a re-run finishes it
   (the switch uninstalls the source) only with `--force`.
+- **A placement is not a lease.** `/srv/containers` is per host, not shared,
+  so after a failed move two hosts can both hold valid data dirs. The registry
+  says which copy is authoritative; it never cleans up the other one.
+- **`net.uses` across hosts** is resolved from both services' registry hosts
+  at deploy time: a same-host pair talks over the private network, a
+  cross-host pair through the callee host's overlay IP. When a move changes
+  that, the caller's egress rule follows its next deploy and the callee's
+  nginx `allow` the callee's next deploy (the move itself refreshes only the
+  callee's ports file); `cnt audit` flags the drift in between.
+- `restore` writes to the bound host unless `--host` says otherwise, and
+  refuses while the service is running there.
+- **Bootstrap.** `sudo fleet containers place --import [--force]` is the
+  one-time way to fill an empty registry: it binds every service discovery
+  finds on exactly one host, with every host answering, and the registry
+  accepts only a copy that is installed and active. Everything else (a silent
+  host, two copies, a stopped unit) is printed as skipped with the reason and
+  left unplaced. Nothing is ever seeded from Nix.
 
 ### nginx at runtime
 
@@ -216,13 +246,14 @@ after `--` are passed through rather than interpreted as CLI help.
 
 ### Routes
 
-`routes` in `service.nix` replaces the `nginx` string. A service sets
-either `routes` or `nginx`, not both (`nginx` stays as the escape hatch for
-unconverted services); `tcpPorts`/`udpPorts` may coexist.
+`routes` in `service.nix` declares every HTTP, TCP and UDP entry point (the
+old free-form `nginx` string is rejected). `tcpPorts`/`udpPorts` may coexist
+on a host-network service; a `net.private` nixos service must use tcp/udp
+routes instead (they get DNAT).
 
 ```nix
 routes.web = {
-  port = 8300;               # required, backend port on 127.0.0.1
+  port = 8300;               # required, backend port (guest IP when net.private, else 127.0.0.1)
   name = "secrets";          # default: service name for `web`, else "<svc>-<route>"
   proto = "http";            # http (default) | tcp | udp
   exposure = "public";       # local (default) | tailnet | lan | public
@@ -244,11 +275,13 @@ The inventory also carries computed `fqdn` (`<name>.joshuabell.xyz`) and
 `url` per http route.
 
 On deploy, every http route with exposure != `local` becomes an **internal**
-`server {}` in `<svc>.conf` (:80/:443 v4+v6, wildcard cert, proxy to
-`127.0.0.1:<port>`, `X-Forwarded-Proto https`, the exposure ACL). A public
-`via = edge` route also gets an **edge** server on `:8443` that answers only
-o002 and is the only place forwarded headers are trusted. tcp/udp routes with
-exposure != `local` are added to the ports file like `tcpPorts`. `local`
+`server {}` in `<svc>.conf` (:80/:443 v4+v6, wildcard cert, proxy to the
+guest IP on `net.private` (`10.233.<index>.2`, podman `10.89.250.<100+index>`)
+or `127.0.0.1` on the host network, `X-Forwarded-Proto https`, the exposure
+ACL). A public `via = edge` route also gets an **edge** server on `:8443`
+that answers only o002 and is the only place forwarded headers are trusted.
+tcp/udp routes with exposure != `local` are added to the ports file: like
+`tcpPorts` on the host network, as a `dnat` line on `net.private`. `local`
 produces nothing.
 
 `:80`/`:443` admission is runtime too: deploy writes the route's sources as
@@ -295,10 +328,163 @@ are logged with `logger -t cnt-port`.
   unless `--force-backend` is given. It answers "already open (declared)"
   for ports the service already declares. It warns but continues when
   nothing listens. It fails if the service isn't installed on the host.
-- `cnt port ls [host...]` lists the elements with their service and time
-  left. `cnt port close` takes the same `--from`/`--iface` as the open.
+- On a `net.private` service a host port would reach nothing (the app is
+  in the guest netns), so `open` adds a temporary DNAT from the host port to
+  the guest IP instead: an element in a map of `ip cnt-port` (`cnt-fwd`,
+  `cnt-fwd4` with `--from`, and `cnt-fwd-any`/`cnt-fwd4-any` for
+  `--iface any`; template `flakes/fleet-agent/internal/containers/cnt-port.nft`,
+  loaded by the first such open). Same timeout, `svc=<svc>` comment,
+  `--iface`/`--from` scoping and fail-closed reload; never from guests, and
+  a declared tcp/udp route on the same port wins. IPv4 only: v6 `--from`
+  sources are dropped with a note (all-v6 is refused). It refuses a port a
+  host process listens on beyond loopback (the forward would shadow it).
+  Established connections outlive the close/expiry, as with host ports.
+- A NixOS guest's own firewall admits only its declared ports, so the open
+  also adds `<proto> . <port>` to the guest's `cnt-guest` set in its
+  `inet nixos-fw`. The rule is `cnt-guest.nft`, which lib.nix adds to every
+  private NixOS guest. The open enters the guest's netns with
+  `nsenter -t $(machinectl show -p Leader --value <svc>) -n nft`. The rule
+  admits the port only on `eth0` (the veth from the host) and only from
+  outside 10.233.0.0/16. DNAT keeps the client's address, so the host itself
+  and other guests never reach a temporary port. The guest element lasts
+  as long as the longest live forward of that port, and close deletes it
+  with the last one. The kernel expires it, and a guest firewall reload or
+  restart empties the set (fail closed). The open refuses a guest that
+  isn't running or has no `cnt-guest` set, and it removes the host forward
+  again if adding the guest element fails. A set is missing when the guest
+  keeps the iptables firewall: lib.nix enables nftables in private guests
+  with `mkDefault`, and arr sets `networking.nftables.enable = false` for
+  its iptables loopback guard, so `cnt port open arr` is refused. A guest
+  deployed before this change needs a redeploy. Podman services have no
+  guest firewall, so their DNAT is enough.
+- `cnt port ls [host...]` lists the elements with their service, guest
+  (`TO`, forwards only) and time left. `cnt port close` takes the same
+  `--from`/`--iface` as the open and removes host ports and forwards alike.
   `--dry-run` prints the script.
 - The host module asserts `networking.nftables.enable`.
+
+## Private networking
+
+`net = { private = true; index = N; }` in `service.nix` gives a service its
+own network namespace with a fixed address. Every inventory service uses it;
+without `net`, a service shares the host network.
+
+**Addresses.** `index` is chosen by hand and never derived from the name, so
+a rename cannot move an address. Each kind has its own index space, unique
+fleet-wide within the kind (the inventory eval throws on a duplicate); never
+reuse a retired index (12 was beszel).
+
+| kind | index | guest address | host side |
+|---|---|---|---|
+| `nixos` | 1-254 | `10.233.<index>.2` on veth `ve-<name>` | `10.233.0.1` on every veth (point-to-point /32 routes) |
+| `podman` | 1-154 | `10.89.250.<100+index>` (static `--ip`) on the shared `fleet-noinet` bridge | `10.89.250.1`, the bridge gateway |
+
+The address is the same on every host, so a move changes nothing. Podman
+static IPs start at .101 to stay clear of the gateway and of podman's dynamic
+IPAM, which hands out .2 upward. A private nixos service name is at most 11
+characters (the veth is `ve-<name>`), and it may not set `tcpPorts`/`udpPorts`:
+declare tcp/udp routes, which get DNAT.
+
+**Guest side.** A nixos guest gets `privateNetwork`, resolves through the
+host's resolved stub on `10.233.0.1:53` (the same split-horizon answers as the
+host), and keeps its own firewall on, admitting only its route ports. Its
+`container.nix` binds `fleetNet.bindAddress` (`0.0.0.0` when private,
+`127.0.0.1` otherwise). Postgres and other internal daemons stay on the
+guest's own loopback.
+
+**Veth up before the guest boots.** nixos-containers only configures
+`ve-<name>` after the guest is ready, which stalls guest units that need the
+network at boot. A udev rule starts `fleet-veth@ve-<name>` the moment nspawn
+creates the veth; it reads `/etc/nixos-containers/<name>.conf` and sets
+`10.233.0.1/32` plus the guest's /32 route. No networkd is needed (dhcpcd
+denies `ve-*`; NetworkManager hosts mark `ve-*` unmanaged). The container's
+own postStart does the same idempotently, so a host without the hook still
+works, late. Its journal is the evidence when a guest has no network.
+
+**Host side** (`privateNetwork.enable`; tables `inet fleet-net` and
+`ip fleet-net-nat`, templates in `flakes/fleet-agent/internal/containers/`):
+
+- `ve-*` is not trusted. A guest may reach the host only for DNS on
+  `10.233.0.1:53` and its declared `net.uses`/`net.egress`; host loopback
+  services are unreachable. No IPv6 to the host or out.
+- No guest reaches another guest directly, nor LAN, tailnet, link-local or
+  other private ranges, beyond its declared exceptions. Traffic routed *to* a
+  guest (a LAN or tailnet host using this host as next hop) is dropped unless
+  it is a DNATed route, a reply, or a declared `net.uses`/`net.egress` flow,
+  so nothing bypasses the nginx ACLs.
+- NAT: `10.233.0.0/16` is masqueraded out of every non-`ve` interface.
+  tcp/udp routes are `dnat <proto> <port> <guest ip>` lines in the ports
+  file, loaded into the `fleet-net-nat` maps after every firewall reload;
+  prerouting and output DNAT local-destination traffic on that port to the
+  guest. Public routes match on any interface, `lan` routes only from the
+  host's LAN subnets (and tailnet peers), tailnet routes only from real
+  tailnet peers: arriving on `tailscale0` from `100.64.0.0/10` and not the
+  edge (o002), or a declared local `net.uses` caller. DNAT never applies to
+  packets from a guest interface (`ve-*`, `podman*`, `fleet-noinet`), so one
+  container cannot reach another through a route on the host's bridge
+  address. DNAT ports never touch `temp-ports` and do not show in `ss`.
+- **Local-user guard.** On the host itself only root and nginx may open new
+  connections to `10.233.0.0/16` and `10.89.250.0/24` (replies and
+  established flows pass), so a local user cannot curl a guest past nginx.
+  Backups, health checks and the output DNAT all run as root.
+- The ports-file lines `guest <ve>`, `noinet <ve>` and `allow …` fill the
+  `@guests`, `@noinet` and `@egress` sets; every set is flushed and refilled
+  on each run, so a redeploy or a removed ports file drops stale entries.
+  Malformed lines are skipped (fail closed).
+
+**No internet.** `internet = false` blocks every new outbound connection
+beyond the declared exceptions; published ports and routes still work. A
+nixos service needs `net.private` for it: the ports file carries
+`noinet ve-<name>`, the host drops new forwarded connections from that veth,
+and DNS on the host stays allowed. A podman service joins `fleet-noinet`,
+whose `inet fleet-noinet` table drops every new connection from the bridge;
+it gets DNS only with `net.uses`. `cnt online <svc> [--for 30m] [--off]`
+lifts that for an `internet = false` podman service for a while (the
+container IP goes into `@online` with a timeout; a restart or firewall reload
+also ends it). A private podman service must set `internet = false` (the
+eval throws otherwise): the bridge has no internet path, so its exceptions
+and `cnt online` are its only ways out.
+
+**Exceptions.**
+
+- `uses = [ "<svc>.<route>" ]` reaches another service's route, both ways.
+  The caller's egress allows the callee's nginx: `10.233.0.1`/`10.89.250.1`
+  and this host's overlay IP on 80/443 when the callee is on the same host
+  (split DNS answers with the host's overlay IP), else the callee host's
+  overlay IP; a tcp/udp route goes to its DNAT port. The callee admits the
+  caller in its vhost (the caller's guest IP on the same host, else the
+  caller host's overlay IP, since cross-host packets leave masqueraded) and in
+  its ports file (`web` lines for every host discovery finds the caller on;
+  `cnt deploy`, `move` and `destroy` refresh the callees' ports files, ports
+  only). Public routes need no `uses`.
+- `egress = [ "10.12.14.181:9010/tcp" ]` allows one fixed LAN/tailnet
+  endpoint.
+- Both are ports-file `allow <guest> <ipv4> <proto> <port>` lines. `<guest>`
+  is `ve-<name>` for nixos and the static `10.89.250.x` IP for podman, whose
+  services share one bridge and are told apart by source address; the podman
+  lines fill `fleet-noinet @allow` and `nixos-fw @podman-egress` (plus the
+  fleet-net/nat `*_src` sets where `privateNetwork` is on), so they work on a
+  host without `privateNetwork` too. A podman `net.uses` also opens the
+  bridge's aardvark DNS on `10.89.250.1:53` so route names resolve.
+
+**Audit.** A private service's route ports belong to the guest, so a host
+listener on one, loopback included, is `STALE` in `cnt audit` (an old
+host-network instance or a port leak), unless a host-network service on the
+same host declares that port too.
+
+**Moving a service onto the private network:** set `net`, bind
+`fleetNet.bindAddress` in `container.nix`, `cnt deploy`. The container
+restarts on the veth, vhost and ports file switch to the guest IP, and the old
+host port goes away with the old instance. A caller of a tailnet/lan route
+needs `uses` before it goes private (nginx then sees its guest IP), and the
+callee has to be deployed first so its ACL admits that IP. Rollback: drop
+`net` and redeploy. Check with the route through edge and tailnet, `ss` on
+the host, `cnt audit`, egress from the guest, and a refused
+`curl 10.233.0.1:<loopback port>`.
+
+The podman default bridge `podman0` (a non-private podman service with
+internet) gets the same guest-in/forward isolation: internet and published
+ports only.
 
 ## Adding a service
 
@@ -315,7 +501,9 @@ nixos) the guest config.
     postgresql = "/var/lib/postgresql";
     nixos = "/var/lib/nixos";   # keep for nixos-kind: stable UID/GID map
   };
-  tcpPorts = [ ];               # opened in the host firewall (raw ports only)
+  net = { private = true; index = 3; };  # see Private networking; omit for the host network
+  internet = true;              # false: no outbound connections beyond net.uses/net.egress
+  tcpPorts = [ ];               # host-network only: opened in the host firewall (raw ports)
   udpPorts = [ ];
   routes.web = {
     port = 8888;
@@ -333,7 +521,6 @@ nixos) the guest config.
 `sudo fleet containers deploy <name> --host <h>` places it; after that the
 registry knows the host and plain `cnt deploy <name>` follows it.
 
-The legacy `nginx` string is rejected; all HTTP entry points use `routes`.
 Public native-auth routes can declare `loginPaths = [ "/api/auth/login" ];`:
 o002 adds a 6 requests/minute per-IP login zone (burst 5, HTTP 429), retains
 the global zone, and logs failures for service-specific fail2ban jails.
@@ -357,7 +544,7 @@ outputs = { extra-container, nixpkgs, ... }:
       config = containersLib.mkNixosContainer {
         service = import ./service.nix;
         config = import ./container.nix;
-        # specialArgs = { ... };  privateNetwork = false;  privateUsers = "pick";
+        # specialArgs = { ... };  privateUsers = "pick";
         # guestNixpkgs = <26.05 nixpkgs>;  guest only; host-side eval stays 25.11
         # binds = [ { host = "/nfs/x"; container = "/media"; } ];  not backed up
         # devices = [ "/dev/dri" ];  capabilities = [ "CAP_NET_ADMIN" ];
@@ -366,15 +553,20 @@ outputs = { extra-container, nixpkgs, ... }:
   });
 ```
 
-The container shares the host network by default. Services should bind
-`127.0.0.1` and be fronted by the host nginx; only bind `0.0.0.0` for raw
-ports listed in `tcpPorts`. The guest firewall is disabled (the host firewall
-is what counts). Guest-side timers and services work normally. Host-side
-units cannot be defined from here; that is what `containers` and the host module do.
+With `net.private` the guest has its own network namespace (see
+[Private networking](#private-networking)): services bind
+`fleetNet.bindAddress` (`0.0.0.0`) and the guest firewall admits only the
+route ports. Without it the container shares the host network: services bind
+`127.0.0.1` (only `0.0.0.0` for raw ports in `tcpPorts`) and the guest
+firewall is disabled, since the host firewall is what counts. Either way the
+host nginx fronts HTTP. Guest-side timers and services work normally.
+Host-side units cannot be defined from here; that is what `containers` and
+the host module do.
 
 **podman kind**: see `examples/whoami/`. `podman.image`, `ports`
 (`"hostPort:containerPort"` binds 127.0.0.1; prefix an address for others),
-`environment`, `extraArgs`, `cmd`.
+`environment`, `extraArgs`, `cmd`. With `net.private` the container runs on
+the `fleet-noinet` bridge at its static IP and nginx proxies there.
 
 Notes:
 
@@ -393,8 +585,9 @@ nightly (`backup.schedule`, default 03:00). For every service installed on
 that host it runs the `backupHook` (if running), makes SQLite `.backup`
 copies, and snapshots `/srv/containers/<svc>` with tags `fleet` and
 `svc:<name>`. History and retention follow the tag, not the host, so a
-moved service continues its series. Enabled on: h001. Not on h003 (no
-services) or joe (no restic secret yet).
+moved service continues its series. Enabled on h001, lio and h003 (one
+shared repository); not on joe, so a service there has no nightly snapshot
+and `move` refuses it as source or target.
 
 On success each service gets a stamp
 `/var/lib/fleet-containers/backup-last/<svc>`
@@ -450,8 +643,11 @@ containers restore minecraft minecraft-h003-2026-10-08T0400.tar.zst --host h003 
 containers deploy minecraft
 ```
 
-`--force` renames the existing data to `<dir>.pre-restore-<epoch>` rather
-than deleting it. By hand: stop, move `/srv/containers/<svc>` aside,
+`restore` targets the host the registry binds the service to; `--host` is
+needed only for an unplaced service or to restore somewhere else on purpose.
+It refuses while the service runs there. `--force` renames the existing data
+to `<dir>.pre-restore-<epoch>` rather than deleting it. By hand: stop, move
+`/srv/containers/<svc>` aside,
 `sudo tar --numeric-owner -xpf backup.tar.gz -C /srv/containers`, start.
 
 ## Moving a service to another host
@@ -507,6 +703,19 @@ so nothing in Nix is edited and no host is rebuilt.
    marker is refused, never overwritten. The source remembers it was running
    (`move-<svc>.was-running`) across an interrupted run, and a re-run resumes
    with the saved token (or `--resume-token`).
+
+   **Why commit comes before retire.** The switch renames the source's data,
+   after which routing can no longer just point back at it. So the commit
+   lands only once the destination has proven it serves the data (health,
+   restore check, first backup), and the source is retired and uninstalled
+   only once routing has moved off it. A commit that fails takes the same undo
+   path as any earlier failure, so no reservation is left behind; after the
+   commit only an operator rolls back (`cnt place <svc> --recover`). A retire
+   that hits a takeover stops before the switch; any other retire failure is
+   a warning and the move finishes, since the destination is already live and
+   the registry's sweep settles the source. A move renews its 30-minute lease
+   between steps; one that dies without renewing is fenced as `stale`, never
+   rolled back, because its source may already be stopped.
 3. Check `cnt place <svc> --verify` and `cnt audit`.
 4. When happy, delete `/srv/containers/<svc>.moved-*` on the old host.
 

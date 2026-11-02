@@ -29,7 +29,9 @@ package containers
 //     reload, and every sweep/revoke retries it (fails while pending).
 //
 // expose-expire puts baseline.conf back (nginx -t; on failure the site is
-// removed: fail closed), reloads nginx and deletes the override. `cnt
+// removed: fail closed), reloads nginx and deletes the override; until
+// that reload succeeds the dir stays with override.json renamed to
+// `reverted`, so `--reset` keeps retrying instead of reporting clean. `cnt
 // deploy` of the service drops its override, but only once the site from
 // service.nix has passed nginx -t and the reload (service.nix wins); if
 // that fails the override and its timer stay, so expiry still narrows it.
@@ -222,10 +224,39 @@ func dropOverrideScript(svc string) string {
 `, q(overridesDir+"/"+svc), svc, overrideUnit(svc))
 }
 
-const overridesListScript = `for f in /var/lib/fleet-containers/overrides/*/override.json; do [ -e "$f" ] && { cat "$f"; echo; }; done; [ ! -e /var/lib/fleet-containers/overrides/.reload-pending ] || echo RELOAD-PENDING; true`
+const overridesListScript = `for f in /var/lib/fleet-containers/overrides/*/override.json; do [ -e "$f" ] && { cat "$f"; echo; }; done; for f in /var/lib/fleet-containers/overrides/*/reverted; do [ -e "$f" ] && { f=${f%/reverted}; echo "REVERTED ${f##*/}"; }; done; [ ! -e /var/lib/fleet-containers/overrides/.reload-pending ] || echo RELOAD-PENDING; true`
 
 // reloadPendingLine marks a host whose nginx still owes the revert reload.
 const reloadPendingLine = "RELOAD-PENDING"
+
+// revertedPrefix starts a line naming a service whose override files were
+// reverted but whose reload has not succeeded yet (the orphan dir is kept
+// until it has).
+const revertedPrefix = "REVERTED "
+
+// hostOverrideState is one host's override listing.
+type hostOverrideState struct {
+	Overrides []override
+	Pending   bool     // .reload-pending: nginx may still serve a reverted (wider) vhost
+	Reverted  []string // services reverted on disk, reload not yet done
+}
+
+func parseHostOverrides(out, host string) hostOverrideState {
+	st := hostOverrideState{Overrides: parseOverrides(out, host), Pending: hasReloadPending(out)}
+	for _, l := range strings.Split(out, "\n") {
+		if s, ok := strings.CutPrefix(strings.TrimSpace(l), revertedPrefix); ok && svcNameRe.MatchString(s) {
+			st.Reverted = append(st.Reverted, s)
+		}
+	}
+	return st
+}
+
+// owesReload reports whether svc's revert may not be live in nginx yet:
+// the host's reload is pending and svc's orphan dir is there, or no orphan
+// dir names anyone (an older agent that deleted the dir first).
+func (st hostOverrideState) owesReload(svc string) bool {
+	return st.Pending && (len(st.Reverted) == 0 || slices.Contains(st.Reverted, svc))
+}
 
 func parseOverrides(out, host string) []override {
 	var ovs []override
@@ -482,24 +513,26 @@ func carryOverride(s Service, ovs []override, to string) error {
 
 // listHostOverrides reads one host's overrides; unlike fetchOverrides an
 // unreachable host is an error (reset must not report "clean" for it).
-func listHostOverrides(h string) ([]override, error) {
+func listHostOverrides(h string) (hostOverrideState, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	out, err := remoteOut(ctx, h, false, overridesListScript)
 	if err != nil {
-		return nil, err
+		return hostOverrideState{}, err
 	}
-	return parseOverrides(out, h), nil
+	return parseHostOverrides(out, h), nil
 }
 
 // exposeReset clears every runtime exposure override of svc, wherever it
 // is: the public row on h005 (DELETE through the fleet-edge override API:
 // o002, then DNS), then the host-local override on every host that reports
 // one (tailnet/lan/public; a stale copy after a move or a lost revoke
-// included), plus any host h005's row names. Each step runs even if an
-// earlier one failed; a final re-read proves nothing is left. Returns an
-// error naming whatever could not be cleared or checked.
-func exposeReset(api edgeAPI, apiErr error, svc string, hosts []string, list func(string) ([]override, error), revokeHost func(string) error) error {
+// included), plus any host h005's row names. A host whose revert of svc
+// still owes the nginx reload is revoked again (the revoke retries the
+// reload). Each step runs even if an earlier one failed; a final re-read
+// proves nothing is left, a pending reload included. Returns an error
+// naming whatever could not be cleared or checked.
+func exposeReset(api edgeAPI, apiErr error, svc string, hosts []string, list func(string) (hostOverrideState, error), revokeHost func(string) error) error {
 	var problems []string
 	set := map[string]bool{}
 	for _, h := range hosts {
@@ -542,22 +575,29 @@ func exposeReset(api edgeAPI, apiErr error, svc string, hosts []string, list fun
 	sort.Strings(sorted)
 	cleared := 0
 	for _, h := range sorted {
-		ovs, err := list(h)
+		st, err := list(h)
 		if err != nil {
 			problems = append(problems, fmt.Sprintf("%s: overrides unknown: %v", h, err))
 			continue
 		}
-		for _, o := range ovs {
-			if o.Service != svc {
-				continue
+		what := ""
+		for _, o := range st.Overrides {
+			if o.Service == svc {
+				what = fmt.Sprintf("%s.%s (%s, baseline %s)", svc, o.Route, o.Exposure, o.Baseline)
+				break // one override dir per service per host; revoke clears it
 			}
-			info("%s: reverting %s.%s (%s, baseline %s)", h, svc, o.Route, o.Exposure, o.Baseline)
-			if err := revokeHost(h); err != nil {
-				problems = append(problems, fmt.Sprintf("%s: revoke: %v", h, err))
-			} else {
-				cleared++
-			}
-			break // one override dir per service per host; revoke clears it
+		}
+		if what == "" && st.owesReload(svc) {
+			what = svc + " (reverted, nginx reload pending)"
+		}
+		if what == "" {
+			continue
+		}
+		info("%s: reverting %s", h, what)
+		if err := revokeHost(h); err != nil {
+			problems = append(problems, fmt.Sprintf("%s: revoke: %v", h, err))
+		} else {
+			cleared++
 		}
 	}
 	// Verify: nothing for svc left on h005 or on any host that answered.
@@ -567,15 +607,18 @@ func exposeReset(api edgeAPI, apiErr error, svc string, hosts []string, list fun
 		}
 	}
 	for _, h := range sorted {
-		ovs, err := list(h)
+		st, err := list(h)
 		if err != nil {
 			problems = append(problems, fmt.Sprintf("%s: final override check: %v", h, err))
 			continue
 		}
-		for _, o := range ovs {
+		for _, o := range st.Overrides {
 			if o.Service == svc {
 				problems = append(problems, fmt.Sprintf("%s still has %s.%s %s", h, svc, o.Route, o.Exposure))
 			}
+		}
+		if st.owesReload(svc) {
+			problems = append(problems, fmt.Sprintf("%s: nginx reload still pending after reverting %s (it may still serve the wider vhost; journalctl -u fleet-containers-expose-expire)", h, svc))
 		}
 	}
 	if len(problems) > 0 {
@@ -625,7 +668,9 @@ var runCmd = func(name string, args ...string) error {
 // it exists nginx may still serve a wider vhost than the files say, so
 // every runtime sweep/revoke retries the reload first and fails while it
 // is pending. A sibling of the per-service dirs (the */override.json glob
-// never sees it), so it survives the svc dir being removed.
+// never sees it). The reverted service's dir stays too, override.json
+// renamed to `reverted`, until that reload has succeeded: `cnt expose
+// --reset` and the list see which service still owes it.
 func reloadPendingFile() string { return filepath.Join(overridesDir, ".reload-pending") }
 
 func reloadPending() bool {
@@ -661,11 +706,37 @@ func flushReload() error {
 	if err := runCmd("systemctl", "try-reload-or-restart", "nginx.service"); err != nil {
 		return fmt.Errorf("reload pending: nginx reload: %v", err)
 	}
+	if err := clearReverted(); err != nil {
+		return fmt.Errorf("reload pending: %v", err)
+	}
 	if err := os.Remove(reloadPendingFile()); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("reload pending: clearing marker: %v", err)
 	}
 	return nil
 }
+
+// clearReverted drops the dirs of reverts that are live now (after a
+// successful reload). A dir re-exposed meanwhile keeps its new override.
+func clearReverted() error {
+	m, _ := filepath.Glob(filepath.Join(overridesDir, "*", revertedFile))
+	for _, p := range m {
+		d := filepath.Dir(p)
+		var err error
+		if _, serr := os.Stat(filepath.Join(d, "override.json")); serr == nil {
+			err = os.Remove(p)
+		} else {
+			err = os.RemoveAll(d)
+		}
+		if err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("clearing reverted %s: %v", filepath.Base(d), err)
+		}
+	}
+	return nil
+}
+
+// revertedFile marks an override dir whose site is back to the baseline on
+// disk while the reload is still owed (override.json renamed to it).
+const revertedFile = "reverted"
 
 // cmdExposeExpire runs on the host:
 //
@@ -728,16 +799,28 @@ func cmdExposeExpire(args []string) error {
 // missing or unreadable override.json counts as due: the dir only exists
 // while an override is being applied or is active, so garbage fails
 // closed. It never reloads: it sets the reload marker before touching the
-// site, and the caller flushes it (runtime) or leaves it (boot).
+// site, and the caller flushes it (runtime) or leaves it (boot). The dir
+// stays, marked reverted, until that reload succeeds (clearReverted).
 func expireOne(svc string, now time.Time, force bool) error {
 	d := filepath.Join(overridesDir, svc)
 	if _, err := os.Stat(d); err != nil {
 		return nil
 	}
 	var o override
+	ovFile := filepath.Join(d, "override.json")
+	b, rerr := os.ReadFile(ovFile)
+	if os.IsNotExist(rerr) {
+		if _, err := os.Stat(filepath.Join(d, revertedFile)); err == nil {
+			// Reverted on disk already; only the reload is owed.
+			if reloadPending() {
+				return nil
+			}
+			return setReloadPending("reverted " + svc)
+		}
+	}
 	// until = 0 is forever, but only for a well-formed public override:
 	// anything else without a deadline is garbage and fails closed.
-	if b, err := os.ReadFile(filepath.Join(d, "override.json")); err == nil && json.Unmarshal(b, &o) == nil && o.Service != "" {
+	if rerr == nil && json.Unmarshal(b, &o) == nil && o.Service != "" {
 		live := o.Until > 0 && now.Unix() < o.Until || o.Until == 0 && o.Exposure == "public"
 		if !force && live {
 			return nil
@@ -764,7 +847,11 @@ func expireOne(svc string, now time.Time, force bool) error {
 		_ = os.Remove(site)
 		ret = errors.New("no baseline.conf; site removed (redeploy the service)")
 	}
-	if err := os.RemoveAll(d); err != nil {
+	if rerr == nil {
+		if err := os.Rename(ovFile, filepath.Join(d, revertedFile)); err != nil {
+			return err
+		}
+	} else if err := os.WriteFile(filepath.Join(d, revertedFile), nil, 0o644); err != nil {
 		return err
 	}
 	_ = runCmd("logger", "-t", "cnt-expose", "reverted "+svc+"."+o.Route+" to "+dash(o.Baseline)+" (until "+strconv.FormatInt(o.Until, 10)+"); reload pending")

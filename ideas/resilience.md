@@ -30,11 +30,11 @@
 ```
 
 ### Resilience Measures Already Deployed
-- **Wildcard DNS-01 Certificates (`hosts/h005/wildcard-cert.nix`):** `h005` mints `*.joshuabell.xyz` via Bunny DNS-01 and pushes certs to `h001` and `o002` (`hosts/_shared_assets/utilities/wildcard-cert-receiver.nix`).
+- **Wildcard DNS-01 Certificates (`hosts/h005/wildcard-cert.nix`):** `h005` mints `*.joshuabell.xyz` via Bunny DNS-01 and pushes certs to `h001`, `h003`, `joe`, `lio` and `o002` (`hosts/_shared_assets/utilities/wildcard-cert-receiver.nix`).
 - **UPS Shutdown Coordination (`hosts/_shared_assets/utilities/ups-shutdown-receiver.nix`):** `h005` monitors the workshop UPS via NUT and triggers clean shutdowns on `h001` and `h004`.
 - **NFS Guard (`hosts/h001/floating-containers.nix`):** `guards.h004` watches `/nfs/h002/nixarr/.h004-online` and automatically stops/starts the `arr` container when `h004` goes down or returns.
 - **Floating Containers + B2 Restic (`containers/`):** All self-hosted apps (`zitadel`, `sec`, `vaultwarden`, `forgejo`, `immich`, `paperless`, `matrix`, etc.) are encapsulated in `/srv/containers/<svc>` with nightly per-service `svc:<name>` snapshots to Backblaze B2 (`fleet-backup.service`).
-- **Identity Break-Glass (`containers/ROUTING-PLAN.md` §9.3):** Cold-restore tested 2026-10-22; `sec` and `zitadel` keys + restic credentials + `root_fleet_backup` SSH key live in the password manager alongside an independent backup copy.
+- **Identity Break-Glass:** Cold-restore tested 2026-10-22; `sec` and `zitadel` keys + restic credentials + `root_fleet_backup` SSH key live in the password manager alongside an independent backup copy.
 
 ---
 
@@ -71,7 +71,7 @@ Currently `h003` has `inputs.containers.nixosModules.default` enabled (`hosts/h0
 1. **Enable `ringofstorms.containers.privateNetwork.enable = true` on `h003`:**
    - It defaults to `false` (`containers/host-module.nix:496-503`) and `hosts/h003/containers.nix` does not set it, whereas services like `sec`, `vaultwarden`, `zitadel`, and `immich` require the `net.private` (`10.233.1.0/24`) bridge.
 2. **Enable `ringofstorms.containers.backup` on `h003`:**
-   - `cnt move` refuses to move a service unless both source and target hosts have `ringofstorms.containers.backup.enable = true` (`ROUTING-PLAN.md` §9.1).
+   - `cnt move` refuses to move a service unless both source and target hosts have `ringofstorms.containers.backup.enable = true` (`containers/README.md`, "Nightly restic").
    - Add `restic_h001_env_2026-10-01` to `hosts/h003/sec-agent.nix` with:
      ```nix
      configChanges.ringofstorms.containers.backup.environmentFile = "$SECRET_PATH";

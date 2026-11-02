@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regression test for containers/cli/nginx/oauth2-cookie-strip.conf.
+# Regression test for flakes/fleet-agent/internal/containers/nginx/oauth2-cookie-strip.conf.
 # Runs a real nginx (no root) on a high port; the front server includes the
 # snippet and proxies to a back server that echoes the Cookie it received.
 set -euo pipefail

@@ -296,7 +296,7 @@ func writeRouteBody(b *strings.Builder, r Route) {
 		if len(r.Groups) > 0 {
 			q = "?allowed_groups=" + strings.Join(r.Groups, ",")
 		}
-		b.WriteString("  # auth = oauth2-proxy: fleet oauth2-proxy on h005 (ROUTING-PLAN §8 step 6).\n")
+		b.WriteString("  # auth = oauth2-proxy: fleet oauth2-proxy on h005.\n")
 		b.WriteString("  location = /oauth2/auth {\n")
 		fmt.Fprintf(b, "    proxy_pass %s/oauth2/auth%s;\n", oauth2Upstream, q)
 		b.WriteString("    proxy_pass_request_body off;\n")
@@ -401,11 +401,13 @@ func routePorts(s Service) []string {
 // tcpPorts/udpPorts and routePorts open on the host ("tcp 3032"). For a
 // private-network service its tcp/udp routes are
 // DNATed to the guest instead ("tcp 3032 dnat 10.233.3.2"), and
-// internet = false adds "noinet ve-<name>". lib.nix refuses
+// internet = false adds "noinet ve-<name>" (nixos only: a podman service's
+// internet is the fleet-noinet network itself). lib.nix refuses
 // tcpPorts/udpPorts together with net.private.
 func portsFileLines(s Service, host string) []string {
 	var out []string
-	if s.Net.Private {
+	veth := s.Net.Private && s.Kind != "podman"
+	if veth {
 		out = append(out, "guest ve-"+s.Name)
 	}
 	if !s.Net.Private {
@@ -455,7 +457,7 @@ func portsFileLines(s Service, host string) []string {
 		}
 		out = append(out, l)
 	}
-	if s.Net.Private && s.Internet != nil && !*s.Internet {
+	if veth && s.Internet != nil && !*s.Internet {
 		out = append(out, "noinet ve-"+s.Name)
 	}
 	out = append(out, netExceptions(s, host)...)
@@ -630,9 +632,10 @@ func srcPortLines(s Service, host string) []string {
 				add(*ip)
 			}
 		}
-		// LAN clients reach the vhost directly unless the route is only
-		// published through the router (minecraft).
-		if (r.Exposure == "lan" || r.Exposure == "public") && !slices.Contains(r.Via, "router") {
+		// LAN clients reach the vhost directly: the LAN resolver answers
+		// with the host's LAN IP, also for a route published only through
+		// the router (there is no hairpin NAT on h005).
+		if r.Exposure == "lan" || r.Exposure == "public" {
 			lan = true
 		}
 	}
@@ -727,22 +730,129 @@ func cmdRoutes(args []string) error {
 		sort.Strings(hs)
 		ovs = fetchOverrides(hs)
 	}
-	fmt.Print(routesTableWith(svcs, ovs, time.Now()))
+	var st *routeState
+	if !dryRun {
+		st = fetchRouteState(newEdgeClient)
+	}
+	fmt.Print(routesTableWith(svcs, ovs, st, time.Now()))
 	return nil
 }
 
-func routesTable(svcs []Service) string { return routesTableWith(svcs, nil, time.Now()) }
+func routesTable(svcs []Service) string { return routesTableWith(svcs, nil, nil, time.Now()) }
+
+// routeState is fleet-edge's view for the DNS/EDGE column: the routing
+// verify (tailnet/LAN DNS answers, o002 vhosts and streams, WAN forwards)
+// and the public expose rows with their live CNAME/o002 state.
+type routeState struct {
+	checks map[string][]routingCheck // layer + " " + name
+	rows   map[string]edgeRow        // svc.route
+	v      *edgeVerify
+}
+
+// fetchRouteState asks h005; nil (column shows "?") without credentials or
+// when the routing report is unavailable (said once on stderr).
+func fetchRouteState(client func() (*edgeClient, error)) *routeState {
+	c, err := client()
+	if err != nil {
+		if !errors.Is(err, errNoToken) {
+			fmt.Fprintf(os.Stderr, "h005: dns/edge state unknown: %v\n", err)
+		}
+		return nil
+	}
+	rep, err := fetchRouting(c)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "h005: dns/edge state unknown: %v\n", err)
+		return nil
+	}
+	st := &routeState{checks: map[string][]routingCheck{}, rows: map[string]edgeRow{}}
+	for _, c := range rep.Checks {
+		k := c.Layer + " " + c.FQDN
+		st.checks[k] = append(st.checks[k], c)
+	}
+	if rows, v, err := c.list(true); err == nil {
+		st.v = v
+		for _, r := range rows {
+			st.rows[r.Service+"."+r.Route] = r
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "h005: public overrides unknown: %v\n", err)
+	}
+	return st
+}
+
+// layerState folds the checks of one name over layers: "-" when none
+// applies, "ok" when all are ok (or kept on purpose), else the first other
+// status with its layer.
+func (st *routeState) layerState(name string, layers ...string) string {
+	seen := false
+	for _, l := range layers {
+		for _, c := range st.checks[l+" "+name] {
+			seen = true
+			if c.Status != "ok" && c.Status != "kept" {
+				return c.Status + "(" + l + ")"
+			}
+		}
+	}
+	if !seen {
+		return "-"
+	}
+	return "ok"
+}
+
+// health is the DNS/EDGE cell of one route: DNS = the tailnet/LAN record,
+// edge = the o002 vhost (public http), o002 stream or WAN forward
+// (public tcp/udp). A live public override shows its CNAME and o002 vhost.
+func (st *routeState) health(s Service, n string, r Route) string {
+	if st == nil {
+		return "?"
+	}
+	if row, ok := st.rows[s.Name+"."+n]; ok {
+		dns, edge := dash(row.DNS), "missing"
+		if row.Edge {
+			edge = "ok"
+		}
+		if st.v != nil {
+			if x := st.v.DNS[s.Name]; x != "" {
+				dns = x
+			}
+			if x := st.v.Edge[s.Name]; x != "" {
+				edge = x
+			}
+		}
+		return "dns " + dns + ", edge " + edge
+	}
+	dns := "-"
+	if fq := str(r.FQDN); fq != "" {
+		dns = st.layerState(fq, "tailnet", "lan")
+	}
+	edge := "-"
+	switch {
+	case r.Proto == "http" && str(r.FQDN) != "":
+		edge = st.layerState(str(r.FQDN), "edge")
+	case r.Proto == "tcp" || r.Proto == "udp":
+		edge = st.layerState(fmt.Sprintf("%s/%d", r.Proto, r.Port), "stream", "wan")
+	}
+	return "dns " + dns + ", edge " + edge
+}
+
+func netMode(s Service) string {
+	if s.Net.Private {
+		return "private"
+	}
+	return "host"
+}
 
 // routesTableWith shows declared exposure, and the effective one where a
-// `cnt expose` override is active.
-func routesTableWith(svcs []Service, ovs []override, now time.Time) string {
+// `cnt expose` override is active, plus the network mode and fleet-edge's
+// DNS/edge state (st nil: unknown).
+func routesTableWith(svcs []Service, ovs []override, st *routeState, now time.Time) string {
 	ov := map[string]override{}
 	for _, o := range ovs {
 		ov[o.Service+"."+o.Route] = o
 	}
 	var b strings.Builder
 	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "SERVICE\tROUTE\tFQDN\tPROTO\tPORT\tEXPOSURE\tAUTH\tVIA\tHOST")
+	fmt.Fprintln(w, "SERVICE\tROUTE\tFQDN\tPROTO\tPORT\tEXPOSURE\tAUTH\tVIA\tHOST\tNET\tDNS/EDGE")
 	for _, s := range svcs {
 		for _, n := range sortedRouteNames(s) {
 			r := s.Routes[n]
@@ -750,8 +860,8 @@ func routesTableWith(svcs []Service, ovs []override, now time.Time) string {
 			if o, ok := ov[s.Name+"."+n]; ok {
 				exp = fmt.Sprintf("%s (OVERRIDDEN from %s, %s left)", o.Exposure, r.Exposure, o.left(now))
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", s.Name, n, dash(str(r.FQDN)), r.Proto, r.Port,
-				exp, dash(str(r.Auth)), dash(strings.Join(r.Via, ",")), dash(resolvedHost(s)))
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n", s.Name, n, dash(str(r.FQDN)), r.Proto, r.Port,
+				exp, dash(str(r.Auth)), dash(strings.Join(r.Via, ",")), dash(resolvedHost(s)), netMode(s), st.health(s, n, r))
 		}
 	}
 	w.Flush()
@@ -766,7 +876,7 @@ var hostAllowlist = map[string]string{
 	"tcp/22":    "sshd",
 	"tcp/80":    "nginx",
 	"tcp/443":   "nginx",
-	"tcp/8443":  "nginx edge listener (ROUTING-PLAN 2.3)",
+	"tcp/8443":  "nginx edge listener",
 	"tcp/53":    "dns",
 	"udp/53":    "dns",
 	"udp/41641": "tailscaled",
@@ -1046,6 +1156,18 @@ type routingCheck struct {
 	Detail  string `json:"detail"`
 }
 
+// routingReport is fleet-edge's GET /api/placements/routing.
+type routingReport struct {
+	Checks []routingCheck `json:"checks"`
+	Errors []string       `json:"errors"`
+}
+
+func fetchRouting(c *edgeClient) (routingReport, error) {
+	var report routingReport
+	err := c.do("GET", "/api/placements/routing", nil, &report)
+	return report, err
+}
+
 // Routing shows DNS, HTTP edge, TCP stream and WAN forward layers. It is
 // diagnostic: an unavailable authority is not an audit failure. A machine
 // without credentials omits the section quietly.
@@ -1059,11 +1181,8 @@ func printRoutingAudit(w io.Writer, client func() (*edgeClient, error)) {
 		fmt.Fprintf(w, "pending: %v\n", err)
 		return
 	}
-	var report struct {
-		Checks []routingCheck `json:"checks"`
-		Errors []string       `json:"errors"`
-	}
-	if err := c.do("GET", "/api/placements/routing", nil, &report); err != nil {
+	report, err := fetchRouting(c)
+	if err != nil {
 		fmt.Fprintf(w, "pending: %v\n", err)
 		return
 	}
@@ -1110,27 +1229,52 @@ func usesTarget(u string) (Service, Route, bool) {
 	return t, r, ok
 }
 
+// Host-side addresses a private service reaches this host on: the veth
+// address of every nixos guest, the fleet-noinet bridge gateway for podman
+// (lib.nix netHostAddress / mkPodmanService).
+const (
+	vethHostAddr   = "10.233.0.1"
+	podmanHostAddr = "10.89.250.1"
+)
+
 // netExceptions is the guest's allow list beyond internet + DNS,
 // as ports-file "allow" lines:
-// "allow ve-<name> <ipv4> <proto> <port>". net.uses of an http route goes
-// to the nginx that serves it: this host's 10.233.0.1:443 when the callee
+// "allow <guest> <ipv4> <proto> <port>", where <guest> is ve-<name> for
+// nixos and the static bridge IP (10.89.250.<100+index>) for podman, whose
+// services share one bridge and so are told apart by source address.
+// net.uses of an http route goes
+// to the nginx that serves it: this host's 10.233.0.1:443 (podman:
+// 10.89.250.1:443) when the callee
 // lives here (split DNS answers with the host's own overlay IP, so the
 // overlay IP too), else the callee host's overlay IP:443. A tcp/udp route
 // goes to its DNAT/host port on the callee host (overlay IP), or this
 // host's addresses when local. net.egress entries pass through as given.
+// A podman service has no DNS of its own (internet = false on the
+// fleet-noinet bridge), so net.uses also allows the bridge's aardvark-dns
+// (10.89.250.1:53) to resolve the route names, as a nixos guest always can.
 func netExceptions(s Service, host string) []string {
 	if !s.Net.Private {
 		return nil
 	}
-	ve := "ve-" + s.Name
+	guest, local := "ve-"+s.Name, vethHostAddr
+	if s.Kind == "podman" {
+		if s.Net.IP == nil {
+			return nil
+		}
+		guest, local = *s.Net.IP, podmanHostAddr
+	}
 	var out []string
 	add := func(ip, proto string, port int) {
-		out = append(out, fmt.Sprintf("allow %s %s %s %d", ve, ip, proto, port))
+		out = append(out, fmt.Sprintf("allow %s %s %s %d", guest, ip, proto, port))
+	}
+	if s.Kind == "podman" && len(s.Net.Uses) > 0 {
+		add(podmanHostAddr, "udp", 53)
+		add(podmanHostAddr, "tcp", 53)
 	}
 	hostIPs := func(h string) []string {
 		var ips []string
 		if h == host {
-			ips = append(ips, "10.233.0.1")
+			ips = append(ips, local)
 		}
 		if inv != nil {
 			if hh, ok := inv.Hosts[h]; ok && hh.OverlayIP != nil {

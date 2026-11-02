@@ -69,10 +69,22 @@ func TestAuditPrivateStale(t *testing.T) {
 	}
 }
 
+// cnt port open on a net.private service forwards to the guest IP; it needs
+// that IP in the inventory, and the http-backend guard still applies.
 func TestPortGuardPrivate(t *testing.T) {
+	bindServices(t, map[string]string{"puzzles": "h001"})
 	s := privSvc("puzzles", 2)
-	if _, err := portGuards(s, portReq{Port: 9000, Proto: "tcp"}, "h001", nil); err == nil {
-		t.Fatal("cnt port open must refuse a net.private service")
+	if m, err := portGuards(s, portReq{Port: 9000, Proto: "tcp"}, "h001", nil); err != nil || m != "" {
+		t.Fatalf("a net.private service gets a forward: %q %v", m, err)
+	}
+	s.Routes = map[string]Route{"web": httpRoute("puzzles", 8093, "public", "native")}
+	svcs := map[string]Service{"puzzles": s}
+	if _, err := portGuards(s, portReq{Port: 8093, Proto: "tcp"}, "h001", svcs); err == nil || !strings.Contains(err.Error(), "puzzles.web") {
+		t.Fatalf("backend guard on a private service: %v", err)
+	}
+	s.Net.IP = nil
+	if _, err := portGuards(s, portReq{Port: 9000, Proto: "tcp"}, "h001", nil); err == nil || !strings.Contains(err.Error(), "no net.ip") {
+		t.Fatalf("no guest IP must be refused: %v", err)
 	}
 }
 

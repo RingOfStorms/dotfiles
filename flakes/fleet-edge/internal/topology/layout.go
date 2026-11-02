@@ -358,7 +358,6 @@ type PublicZone struct {
 	Zone      string      `json:"zone"`
 	Available bool        `json:"available"`
 	Records   []DNSRecord `json:"records"`
-	External  []string    `json:"external,omitempty"`
 }
 
 // routeGroup is one laid-out cloud, as the route document carries it.
@@ -901,7 +900,7 @@ func buildRoutes(spec *Spec, svcByHost map[string][]state.ServiceView, info map[
 	zone := ""
 	if spec.DNS != nil {
 		zone = spec.DNS.Zone
-		rs.cat = PublicZone{Zone: zone, Available: zone != "", Records: append([]DNSRecord(nil), spec.DNS.Records...), External: append([]string(nil), spec.DNS.External...)}
+		rs.cat = PublicZone{Zone: zone, Available: zone != "", Records: append([]DNSRecord(nil), spec.DNS.Records...)}
 	}
 	claimed := map[string]*DNSRecord{}
 	for i := range rs.cat.Records {

@@ -130,8 +130,10 @@ in
     # Public reverse proxy for `via = edge` routes: the public cloud's
     # collector leads into this node.
     edge = "o002";
-    # No `via = router` route has a host (minecraft is unplaced), so there is
-    # nothing to derive; claiming h005 here would invent a path.
+    # Left empty: the only `via = router` route (minecraft's game port) is a
+    # net.private guest on whichever host the registry binds it to, and
+    # h005's WAN DNAT to that host is runtime state, so there is no fixed
+    # router node to draw.
     router = "";
     # Where fleet-edge runs: poll lines to every host with a fleet-agent.
     dashboard = "h005";

@@ -2,18 +2,19 @@
   nix-minecraft,
   pkgs,
   lib,
+  fleetNet,
   ...
 }:
 let
-  # Networking: the container shares the host network (no private veth).
-  #   - Velocity listens on 0.0.0.0:<proxyPort>, the only public port. The
-  #     host firewall opens it at deploy time from tcpPorts in service.nix
-  #     (keep the two in sync); the guest firewall is off.
+  # Networking: private netns (service.nix net.private, 10.233.18.2). The
+  # guest firewall admits only the route ports (25565, 8080).
+  #   - Velocity listens on 0.0.0.0:<proxyPort>, the only player port. The
+  #     placed host DNATs it to the guest (routes.game, a tcp route).
   #   - survival/creative listen on 127.0.0.1:25566/25567 (behind Velocity).
-  #   - squaremap serves 127.0.0.1:<squaremapPort>; host nginx exposes it via
-  #     the server block in service.nix on the tailscale IP, and o002
-  #     terminates TLS and proxies to it over tailscale.
-  #   - postgres is 127.0.0.1:5432, reachable only from local processes.
+  #   - squaremap serves fleetNet.bindAddress:<squaremapPort>; the host nginx
+  #     proxies the vhost cnt deploy generates from routes.web to it, and
+  #     o002 terminates TLS and proxies to the host's edge listener.
+  #   - postgres is 127.0.0.1:5432 on the guest's own loopback.
   # The root fs is ephemeral; only the persist dirs in service.nix survive.
   proxyPort = 25565;
 
@@ -61,7 +62,7 @@ let
     }:
     {
       server-port = port;
-      server-ip = "127.0.0.1"; # host network: only Velocity is reachable
+      server-ip = "127.0.0.1"; # only Velocity faces the network
       online-mode = false; # Velocity handles authentication
       white-list = true;
       enforce-whitelist = true;
@@ -294,7 +295,7 @@ let
     sha512 = "b35306031aaec4d5cb32c52e0bde7e95321cbce24016e8e9fb9cc1161366c7ba352a864bf1f9a44240e35b886fd933f5fc1b20a2c02ea2ff0ca4b611e7259cd4";
   };
 
-  # squaremap web port (survival map); loopback only, fronted by host nginx
+  # squaremap web port (survival map), fronted by the host nginx
   squaremapPort = 8080;
 
   # SimpleProxyChat -- cross-server chat + join/leave/switch messages.
@@ -324,9 +325,8 @@ let
   # PostgreSQL database so permissions are synchronized across the network.
   #
   # Auth: trust on 127.0.0.1 (see services.postgresql.authentication below).
-  # NOTE: the container shares the host network, so host loopback is the
-  # same loopback: any local process on the host can reach 5432. Postgres
-  # is not exposed beyond loopback and the host firewall blocks it.
+  # The guest has its own netns, so that loopback is the guest's alone; the
+  # host and other containers can't reach 5432.
   #
   # First-boot note: LuckPerms downloads the PostgreSQL JDBC driver from
   # Maven Central on first start. The container has internet access, so
@@ -362,8 +362,8 @@ in
 
   environment.systemPackages = [ pkgs.tmux ];
 
-  # No guest firewall rule: the guest firewall is disabled (host network)
-  # and the host opens proxyPort at deploy time (tcpPorts in service.nix).
+  # No guest firewall rule here: mkNixosContainer opens the route ports
+  # (25565, 8080) in the guest firewall.
 
   # ── Generate forwarding secret on first boot ────────────────────────────
   # Creates a random secret once and reuses it forever. All minecraft
@@ -426,8 +426,8 @@ in
 
   # ── PostgreSQL for LuckPerms ────────────────────────────────────────────
   # Single shared database used by Velocity + Paper backends for permissions.
-  # Trust auth on loopback only -- nothing off the host can reach postgres
-  # (shared host network, so host-local processes can). The `luckperms` role owns the `luckperms` database; LuckPerms
+  # Trust auth on the guest's loopback only (private netns: nothing outside
+  # the container can reach it). The `luckperms` role owns the `luckperms` database; LuckPerms
   # creates its own tables on first connect (prefixed `luckperms_`).
   services.postgresql = {
     enable = true;
@@ -450,7 +450,9 @@ in
   services.minecraft-servers = {
     enable = true;
     eula = true;
-    openFirewall = true;
+    # The guest firewall admits only the route ports (lib.nix); this would
+    # also open the backends' 25566/25567.
+    openFirewall = false;
 
     servers = {
       # ── Velocity Proxy ────────────────────────────────────────────────
@@ -593,7 +595,7 @@ in
             web-address = "http://localhost:${toString squaremapPort}";
             internal-webserver = {
               enabled = true;
-              bind = "127.0.0.1"; # host nginx proxies to it
+              bind = fleetNet.bindAddress; # host nginx proxies to it (10.233.18.2)
               port = squaremapPort;
             };
           };

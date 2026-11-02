@@ -6,6 +6,8 @@
 // aren't declared are reported as unmanaged and left alone. There is no
 // write path except Apply, which only executes a plan's create/update/retire
 // rows; retire deletes only records listed exactly (name, type, value).
+// A dynamic record (the router's WAN address) is declared in the same spec
+// but written only by DDNS, which resolves its value at runtime (ddns.go).
 package bunny
 
 import (
@@ -63,15 +65,16 @@ type Desired struct {
 	// ("" for hand-kept names). Such a record is published only while the
 	// placement registry places the service (ForPlacements).
 	Service string `json:"service,omitempty"`
+	// Dynamic names where the value comes from at runtime (WANIPv4); Value
+	// is then empty in the spec. dns-plan reports such a record and never
+	// writes it; DDNS fills in the value and owns the writes.
+	Dynamic string `json:"dynamic,omitempty"`
 }
 
 // Spec is the build-time input (hosts/h005, JSON).
 type Spec struct {
 	Zone    string    `json:"zone"`
 	Records []Desired `json:"records"`
-	// External lists names written by something else on purpose (e.g. the
-	// DDNS updater owns "home"). They are reported as such, never planned.
-	External []string `json:"external"`
 	// Retire lists records to delete: only a live record matching name,
 	// type and value exactly is deleted. Anything else under that name is
 	// reported as retire-mismatch and blocks Apply.
@@ -87,11 +90,13 @@ type Retired struct {
 
 // Action kinds.
 const (
-	Keep      = "keep"      // live record matches
-	Create    = "create"    // declared, missing
-	Update    = "update"    // declared, same name+type, value or ttl differs
-	Conflict  = "conflict"  // declared name exists with another type: needs a human
-	External  = "external"  // owned by another writer (DDNS)
+	Keep     = "keep"     // live record matches
+	Create   = "create"   // declared, missing
+	Update   = "update"   // declared, same name+type, value or ttl differs
+	Conflict = "conflict" // declared name exists with another type: needs a human
+	// Dynamic: a declared record whose value is resolved at runtime (DDNS).
+	// dns-plan shows the live record and never writes it.
+	Dynamic   = "dynamic"
 	Unmanaged = "unmanaged" // in the zone, not declared: left alone
 	Retire    = "retire"    // listed in Retire and matching exactly: delete
 	// RetireMismatch: a Retire entry's name exists with another type or
@@ -163,6 +168,17 @@ func (s *Spec) Validate() error {
 		default:
 			return fmt.Errorf("%s: type %s not supported", d.Name, d.Type)
 		}
+		if d.Dynamic != "" {
+			want, ok := dynamicTypes[d.Dynamic]
+			if !ok {
+				return fmt.Errorf("%s: unknown dynamic kind %q", d.Name, d.Dynamic)
+			}
+			if d.Type != want || d.Value != "" {
+				return fmt.Errorf("%s: dynamic %s needs type %s and no value", d.Name, d.Dynamic, want)
+			}
+		} else if d.Value == "" {
+			return fmt.Errorf("%s %s: value is empty", d.Name, d.Type)
+		}
 		if d.TTL < 60 {
 			return fmt.Errorf("%s: ttl %d < 60", d.Name, d.TTL)
 		}
@@ -213,6 +229,8 @@ func Plan(spec *Spec, z *Zone) []Change { return PlanWith(spec, z, nil) }
 // declare is reported as Override, even if it's on the retire list. A
 // declared name wins over an override (the route became public in
 // service.nix): it's planned normally and the override releases it.
+// An unresolved dynamic record is Dynamic (never written here) unless
+// another record is in its way, which is a Conflict like any declared name.
 func PlanWith(spec *Spec, z *Zone, owned []Owned) []Change {
 	ownedBy := map[int64]Owned{}
 	for _, o := range owned {
@@ -221,10 +239,6 @@ func PlanWith(spec *Spec, z *Zone, owned []Owned) []Change {
 		}
 	}
 	var out []Change
-	external := map[string]bool{}
-	for _, n := range spec.External {
-		external[strings.ToLower(n)] = true
-	}
 	byName := map[string][]Record{}
 	for _, r := range z.Records {
 		byName[strings.ToLower(r.Name)] = append(byName[strings.ToLower(r.Name)], r)
@@ -246,13 +260,20 @@ func PlanWith(spec *Spec, z *Zone, owned []Owned) []Change {
 			}
 		}
 		c := Change{Name: d.Name, Type: d.Type, New: fmtVal(d.Value, d.TTL), Source: d.Source, Value: d.Value, TTL: d.TTL}
+		unresolved := d.Dynamic != "" && d.Value == ""
+		if unresolved {
+			c.New = fmtVal("<"+d.Dynamic+">", d.TTL)
+		}
 		switch {
 		case len(same) == 1:
 			r := same[0]
 			c.ID, c.Old = r.ID, fmtVal(r.Value, r.TTL)
-			if norm(r.Value) == norm(d.Value) && r.TTL == d.TTL {
+			switch {
+			case unresolved:
+				c.Action = Dynamic
+			case norm(r.Value) == norm(d.Value) && r.TTL == d.TTL:
 				c.Action = Keep
-			} else {
+			default:
 				c.Action = Update
 			}
 		case len(same) > 1:
@@ -260,6 +281,8 @@ func PlanWith(spec *Spec, z *Zone, owned []Owned) []Change {
 		case len(other) > 0:
 			r := other[0]
 			c.Action, c.ID, c.Old = Conflict, r.ID, TypeName(r.Type)+" "+fmtVal(r.Value, r.TTL)
+		case unresolved:
+			c.Action, c.Old = Dynamic, "missing"
 		default:
 			c.Action = Create
 		}
@@ -271,9 +294,6 @@ func PlanWith(spec *Spec, z *Zone, owned []Owned) []Change {
 			continue
 		}
 		a := Unmanaged
-		if external[name] {
-			a = External
-		}
 		src := ""
 		if o, ok := ownedBy[r.ID]; ok && strings.EqualFold(o.Name, r.Name) {
 			out = append(out, Change{Action: Override, Name: r.Name, Type: TypeName(r.Type), Old: fmtVal(r.Value, r.TTL), ID: r.ID, Source: "cnt expose " + o.Service})
@@ -290,7 +310,7 @@ func PlanWith(spec *Spec, z *Zone, owned []Owned) []Change {
 		}
 		out = append(out, Change{Action: a, Name: r.Name, Type: TypeName(r.Type), Old: fmtVal(r.Value, r.TTL), ID: r.ID, Source: src})
 	}
-	order := map[string]int{Conflict: 0, RetireMismatch: 0, Create: 1, Update: 2, Retire: 3, Keep: 4, Override: 5, External: 6, Unmanaged: 7}
+	order := map[string]int{Conflict: 0, RetireMismatch: 0, Create: 1, Update: 2, Retire: 3, Keep: 4, Override: 5, Dynamic: 6, Unmanaged: 7}
 	sort.SliceStable(out, func(i, j int) bool {
 		if order[out[i].Action] != order[out[j].Action] {
 			return order[out[i].Action] < order[out[j].Action]
@@ -318,6 +338,8 @@ func Render(w io.Writer, zone string, plan []Change) {
 			line += "  + " + c.New
 		case Update, Conflict:
 			line += "  " + c.Old + "  ->  " + c.New
+		case Dynamic:
+			line += "  " + c.Old + "  (" + c.New + ", written by ddns)"
 		default:
 			line += "  " + c.Old
 		}
@@ -326,8 +348,8 @@ func Render(w io.Writer, zone string, plan []Change) {
 		}
 		fmt.Fprintln(w, strings.TrimRight(line, " "))
 	}
-	fmt.Fprintf(w, "\n%s: %d create, %d update, %d retire, %d conflict, %d retire-mismatch, %d keep, %d override, %d external, %d unmanaged (never deleted)\n",
-		zone, counts[Create], counts[Update], counts[Retire], counts[Conflict], counts[RetireMismatch], counts[Keep], counts[Override], counts[External], counts[Unmanaged])
+	fmt.Fprintf(w, "\n%s: %d create, %d update, %d retire, %d conflict, %d retire-mismatch, %d keep, %d override, %d dynamic, %d unmanaged (never deleted)\n",
+		zone, counts[Create], counts[Update], counts[Retire], counts[Conflict], counts[RetireMismatch], counts[Keep], counts[Override], counts[Dynamic], counts[Unmanaged])
 }
 
 // Client talks to the bunny API. Apply, CreateRecord and DeleteRecord write.
