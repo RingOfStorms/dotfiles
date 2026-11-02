@@ -1,5 +1,5 @@
-# ip fleet-net-nat (ROUTING-PLAN §8 step 5): DNAT for net.private tcp/udp
-# routes. Loaded by host-module.nix (@EDGE4@ = nginx.edge.peers, v4;
+# DNAT for net.private TCP/UDP routes.
+# Loaded by host-module.nix (@EDGE4@ = nginx.edge.peers, v4;
 # @LAN4@ = nginx.acl.lan, v4) and
 # syntax-checked by natrules_test.go. The maps/sets are filled from the
 # ports files by fleet-containers-apply-ports.
@@ -51,7 +51,7 @@ chain tailnet {
   # here. A matching dnat is terminal, so nothing runs twice.
   # Real tailnet peers: arrive on tailscale0 from the overlay range and are
   # not the edge. A LAN packet sent to the overlay IP (h001 as next hop, or
-  # spoofed) has the wrong iif; o002 is the internet (ROUTING-PLAN §2.1).
+  # spoofed) has the wrong iif; o002 is an internet-facing edge, not a peer.
   iifname "tailscale0" ip saddr 100.64.0.0/10 ip saddr != @edge jump tailnet-peer
   # Declared local guest callers (net.uses of the route).
   iifname . ip daddr . meta l4proto . th dport @uses jump tailnet-guest

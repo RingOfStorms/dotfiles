@@ -53,6 +53,12 @@
 </tbody>
 </table>
 </div>
+{{if .Certificates}}
+<section><h2>TLS certificates</h2>
+<table><thead><tr><th>route</th><th>expires</th><th>status</th></tr></thead><tbody>
+{{range .Certificates}}<tr><td>{{.URL}}</td><td>{{if not .Error}}{{.Expires}}{{end}}</td><td>{{if .Error}}<span class="warn">{{.Error}}</span>{{else if .Expiring}}<strong class="warn">expires in under 14 days</strong>{{else}}ok{{end}}</td></tr>{{end}}
+</tbody></table></section>
+{{end}}
 {{if .ExposeEnabled}}
 <section class="expose">
 <h2>Expose overrides</h2>

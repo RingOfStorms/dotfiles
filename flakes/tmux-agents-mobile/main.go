@@ -130,6 +130,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	locator := transcript.NewLocator()
 	history := transcript.NewHistory(locator.OmpDir)
 	defer history.Close()
+	defer locator.OpenCode.Close()
 	chatHub := watch.NewChatHub(tmuxClient, locator, history, web.ChatRenderer, log)
 	git := diff.New(cfg.gitBin)
 

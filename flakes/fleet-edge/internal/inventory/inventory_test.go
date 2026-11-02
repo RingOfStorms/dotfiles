@@ -10,8 +10,7 @@ const sampleNoRoutes = `{
       "description": "media server",
       "persist": {},
       "tcpPorts": [8096],
-      "udpPorts": [],
-      "nginx": null
+      "udpPorts": []
     }
   },
   "hosts": {
@@ -29,7 +28,6 @@ const sampleWithRoutes = `{
       "persist": {},
       "tcpPorts": [2283],
       "udpPorts": [],
-      "nginx": null,
       "routes": {
         "web": {
           "port": 2283,
@@ -97,7 +95,6 @@ const sampleTCPRouteNullFields = `{
       "persist": {},
       "tcpPorts": [5432],
       "udpPorts": [],
-      "nginx": null,
       "routes": {
         "db": {
           "port": 5432,

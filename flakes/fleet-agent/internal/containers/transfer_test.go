@@ -550,6 +550,61 @@ func TestRequiresScript(t *testing.T) {
 	}
 }
 
+func TestSecretsScript(t *testing.T) {
+	oldInv := inv
+	t.Cleanup(func() { inv = oldInv })
+	dir := t.TempDir()
+	inv = &Inventory{DataRoot: "/srv/containers", SecretsDir: dir, Hosts: map[string]Host{}}
+	bash := realPath(t, "bash")
+	run := func(s Service) (string, error) {
+		out, err := exec.Command(bash, "-c", "set -euo pipefail\n"+secretsScript(s, "h9")+"echo ok").CombinedOutput()
+		return string(out), err
+	}
+	if out, err := run(Service{Name: "plain"}); err != nil || !strings.Contains(out, "ok") {
+		t.Fatalf("no secrets must pass: %v %s", err, out)
+	}
+	s := Service{Name: "life", Secrets: []string{"life_env", "life_pg"}}
+	must(t, os.WriteFile(filepath.Join(dir, "life_env"), []byte("x"), 0o400))
+	out, err := run(s)
+	if err == nil || !strings.Contains(out, "life_pg") || strings.Contains(out, "life_env ") || strings.Contains(out, "ok") ||
+		!strings.Contains(out, "hosts/h9/sec-agent.nix") {
+		t.Fatalf("a missing secret must refuse and name it: %v %s", err, out)
+	}
+	must(t, os.Mkdir(filepath.Join(dir, "life_pg"), 0o755)) // a directory is not a hydrated file
+	if _, err := run(s); err == nil {
+		t.Fatal("a directory must not pass for a secret file")
+	}
+	must(t, os.Remove(filepath.Join(dir, "life_pg")))
+	must(t, os.WriteFile(filepath.Join(dir, "life_pg"), []byte("x"), 0o400))
+	if out, err := run(s); err != nil {
+		t.Fatalf("all hydrated must pass: %v %s", err, out)
+	}
+	if out, err := run(Service{Name: "bad", Secrets: []string{"../etc/shadow"}}); err == nil || !strings.Contains(out, "not a plain file name") {
+		t.Fatalf("a path must be refused: %v %s", err, out)
+	}
+	inv.SecretsDir = ""
+	if out, err := run(s); err == nil || !strings.Contains(out, "no secretsDir") {
+		t.Fatalf("no secretsDir must fail closed: %v %s", err, out)
+	}
+}
+
+// Both entry points run the secrets preflight before touching anything.
+func TestDeployAndMovePreflightCheckSecrets(t *testing.T) {
+	oldInv := inv
+	t.Cleanup(func() { inv = oldInv })
+	inv = &Inventory{DataRoot: "/srv/containers", SecretsDir: "/var/lib/secrets_manager_hydrated", Hosts: map[string]Host{}}
+	s := Service{Name: "litellm", Kind: "nixos", Secrets: []string{"litellm-env"}}
+	want := "/var/lib/secrets_manager_hydrated/litellm-env"
+	ps := prepareScript(s, "h003")
+	if !strings.Contains(ps, want) || strings.Index(ps, want) > strings.Index(ps, "install -d") {
+		t.Errorf("deploy prepareScript must check %s before installing anything:\n%s", want, ps)
+	}
+	mp := movePreflightTarget(s, "h003")
+	if !strings.Contains(mp, want) || strings.Index(mp, want) > strings.Index(mp, "install -d") {
+		t.Errorf("move preflight must check %s before installing anything:\n%s", want, mp)
+	}
+}
+
 // The guard (host-module.nix) checks the hold and enqueues a start under
 // <hold>/<svc>.lock. Simulated here with the same lock/checks.
 func guardStart(s Service) string {

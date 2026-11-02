@@ -32,22 +32,14 @@ var ErrReset = errors.New("transcript: session must be reloaded")
 // Session is one omp session log, parsed into items and kept current by Poll.
 // It is not safe for concurrent use; the hub serialises access.
 type Session struct {
+	conversation
 	Path string
 
 	id    string
-	items []*Item
-	byID  map[string]int
 	tools map[string]toolRef
-	jobs  map[string]jobRef
 	// pending are tool calls still waiting for a result, in call order.
 	pending []string
-	seq     int
 	leaf    string
-
-	meta     Meta
-	metaRev  int
-	settings map[string]string
-	activity time.Time
 
 	offset int64
 	dev    uint64
@@ -55,8 +47,6 @@ type Session struct {
 }
 
 type toolRef struct{ item, part int }
-
-type jobRef struct{ item, part, job int }
 
 // ompEntry is the subset of an omp session record the transcript needs.
 type ompEntry struct {
@@ -123,72 +113,16 @@ func Open(path string) (*Session, error) {
 	return s, nil
 }
 
-// Seq is the latest change number; every item's Rev is at most Seq.
-func (s *Session) Seq() int { return s.seq }
-
-// Len is the number of items.
-func (s *Session) Len() int { return len(s.items) }
-
-// Tail returns copies of the last n items.
-func (s *Session) Tail(n int) []Item {
-	return s.Range(max(0, len(s.items)-n), len(s.items))
-}
-
-// Range returns copies of items [from, to).
-func (s *Session) Range(from, to int) []Item {
-	from = max(0, from)
-	to = min(len(s.items), to)
-	out := make([]Item, 0, max(0, to-from))
-	for i := from; i < to; i++ {
-		out = append(out, s.items[i].clone())
-	}
-	return out
-}
-
 // ID is the session id from the log's header; omp keys its side tables
 // (recaps, titles) by it.
 func (s *Session) ID() string { return s.id }
 
-// Meta returns a copy of the session-wide state.
-func (s *Session) Meta() Meta {
-	return Meta{Title: s.meta.Title, Todos: cloneTodos(s.meta.Todos)}
-}
-
-// MetaRev changes whenever Meta does.
-func (s *Session) MetaRev() int { return s.metaRev }
-
-// LastActivity is when the newest message was logged; zero if unknown.
-func (s *Session) LastActivity() time.Time { return s.activity }
-
-// Index returns the position of the item with the given id.
-func (s *Session) Index(id string) (int, bool) {
-	i, ok := s.byID[id]
-	return i, ok
-}
-
-// Since returns copies of items changed after seq, in order.
-func (s *Session) Since(seq int) []Item {
-	var out []Item
-	for _, it := range s.items {
-		if it.Rev > seq {
-			out = append(out, it.clone())
-		}
-	}
-	return out
-}
-
 func (s *Session) reset() {
-	s.items = nil
-	s.byID = map[string]int{}
+	s.clear()
 	s.tools = map[string]toolRef{}
-	s.jobs = map[string]jobRef{}
 	s.pending = nil
 	s.leaf = ""
 	s.offset = 0
-	s.meta = Meta{}
-	s.metaRev++
-	s.settings = map[string]string{}
-	s.activity = time.Time{}
 }
 
 // load parses the file from scratch. omp sessions are trees: re-sending an
@@ -355,31 +289,6 @@ func (s *Session) reload() error {
 	return ErrReset
 }
 
-// touch marks item i changed in this round.
-func (s *Session) touch(i int, changed *[]int) {
-	s.items[i].Rev = s.seq
-	if changed == nil {
-		return
-	}
-	for _, c := range *changed {
-		if c == i {
-			return
-		}
-	}
-	*changed = append(*changed, i)
-}
-
-func (s *Session) add(it *Item, changed *[]int) int {
-	s.seq++
-	it.Index = len(s.items)
-	s.items = append(s.items, it)
-	if it.ID != "" {
-		s.byID[it.ID] = it.Index
-	}
-	s.touch(it.Index, changed)
-	return it.Index
-}
-
 func (s *Session) apply(e *ompEntry, changed *[]int) {
 	switch e.Type {
 	case "message":
@@ -396,10 +305,7 @@ func (s *Session) apply(e *ompEntry, changed *[]int) {
 			s.add(&Item{ID: e.ID, Kind: KindNotice, Label: e.CustomType, Text: clip(contentText(e.Content), maxNoticeBytes)}, changed)
 		}
 	case "title_change":
-		if e.Title != "" && e.Title != s.meta.Title {
-			s.meta.Title = e.Title
-			s.metaRev++
-		}
+		s.setTitle(e.Title)
 	case "model_change":
 		// Other roles (smol, slow) configure helper models, not the one
 		// talking.
@@ -440,36 +346,6 @@ func (s *Session) noteActivity(ts string) {
 	if t, err := time.Parse(time.RFC3339Nano, ts); err == nil && t.After(s.activity) {
 		s.activity = t
 	}
-}
-
-// setting records a changed session setting as a divider. Settings logged
-// before the conversation starts are the starting state, not a change;
-// re-logged values (omp repeats the thinking level on every model switch)
-// are dropped; back-to-back changes share one divider.
-func (s *Session) setting(id, key, value string, changed *[]int) {
-	if value == "" || s.settings[key] == value {
-		return
-	}
-	s.settings[key] = value
-	if len(s.items) == 0 {
-		return
-	}
-	if n := len(s.items); s.items[n-1].Kind == KindEvent {
-		it := s.items[n-1]
-		s.seq++
-		replaced := false
-		for i := range it.Settings {
-			if it.Settings[i].Key == key {
-				it.Settings[i].Value, replaced = value, true
-			}
-		}
-		if !replaced {
-			it.Settings = append(it.Settings, Setting{Key: key, Value: value})
-		}
-		s.touch(n-1, changed)
-		return
-	}
-	s.add(&Item{ID: id, Kind: KindEvent, Settings: []Setting{{Key: key, Value: value}}}, changed)
 }
 
 // shortModel drops the provider: "litellm/air-claude-opus-5.5" reads as
@@ -719,40 +595,6 @@ func (s *Session) applyAsyncResult(e *ompEntry, changed *[]int) {
 	}
 }
 
-func (s *Session) settleRunningJob(id string, changed *[]int) {
-	if ref, ok := s.jobs[id]; ok && s.items[ref.item].Parts[ref.part].Tool.Jobs[ref.job].Status == ToolRunning {
-		s.settleJob(id, "cancelled", 0, changed)
-	}
-}
-
-func (s *Session) settleJob(id, status string, durationMs int64, changed *[]int) {
-	ref, ok := s.jobs[id]
-	if !ok {
-		return
-	}
-	var next ToolStatus
-	switch {
-	case strings.HasPrefix(status, "completed"):
-		next = ToolDone
-	case strings.HasPrefix(status, "failed"), strings.HasPrefix(status, "aborted"):
-		next = ToolError
-	case strings.HasPrefix(status, "cancelled"):
-		next = ToolStopped
-	default:
-		return
-	}
-	j := &s.items[ref.item].Parts[ref.part].Tool.Jobs[ref.job]
-	if j.Status == next && (durationMs == 0 || j.DurationMs == durationMs) {
-		return
-	}
-	s.seq++
-	j.Status = next
-	if durationMs > 0 {
-		j.DurationMs = durationMs
-	}
-	s.touch(ref.item, changed)
-}
-
 func (s *Session) stopPending(changed *[]int) {
 	if len(s.pending) == 0 {
 		return
@@ -804,30 +646,8 @@ func newTool(b ompBlock) Tool {
 	}
 	delete(args, "i")
 	t.Jobs = spawnJobs(b.Name, args)
-
 	if b.Name == "ask" {
-		if q, ok := askDetail(args["questions"]); ok {
-			t.Detail = clip(q, maxDetailBytes)
-			delete(args, "questions")
-		}
-	}
-
-	key := detailKeys[b.Name]
-	if t.Detail != "" {
-		key = ""
-	}
-	if _, ok := args[key].(string); !ok {
-		key = ""
-		for _, k := range fallbackDetailKeys {
-			if _, ok := args[k].(string); ok {
-				key = k
-				break
-			}
-		}
-	}
-	if key != "" && t.Detail == "" {
-		t.Detail = clip(args[key].(string), maxDetailBytes)
-		delete(args, key)
+		askArgs(&t, args)
 	}
 	// Edits name their file on the script's first line: "[path#hash]".
 	if b.Name == "edit" {
@@ -840,12 +660,41 @@ func newTool(b ompBlock) Tool {
 			delete(args, "input")
 		}
 	}
+	fillToolArgs(&t, args, detailKeys[b.Name])
+	return t
+}
+
+// askArgs lays out a question tool's questions as the detail.
+func askArgs(t *Tool, args map[string]any) {
+	if q, ok := askDetail(args["questions"]); ok {
+		t.Detail = clip(q, maxDetailBytes)
+		delete(args, "questions")
+	}
+}
+
+// fillToolArgs sets the headline argument (key, else the first common one)
+// as Detail unless one is set already, and the rest as compact JSON in Args.
+func fillToolArgs(t *Tool, args map[string]any, key string) {
+	if t.Detail == "" {
+		if _, ok := args[key].(string); !ok {
+			key = ""
+			for _, k := range fallbackDetailKeys {
+				if _, ok := args[k].(string); ok {
+					key = k
+					break
+				}
+			}
+		}
+		if key != "" {
+			t.Detail = clip(args[key].(string), maxDetailBytes)
+			delete(args, key)
+		}
+	}
 	if len(args) > 0 {
 		if raw, err := json.Marshal(args); err == nil {
 			t.Args = clip(string(raw), maxArgsBytes)
 		}
 	}
-	return t
 }
 
 // spawnJobs lists the background agents a call asks for. Their job ids are

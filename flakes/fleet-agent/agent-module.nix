@@ -26,7 +26,7 @@ let
   defaultOverlayIp = hostDef.overlayIp or null;
   defaultPollers =
     lib.optional ((fleetHosts.h005.overlayIp or null) != null) fleetHosts.h005.overlayIp
-    ++ [ "fd7a:115c:a1e0::3" ];
+    ++ lib.optional ((fleetHosts.h005.overlayIp6 or null) != null) fleetHosts.h005.overlayIp6;
 
   smartScript = pkgs.writeShellScript "fleet-agent-smart" ''
     set -euo pipefail

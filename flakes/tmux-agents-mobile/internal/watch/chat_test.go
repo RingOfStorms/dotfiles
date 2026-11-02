@@ -74,7 +74,7 @@ func TestChatHubTailsSession(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, path, err := hub.Locate(ctx, p); err == nil && path == log {
+		if found, err := hub.Locate(ctx, p); err == nil && found.Ref == log {
 			break
 		}
 		if time.Now().After(deadline) {

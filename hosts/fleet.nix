@@ -21,10 +21,8 @@ rec {
   # ─── GLOBAL CONSTANTS ─────────────────────────────────────────────
   global = {
     domain = "joshuabell.xyz";
-    # The one physical LAN (h003's/h001's nginx.acl.lan, hardening firewalls
-    # ROUTING-PLAN §8 step 2). Derived once here instead of hand-repeating
-    # "10.12.14.0/24" per host; matches the lanIp /24 every registered host
-    # below actually uses.
+    # Shared by nginx LAN ACLs and host firewalls; registered lanIp values
+    # belong to this subnet.
     lanSubnet = "10.12.14.0/24";
     acmeEmail = "admin@joshuabell.xyz";
 
@@ -32,12 +30,11 @@ rec {
     sshPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF0aeQA4617YMbhPGkCR3+NkyKppHca1anyv7Y7HxQcr nix2nix_2026-03-15";
     sshKeyName = "nix2nix_2026-03-15";
 
-    # Dedicated restricted SSH public keys (H2 least-privilege split):
+    # Dedicated SSH keys restrict each caller to its receiving command:
     # - wildcardCertPushPubKey: h005 -> h001, o002 (command=fleet-cert-receive)
     # - upsShutdownPubKey:      h005 -> h001, h004 (command=fleet-ups-shutdown)
     # - remoteLioBuildsPubKey:  juni/gp3/oren -> lio (command=nix-daemon/nix-store)
-    # - edgeVhostPushPubKey:    h005 -> o002 (command=fleet-vhost-receive);
-    #   null until the edge_vhost_push key exists in sec (rollout step 4).
+    # - edgeVhostPushPubKey:    h005 -> o002 (command=fleet-vhost-receive)
     wildcardCertPushPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOaTzdbHJRre5CjJFRJH4V12sNdfnAXF5seRq+AKGfA5 josh@lio";
     upsShutdownPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA0zalrea9G+zd3iosRzuyo40xFKDv3Gjp/mPzHphO+d josh@lio";
     edgeVhostPushPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN+i6zNcEnqG4cirgBJAqR1snZNMTGa6CchAK7jmGnJP edge_vhost_push";

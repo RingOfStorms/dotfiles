@@ -170,7 +170,9 @@ func exposeScript(s Service, o override, secs int, baseline, conf string) string
 	fmt.Fprintf(&b, "if [ -e \"$d/override.json\" ] && ! grep -q %s \"$d/override.json\"; then echo %s >&2; exit 1; fi\n",
 		q(`"route":"`+o.Route+`"`), q(s.Name+" already has an override on another route; cnt expose --revoke "+s.Name+" first"))
 	b.WriteString("install -d -m755 " + q(overridesDir) + " \"$d\"\n")
-	if secs == 0 {
+	if o.Until > 0 {
+		fmt.Fprintf(&b, "now=$(date +%%s); until=%d; [ \"$until\" -gt \"$now\" ] || exit 0; by=${SUDO_USER:-$(id -un)}\n", o.Until)
+	} else if secs == 0 {
 		b.WriteString("now=$(date +%s); until=0; by=${SUDO_USER:-$(id -un)}\n")
 	} else {
 		fmt.Fprintf(&b, "now=$(date +%%s); until=$((now + %d)); by=${SUDO_USER:-$(id -un)}\n", secs)
@@ -195,7 +197,11 @@ func exposeScript(s Service, o override, secs int, baseline, conf string) string
 		fmt.Fprintf(&b, "echo \"%s.%s is %s with no expiry (baseline %s; cnt expose --revoke %s ends it)\"\n", s.Name, o.Route, o.Exposure, o.Baseline, s.Name)
 		return b.String()
 	}
-	fmt.Fprintf(&b, "systemd-run --quiet --unit=%s --on-active=%ds --timer-property=AccuracySec=1s /run/current-system/sw/bin/systemctl start fleet-containers-expose-expire.service\n", u, secs+1)
+	if o.Until > 0 {
+		fmt.Fprintf(&b, "systemd-run --quiet --unit=%s --on-active=\"$((until - $(date +%%s) + 1))s\" --timer-property=AccuracySec=1s /run/current-system/sw/bin/systemctl start fleet-containers-expose-expire.service\n", u)
+	} else {
+		fmt.Fprintf(&b, "systemd-run --quiet --unit=%s --on-active=%ds --timer-property=AccuracySec=1s /run/current-system/sw/bin/systemctl start fleet-containers-expose-expire.service\n", u, secs+1)
+	}
 	fmt.Fprintf(&b, "logger -t cnt-expose \"expose %s.%s %s (baseline %s) for %ds by=$by\"\n", s.Name, o.Route, o.Exposure, o.Baseline, secs)
 	fmt.Fprintf(&b, "echo \"%s.%s is %s until $(date -d @$until '+%%F %%T %%Z') (baseline %s)\"\n", s.Name, o.Route, o.Exposure, o.Baseline)
 	return b.String()
@@ -339,6 +345,20 @@ func cmdExpose(args []string) error {
 		}
 		return nil
 	}
+	if v := f.vals["reset"]; v != "" {
+		s := service(v)
+		c, err := newEdgeClient()
+		var api edgeAPI
+		if err == nil {
+			api = c
+		}
+		hosts := containerHosts()
+		if h, _, herr := resolveHost(s, f); herr == nil && !slices.Contains(hosts, h) {
+			hosts = append(hosts, h)
+		}
+		return exposeReset(api, err, s.Name, hosts, listHostOverrides,
+			func(h string) error { return remote(h, true, revokeScript(s.Name)) })
+	}
 	if v := f.vals["revoke"]; v != "" {
 		s := service(v)
 		// h005 first (o002, then DNS), then the host. h005 down: the host
@@ -354,7 +374,7 @@ func cmdExpose(args []string) error {
 		return remote(h, true, revokeScript(s.Name))
 	}
 	if len(f.pos) < 1 {
-		return errors.New("usage: cnt expose <svc>[.<route>] --exposure tailnet|lan|public --for DUR|forever [--reason TEXT] | --list [host...] | --revoke <svc>")
+		return errors.New("usage: cnt expose <svc>[.<route>] --exposure tailnet|lan|public --for DUR|forever [--reason TEXT] | --list [host...] | --revoke <svc> | --reset <svc>")
 	}
 	svcName, route := splitTarget(f.pos[0])
 	s := service(svcName)
@@ -381,13 +401,8 @@ func cmdExpose(args []string) error {
 		return fmt.Errorf("%s has no host vhost to override", s.Name)
 	}
 	h, _ := hostFor(s, f)
-	head := "# managed by containers, service " + s.Name + " (generated from routes)\n"
-	baseline := head + routesVhost(s)
-	conf := head + fmt.Sprintf("# cnt expose override: route %s %s -> %s (see %s/%s)\n", route, s.Routes[route].Exposure, level, overridesDir, s.Name) + routesVhost(o)
+	baseline, conf := exposeSite(s, o, route, level)
 	ov := override{Service: s.Name, Route: route, Exposure: level, Baseline: s.Routes[route].Exposure, Reason: f.vals["reason"]}
-	if level == "lan" {
-		fmt.Fprintln(os.Stderr, "note: LAN DNS (h005) is build-time; LAN clients without tailnet DNS need the host's LAN IP for this name")
-	}
 	forStr := d.String()
 	if d == 0 {
 		forStr = "ever (no expiry)"
@@ -403,6 +418,171 @@ func cmdExpose(args []string) error {
 	}
 	return exposePublic(c, s, route, h, d, f.vals["reason"], func() error { return remote(h, true, script) },
 		func() error { return remote(h, true, revokeScript(s.Name)) })
+}
+
+// exposeSite renders the baseline (service.nix) and the widened site of an
+// override of route to level; o is exposeCheck's result.
+func exposeSite(s, o Service, route, level string) (baseline, conf string) {
+	head := "# managed by containers, service " + s.Name + " (generated from routes)\n"
+	baseline = head + routesVhost(s)
+	conf = head + fmt.Sprintf("# cnt expose override: route %s %s -> %s (see %s/%s)\n", route, s.Routes[route].Exposure, level, overridesDir, s.Name) + routesVhost(o)
+	return baseline, conf
+}
+
+// carryOverrideScript is what `cnt move` runs on the target to take the
+// source's tailnet/lan override along: same route and level, until the same
+// deadline (the time it had left, never longer). "" when there is nothing to
+// carry: no override, a public one (move refuses those earlier), or one that
+// has expired by now. An override service.nix no longer allows (the route
+// changed under it) is an error, so the move can say why it was dropped.
+func carryOverrideScript(s Service, ovs []override, now time.Time) (string, *override, error) {
+	for _, o := range ovs {
+		if o.Service != s.Name || (o.Exposure != "tailnet" && o.Exposure != "lan") {
+			continue
+		}
+		left := o.Until - now.Unix()
+		if o.Until == 0 || left <= 0 {
+			return "", nil, nil // host-local overrides always expire; past it, nothing to carry
+		}
+		r, ok := s.Routes[o.Route]
+		if !ok || r.Proto != "http" || r.Exposure == "local" {
+			return "", &o, fmt.Errorf("%s.%s no longer permits an exposure override", s.Name, o.Route)
+		}
+		wide := s
+		wide.Routes = make(map[string]Route, len(s.Routes))
+		for name, route := range s.Routes {
+			wide.Routes[name] = route
+		}
+		r.Exposure = o.Exposure
+		r.Via = nil
+		wide.Routes[o.Route] = r
+		if err := validateRoutes(wide); err != nil {
+			return "", &o, err
+		}
+		baseline, conf := exposeSite(s, wide, o.Route, o.Exposure)
+		reason := strings.TrimSpace(o.Reason + " (carried by cnt move from " + o.Host + ")")
+		carried := override{Service: s.Name, Route: o.Route, Exposure: o.Exposure, Baseline: s.Routes[o.Route].Exposure, Reason: reason, Until: o.Until}
+		return exposeScript(s, carried, int(left), baseline, conf), &o, nil
+	}
+	return "", nil, nil
+}
+
+// carryOverride refuses source cleanup if the target cannot retain the override.
+func carryOverride(s Service, ovs []override, to string) error {
+	script, o, err := carryOverrideScript(s, ovs, time.Now())
+	if err != nil {
+		return err
+	}
+	if script == "" {
+		return nil
+	}
+	info("carrying the expose override %s.%s %s to %s", s.Name, o.Route, o.Exposure, to)
+	return remote(to, true, script)
+}
+
+// listHostOverrides reads one host's overrides; unlike fetchOverrides an
+// unreachable host is an error (reset must not report "clean" for it).
+func listHostOverrides(h string) ([]override, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	out, err := remoteOut(ctx, h, false, overridesListScript)
+	if err != nil {
+		return nil, err
+	}
+	return parseOverrides(out, h), nil
+}
+
+// exposeReset clears every runtime exposure override of svc, wherever it
+// is: the public row on h005 (DELETE through the fleet-edge override API:
+// o002, then DNS), then the host-local override on every host that reports
+// one (tailnet/lan/public; a stale copy after a move or a lost revoke
+// included), plus any host h005's row names. Each step runs even if an
+// earlier one failed; a final re-read proves nothing is left. Returns an
+// error naming whatever could not be cleared or checked.
+func exposeReset(api edgeAPI, apiErr error, svc string, hosts []string, list func(string) ([]override, error), revokeHost func(string) error) error {
+	var problems []string
+	set := map[string]bool{}
+	for _, h := range hosts {
+		set[h] = true
+	}
+	edgeRows := func() []edgeRow {
+		rows, _, err := api.list(false)
+		if err != nil {
+			problems = append(problems, "h005 list: "+err.Error())
+			return nil
+		}
+		var mine []edgeRow
+		for _, r := range rows {
+			if r.Service == svc {
+				mine = append(mine, r)
+			}
+		}
+		return mine
+	}
+	if api == nil {
+		if apiErr == nil {
+			apiErr = errNoToken
+		}
+		problems = append(problems, "h005 not reachable through the override API: "+apiErr.Error())
+	} else {
+		for _, r := range edgeRows() {
+			if r.Host != "" {
+				set[r.Host] = true
+			}
+		}
+		info("h005: removing the public override of %s (o002, then DNS)", svc)
+		if err := api.revoke(svc); err != nil {
+			problems = append(problems, "h005 revoke: "+err.Error())
+		}
+	}
+	sorted := make([]string, 0, len(set))
+	for h := range set {
+		sorted = append(sorted, h)
+	}
+	sort.Strings(sorted)
+	cleared := 0
+	for _, h := range sorted {
+		ovs, err := list(h)
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("%s: overrides unknown: %v", h, err))
+			continue
+		}
+		for _, o := range ovs {
+			if o.Service != svc {
+				continue
+			}
+			info("%s: reverting %s.%s (%s, baseline %s)", h, svc, o.Route, o.Exposure, o.Baseline)
+			if err := revokeHost(h); err != nil {
+				problems = append(problems, fmt.Sprintf("%s: revoke: %v", h, err))
+			} else {
+				cleared++
+			}
+			break // one override dir per service per host; revoke clears it
+		}
+	}
+	// Verify: nothing for svc left on h005 or on any host that answered.
+	if api != nil {
+		for _, r := range edgeRows() {
+			problems = append(problems, fmt.Sprintf("h005 still has %s.%s (%s on %s, %s)", r.Service, r.Route, r.State, r.Host, dash(r.LastError)))
+		}
+	}
+	for _, h := range sorted {
+		ovs, err := list(h)
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("%s: final override check: %v", h, err))
+			continue
+		}
+		for _, o := range ovs {
+			if o.Service == svc {
+				problems = append(problems, fmt.Sprintf("%s still has %s.%s %s", h, svc, o.Route, o.Exposure))
+			}
+		}
+	}
+	if len(problems) > 0 {
+		return fmt.Errorf("reset %s incomplete:\n  %s", svc, strings.Join(problems, "\n  "))
+	}
+	fmt.Printf("%s: no runtime exposure overrides left (h005 and %d host(s) checked, %d host override(s) reverted)\n", svc, len(sorted), cleared)
+	return nil
 }
 
 // exposeFor parses --for. tailnet/lan: required, at most 24h. public:

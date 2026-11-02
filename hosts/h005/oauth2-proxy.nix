@@ -28,18 +28,20 @@
 let
   domain = fleet.global.domain;
   overlayIp = constants.host.overlayIp;
+  overlayIp6 = fleet.hosts.h005.overlayIp6;
   port = 4180;
   signinHost = "sso-proxy.${domain}";
   # Hosts whose nginx may call auth_request (ringofstorms.containers.nginx):
   # generated from the inventory (containers/flake.nix containerHosts),
   # the same list the CLI probes. No hand-kept duplicate list to drift.
   clients = map (h: fleet.hosts.${h}.overlayIp) inputs.containers.inventory.containerHosts;
+  clients6 = map (h: fleet.hosts.${h}.overlayIp6) inputs.containers.inventory.containerHosts;
   # Public edge (o002): the only caller allowed to reach the edge listener
   # below, and the only one whose X-Forwarded-* that listener trusts.
   # Never admitted to the tailnet vhost: firewall.nix excludes o002 from
   # h005's broad tailnet HTTP accept.
   o002Ip = fleet.hosts.o002.overlayIp;
-  o002Ip6 = "fd7a:115c:a1e0::5";
+  o002Ip6 = fleet.hosts.o002.overlayIp6;
   edgePort = 8443;
   envFile = "${fleet.global.secretsDir}/oauth2_proxy_key_file_2026-03-15";
 in
@@ -53,8 +55,10 @@ in
     # but lib.unique keeps this safe if that ever changes.
     trustedProxyIP = lib.unique (
       clients
+      ++ clients6
       ++ [
         overlayIp
+        overlayIp6
         "127.0.0.1"
       ]
     );
@@ -101,6 +105,10 @@ in
       ip:
       "iifname \"tailscale0\" ip saddr ${ip} tcp dport ${toString port} accept comment \"oauth2-proxy auth_request\"\n"
     ) clients
+    + lib.concatMapStrings (
+      ip:
+      "iifname \"tailscale0\" ip6 saddr ${ip} tcp dport ${toString port} accept comment \"oauth2-proxy auth_request (v6)\"\n"
+    ) clients6
     # o002 reaches only the edge listener, never the proxy's direct port.
     + "iifname \"tailscale0\" ip saddr ${o002Ip} tcp dport ${toString edgePort} accept comment \"oauth2-proxy edge listener, o002 only\"\n"
     + "iifname \"tailscale0\" ip6 saddr ${o002Ip6} tcp dport ${toString edgePort} accept comment \"oauth2-proxy edge listener, o002 only (v6)\"\n";

@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/alert"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/auth"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/authority"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/bunny"
@@ -268,7 +269,7 @@ func runOverrides(args []string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	routing, err = reconcile.New(reconcile.Config{Inventory: inv, Source: func() (placements.Export, error) { return pl.Snapshot(), nil },
+	routing, err = reconcile.New(reconcile.Config{Inventory: inv, Status: cfg.Status, Source: func() (placements.Export, error) { return pl.Snapshot(), nil },
 		TailnetDir: *tailnetDir, LANDir: *lanDir, TailnetServer: *tailnetServer, LANServer: *lanServer, Edge: cfg.Edge,
 		Streams: streams, ForwardsFile: *forwardsFile, ForwardsStatus: *forwardsStatus})
 	if err != nil {
@@ -390,27 +391,6 @@ func main() {
 				log.Fatal(err)
 			}
 			return
-		case "stream-seed":
-			fs := flag.NewFlagSet("stream-seed", flag.ExitOnError)
-			cfgPath := fs.String("config", "/etc/fleet-edge-stream/config.json", "receiver config")
-			snapshot := fs.String("snapshot", "", "Nix snapshot of the pre-cutover static stream")
-			_ = fs.Parse(os.Args[2:])
-			c, err := edgestream.LoadConfig(*cfgPath)
-			if err != nil {
-				log.Fatal(err)
-			}
-			b, err := os.ReadFile(*snapshot)
-			if err != nil {
-				log.Fatal(err)
-			}
-			seeded, err := c.Seed(b)
-			for _, e := range seeded {
-				fmt.Printf("fleet-stream-seed: :%d -> %s (static cutover snapshot)\n", e.Port, e.Host)
-			}
-			if err != nil {
-				log.Fatal(err)
-			}
-			return
 		case "forwards-apply":
 			fs := flag.NewFlagSet("forwards-apply", flag.ExitOnError)
 			invFile := fs.String("inventory", "", "inventory JSON (the routes and LAN IPs a forward may use)")
@@ -514,6 +494,8 @@ func main() {
 	placementsURL := flag.String("placements-url", envDefault("FLEET_EDGE_PLACEMENTS_URL", "http://127.0.0.1:8098/internal/placements.json"),
 		"read-only placement registry export; its binding is where each service runs now (empty: every service is unplaced)")
 	sessionKeyFile := flag.String("session-key-file", envDefault("FLEET_EDGE_SESSION_KEY_FILE", ""), "file holding HMAC session key (optional)")
+	ntfyURL := flag.String("ntfy-url", envDefault("FLEET_EDGE_NTFY_URL", ""), "ntfy topic URL; empty disables notifications")
+	downAfter := flag.Duration("health-down-after", 5*time.Minute, "continuous unhealthy duration before notification")
 	flag.Parse()
 
 	if *inventoryFile == "" {
@@ -587,6 +569,10 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	monitor, err := alert.New(ctx, alert.Config{URL: *ntfyURL, DownAfter: *downAfter, Store: st})
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Poll once synchronously so the atlas's first snapshot captures observed
 	// health. Starting the recorder alongside an unpolled poller would record
@@ -596,6 +582,7 @@ func main() {
 
 	srv := server.New(poller, server.Config{
 		Title:         *title,
+		Certificates:  monitor.Certificates,
 		Background:    *background,
 		IconBase:      *iconBase,
 		Links:         links,
@@ -612,6 +599,7 @@ func main() {
 	go history.Run(ctx, func() state.Merged { return srv.Merged(ctx) }, func(err error) {
 		log.Printf("atlas: recording snapshot: %v", err)
 	})
+	go monitor.Run(ctx, srv.Merged, func(err error) { log.Printf("alerts: %v", err) })
 	httpServer := &http.Server{
 		Addr:              *listen,
 		Handler:           authn.Wrap(srv),

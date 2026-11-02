@@ -38,7 +38,7 @@ connected.
   real keyboard: Esc, Ctrl-C, Tab, arrows and Ctrl-<letter> go straight to the
   pane. If the pane exits (or is killed) while you are looking at it, the page
   returns to the inbox instead of staying on a dead screen.
-- **Conversation view** (omp panes) — see [Native conversation view](#native-conversation-view).
+- **Conversation view** (omp and opencode panes) — see [Native conversation view](#native-conversation-view).
   It is the default wherever the agent's session log can be found; the menu
   switches to *terminal: wrap text* / *terminal: fit to width* (`?view=wrap|fit`)
   and back (`?view=native`).
@@ -245,7 +245,7 @@ session or a missing tmux server cannot paste a login page into the list.
 
 ## Native conversation view
 
-For omp panes the page renders the agent's own session log instead of the
+For omp and opencode panes the page renders the agent's own session instead of the
 terminal: user messages as bubbles, assistant prose as Markdown (goldmark;
 raw HTML in model output is shown as text, unsafe link schemes dropped),
 thinking collapsed, and each tool call as a one-line row (status glyph, tool,
@@ -289,9 +289,31 @@ tails the file every 400ms and pushes rendered items over SSE
 `gone`); a tool
 result re-renders its call in place. The page loads the last 60 items and
 *show earlier* fetches more (`/p/<id>/chat/earlier?before=N`). If no session
-can be read (agent exited, not omp), the page falls back to the terminal.
+can be read (agent exited, not an agent), the page falls back to the terminal.
 Input still goes through `send-keys`, so the composer and ⌨ keys behave exactly
 as in the terminal views — `ask` prompts are answered with the arrow/Enter keys.
+
+### opencode
+
+opencode panes get the same view from opencode's database
+(`$XDG_DATA_HOME/opencode/opencode.db`, or `OPENCODE_DB`), opened read-only and
+shared by every opencode pane. Each `session_message` row is one item: `user`,
+`assistant` (reasoning, text and tool parts; the row is rewritten in place
+while it streams, so changed rows are re-read by `time_updated`), described
+`synthetic` notices (subagent results, restarts; plan-mode reminders are
+skipped) and `compaction`. `model-switched`, `agent-switched` and
+`location-switched` become dividers; the title comes from `session_v2.title`
+(opencode's `New session - …` placeholder is ignored), the todo card from the
+latest `todowrite` call, edit diffs from the tool's patch metadata, and
+`subagent` calls list their child session, settled by the `<subagent>` result.
+A staged undo (`session_v2.revert`) hides the reverted messages. There is no
+recap.
+
+The session is found like tmux-agents' `resume.sh`: the shallowest
+`opencode` process under the pane, then the pane title `OC | <title>`
+(truncated at 40 characters) matched against sessions under the process's
+cwd, else its `-s/--session` argument. A pane on the home screen (title
+`OpenCode`) with no session argument falls back to the terminal.
 
 ## Limits
 

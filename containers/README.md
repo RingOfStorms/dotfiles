@@ -24,6 +24,12 @@ Both use the same model:
   reloads nginx. Raw ports (`tcpPorts`/`udpPorts`) are opened at runtime in
   the nftables `temp-ports` set and re-applied after each firewall reload.
 
+Host SSH allow-lists are generated separately from inventory `overlayIp`
+and `overlayIp6`; both must include lio. Low-trust IPv6 peers are dropped
+before NixOS port accepts, just like low-trust LAN IPv4 peers. h005's own
+HTTP exclusions and admission, OAuth auth-request clients, fleet-agent
+pollers, and nginx edge peers also carry both address families.
+
 ```
 containers/
   flake.nix          host module, lib, inventory, `fleet` package (from `flakes/fleet-agent`)
@@ -96,11 +102,17 @@ must be able to fetch that ref, so pair it with `deploy --local`).
 | `containers health <svc>` | every route answers on its host (backend and nginx) |
 | `containers destroy <svc>` | uninstall (data kept; `--purge` deletes it). `--host` on a host the registry does not bind removes that stray copy and leaves the row; the bound copy, or a row a move still holds, needs `--force` (the bound copy's row is then removed, revision-guarded) |
 | `containers check-idmap <host>` | the idmap test above |
-| `containers routes [svc]` | declared routes from the inventory: fqdn, proto, port, exposure, auth, via, and the registry-bound host (`-` when unplaced). Unconverted services show as `nginx string` |
+| `containers routes [svc]` | declared routes from the inventory: fqdn, proto, port, exposure, auth, via, and the registry-bound host (`-` when unplaced) |
 | `containers audit [host...] [--stdin]` | read-only: runs `ss -ltnupH` on each host (default: all container hosts) and lists every non-loopback listener as `declared` (a route, `tcpPorts`/`udpPorts` of a service the registry binds to that host), `host` (small allowlist in `flakes/fleet-agent/internal/containers/routes.go`: 22, 80, 443, 8443, 53, tailscale 41641/udp, dhcp, mdns; plus host daemons the host module declares in `/etc/fleet-containers/host-listeners`, e.g. the status endpoint at its configured address; plus, matched by process name rather than port, tailscaled's dynamic sockets on tailnet/wildcard addresses and systemd-resolved LLMNR on 5355) or `UNDECLARED` (incl. ports of `exposure = "local"` routes, and `proto = "http"` backend ports found on a non-loopback address — those must stay on `127.0.0.1`, nginx is the only thing allowed to expose them). Needs root on the remote host to see process names; non-root users get `sudo -n` (fails fast instead of hanging if it needs a password). If sudo there needs a password, plain ssh can't prompt (no TTY): run it on the host itself and feed the file in with `--stdin` (exactly one host): `sudo ss -ltnupH > /tmp/<host>.ss && cnt audit <host> --stdin < /tmp/<host>.ss`, or collect the file with `ssh -t`. Empty `--stdin` input (or input with no listeners) is an error, so a failed collection never looks like a clean host. With a machine key it also prints `== routing (h005)`: fleet-edge's comparison of the DNS, edge vhost, TCP stream and WAN forward layers against the registry (diagnostic only; omitted without a key). Otherwise exits 0 |
 | `containers port open <svc> <port>/<tcp\|udp> --for <dur> [--from <host\|cidr>]... [--iface tailnet\|lan\|any] [--host h]` | open a port temporarily (see [Temporary ports](#temporary-ports-cnt-port)) |
 | `containers port ls [host...]` / `port close <svc> <port>/<proto> [--from ...] [--iface ...]` | list / close them early |
 | `containers expose <svc>[.<route>] --exposure tailnet\|lan\|public --for DUR\|forever [--reason T]` | widen one http route on its host for a while. tailnet/lan: `--for` required, max 24h; the host reverts it at expiry (transient timer, plus `fleet-containers-expose-expire` at boot and every minute). `public`: fleet-edge on h005 adds the public CNAME and pushes an o002 runtime vhost (default 8h, any duration ≥ 1m or `forever`; h005 owns the expiry). Public expose (and `--revoke` of one) signs with this machine's key (`/machine-key.json`, root-only), so run `sudo fleet containers expose ...`: the `cnt` alias does not expand under sudo. `expose --list [host...]` / `expose --revoke <svc>`; `deploy` drops an override; `routes` and `audit` show them |
+| `containers expose --reset <svc>` | clear the fleet-edge override API row and every host-local override; report unreachable hosts or remaining state as errors |
+
+`cnt move` carries tailnet/LAN overrides to the destination with their original
+deadline before removing the source. Public overrides must be revoked first.
+LAN DNS follows the bound host's unexpired LAN override on the next reconcile
+pass (30 seconds); expiry removes the additional LAN answer.
 
 The host module adds the shell alias `cnt = "fleet containers"`.
 
@@ -305,13 +317,12 @@ nixos) the guest config.
   };
   tcpPorts = [ ];               # opened in the host firewall (raw ports only)
   udpPorts = [ ];
-  nginx = ''                    # optional; @OVERLAY_IP@ / @LAN_IP@ substituted
-    server {
-      listen @OVERLAY_IP@:80;
-      server_name atuin.joshuabell.xyz;
-      location / { proxy_pass http://127.0.0.1:8888; }
-    }
-  '';
+  routes.web = {
+    port = 8888;
+    exposure = "tailnet";
+    auth = "native";
+  };
+  secrets = [ ];                # file names under fleet.global.secretsDir
   backupHook = "runuser -u postgres -- pg_dumpall > /var/lib/postgresql/dumpall.sql";
   attach = null;                # command for `containers attach`
   requires = [ ];               # host capabilities, e.g. [ "nfs-h004" "intel-qsv" ]
@@ -321,6 +332,15 @@ nixos) the guest config.
 `service.nix` describes the service, never where it runs. The first
 `sudo fleet containers deploy <name> --host <h>` places it; after that the
 registry knows the host and plain `cnt deploy <name>` follows it.
+
+The legacy `nginx` string is rejected; all HTTP entry points use `routes`.
+Public native-auth routes can declare `loginPaths = [ "/api/auth/login" ];`:
+o002 adds a 6 requests/minute per-IP login zone (burst 5, HTTP 429), retains
+the global zone, and logs failures for service-specific fail2ban jails.
+Vaultwarden, Immich and Jellyfin are wired; Jellyfin belongs to the `arr` jail.
+`secrets` lists hydrated secret file names (not paths). Deploy/move check every
+file on the target before installing/stopping anything; missing grants refuse
+the operation. Nix also rejects undeclared hydrated-secret bind mounts.
 
 `requires` names must appear in the target host's
 `ringofstorms.containers.capabilities`. `deploy` and `move` refuse (before

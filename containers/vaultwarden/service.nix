@@ -14,6 +14,10 @@
   # on the WAL state of the stopped copy.
   backupHook = "systemctl start backup-vaultwarden.service";
 
+  # sec-agent grant on the host (bound read-only in flake.nix); cnt deploy
+  # and cnt move refuse a target host that lacks it.
+  secrets = [ "vaultwarden_env_2026-03-15" ];
+
   net = {
     private = true;
     index = 5;
@@ -27,5 +31,16 @@
     exposure = "public";
     auth = "native";
     maxBody = "525m";
+    # Strict per-IP rate limit + fail2ban on o002 (lib.nix edgeLogin).
+    # connect/token also serves token refreshes (about one per client per
+    # hour); the burst covers them.
+    loginPaths = [
+      "/identity/connect/token"
+      "/identity/accounts/prelogin"
+      "/api/accounts/prelogin"
+      "/api/accounts/password-hint"
+      "/api/two-factor/send-email-login"
+      "/admin"
+    ];
   };
 }

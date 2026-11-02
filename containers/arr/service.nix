@@ -20,6 +20,12 @@
     recyclarr = "/var/lib/recyclarr";
     nixos = "/var/lib/nixos";
   };
+  # sec-agent grants on the host (bound read-only in flake.nix); cnt deploy
+  # and cnt move refuse a target host that lacks one.
+  secrets = [
+    "sabnzbd_api_key_2026-07-15"
+    "nzbgeek_api_key_2026-07-15"
+  ];
   # No raw ports: every UI is a route below.
   net = {
     private = true;
@@ -36,6 +42,13 @@
       exposure = "public";
       auth = "native";
       maxBody = "500m";
+      # Strict per-IP rate limit + fail2ban on o002 (lib.nix edgeLogin).
+      loginPaths = [
+        "/Users/AuthenticateByName"
+        "/Users/AuthenticateWithQuickConnect"
+        "/Users/ForgotPassword"
+        "/Users/ForgotPassword/Pin"
+      ];
     };
     media = {
       name = "media"; # seerr

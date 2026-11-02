@@ -53,5 +53,10 @@
       proxy_set_header X-Forwarded-Host $host;
       send_timeout 600s;
     '';
+    # Strict per-IP rate limit + fail2ban on o002 (lib.nix edgeLogin).
+    loginPaths = [
+      "/api/auth/login"
+      "/api/auth/admin-sign-up"
+    ];
   };
 }

@@ -74,9 +74,6 @@ func str(p *string) string {
 
 // validateRoutes mirrors the lib.nix safety checks.
 func validateRoutes(s Service) error {
-	if len(s.Routes) > 0 && s.Nginx != nil && strings.TrimSpace(*s.Nginx) != "" {
-		return fmt.Errorf("%s: set either routes or nginx, not both", s.Name)
-	}
 	for _, n := range sortedRouteNames(s) {
 		r := s.Routes[n]
 		where := s.Name + ".routes." + n
@@ -755,9 +752,6 @@ func routesTableWith(svcs []Service, ovs []override, now time.Time) string {
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", s.Name, n, dash(str(r.FQDN)), r.Proto, r.Port,
 				exp, dash(str(r.Auth)), dash(strings.Join(r.Via, ",")), dash(resolvedHost(s)))
-		}
-		if len(s.Routes) == 0 && s.Nginx != nil {
-			fmt.Fprintf(w, "%s\t(nginx string, not converted)\t-\t-\t-\t-\t-\t-\t%s\n", s.Name, dash(resolvedHost(s)))
 		}
 	}
 	w.Flush()

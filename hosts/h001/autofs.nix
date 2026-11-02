@@ -3,10 +3,8 @@
   environment.systemPackages = [
     pkgs.nfs-utils
   ];
-  # C2: h004 exports only /data/nixarr (hosts/h004/nfs-data.nix, fsid=0), so
-  # its NFSv4 root is mounted at /nfs/h002/nixarr. The arr apps' stored paths
-  # (/nfs/h002/nixarr/media/...) stay the same; /data/backups is not exported.
-  # /nfs/h002 itself is the autofs indirect mount point.
+  # h004 exports /data/nixarr as its NFSv4 root, not /data/backups.
+  # Keep /nfs/h002/nixarr because arr stores absolute media paths there.
   services.autofs = {
     enable = true;
     autoMaster =

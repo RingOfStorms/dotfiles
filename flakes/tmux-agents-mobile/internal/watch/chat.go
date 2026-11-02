@@ -94,7 +94,7 @@ type ChatHub struct {
 	w  map[string]*chatWatcher
 }
 
-// NewChatHub returns a hub that polls session logs every 400ms and checks the
+// NewChatHub returns a hub that polls agent sessions every 400ms and checks the
 // pane (still there, same session, agent state, recap) every 2s. history may
 // be nil, which disables recaps.
 func NewChatHub(t *tmux.Client, l *transcript.Locator, history *transcript.History, render ChatRenderer, log *slog.Logger) *ChatHub {
@@ -111,9 +111,13 @@ func NewChatHub(t *tmux.Client, l *transcript.Locator, history *transcript.Histo
 	}
 }
 
-// Locate returns the agent kind and session log of the agent in a pane.
-func (h *ChatHub) Locate(ctx context.Context, p tmux.Pane) (kind, path string, err error) {
-	return h.locator.Find(ctx, p.PID)
+// Locate returns the session of the agent in a pane.
+func (h *ChatHub) Locate(ctx context.Context, p tmux.Pane) (transcript.Target, error) {
+	return h.locator.Find(ctx, paneRef(p))
+}
+
+func paneRef(p tmux.Pane) transcript.PaneRef {
+	return transcript.PaneRef{PID: p.PID, Title: p.Title, Path: p.Path}
 }
 
 type chatWatcher struct {
@@ -125,7 +129,7 @@ type chatWatcher struct {
 
 	// mu guards sess and cache: Earlier reads them from request goroutines.
 	mu    sync.Mutex
-	sess  *transcript.Session
+	sess  transcript.Reader
 	cache map[string]cached
 }
 
@@ -223,7 +227,7 @@ func (w *chatWatcher) run() {
 	ctx := context.Background()
 	subs := map[*stream]struct{}{}
 	var (
-		path      string
+		target    transcript.Target
 		state     ChatState
 		haveState bool
 		meta      ChatMeta
@@ -308,7 +312,7 @@ func (w *chatWatcher) run() {
 	// publishRecap shows omp's newest recap while nothing has happened in
 	// the conversation since it was written.
 	publishRecap := func() {
-		if w.sess == nil || w.hub.history == nil {
+		if w.sess == nil || w.hub.history == nil || target.Kind != transcript.AgentOmp {
 			return
 		}
 		w.mu.Lock()
@@ -361,7 +365,7 @@ func (w *chatWatcher) run() {
 			state, haveState = next, true
 			broadcast("state", state)
 		}
-		_, found, err := w.hub.locator.Find(ctx, p.PID)
+		found, err := w.hub.locator.Find(ctx, paneRef(p))
 		switch {
 		case err != nil && w.sess == nil:
 			broadcast("fallback", payload{Message: err.Error()})
@@ -370,17 +374,17 @@ func (w *chatWatcher) run() {
 			// The agent exited or is between sessions; keep showing what we
 			// have until the pane says otherwise.
 			return true
-		case found == path:
+		case found == target:
 			publishRecap()
 			return true
 		}
-		sess, err := transcript.Open(found)
+		sess, err := w.hub.locator.Open(found)
 		if err != nil {
 			broadcast("fallback", payload{Message: err.Error()})
 			return false
 		}
 		w.mu.Lock()
-		w.sess, w.cache, path = sess, map[string]cached{}, found
+		w.sess, w.cache, target = sess, map[string]cached{}, found
 		init := w.initLocked()
 		w.mu.Unlock()
 		broadcast("init", init)

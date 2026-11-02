@@ -17,6 +17,8 @@ let
   streamPorts = containersLib.edgeStreamPorts ../../../containers;
   # oauth2-proxy cookie/identity hygiene for app-facing hand vhosts (shared with routes.go).
   inherit (containersLib) nginxSnippets;
+  login = containersLib.edgeLogin;
+  loginServices = containersLib.edgeLoginServices ../../../containers;
 
   # h005 supplies the wildcard; the edge does not hold a DNS API credential.
   wildcardNames = [ "all" ];
@@ -173,10 +175,32 @@ in
     streamConfig = "include /var/lib/fleet-edge-streams/*.stream;";
   };
 
+  environment.etc = builtins.listToAttrs (map (s: {
+    name = "fail2ban/filter.d/fleet-login-${s.service}.conf";
+    value.text = ''
+      [Definition]
+      datepattern = ${login.datepattern}
+      failregex = ${login.failregex s.fqdns}
+      ignoreregex =
+    '';
+  }) loginServices);
+
   services.fail2ban = {
     enable = true;
     maxretry = 5;
     bantime = "1h";
+    jails = builtins.listToAttrs (map (s: {
+      name = "fleet-login-${s.service}";
+      value.settings = {
+        enabled = true;
+        filter = "fleet-login-${s.service}";
+        logpath = login.log;
+        backend = "auto";
+        port = "http,https";
+        maxretry = 5;
+        findtime = "10m";
+      };
+    }) loginServices);
     ignoreIP = [
       "127.0.0.1/8"
       "24.16.158.91" # Jason's ip

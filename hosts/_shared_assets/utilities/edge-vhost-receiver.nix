@@ -23,6 +23,7 @@ let
   dir = "/var/lib/fleet-edge-vhosts";
   nginxCfg = config.services.nginx;
   limitZone = "fleet_edge_rt";
+  login = (import ../../../containers/lib.nix).edgeLogin;
 
   hosts = lib.mapAttrs (_: h: h.overlayIp) (
     lib.filterAttrs (_: h: (h.overlayIp or null) != null) fleet.hosts
@@ -42,6 +43,10 @@ let
         limitZone
         ;
       certDir = config.fleet.wildcardCertDir;
+      loginZone = login.zone;
+      loginLog = login.log;
+      loginLogFormat = login.logFormat;
+      accessLog = "/var/log/nginx/access.log";
       # Same -c trick as wildcard-cert-receiver.nix: test what nginx runs.
       nginxTest = ''"${nginxCfg.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
       # Blocking, and its exit status is not enough: ExecReload is nginx -t
@@ -106,6 +111,8 @@ in
     services.nginx.appendHttpConfig = ''
       # Runtime public vhosts (cnt expose --exposure public, hosts/_shared_assets/utilities/edge-vhost-receiver.nix).
       limit_req_zone $binary_remote_addr zone=${limitZone}:10m rate=20r/s;
+      limit_req_zone $binary_remote_addr zone=${login.zone}:10m rate=${login.rate};
+      log_format ${login.logFormat} ${login.logFormatDef};
       include ${dir}/*.conf;
     '';
 

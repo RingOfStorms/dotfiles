@@ -11,11 +11,9 @@ let
   # Only h001 mounts the NAS (hosts/h001/autofs.nix -> 10.12.14.184:/, for
   # the arr container's nfs-h004 requirement). backup.nix pushes over ssh
   # (rsync), not NFS. Add a host here only when it really mounts the export.
-  # C2: export only the arr tree (/data/nixarr, holding media), not all of
-  # /data (backups, pinchflat, ...). h001 (hosts/h001/autofs.nix) mounts
-  # 10.12.14.184:/ at /nfs/h002/nixarr, so the /nfs/h002/nixarr/media
-  # paths stored in the arr apps don't change. The guard sentinel is now
-  # /data/nixarr/.h004-online (created below).
+  # Export only /data/nixarr, not the backups and other data alongside it.
+  # h001 mounts this at /nfs/h002/nixarr because arr stores absolute media
+  # paths there. The guard sentinel is /data/nixarr/.h004-online.
   # C2 (closed): root_squash is now enabled below. /data/backups was moved
   # into its own bcachefs subvolume (mode 0700 luser:users), but that
   # subvolume still shares the SAME superblock (same bcachefs filesystem,
@@ -60,6 +58,7 @@ let
     fleet.hosts.h001.lanIp
     fleet.hosts.h001.overlayIp
   ];
+  nfsClients6 = [ fleet.hosts.h001.overlayIp6 ];
   nfsPorts = lib.concatMapStringsSep ", " toString [
     nfs.nfsPort
     nfs.rpcbindPort
@@ -77,7 +76,7 @@ lib.mkMerge [
       # root filesystem to media clients.
       exports = ''
         ${exportRoot} ${
-          lib.concatMapStringsSep " " (ip: "${ip}(rw,sync,subtree_check,root_squash,fsid=0)") nfsClients
+          lib.concatMapStringsSep " " (ip: "${ip}(rw,sync,subtree_check,root_squash,fsid=0)") (nfsClients ++ nfsClients6)
         }
       '';
     };
@@ -107,6 +106,7 @@ lib.mkMerge [
 
     networking.firewall.extraInputRules = ''
       ip saddr { ${lib.concatStringsSep ", " nfsClients} } meta l4proto { tcp, udp } th dport { ${nfsPorts} } accept comment "NFS: h001 only"
+      ip6 saddr { ${lib.concatStringsSep ", " nfsClients6} } meta l4proto { tcp, udp } th dport { ${nfsPorts} } accept comment "NFS: h001 only (v6)"
     '';
 
   })

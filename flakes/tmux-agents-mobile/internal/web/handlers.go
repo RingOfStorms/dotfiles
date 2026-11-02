@@ -264,7 +264,7 @@ func (s *Server) panePage(w http.ResponseWriter, r *http.Request) {
 	// found; everything else (shells, unsupported agents) gets the terminal.
 	native := false
 	if s.chat != nil {
-		if _, _, err := s.chat.Locate(ctx, p); err == nil {
+		if _, err := s.chat.Locate(ctx, p); err == nil {
 			native = true
 		}
 	}

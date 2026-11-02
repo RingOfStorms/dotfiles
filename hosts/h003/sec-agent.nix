@@ -1,13 +1,9 @@
-# Host-specific sec-agent additions for h003.
 { inputs, constants, ... }:
 import ../_shared_assets/utilities/sec-agent.nix {
   inherit inputs constants;
   role = "machines-hightrust";
-  # H2: h003 is a floating-containers host (nginx + podman); it never
-  # initiates nix2nix (fleet root SSH) itself -- `containers` deploys are
-  # run from operator workstations, and it has neither remote_lio_builds
-  # nor ringofstorms.backup.enable. It may still fetch git+ssh flake
-  # inputs, so includeGitKeys (default true) stays on.
+  # Deploys originate on operator workstations; this host needs no fleet
+  # root SSH key. Git+SSH flake inputs still need includeGitKeys.
   includeFleetSshKeys = false;
   extraSecrets = {
     # Credentials of the shared `josh` atuin account, readable by the local

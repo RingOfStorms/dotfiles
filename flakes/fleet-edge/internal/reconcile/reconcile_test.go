@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -374,7 +375,7 @@ func TestLiveExposeWinsOverPlacement(t *testing.T) {
 	expose := edgevhost.Request{FQDN: "photos.example.com", Host: "h003", Until: time.Now().Add(time.Hour).Unix()}
 	rg.edge.files["photos.example.com"] = expose
 	rep := rg.pass()
-	if rg.edge.ops("add") != 0 || rg.edge.files["photos.example.com"] != expose {
+	if rg.edge.ops("add") != 0 || !reflect.DeepEqual(rg.edge.files["photos.example.com"], expose) {
 		t.Fatalf("placement add over a live expose: log %v files %v", rg.edge.log, rg.edge.files)
 	}
 	if got := edgeChanges(rep); got != "o002: photos.example.com kept: expose on h003" {
@@ -405,7 +406,7 @@ func TestLiveExposeWinsOverPlacement(t *testing.T) {
 	delete(rg.edge.files, "photos.example.com")
 	rg.edge.afterList = func() { rg.edge.files["photos.example.com"] = expose }
 	rep = rg.pass()
-	if rg.edge.files["photos.example.com"] != expose {
+	if !reflect.DeepEqual(rg.edge.files["photos.example.com"], expose) {
 		t.Fatalf("racing expose overwritten: %+v", rg.edge.files["photos.example.com"])
 	}
 	if got := edgeChanges(rep); got != "o002: photos.example.com kept: expose on h003" {

@@ -35,6 +35,8 @@ let
   # superproject); `import` keeps it lazy, so nothing here evaluates mkHost.
   fleetHosts = import ../hosts/fleet.nix;
   lanSubnet = fleetHosts.global.lanSubnet;
+  # sec-agent's hydrated files; service.nix `secrets` names live here.
+  secretsDir = fleetHosts.global.secretsDir;
 
   # ---------------------------------------------------------------- routes
   # Each route is normalized and validated here; any
@@ -90,6 +92,8 @@ let
     # auth = "oauth2-proxy" only
     "groups"
     "bypass"
+    # exposure = "public" via edge, auth = native/native-oidc only
+    "loginPaths"
   ];
 
   normalizeRoute =
@@ -198,6 +202,28 @@ let
             ));
           msg = "bypass must be a list of path prefixes like \"/api/\"";
         }
+        {
+          # Exact login endpoints (matched case-insensitively, optional
+          # trailing slash). o002's edge receiver (fleet-edge
+          # internal/edgevhost) gives them the strict edgeLogin zone and
+          # access log that o002's fail2ban jails read.
+          bad =
+            (r ? loginPaths)
+            && !(isPublic && builtins.elem "edge" via && (auth == "native" || auth == "native-oidc"));
+          msg = "loginPaths only apply to exposure = \"public\" routes via edge with auth = native or native-oidc";
+        }
+        {
+          bad =
+            !(builtins.isList (r.loginPaths or [ ]))
+            || builtins.length (r.loginPaths or [ ]) > 16
+            || !(builtins.all (
+              p:
+              builtins.isString p
+              && builtins.stringLength p <= 128
+              && builtins.match "/[A-Za-z0-9_.-][A-Za-z0-9_./-]*" p != null
+            ) (r.loginPaths or [ ]));
+          msg = "loginPaths must be a list of at most 16 exact paths like \"/api/auth/login\" ([A-Za-z0-9_./-], at most 128 chars, not \"/\")";
+        }
       ];
       firstBad = builtins.filter (c: c.bad) checks;
     in
@@ -235,6 +261,8 @@ let
             # oauth2-proxy: zitadel roles (any of) and unauthenticated path prefixes
             groups = r.groups or [ ];
             bypass = r.bypass or [ ];
+            # strict edge rate limit + fail2ban log (edgeLogin below)
+            loginPaths = r.loginPaths or [ ];
           }
         else
           {
@@ -254,8 +282,6 @@ let
     in
     if !(builtins.isAttrs raw) then
       throw "${svc.name}: routes must be an attrset"
-    else if raw != { } && (svc.nginx or null) != null then
-      throw "${svc.name}: set either routes or nginx, not both (nginx is the escape hatch for unconverted services)"
     else if dup != [ ] then
       throw "${svc.name}: two routes use the name ${builtins.head dup}"
     else
@@ -350,8 +376,6 @@ let
       fail "service name must be <= 11 characters (veth ve-<name>)"
     else if s.tcpPorts != [ ] || s.udpPorts != [ ] then
       fail "tcpPorts/udpPorts don't reach a private guest; declare tcp/udp routes instead (they get DNAT)"
-    else if s.nginx != null then
-      fail "nginx strings proxy to 127.0.0.1; convert to routes first"
     else if badUse != [ ] then
       fail "uses entry ${builtins.toJSON (builtins.head badUse)} is not \"<service>.<route>\""
     else if badEgress != [ ] then
@@ -389,6 +413,25 @@ let
     assert checkKind "podman";
     services;
 
+  # Secret grants: service.nix `secrets = [ "<name>" ... ]` lists the files
+  # under secretsDir (sec-agent's hydrated cache) the container binds.
+  # `cnt deploy`/`cnt move` refuse a target host that lacks one, and
+  # mkNixosContainer throws on a secretsDir bind that isn't declared here.
+  normalizeSecrets =
+    s:
+    let
+      secrets = s.secrets or [ ];
+      bad = builtins.filter (
+        n: !(builtins.isString n) || builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" n == null
+      ) secrets;
+    in
+    if !(builtins.isList secrets) then
+      throw "${s.name}: secrets must be a list of names under ${secretsDir}"
+    else if bad != [ ] then
+      throw "${s.name}: secrets entry ${builtins.toJSON (builtins.head bad)} is not a plain file name under ${secretsDir}"
+    else
+      secrets;
+
   # Defaults so service.nix files can stay short.
   normalize =
     service:
@@ -402,8 +445,8 @@ let
         tcpPorts = [ ];
         requires = [ ];
         udpPorts = [ ];
-        nginx = null;
         routes = { };
+        secrets = [ ];
         # false: podman services join the fleet-noinet network (host-module.nix);
         # nixos services need net.private and get their veth in the host's
         # fleet-net @noinet set. Published ports/routes still work; the
@@ -413,11 +456,15 @@ let
       }
       // service;
     in
-    s
-    // {
-      routes = normalizeRoutes s;
-      net = normalizeNet s;
-    };
+    if service ? nginx then
+      throw "${s.name}: the nginx string was removed; declare routes instead"
+    else
+      s
+      // {
+        routes = normalizeRoutes s;
+        net = normalizeNet s;
+        secrets = normalizeSecrets s;
+      };
 
   # The edge listener port on service hosts. Keep in
   # sync with cli/routes.go edgePort.
@@ -455,6 +502,16 @@ let
     hosts:
     builtins.filter (ip: ip != null) (
       map (name: hosts.${name}.overlayIp or null) (
+        builtins.filter (name: name == "o002" || (hosts.${name}.trust or null) == "low") (
+          builtins.attrNames hosts
+        )
+      )
+    );
+
+  tailnetExcludedOverlayIps6 =
+    hosts:
+    builtins.filter (ip: ip != null) (
+      map (name: hosts.${name}.overlayIp6 or null) (
         builtins.filter (name: name == "o002" || (hosts.${name}.trust or null) == "low") (
           builtins.attrNames hosts
         )
@@ -499,16 +556,16 @@ in
     checkNetIndexes
     allServices
     tailnetExcludedOverlayIps
+    tailnetExcludedOverlayIps6
     validWebSource
     webSourcesIps
     ;
   # Explicit per-host firewall allow-lists, generated from the inventory
   # (no host trusts tailscale0 as a whole).
-  #   hosts     fleet.nix hosts (overlayIp, trust)
+  #   hosts     fleet.nix hosts (overlayIp, overlayIp6, trust)
   #   exclude   host names to leave out even if high trust (o002: edge
   #             traffic must never satisfy a tailnet http allow)
-  # v6 is not generated (no host in fleet.nix has an overlayIp6 yet); a
-  # host that gains one needs a manual addition, same as nginx.edge.peers.
+  # Separate address-family lists keep nft's ip/ip6 expressions well typed.
   firewallHighTrustIps =
     {
       hosts,
@@ -516,6 +573,19 @@ in
     }:
     builtins.filter (ip: ip != null) (
       map (n: hosts.${n}.overlayIp or null) (
+        builtins.filter (n: (hosts.${n}.trust or null) == "high" && !(builtins.elem n exclude)) (
+          builtins.attrNames hosts
+        )
+      )
+    );
+
+  firewallHighTrustIps6 =
+    {
+      hosts,
+      exclude ? [ ],
+    }:
+    builtins.filter (ip: ip != null) (
+      map (n: hosts.${n}.overlayIp6 or null) (
         builtins.filter (n: (hosts.${n}.trust or null) == "high" && !(builtins.elem n exclude)) (
           builtins.attrNames hosts
         )
@@ -535,13 +605,19 @@ in
       ips = builtins.filter (ip: ip != null) (
         map (h: if (h.trust or null) == "low" then h.lanIp or null else null) (builtins.attrValues hosts)
       );
+      ips6 = builtins.filter (ip: ip != null) (
+        builtins.concatMap (
+          h: if (h.trust or null) == "low" then [ (h.lanIp6 or null) (h.overlayIp6 or null) ] else [ ]
+        ) (builtins.attrValues hosts)
+      );
     in
-    lib.mkIf (ips != [ ]) {
+    lib.mkIf (ips != [ ] || ips6 != [ ]) {
       family = "inet";
       content = ''
         chain input {
           type filter hook input priority -10; policy accept;
-          ip saddr { ${builtins.concatStringsSep ", " ips} } tcp dport 22 counter drop comment "M3: low-trust LAN devices must not reach ${host} SSH"
+          ${lib.optionalString (ips != [ ]) ''ip saddr { ${builtins.concatStringsSep ", " ips} } tcp dport 22 counter drop comment "M3: low-trust LAN devices must not reach ${host} SSH"''}
+          ${lib.optionalString (ips6 != [ ]) ''ip6 saddr { ${builtins.concatStringsSep ", " ips6} } tcp dport 22 counter drop comment "M3: low-trust IPv6 devices must not reach ${host} SSH"''}
         }
       '';
     };
@@ -551,20 +627,21 @@ in
   # fleet.nix typo / scoping bug silently locks out ssh from lio. Build a
   # NixOS `assertions` entry for the module that computes `ips` via
   # `firewallHighTrustIps`; fails the eval instead of the deploy.
-  #   ips   the computed high-trust ssh allow-list for this host
-  #   hosts fleet.nix hosts (for lio's overlayIp)
+  #   ips/ips6 the computed high-trust ssh allow-lists for this host
+  #   hosts fleet.nix hosts (for lio's overlayIp and overlayIp6)
   #   host  this host's name, for the assertion message
   sshGuardAssertion =
     {
       ips,
+      ips6,
       hosts,
       host,
     }:
     {
-      assertion = ips != [ ] && builtins.elem (hosts.lio.overlayIp or null) ips;
-      message = "ROUTING-PLAN §8 step 2: ${host}'s generated ssh allow-list is empty or excludes lio's overlay IP (${
-        toString (hosts.lio.overlayIp or null)
-      }) -- this would lock out ssh from lio; computed list: [ ${builtins.concatStringsSep ", " ips} ]";
+      assertion =
+        ips != [ ] && builtins.elem (hosts.lio.overlayIp or null) ips
+        && ips6 != [ ] && builtins.elem (hosts.lio.overlayIp6 or null) ips6;
+      message = "ROUTING-PLAN §8 step 2: ${host}'s generated ssh allow-list is empty or excludes lio's overlay IP in IPv4 or IPv6 -- this would lock out ssh from lio; computed lists: ${builtins.toJSON { inherit ips ips6; }}";
     };
 
   # Placement-free DNS route names and public CNAME membership. h005 keeps
@@ -620,6 +697,48 @@ in
           (builtins.attrValues s.routes))) (allServices dir)
     )));
 
+  # Edge login hardening (ROUTING-PLAN §6 req 4). A route's loginPaths become
+  # one `location ~* ^(<paths>)/?$` in its o002 vhost (fleet-edge
+  # internal/edgevhost Render, placements and public exposes alike) with the
+  # same proxy settings as `/`, plus: the strict `zone` (burst 5, 429 when
+  # over) on top of the global fleet_edge_rt zone, and a second access_log
+  # in `logFormat`. hosts/_shared_assets/utilities/edge-vhost-receiver.nix
+  # defines both in http{}; o002's fail2ban (hosts/oracle/o002/nginx.nix)
+  # runs one jail per service (edgeLoginServices) over `log`.
+  edgeLogin = {
+    zone = "fleet_edge_login";
+    rate = "6r/m"; # per client IP, shared by every login location
+    log = "/var/log/nginx/fleet-edge-login.log"; # nginx logrotates /var/log/nginx/*.log
+    logFormat = "fleet_login";
+    # $host is the vhost's fqdn (nginx picked the server by it).
+    logFormatDef = "'$remote_addr $host [$time_local] \"$request\" $status'";
+    # fail2ban cuts the date out of the line before matching (hence `\[\]`).
+    datepattern = "^[^\\[]*\\[({DATE})";
+    # Failed logins: 400 (vaultwarden's wrong password), 401, 403, and 429
+    # (the strict zone itself refused the request). The pattern is valid
+    # as both Python re (fail2ban) and POSIX ERE (containers/tests/edge-login.nix).
+    failregex =
+      fqdns:
+      "^<HOST> (${
+        builtins.concatStringsSep "|" (map (builtins.replaceStrings [ "." ] [ "\\." ]) fqdns)
+      }) \\[\\] \"[^\"]*\" (400|401|403|429)$";
+  };
+
+  # Services with public edge routes that declare loginPaths, with those
+  # routes' fqdns: [ { service; fqdns; } ] (o002's fail2ban jails).
+  edgeLoginServices =
+    dir:
+    builtins.filter (x: x.fqdns != [ ]) (
+      map (s: {
+        service = s.name;
+        fqdns = map (r: r.fqdn) (
+          builtins.filter (
+            r: r.exposure == "public" && builtins.elem "edge" r.via && (r.loginPaths or [ ]) != [ ]
+          ) (builtins.attrValues s.routes)
+        );
+      }) (allServices dir)
+    );
+
   # The extra-container `config` for a nixos-kind service. Pass it to
   # extra-container.lib.buildContainers { config = ...; }.
   #
@@ -665,11 +784,19 @@ in
       svc =
         let
           s = normalize service;
+          prefix = "${secretsDir}/";
+          plen = builtins.stringLength prefix;
+          secretBinds = map (b: builtins.substring plen (-1) b.host) (
+            builtins.filter (b: builtins.substring 0 plen b.host == prefix) binds
+          );
+          undeclared = builtins.filter (n: !(builtins.elem n s.secrets)) secretBinds;
         in
-        if s.internet || s.net.private then
-          s
+        if !(s.internet || s.net.private) then
+          throw "${s.name}: internet = false needs net.private for kind = \"nixos\""
+        else if undeclared != [ ] then
+          throw "${s.name}: binds ${prefix}${builtins.head undeclared} but service.nix secrets doesn't list ${builtins.toJSON (builtins.head undeclared)}"
         else
-          throw "${s.name}: internet = false needs net.private for kind = \"nixos\"";
+          s;
       # net.private (service.nix) is the supported switch; the legacy
       # privateNetwork argument gives a veth without addresses (unused).
       private = svc.net.private || privateNetwork;

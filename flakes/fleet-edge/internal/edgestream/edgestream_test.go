@@ -198,112 +198,23 @@ func TestExpireDropsWhatItCannotVouchFor(t *testing.T) {
 	}
 }
 
-const oldConf = `
-http { server { listen 443; proxy_pass http://100.64.0.13:8443; } }
-stream {
-server {
-  listen 3032;
-  proxy_pass 100.64.0.13:3032;
-}
-server { listen 9999; proxy_pass 100.64.0.13:9999; }
-server { listen 3032; proxy_pass 100.64.0.13:22; }
-}
-`
-
-func seededMarkerExists(c *Config) bool {
-	_, err := os.Stat(filepath.Join(c.Dir, SeededMarker))
-	return err == nil
-}
-
-func TestSeedFirstRunSeedsAndMarks(t *testing.T) {
+func TestEmptyDirectoryStaysClosedUntilReconcile(t *testing.T) {
+	calls := stubRunner(t, false)
 	c := testCfg(t)
-	c.Dir = filepath.Join(c.Dir, "streams") // created by Seed
-	got, err := c.Seed([]byte(oldConf))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 1 || got[0] != (Entry{Port: 3032, Host: "h001", Kind: KindPlacement}) {
-		t.Fatalf("seeded %+v", got)
-	}
-	b, _ := os.ReadFile(filepath.Join(c.Dir, "3032.stream"))
-	if string(b) != testCfg(t).Render(addReq()) {
-		t.Fatalf("seed differs from a pushed file:\n%s", b)
-	}
-	if !c.Pending() {
-		t.Fatal("seed must leave a reload owed")
-	}
-	if !seededMarkerExists(c) {
-		t.Fatal("first seed must write the seeded marker")
-	}
-	// An include-only file is not a static snapshot (but the one shot is spent).
-	c2 := testCfg(t)
-	if got, _ := c2.Seed([]byte("stream {\ninclude /var/lib/fleet-edge-streams/*.stream;\n}\n")); got != nil {
-		t.Fatalf("seeded from include-only config: %+v", got)
-	}
-	if !seededMarkerExists(c2) {
-		t.Fatal("an empty first seed must still write the marker")
-	}
-	// An address that is not exactly one fleet host is not guessed.
-	c3 := testCfg(t)
-	c3.Hosts["dup"] = "100.64.0.13"
-	if got, _ := c3.Seed([]byte(oldConf)); got != nil {
-		t.Fatalf("seeded an ambiguous address: %+v", got)
-	}
-}
-
-func TestSeedExistingStreamsOnlyMarks(t *testing.T) {
-	c := testCfg(t)
-	moved := render(Entry{Port: 3032, Host: "h003", Kind: KindPlacement}, "100.64.0.20")
-	_ = os.WriteFile(filepath.Join(c.Dir, "3032.stream"), []byte(moved), 0o644)
-	if got, err := c.Seed([]byte(oldConf)); err != nil || got != nil {
-		t.Fatalf("seeded over existing streams: %+v %v", got, err)
-	}
-	if b, _ := os.ReadFile(filepath.Join(c.Dir, "3032.stream")); string(b) != moved {
-		t.Fatalf("existing stream changed:\n%s", b)
-	}
-	if !seededMarkerExists(c) || c.Pending() {
-		t.Fatal("existing streams: want marker, no reload owed")
-	}
-}
-
-func TestSeedNotRepeatedAfterUnplace(t *testing.T) {
-	stubRunner(t, false)
-	c := testCfg(t)
-	if _, err := c.Seed([]byte(oldConf)); err != nil {
-		t.Fatal(err)
-	}
-	if err := c.Handle(&Request{Op: "remove", Kind: KindPlacement, Port: 3032, Host: "h001"}, nil); err != nil {
-		t.Fatal(err)
-	}
-	// Next activation (and boot): the empty directory stays closed.
-	for range 2 {
-		if got, err := c.Seed([]byte(oldConf)); err != nil || got != nil {
-			t.Fatalf("re-seeded after unplace: %+v %v", got, err)
-		}
-	}
-	if l, _ := c.List(); len(l) != 0 {
-		t.Fatalf("unplaced port reopened: %+v", l)
-	}
-}
-
-func TestSeedKeepsMovedStreamAcrossReboot(t *testing.T) {
-	stubRunner(t, false)
-	c := testCfg(t)
-	if _, err := c.Seed([]byte(oldConf)); err != nil {
-		t.Fatal(err)
-	}
-	if err := c.Handle(&Request{Op: "add", Kind: KindPlacement, Port: 3032, Host: "h003"}, nil); err != nil {
-		t.Fatal(err)
-	}
-	// Reboot with the persisted dir: boot seeds, then expires without reload.
-	if got, err := c.Seed([]byte(oldConf)); err != nil || got != nil {
-		t.Fatalf("re-seeded after move: %+v %v", got, err)
-	}
 	if gone, err := c.Expire(false); err != nil || len(gone) != 0 {
-		t.Fatalf("expire after reboot: %v %v", gone, err)
+		t.Fatalf("empty boot expiry: %v %v", gone, err)
 	}
-	if l, _ := c.List(); len(l) != 1 || l[0] != (Entry{Port: 3032, Host: "h003", Kind: KindPlacement}) {
-		t.Fatalf("after reboot %+v, want :3032 -> h003", l)
+	if entries, err := c.List(); err != nil || len(entries) != 0 {
+		t.Fatalf("empty directory opened streams: %v %v", entries, err)
+	}
+	if len(*calls) != 0 {
+		t.Fatalf("boot ran nginx: %v", *calls)
+	}
+	if err := c.Handle(addReq(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if entries, err := c.List(); err != nil || len(entries) != 1 || entries[0].Host != "h001" {
+		t.Fatalf("reconcile did not open stream: %v %v", entries, err)
 	}
 }
 

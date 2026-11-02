@@ -1,8 +1,8 @@
 // Package transcript reads an agent's own session log and turns it into a
 // list of chat items (user messages, assistant turns with their tool calls,
 // notices), so the phone can show the conversation natively instead of a
-// re-flowed terminal. Only omp is supported so far; the model is meant to be
-// shared by other agents' readers.
+// re-flowed terminal. omp (session JSONL) and opencode (SQLite) are
+// supported; both readers build the same items.
 package transcript
 
 import "slices"

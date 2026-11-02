@@ -1,33 +1,22 @@
-# h001 as a floating-container host (containers/README.md).
 { constants, ... }:
 {
-  # litellm (containers/litellm) is on 127.0.0.1:8094 behind the tailnet
-  # vhost litellm.joshuabell.xyz; no raw port to open.
-
   ringofstorms.containers = {
     enable = true;
     # nginx (:80/:443 internal, :8443 edge), the edge-peer drop on the
     # internal listener and the pushed cert are host-module defaults.
-    # LAN subnet for `exposure = "lan"` routes (nginx-acl-lan.conf).
     nginx.acl.lan = [ "10.12.14.0/24" ];
-    # Hand-written vhosts in mods/arr-nginx.nix (:34-38) admit the whole
-    # tailnet, so these explicit 80/443 sources preserve their clients.
-    # Placement-driven routes use runtime sets instead (ROUTING-PLAN 8.2).
-    # Narrow this when arr moves to a routes declaration.
+    # Hand-written vhosts in mods/arr-nginx.nix admit the whole tailnet.
+    # Placement-driven routes use runtime sets instead.
     nginx.extraWebSources = [
       "100.64.0.0/10"
       "fd7a:115c:a1e0::/48"
     ];
-    # Nightly restic of every service here, one snapshot per svc:<name>
-    # (ROUTING-PLAN §9.1). Repo + credentials: restic_h001_env_2026-10-01
-    # (sec-agent.nix configChanges sets environmentFile). Same schedule and
-    # repo as the host-only job in mods/restic-backup.nix.
+    # Shares the repository and schedule with mods/restic-backup.nix;
+    # sec-agent.nix supplies environmentFile for both jobs.
     backup = {
       enable = true;
       schedule = "03:00";
     };
-    # Host side for service.nix net.private (ROUTING-PLAN §8 step 5): NAT,
-    # DNAT for tcp/udp routes, DNS on 10.233.0.1, no container-to-container.
     privateNetwork.enable = true;
     # Checked by `containers deploy/move` against service.nix `requires`.
     capabilities = [
@@ -40,7 +29,7 @@
     # `arr` again (unless it was stopped with `containers stop arr`).
     # h004 creates the sentinel (/data/nixarr/.h004-online) whenever its NFS
     # server starts (hosts/h004/nfs-data.nix). /nfs/h002/nixarr is the autofs
-    # mount of h004's only export (C2: /data/nixarr, not all of /data).
+    # mount of h004's only export (/data/nixarr, not all of /data).
     guards.h004 = {
       mounts = [
         {

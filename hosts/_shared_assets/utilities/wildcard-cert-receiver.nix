@@ -1,5 +1,5 @@
-# Receiver for the public wildcard pushed by h005 (hosts/h005/wildcard-cert.nix,
-# ROUTING-PLAN §8 step 4). h005 runs `fleet-cert-receive [name]` over root SSH
+# Receiver for the public wildcard pushed by h005 (hosts/h005/wildcard-cert.nix).
+# h005 runs `fleet-cert-receive [name]` over root SSH
 # with a tar of fullchain.pem + key.pem on stdin. `name` (optional, taken from
 # $SSH_ORIGINAL_COMMAND since the forced command strips argv) selects which
 # cert this pair is: the zone domain by default, or one of

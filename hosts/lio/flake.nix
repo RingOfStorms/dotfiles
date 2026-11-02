@@ -87,11 +87,10 @@
           inputs.containers.nixosModules.default
           ({
             ringofstorms.containers.nginx.enable = true;
-            # net.private guests (ROUTING-PLAN §8 step 5); the legacy 10.0.0.x
-            # containers in containers.nix are outside its scope.
+            # Only net.private guests; the 10.0.0.x containers in
+            # containers.nix are outside its scope.
             ringofstorms.containers.privateNetwork.enable = true;
-            # Per-service restic into the shared fleet repo (ROUTING-PLAN
-            # §9.1); environmentFile comes from sec-agent.nix configChanges.
+            # The shared fleet repo's environmentFile comes from sec-agent.nix.
             ringofstorms.containers.backup.enable = true;
           })
           inputs.common.nixosModules.essentials

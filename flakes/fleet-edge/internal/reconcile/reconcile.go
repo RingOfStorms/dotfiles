@@ -43,6 +43,7 @@ import (
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/edgestream"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/edgevhost"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/overrides"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/placements"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/wanforward"
 )
@@ -87,6 +88,9 @@ type Config struct {
 	// Source is the registry's current export (placements.Service.Snapshot).
 	// An error leaves every answer as it is.
 	Source func() (placements.Export, error)
+	// Status reports host-local exposure overrides; unavailable hosts retain
+	// their last LAN answer instead of silently undoing a live override.
+	Status overrides.HostStatus
 	// TailnetDir and LANDir are the dnsmasq hostsdirs; "" skips that layer.
 	// They must exist (dnsmasq only watches a hostsdir present at its start),
 	// so a missing one is an error, never created here.
@@ -216,6 +220,24 @@ func (r *Reconciler) desired(exp placements.Export) *want {
 		}
 	}
 	inv := r.cfg.Inventory
+	observed := map[string][]overrides.HostOverride{}
+	failed := map[string]bool{}
+	if r.cfg.Status != nil {
+		for _, h := range exp.Host {
+			if _, ok := observed[h]; ok || failed[h] || h == "" {
+				continue
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			rows, err := r.cfg.Status(ctx, h)
+			cancel()
+			if err != nil {
+				failed[h] = true
+				w.errs = append(w.errs, fmt.Sprintf("%s exposure status: %v", h, err))
+			} else {
+				observed[h] = rows
+			}
+		}
+	}
 	names := make([]string, 0, len(inv.Services))
 	for n := range inv.Services {
 		names = append(names, n)
@@ -256,10 +278,19 @@ func (r *Reconciler) desired(exp placements.Export) *want {
 				continue
 			}
 			w.dns[Tailnet][fq] = *hi.OverlayIP
-			if (rt.Exposure == "lan" || rt.Exposure == "public") && hi.LanIP != nil && *hi.LanIP != "" {
+			lan := rt.Exposure == "lan" || rt.Exposure == "public"
+			for _, o := range observed[h] {
+				if o.Service == svc && o.Route == rn && o.Until > time.Now().Unix() && (o.Exposure == "lan" || o.Exposure == "public") {
+					lan = true
+				}
+			}
+			if failed[h] && !lan {
+				w.keep[LAN][fq] = true
+			}
+			if lan && hi.LanIP != nil && *hi.LanIP != "" {
 				w.dns[LAN][fq] = *hi.LanIP
 			}
-			if (rt.Exposure == "lan" || rt.Exposure == "public") && (hi.LanIP == nil || *hi.LanIP == "") {
+			if lan && (hi.LanIP == nil || *hi.LanIP == "") {
 				w.keep[LAN][fq] = true
 				w.errs = append(w.errs, fmt.Sprintf("%s.%s: host %s has no LAN IP; last LAN file kept", svc, rn, h))
 			}
@@ -275,7 +306,7 @@ func (r *Reconciler) desired(exp placements.Export) *want {
 				}
 				w.vhosts[fq] = edgevhost.Request{Op: "add", Kind: edgevhost.KindPlacement, FQDN: fq, Host: h,
 					MaxBody: rt.MaxBody, Websockets: rt.Websockets, Buffering: rt.Buffering,
-					RequestBuffering: rb, Timeouts: rt.Timeouts}
+					RequestBuffering: rb, Timeouts: rt.Timeouts, LoginPaths: rt.LoginPaths}
 			}
 		}
 	}

@@ -10,6 +10,10 @@
     nixos = "/var/lib/nixos";
   };
 
+  # sec-agent grant on the host (bound read-only in flake.nix); cnt deploy
+  # and cnt move refuse a target host that lacks it.
+  secrets = [ "openwebui_env_2026-03-15" ];
+
   net = {
     private = true;
     index = 6;

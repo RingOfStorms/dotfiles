@@ -135,7 +135,7 @@ func backupCheckScript(host string) string {
 func movePreflightTarget(s Service, to string) string {
 	dst := dataDir(s)
 	return strict + fmt.Sprintf(`test -d /etc/systemd-mutable/system || { echo "%[3]s lacks the containers host module" >&2; exit 1; }
-`, unitOf(s), s.Name, to) + backupCheckScript(to) + requiresScript(s, to) + fmt.Sprintf(`if [ -e %[6]s ]; then
+`, unitOf(s), s.Name, to) + backupCheckScript(to) + requiresScript(s, to) + secretsScript(s, to) + fmt.Sprintf(`if [ -e %[6]s ]; then
   echo "%[3]s: leftovers of an unfinished move of %[2]s; removing them" >&2
   %[7]s
 fi
@@ -572,6 +572,15 @@ func finishMove(s Service, from, to string, st *moveState) error {
 		}
 		return fmt.Errorf("retiring the source in the registry: %w\nthe move stopped before the switch: %s serves from %s (committed); the copy on %s is stopped and still installed, nothing was destroyed. Re-run `cnt move %s --to %s --from %s` (it resumes from the held token and redoes only the retire and the switch), or settle it with `cnt place %s --recover`",
 			err, s.Name, to, from, s.Name, to, from, s.Name)
+	}
+	if !dryRun {
+		ovs, err := listHostOverrides(from)
+		if err != nil {
+			return fmt.Errorf("reading exposure overrides before retiring %s: %w", from, err)
+		}
+		if err := carryOverride(s, ovs, to); err != nil {
+			return fmt.Errorf("carrying exposure to %s (source left installed; rerun move): %w", to, err)
+		}
 	}
 	info("8/9 switch: removing %s from %s (data kept as %s.moved-<date>)", s.Name, from, dataDir(s))
 	if err := remote(from, true, switchScript(s)); err != nil {

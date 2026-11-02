@@ -251,6 +251,14 @@ type HostPoll struct {
 	Status   *HostStatus `json:"status,omitempty"`
 }
 
+// Certificate is the most recently observed TLS leaf expiry for a route.
+type Certificate struct {
+	URL      string    `json:"url"`
+	Expires  time.Time `json:"expires"`
+	Expiring bool      `json:"expiring"`
+	Error    string    `json:"error,omitempty"`
+}
+
 // ServiceView is one row of the merged dashboard state. BoundHost is the host
 // the placement registry binds the service to (a row's effective host); ""
 // means the service is unplaced.
@@ -312,6 +320,7 @@ type Poller struct {
 	urlTmpl    string
 	httpClient *http.Client
 	store      *store.Store
+	afterPoll  []func() // set before Run; see OnPoll
 
 	mu         sync.RWMutex
 	polls      map[string]HostPoll // keyed by host name
@@ -604,10 +613,24 @@ func buildStoreSamples(host string, polledAt time.Time, st *HostStatus) (store.S
 	return s, fsOut
 }
 
+// OnPoll registers f to run after every poll cycle of Run (not PollOnce). f
+// runs on the poll goroutine, so it must return at once: alert.Engine.Kick only
+// signals its own goroutine. Register before Run starts.
+func (p *Poller) OnPoll(f func()) {
+	p.afterPoll = append(p.afterPoll, f)
+}
+
+func (p *Poller) pollAndNotify(ctx context.Context) {
+	p.PollOnce(ctx)
+	for _, f := range p.afterPoll {
+		f()
+	}
+}
+
 // Run polls every interval until ctx is cancelled. It polls once
 // immediately before the first sleep.
 func (p *Poller) Run(ctx context.Context, interval time.Duration) {
-	p.PollOnce(ctx)
+	p.pollAndNotify(ctx)
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	for {
@@ -615,7 +638,7 @@ func (p *Poller) Run(ctx context.Context, interval time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			p.PollOnce(ctx)
+			p.pollAndNotify(ctx)
 		}
 	}
 }

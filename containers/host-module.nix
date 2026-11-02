@@ -452,9 +452,9 @@ in
       };
       peers = lib.mkOption {
         type = lib.types.listOf lib.types.str;
-        default = [
-          "100.64.0.5"
-          "fd7a:115c:a1e0::5"
+        default = builtins.filter (ip: ip != null) [
+          (fleet.hosts.o002.overlayIp or null)
+          (fleet.hosts.o002.overlayIp6 or null)
         ];
         description = "Overlay addresses of the public edge (o002), v4 and v6.";
       };

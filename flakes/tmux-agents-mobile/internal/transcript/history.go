@@ -4,14 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
-
-	// Pure Go, so the binary stays CGO_ENABLED=0.
-	_ "modernc.org/sqlite"
 )
 
 // Recap is omp's "while you were away" summary of a session. omp writes one
@@ -39,13 +35,6 @@ type recapResult struct {
 	ok    bool
 }
 
-// dbStamp is what tells a changed database apart: SQLite in WAL mode appends
-// to the -wal file and only checkpoints into the main file now and then.
-type dbStamp struct {
-	main, wal time.Time
-	walSize   int64
-}
-
 // NewHistory reads <ompDir>/history.db.
 func NewHistory(ompDir string) *History {
 	return &History{path: filepath.Join(ompDir, "history.db"), recaps: map[string]recapResult{}}
@@ -59,7 +48,7 @@ func (h *History) LatestRecap(ctx context.Context, sessionID string) (Recap, boo
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	stamp, err := h.currentStamp()
+	stamp, err := statDB(h.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return Recap{}, false, nil
 	}
@@ -74,11 +63,10 @@ func (h *History) LatestRecap(ctx context.Context, sessionID string) (Recap, boo
 	}
 
 	if h.db == nil {
-		db, err := sql.Open("sqlite", h.dsn())
+		db, err := openReadOnly(h.path, 1)
 		if err != nil {
 			return Recap{}, false, err
 		}
-		db.SetMaxOpenConns(1)
 		h.db = db
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -116,28 +104,4 @@ func (h *History) Close() error {
 	err := h.db.Close()
 	h.db = nil
 	return err
-}
-
-func (h *History) currentStamp() (dbStamp, error) {
-	st, err := os.Stat(h.path)
-	if err != nil {
-		return dbStamp{}, err
-	}
-	stamp := dbStamp{main: st.ModTime()}
-	if wal, err := os.Stat(h.path + "-wal"); err == nil {
-		stamp.wal, stamp.walSize = wal.ModTime(), wal.Size()
-	}
-	return stamp, nil
-}
-
-// dsn opens read-only: omp owns the file. busy_timeout covers omp holding a
-// write lock for a moment.
-func (h *History) dsn() string {
-	u := url.URL{Scheme: "file", Path: h.path}
-	q := url.Values{}
-	q.Set("mode", "ro")
-	q.Add("_pragma", "busy_timeout(2000)")
-	q.Add("_pragma", "query_only(1)")
-	u.RawQuery = q.Encode()
-	return u.String()
 }

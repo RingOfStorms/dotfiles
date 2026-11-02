@@ -1,4 +1,4 @@
-# inet fleet-net (ROUTING-PLAN §8 step 5): guest isolation. Loaded by
+# Guest isolation. Loaded by
 # host-module.nix and checked by fleetnet_test.go. Sets are filled from the
 # ports files by fleet-containers-apply-ports.
 set guests {

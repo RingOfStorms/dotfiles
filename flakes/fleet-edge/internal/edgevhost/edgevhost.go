@@ -8,8 +8,10 @@
 // The receiver never accepts nginx text: it validates the request against its
 // build-time Config (domain, fleet host -> overlay IP map, names o002 already
 // serves) and renders the server block itself: proxy to the bound host's
-// http://<overlayIp>:8443 listener, the pushed wildcard, and
-// a limit_req zone. Every change is `nginx -t`-checked and rolled back on
+// http://<overlayIp>:8443 listener, the pushed wildcard, a limit_req zone,
+// and a strictly limited, separately logged location for the route's
+// loginPaths (fail2ban on o002 reads that log). Every change is
+// `nginx -t`-checked and rolled back on
 // failure. Expiry is also local: each file carries its deadline in a header
 // line and `fleet-edge vhost-expire` (timer, and at boot before nginx)
 // removes expired files, so o002 closes even if h005 is gone.
@@ -66,6 +68,9 @@ type Request struct {
 	Buffering        bool   `json:"buffering,omitempty"`
 	RequestBuffering bool   `json:"requestBuffering,omitempty"`
 	Timeouts         string `json:"timeouts,omitempty"`
+	// LoginPaths are the route's exact login endpoints (lib.nix loginPaths):
+	// one extra location with the strict login zone and the login log.
+	LoginPaths []string `json:"loginPaths,omitempty"`
 }
 
 // Entry is one installed runtime vhost (from its header line).
@@ -98,6 +103,14 @@ type Config struct {
 	// watches its workers to confirm a reload loaded the new config.
 	NginxMainPID string `json:"nginxMainPid"`
 	LimitZone    string `json:"limitZone"` // limit_req zone name defined in http{}
+	// Login locations (Request.LoginPaths; lib.nix edgeLogin): the strict
+	// limit_req zone and the extra access log (path, log_format name)
+	// fail2ban reads. AccessLog is the main access log, re-stated because
+	// a location's access_log replaces the inherited ones ("" = none).
+	LoginZone      string `json:"loginZone"`
+	LoginLog       string `json:"loginLog"`
+	LoginLogFormat string `json:"loginLogFormat"`
+	AccessLog      string `json:"accessLog"`
 }
 
 var (
@@ -105,6 +118,8 @@ var (
 	maxBodyRe = regexp.MustCompile(`^[0-9]{1,6}[kKmMgG]?$`)
 	timeRe    = regexp.MustCompile(`^[0-9]{1,6}(ms|s|m|h)?$`)
 	ipv4Re    = regexp.MustCompile(`^[0-9]{1,3}(\.[0-9]{1,3}){3}$`)
+	// Same rule as lib.nix loginPaths: a path, not "/", <= 128 chars.
+	loginPathRe = regexp.MustCompile(`^/[A-Za-z0-9_.-][A-Za-z0-9_./-]{0,126}$`)
 )
 
 // Validate checks an add/remove request against the config.
@@ -151,6 +166,17 @@ func (c *Config) Validate(r *Request) error {
 	if !timeRe.MatchString(r.Timeouts) {
 		return fmt.Errorf("timeouts %q not allowed", r.Timeouts)
 	}
+	if len(r.LoginPaths) > 0 && c.LoginZone == "" {
+		return errors.New("loginPaths given but this edge has no login zone")
+	}
+	if len(r.LoginPaths) > MaxLoginPaths {
+		return fmt.Errorf("at most %d loginPaths", MaxLoginPaths)
+	}
+	for _, p := range r.LoginPaths {
+		if !loginPathRe.MatchString(p) {
+			return fmt.Errorf("loginPath %q not allowed", p)
+		}
+	}
 	return nil
 }
 
@@ -181,6 +207,13 @@ func onOff(b bool) string {
 	return "off"
 }
 
+// MaxLoginPaths matches lib.nix's loginPaths limit.
+const MaxLoginPaths = 16
+
+// LoginBurst is the strict login zone's burst (the rate is lib.nix
+// edgeLogin.rate, in the zone's http{} definition).
+const LoginBurst = 5
+
 // Render returns the nginx file for a validated add request.
 func (c *Config) Render(r *Request) string {
 	hdr, _ := json.Marshal(Entry{FQDN: r.FQDN, Host: r.Host, Until: r.Until, Kind: r.Kind})
@@ -194,12 +227,44 @@ func (c *Config) Render(r *Request) string {
 	fmt.Fprintf(&b, "server {\n  listen 80;\n  listen [::]:80;\n  server_name %s;\n  location / { return 301 https://$host$request_uri; }\n}\n", r.FQDN)
 	fmt.Fprintf(&b, "server {\n  listen 443 ssl;\n  listen [::]:443 ssl;\n  server_name %s;\n", r.FQDN)
 	fmt.Fprintf(&b, "  ssl_certificate %s/fullchain.pem;\n  ssl_certificate_key %s/key.pem;\n", c.CertDir, c.CertDir)
-	// Permanent placement vhosts have no rate limit; only temporary exposes do.
+	// Permanent placement vhosts have no server-wide rate limit; only
+	// temporary exposes do. Login locations of both kinds get it below.
 	if c.LimitZone != "" && r.Kind != KindPlacement {
 		fmt.Fprintf(&b, "  limit_req zone=%s burst=100 nodelay;\n", c.LimitZone)
 	}
+	if len(r.LoginPaths) > 0 {
+		// Exact paths, any case (ASP.NET routes ignore it), optional
+		// trailing slash. A regex location wins over the `/` prefix.
+		alts := make([]string, len(r.LoginPaths))
+		for i, p := range r.LoginPaths {
+			alts[i] = strings.ReplaceAll(p, ".", `\.`)
+		}
+		fmt.Fprintf(&b, "  location ~* ^(?:%s)/?$ {\n", strings.Join(alts, "|"))
+		// A location's limit_req and access_log replace the inherited
+		// ones, so the global zone and main log are stated again.
+		if c.LimitZone != "" {
+			fmt.Fprintf(&b, "    limit_req zone=%s burst=100 nodelay;\n", c.LimitZone)
+		}
+		fmt.Fprintf(&b, "    limit_req zone=%s burst=%d nodelay;\n", c.LoginZone, LoginBurst)
+		b.WriteString("    limit_req_status 429;\n")
+		if c.AccessLog != "" {
+			fmt.Fprintf(&b, "    access_log %s;\n", c.AccessLog)
+		}
+		if c.LoginLog != "" {
+			fmt.Fprintf(&b, "    access_log %s %s;\n", c.LoginLog, c.LoginLogFormat)
+		}
+		c.writeProxy(&b, r)
+		b.WriteString("  }\n")
+	}
 	b.WriteString("  location / {\n")
-	fmt.Fprintf(&b, "    proxy_pass http://%s:%d;\n", c.Hosts[r.Host], EdgePort)
+	c.writeProxy(&b, r)
+	b.WriteString("  }\n}\n")
+	return b.String()
+}
+
+// writeProxy writes the proxy directives every location of r shares.
+func (c *Config) writeProxy(b *strings.Builder, r *Request) {
+	fmt.Fprintf(b, "    proxy_pass http://%s:%d;\n", c.Hosts[r.Host], EdgePort)
 	b.WriteString("    proxy_http_version 1.1;\n")
 	// Any proxy_set_header here drops the http-level ones, so set them all.
 	b.WriteString("    proxy_set_header Host $host;\n")
@@ -212,12 +277,10 @@ func (c *Config) Render(r *Request) string {
 	} else {
 		b.WriteString("    proxy_set_header Connection \"\";\n")
 	}
-	fmt.Fprintf(&b, "    client_max_body_size %s;\n", r.MaxBody)
-	fmt.Fprintf(&b, "    proxy_buffering %s;\n", onOff(r.Buffering))
-	fmt.Fprintf(&b, "    proxy_request_buffering %s;\n", onOff(r.RequestBuffering))
-	fmt.Fprintf(&b, "    proxy_read_timeout %s;\n    proxy_send_timeout %s;\n", r.Timeouts, r.Timeouts)
-	b.WriteString("  }\n}\n")
-	return b.String()
+	fmt.Fprintf(b, "    client_max_body_size %s;\n", r.MaxBody)
+	fmt.Fprintf(b, "    proxy_buffering %s;\n", onOff(r.Buffering))
+	fmt.Fprintf(b, "    proxy_request_buffering %s;\n", onOff(r.RequestBuffering))
+	fmt.Fprintf(b, "    proxy_read_timeout %s;\n    proxy_send_timeout %s;\n", r.Timeouts, r.Timeouts)
 }
 
 // ParseHeader reads the Entry from a rendered file's first line.
@@ -589,6 +652,9 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if strings.Contains(c.NginxReload, "--no-block") {
 		return nil, fmt.Errorf("%s: nginxReload must not use --no-block: settle confirms the reload only after it ran", path)
+	}
+	if c.LoginLog != "" && c.LoginLogFormat == "" {
+		return nil, fmt.Errorf("%s: loginLog needs loginLogFormat", path)
 	}
 	return &c, nil
 }

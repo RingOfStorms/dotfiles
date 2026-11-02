@@ -596,7 +596,8 @@ func (s *Service) edgeReq(o *Row) (edgevhost.Request, error) {
 		rb = *rt.RequestBuffering
 	}
 	return edgevhost.Request{Op: "add", FQDN: o.FQDN, Host: o.Host, Until: o.Until, MaxBody: rt.MaxBody,
-		Websockets: rt.Websockets, Buffering: rt.Buffering, RequestBuffering: rb, Timeouts: rt.Timeouts}, nil
+		Websockets: rt.Websockets, Buffering: rt.Buffering, RequestBuffering: rb, Timeouts: rt.Timeouts,
+		LoginPaths: rt.LoginPaths}, nil
 }
 
 func (s *Service) pushEdge(ctx context.Context, o *Row) error {

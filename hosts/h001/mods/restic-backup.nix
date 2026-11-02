@@ -4,8 +4,8 @@
 # Floating containers (/srv/containers/<svc>, their backupHooks and SQLite
 # copies) are backed up by the containers host module instead
 # (ringofstorms.containers.backup, fleet-backup.service, one snapshot per
-# service tagged `svc:<name>`; see floating-containers.nix and
-# containers/ROUTING-PLAN.md §9.1). Both jobs use the same repository.
+# service tagged `svc:<name>`; see floating-containers.nix).
+# Both jobs use the same repository.
 #
 # The repository, password and backend credentials all come from the
 # `restic_h001_env_2026-10-01` EnvironmentFile (sec-agent.nix).

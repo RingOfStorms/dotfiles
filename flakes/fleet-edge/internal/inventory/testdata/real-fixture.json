@@ -7,7 +7,6 @@
       "internet": true,
       "kind": "nixos",
       "name": "sec",
-      "nginx": null,
       "persist": {
         "data": "/var/lib/secrets_manager",
         "nixos": "/var/lib/nixos"
@@ -58,7 +57,6 @@
       "internet": true,
       "kind": "nixos",
       "name": "zitadel",
-      "nginx": null,
       "persist": {
         "keys": "/var/lib/zitadel-keys",
         "nixos": "/var/lib/nixos",

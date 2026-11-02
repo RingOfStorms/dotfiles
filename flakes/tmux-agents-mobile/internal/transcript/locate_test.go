@@ -50,10 +50,10 @@ func TestFindWithoutAgent(t *testing.T) {
 	}
 	l := &Locator{OmpDir: t.TempDir()}
 	// Our own process tree has no omp in it.
-	if _, _, err := l.Find(context.Background(), os.Getpid()); err != ErrNoSession {
+	if _, err := l.Find(context.Background(), PaneRef{PID: os.Getpid()}); err != ErrNoSession {
 		t.Fatalf("Find = %v, want ErrNoSession", err)
 	}
-	if _, _, err := l.Find(context.Background(), 0); err != ErrNoSession {
+	if _, err := l.Find(context.Background(), PaneRef{}); err != ErrNoSession {
 		t.Fatalf("Find(0) = %v", err)
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -33,13 +34,15 @@ type Service struct {
 	Persist     map[string]string `json:"persist"`
 	TCPPorts    []int             `json:"tcpPorts"`
 	UDPPorts    []int             `json:"udpPorts"`
-	Nginx       *string           `json:"nginx"`
 	BackupHook  string            `json:"backupHook"`
 	Attach      string            `json:"attach"`
 	Internet    *bool             `json:"internet"`
 	Requires    []string          `json:"requires"`
 	Routes      map[string]Route  `json:"routes"`
 	Net         Net               `json:"net"`
+	// Secrets are file names under Inventory.SecretsDir the container
+	// binds (service.nix `secrets`); deploy and move check them first.
+	Secrets []string `json:"secrets"`
 }
 
 // Net is lib.nix normalizeNet. IP is the guest
@@ -81,6 +84,9 @@ type Inventory struct {
 	DataRoot       string   `json:"dataRoot"`
 	// LanSubnet is the fleet LAN (fleet.nix global.lanSubnet), for `weblan`.
 	LanSubnet string `json:"lanSubnet"`
+	// SecretsDir is where sec-agent hydrates grants (fleet.nix
+	// global.secretsDir), for the service.nix `secrets` preflight.
+	SecretsDir string `json:"secretsDir"`
 }
 
 var (
@@ -193,6 +199,9 @@ commands:
                                (the cnt alias does not expand under sudo)
   expose --list [host...]      active overrides (also shown by routes and audit)
   expose --revoke <svc>        drop the override now (deploy drops it too)
+  expose --reset <svc>         clear every runtime override of svc: the h005 row (fleet-edge override
+                               API: o002, then DNS) and the host override on every container host
+                               that reports one; re-checks and fails if anything is left (sudo, as above)
   agent --listen ADDR [--host NAME]
                                read-only GET /status.json and /logs.json for fleet-edge
   check-idmap <host>           test idmapped mounts on /srv/containers and /nix
@@ -1070,6 +1079,7 @@ func prepareScript(s Service, host string) string {
 	b.WriteString("set -euo pipefail\n")
 	b.WriteString("test -d /etc/systemd-mutable/system -o -d /var/lib/fleet-containers || { echo 'host is missing the containers host module (inputs.containers.nixosModules.default)'; exit 1; }\n")
 	b.WriteString(requiresScript(s, host))
+	b.WriteString(secretsScript(s, host))
 	if s.Net.Private {
 		if s.Kind == "podman" {
 			// podman net.private rides the always-present fleet-noinet table
@@ -1221,18 +1231,6 @@ func siteScript(s Service, host string) string {
 	// hosts without containers.nginx (joe) must never be asked to run nginx -t.
 	if v := routesVhost(s); v != "" && needsHostVhost(s) {
 		conf := "# managed by containers, service " + s.Name + " (generated from routes)\n" + v
-		b.WriteString(nginxSiteScript(nginxDir, s.Name, conf))
-	} else if len(s.Routes) == 0 && s.Nginx != nil && strings.TrimSpace(*s.Nginx) != "" {
-		conf := *s.Nginx
-		if hh, ok := inv.Hosts[host]; ok {
-			if hh.OverlayIP != nil {
-				conf = strings.ReplaceAll(conf, "@OVERLAY_IP@", *hh.OverlayIP)
-			}
-			if hh.LanIP != nil {
-				conf = strings.ReplaceAll(conf, "@LAN_IP@", *hh.LanIP)
-			}
-		}
-		conf = "# managed by containers, service " + s.Name + "\n" + conf
 		b.WriteString(nginxSiteScript(nginxDir, s.Name, conf))
 	} else {
 		b.WriteString(fmt.Sprintf("rm -f %s/%s.conf.broken\n", nginxDir, s.Name))
@@ -2143,6 +2141,33 @@ func requiresScript(s Service, host string) string {
 		fmt.Fprintf(&b, "[ -e %s ] || missing=\"$missing %s\"\n", q(capDir+"/"+r), r)
 	}
 	fmt.Fprintf(&b, "if [ -n \"$missing\" ]; then echo \"%s requires:$missing, which %s does not offer (ringofstorms.containers.capabilities)\" >&2; exit 1; fi\n", s.Name, host)
+	return b.String()
+}
+
+var secretNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+// secretsScript fails unless every secret the service declares (service.nix
+// `secrets`) is hydrated on the host: sec-agent writes each grant to
+// <secretsDir>/<name>, which the container binds read-only. Runs before
+// anything is stopped or installed, so a host without the grant is refused
+// up front instead of failing the container start (or a move half-way).
+func secretsScript(s Service, host string) string {
+	if len(s.Secrets) == 0 {
+		return ""
+	}
+	if inv == nil || inv.SecretsDir == "" {
+		return fmt.Sprintf("echo '%s declares secrets but the inventory has no secretsDir (old containers flake?)' >&2; exit 1\n", s.Name)
+	}
+	var b strings.Builder
+	b.WriteString("missing=\n")
+	for _, n := range s.Secrets {
+		if !secretNameRe.MatchString(n) {
+			return fmt.Sprintf("echo %s >&2; exit 1\n", q(fmt.Sprintf("%s: secrets entry %q is not a plain file name", s.Name, n)))
+		}
+		fmt.Fprintf(&b, "[ -f %s ] || missing=\"$missing %s\"\n", q(inv.SecretsDir+"/"+n), n)
+	}
+	fmt.Fprintf(&b, "if [ -n \"$missing\" ]; then echo \"%s needs secret(s)$missing, which %s has not hydrated in %s; grant them in hosts/%s/sec-agent.nix (extraSecrets) and rebuild %s first\" >&2; exit 1; fi\n",
+		s.Name, host, inv.SecretsDir, host, host)
 	return b.String()
 }
 

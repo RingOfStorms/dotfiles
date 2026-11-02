@@ -16,12 +16,9 @@
     enable = true;
     # LAN subnet for `exposure = "lan"` routes (nginx-acl-lan.conf).
     nginx.acl.lan = [ "10.12.14.0/24" ];
-    # Host side for service.nix net.private (ROUTING-PLAN §8 step 5).
     privateNetwork.enable = true;
-    # Nightly restic of every service here, one snapshot per svc:<name>
-    # (ROUTING-PLAN §9.1). Credentials: restic_h001_env_2026-10-01 (shared
-    # fleet repo; snapshots group by svc tags, not host), wired in
-    # sec-agent.nix via configChanges.
+    # Shares h001's fleet repository; snapshots group by service tags, not
+    # host. sec-agent.nix supplies environmentFile via configChanges.
     backup = {
       enable = true;
       schedule = "03:00";

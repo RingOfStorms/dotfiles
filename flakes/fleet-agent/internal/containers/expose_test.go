@@ -191,6 +191,100 @@ func TestExposePublicOrder(t *testing.T) {
 	}
 }
 
+// resetEdge is a stateful h005: revoke drops the service's row.
+type resetEdge struct {
+	fakeEdgeAPI
+	rows    []edgeRow
+	stuck   bool // revoke "succeeds" but the row stays (sweep pending)
+	revoked []string
+}
+
+func (f *resetEdge) revoke(svc string) error {
+	f.revoked = append(f.revoked, svc)
+	if f.revokeErr != nil || f.stuck {
+		return f.revokeErr
+	}
+	var keep []edgeRow
+	for _, r := range f.rows {
+		if r.Service != svc {
+			keep = append(keep, r)
+		}
+	}
+	f.rows = keep
+	return nil
+}
+func (f *resetEdge) list(bool) ([]edgeRow, *edgeVerify, error) { return f.rows, nil, f.listErr }
+
+func TestExposeResetClearsEverywhere(t *testing.T) {
+	hostOv := map[string][]override{
+		"h001": {{Service: "app", Route: "web", Exposure: "lan", Baseline: "tailnet"}, {Service: "other", Route: "web", Exposure: "lan"}},
+		"lio":  {{Service: "app", Route: "web", Exposure: "public", Baseline: "tailnet"}}, // stale copy after a move
+	}
+	list := func(h string) ([]override, error) {
+		if h == "down" {
+			return nil, errors.New("ssh: timeout")
+		}
+		return hostOv[h], nil
+	}
+	var revoked []string
+	revokeHost := func(h string) error {
+		revoked = append(revoked, h)
+		var keep []override
+		for _, o := range hostOv[h] {
+			if o.Service != "app" {
+				keep = append(keep, o)
+			}
+		}
+		hostOv[h] = keep
+		return nil
+	}
+	// lio is not in the host list: h005's row names it, so it is swept too.
+	edge := &resetEdge{rows: []edgeRow{{Service: "app", Route: "web", Host: "lio"}, {Service: "keep", Route: "web", Host: "h001"}}}
+	if err := exposeReset(edge, nil, "app", []string{"h001", "h003"}, list, revokeHost); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	if strings.Join(edge.revoked, ",") != "app" || strings.Join(revoked, ",") != "h001,lio" {
+		t.Fatalf("h005 revoked %v, hosts revoked %v", edge.revoked, revoked)
+	}
+	if len(hostOv["h001"]) != 1 || hostOv["h001"][0].Service != "other" || len(edge.rows) != 1 || edge.rows[0].Service != "keep" {
+		t.Fatalf("other services' overrides must survive: %v %v", hostOv, edge.rows)
+	}
+}
+
+func TestExposeResetReportsWhatIsLeft(t *testing.T) {
+	none := func(string) error { return nil }
+	empty := func(h string) ([]override, error) {
+		if h == "down" {
+			return nil, errors.New("ssh: timeout")
+		}
+		return nil, nil
+	}
+	// h005 unreachable: the hosts are still cleared, but reset fails.
+	err := exposeReset(nil, errNoToken, "app", []string{"h001"}, empty, none)
+	if err == nil || !strings.Contains(err.Error(), "override API") {
+		t.Errorf("no h005 must fail: %v", err)
+	}
+	// A host that does not answer is never reported clean.
+	err = exposeReset(&resetEdge{}, nil, "app", []string{"h001", "down"}, empty, none)
+	if err == nil || !strings.Contains(err.Error(), "down: overrides unknown") {
+		t.Errorf("unreachable host must fail: %v", err)
+	}
+	// h005's row survives the DELETE (o002 push failed, sweep retries).
+	edge := &resetEdge{rows: []edgeRow{{Service: "app", Route: "web", Host: "h001", State: "removing", LastError: "o002: down"}}, stuck: true}
+	err = exposeReset(edge, nil, "app", []string{"h001"}, empty, none)
+	if err == nil || !strings.Contains(err.Error(), "h005 still has app.web") {
+		t.Errorf("leftover h005 row must fail: %v", err)
+	}
+	// The host revert fails: still listed afterwards.
+	stuckHost := func(string) ([]override, error) {
+		return []override{{Service: "app", Route: "web", Exposure: "lan"}}, nil
+	}
+	err = exposeReset(&resetEdge{}, nil, "app", []string{"h001"}, stuckHost, func(string) error { return errors.New("nginx -t") })
+	if err == nil || !strings.Contains(err.Error(), "h001: revoke: nginx -t") || !strings.Contains(err.Error(), "h001 still has app.web lan") {
+		t.Errorf("failed host revert must fail: %v", err)
+	}
+}
+
 func TestExpireForeverOnlyPublic(t *testing.T) {
 	dir := t.TempDir()
 	oldO, oldN, oldR := overridesDir, nginxDir, runCmd

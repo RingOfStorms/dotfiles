@@ -19,11 +19,6 @@ let
     nginxReload = "systemctl reload nginx";
     nginxMainPid = "systemctl show -p MainPID --value nginx";
   });
-  # Snapshot of nginx.nix's pre-cutover stream; never derived from placement.
-  # Seeded once per edge (stream-seed writes ${dir}/.seeded); dir must persist.
-  snapshot = pkgs.writeText "fleet-edge-stream-seed.conf" ''
-    server { listen 3032; proxy_pass ${fleet.hosts.h001.overlayIp}:3032; }
-  '';
   path = lib.makeBinPath [ pkgs.coreutils pkgs.gnugrep pkgs.systemd ];
   receive = pkgs.writeShellScriptBin "fleet-stream-receive" ''
     export PATH=${path}
@@ -34,25 +29,16 @@ let
     export PATH=${path}
     exec ${lib.getExe cfg.package} stream-expire --config ${receiverConfig} "$@"
   '';
-  seed = pkgs.writeShellScript "fleet-stream-seed" ''
-    umask 022
-    exec ${lib.getExe cfg.package} stream-seed --config ${receiverConfig} --snapshot ${snapshot}
-  '';
 in {
   environment.systemPackages = [ receive expire ];
   systemd.tmpfiles.rules = [ "d ${dir} 0755 root root -" ];
-  system.activationScripts.fleet-stream-seed = {
-    deps = [ "specialfs" ];
-    text = "${seed}";
-  };
   systemd.services.fleet-stream-expire-boot = {
-    description = "Seed and expire runtime edge streams before nginx";
+    description = "Expire runtime edge streams before nginx";
     wantedBy = [ "multi-user.target" ];
     before = [ "nginx.service" ];
     after = [ "systemd-tmpfiles-setup.service" ];
     serviceConfig = {
       Type = "oneshot";
-      ExecStartPre = seed;
       ExecStart = "${lib.getExe expire} --no-reload";
     };
   };

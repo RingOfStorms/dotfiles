@@ -1,18 +1,9 @@
-# Host-specific sec-agent additions for h001.
-#
-# h001 continues to run the OpenBao server for the hosts that have not been
-# deployed yet, but its own consumers read the sec-agent cache below. Keeping
-# the two stores and rendered directories separate is what makes that
-# dual-run safe.
 { inputs, constants, ... }:
 import ../_shared_assets/utilities/sec-agent.nix {
   inherit inputs constants;
   role = "machines-hightrust";
-  # H2: h001 backs up to B2 via restic_h001_env and imports neither
-  # backup.nix nor remote_lio_builds.nix, so it never needs nix2nix (root
-  # fleet SSH). It does fetch git+ssh flake inputs (e.g. the `life`
-  # container) over Forgejo/GitHub, so includeGitKeys (default true) stays
-  # on to hydrate nix2github/nix2gitforgejo.
+  # Backups use B2, not fleet SSH. Git+SSH flake inputs still need the
+  # Forgejo/GitHub keys supplied by includeGitKeys.
   includeFleetSshKeys = false;
   extraSecrets = {
     # Credentials of the shared `josh` atuin account, readable by the local

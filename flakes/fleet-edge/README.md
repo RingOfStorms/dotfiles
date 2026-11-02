@@ -16,9 +16,32 @@ One binary, `fleet-edge`, runs as several processes:
 | `fleet-edge dns-plan [--apply]` | h005, by hand | diff (and apply) the bunny zone against `dns-records.nix` `publicSpec` |
 | `fleet-edge forwards-apply` | h005, root | install the reconciler's WAN forwards as `table ip fleet-wan-forwards` |
 | `fleet-edge vhost-receive` / `vhost-expire` | o002, ssh forced command / timer | runtime edge vhosts in `/var/lib/fleet-edge-vhosts` |
-| `fleet-edge stream-receive` / `stream-expire` / `stream-seed` | o002, ssh forced command / timer / boot | runtime TCP streams in `/var/lib/fleet-edge-streams` |
+| `fleet-edge stream-receive` / `stream-expire` | o002, ssh forced command / timer / boot | runtime TCP streams in `/var/lib/fleet-edge-streams` |
 | `fleet-edge share-serve` / `share-apply` / `share-sweep` | o002 | `*.share` temporary sharing (`hosts/_shared_assets/utilities/share-receiver.nix`) |
 | `fleet-edge import-beszel` | by hand | import historical Beszel metrics |
+
+## Alerts and TLS expiry
+
+`services.fleet-edge.alerts.ntfyUrl` (CLI `--ntfy-url`, environment
+`FLEET_EDGE_NTFY_URL`) is the complete ntfy topic URL; empty disables sends.
+No pre-existing ntfy endpoint/topic was found in this repository, so deployment
+must supply it explicitly. `alerts.healthDownMinutes` defaults to 5.
+
+Every minute, placed services are checked for a backup stamp older than 36h,
+continuous non-active/unknown status or failing declared HTTP health endpoints,
+and served HTTPS leaf certificates expiring in under 14 days. Missing backup
+stamps get a 36h observation grace. `/services` shows certificate expiry and
+probe errors even with notifications disabled. TLS inspection sends no app
+credentials and intentionally reads expired/untrusted leaf certificates.
+The monitor sends one notification per open condition, clears it on recovery,
+and stores de-duplication state in the metrics SQLite DB (memory only with
+`dbPath = ""`). Failed deliveries are retried; no repeated reminder spam.
+
+LAN DNS incorporates unexpired LAN exposure overrides reported by the current
+placement host; expiry/revoke removes that extra answer, and moves change its
+address. Unknown host status keeps the last LAN answer. Public login routes
+carry `loginPaths` to o002; exact case-insensitive endpoints retain normal proxy
+settings plus global and strict login zones, 429 responses and fail2ban logs.
 
 ## Dashboard
 
@@ -179,9 +202,9 @@ run on any conflict, and never deletes a record the spec does not own.
   edge listener already returns 444 to anything it no longer serves.
 - **Streams close by deletion.** nginx's `stream` module has no `return`,
   and a `server` with no `proxy_pass` fails `nginx -t`, so a closed stream
-  port is a deleted file. The stream directory is persisted; o002 seeds it
-  once (`.seeded` marker) from a Nix snapshot and the reconciler owns it
-  afterwards, so an empty directory stays closed.
+  port is a deleted file. The stream directory is persisted and owned only
+  by the reconciler. An empty directory on a freshly reinstalled o002 stays
+  closed until h005's next reconcile pass (at most 30 seconds).
 - **Receivers never take nginx text.** h005 sends JSON over a forced-command
   ssh key; the receiver renders, writes atomically, runs `nginx -t` and
   reloads, and leaves a `.reload-pending` marker for a failed reload. h005 and

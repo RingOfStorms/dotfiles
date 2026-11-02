@@ -18,6 +18,13 @@
   # Logical dump that travels with cnt backups/moves (pgBackRest repo too).
   backupHook = "mkdir -p /var/lib/life/backups && runuser -u postgres -- pg_dumpall > /var/lib/life/backups/cnt-dumpall.sql";
 
+  # sec-agent grants on the host (bound read-only in flake.nix); cnt deploy
+  # and cnt move refuse a target host that lacks one.
+  secrets = [
+    "life_pgbackrest_2026-09-30"
+    "life_backup_env_2026-09-30"
+  ];
+
   # Life validates Zitadel tokens (issuer sso.joshuabell.xyz) through the host
   # nginx and calls LocalAI (recognition, localai.joshuabell.xyz) on joe's
   # nginx; restic/pgBackRest offsite targets are on the internet.

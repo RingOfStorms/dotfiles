@@ -54,7 +54,8 @@ var tmpl = template.Must(
 // dashboard: no background, default icon CDN, no extra links.
 type Config struct {
 	// Title shown in the nav and <title>; "" means "fleet-edge".
-	Title string
+	Title        string
+	Certificates func() []state.Certificate
 	// Background is an http(s) URL used directly, or a local file path
 	// served at /assets/bg. "" means no background image.
 	Background string
@@ -242,6 +243,7 @@ type IndexData struct {
 	ActiveCount   int
 	FailedCount   int
 	BackupStale   int
+	Certificates  []state.Certificate
 	HostsTotal    int
 	HostsUp       int
 	// Expose overrides (public cnt expose), when OverridesURL is set.
@@ -478,6 +480,9 @@ func (s *Server) handleServices(w http.ResponseWriter, r *http.Request) {
 		return m.Services[i].Name < m.Services[j].Name
 	})
 	data := IndexData{Merged: m, Common: s.common("services"), TotalServices: len(m.Services)}
+	if s.cfg.Certificates != nil {
+		data.Certificates = s.cfg.Certificates()
+	}
 	for _, svc := range m.Services {
 		switch svc.Active {
 		case "active":

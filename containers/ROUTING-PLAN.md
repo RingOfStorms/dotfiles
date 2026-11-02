@@ -1069,16 +1069,16 @@ Taken 2026-10-16:
      the declared route, §5.2), adds the CNAME and tells o002 to include a
      runtime vhost, and h005 as the authority (§5.3). The host part
      (edge server on `:8443`) already falls out of `routesVhost`.
-   - **LAN DNS**: also build-time (`dnsRecords`). A tailnet → lan
-     override admits LAN sources at nginx, but LAN-only clients only resolve
-     the name if it already has a LAN record (or they use the host's LAN IP
-     with the name as SNI/Host). The CLI prints a note.
+   - **LAN DNS: done 2026-11-01 (code).** The reconciler reads the bound
+     host's exposure overrides; tailnet → LAN adds a LAN answer until expiry,
+     and follows a move. Unavailable status retains the last answer.
    - **Tested 2026-10-22 on h001** (gen 844): `trilium.web` tailnet → lan
      for 3m; from h003 over the LAN (`10.12.14.10`) 403 → 302 (oauth2 gate,
      so auth still applies) → 403 two seconds after expiry; tailnet unchanged;
      `cnt audit h001` clean.
-   - **Not yet**: h005 as the authority, `cnt move` carrying overrides,
-     `--reset` for several overrides (one per service today).
+   - **Done 2026-11-01 (code):** `cnt move` carries tailnet/LAN overrides
+     with their original deadline; `cnt expose --reset <svc>` clears the
+     fleet-edge API row and all host-local copies, then checks for leftovers.
    - **Public expose design (approved 2026-10-24; deployed; live 5-minute
      trial (rollout step 5 below) not yet run).** `hosts/h005/fleet-edge.nix`
      has `overrides.enable = true` with `pushTarget`/`bunnyKeyFile`/
@@ -1259,6 +1259,16 @@ Taken 2026-10-16:
    target. A move that lost its row to another client leaves both hosts
    alone for `cnt place <svc> --recover`. `containers/README.md` has the full
    procedure and `containers/PLACEMENT-PLAN.md` the registry design.
+10. **Done 2026-11-01 (code, not deployed):** o002 login-path limits and
+    fail2ban for vaultwarden, immich and Jellyfin (`arr`), retaining the global
+    zone. Unused service `nginx` strings removed and rejected by the schema.
+11. **Done 2026-11-01 (code, notifications opt-in):** fleet-edge ntfy alerts
+    for stale/missing backup stamps, continuous unhealthy services (default
+    5 minutes), and TLS expiry under 14 days; expiry is also on `/services`.
+    SQLite de-duplicates notifications across restart and resets on recovery.
+    Set `services.fleet-edge.alerts.ntfyUrl` to the topic URL. No existing ntfy
+    URL/topic was found in the repository; no endpoint was invented.
+
 
 ## 9. Carried over from the migration plan
 
@@ -1378,15 +1388,15 @@ Still open:
 - `joe` is the only remaining backup-less container host; enable
   `ringofstorms.containers.backup` there (repo secret via sec-agent) if it
   should be a move target.
-- Stale backups are only flagged on the dashboard. Nothing sends an alert
-  yet (left for the monitoring work).
+- Stale backup notifications are implemented (see §8.11); configuring an
+  ntfy topic and deploying remain operator actions.
 
-### 9.2 Secret grants in service.nix
+### 9.2 Secret grants in service.nix — done 2026-11-01 (code)
 
-Containers bind `/var/lib/secrets_manager_hydrated/<name>` read-only;
-h001's `sec-agent.nix` grants them by hand (`cnt restart <svc>` after
-rotation). Declare them in `service.nix` so `deploy`/`move` can refuse
-early when the target host lacks a grant.
+`secrets = [ "name" ];` declares files under `fleet.global.secretsDir`.
+Deploy/move refuse before mutation unless every target file exists. Existing
+arr, life, litellm, open-webui and vaultwarden secret binds are declared;
+Nix rejects undeclared hydrated-secret binds. Grants still belong to sec-agent.
 
 ### 9.3 Identity core: break-glass and a cold-restore test — **done 2026-10-22**
 

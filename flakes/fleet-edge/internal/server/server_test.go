@@ -60,6 +60,19 @@ func TestHandleIndexRenders(t *testing.T) {
 	}
 }
 
+func TestServicesShowsCertificateExpiry(t *testing.T) {
+	srv := New(fakeSource{m: sample()}, Config{Certificates: func() []state.Certificate {
+		return []state.Certificate{{URL: "https://photos.example.com", Expires: time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC), Expiring: true}}
+	}})
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
+	for _, text := range []string{"TLS certificates", "https://photos.example.com", "2026-11-05", "expires in under 14 days"} {
+		if !strings.Contains(w.Body.String(), text) {
+			t.Fatalf("missing %q: %s", text, w.Body.String())
+		}
+	}
+}
+
 func TestHandleHosts(t *testing.T) {
 	srv := New(fakeSource{m: sample()}, Config{})
 	req := httptest.NewRequest(http.MethodGet, "/hosts", nil)

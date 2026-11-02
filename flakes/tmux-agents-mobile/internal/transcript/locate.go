@@ -15,24 +15,64 @@ import (
 // ErrNoSession means no agent with a readable session runs in the pane.
 var ErrNoSession = errors.New("no agent session found for this pane")
 
-// Locator finds the session log of the agent running under a pane. It mirrors
-// session_for_pane/omp_session in tmux-agents' resume.sh, but needs nothing
-// from the plugin, so it works with older plugin versions too.
+// Locator finds the session of the agent running under a pane. It mirrors
+// session_for_pane in tmux-agents' resume.sh, but needs nothing from the
+// plugin, so it works with older plugin versions too.
 type Locator struct {
 	// OmpDir is omp's agent directory (PI_CODING_AGENT_DIR, else ~/.omp/agent).
 	OmpDir string
+	// OpenCode is opencode's database; nil disables opencode.
+	OpenCode *OpenCodeDB
 	// Ps is the ps binary; defaults to "ps" on PATH.
 	Ps string
 }
 
-// NewLocator returns a locator using omp's own directory resolution.
+// NewLocator returns a locator using omp's and opencode's own directory
+// resolution.
 func NewLocator() *Locator {
 	dir := os.Getenv("PI_CODING_AGENT_DIR")
 	if dir == "" {
 		home, _ := os.UserHomeDir()
 		dir = filepath.Join(home, ".omp", "agent")
 	}
-	return &Locator{OmpDir: dir}
+	return &Locator{OmpDir: dir, OpenCode: NewOpenCodeDB(DefaultOpenCodeDBPath())}
+}
+
+// Agent kinds a Target can name.
+const (
+	AgentOmp      = "omp"
+	AgentOpenCode = "opencode"
+)
+
+// Target is the session an agent pane shows. Ref is the session log path for
+// omp and the session id for opencode.
+type Target struct {
+	Kind string
+	Ref  string
+}
+
+// PaneRef is what the locator needs to know about a pane.
+type PaneRef struct {
+	PID int
+	// Title is the terminal title; opencode names its session there.
+	Title string
+	// Path is the pane's current directory, used when the agent's own cwd
+	// cannot be read.
+	Path string
+}
+
+// Open starts reading the target's conversation.
+func (l *Locator) Open(t Target) (Reader, error) {
+	switch t.Kind {
+	case AgentOmp:
+		return Open(t.Ref)
+	case AgentOpenCode:
+		if l.OpenCode == nil {
+			return nil, ErrNoSession
+		}
+		return l.OpenCode.Open(t.Ref)
+	}
+	return nil, ErrNoSession
 }
 
 type proc struct {
@@ -41,15 +81,15 @@ type proc struct {
 	args      string
 }
 
-// Find returns the agent kind and session log path for the process tree
-// rooted at panePID.
-func (l *Locator) Find(ctx context.Context, panePID int) (kind, path string, err error) {
-	if panePID <= 0 {
-		return "", "", ErrNoSession
+// Find returns the session of the agent in the process tree rooted at the
+// pane's process.
+func (l *Locator) Find(ctx context.Context, pane PaneRef) (Target, error) {
+	if pane.PID <= 0 {
+		return Target{}, ErrNoSession
 	}
 	procs, err := l.ps(ctx)
 	if err != nil {
-		return "", "", err
+		return Target{}, err
 	}
 	children := map[int][]int{}
 	byPID := map[int]proc{}
@@ -57,9 +97,10 @@ func (l *Locator) Find(ctx context.Context, panePID int) (kind, path string, err
 		children[p.ppid] = append(children[p.ppid], p.pid)
 		byPID[p.pid] = p
 	}
-	// Breadth-first: the shallowest omp is the agent; deeper ones are its
-	// workers. Sandbox wrappers (nono) run the agent as their child.
-	queue := []int{panePID}
+	// Breadth-first: the shallowest agent process is the agent; deeper ones
+	// are omp's workers or opencode's `serve` child (same comm). Sandbox
+	// wrappers (nono) run the agent as their child.
+	queue := []int{pane.PID}
 	seen := map[int]bool{}
 	for len(queue) > 0 {
 		pid := queue[0]
@@ -69,16 +110,39 @@ func (l *Locator) Find(ctx context.Context, panePID int) (kind, path string, err
 		}
 		seen[pid] = true
 		p := byPID[pid]
-		if filepath.Base(p.comm) == "omp" {
+		switch filepath.Base(p.comm) {
+		case "omp":
 			path, ok := l.ompSession(p)
 			if !ok {
-				return "omp", "", ErrNoSession
+				return Target{Kind: AgentOmp}, ErrNoSession
 			}
-			return "omp", path, nil
+			return Target{Kind: AgentOmp, Ref: path}, nil
+		// The nix wrapper's name, cut to 15 characters by ps.
+		case "opencode", ".opencode-wrapp", ".opencode-wrapped":
+			id, ok := l.openCodeSession(ctx, p, pane)
+			if !ok {
+				return Target{Kind: AgentOpenCode}, ErrNoSession
+			}
+			return Target{Kind: AgentOpenCode, Ref: id}, nil
 		}
 		queue = append(queue, children[pid]...)
 	}
-	return "", "", ErrNoSession
+	return Target{}, ErrNoSession
+}
+
+func (l *Locator) openCodeSession(ctx context.Context, p proc, pane PaneRef) (string, bool) {
+	if l.OpenCode == nil {
+		return "", false
+	}
+	argv := strings.Fields(p.args)
+	if raw, err := os.ReadFile("/proc/" + strconv.Itoa(p.pid) + "/cmdline"); err == nil {
+		argv = strings.Split(strings.TrimRight(string(raw), "\x00"), "\x00")
+	}
+	cwd, err := os.Readlink("/proc/" + strconv.Itoa(p.pid) + "/cwd")
+	if err != nil {
+		cwd = pane.Path
+	}
+	return l.OpenCode.FindSession(ctx, argv, cwd, pane.Title)
 }
 
 func (l *Locator) ps(ctx context.Context) ([]proc, error) {

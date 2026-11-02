@@ -96,6 +96,8 @@
         dataRoot = containersLib.dataRoot;
         # LAN subnet, for the `weblan` ports-file lines (host-module.nix).
         lanSubnet = containersLib.lanSubnet;
+        # sec-agent's hydrated dir, for the service.nix `secrets` preflight.
+        secretsDir = (import ../hosts/fleet.nix).global.secretsDir;
       };
 
       packages = forAll (pkgs: rec {

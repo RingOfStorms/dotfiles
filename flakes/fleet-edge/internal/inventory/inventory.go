@@ -37,6 +37,8 @@ type Route struct {
 	Buffering         bool   `json:"buffering"`
 	RequestBuffering  *bool  `json:"requestBuffering"`
 	Timeouts          string `json:"timeouts"`
+	// LoginPaths (public edge routes): strict login locations on o002.
+	LoginPaths []string `json:"loginPaths"`
 }
 
 // Str returns s dereferenced, or "" if s is nil. Used by templates and
@@ -67,7 +69,6 @@ type Service struct {
 	Persist     map[string]string `json:"persist"`
 	TCPPorts    []int             `json:"tcpPorts"`
 	UDPPorts    []int             `json:"udpPorts"`
-	Nginx       *string           `json:"nginx"`
 	// Routes may be absent; treat missing as empty.
 	Routes map[string]Route `json:"routes"`
 }

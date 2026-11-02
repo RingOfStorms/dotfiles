@@ -105,6 +105,18 @@
               default = "/var/lib/fleet-edge/metrics.db";
               description = "Path to the SQLite time-series metrics database (empty string disables persistence).";
             };
+            alerts = {
+              ntfyUrl = lib.mkOption {
+                type = lib.types.str;
+                default = "";
+                description = "Full ntfy topic URL. Empty disables notifications; certificate dashboard checks remain enabled.";
+              };
+              healthDownMinutes = lib.mkOption {
+                type = lib.types.ints.positive;
+                default = 5;
+                description = "Continuous service health failure before an ntfy notification.";
+              };
+            };
             geoipCountryFile = lib.mkOption {
               type = lib.types.str;
               default = "";
@@ -465,6 +477,7 @@
                 FLEET_EDGE_LINKS = toString (pkgs.writeText "fleet-edge-links.json" (builtins.toJSON cfg.links));
                 FLEET_EDGE_DB = cfg.dbPath;
                 FLEET_EDGE_GEOIP_COUNTRY_FILE = cfg.geoipCountryFile;
+                FLEET_EDGE_NTFY_URL = cfg.alerts.ntfyUrl;
                 FLEET_EDGE_ZITADEL_ISSUER = if cfg.auth.zitadel.enable then cfg.auth.zitadel.issuer else "";
                 FLEET_EDGE_ZITADEL_PROJECT_ID = if cfg.auth.zitadel.enable then cfg.auth.zitadel.projectId else "";
                 FLEET_EDGE_ZITADEL_CLAIM = cfg.auth.zitadel.claim;
@@ -497,7 +510,8 @@
                   ${lib.getExe fleetEdgePkg} \
                     --listen ${cfg.listen} \
                     --inventory ${cfg.inventoryFile} \
-                    --status-url-template ${lib.escapeShellArg cfg.statusUrlTemplate}
+                    --status-url-template ${lib.escapeShellArg cfg.statusUrlTemplate} \
+                    --health-down-after ${toString cfg.alerts.healthDownMinutes}m
                 '';
                 Restart = "on-failure";
                 RestartSec = "5s";

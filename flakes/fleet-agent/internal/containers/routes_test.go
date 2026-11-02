@@ -420,7 +420,6 @@ func TestValidateRoutes(t *testing.T) {
 		err string
 	}{
 		"ok":          {Service{Name: "a", Routes: map[string]Route{"web": ok}}, ""},
-		"both":        {Service{Name: "a", Nginx: sp("server {}"), Routes: map[string]Route{"web": ok}}, "not both"},
 		"public none": {Service{Name: "a", Routes: map[string]Route{"web": func() Route { r := ok; r.Auth = sp("none"); return r }()}}, "publicWithoutAuth"},
 		"public none ok": {Service{Name: "a", Routes: map[string]Route{"web": func() Route {
 			r := ok

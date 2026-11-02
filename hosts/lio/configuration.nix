@@ -15,6 +15,10 @@ let
       "lio"
     ];
   };
+  sshHighTrustIps6 = fleetLib.firewallHighTrustIps6 {
+    hosts = fleet.hosts;
+    exclude = [ "o002" "lio" ];
+  };
   nixBuildReceive = pkgs.writeShellApplication {
     name = "fleet-nix-build-receive";
     text = ''
@@ -39,12 +43,9 @@ let
   };
 in
 {
-  # Close port 22 on the global allow-list set by hardening.nix and re-open
-  # it only on tailscale0 (high-trust overlay IPs only, ROUTING-PLAN §8 step
-  # 2; o002 excluded) + the LAN CIDR (kept: lio is a workstation reached
-  # from the LAN too). Using nftables source-address filtering (rather than
-  # per-interface) means it keeps working regardless of whether the LAN is
-  # reached via wired or Wi-Fi.
+  # SSH is restricted to high-trust tailnet peers (excluding o002) and
+  # the LAN. Source-address filtering keeps LAN access working over both
+  # wired and Wi-Fi interfaces.
   #
   # `allowedTCPPorts` has list-merge semantics across modules, and `mkForce`
   # replaces *all* contributions — so any port this host should open
@@ -57,6 +58,7 @@ in
   networking.firewall.allowedTCPPorts = lib.mkForce [ ];
   networking.firewall.extraInputRules = ''
     iifname "tailscale0" ip saddr { ${lib.concatStringsSep ", " sshHighTrustIps} } tcp dport 22 accept comment "generated: ssh, high-trust tailnet only (ROUTING-PLAN 8.2)"
+    iifname "tailscale0" ip6 saddr { ${lib.concatStringsSep ", " sshHighTrustIps6} } tcp dport 22 accept comment "generated: ssh, high-trust tailnet only (ROUTING-PLAN 8.2, v6)"
     ip saddr 10.12.14.0/24 tcp dport 22 accept comment "lio: LAN ssh kept"
   '';
 
