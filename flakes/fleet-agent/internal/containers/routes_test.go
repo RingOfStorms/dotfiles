@@ -632,7 +632,7 @@ func TestRoutesTableNetAndDNSEdge(t *testing.T) {
 	idx := 7
 	svcs := []Service{
 		{Name: "sec", Routes: map[string]Route{"web": httpRoute("secrets", 8300, "public", "native-oidc")}},
-		{Name: "trilium", Net: Net{Private: true, Index: &idx}, Routes: map[string]Route{"web": httpRoute("notes", 80, "tailnet", "oauth2-proxy")}},
+		{Name: "trilium", Net: Net{Private: true, Index: &idx, IP: sp("10.233.7.2")}, Routes: map[string]Route{"web": httpRoute("notes", 80, "tailnet", "oauth2-proxy")}},
 		{Name: "pics", Routes: map[string]Route{"web": httpRoute("pics", 80, "tailnet", "native")}},
 		{Name: "forgejo", Routes: map[string]Route{"ssh": {Port: 3032, Proto: "tcp", Exposure: "public", Via: []string{"edge"}}}},
 		{Name: "mc", Routes: map[string]Route{"game": {Port: 25565, Proto: "udp", Exposure: "public", Via: []string{"router"}}}},
@@ -641,7 +641,7 @@ func TestRoutesTableNetAndDNSEdge(t *testing.T) {
 	lines := strings.Split(tbl, "\n")
 	want := map[string][]string{
 		"sec ":     {"host", "dns ok, edge ok"},
-		"trilium ": {"private", "dns missing(tailnet), edge -"},
+		"trilium ": {"10.233.7.2", "dns missing(tailnet), edge -"},
 		"pics ":    {"host", "dns ok, edge reload pending"},
 		"forgejo ": {"host", "dns -, edge ok"},
 		"mc ":      {"host", "dns -, edge pending(wan)"},
@@ -665,9 +665,9 @@ func TestRoutesTableNetAndDNSEdge(t *testing.T) {
 			t.Errorf("no row %s:\n%s", prefix, tbl)
 		}
 	}
-	// Unknown state: "?" and the routing report error is not fatal.
-	if !strings.Contains(routesTable(svcs[:1]), "?") {
-		t.Error("nil state must show ?")
+	// Offline state has no health claim, and the routing report error is not fatal.
+	if got := (*routeState)(nil).health(svcs[0], "web", svcs[0].Routes["web"]); got != "-" {
+		t.Errorf("offline state = %q, want -", got)
 	}
 	if fetchRouteState(func() (*edgeClient, error) { return nil, errNoToken }) != nil {
 		t.Error("no credentials must give nil state")

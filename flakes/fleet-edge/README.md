@@ -157,6 +157,11 @@ every registry write, and makes these follow the effective hosts:
   and no server-wide rate limit: they rely only on the global zone and the
   strict login zone on the route's `loginPaths`, plus o002's fail2ban login
   jails.
+  The login log is pre-created by tmpfiles (`nginx:nginx 0640`) before nginx
+  and fail2ban starts, including switches. Vhost, stream, share and certificate
+  receiver config tests run as nginx so a missing log cannot become root-owned.
+  Login jails use the file-polling backend: `fleet-login-arr` protects Jellyfin;
+  `fleet-login-immich`, `fleet-login-vaultwarden` and `sshd` complete the intended list.
 - **o002 streams**: each `public` + `via = edge` + `proto = tcp` route
   (forgejo ssh :3032) is pushed to o002's stream receiver, which writes
   `/var/lib/fleet-edge-streams/<port>.stream`

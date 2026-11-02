@@ -70,6 +70,7 @@ func TestPortPktHelper(t *testing.T) {
 // machinectl is a stub that prints the guest's PID, and an nsenter wrapper
 // can fail the guest transaction to exercise the undo.
 func TestPortForwardPackets(t *testing.T) {
+	fwdTestDir(t)
 	sh := newNsShell(t)
 	for _, b := range []string{"ip", "ss", "grep", "nsenter", "readlink", "sleep"} {
 		if _, err := exec.LookPath(b); err != nil {

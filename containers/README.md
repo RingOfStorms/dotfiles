@@ -109,12 +109,12 @@ must be able to fetch that ref, so pair it with `deploy --local`).
 | `containers health <svc>` | every route answers on its host (backend and nginx) |
 | `containers destroy <svc>` | uninstall (data kept; `--purge` deletes it). `--host` on a host the registry does not bind removes that stray copy and leaves the row; the bound copy, or a row a move still holds, needs `--force` (the bound copy's row is then removed, revision-guarded) |
 | `containers check-idmap <host>` | the idmap test above |
-| `containers routes [svc]` | declared routes from the inventory: fqdn, proto, port, exposure, auth, via, and the registry-bound host (`-` when unplaced) |
+| `containers routes [svc]` | declared routes, registry-bound host (`-` when unplaced), NET (`host` or private IP), and DNS/EDGE from fleet-edge's routing/override APIs (`-` offline) |
 | `containers audit [host...] [--stdin]` | read-only: runs `ss -ltnupH` on each host (default: all container hosts) and lists every non-loopback listener as `declared` (a route, `tcpPorts`/`udpPorts` of a service the registry binds to that host), `host` (small allowlist in `flakes/fleet-agent/internal/containers/routes.go`: 22, 80, 443, 8443, 53, tailscale 41641/udp, dhcp, mdns; plus host daemons the host module declares in `/etc/fleet-containers/host-listeners`, e.g. the status endpoint at its configured address; plus, matched by process name rather than port, tailscaled's dynamic sockets on tailnet/wildcard addresses and systemd-resolved LLMNR on 5355) or `UNDECLARED` (incl. ports of `exposure = "local"` routes, and `proto = "http"` backend ports found on a non-loopback address — those must stay on `127.0.0.1`, nginx is the only thing allowed to expose them). Needs root on the remote host to see process names; non-root users get `sudo -n` (fails fast instead of hanging if it needs a password). If sudo there needs a password, plain ssh can't prompt (no TTY): run it on the host itself and feed the file in with `--stdin` (exactly one host): `sudo ss -ltnupH > /tmp/<host>.ss && cnt audit <host> --stdin < /tmp/<host>.ss`, or collect the file with `ssh -t`. Empty `--stdin` input (or input with no listeners) is an error, so a failed collection never looks like a clean host. With a machine key it also prints `== routing (h005)`: fleet-edge's comparison of the DNS, edge vhost, TCP stream and WAN forward layers against the registry (diagnostic only; omitted without a key). Otherwise exits 0 |
 | `containers port open <svc> <port>/<tcp\|udp> --for <dur> [--from <host\|cidr>]... [--iface tailnet\|lan\|any] [--host h]` | open a port temporarily (see [Temporary ports](#temporary-ports-cnt-port)) |
 | `containers port ls [host...]` / `port close <svc> <port>/<proto> [--from ...] [--iface ...]` | list / close them early |
 | `containers expose <svc>[.<route>] --exposure tailnet\|lan\|public --for DUR\|forever [--reason T]` | widen one http route on its host for a while. tailnet/lan: `--for` required, max 24h; the host reverts it at expiry (transient timer, plus `fleet-containers-expose-expire` at boot and every minute). `public`: fleet-edge on h005 adds the public CNAME and pushes an o002 runtime vhost (default 8h, any duration ≥ 1m or `forever`; h005 owns the expiry). Public expose (and `--revoke` of one) signs with this machine's key (`/machine-key.json`, root-only), so run `sudo fleet containers expose ...`: the `cnt` alias does not expand under sudo. `expose --list [host...]` / `expose --revoke <svc>`; `deploy` drops an override; `routes` and `audit` show them |
-| `containers expose --reset <svc>` | clear the fleet-edge override API row and every host-local override. A host whose revert still owes the nginx reload is revoked again, which retries the reload; the final re-read counts a pending reload as remaining state. Unreachable hosts or remaining state are reported as errors |
+| `containers expose --reset <svc>` | clear the fleet-edge override API row and every host-local override, including interrupted/orphan directories. Retry an owed nginx reload up to three times and re-read to confirm; pending reloads and unreachable hosts return non-zero, never clean |
 
 `cnt move` carries tailnet/LAN overrides to the destination with their original
 deadline (the clock does not restart) before removing the source. Public
@@ -313,7 +313,7 @@ ports) restart them.
 ### Temporary ports (`cnt port`)
 
 `cnt port open <svc> <port>/<tcp|udp> --for <dur>` opens a port for at most
-24h with no rebuild. The only state is an element in an nft set of
+24h with no rebuild. Host-network ports use an element in an nft set of
 `inet nixos-fw` (`cnt-tmp`, or `cnt-tmp4`/`cnt-tmp6` with `--from`). Each
 element has a timeout and the comment `svc=<svc>`. The kernel expires it,
 and a firewall reload empties the sets, so they fail closed. Open and close
@@ -334,7 +334,7 @@ are logged with `logger -t cnt-port`.
   `cnt-fwd4` with `--from`, and `cnt-fwd-any`/`cnt-fwd4-any` for
   `--iface any`; template `flakes/fleet-agent/internal/containers/cnt-port.nft`,
   loaded by the first such open). Same timeout, `svc=<svc>` comment,
-  `--iface`/`--from` scoping and fail-closed reload; never from guests, and
+  `--iface`/`--from` scoping; never from guests, and
   a declared tcp/udp route on the same port wins. IPv4 only: v6 `--from`
   sources are dropped with a note (all-v6 is refused). It refuses a port a
   host process listens on beyond loopback (the forward would shadow it).
@@ -348,8 +348,12 @@ are logged with `logger -t cnt-port`.
   outside 10.233.0.0/16. DNAT keeps the client's address, so the host itself
   and other guests never reach a temporary port. The guest element lasts
   as long as the longest live forward of that port, and close deletes it
-  with the last one. The kernel expires it, and a guest firewall reload or
-  restart empties the set (fail closed). The open refuses a guest that
+  with the last one. The kernel expires it. After a host firewall reload,
+  `fleet-containers-port-restore` restores live forwards with their remaining
+  TTL from `/var/lib/fleet-containers/port-fwd`; its minute sweep also restores
+  guest elements after a guest firewall restart. Close removes saved entries;
+  move/destroy remove the source's forwards and state before firewall restart.
+  Expired state is pruned, never extended. The open refuses a guest that
   isn't running or has no `cnt-guest` set, and it removes the host forward
   again if adding the guest element fails. A set is missing when the guest
   keeps the iptables firewall: lib.nix enables nftables in private guests
@@ -525,6 +529,10 @@ Public native-auth routes can declare `loginPaths = [ "/api/auth/login" ];`:
 o002 adds a 6 requests/minute per-IP login zone (burst 5, HTTP 429), retains
 the global zone, and logs failures for service-specific fail2ban jails.
 Vaultwarden, Immich and Jellyfin are wired; Jellyfin belongs to the `arr` jail.
+The login log is created/repaired by tmpfiles as `nginx:nginx 0640` before
+nginx and fail2ban start. All o002 receiver config tests run as nginx, not root;
+the file-backed login jails use polling. Expected jails: `fleet-login-arr`
+(Jellyfin), `fleet-login-immich`, `fleet-login-vaultwarden`, plus `sshd`.
 `secrets` lists hydrated secret file names (not paths). Deploy/move check every
 file on the target before installing/stopping anything; missing grants refuse
 the operation. Nix also rejects undeclared hydrated-secret bind mounts.

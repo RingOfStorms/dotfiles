@@ -13,6 +13,12 @@ let
   mutable = "/etc/systemd-mutable/system";
   thisHost = config.networking.hostName;
   fleetLib = import ./lib.nix;
+  # port-restore runs nft, machinectl and nsenter (cnt port forwards).
+  portRestorePath = [
+    pkgs.nftables
+    pkgs.systemd
+    pkgs.util-linux
+  ];
   # Only hand-written vhosts have build-time source literals. Placement-driven
   # admission comes exclusively from the runtime @src/@src6/@src_lan sets.
   webSources4 = fleetLib.webSourcesIps {
@@ -890,6 +896,45 @@ in
             RemainAfterExit = true;
             ExecStart = applyPorts;
             ExecReload = applyPorts;
+          };
+        };
+
+        # Re-adds the live `cnt port open` forwards of net.private services
+        # (table ip cnt-port, and the NixOS guest's cnt-guest element) from
+        # ${stateDir}/port-fwd after every firewall start or reload (this
+        # unit), and every minute for guests whose firewall restarted (the
+        # -sweep unit; a timer can't re-run a RemainAfterExit unit). Each
+        # comes back with the time it has left; expired ones are pruned.
+        # See fleet-agent internal/containers/port.go ("forward state").
+        systemd.services.fleet-containers-port-restore = {
+          description = "Restore temporary cnt port forwards after a firewall reload";
+          wantedBy = [ "multi-user.target" ];
+          after = [ "nftables.service" ];
+          partOf = [ "nftables.service" ];
+          unitConfig.ReloadPropagatedFrom = [ "nftables.service" ];
+          path = portRestorePath;
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            ExecStart = "${lib.getExe cfg.package} port-restore";
+            ExecReload = "${lib.getExe cfg.package} port-restore";
+          };
+        };
+        systemd.services.fleet-containers-port-restore-sweep = {
+          description = "Restore temporary cnt port forwards (minute sweep)";
+          after = [ "nftables.service" ];
+          path = portRestorePath;
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "${lib.getExe cfg.package} port-restore";
+          };
+        };
+        systemd.timers.fleet-containers-port-restore-sweep = {
+          wantedBy = [ "timers.target" ];
+          timerConfig = {
+            OnBootSec = "1min";
+            OnUnitInactiveSec = "1min";
+            AccuracySec = "5s";
           };
         };
 

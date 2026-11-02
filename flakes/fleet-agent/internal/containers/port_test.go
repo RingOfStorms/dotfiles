@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -591,6 +592,7 @@ func cutAt(t *testing.T, sc string, ends ...string) string {
 // list, scoped close, and kernel expiry. The guest half (machinectl,
 // nsenter, cnt-guest) is TestPortForwardPackets.
 func TestPortForwardLive(t *testing.T) {
+	fwdTestDir(t)
 	sh := newNsShell(t)
 	// The host module's sets (host-module.nix), so portLsScript runs as is.
 	sh.run(t, `nft -f - <<'EOF'
@@ -669,5 +671,18 @@ EOF`)
 	time.Sleep(2 * time.Second)
 	if got := keys(ls()); got != "cnt-fwd:enp1s0:8000/tcp:all>10.233.15.2" {
 		t.Fatalf("after expiry: %s", got)
+	}
+	// A firewall reload drops the table; port-restore's transactions bring
+	// the recorded live forward back (an expired one stays gone).
+	sh.run(t, "set -eu\nIFACE=enp1s0\n"+fwdStateAddScript(a, portReq{Svc: "a", Port: 8000, Proto: "tcp", For: time.Hour, Iface: "lan"}))
+	sh.run(t, "nft delete table ip cnt-port")
+	b2, err := os.ReadFile(filepath.Join(portFwdDir, "a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	host, _ := fwdRestoreTxn("a", parseFwdState(string(b2)), time.Now())
+	sh.run(t, "nft -f - <<'NFT'\n"+cntPortNft+"NFT\nnft -f - <<'NFT'\n"+host+"NFT\n")
+	if es := ls(); keys(es) != "cnt-fwd:enp1s0:8000/tcp:all>10.233.15.2" || es[0].Svc != "a" || es[0].Expires < 3500*time.Second {
+		t.Fatalf("after reload + restore: %+v", es)
 	}
 }

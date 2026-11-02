@@ -185,6 +185,14 @@ in
     '';
   }) loginServices);
 
+  systemd.services.fail2ban = {
+    after = [ "systemd-tmpfiles-setup.service" ];
+    # File backends need a real path even before the first login request.
+    serviceConfig.ExecStartPre = lib.mkBefore [
+      "+${pkgs.systemd}/bin/systemd-tmpfiles --create --prefix=${login.log}"
+    ];
+  };
+
   services.fail2ban = {
     enable = true;
     maxretry = 5;
@@ -195,7 +203,7 @@ in
         enabled = true;
         filter = "fleet-login-${s.service}";
         logpath = login.log;
-        backend = "auto";
+        backend = "polling";
         port = "http,https";
         maxretry = 5;
         findtime = "10m";

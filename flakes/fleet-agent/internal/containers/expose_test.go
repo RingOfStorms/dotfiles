@@ -823,13 +823,16 @@ func TestResetAfterFailedReloadNotClean(t *testing.T) {
 	if err := exposeReset(&resetEdge{}, nil, "app", []string{"h001"}, listLocal(t), revoke); err == nil {
 		t.Fatal("reset with a failed reload reported clean")
 	}
+	if revokes != resetAttempts {
+		t.Fatalf("reset gave up after %d revokes, want %d", revokes, resetAttempts)
+	}
 	st, _ := listLocal(t)("h001")
 	if !st.Pending || !slices.Equal(st.Reverted, []string{"app"}) || len(st.Overrides) != 1 || st.Overrides[0].Service != "other" {
 		t.Fatalf("after failed reload: %+v", st)
 	}
 	// Retry while the reload still fails: still not clean (the bug said clean).
 	err := exposeReset(&resetEdge{}, nil, "app", []string{"h001"}, listLocal(t), revoke)
-	if err == nil || !strings.Contains(err.Error(), "reload still pending") || revokes != 2 {
+	if err == nil || !strings.Contains(err.Error(), "reload still pending") || revokes != 2*resetAttempts {
 		t.Fatalf("second reset: %v (revokes %d)", err, revokes)
 	}
 	// Reload works again: the retry clears it.
@@ -838,7 +841,7 @@ func TestResetAfterFailedReloadNotClean(t *testing.T) {
 	if err := exposeReset(&resetEdge{}, nil, "app", []string{"h001"}, listLocal(t), revoke); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
-	if revokes != 3 || r.reloads() != 1 || reloadPending() {
+	if revokes != 2*resetAttempts+1 || r.reloads() != 1 || reloadPending() {
 		t.Fatalf("revokes %d ran %v pending %v", revokes, r.ran, reloadPending())
 	}
 	if _, err := os.Stat(filepath.Join(overridesDir, "app")); !os.IsNotExist(err) {
@@ -851,9 +854,58 @@ func TestResetAfterFailedReloadNotClean(t *testing.T) {
 		t.Fatalf("site %q", b)
 	}
 	// Clean now: nothing to revoke.
-	if err := exposeReset(&resetEdge{}, nil, "app", []string{"h001"}, listLocal(t), revoke); err != nil || revokes != 3 {
+	if err := exposeReset(&resetEdge{}, nil, "app", []string{"h001"}, listLocal(t), revoke); err != nil || revokes != 2*resetAttempts+1 {
 		t.Fatalf("clean reset: %v revokes %d", err, revokes)
 	}
+}
+
+// A reload that fails once is retried within the same reset, and reset
+// only reports clean after the re-read confirms it.
+func TestResetRetriesUntilReloadConfirmed(t *testing.T) {
+	r := newExpireRig(t)
+	r.setup("app", "lan", time.Now().Unix()+3600)
+	r.reloadOK = false
+	revokes := 0
+	revoke := func(string) error {
+		revokes++
+		err := cmdExposeExpire([]string{"--now", "app"})
+		r.reloadOK = true // nginx recovers before the next attempt
+		return err
+	}
+	if err := exposeReset(&resetEdge{}, nil, "app", []string{"h001"}, listLocal(t), revoke); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	if revokes != 2 || reloadPending() {
+		t.Fatalf("revokes %d pending %v", revokes, reloadPending())
+	}
+}
+
+// An override dir without override.json (interrupted apply) is listed as
+// an orphan and revoked by reset, not skipped as "clean".
+func TestResetRevokesOrphanDir(t *testing.T) {
+	r := newExpireRig(t)
+	must(t, os.MkdirAll(filepath.Join(overridesDir, "app"), 0o755))
+	must(t, os.WriteFile(filepath.Join(overridesDir, "app", "baseline.conf"), []byte("BASE"), 0o644))
+	st, _ := listLocal(t)("h001")
+	if !slices.Equal(st.Orphans, []string{"app"}) || st.residue("app") == "" {
+		t.Fatalf("orphan not listed: %+v", st)
+	}
+	revokes := 0
+	revoke := func(string) error { revokes++; return cmdExposeExpire([]string{"--now", "app"}) }
+	if err := exposeReset(&resetEdge{}, nil, "app", []string{"h001"}, listLocal(t), revoke); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	if revokes != 1 || r.reloads() != 1 {
+		t.Fatalf("revokes %d ran %v", revokes, r.ran)
+	}
+	if _, err := os.Stat(filepath.Join(overridesDir, "app")); !os.IsNotExist(err) {
+		t.Fatal("orphan dir left")
+	}
+}
+
+func TestMain(m *testing.M) {
+	resetRetryDelay = 0
+	os.Exit(m.Run())
 }
 
 func TestExpireKeepsReexposedDirOnClear(t *testing.T) {

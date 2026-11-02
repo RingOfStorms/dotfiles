@@ -17,7 +17,9 @@ package containers
 // nothing there. For those, open adds a temporary DNAT instead: elements in
 // the maps of table ip cnt-port (cnt-port.nft, loaded on first use), keyed
 // like the sets above and mapping to the guest IP (backendAddr). Same
-// expiry, comment and fail-closed reload; v4 only. A NixOS guest's own
+// expiry and comment; v4 only. Unlike host ports they survive a firewall
+// reload: open records them in portFwdDir and port-restore re-adds the
+// live ones (see "forward state" below). A NixOS guest's own
 // firewall admits only declared ports, so open also adds "proto . port" to
 // the guest's cnt-guest set (cnt-guest.nft, in its inet nixos-fw), entered
 // with nsenter on the machine's leader. One guest element serves every
@@ -32,9 +34,14 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 	"time"
 )
@@ -450,6 +457,7 @@ func portForwardScript(s Service, r portReq, gfor time.Duration) string {
 		fmt.Fprintf(&b, "EOF\necho %s >&2\nexit 1\nfi\n",
 			q(fmt.Sprintf("%s: adding %d/%s to the guest firewall failed; removed the host forward again", s.Name, r.Port, r.Proto)))
 	}
+	b.WriteString(fwdStateAddScript(s, r))
 	secs := int(r.For.Seconds())
 	desc := portDesc(s, r)
 	guest := backendAddr(s)
@@ -492,6 +500,15 @@ func portCloseScript(s Service, r portReq, iface string, es []portEntry, closeGu
 		fmt.Fprintf(&b, "delete element %s %s { %s }\n", table, e.Set, key)
 	}
 	b.WriteString("EOF\n")
+	var drop []string
+	for _, e := range es {
+		if strings.HasPrefix(e.Set, "cnt-fwd") {
+			drop = append(drop, q(fwdStateID(e.Set, e.Iface, e.Proto, e.Port, normCIDR(e.From))))
+		}
+	}
+	if len(drop) > 0 {
+		b.WriteString(fwdStateRewriteScript(s.Name, drop, ""))
+	}
 	if closeGuest && guestNet(s) {
 		b.WriteString(guestLeader(s))
 		fmt.Fprintf(&b, "case \"$LEADER\" in ''|0) ;; *) nsenter -t \"$LEADER\" -n nft delete element inet nixos-fw %s '{ %s . %d }' 2>/dev/null || true;; esac\n",
@@ -878,4 +895,290 @@ func portNeedsRootMsg(h string) string {
 	return fmt.Sprintf(`%[1]s: cnt port needs root and sudo there wants a password (plain ssh has no TTY to prompt).
   Run it on %[1]s itself (sudo cnt port ...), or use ssh as root / passwordless sudo for %[1]s.
 `, h)
+}
+
+// ------------------------------------------------- forward state (reloads)
+
+// portFwdDir holds one file per service with net.private forwards, so a
+// firewall reload (flushRuleset drops table ip cnt-port) or a guest
+// firewall restart (empties cnt-guest) does not end them before their
+// deadline: `containers port-restore` (fleet-containers-port-restore, after
+// every nftables start/reload and every minute) re-adds the live ones with
+// the time they have left. Lines: "<until> <map> <iface> <proto> <port>
+// <from|all> <guest> <guestfw 0|1>". Open writes its lines, close removes
+// them, expired ones are pruned, and cleanupScript (destroy, move)
+// deletes the service's forwards and its file. Writers hold flock on
+// portFwdDir/.lock. Host ports (cnt-tmp*) keep failing closed on reload.
+var portFwdDir = "/var/lib/fleet-containers/port-fwd"
+
+// fwdStateID is the identity of one forward element in the state file
+// (every field but the deadline and the target).
+func fwdStateID(m, iface, proto, port, from string) string {
+	return strings.Join([]string{m, iface, proto, port, from}, " ")
+}
+
+// fwdStateRewriteScript rewrites svc's state file under the lock: it drops
+// expired lines and lines matching drop (shell case patterns over
+// "map iface proto port from"), appends the output of adds (shell that
+// echoes lines; may use $now), and removes the file when nothing is left.
+func fwdStateRewriteScript(svc string, drop []string, adds string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "install -d -m755 %s\n(\nflock 9\nst=%s\ntmp=%s\nnow=$(date +%%s)\n{\nif [ -e \"$st\" ]; then\nwhile read -r u m i p po f g gf; do\n",
+		q(portFwdDir), q(portFwdDir+"/"+svc), q(portFwdDir+"/."+svc+".new"))
+	if len(drop) > 0 {
+		fmt.Fprintf(&b, "  case \"$m $i $p $po $f\" in %s) continue ;; esac\n", strings.Join(drop, "|"))
+	}
+	b.WriteString("  case \"$u\" in ''|*[!0-9]*) continue ;; esac\n  [ \"$u\" -gt \"$now\" ] || continue\n  echo \"$u $m $i $p $po $f $g $gf\"\ndone < \"$st\"\nfi\n")
+	b.WriteString(adds)
+	b.WriteString("} > \"$tmp\"\nif [ -s \"$tmp\" ]; then mv -f \"$tmp\" \"$st\"; else rm -f \"$tmp\" \"$st\"; fi\n")
+	fmt.Fprintf(&b, ") 9>%s\n", q(portFwdDir+"/.lock"))
+	return b.String()
+}
+
+// fwdStateAddScript records the forward elements of r (the ones fwdElems
+// adds), replacing earlier lines of the same elements. $IFACE is set by
+// the open script.
+func fwdStateAddScript(s Service, r portReq) string {
+	gf := 0
+	if guestNet(s) {
+		gf = 1
+	}
+	m := "cnt-fwd"
+	if r.Iface == "any" {
+		m = "cnt-fwd-any"
+	}
+	froms := []string{"all"}
+	if len(r.From) > 0 {
+		m = strings.Replace(m, "cnt-fwd", "cnt-fwd4", 1)
+		froms = froms[:0]
+		for _, c := range r.From {
+			froms = append(froms, normCIDR(c))
+		}
+	}
+	var pats []string
+	var adds strings.Builder
+	for _, f := range froms {
+		id := fwdStateID(m, "$IFACE", r.Proto, strconv.Itoa(r.Port), f)
+		pats = append(pats, `"`+id+`"`)
+		fmt.Fprintf(&adds, "echo \"$((now + %d)) %s %s %d\"\n", int(r.For.Seconds()), id, backendAddr(s), gf)
+	}
+	return fwdStateRewriteScript(s.Name, pats, adds.String())
+}
+
+// fwdDropScript deletes every forward element svc's state file records,
+// then the file (cleanupScript: destroy and the move's source cleanup).
+// Elements already gone (expired, reloaded) are fine.
+func fwdDropScript(svc string) string {
+	return fmt.Sprintf(`if [ -d %[3]s ]; then
+(
+flock 9
+if [ -e %[1]s ]; then
+  while read -r u m i p po f g gf; do
+    case "$m" in cnt-fwd|cnt-fwd4|cnt-fwd-any|cnt-fwd4-any) ;; *) continue ;; esac
+    k="$p . $po"
+    case "$m" in *-any) ;; *) k="\"$i\" . $k" ;; esac
+    case "$m" in cnt-fwd4*) k="$k . $f" ;; esac
+    nft delete element ip %[2]s "$m" "{ $k }" 2>/dev/null || true
+  done < %[1]s
+  rm -f %[1]s
+fi
+) 9>%[4]s
+fi
+`, q(portFwdDir+"/"+svc), fwdTable, q(portFwdDir), q(portFwdDir+"/.lock"))
+}
+
+// fwdRec is one parsed state line.
+type fwdRec struct {
+	Until                                int64
+	Map, Iface, Proto, Port, From, Guest string
+	GuestFW                              bool
+}
+
+var ifnameRe = regexp.MustCompile(`^[A-Za-z0-9_.@-]{1,15}$`)
+
+// parseFwdState parses a state file, skipping malformed lines (the restore
+// must not feed garbage to nft).
+func parseFwdState(b string) []fwdRec {
+	var out []fwdRec
+	for _, l := range strings.Split(b, "\n") {
+		f := strings.Fields(l)
+		if len(f) != 8 {
+			continue
+		}
+		u, err := strconv.ParseInt(f[0], 10, 64)
+		if err != nil || !slices.Contains(fwdMaps, f[1]) || !ifnameRe.MatchString(f[2]) || (f[3] != "tcp" && f[3] != "udp") {
+			continue
+		}
+		if p, err := strconv.Atoi(f[4]); err != nil || p < 1 || p > 65535 {
+			continue
+		}
+		if scopedSets[f[1]] {
+			ip, _, err := net.ParseCIDR(f[5])
+			if err != nil {
+				ip = net.ParseIP(f[5])
+			}
+			if ip == nil || ip.To4() == nil {
+				continue
+			}
+		} else if f[5] != "all" {
+			continue
+		}
+		if ip := net.ParseIP(f[6]); ip == nil || ip.To4() == nil || (f[7] != "0" && f[7] != "1") {
+			continue
+		}
+		out = append(out, fwdRec{Until: u, Map: f[1], Iface: f[2], Proto: f[3], Port: f[4], From: f[5], Guest: f[6], GuestFW: f[7] == "1"})
+	}
+	return out
+}
+
+func (e fwdRec) key() string {
+	k := e.Proto + " . " + e.Port
+	if !strings.HasSuffix(e.Map, "-any") {
+		k = fmt.Sprintf(`"%s" . %s`, e.Iface, k)
+	}
+	if scopedSets[e.Map] {
+		k += " . " + e.From
+	}
+	return k
+}
+
+func (e fwdRec) line() string {
+	gf := 0
+	if e.GuestFW {
+		gf = 1
+	}
+	return fmt.Sprintf("%d %s %d\n", e.Until, fwdStateID(e.Map, e.Iface, e.Proto, e.Port, e.From)+" "+e.Guest, gf)
+}
+
+// fwdRestoreTxn renders the nft transactions that re-add svc's live
+// forwards with the time they have left: host is for table ip cnt-port,
+// guest (NixOS guests only) for the guest's cnt-guest set, one element per
+// port with the longest left of its forwards (as guestFor does on open).
+// `add element` leaves an element that is still there untouched.
+func fwdRestoreTxn(svc string, live []fwdRec, now time.Time) (host, guest string) {
+	var hb, gb strings.Builder
+	gleft := map[string]int64{}
+	for _, e := range live {
+		left := e.Until - now.Unix()
+		fmt.Fprintf(&hb, "add element ip %s %s { %s timeout %ds comment \"svc=%s\" : %s }\n", fwdTable, e.Map, e.key(), left, svc, e.Guest)
+		if k := e.Proto + " . " + e.Port; e.GuestFW && left > gleft[k] {
+			gleft[k] = left
+		}
+	}
+	keys := make([]string, 0, len(gleft))
+	for k := range gleft {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		fmt.Fprintf(&gb, "add element inet nixos-fw %s { %s timeout %ds comment \"svc=%s\" }\n", guestSet, k, gleft[k], svc)
+	}
+	return hb.String(), gb.String()
+}
+
+// runNft runs `nft -f -` on script, in the network namespace of PID leader
+// when it is set (vars for tests).
+var runNft = func(leader, script string) error {
+	c := exec.Command("nft", "-f", "-")
+	if leader != "" {
+		c = exec.Command("nsenter", "-t", leader, "-n", "nft", "-f", "-")
+	}
+	c.Stdin = strings.NewReader(script)
+	c.Stdout, c.Stderr = os.Stdout, os.Stderr
+	return c.Run()
+}
+
+var fwdTableExists = func() bool { return exec.Command("nft", "list", "table", "ip", fwdTable).Run() == nil }
+
+// machineLeader is the PID of a running nspawn guest's init, "" if none.
+var machineLeader = func(svc string) string {
+	out, err := exec.Command("machinectl", "show", "-p", "Leader", "--value", svc).Output()
+	if l := strings.TrimSpace(string(out)); err == nil && l != "0" {
+		return l
+	}
+	return ""
+}
+
+// cmdPortRestore runs on the host (fleet-containers-port-restore):
+//
+//	port-restore    re-add every live net.private forward (and its guest
+//	                element) from portFwdDir; prune expired lines
+func cmdPortRestore(args []string) error {
+	if len(args) != 0 {
+		return errors.New("usage: containers port-restore")
+	}
+	files, _ := filepath.Glob(filepath.Join(portFwdDir, "*"))
+	if len(files) == 0 {
+		return nil
+	}
+	lock, err := os.OpenFile(filepath.Join(portFwdDir, ".lock"), os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		return fmt.Errorf("locking %s: %w", portFwdDir, err)
+	}
+	now := time.Now()
+	var errs []string
+	tableOK := false
+	for _, p := range files {
+		svc := filepath.Base(p)
+		if !svcNameRe.MatchString(svc) {
+			continue
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			errs = append(errs, err.Error())
+			continue
+		}
+		all := parseFwdState(string(b))
+		var live []fwdRec
+		var keep strings.Builder
+		for _, e := range all {
+			if e.Until > now.Unix() {
+				live = append(live, e)
+				keep.WriteString(e.line())
+			}
+		}
+		if len(live) == 0 {
+			if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+				errs = append(errs, err.Error())
+			}
+			continue
+		}
+		if keep.String() != string(b) {
+			tmp := filepath.Join(portFwdDir, "."+svc+".new")
+			err = os.WriteFile(tmp, []byte(keep.String()), 0o644)
+			if err == nil {
+				err = os.Rename(tmp, p)
+			}
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("%s: pruning: %v", svc, err))
+			}
+		}
+		if !tableOK {
+			if !fwdTableExists() {
+				if err := runNft("", cntPortNft); err != nil {
+					return fmt.Errorf("loading table ip %s: %w", fwdTable, err)
+				}
+			}
+			tableOK = true
+		}
+		host, guest := fwdRestoreTxn(svc, live, now)
+		if err := runNft("", host); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: forwards: %v", svc, err))
+		}
+		if guest != "" {
+			if l := machineLeader(svc); l != "" {
+				if err := runNft(l, guest); err != nil {
+					errs = append(errs, fmt.Sprintf("%s: guest firewall: %v", svc, err))
+				}
+			}
+		}
+	}
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "; "))
+	}
+	return nil
 }

@@ -2,8 +2,10 @@
 # port to the guest, with the same scoping as the cnt-tmp* sets of inet
 # nixos-fw. port.go embeds this file and loads it on the host when the
 # table is missing (the host module doesn't declare it). The kernel expires
-# the elements; a firewall reload (flushRuleset) drops the whole table
-# (fail closed). Each element carries comment "svc=<svc>". The *-any maps
+# the elements; a firewall reload (flushRuleset) drops the whole table, and
+# `containers port-restore` (fleet-containers-port-restore) reloads it with
+# the forwards recorded in /var/lib/fleet-containers/port-fwd that are
+# still live. Each element carries comment "svc=<svc>". The *-any maps
 # are --iface any (a constant can't start a dnat map key, unlike the
 # nixos-fw `"any" . ...` set lookups). v4 only: guests have no IPv6.
 # Checked by port_test.go.

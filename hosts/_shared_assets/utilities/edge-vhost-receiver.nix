@@ -47,8 +47,9 @@ let
       loginLog = login.log;
       loginLogFormat = login.logFormat;
       accessLog = "/var/log/nginx/access.log";
-      # Same -c trick as wildcard-cert-receiver.nix: test what nginx runs.
-      nginxTest = ''"${nginxCfg.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
+      # Test as the nginx service identity, never root: nginx -t opens logs
+      # and otherwise recreates a missing log as root-owned.
+      nginxTest = ''${pkgs.util-linux}/bin/runuser -u ${lib.escapeShellArg nginxCfg.user} -g ${lib.escapeShellArg nginxCfg.group} -- "${nginxCfg.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
       # Blocking, and its exit status is not enough: ExecReload is nginx -t
       # plus kill -HUP, and the master can still fail to load the config. The
       # receiver clears .reload-pending only once nginxMainPid's workers have
@@ -106,7 +107,18 @@ in
       expire
       dispatch
     ];
-    systemd.tmpfiles.rules = [ "d ${dir} 0755 root root -" ];
+    systemd.tmpfiles.rules = [
+      "d ${dir} 0755 root root -"
+      "f ${login.log} 0640 ${nginxCfg.user} ${nginxCfg.group} -"
+    ];
+    # Also run on service starts (including switches), not just at boot.
+    # f creates without truncation and repairs an existing root-owned file.
+    systemd.services.nginx = {
+      after = [ "systemd-tmpfiles-setup.service" ];
+      serviceConfig.ExecStartPre = lib.mkBefore [
+        "+${pkgs.systemd}/bin/systemd-tmpfiles --create --prefix=${login.log}"
+      ];
+    };
 
     services.nginx.appendHttpConfig = ''
       # Runtime public vhosts (cnt expose --exposure public, hosts/_shared_assets/utilities/edge-vhost-receiver.nix).

@@ -47,10 +47,8 @@ let
         certDir
         ;
       shareUser = "share";
-      # Same -c trick as wildcard-cert-receiver.nix / edge-vhost-receiver.nix:
-      # test what nginx actually runs. Run as root (fleet-share-apply), so no
-      # pidfile rewrite is needed.
-      nginxTest = ''"${nginxCfg.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
+      # Test the running config as nginx, so missing logs cannot become root-owned.
+      nginxTest = ''${pkgs.util-linux}/bin/runuser -u ${lib.escapeShellArg nginxCfg.user} -g ${lib.escapeShellArg nginxCfg.group} -- "${nginxCfg.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
       nginxReload = "systemctl reload nginx";
       maxFor = 24 * 60 * 60;
     }

@@ -224,7 +224,7 @@ func dropOverrideScript(svc string) string {
 `, q(overridesDir+"/"+svc), svc, overrideUnit(svc))
 }
 
-const overridesListScript = `for f in /var/lib/fleet-containers/overrides/*/override.json; do [ -e "$f" ] && { cat "$f"; echo; }; done; for f in /var/lib/fleet-containers/overrides/*/reverted; do [ -e "$f" ] && { f=${f%/reverted}; echo "REVERTED ${f##*/}"; }; done; [ ! -e /var/lib/fleet-containers/overrides/.reload-pending ] || echo RELOAD-PENDING; true`
+const overridesListScript = `for f in /var/lib/fleet-containers/overrides/*/override.json; do [ -e "$f" ] && { cat "$f"; echo; }; done; for f in /var/lib/fleet-containers/overrides/*/reverted; do [ -e "$f" ] && { f=${f%/reverted}; echo "REVERTED ${f##*/}"; }; done; for d in /var/lib/fleet-containers/overrides/*/; do [ -d "$d" ] || continue; d=${d%/}; [ -e "$d/override.json" ] || [ -e "$d/reverted" ] || echo "ORPHAN ${d##*/}"; done; [ ! -e /var/lib/fleet-containers/overrides/.reload-pending ] || echo RELOAD-PENDING; true`
 
 // reloadPendingLine marks a host whose nginx still owes the revert reload.
 const reloadPendingLine = "RELOAD-PENDING"
@@ -234,18 +234,28 @@ const reloadPendingLine = "RELOAD-PENDING"
 // until it has).
 const revertedPrefix = "REVERTED "
 
+// orphanPrefix starts a line naming an override dir with neither
+// override.json nor the reverted marker (an interrupted apply or revert):
+// the sweep treats it as due, so reset must revoke it too.
+const orphanPrefix = "ORPHAN "
+
 // hostOverrideState is one host's override listing.
 type hostOverrideState struct {
 	Overrides []override
 	Pending   bool     // .reload-pending: nginx may still serve a reverted (wider) vhost
 	Reverted  []string // services reverted on disk, reload not yet done
+	Orphans   []string // override dirs without override.json or reverted
 }
 
 func parseHostOverrides(out, host string) hostOverrideState {
 	st := hostOverrideState{Overrides: parseOverrides(out, host), Pending: hasReloadPending(out)}
 	for _, l := range strings.Split(out, "\n") {
-		if s, ok := strings.CutPrefix(strings.TrimSpace(l), revertedPrefix); ok && svcNameRe.MatchString(s) {
+		l = strings.TrimSpace(l)
+		if s, ok := strings.CutPrefix(l, revertedPrefix); ok && svcNameRe.MatchString(s) {
 			st.Reverted = append(st.Reverted, s)
+		}
+		if s, ok := strings.CutPrefix(l, orphanPrefix); ok && svcNameRe.MatchString(s) {
+			st.Orphans = append(st.Orphans, s)
 		}
 	}
 	return st
@@ -256,6 +266,23 @@ func parseHostOverrides(out, host string) hostOverrideState {
 // dir names anyone (an older agent that deleted the dir first).
 func (st hostOverrideState) owesReload(svc string) bool {
 	return st.Pending && (len(st.Reverted) == 0 || slices.Contains(st.Reverted, svc))
+}
+
+// residue describes what svc still has on this host ("" = clean): an
+// override, an orphan dir, or a revert whose reload is not confirmed.
+func (st hostOverrideState) residue(svc string) string {
+	for _, o := range st.Overrides {
+		if o.Service == svc {
+			return fmt.Sprintf("%s.%s (%s, baseline %s)", svc, o.Route, o.Exposure, o.Baseline)
+		}
+	}
+	if slices.Contains(st.Orphans, svc) {
+		return svc + " (override dir without override.json: interrupted apply/revert)"
+	}
+	if st.owesReload(svc) {
+		return svc + " (reverted, nginx reload pending)"
+	}
+	return ""
 }
 
 func parseOverrides(out, host string) []override {
@@ -523,13 +550,22 @@ func listHostOverrides(h string) (hostOverrideState, error) {
 	return parseHostOverrides(out, h), nil
 }
 
+// resetAttempts/resetRetryDelay bound how often reset revokes a host whose
+// revert is not confirmed (override, orphan dir or owed reload left).
+var (
+	resetAttempts   = 3
+	resetRetryDelay = 3 * time.Second
+)
+
 // exposeReset clears every runtime exposure override of svc, wherever it
 // is: the public row on h005 (DELETE through the fleet-edge override API:
 // o002, then DNS), then the host-local override on every host that reports
 // one (tailnet/lan/public; a stale copy after a move or a lost revoke
 // included), plus any host h005's row names. A host whose revert of svc
-// still owes the nginx reload is revoked again (the revoke retries the
-// reload). Each step runs even if an earlier one failed; a final re-read
+// still owes the nginx reload, or that holds an orphan override dir, is
+// revoked too (the revoke retries the reload). Each host is re-read after
+// its revoke and revoked again (up to resetAttempts) until the reload is
+// confirmed. Each step runs even if an earlier one failed; a final re-read
 // proves nothing is left, a pending reload included. Returns an error
 // naming whatever could not be cleared or checked.
 func exposeReset(api edgeAPI, apiErr error, svc string, hosts []string, list func(string) (hostOverrideState, error), revokeHost func(string) error) error {
@@ -580,24 +616,32 @@ func exposeReset(api edgeAPI, apiErr error, svc string, hosts []string, list fun
 			problems = append(problems, fmt.Sprintf("%s: overrides unknown: %v", h, err))
 			continue
 		}
-		what := ""
-		for _, o := range st.Overrides {
-			if o.Service == svc {
-				what = fmt.Sprintf("%s.%s (%s, baseline %s)", svc, o.Route, o.Exposure, o.Baseline)
-				break // one override dir per service per host; revoke clears it
-			}
-		}
-		if what == "" && st.owesReload(svc) {
-			what = svc + " (reverted, nginx reload pending)"
-		}
+		what := st.residue(svc)
 		if what == "" {
 			continue
 		}
-		info("%s: reverting %s", h, what)
-		if err := revokeHost(h); err != nil {
-			problems = append(problems, fmt.Sprintf("%s: revoke: %v", h, err))
-		} else {
-			cleared++
+		for attempt := 1; ; attempt++ {
+			if attempt == 1 {
+				info("%s: reverting %s", h, what)
+			} else {
+				info("%s: still %s; revoking again (%d/%d)", h, what, attempt, resetAttempts)
+			}
+			rerr := revokeHost(h)
+			if rerr == nil {
+				if st, err = list(h); err == nil {
+					if what = st.residue(svc); what == "" {
+						cleared++
+						break
+					}
+				}
+			}
+			if attempt >= resetAttempts {
+				if rerr != nil {
+					problems = append(problems, fmt.Sprintf("%s: revoke: %v", h, rerr))
+				}
+				break // the final re-read below names what is left
+			}
+			time.Sleep(resetRetryDelay)
 		}
 	}
 	// Verify: nothing for svc left on h005 or on any host that answered.
@@ -611,6 +655,9 @@ func exposeReset(api edgeAPI, apiErr error, svc string, hosts []string, list fun
 		if err != nil {
 			problems = append(problems, fmt.Sprintf("%s: final override check: %v", h, err))
 			continue
+		}
+		if slices.Contains(st.Orphans, svc) {
+			problems = append(problems, fmt.Sprintf("%s still has an orphan override dir for %s (%s/%s)", h, svc, overridesDir, svc))
 		}
 		for _, o := range st.Overrides {
 			if o.Service == svc {

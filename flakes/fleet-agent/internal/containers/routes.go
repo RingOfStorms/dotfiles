@@ -749,7 +749,7 @@ type routeState struct {
 	v      *edgeVerify
 }
 
-// fetchRouteState asks h005; nil (column shows "?") without credentials or
+// fetchRouteState asks h005; nil (column shows "-") without credentials or
 // when the routing report is unavailable (said once on stderr).
 func fetchRouteState(client func() (*edgeClient, error)) *routeState {
 	c, err := client()
@@ -804,7 +804,7 @@ func (st *routeState) layerState(name string, layers ...string) string {
 // (public tcp/udp). A live public override shows its CNAME and o002 vhost.
 func (st *routeState) health(s Service, n string, r Route) string {
 	if st == nil {
-		return "?"
+		return "-"
 	}
 	if row, ok := st.rows[s.Name+"."+n]; ok {
 		dns, edge := dash(row.DNS), "missing"
@@ -837,7 +837,7 @@ func (st *routeState) health(s Service, n string, r Route) string {
 
 func netMode(s Service) string {
 	if s.Net.Private {
-		return "private"
+		return dash(str(s.Net.IP))
 	}
 	return "host"
 }

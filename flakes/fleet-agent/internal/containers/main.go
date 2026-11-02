@@ -317,6 +317,8 @@ func dispatch(cmd string, rest []string) (known bool, err error) {
 		err = cmdExpose(rest)
 	case "expose-expire":
 		err = cmdExposeExpire(rest)
+	case "port-restore":
+		err = cmdPortRestore(rest)
 	case "check-idmap":
 		err = cmdCheckIdmap(rest)
 	case "inventory":
@@ -1254,9 +1256,11 @@ func needsHostVhost(s Service) bool {
 
 // cleanupScript removes the service's host state. The site goes (and nginx
 // reloads) before the expose override is dropped, so an interruption can
-// never leave a widened site without its expiry state.
+// never leave a widened site without its expiry state. Its cnt port
+// forwards (and their state, which port-restore would re-add after the
+// nftables restart) go before the restart.
 func cleanupScript(s Service) string {
-	return fmt.Sprintf(`rm -f /var/lib/fleet-containers/ports/%[1]s
+	return fwdDropScript(s.Name) + fmt.Sprintf(`rm -f /var/lib/fleet-containers/ports/%[1]s
 systemctl restart fleet-containers-ports.service nftables.service 2>/dev/null || true
 if [ -e %[2]s/%[1]s.conf ]; then rm -f %[2]s/%[1]s.conf; systemctl reload nginx || true; fi
 `, s.Name, nginxDir) + dropOverrideScript(s.Name)
