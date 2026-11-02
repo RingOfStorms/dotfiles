@@ -1,7 +1,7 @@
 # Guest config (net.private, 10.233.15.2): immich-server on
 # fleetNet.bindAddress:2283, ML on *:3003, postgres on its unix socket +
 # *:5432, redis on a unix socket.
-# uids pinned to the copied data (immich 916; postgres is 71 by default).
+# uids pinned to the persisted data (immich 916; postgres is 71 by default).
 #
 # Tailnet access for immich_manager (~/projects/immich_manager):
 #   - postgres TCP: only role immich_ro (read-only, scram password) from
@@ -29,7 +29,7 @@
     enableJIT = true;
     dataDir = "/var/lib/postgresql/16";
     # Port stays 5432 so immich's socket URL and pg_dumpall need no changes.
-    # Nothing else on h001 binds TCP 5432 (other containers are socket-only).
+    # Nothing else in the guest binds TCP 5432.
     settings.listen_addresses = lib.mkForce "*";
     authentication = lib.mkForce ''
       local all all trust

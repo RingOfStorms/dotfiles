@@ -1,8 +1,6 @@
 # Dawarich location history (location.joshuabell.xyz): Rails + sidekiq +
-# PostgreSQL 17/postgis + redis, one container. Was
-# hosts/h001/containers/dawarich.nix (private-network container 10.0.0.5,
-# data on /drives/wd10/dawarich). Now on /srv/containers (nvme, ~1.6 GB);
-# h001's restic job backs up data + pgdumps from there.
+# PostgreSQL 17/postgis + redis, one container. The host's restic job backs
+# up data + pgdumps.
 {
   name = "dawarich";
   kind = "nixos";
@@ -18,10 +16,9 @@
 
   backupHook = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
 
-  # Generated vhost sends each header once (duplicate X-Forwarded-Proto/Host
-  # broke login before).
+  # Login breaks on duplicate X-Forwarded-Proto/Host headers; the generated
+  # vhost sends each once.
   # puma binds :3001 in its private netns (BINDING in container.nix).
-  # Private network (ROUTING-PLAN §8 step 5): guest 10.233.10.2.
   net = {
     private = true;
     index = 10;

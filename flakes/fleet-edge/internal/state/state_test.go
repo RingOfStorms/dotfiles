@@ -168,8 +168,8 @@ func TestMergeContainerHostIsDeclared(t *testing.T) {
 	inv.Hosts["h003"] = inventory.Host{OverlayIP: strp("100.64.0.4")}
 	inv.Hosts["gp3"] = inventory.Host{OverlayIP: strp("100.64.0.15")}
 	inv.ContainerHosts = []string{"h003"}
-	// h001 is a container host only because a service is declared on it; a
-	// service with no host is unplaced and declares nothing.
+	// h001 is a container host only because a service is bound to it; an
+	// unplaced service binds to no host.
 	inv.Services["unplaced"] = inventory.Service{Name: "unplaced", Kind: "nixos"}
 	polls := map[string]HostPoll{
 		"h001": {Host: "h001", OK: true, PolledAt: time.Now()},
@@ -202,8 +202,7 @@ func TestMergeContainerHostWithoutServices(t *testing.T) {
 }
 
 func TestMergeBoundHost(t *testing.T) {
-	inv := sampleInventory() // jellyfin and photos, both declared on h001
-	// No registry map at all: the declaration is all there is.
+	inv := sampleInventory()
 	m := MergeAt(inv, map[string]HostPoll{}, time.Now(), sampleBindings())
 	for _, svc := range m.Services {
 		if svc.BoundHost != "h001" {
@@ -211,7 +210,7 @@ func TestMergeBoundHost(t *testing.T) {
 		}
 	}
 
-	// A registry that names one service: the other is unplaced, not declared.
+	// A registry that names one service: the other is unplaced.
 	m = MergeAt(inv, map[string]HostPoll{}, time.Now(), map[string]string{"photos": "h003"})
 	got := map[string]string{}
 	for _, svc := range m.Services {
@@ -221,8 +220,7 @@ func TestMergeBoundHost(t *testing.T) {
 		t.Fatalf("boundHost = %v, want photos=h003 jellyfin=unplaced", got)
 	}
 
-	// An empty (non-nil) registry is not "no registry": every service is
-	// unplaced, which is what running without one means.
+	// An empty (non-nil) registry leaves every service unplaced.
 	m = MergeAt(inv, map[string]HostPoll{}, time.Now(), map[string]string{})
 	for _, svc := range m.Services {
 		if svc.BoundHost != "" {

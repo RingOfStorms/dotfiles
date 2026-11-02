@@ -253,6 +253,27 @@ intent) that expands to the command/path, the output and, for edits, the diff.
 Notices (`custom_message` with `display: true`: advisor, IRC, async results)
 and compactions are collapsible rows; hidden entries are skipped.
 
+Also pulled from the log:
+
+- **Session title**: the `title` header line (rewritten in place by omp) and
+  `title_change` entries replace the pane label in the header.
+- **Todo card**: the latest `todo` tool result (or `user_todo_edit`) is pinned
+  above the composer, collapsed to `done/total` and the current task; hidden
+  once every task is closed.
+- **Setting dividers**: `model_change` (main model only), `thinking_level_change`
+  and `mode_change` after the first message become dashed dividers; repeats are
+  dropped and adjacent changes merge.
+- **Background agents**: `task`, `vibe_spawn` and `vibe_send` rows list the jobs
+  they started (names from the result text), settled by `async-result`
+  deliveries and `vibe_wait`/`hub` snapshots.
+
+The **recap** ("※ recap: …", omp's idle summary) is not in the log: omp writes
+it to `$PI_CODING_AGENT_DIR/history.db`, table `session_recaps`, keyed by the
+session header's `id`. It is read read-only with the pure-Go
+`modernc.org/sqlite` driver (still `CGO_ENABLED=0`), re-queried only when the
+db or its `-wal` changes, and shown after the last item until the conversation
+moves past it.
+
 Finding the session (`internal/transcript/locate.go`, no plugin needed):
 
 1. `pane_pid` → `ps -e` process tree, breadth-first, to the shallowest `omp`
@@ -264,7 +285,8 @@ Finding the session (`internal/transcript/locate.go`, no plugin needed):
 Sessions are trees (re-sending a message branches); the view follows the newest
 entry back to the root, which is what omp resumes into. One reader per pane
 tails the file every 400ms and pushes rendered items over SSE
-(`/p/<id>/chat/events`: `init`, `items`, `state`, `fallback`, `gone`); a tool
+(`/p/<id>/chat/events`: `init`, `items`, `meta`, `recap`, `state`, `fallback`,
+`gone`); a tool
 result re-renders its call in place. The page loads the last 60 items and
 *show earlier* fetches more (`/p/<id>/chat/earlier?before=N`). If no session
 can be read (agent exited, not omp), the page falls back to the terminal.

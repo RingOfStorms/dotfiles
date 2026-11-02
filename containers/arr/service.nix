@@ -1,7 +1,7 @@
-# The h001 media stack (nixarr: jellyfin, sonarr, radarr, prowlarr, bazarr,
+# The media stack (nixarr: jellyfin, sonarr, radarr, prowlarr, bazarr,
 # sabnzbd, seerr, shelfmark, recyclarr) plus kavita and the media-integrity scanner,
 # as one container: `containers stop arr` / `start arr` takes it all down/up.
-# See README.md (cutover runbook, NAS guard).
+# See README.md (NAS guard).
 {
   name = "arr";
   kind = "nixos";
@@ -20,7 +20,6 @@
     recyclarr = "/var/lib/recyclarr";
     nixos = "/var/lib/nixos";
   };
-  # Private network (ROUTING-PLAN §8 step 5): guest 10.233.16.2.
   # No raw ports: every UI is a route below.
   net = {
     private = true;
@@ -28,10 +27,8 @@
   };
   tcpPorts = [ ];
   udpPorts = [ ];
-  # jellyfin + media: public via the o002 edge (ROUTING-PLAN §2.3); books
-  # (kavita): tailnet only. Each app has its own
-  # accounts (TV/mobile clients), so no gate. maxBody 500m = h001's old
-  # global client_max_body_size these vhosts inherited.
+  # jellyfin + media: public via the o002 edge; books (kavita): tailnet only.
+  # Each app has its own accounts (TV/mobile clients), so no gate.
   routes = {
     jellyfin = {
       name = "jellyfin";
@@ -100,7 +97,7 @@
       maxBody = "100m"; # nzb uploads
     };
   };
-  # /media-health/ on h001.net stays in hosts/h001/mods/arr-nginx.nix (a
+  # /media-health/ on h001.net lives in hosts/h001/mods/arr-nginx.nix (a
   # static alias of the persist dir, not a backend).
   backupHook = null;
   attach = null;

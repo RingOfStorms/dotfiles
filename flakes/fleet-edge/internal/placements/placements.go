@@ -1,5 +1,4 @@
-// Package placements is h005's registry of where each container service runs
-// (containers/PLACEMENT-PLAN.md).
+// Package placements is h005's registry of where each container service runs.
 //
 // It is the only runtime answer to "which host runs service X". Nix describes
 // what a service is; placement, DNS, o002 vhosts, certificates and firewall

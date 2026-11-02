@@ -1,17 +1,6 @@
-# fleet-edge read-only dashboard (containers/ROUTING-PLAN.md §5.4).
-# The inventory is generated at build time from the containers flake, so it
-# only refreshes when h005 is redeployed (`nix flake update containers` first).
-#
-# Tailnet-only: nginx listens on h005's overlay IP alone (plain HTTP, no
-# public DNS, not proxied by o002) and additionally allows only tailnet
-# source ranges. URL: http://h005.net.joshuabell.xyz/ (MagicDNS).
-#
-# Start page: replaces the homepage-dashboard instances that used to run on
-# h001 and joe (retired, no redirects left). `links` below is the ported
-# h001 homepage content; `host` pins the serving host for links the URL
-# can't be traced to (public vhosts proxied to h001); links whose url matches an inventory
-# route take over that route's tile (and show its polled state). Remaining
-# inventory routes appear under their route `group` (containers/<svc>/service.nix).
+# The build-time inventory describes services; runtime placement comes from
+# the local registry. Links matching a route reuse its tile and polled state.
+# The dashboard is tailnet-only; /internal exports are loopback-only.
 {
   inputs,
   config,
@@ -100,9 +89,8 @@ in
 
   services.fleet-edge = {
     enable = true;
-    # Public expose authority (ROUTING-PLAN §8 step 7). Callers authenticate
-    # as their own Zitadel machine user (the sec-agent login, same issuer
-    # and project), allowed only by explicit sub from their overlay IP.
+    # Writers need both an allowlisted Zitadel machine subject and their
+    # assigned overlay source address.
     overrides = {
       enable = true;
       specFile = publicSpecFile;
@@ -234,9 +222,7 @@ in
         else
           [ ]
       );
-      # Public expose API and placement registry (fleet-edge-overrides,
-      # ROUTING-PLAN §8 step 7, containers/PLACEMENT-PLAN.md). /internal/*
-      # is never proxied; both exports are loopback-only.
+      # /internal/* is never proxied; registry exports stay loopback-only.
       locations."/api/overrides" = {
         proxyPass = "http://127.0.0.1:8098";
         extraConfig = ''

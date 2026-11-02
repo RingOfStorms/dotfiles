@@ -1,6 +1,6 @@
 package containers
 
-// `cnt port` (ROUTING-PLAN.md §8 step 2): open a port for a while without a
+// `cnt port`: open a port for a while without a
 // rebuild. The only state is elements in three nft sets of inet nixos-fw
 // (host-module.nix creates them and the input-allow rules):
 //
@@ -391,8 +391,8 @@ func portDesc(s Service, r portReq) string {
 func portGuards(s Service, r portReq, host string, svcs map[string]Service) (string, error) {
 	if !r.Closer {
 		if s.Net.Private {
-			// ROUTING-PLAN §8 step 5: the app is in its own netns, so a host
-			// port opens nothing. Declare a tcp/udp route (DNAT) instead.
+			// The app is in its own netns, so a host port opens nothing.
+			// Declare a tcp/udp route (DNAT) instead.
 			return "", fmt.Errorf("%s has net.private: a host port doesn't reach it; declare a tcp/udp route (DNAT) instead", s.Name)
 		}
 		if b := backendOf(svcs, host, r.Port, r.Proto); b != "" && !r.Force {

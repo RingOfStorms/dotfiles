@@ -1,5 +1,4 @@
-# Guest config: settings copied verbatim from hosts/h001/mods/openwebui.nix.
-# Module + package from h001's open-webui-nixpkgs rev, as on bare metal.
+# Guest config. Module + package come from the openwebuipkgs rev (flake.nix).
 {
   pkgs,
   openwebuipkgs,
@@ -26,7 +25,7 @@ let
     ];
   };
   # net.uses litellm.web / searx.api: their guest IPs (service.nix net.index),
-  # direct, same host (ROUTING-PLAN §8 step 5).
+  # reached directly.
   openaiBaseUrl = "http://10.233.7.2:8094/v1";
 in
 {
@@ -71,7 +70,7 @@ in
       ENABLE_OAUTH_SIGNUP = "True";
       WEBUI_SESSION_COOKIE_SAME_SITE = "lax";
 
-      # OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET are in the OpenBao env file.
+      # OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET are in environmentFile.
       OPENID_PROVIDER_URL = "https://sso.joshuabell.xyz/.well-known/openid-configuration";
       OAUTH_PROVIDER_NAME = "SSO";
       OPENID_REDIRECT_URI = "https://chat.joshuabell.xyz/oauth/oidc/callback";

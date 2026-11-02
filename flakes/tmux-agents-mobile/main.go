@@ -127,7 +127,10 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	}
 
 	hub := watch.New(tmuxClient, log)
-	chatHub := watch.NewChatHub(tmuxClient, transcript.NewLocator(), web.RenderChatItem, log)
+	locator := transcript.NewLocator()
+	history := transcript.NewHistory(locator.OmpDir)
+	defer history.Close()
+	chatHub := watch.NewChatHub(tmuxClient, locator, history, web.ChatRenderer, log)
 	git := diff.New(cfg.gitBin)
 
 	provider := agents.New(cfg.agentsBin, tmuxClient)

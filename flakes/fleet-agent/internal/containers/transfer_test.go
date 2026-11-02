@@ -43,7 +43,7 @@ func newRig(t *testing.T) *rig {
 	// fleet (and on a root-only machine key).
 	oldPlacement := placementNow
 	// Discovery is faked too: resolveHost probes the fleet, and the real probe
-	// would ssh out of the test. src is the fixture's declared host.
+	// would ssh out of the test. The fixture's service is installed on src.
 	oldProbe := fleetProbe
 	t.Cleanup(func() {
 		placementNow, registryCache = oldPlacement, nil

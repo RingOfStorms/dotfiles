@@ -1,6 +1,6 @@
 package containers
 
-// `cnt move` (ROUTING-PLAN §8 step 9, §9.1, PLACEMENT-PLAN §2). The data travels
+// `cnt move`. The data travels
 // through the shared restic repository, so the moved service continues its
 // svc:<name> series and a move doubles as a restore test:
 //

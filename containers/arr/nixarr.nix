@@ -17,11 +17,10 @@ in
       mediaDir = c.mediaDir;
       stateDir = c.stateDir;
 
-      # No VPN: the wg netns (VPN-Confinement) and torrents were removed.
       vpn.enable = false;
 
       jellyfin.enable = true; # jellyfinnnnnn!
-      seerr.enable = true; # request manager for media (was jellyseerr; renamed in nixarr)
+      seerr.enable = true; # request manager for media
       # seerr.vpn.enable = true; # NOTE makes it not able to communicate to *arr apps
       sabnzbd = {
         enable = true; # Usenet downloader
@@ -152,10 +151,10 @@ in
         host = fleetNet.bindAddress;
         openFirewall = false;
       };
-      # audiobookshelf removed (kavita is used instead). Its state stays in
-      # /var/lib/nixarr/state/audiobookshelf (not deleted).
+      # kavita is used instead. Old state stays in
+      # /var/lib/nixarr/state/audiobookshelf.
       audiobookshelf.enable = false;
-      lidarr.enable = false; # preserved in the h001 migration backup; out of scope
+      lidarr.enable = false;
       recyclarr = {
         enable = true;
         # Profiles are declarative. Existing movies/series are deliberately not
@@ -308,7 +307,7 @@ in
       };
     };
 
-    # No login (ROUTING-PLAN §8 step 5): the UIs are tailnet-only routes and
+    # No login: the UIs are tailnet-only routes and
     # the guest is reachable only through host nginx, which is the gate.
     # "External" = the app trusts its front end; "required" stays for the
     # loopback API callers (nixarr synchronizers).
@@ -331,15 +330,15 @@ in
     # Secrets (api_key, nzb_key, web login, news-server credentials) are NOT
     # in git. They live in a stateful host file at
     # /var/lib/sabnzbd-secrets/secrets.ini, merged at runtime via secretFiles
-    # (secret values take precedence). Manage that file by hand on h001; see
+    # (secret values take precedence). Manage that file by hand; see
     # the format note below. This avoids putting any credentials in the repo.
     services.sabnzbd = {
       configFile = null;
 
-      # Keep using the existing nixarr state location (history db, queue, rss,
-      # totals) instead of the nixpkgs default /var/lib/sabnzbd. nixpkgs uses
-      # this as systemd StateDirectory (relative to /var/lib), so a nested path
-      # is fine and matches nixarr's old ${nixarr.stateDir}/sabnzbd.
+      # Keep the nixarr state location (history db, queue, rss, totals)
+      # instead of the nixpkgs default /var/lib/sabnzbd. nixpkgs uses this as
+      # systemd StateDirectory (relative to /var/lib), so a nested path is
+      # fine and matches nixarr's ${nixarr.stateDir}/sabnzbd.
       stateDir = "nixarr/state/sabnzbd";
 
       # Runtime secret overlay (host-managed, never in git). Must exist before

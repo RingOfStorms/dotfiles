@@ -1,13 +1,6 @@
-# joe does not trust tailscale0 (ROUTING-PLAN §5.1). joe is itself low-trust
-# (hosts/fleet.nix), so the global :22 (hardening.nix) is replaced here: ssh
-# on tailscale0 only from high-trust overlay IPs (ROUTING-PLAN §8 step 2),
-# o002 excluded, plus a low-trust-filtered home LAN fallback. kdeconnect,
-# steam, 41641/udp, icmp and temp-ports stay global (unrelated to this step).
-#
-# LocalAI (containers/localai) publishes on 127.0.0.1:8080 only; clients
-# reach it through joe's own nginx on :443 (containers host module, opened
-# by the generated per-host rule below: joe has one tailnet http route),
-# whose vhost applies the route's allow list.
+# Being a low-trust node does not make its SSH public: management still
+# requires a high-trust peer, with a low-trust-filtered LAN fallback.
+# Container clients enter through nginx and its route ACLs, not raw ports.
 { fleet, lib, ... }:
 let
   fleetLib = import ../../containers/lib.nix;

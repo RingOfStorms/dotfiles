@@ -7,7 +7,7 @@
     extra-container.url = "github:erikarvstedt/extra-container";
     # Host-side extra-container eval must stay on 25.11 (issue #40) ...
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
-    # ... the guest runs 26.05 (same as h001).
+    # ... the guest runs 26.05.
     guestpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
   };
 

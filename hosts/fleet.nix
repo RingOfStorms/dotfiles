@@ -79,6 +79,7 @@ rec {
   # Fields:
   #   user        - primary SSH user (required)
   #   overlayIp   - Tailscale overlay IP (null if not on tailnet)
+  #   overlayIp6  - Tailscale IPv6 address (optional; restricted route ACLs and web admission)
   #   lanIp       - LAN IP address (null if not on LAN / cloud host)
   #   publicIp    - Public IP (for cloud/VPS hosts)
   #   trust       - "high" | "low" | "none" (determines tailnet DNS policy)
@@ -97,6 +98,7 @@ rec {
     h001 = {
       user = "luser";
       overlayIp = "100.64.0.13";
+      overlayIp6 = "fd7a:115c:a1e0::d";
       lanIp = "10.12.14.10";
       trust = "high";
       role = "server";
@@ -109,6 +111,7 @@ rec {
     h003 = {
       user = "luser";
       overlayIp = "100.64.0.4";
+      overlayIp6 = "fd7a:115c:a1e0::4";
       trust = "high";
       role = "server";
       alwaysOn = true;
@@ -119,6 +122,7 @@ rec {
     h004 = {
       user = "luser";
       overlayIp = "100.64.0.17";
+      overlayIp6 = "fd7a:115c:a1e0::11";
       lanIp = "10.12.14.184";
       trust = "high";
       role = "server";
@@ -131,6 +135,7 @@ rec {
     h005 = {
       user = "luser";
       overlayIp = "100.64.0.3";
+      overlayIp6 = "fd7a:115c:a1e0::3";
       lanIp = "10.12.14.1";
       trust = "high";
       role = "server";
@@ -140,6 +145,7 @@ rec {
     i001 = {
       user = "luser";
       overlayIp = "100.64.0.6";
+      overlayIp6 = "fd7a:115c:a1e0::6";
       lanIp = "10.12.14.119";
       trust = "low";
       role = "workstation";
@@ -150,6 +156,7 @@ rec {
     joe = {
       user = "josh";
       overlayIp = "100.64.0.12";
+      overlayIp6 = "fd7a:115c:a1e0::c";
       lanIp = "10.12.14.126";
       trust = "low";
       role = "workstation";
@@ -160,6 +167,7 @@ rec {
     juni = {
       user = "josh";
       overlayIp = "100.64.0.18";
+      overlayIp6 = "fd7a:115c:a1e0::12";
       lanIp = "10.12.14.172";
       trust = "high";
       role = "laptop";
@@ -168,6 +176,7 @@ rec {
     lio = {
       user = "josh";
       overlayIp = "100.64.0.1";
+      overlayIp6 = "fd7a:115c:a1e0::1";
       lanIp = "10.12.14.118";
       trust = "high";
       role = "workstation";
@@ -177,6 +186,7 @@ rec {
     oren = {
       user = "josh";
       overlayIp = "100.64.0.2";
+      overlayIp6 = "fd7a:115c:a1e0::2";
       trust = "high";
       role = "laptop";
       alwaysOn = false;
@@ -184,6 +194,7 @@ rec {
     gp3 = {
       user = "josh";
       overlayIp = "100.64.0.15";
+      overlayIp6 = "fd7a:115c:a1e0::f";
       trust = "high";
       role = "laptop";
       alwaysOn = false;
@@ -191,6 +202,7 @@ rec {
     o002 = {
       user = "root";
       overlayIp = "100.64.0.5";
+      overlayIp6 = "fd7a:115c:a1e0::5";
       publicIp = "164.152.19.60";
       trust = "high";
       role = "server";
@@ -205,6 +217,7 @@ rec {
     hass = {
       user = "root";
       overlayIp = "100.64.0.10";
+      overlayIp6 = "fd7a:115c:a1e0::a";
       lanIp = "10.12.14.22";
       trust = "low";
       role = "appliance";

@@ -404,8 +404,8 @@ func TestCheckFollowsRegistryBinding(t *testing.T) {
 	}
 }
 
-// ROUTING-PLAN §8 step 6: sso-proxy is public now, so auth = oauth2-proxy
-// is no longer refused for a public override.
+// sso-proxy is public, so auth = oauth2-proxy is allowed for a public
+// override.
 func TestCheckAllowsOauth2ProxyPublic(t *testing.T) {
 	r := newRig(t)
 	if c, out := r.call("POST", "/api/overrides/prepare", "100.64.0.2", Request{Service: "app", Route: "gated", Host: "h001"}); c != 200 {

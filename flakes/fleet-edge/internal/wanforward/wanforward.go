@@ -1,7 +1,6 @@
 // Package wanforward makes h005's WAN port forwards follow the placement
-// registry (containers/PLACEMENT-PLAN.md §5, phase 4a): one DNAT per public
-// `via = router` tcp/udp route of a placed service, WAN <port> -> the placed
-// host's LAN IP.
+// registry: one DNAT per public `via = router` tcp/udp route of a placed
+// service, WAN <port> -> the placed host's LAN IP.
 //
 // Two halves, split at a privilege boundary:
 //   - the capability-free fleet-edge-overrides unit (internal/reconcile)
@@ -38,8 +37,8 @@ import (
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
 )
 
-// Table is the nft table the applier owns (family ip: IPv4 only, like the
-// router's forwards always were).
+// Table is the nft table the applier owns (family ip: the forwards target
+// LAN IPv4 addresses only).
 const Table = "fleet-wan-forwards"
 
 // Forward is one wanted forward. Source is "<service>.<route>".

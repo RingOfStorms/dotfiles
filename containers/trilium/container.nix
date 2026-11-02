@@ -1,10 +1,10 @@
-# Guest config. Private network: trilium on :9111; only h001's nginx
+# Guest config. Private network: trilium on :9111; only the host nginx
 # (the generated, oauth2-proxy-gated vhost) is reachable from outside.
 { fleetNet, ... }:
 {
   system.stateVersion = "24.11";
 
-  # Same ids as on h001 bare metal, so the copied files keep working.
+  # Pinned ids so the persisted files keep their owner.
   users.users.trilium.uid = 989;
   users.groups.trilium.gid = 985;
 

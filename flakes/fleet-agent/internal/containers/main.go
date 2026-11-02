@@ -42,7 +42,7 @@ type Service struct {
 	Net         Net               `json:"net"`
 }
 
-// Net is lib.nix normalizeNet (ROUTING-PLAN §8 step 5). IP is the guest
+// Net is lib.nix normalizeNet. IP is the guest
 // address when Private: 10.233.<index>.2 for kind = "nixos" (a per-service
 // veth), or 10.89.250.<100+index> for kind = "podman" (a static --ip on the
 // shared fleet-noinet bridge: .1 is the bridge/gateway and podman's dynamic
@@ -69,15 +69,14 @@ type Host struct {
 	User      string  `json:"user"`
 	OverlayIP *string `json:"overlayIp"`
 	LanIP     *string `json:"lanIp"`
-	// Optional tailnet v6 (not in fleet.nix today; web admission and port --from).
+	// Optional tailnet v6, for web admission and port --from.
 	OverlayIP6 *string `json:"overlayIp6"`
 }
 
 type Inventory struct {
 	Services map[string]Service `json:"services"`
 	Hosts    map[string]Host    `json:"hosts"`
-	// Hosts with the containers host module; all are probed before the CLI
-	// trusts the declared host.
+	// Hosts with the containers host module; discovery probes all of them.
 	ContainerHosts []string `json:"containerHosts"`
 	DataRoot       string   `json:"dataRoot"`
 	// LanSubnet is the fleet LAN (fleet.nix global.lanSubnet), for `weblan`.
@@ -1065,7 +1064,7 @@ func cmdLogs(args []string) error {
 
 // ---------------------------------------------------------------- deploy
 
-// prepareHost writes data dirs, nginx site and firewall ports.
+// prepareScript writes data dirs, nginx site and firewall ports.
 func prepareScript(s Service, host string) string {
 	var b strings.Builder
 	b.WriteString("set -euo pipefail\n")
@@ -1077,7 +1076,7 @@ func prepareScript(s Service, host string) string {
 			// (cfg.enable), not the nixos-guest veth/NAT side.
 			b.WriteString(fmt.Sprintf("nft list table inet fleet-noinet >/dev/null 2>&1 || { echo '%s has net.private but %s lacks the fleet-noinet table (containers host module not enabled)' >&2; exit 1; }\n", s.Name, host))
 		} else {
-			// ROUTING-PLAN §8 step 5: the host side (NAT, DNAT map, DNS on the veth).
+			// The nixos-guest host side: NAT, DNAT map, DNS on the veth.
 			b.WriteString(fmt.Sprintf("nft list table ip fleet-net-nat >/dev/null 2>&1 || { echo '%s has net.private but %s lacks ringofstorms.containers.privateNetwork.enable' >&2; exit 1; }\n", s.Name, host))
 		}
 	}
@@ -1094,12 +1093,11 @@ func prepareScript(s Service, host string) string {
 		// Only create; never chown existing data.
 		b.WriteString(fmt.Sprintf("[ -d %[1]s ] || install -d -m755 %[1]s\n", q(dataDir(s)+"/"+k)))
 	}
-	// ports
 	var ports strings.Builder
 	for _, l := range portsFileLines(s, host) {
 		ports.WriteString(l + "\n")
 	}
-	// 80/443 admission (ROUTING-PLAN 8.2) for this service's vhosts on this
+	// 80/443 admission for this service's vhosts on this
 	// host, from its own routes. Written before prunePortsScript, which
 	// ignores non-`tcp|udp` first words.
 	for _, l := range srcPortLines(s, host) {
@@ -1245,9 +1243,8 @@ func siteScript(s Service, host string) string {
 
 // needsHostVhost reports whether some route must be served by nginx on the
 // service's own host: an http route that leaves the host (exposure !=
-// local). Every container host terminates TLS for its own routes
-// (FLOWS-AUDIT target design (a)); tcp/udp routes go through the ports
-// file, not nginx.
+// local). Every container host terminates TLS for its own routes;
+// tcp/udp routes go through the ports file, not nginx.
 func needsHostVhost(s Service) bool {
 	for _, r := range s.Routes {
 		if r.Proto == "http" && r.Exposure != "local" {
@@ -1493,7 +1490,7 @@ func hookScript(s Service) string {
 	return fmt.Sprintf("if systemctl is-active -q %s; then echo 'running backup hook'; nixos-container run %s -- bash -lc %s; fi\n", unitOf(s), s.Name, q(s.BackupHook))
 }
 
-// streamCmd runs a remote script and pipes its stdout to w.
+// streamFrom runs a remote script and pipes its stdout to w.
 func streamFrom(h, script string, w *os.File) error {
 	if dryRun {
 		fmt.Printf("[%s (root, stream out)] %s\n", h, script)
@@ -1617,7 +1614,7 @@ func uninstallScript(s Service) string {
 //	the authoritative copy (the bound host): refused without --force, because
 //	the name would point at nothing. With --force the row goes too, unforced
 //	and guarded by the revision this command read;
-//	no row: as before (--host, else the one copy discovery finds).
+//	no row: --host, else the one copy discovery finds.
 //
 // A fenced row (a move still holds it) is refused unless --force: the move
 // may be about to make either copy the live one.

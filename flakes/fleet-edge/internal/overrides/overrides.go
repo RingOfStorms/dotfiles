@@ -1,5 +1,4 @@
-// Package overrides is h005's authority for public `cnt expose` overrides
-// (containers/ROUTING-PLAN.md §8 step 7, "Public expose design").
+// Package overrides is h005's authority for public `cnt expose` overrides.
 //
 // It runs as `fleet-edge overrides` in its own unit (fleet-edge-overrides),
 // separate from the dashboard: only this process holds the bunny key and the

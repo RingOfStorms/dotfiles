@@ -15,8 +15,8 @@ import (
 )
 
 // StatusDoc is the JSON response served by GET /status.json on port 9101.
-// It remains backwards-compatible with the original `{host, time, services}`
-// schema while adding host telemetry, bcachefs pools, SMART, and fail2ban.
+// Its `{host, time, services}` fields keep their original shape for older
+// consumers; the rest adds host telemetry, bcachefs pools, SMART, and fail2ban.
 type StatusDoc struct {
 	Host        string                   `json:"host"`
 	Time        string                   `json:"time"`
@@ -31,7 +31,7 @@ type StatusDoc struct {
 	Fail2ban    *Fail2banSummary         `json:"fail2ban,omitempty"`
 	// Overrides lists active `cnt expose` overrides on this host. h005's
 	// fleet-edge-overrides checks it on commit and in its sweep
-	// (ROUTING-PLAN §8 step 7, public expose). Always present (maybe
+	// (public expose). Always present (maybe
 	// empty) in the served doc so "none" and "old agent" differ; nil only
 	// in buildStatus (compat shape).
 	Overrides *[]ExposeOverride `json:"overrides,omitempty"`

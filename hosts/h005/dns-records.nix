@@ -1,10 +1,6 @@
-# Tailnet + LAN DNS records served by h005's dnsmasq (ROUTING-PLAN §8 step 4).
-#
-# Container routes are generated from containers/*/service.nix by
-# containers/lib.nix `dnsRecords` (read from this repo's working tree at
-# build time). Only names that aren't container routes yet
-# are listed here by hand. Converting a service to `routes` means deleting
-# its names below; the eval refuses a name that is both.
+# Container DNS answers come from h005's runtime placement registry.
+# This file declares route names and public membership, not placement.
+# Hand-kept host names must not overlap container routes.
 { fleet }:
 let
   domain = fleet.global.domain;
@@ -13,10 +9,8 @@ let
     dir = ../../containers;
   };
 
-  # notes is a generated route now (containers/trilium). sso-proxy is the
-  # fleet oauth2-proxy's sign-in host on h005 (oauth2-proxy.nix); tailnet
-  # record here, plus a public CNAME to o002 below (ROUTING-PLAN §8 step 6:
-  # o002's vhost proxies only /oauth2/ to h005's edge listener).
+  # The sign-in name has a tailnet answer here and a public CNAME to o002;
+  # o002 forwards only /oauth2/ to h005's edge listener.
   handTailnet = [
     {
       fqdn = "sso-proxy.${domain}";
@@ -62,9 +56,8 @@ in
   lan = [ ];
   public = generated.public;
 
-  # Desired bunny zone for `fleet-edge dns-plan` (ROUTING-PLAN §8 step 4).
-  # Generated route CNAMEs plus the hand-kept public names below. Records
-  # in the zone that are neither are reported as unmanaged, never deleted.
+  # The reconciler filters route CNAMEs by effective placement. Unmanaged
+  # records are reported, never deleted.
   publicSpec =
     let
       ttl = 300;
@@ -101,11 +94,10 @@ in
       # o002 hand vhosts (hosts/oracle/o002/nginx.nix).
       ++ map (cname "o002") [
         "www"
-        # Public sign-in for auth = oauth2-proxy routes (ROUTING-PLAN §8
-        # step 6); o002 proxies only /oauth2/ to h005's edge listener.
+        # o002 exposes only /oauth2/ on h005's edge listener.
         "sso-proxy"
       ]
-      # *.share: local temporary sharing (FLOWS-AUDIT.md §c, fleet-share-serve).
+      # Wildcard names support temporary local sharing.
       ++ map (cname "o002") [ "*.share" ];
       genNames = map (r: r.name) gen;
       clash = builtins.filter (r: builtins.elem r.name genNames) hand;

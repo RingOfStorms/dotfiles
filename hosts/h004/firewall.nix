@@ -1,8 +1,5 @@
-# h004 does not trust tailscale0 (ROUTING-PLAN §5.1). NFS is mounted over the
-# LAN (h001 autofs -> 10.12.14.184) and opened to h001 only by nfs-data.nix.
-# SSH (ROUTING-PLAN §8 step 2): high-trust tailnet overlay IPs, o002
-# excluded, plus a home LAN fallback that rejects low-trust devices. The
-# global :22 from hardening.nix is replaced; 41641/udp and icmp stay global.
+# NFS is LAN-only to h001. LAN SSH remains a fallback when the tailnet is
+# down, but must reject low-trust devices just like tailnet SSH.
 { fleet, lib, ... }:
 let
   fleetLib = import ../../containers/lib.nix;

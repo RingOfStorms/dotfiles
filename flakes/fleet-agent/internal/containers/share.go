@@ -1,7 +1,6 @@
 package containers
 
-// `fleet share` (containers/FLOWS-AUDIT.md §(c) "Local temporary sharing via
-// *.share.joshuabell.xyz"): share a local port under a temporary subdomain
+// `fleet share`: share a local port under a temporary subdomain
 // via a restricted ssh reverse tunnel to o002's `share` user, whose forced
 // command (`fleet-share-serve`, o002-side, fleet-edge `internal/shareserve`)
 // renders and tears down the nginx vhost itself. There is no host-side
@@ -9,20 +8,16 @@ package containers
 //
 // Usage: fleet share <port> [--name N] [--for DUR]
 //
-// Two ssh phases over one multiplexed connection (control socket), because
+// Two ssh sessions over one multiplexed connection (control socket), because
 // the forced command needs to know which port sshd ends up binding for
-// `-R 127.0.0.1:0:...` (port 0: let the server pick), and the only way to
-// learn that before the forced command runs is to ask the connection
-// itself once it exists:
+// `-R 127.0.0.1:0:...` (port 0: let the server pick), and that port is only
+// known once the connection exists:
 //
 //  1. A background ControlMaster with `-N` (no session/command requested
 //     at all, so `share`'s ForceCommand never fires) opens the connection
 //     and requests the `-R 127.0.0.1:0:localhost:<port>` forward.
-//  2. `ssh -S <ctrl> -O forward` on the same control path asks the running
-//     master to (re-)establish configured forwards and prints the
-//     allocated port to stdout (documented OpenSSH pattern, see
-//     PROTOCOL.mux: `LPORT=$(ssh -S muxsocket -R0:localhost:25 -O forward
-//     somehost)`).
+//  2. The allocated port is read from the master's own stderr ("Allocated
+//     port N for remote forward to ...").
 //  3. A second, foreground `ssh -S <ctrl>` session with an explicit remote
 //     command (`<name> <boundport> <forSeconds>`) reuses the same
 //     connection and *does* request a session, so this is the one that
@@ -188,7 +183,7 @@ func Share(args []string) error {
 	defer os.RemoveAll(ctrlDir)
 	ctrl := filepath.Join(ctrlDir, "sock")
 
-	// Phase 1: background master, no session at all (so share's
+	// Background master, no session at all (so share's
 	// ForceCommand never runs), just the reverse forward. OpenSSH prints
 	// "Allocated port N for remote forward to ..." for a `-R ...:0:...`
 	// (port 0) request to its OWN stderr at setup time (ssh.c
@@ -210,7 +205,7 @@ func Share(args []string) error {
 	}
 	defer exec.Command("ssh", "-S", ctrl, "-O", "exit", target).Run() //nolint:errcheck
 
-	// Phase 2: pull the bound port out of the master's own setup message.
+	// Pull the bound port out of the master's own setup message.
 	m := allocatedPortRe.FindSubmatch(masterErr.Bytes())
 	if m == nil {
 		return fmt.Errorf("could not find the allocated port in ssh output (%q)", masterErr.String())
@@ -220,7 +215,7 @@ func Share(args []string) error {
 		return fmt.Errorf("could not parse the allocated port (%q): %v", string(m[1]), err)
 	}
 
-	// Phase 3: the real, foreground session -- this is the one that
+	// The real, foreground session -- this is the one that
 	// triggers fleet-share-serve.
 	remoteCmd := fmt.Sprintf("%s %d %d", a.Name, boundPort, int(a.For.Seconds()))
 	fmt.Fprintf(os.Stderr, "sharing 127.0.0.1:%d as https://%s.%s ...\n", a.Port, a.Name, shareDomain())

@@ -1,7 +1,7 @@
 # Guest config. Private network: paperless on :28981, tika on
-# 127.0.0.1:9998 (guest loopback), gotenberg moved to 127.0.0.1:3002 (3000 is forgejo's),
-# postgres and redis on unix sockets. uids pinned to the copied data
-# (paperless 915; postgres is 71 by default).
+# 127.0.0.1:9998 (guest loopback), gotenberg on 127.0.0.1:3002, postgres and
+# redis on unix sockets. uids pinned to the persisted data (paperless 915;
+# postgres is 71 by default).
 {
   pkgs,
   lib,

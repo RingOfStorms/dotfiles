@@ -15,6 +15,9 @@ const (
 	KindAssistant  Kind = "assistant"
 	KindNotice     Kind = "notice"
 	KindCompaction Kind = "compaction"
+	// KindEvent is a divider for session settings changing mid-conversation
+	// (model, thinking level, mode); see Item.Settings.
+	KindEvent Kind = "event"
 )
 
 // PartKind is one block of an assistant turn.
@@ -67,6 +70,16 @@ type Item struct {
 	Stop  StopKind
 	// StopMessage is the provider's error or "Interrupted by user".
 	StopMessage string
+
+	// Settings are an event's changes, in order; consecutive changes share
+	// one divider.
+	Settings []Setting
+}
+
+// Setting is one changed session setting, e.g. {"model", "claude-opus"}.
+type Setting struct {
+	Key   string
+	Value string
 }
 
 // Part is one block of an assistant turn.
@@ -90,6 +103,43 @@ type Tool struct {
 	// Diff is the unified-ish diff omp records for edits (lines prefixed with
 	// '+', '-' or ' ').
 	Diff string
+	// Jobs are the background agents or sessions the call started, kept
+	// current as their results arrive.
+	Jobs []Job
+}
+
+// Job is one background agent (a task subagent, a vibe session turn) started
+// by a tool call. Its Status reuses the tool lifecycle.
+type Job struct {
+	ID         string
+	Name       string
+	Agent      string
+	Status     ToolStatus
+	DurationMs int64
+}
+
+// TodoStatus is a todo task's state, as omp's todo tool records it.
+type TodoStatus string
+
+const (
+	TodoPending    TodoStatus = "pending"
+	TodoInProgress TodoStatus = "in_progress"
+	TodoCompleted  TodoStatus = "completed"
+	TodoBlocked    TodoStatus = "blocked"
+	TodoAbandoned  TodoStatus = "abandoned"
+)
+
+// TodoPhase is a named group of the agent's todo list.
+type TodoPhase struct {
+	Name  string     `json:"name"`
+	Tasks []TodoTask `json:"tasks"`
+}
+
+// TodoTask is one entry of the agent's todo list.
+type TodoTask struct {
+	Content string     `json:"content"`
+	Status  TodoStatus `json:"status"`
+	Blocker string     `json:"blocker,omitempty"`
 }
 
 // clone copies an item deeply enough that later mutation of the session
@@ -97,6 +147,25 @@ type Tool struct {
 func (it *Item) clone() Item {
 	out := *it
 	out.Parts = slices.Clone(it.Parts)
+	for i := range out.Parts {
+		out.Parts[i].Tool.Jobs = slices.Clone(out.Parts[i].Tool.Jobs)
+	}
 	out.Files = slices.Clone(it.Files)
+	out.Settings = slices.Clone(it.Settings)
+	return out
+}
+
+// Meta is session-wide state that is not part of the conversation flow: the
+// title omp gave the session and the agent's current todo list.
+type Meta struct {
+	Title string
+	Todos []TodoPhase
+}
+
+func cloneTodos(phases []TodoPhase) []TodoPhase {
+	out := slices.Clone(phases)
+	for i := range out {
+		out[i].Tasks = slices.Clone(out[i].Tasks)
+	}
 	return out
 }

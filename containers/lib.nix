@@ -37,12 +37,12 @@ let
   lanSubnet = fleetHosts.global.lanSubnet;
 
   # ---------------------------------------------------------------- routes
-  # ROUTING-PLAN.md §2. Each route is normalized and validated here; any
+  # Each route is normalized and validated here; any
   # mistake throws at eval time (the inventory, every flake build).
   #
   # Naming: a route called `web` gets the service name (atuin.joshuabell.xyz);
   # any other route gets "<svc>-<route>" (immich-db). Set `name` to override.
-  # tcp/udp routes have no name, url or fqdn (no DNS yet; that's fleet-edge).
+  # tcp/udp routes have no name, url or fqdn.
   routeEnums = {
     proto = [
       "http"
@@ -87,7 +87,7 @@ let
     "requestBuffering"
     "forwardedProto"
     "extraConfig"
-    # auth = "oauth2-proxy" only (ROUTING-PLAN §8 step 6)
+    # auth = "oauth2-proxy" only
     "groups"
     "bypass"
   ];
@@ -261,7 +261,7 @@ let
     else
       routes;
 
-  # Private container networking (ROUTING-PLAN §8 step 5). Opt-in per
+  # Private container networking. Opt-in per
   # service: net = { private = true; index = N; }. For kind = "nixos" the
   # guest is 10.233.<N>.2 on every host (index is fleet-wide unique within
   # the kind, checked by checkNetIndexes); the host side of every veth is
@@ -273,7 +273,7 @@ let
   #            host, else the target host's overlay IP on tcp 443, its
   #            nginx), and the target admits this caller on 80/443 in its
   #            own ports file, from the hosts discovery puts the caller on
-  #            (cli/routes.go srcPortLines) -- not from its `host` field.
+  #            (cli/routes.go srcPortLines).
   #            That file is refreshed after a deploy, move or destroy.
   #   egress = [ "10.12.14.181:9010/tcp" ]   a fixed LAN/tailnet endpoint.
   # For kind = "podman", `index` instead picks a static address on the
@@ -395,8 +395,8 @@ let
     let
       s = {
         kind = "nixos";
-        # No `host`: placement is runtime (PLACEMENT-PLAN.md). The fleet-edge
-        # registry is the source of truth; record a destination with
+        # Placement is not service metadata: the fleet-edge registry is the
+        # source of truth; record a destination with
         # `cnt place <svc> --set <host>` or `cnt deploy <svc> --host <host>`.
         persist = { };
         tcpPorts = [ ];
@@ -419,12 +419,12 @@ let
       net = normalizeNet s;
     };
 
-  # The edge listener port on service hosts (ROUTING-PLAN §2.3). Keep in
+  # The edge listener port on service hosts. Keep in
   # sync with cli/routes.go edgePort.
   edgePort = 8443;
 
   # oauth2-proxy hygiene for any vhost under .joshuabell.xyz that proxies to
-  # an app (ROUTING-PLAN §4). Same files cli/routes.go embeds, so there is one
+  # an app. Same files cli/routes.go embeds, so there is one
   # copy. cookieStrip goes in the server block (sets $fleet_cookie);
   # identityClear in each app-facing proxy location (never in oauth2-proxy's
   # own /oauth2/ locations, which need the cookie).
@@ -445,7 +445,7 @@ let
 
   # Tailnet peers a host's own http vhosts must not serve: o002 (the public
   # edge, which reaches them through its edge listener instead) and the
-  # low-trust nodes (hosts/fleet.nix trust = "low"). ROUTING-PLAN 8.2.
+  # low-trust nodes (hosts/fleet.nix trust = "low").
   # Container hosts do not need this: their 80/443 admission is the runtime
   # @src set `cnt deploy` fills per service. h005 does, because its vhosts
   # (fleet-edge dashboard, oauth2-proxy sso-proxy) are hand-written and
@@ -502,9 +502,8 @@ in
     validWebSource
     webSourcesIps
     ;
-  # ROUTING-PLAN §8 step 2: explicit per-host firewall, generated from the
-  # inventory instead of hand-written global allows ("every host trusts
-  # tailscale0" is gone; this is what replaces the blanket 22/80/443).
+  # Explicit per-host firewall allow-lists, generated from the inventory
+  # (no host trusts tailscale0 as a whole).
   #   hosts     fleet.nix hosts (overlayIp, trust)
   #   exclude   host names to leave out even if high trust (o002: edge
   #             traffic must never satisfy a tailnet http allow)
@@ -547,7 +546,7 @@ in
       '';
     };
 
-  # Lockout guard (ROUTING-PLAN §8 step 2): every host's generated ssh
+  # Lockout guard: every host's generated ssh
   # allow-list must be non-empty and must contain lio's overlay IP, or a
   # fleet.nix typo / scoping bug silently locks out ssh from lio. Build a
   # NixOS `assertions` entry for the module that computes `ips` via
@@ -720,7 +719,7 @@ in
               (
                 if svc.net.private then
                   {
-                    # Private network (ROUTING-PLAN §8 step 5): the guest firewall
+                    # The guest firewall
                     # admits only the exposed route ports (host nginx or DNAT).
                     # DNS goes to the host's resolved stub on the veth, so the
                     # guest gets the same split-horizon answers as the host.
@@ -797,7 +796,7 @@ in
       # Private (net.private, podman): no publish needed at all. nginx
       # (routes.go backendAddr) proxies straight to the bridge IP:port,
       # which podman routes without a --publish, same as a nixos guest's
-      # veth. A bare "port:port" entry (the old 127.0.0.1-default) is
+      # veth. A bare "port:port" entry (127.0.0.1 by default) is
       # dropped; an explicit host address (e.g. "0.0.0.0:X:Y", for a port
       # meant to stay reachable on every interface alongside the private
       # IP) still publishes as written.

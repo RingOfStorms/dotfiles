@@ -9,8 +9,7 @@
 let
   c = constants;
   domain = fleet.global.domain;
-  # Fleet oauth2-proxy's edge listener (ROUTING-PLAN §8 step 6): only
-  # /oauth2/ is reached here, never the tailnet sign-in vhost or 4180.
+  # Reach only /oauth2/ on the edge listener, not the internal sign-in vhost.
   h005EdgeIp = fleet.hosts.h005.overlayIp;
 
   # Floating-container public vhosts arrive through fleet-vhost-receive.
@@ -19,11 +18,7 @@ let
   # oauth2-proxy cookie/identity hygiene for app-facing hand vhosts (shared with routes.go).
   inherit (containersLib) nginxSnippets;
 
-  # TLS (ROUTING-PLAN §8 step 4): names listed here serve the
-  # *.joshuabell.xyz + apex wildcard that h005 issues and pushes
-  # (hosts/_shared_assets/utilities/wildcard-cert-receiver.nix) instead of their own http-01 cert.
-  # Moved over one name at a time; "all" switches every joshuabell.xyz
-  # vhost.
+  # h005 supplies the wildcard; the edge does not hold a DNS API credential.
   wildcardNames = [ "all" ];
   coveredByWildcard =
     name:
@@ -135,7 +130,6 @@ in
             };
           };
 
-          # ── Fleet oauth2-proxy sign-in, public (ROUTING-PLAN §8 step 6) ──
           # Only /oauth2/ (start, callback, sign_out, auth) is public; the
           # upstream is h005's dedicated edge listener (:8443), which is
           # the only thing admitted there and the only place h005 trusts

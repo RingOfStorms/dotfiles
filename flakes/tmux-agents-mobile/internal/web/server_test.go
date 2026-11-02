@@ -335,7 +335,7 @@ func TestHTMLIsNotCached(t *testing.T) {
 // are served from the origin itself with the right content types.
 func TestInstallableAssets(t *testing.T) {
 	s := testServer()
-	s.tpl = template.Must(template.ParseFS(assets, "templates/*.html"))
+	s.tpl = template.Must(parseTemplates())
 	h := s.Handler()
 
 	for _, tc := range []struct{ path, contentType string }{
@@ -356,6 +356,23 @@ func TestInstallableAssets(t *testing.T) {
 	}
 }
 
+// The service worker serves /static/* cache-first, so pages must link a URL
+// that changes with the file's content or phones keep running the old JS.
+func TestStaticAssetsAreVersioned(t *testing.T) {
+	tpl := template.Must(parseTemplates())
+	var b strings.Builder
+	if err := tpl.ExecuteTemplate(&b, "head", Base{}); err != nil {
+		t.Fatal(err)
+	}
+	head := b.String()
+	for _, name := range []string{"app.js", "app.css", "htmx.min.js"} {
+		want := "/static/" + name + "?v=" + assetVersions[name]
+		if assetVersions[name] == "" || !strings.Contains(head, want) {
+			t.Errorf("head does not link %s", want)
+		}
+	}
+}
+
 // The inbox poll swaps cards in place: the fragment must be exactly what sits
 // inside the page's card container, and must be refused when tmux is gone.
 func TestInboxFragment(t *testing.T) {
@@ -363,7 +380,7 @@ func TestInboxFragment(t *testing.T) {
 		t.Skip("tmux not installed")
 	}
 	s := testServer()
-	s.tpl = template.Must(template.ParseFS(assets, "templates/*.html"))
+	s.tpl = template.Must(parseTemplates())
 	// No tmux server on this socket: the fragment must not hand back a page.
 	s.tmux = tmux.New("tmux", fmt.Sprintf("tamfrag-%d", os.Getpid()))
 	s.agents = agents.New("", s.tmux)

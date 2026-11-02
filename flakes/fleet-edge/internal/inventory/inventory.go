@@ -1,7 +1,6 @@
 // Package inventory parses the fleet inventory JSON produced by
 // `nix eval --json <containers-flake>#inventory`. The shape is defined by
-// containers/flake.nix and containers/cli/main.go; routes is a newer,
-// optional field (absent on services that haven't adopted it yet).
+// containers/flake.nix and containers/cli/main.go; routes is optional.
 package inventory
 
 import (
@@ -12,9 +11,7 @@ import (
 	"strings"
 )
 
-// Route describes one declared route on a service, per
-// containers/ROUTING-PLAN.md §2. All fields are informational here;
-// fleet-edge does not enforce or generate anything from them yet.
+// Route describes one declared route on a service.
 type Route struct {
 	Port     int     `json:"port"`
 	Name     *string `json:"name"`
@@ -23,8 +20,8 @@ type Route struct {
 	Proto    string  `json:"proto"`
 	Exposure string  `json:"exposure"`
 	Auth     *string `json:"auth"`
-	// Via lists the public paths for this route (ROUTING-PLAN.md §2.4),
-	// e.g. ["edge"] or ["router"]; empty/absent for non-public routes.
+	// Via lists the public paths for this route, e.g. ["edge"] or ["router"];
+	// empty/absent for non-public routes.
 	Via    []string `json:"via"`
 	Health *string  `json:"health"`
 	// Icon is an optional start-page icon: a URL or a CDN icon name.
@@ -32,8 +29,8 @@ type Route struct {
 	// Group is an optional start-page category for the route's tile.
 	Group *string `json:"group"`
 	// Fields the expose-override service (internal/overrides) validates
-	// against and pushes to the edge. Absent in older inventories (zero
-	// values: refused there, never guessed).
+	// against and pushes to the edge. When absent they decode as zero values,
+	// which are refused, never guessed.
 	PublicWithoutAuth bool   `json:"publicWithoutAuth"`
 	Websockets        bool   `json:"websockets"`
 	MaxBody           string `json:"maxBody"`
@@ -71,8 +68,7 @@ type Service struct {
 	TCPPorts    []int             `json:"tcpPorts"`
 	UDPPorts    []int             `json:"udpPorts"`
 	Nginx       *string           `json:"nginx"`
-	// Routes may be absent entirely on services that haven't migrated to
-	// the routes model yet (ROUTING-PLAN.md §2). Treat missing as empty.
+	// Routes may be absent; treat missing as empty.
 	Routes map[string]Route `json:"routes"`
 }
 

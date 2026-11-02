@@ -1,6 +1,5 @@
-// Package reconcile makes h005's routing follow the placement registry
-// (containers/PLACEMENT-PLAN.md §5, phases 3 and 4a). It runs in the
-// fleet-edge-overrides unit next to the registry and, every pass:
+// Package reconcile makes h005's routing follow the placement registry. It
+// runs in the fleet-edge-overrides unit next to the registry and, every pass:
 //
 //   - writes one hosts file per name into two dnsmasq `hostsdir`s: tailnet
 //     (every non-local route -> the placed host's overlay IP) and lan (lan and

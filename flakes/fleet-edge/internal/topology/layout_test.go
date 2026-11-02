@@ -647,7 +647,7 @@ func routeInventory() *inventory.Inventory {
 				"web": {Port: 8080, FQDN: strp("notes.example"), Exposure: "tailnet"},
 			}},
 			// Same FQDN as gitea, served from a second host: one name, one
-			// marker, and the first owner in host order wins.
+			// marker, and the first owner in service name order wins.
 			"mirror": {Name: "mirror", Routes: map[string]inventory.Route{
 				"web": {Port: 80, FQDN: strp("git.example"), Exposure: "public", Via: []string{"edge"}},
 			}},
@@ -1566,7 +1566,7 @@ func TestDefaultZoneAutoPlacesUnknownHost(t *testing.T) {
 	}
 }
 
-// --- parking: behaviour that must not regress ------------------------------
+// --- station geometry invariants -------------------------------------------
 
 // The station is fixed size and its head, icon, dot and counter baselines all
 // stay inside the box, whatever the label length.
@@ -1616,8 +1616,7 @@ func TestStationGeometryStaysInsideTheBox(t *testing.T) {
 
 // A station's name is 21px type, so its baseline has to clear whatever is
 // drawn around the head: the outermost space ring when the host reports
-// mounts, the head circle when it does not. Clearing only the ring radius
-// put a ringless station's name through its own circle.
+// mounts, the head circle when it does not.
 func TestStationLabelClearsTheHead(t *testing.T) {
 	spec := &Spec{
 		Width:       DefaultWidth,

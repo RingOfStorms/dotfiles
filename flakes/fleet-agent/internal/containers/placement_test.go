@@ -77,8 +77,8 @@ func TestResolveHostMatrix(t *testing.T) {
 	}{
 		// A fenced row that names no host is refused before --host or
 		// discovery: the move owns the name, and the registry's host map is
-		// empty for it, so these are the cases where a second copy used to
-		// be placed ahead of any write that could refuse it.
+		// empty for it, so falling through would place a second copy ahead
+		// of any write that could refuse it.
 		{name: "fenced stale row", bound: map[string]string{}, probes: 0,
 			rows:    map[string]placementRow{"svc": {Service: "svc", State: placementStale, Host: "dst", Token: "t1", Device: "h005", Previous: &placementBinding{Host: "src"}}},
 			wantErr: "is fenced: a move to dst is still open, held by h005 (state stale with a rollback binding on src)"},
@@ -231,12 +231,12 @@ func TestCmdUnitRefusesLocalCopyPlacedElsewhere(t *testing.T) {
 	}
 }
 
-// TestFencedRowRefusesBeforeActing is the gap that let a deploy or a start
-// place a second copy: a fenced row (a move owns the name) whose row names no
-// host -- stale, or a first placement that never committed -- used to fall
-// through to --host and discovery, so the command ran on a host the move may
-// have stranded and only a later registry write could object. Nothing may run
-// remotely, and the row is left exactly as it was for --recover to settle.
+// TestFencedRowRefusesBeforeActing: a fenced row (a move owns the name) whose
+// row names no host -- stale, or a first placement that never committed --
+// must not fall through to --host and discovery, which would run the command
+// on a host the move may have stranded before any registry write could
+// object. Nothing may run remotely, and the row is left exactly as it was for
+// --recover to settle.
 func TestFencedRowRefusesBeforeActing(t *testing.T) {
 	fenced := map[string]struct {
 		row placementRow
@@ -534,9 +534,9 @@ func TestCmdPlaceDispatcher(t *testing.T) {
 	}
 }
 
-// TestDispatchPlaceHelp guards the top-level switch: `fleet containers place`
-// once fell through to the top-level usage because cmdPlace was never wired
-// in. Help must come from place itself and list every form it accepts.
+// TestDispatchPlaceHelp guards the top-level switch: help for `fleet
+// containers place` must come from place itself, not the top-level usage,
+// and list every form it accepts.
 func TestDispatchPlaceHelp(t *testing.T) {
 	var buf strings.Builder
 	old := usageOut

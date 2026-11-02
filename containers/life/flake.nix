@@ -7,9 +7,9 @@
     extra-container.url = "github:erikarvstedt/extra-container";
     # Host-side extra-container eval must stay on 25.11 (issue #40) ...
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
-    # ... the guest runs the nixpkgs rev h001 runs today (postgresql_18 as before).
+    # ... the guest is pinned to a fixed rev (postgresql_18, matching the persisted cluster).
     guestpkgs.url = "github:nixos/nixpkgs/6fcc160353f63555b560f25588925133c8f61f2a";
-    # Locked to the rev h001 runs today (4ef30d9); bump with `nix flake update life`.
+    # Locked in flake.lock; bump with `nix flake update life`.
     life.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/life.git";
   };
 

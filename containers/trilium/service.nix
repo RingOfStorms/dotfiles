@@ -1,7 +1,6 @@
 # Trilium notes (notes.joshuabell.xyz). Trilium runs with noAuthentication =
 # true; the only way in is the route below, gated by the fleet oauth2-proxy
-# (hosts/h005/oauth2-proxy.nix). Tailnet-only since 2026-10-21.
-# Was hosts/h001/mods/trilium.nix on bare metal.
+# (hosts/h005/oauth2-proxy.nix).
 {
   name = "trilium";
   kind = "nixos";
@@ -14,16 +13,13 @@
 
   # Stopped copies of document.db + its WAL are consistent; no hook needed.
 
-  # Gated by the fleet oauth2-proxy on h005 (ROUTING-PLAN §8 step 6): login
-  # at sso-proxy.joshuabell.xyz, only zitadel role `notes`. Tailnet-only.
-  # The desktop sync client can't do the browser login; it used the old
-  # :9112 bypass, removed 2026-10-21.
-  # Private network (ROUTING-PLAN §8 step 5): guest 10.233.4.2.
+  # Login at sso-proxy.joshuabell.xyz, only zitadel role `notes`. The desktop
+  # sync client can't do the browser login.
   net = {
     private = true;
     index = 4;
   };
-  # Finding M2: trilium auth is via the fleet oauth2-proxy on h005; the
+  # trilium auth is via the fleet oauth2-proxy on h005; the
   # guest itself makes no outbound calls.
   internet = false;
 

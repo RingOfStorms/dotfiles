@@ -217,7 +217,7 @@ func TestPlacementFirstPlacement(t *testing.T) {
 	}
 }
 
-// TestPlacementMove covers the corrected ordering: reserve before the source
+// TestPlacementMove covers the move ordering: reserve before the source
 // stops, the source keeps serving and stays the rollback target, commit after
 // routing cutover, retire only afterwards.
 func TestPlacementMove(t *testing.T) {
@@ -248,8 +248,8 @@ func TestPlacementMove(t *testing.T) {
 	if c, out := r.commit("app"); c != 409 || !strings.Contains(out["error"].(string), "does not report app") {
 		t.Fatalf("commit without the destination: %d %v", c, out)
 	}
-	// The move stops the source before it commits (step 3 before step 7), so the
-	// source is installed but stopped while the destination takes the name.
+	// The move stops the source before it commits, so the source is installed
+	// but stopped while the destination takes the name.
 	r.stop("h001", "app")
 	r.up("h003", "app")
 	if c, out := r.commit("app"); c != 200 {

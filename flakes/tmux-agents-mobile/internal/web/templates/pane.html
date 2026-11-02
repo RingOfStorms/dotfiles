@@ -2,9 +2,11 @@
 {{if eq .View "native"}}
 <div id="chat" class="chat" data-pane="{{.Slug}}">
   <button type="button" class="earlier" data-earlier hidden>show earlier</button>
-  <div class="items" data-items></div>
+  <div class="items" data-items><div class="empty" data-loading>loading conversation…</div></div>
+  <div data-recap hidden></div>
   <div class="working" data-working{{if ne .State "working"}} hidden{{end}}><span class="glyph working">⠿</span> working…</div>
 </div>
+<div class="todo-slot" data-todo-slot hidden></div>
 {{else}}
 <pre id="frame" class="frame {{if .Fit}}fit{{else}}wrap{{end}}"
      data-pane="{{.Slug}}"

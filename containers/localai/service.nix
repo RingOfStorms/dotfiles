@@ -34,7 +34,7 @@
   # Static IP on the shared fleet-noinet bridge (10.89.250.101, offset past
   # the .1 gateway and podman's dynamic-IPAM low range): joe's nginx
   # proxies straight to it instead of a loopback publish, so other local
-  # processes/users on joe can no longer reach the unauthenticated API.
+  # processes/users on joe cannot reach the unauthenticated API.
   # index is fleet-wide unique within kind = "podman" (checkNetIndexes).
   net = {
     private = true;
@@ -46,7 +46,7 @@
   # zone wildcard pushed from h005 (hosts/h005/wildcard-cert.nix) and
   # proxies to the bridge IP 10.89.250.101:8080 (net.private above).
   # auth = "none": LocalAI has no login (only an optional API_KEY, which
-  # would break the existing Open WebUI / agent clients). M6: instead of the
+  # would break the existing Open WebUI / agent clients). Rather than the
   # whole tailnet, joe's vhost only admits the known callers (allow -> nginx
   # allow <overlayIp>; deny all): h001 (Open WebUI and net.uses callers such
   # as life, masqueraded to h001's overlay IP) and the high-trust

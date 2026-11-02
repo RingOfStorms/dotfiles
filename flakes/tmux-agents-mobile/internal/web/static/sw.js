@@ -10,7 +10,10 @@
 // Zitadel, an expired session turns a static request into a redirect to the
 // login page, and caching that under /static/app.css would leave a phone with a
 // permanently broken stylesheet.
-const CACHE = "tam-static-v1";
+//
+// Pages link assets as /static/<file>?v=<content hash>, so cache-first is safe:
+// a new release is a new URL. Storing a version drops the file's older ones.
+const CACHE = "tam-static-v2";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -36,7 +39,16 @@ self.addEventListener("fetch", (event) => {
       return fetch(event.request).then((res) => {
         if (res.ok && !res.redirected) {
           const copy = res.clone();
-          caches.open(CACHE).then((cache) => cache.put(event.request, copy)).catch(() => {});
+          caches
+            .open(CACHE)
+            .then(async (cache) => {
+              for (const old of await cache.keys()) {
+                const oldURL = new URL(old.url);
+                if (oldURL.pathname === url.pathname && oldURL.search !== url.search) await cache.delete(old);
+              }
+              await cache.put(event.request, copy);
+            })
+            .catch(() => {});
         }
         return res;
       });

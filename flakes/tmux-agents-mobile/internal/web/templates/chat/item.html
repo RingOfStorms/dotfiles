@@ -1,4 +1,4 @@
-{{define "item"}}{{if eq .Kind "user"}}{{template "user" .}}{{else if eq .Kind "assistant"}}{{template "assistant" .}}{{else if eq .Kind "compaction"}}{{template "compaction" .}}{{else}}{{template "notice" .}}{{end}}{{end}}
+{{define "item"}}{{if eq .Kind "user"}}{{template "user" .}}{{else if eq .Kind "assistant"}}{{template "assistant" .}}{{else if eq .Kind "compaction"}}{{template "compaction" .}}{{else if eq .Kind "event"}}{{template "event" .}}{{else}}{{template "notice" .}}{{end}}{{end}}
 
 {{define "user"}}<div class="msg user"><div class="bubble">
 {{- if .Text}}<div class="utext">{{.Text}}</div>{{end}}
@@ -16,15 +16,26 @@
 {{- else if eq .Stop "error"}}<div class="stop st-error">✗ {{if .StopMessage}}{{.StopMessage}}{{else}}error{{end}}</div>{{end -}}
 </div>{{end}}
 
-{{define "tool"}}<details class="tool st-{{.Status}}"><summary><span class="tglyph">{{toolGlyph .Status}}</span><span class="tname">{{.Name}}</span><span class="tsum">{{if .Intent}}{{.Intent}}{{else}}{{firstLine .Detail}}{{end}}</span></summary><div class="tbody">
+{{define "tool"}}<details class="tool st-{{.Status}}"><summary><span class="tglyph">{{toolGlyph .Status}}</span><span class="tname">{{.Name}}</span><span class="tsum">{{if .Intent}}{{.Intent}}{{else}}{{firstLine .Detail}}{{end}}</span>{{if gt (len .Jobs) 1}}<span class="tcount">{{jobsDone .Jobs}}/{{len .Jobs}}</span>{{end}}</summary><div class="tbody">
 {{- if .Detail}}<pre class="tdetail">{{.Detail}}</pre>{{end}}
 {{- if .Args}}<pre class="targs">{{.Args}}</pre>{{end}}
 {{- if .Diff}}<pre class="tdiff">{{range diffLines .Diff}}<span class="{{.Class}}">{{.Text}}</span>
 {{end}}</pre>
 {{- else if .Output}}<pre class="tout">{{.Output}}</pre>
 {{- else if eq .Status "running"}}<div class="tpending">running…</div>{{end -}}
-</div></details>{{end}}
+</div></details>
+{{- if .Jobs}}<ul class="jobs">{{range .Jobs}}<li class="st-{{.Status}}"><span class="tglyph">{{toolGlyph .Status}}</span><span class="jname">{{.Name}}</span>{{if .Agent}}<span class="jagent">{{.Agent}}</span>{{end}}{{with duration .DurationMs}}<span class="jtime">{{.}}</span>{{end}}</li>{{end}}</ul>{{end}}{{end}}
 
 {{define "notice"}}<details class="msg notice"><summary><span class="nlabel">{{noticeLabel .Label}}</span><span class="tsum">{{summaryLine .Text}}{{range .Files}} @{{.}}{{end}}</span></summary><div class="md">{{md (unwrap .Text)}}</div></details>{{end}}
 
 {{define "compaction"}}<details class="msg compaction"><summary>— {{.Label}} —</summary>{{if .Text}}<div class="md">{{md .Text}}</div>{{end}}</details>{{end}}
+
+{{define "event"}}<div class="msg event"><span class="etext">{{range $i, $s := .Settings}}{{if $i}} · {{end}}{{$s.Key}} <span class="eval">{{$s.Value}}</span>{{end}}</span></div>{{end}}
+
+{{define "todos"}}<details class="todos" data-todos><summary><span class="tcount">{{.Done}}/{{.Total}}</span><span class="tsum">{{.Current}}</span></summary><div class="todo-body">
+{{- range .Phases}}{{if .Tasks}}<div class="todo-phase">{{if .Name}}<div class="todo-name">{{.Name}}</div>{{end}}<ul>
+{{- range .Tasks}}<li class="td-{{.Status}}"><span class="tglyph">{{todoGlyph .Status}}</span><span class="td-text">{{.Content}}{{if .Blocker}}<span class="td-blocker">{{.Blocker}}</span>{{end}}</span></li>{{end -}}
+</ul></div>{{end}}{{end -}}
+</div></details>{{end}}
+
+{{define "recap"}}<div class="recap" title="recap while you were away">※ recap: {{.Text}}</div>{{end}}

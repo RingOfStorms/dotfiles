@@ -1,6 +1,6 @@
 package containers
 
-// Routes (ROUTING-PLAN.md §2, step 1 of §8): the host vhost and firewall
+// Routes: the host vhost and firewall
 // ports generated from service.nix `routes`, `cnt routes` and `cnt audit`.
 //
 // lib.nix normalizes and validates routes (defaults filled in, bad combos
@@ -132,7 +132,7 @@ func validateRoutes(s Service) error {
 	return nil
 }
 
-// Edge listener (ROUTING-PLAN §2.3). o002 proxies public `via = edge` routes
+// Edge listener. o002 proxies public `via = edge` routes
 // to <overlayIp>:edgePort on the service host over the tailnet (plain http
 // inside WireGuard; TLS ends on o002). Keep edgePort in sync with lib.nix
 // edgePort and host-module.nix nginx.edge.port. The host module defines
@@ -165,7 +165,7 @@ func isEdgeRoute(r Route) bool {
 //     and only it trusts X-Forwarded-For (real_ip) from the edge.
 //
 // tailnet and lan routes get only the internal server. Their source ACL
-// (§2.1: enforced by transport peer, never DNS) is either an include
+// (enforced by transport peer, never DNS) is either an include
 // written by host-module.nix (writeExposureACL) or, for a tailnet route
 // with `allow`, per-host `allow <overlayIp>; # allow: <host>` lines plus
 // `deny all;` -- the same set the host firewall admits on 80/443 for that
@@ -177,7 +177,7 @@ func routesVhost(s Service) string {
 		if r.Proto != "http" || r.Exposure == "local" {
 			continue
 		}
-		// Private network (ROUTING-PLAN §8 step 5): proxy to the guest IP.
+		// Private network: proxy to the guest IP.
 		r.backend = backendAddr(s)
 		if b.Len() > 0 {
 			b.WriteString("\n")
@@ -189,13 +189,11 @@ func routesVhost(s Service) string {
 		// Cert paths live in one place: host-module.nix nginx.tls.certDir.
 		b.WriteString("  include /etc/fleet-containers/nginx-tls.conf;\n")
 		b.WriteString("  if ($fleet_edge_block_internal) {\n    return 444;\n  }\n")
-		// net.uses callers (ROUTING-PLAN §8 step 5; FLOWS-AUDIT target
-		// design (a)): same-host private guests come in on 10.233.0.1,
+		// net.uses callers: same-host private guests come in on 10.233.0.1,
 		// which the tailnet/lan ACL would refuse; cross-host callers
 		// arrive masqueraded as their host's overlay IP. The firewall
 		// half (srcPortLines) follows live discovery; this list resolves
-		// both sides through the placement registry, and only falls back
-		// to the declared host where the registry has no row.
+		// both sides through the placement registry.
 		for _, c := range callerIPs(s, n) {
 			fmt.Fprintf(&b, "  allow %s; # %s\n", c.ip, c.comment)
 		}
@@ -217,9 +215,8 @@ func routesVhost(s Service) string {
 	return b.String()
 }
 
-// writeRouteACL restricts the internal server to the route's exposure
-// (ROUTING-PLAN §2.1). The CIDRs live in Nix: host-module.nix writes
-// /etc/fleet-containers/nginx-acl-{tailnet,lan}.conf (allow ...; deny all;).
+// writeRouteACL restricts the internal server to the route's exposure.
+// host-module.nix writes nginx-acl-{tailnet,lan}.conf with deny-all defaults.
 // Server level, so every location (incl. /oauth2/ and the auth_request
 // subrequest) inherits it; locations must not set their own allow/deny.
 // nginx runs allow/deny in the access phase before auth_request, and the
@@ -238,6 +235,11 @@ func writeRouteACL(b *strings.Builder, r Route) {
 			if ip := hostOverlayIP(a); ip != "" {
 				fmt.Fprintf(b, "  allow %s; # allow: %s\n", ip, a)
 			}
+			if inv != nil {
+				if ip := inv.Hosts[a].OverlayIP6; ip != nil && *ip != "" {
+					fmt.Fprintf(b, "  allow %s; # allow: %s\n", *ip, a)
+				}
+			}
 		}
 		b.WriteString("  deny all;\n")
 		return
@@ -248,7 +250,7 @@ func writeRouteACL(b *strings.Builder, r Route) {
 	}
 }
 
-// Fleet oauth2-proxy (ROUTING-PLAN §4, §8 step 6). It runs on h005
+// Fleet oauth2-proxy. It runs on h005
 // (hosts/h005/oauth2-proxy.nix). auth_request subrequests go straight to it
 // over the tailnet (plain http inside WireGuard; h005's firewall admits 4180
 // only from container hosts). Browser login starts and ends on
@@ -386,7 +388,7 @@ func onOff(v bool) string {
 }
 
 // routePorts lists raw tcp/udp routes that leave the host, in the ports
-// file format ("tcp 25565"). Same effect as tcpPorts/udpPorts today.
+// file format ("tcp 25565"). Same effect as tcpPorts/udpPorts.
 func routePorts(s Service) []string {
 	var out []string
 	for _, n := range sortedRouteNames(s) {
@@ -400,7 +402,7 @@ func routePorts(s Service) []string {
 
 // portsFileLines is the service's ports file (host-module.nix applyPorts):
 // tcpPorts/udpPorts and routePorts open on the host ("tcp 3032"). For a
-// private-network service (ROUTING-PLAN §8 step 5) its tcp/udp routes are
+// private-network service its tcp/udp routes are
 // DNATed to the guest instead ("tcp 3032 dnat 10.233.3.2"), and
 // internet = false adds "noinet ve-<name>". lib.nix refuses
 // tcpPorts/udpPorts together with net.private.
@@ -425,8 +427,8 @@ func portsFileLines(s Service, host string) []string {
 		l := fmt.Sprintf("%s %d", r.Proto, r.Port)
 		if s.Net.Private {
 			l += " dnat " + backendAddr(s)
-			// tailnet: only on the host's overlay IP, as a socket bound
-			// there was. Without a known overlay IP, skip it (fail closed).
+			// tailnet: only on the host's overlay IP, like a socket bound
+			// there. Without a known overlay IP, skip it (fail closed).
 			if r.Exposure == "tailnet" {
 				ip := hostOverlayIP(host)
 				if ip == "" {
@@ -447,7 +449,7 @@ func portsFileLines(s Service, host string) []string {
 				// allow is only implemented for tailnet tcp/udp routes.
 				continue
 			}
-			// lan (H4): not on every interface like public; apply-ports puts
+			// lan: not on every interface like public; apply-ports puts
 			// it in @routes_lan (nginx.acl.lan sources + tailnet peers). An
 			// older apply-ports rejects "lan" as a bad address (fails closed).
 			if r.Exposure == "lan" {
@@ -465,9 +467,8 @@ func portsFileLines(s Service, host string) []string {
 
 // fleetPlacement is one discovery sweep of the container hosts, cached for
 // the process: which hosts each installed service was found on, and which
-// hosts did not answer. net.uses admission follows the live fleet, not the
-// `host` field of service.nix: a service that moved without the repo being
-// updated still lands where it actually runs.
+// hosts did not answer. net.uses admission follows the live fleet, so it
+// lands where each service actually runs.
 type fleetPlacement struct {
 	found map[string][]string // service -> hosts it is installed on, sorted
 	down  map[string]bool     // hosts that could not be probed
@@ -585,11 +586,8 @@ func (p *fleetPlacement) places(name, bound string) (hosts []string, known bool)
 	return nil, true
 }
 
-// srcPortLines is this service's 80/443 admission as ports-file lines
-// (host-module.nix applyPorts, which refills the nixos-fw @src* sets on
-// every run): ROUTING-PLAN 8.2. Computed from the service's own routes at
-// the host it is being deployed to -- not from a host-keyed inventory map --
-// so a service deployed or moved onto a host reaches its own vhost there.
+// srcPortLines computes admission on the actual deployment host, not a
+// build-time placement. applyPorts refills the nixos-fw @src* sets each run.
 // Every service on a host contributes its own lines; applyPorts flushes the
 // sets once per run and adds all of them. nginx still enforces the per-vhost
 // exposure ACL, so over-admission here is only TCP reachability.
@@ -641,10 +639,9 @@ func srcPortLines(s Service, host string) []string {
 			lan = true
 		}
 	}
-	// net.uses lands on the callee's nginx (ROUTING-PLAN §8 step 5). Only
-	// http: tcp/udp uses are covered by netExceptions' egress elements,
-	// which are what fleet-net matches for those flows. Discovery includes
-	// every installed copy; only an inconclusive sweep uses the registry.
+	// HTTP uses reach the callee's nginx; raw routes use netExceptions instead.
+	// Discovery includes every installed copy; only an inconclusive sweep
+	// uses the registry.
 	if len(inv.Services) > 0 {
 		fp := fleetPlacementNow()
 		admitCaller := func(c Service, entry string) {
@@ -740,7 +737,7 @@ func cmdRoutes(args []string) error {
 func routesTable(svcs []Service) string { return routesTableWith(svcs, nil, time.Now()) }
 
 // routesTableWith shows declared exposure, and the effective one where a
-// `cnt expose` override is active (ROUTING-PLAN §5.3: "overridden").
+// `cnt expose` override is active.
 func routesTableWith(svcs []Service, ovs []override, now time.Time) string {
 	ov := map[string]override{}
 	for _, o := range ovs {
@@ -872,7 +869,7 @@ type auditRow struct {
 }
 
 // auditListeners classifies the non-loopback listeners on host. Route
-// ports of net.private services (ROUTING-PLAN §8 step 5) live in the
+// ports of net.private services live in the
 // guest's netns, so a *host* listener on one, loopback included, is STALE
 // (an old host-network instance or a leak), unless a host-network service
 // on the same host declares that port too.
@@ -1119,8 +1116,8 @@ func usesTarget(u string) (Service, Route, bool) {
 	return t, r, ok
 }
 
-// netExceptions is the guest's allow list beyond internet + DNS
-// (ROUTING-PLAN §8 step 5), as ports-file "allow" lines:
+// netExceptions is the guest's allow list beyond internet + DNS,
+// as ports-file "allow" lines:
 // "allow ve-<name> <ipv4> <proto> <port>". net.uses of an http route goes
 // to the nginx that serves it: this host's 10.233.0.1:443 when the callee
 // lives here (split DNS answers with the host's own overlay IP, so the
@@ -1203,15 +1200,12 @@ type callerEntry struct {
 //   - same host, private caller: its guest IP (10.233.x.2) arrives via
 //     10.233.0.1, which the tailnet/lan ACL would refuse;
 //   - a different host: the caller host's overlay IP, since a cross-host
-//     caller's packets leave masqueraded as that host (FLOWS-AUDIT target
-//     design (a): "the callee's vhost renders allow <caller host
-//     overlayIp>; # net.uses <svc>").
+//     caller's packets leave masqueraded as that host.
 //
-// Both sides are resolved through the placement registry, so a caller or a
-// callee that moved without the repo being updated is still admitted on the
-// host it actually runs on; a pair the registry has no row for falls back to
-// the declared host, and so is only as current as the repo. This is the nginx
-// half, rendered by a deploy of the callee itself. The firewall half
+// Both sides are resolved through the placement registry, so callers and
+// callees are admitted on the hosts they are bound to; an unplaced caller is
+// skipped. This is the nginx half, rendered by a deploy of the callee
+// itself. The firewall half
 // (srcPortLines) follows live discovery instead, and main.go refreshCallers
 // rewrites it on a deploy, move or destroy; a vhost left stale that way still
 // refuses the caller until the callee's next deploy.
@@ -1259,7 +1253,7 @@ func hostOverlayIP(host string) string {
 // ------------------------------------------------- declared host listeners
 
 // hostListenersFile is written by host-module.nix: host daemons the module
-// itself declares (the status endpoint today), one per line:
+// itself declares (the status endpoint), one per line:
 //
 //	<tcp|udp> <addr|*> <port> <owner...>
 //

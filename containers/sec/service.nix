@@ -1,8 +1,7 @@
 # sec — the fleet secrets manager server (secrets.joshuabell.xyz).
-# Was hosts/h001/mods/sec.nix (bare-metal systemd unit). Private network
-# (net.private, 10.233.14.2): :8300 behind host nginx.
+# Private network (net.private, 10.233.14.2): :8300 behind host nginx.
 #
-# Bootstrap: every host's sec-agent (h001's included) fetches from here and
+# Bootstrap: every host's sec-agent (its own host's included) fetches from here and
 # logs in via zitadel. Agents keep their hydrated cache, so a short outage is
 # harmless; a lost db.key is not (break-glass copy is offline + in restic).
 {
@@ -18,15 +17,15 @@
     nixos = "/var/lib/nixos";
   };
 
-  # Private network (ROUTING-PLAN §8 step 5). sec validates tokens against
-  # zitadel (issuer sso.joshuabell.xyz), reached through the host nginx.
+  # sec validates tokens against zitadel (issuer sso.joshuabell.xyz), reached
+  # through the host nginx.
   net = {
     private = true;
     index = 14;
     uses = [ "zitadel.web" ];
   };
 
-  # Dumb proxy, as the old module vhost: the origin authenticates every route.
+  # Dumb proxy: the origin authenticates every route.
   # Public via edge (o002): a new machine reads its headscale join key over
   # the internet before it is on the tailnet (see o002/nginx.nix).
   routes.web = {

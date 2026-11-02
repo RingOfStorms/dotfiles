@@ -1,7 +1,6 @@
 package containers
 
-// Client for h005's fleet-edge-overrides API (public `cnt expose`,
-// ROUTING-PLAN §8 step 7, "Public expose design" items 1 and 5).
+// Client for h005's fleet-edge-overrides API (public `cnt expose`).
 //
 // Auth: this host's Zitadel machine token (machinetoken.go, the sec-agent
 // login), which h005 accepts only for allowlisted subs from their overlay IP.
@@ -222,8 +221,8 @@ func exposePublic(c edgeAPI, s Service, route, host string, d time.Duration, rea
 	return nil
 }
 
-// mergeEdge prints h005's view next to the hosts' overrides and returns
-// the leftovers (for cnt audit). Host public overrides missing on h005,
+// edgeLeftovers compares h005's view with the hosts' overrides and returns
+// the leftovers (for cnt audit): host public overrides missing on h005,
 // h005 rows missing on their host, o002 files without a row, and rows
 // whose DNS/edge isn't live.
 func edgeLeftovers(host []override, rows []edgeRow, v *edgeVerify) []string {

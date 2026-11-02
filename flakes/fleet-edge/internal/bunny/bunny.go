@@ -1,5 +1,4 @@
-// Package bunny plans public DNS changes for one bunny.net zone
-// (containers/ROUTING-PLAN.md §5.2, §8 step 4).
+// Package bunny plans public DNS changes for one bunny.net zone.
 //
 // The desired record set is generated at build time from the container
 // routes plus a hand-kept list (hosts/h005). Plan compares it with the live
@@ -99,8 +98,8 @@ const (
 	// value. Never deleted; blocks Apply until the list is fixed.
 	RetireMismatch = "retire-mismatch"
 	// Override: a record created by an active `cnt expose` public override
-	// (internal/overrides, ROUTING-PLAN §8 step 7). Owned by that service:
-	// never retired, updated or counted as a conflict here; Ops skips it.
+	// (internal/overrides). Owned by that service: never retired, updated or
+	// counted as a conflict here; Ops skips it.
 	Override = "override"
 )
 
@@ -141,8 +140,8 @@ func LoadSpec(path string) (*Spec, error) {
 	return &s, nil
 }
 
-// Validate refuses duplicate and external targets (ROUTING-PLAN §4: every
-// name in the zone must point at a server we control).
+// Validate refuses duplicate and external targets: every name in the zone
+// must point at a server we control.
 func (s *Spec) Validate() error {
 	if s.Zone == "" {
 		return fmt.Errorf("zone is empty")
@@ -182,12 +181,12 @@ func (s *Spec) Validate() error {
 }
 
 // ForPlacements is the spec with the record set following the placement
-// registry (containers/PLACEMENT-PLAN.md §5): a route record whose service is
-// not placed contributes no name. It moves to Retire, so the live record is
-// deleted only while it is exactly the one the spec would have created; any
-// other record under that name is a retire-mismatch and blocks Apply. Values
-// stay declarative (o002/home), only membership changes. Hand records are
-// untouched. The receiver is not modified.
+// registry: a route record whose service is not placed contributes no name.
+// It moves to Retire, so the live record is deleted only while it is exactly
+// the one the spec would have created; any other record under that name is a
+// retire-mismatch and blocks Apply. Values stay declarative (o002/home), only
+// membership changes. Hand records are untouched. The receiver is not
+// modified.
 func (s *Spec) ForPlacements(placed func(service string) bool) *Spec {
 	out := *s
 	out.Records = nil

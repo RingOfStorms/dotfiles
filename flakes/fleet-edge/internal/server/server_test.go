@@ -463,8 +463,7 @@ func TestServicesUnreachableRegistryIsUnplaced(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
 	body := w.Body.String()
-	// A registry that never answered has no rows, so nothing is bound: the
-	// Nix declaration must not stand in for a placement.
+	// A registry that never answered has no rows, so nothing is bound.
 	if !strings.Contains(body, `<td colspan="7">unplaced</td>`) {
 		t.Errorf("unreachable registry fell back to the declaration:\n%s", body)
 	}

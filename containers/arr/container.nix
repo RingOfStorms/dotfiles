@@ -1,6 +1,6 @@
 # Guest config. The media stack lives here (nixarr.nix, kavita.nix,
-# media-integrity.nix); h001 only keeps the nginx vhosts. It pins
-# every uid/gid that appears in migrated state, since the guest's dynamic
+# media-integrity.nix); the host only keeps the nginx vhosts. It pins
+# every uid/gid that appears in persisted state, since the guest's dynamic
 # allocation would otherwise differ from the host's.
 {
   lib,
@@ -27,8 +27,7 @@
   # boot.kernel.sysctl doesn't apply inside nspawn (read-only /proc/sys).
   boot.kernel.sysctl = lib.mkForce { };
 
-  # Pinned to the values on h001 before the move (state and secrets are
-  # owned by these numbers).
+  # Pinned: state and secrets are owned by these numbers.
   users.users.kavita.uid = 982;
   users.groups.kavita.gid = 970;
   users.users.media-integrity.uid = 980;

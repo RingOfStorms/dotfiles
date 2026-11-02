@@ -1,7 +1,6 @@
 // Package edgestream renders and installs the edge's (o002's) runtime nginx
 // `stream` servers: one per public `via = edge` tcp route of a placed
-// service (containers/PLACEMENT-PLAN.md §5, phase 4a), e.g. forgejo's SSH on
-// :3032.
+// service, e.g. forgejo's SSH on :3032.
 //
 // h005's placement reconciler (internal/reconcile) pushes one JSON Request
 // over the same restricted SSH key as internal/edgevhost; o002's forced
@@ -44,7 +43,7 @@ import (
 // HeaderPrefix starts the first line of every rendered file.
 const HeaderPrefix = "# fleet-edge-stream "
 
-// KindPlacement is the only writer of stream files today (internal/reconcile).
+// KindPlacement is the only writer of stream files (internal/reconcile).
 // The kind travels in the header like edgevhost's, so a remove is fenced to
 // the owner it names.
 const KindPlacement = "placement"
@@ -481,8 +480,8 @@ func (c *Config) Expire(reload bool) ([]string, error) {
 }
 
 // staticStreamRe matches a hand-written stream server that does nothing but
-// forward one port to the same port on an IPv4 address, i.e. the block
-// o002's nginx.nix carried before phase 4a.
+// forward one port to the same port on an IPv4 address: the shape of the
+// pre-cutover static stream in Seed's snapshot.
 var staticStreamRe = regexp.MustCompile(`server\s*\{\s*listen\s+([0-9]{1,5});\s*proxy_pass\s+([0-9.]+):([0-9]{1,5});\s*\}`)
 
 // Seed installs the Nix-provided snapshot of the pre-cutover static stream

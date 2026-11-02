@@ -1,5 +1,5 @@
 # Guest config. Private network: puma on :3001 (BINDING; host nginx
-# fronts it); postgres and redis on unix sockets only. uids pinned to match the copied data.
+# fronts it); postgres and redis on unix sockets only. uids pinned to match the persisted data.
 {
   config,
   pkgs,

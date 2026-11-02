@@ -466,7 +466,7 @@ func TestMoveFailureReleasesTheReservation(t *testing.T) {
 }
 
 // A row another client has taken over stops the move where it is: the source
-// really was stopped in step 2, so it is NOT restarted (the other client may be
+// is already stopped, so it is NOT restarted (the other client may be
 // serving from either host), the destination keeps the copy the deploy just
 // installed, and the source is not uninstalled.
 func TestMoveTakeoverStopsBeforeTheSwitch(t *testing.T) {

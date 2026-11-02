@@ -3,7 +3,7 @@
 {
   system.stateVersion = "24.11";
 
-  # Same ids as the old container / o001, so the copied files keep working.
+  # Pinned ids so the persisted files keep their owner.
   users.users.vaultwarden.uid = 114;
   users.groups.vaultwarden.gid = 114;
 

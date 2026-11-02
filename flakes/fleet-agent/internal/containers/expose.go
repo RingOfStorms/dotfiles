@@ -1,12 +1,12 @@
 package containers
 
-// `cnt expose` (ROUTING-PLAN.md §5.3, §8 step 7): change one http route's
+// `cnt expose`: change one http route's
 // exposure on its host for a while, without a commit or a rebuild.
 //
 // tailnet and lan are host-local: only the generated vhost (ACL include)
 // changes. public also needs h005 (fleet-edge-overrides: public CNAME) and
-// o002 (runtime vhost); the order and the API are in edgeapi.go and the
-// plan's "Public expose design". until = 0 means forever (public only): no
+// o002 (runtime vhost); the order and the API are in edgeapi.go.
+// until = 0 means forever (public only): no
 // timer, never swept; --revoke or a deploy ends it.
 //
 // State, per service, on the service's host:

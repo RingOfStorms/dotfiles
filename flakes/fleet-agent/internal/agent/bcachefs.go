@@ -54,7 +54,7 @@ type BcachefsPool struct {
 	Devices             []BcachefsDevice `json:"devices,omitempty"`             // member devices
 }
 
-// bcachefsTimerFile is the optional JSON file written by fleet-agent-bcachefs.timer
+// bcachefsTimerSnapshot is the optional JSON file written by fleet-agent-bcachefs.timer
 // containing raw `bcachefs fs usage -b <mount>` output per mountpoint or UUID.
 type bcachefsTimerSnapshot struct {
 	Pools map[string]struct {
@@ -242,10 +242,9 @@ func ApplyBcachefsUsageText(p *BcachefsPool, text string) {
 				inCompression = true
 				continue
 			}
-			// Device header: e.g. "hdd.0 (device 0):             sda              rw"
-			// or "/dev/sda (device 0): ..."
 			// Device header:
 			// Format A (multi-line): "hdd.0 (device 0):             sda              rw"
+			//   or "/dev/sda (device 0): ..."
 			// Format B (tabular 1-line, bcachefs-tools 1.31+):
 			//   "(no label) (device 3):  sdb     rw     11991545540608  6504431786496   56%"
 			//   "ssd.primary (device 0): mmcblk0p3 rw   240731549696    10090424832      5%"

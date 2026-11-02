@@ -1,14 +1,6 @@
-# h003 does not trust tailscale0 (ROUTING-PLAN §5.1). 80/443 are generated
-# by the containers host module (ROUTING-PLAN §8 step 2), using runtime sets
-# filled per service by cnt deploy. Only explicit nginx.extraWebSources
-# remain build-time literals. LAN clients use @src_lan; h003 has no lanIp
-# and therefore no static LAN accept.
-# SSH is explicit below, not the global hardening.nix allow: 41641/udp, icmp
-# and the `containers` temp-ports set stay open on every interface (global
-# rules unrelated to this step).
-#
-# nginx is still the real gate: generated vhosts enforce the tailnet/lan
-# exposure ACLs (nginx.acl) and drop edge peers on the internal listener.
+# Container HTTP admission follows runtime sets. With no lanIp, h003 uses
+# @src_lan rather than a static LAN accept. Vhost ACLs remain the final gate
+# and reject edge peers on the internal listener.
 { fleet, lib, ... }:
 let
   fleetLib = import ../../containers/lib.nix;

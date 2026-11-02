@@ -1,7 +1,6 @@
-// Command fleet-edge serves the read-only fleet dashboard described in
-// containers/ROUTING-PLAN.md §5.2 and §5.4: a start page of app tiles
-// (inventory routes plus configured links), a table of every service
-// (declared vs. polled state, routes, description) and a per-host poll
+// Command fleet-edge serves the read-only fleet dashboard: a start page of
+// app tiles (inventory routes plus configured links), a table of every
+// service (declared vs. polled state, routes, description) and a per-host poll
 // status page, backed by the static inventory plus each host's status
 // endpoint (contract documented in internal/state).
 package main
@@ -48,11 +47,11 @@ func envDefault(key, def string) string {
 }
 
 // dnsPlan: `fleet-edge dns-plan --spec records.json --key-file f [--apply]`.
-// Fetches the zone and prints what a reconcile would do (ROUTING-PLAN §8
-// step 4). With --apply it then executes only the create/update/retire rows
-// (refusing the whole plan on any conflict or retire-mismatch). The spec is
-// declarative; only its route-record set follows the placement registry
-// (bunny.ForPlacements), so an unplaced service publishes no name.
+// Fetches the zone and prints what a reconcile would do. With --apply it then
+// executes only the create/update/retire rows (refusing the whole plan on any
+// conflict or retire-mismatch). The spec is declarative; only its route-record
+// set follows the placement registry (bunny.ForPlacements), so an unplaced
+// service publishes no name.
 func dnsPlan(args []string) {
 	fs := flag.NewFlagSet("dns-plan", flag.ExitOnError)
 	specFile := fs.String("spec", "", "desired records JSON (generated on h005)")
@@ -181,8 +180,8 @@ func fetchPlacements(url string) (placements.Export, error) {
 	return e, err
 }
 
-// runOverrides: the public expose authority and the placement registry, one
-// unit (ROUTING-PLAN §8 step 7, containers/PLACEMENT-PLAN.md).
+// runOverrides runs the public expose authority and the placement registry
+// as one unit.
 func runOverrides(args []string) {
 	fs := flag.NewFlagSet("overrides", flag.ExitOnError)
 	listen := fs.String("listen", "127.0.0.1:8098", "address (loopback; h005 nginx proxies /api/overrides and /api/placements)")

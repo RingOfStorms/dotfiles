@@ -7,7 +7,7 @@
     extra-container.url = "github:erikarvstedt/extra-container";
     # Host-side extra-container eval must stay on 25.11 (issue #40) ...
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
-    # ... the guest runs the rev the old h001 container ran (immich-/paperless-nixpkgs lock).
+    # ... the guest is pinned to a fixed rev; bump deliberately, after a `cnt backup`.
     guestpkgs.url = "github:nixos/nixpkgs/331800de5053fcebacf6813adb5db9c9dca22a0c";
   };
 
@@ -30,7 +30,7 @@
           guestNixpkgs = guestpkgs;
           # Network: service.nix net (private, 10.233.15.2); idmapped persist (ext4).
           # Media stays on /drives/wd10 (service.nix requires "wd10"); not in
-          # persist, so `cnt backup` skips it (h001 restic covers it).
+          # persist, so `cnt backup` skips it (the host's restic job covers it).
           binds = [
             {
               host = "/drives/wd10/immich/media";

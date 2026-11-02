@@ -1,4 +1,4 @@
-# The sec key registry (moved verbatim from hosts/h001/mods/sec.nix).
+# The sec key registry.
 # Full mirror of the KV registry. Every key is listed here so the
 # reconciler creates stubs for all of them. Values start as
 # `TODO:replace_me` and are filled in through the UI; the
@@ -7,14 +7,10 @@
 # Access is granted explicitly per key — no prefix matching. A
 # `role` grant binds to a Zitadel role claim value; a `sub` grant
 # binds to a specific machine identity's service-account userId.
-# The old OpenBao model gave `device_high_trust` read on all
-# machines/high-trust/* and machines/low-trust/*, and
-# `device_low_trust` read on machines/low-trust/*. The new model
-# requires an explicit grant on each key, so every high-trust key
-# carries a `device_high_trust` role grant and every low-trust key
-# carries both `device_high_trust` and `device_low_trust` (high-trust
-# is a superset, as in OpenBao). Per-host keys use `sub` grants that
-# will be filled in with real Zitadel service-account userIds.
+# Every high-trust key carries a `device_high_trust` role grant and
+# every low-trust key carries both `device_high_trust` and
+# `device_low_trust` (high-trust is a superset). Per-host keys use
+# `sub` grants with Zitadel service-account userIds.
 {
   # ── high-trust: SSH keys ──────────────────────────────────────
   "machines/high-trust/nix2nix_2026-03-15" = {

@@ -721,7 +721,7 @@ func TestValidateRoutesOauth2(t *testing.T) {
 	}
 }
 
-// Exposure ACL (ROUTING-PLAN §2.1): tailnet/lan internal servers include
+// Exposure ACL: tailnet/lan internal servers include
 // their host-module ACL at server level, after the edge-peer 444 and before
 // any location (so /oauth2/ and auth_request inherit it); public internal
 // and edge servers get none.
@@ -764,6 +764,34 @@ func TestRoutesVhostExposureACL(t *testing.T) {
 	}
 }
 
+func TestWriteRouteACLRestrictedDualStack(t *testing.T) {
+	old := inv
+	t.Cleanup(func() { inv = old })
+	inv = &Inventory{Hosts: map[string]Host{
+		"dual":  {OverlayIP: sp("100.64.0.1"), OverlayIP6: sp("fd7a:115c:a1e0::1")},
+		"v4":    {OverlayIP: sp("100.64.0.2")},
+		"v6":    {OverlayIP6: sp("fd7a:115c:a1e0::3")},
+		"empty": {OverlayIP: sp(""), OverlayIP6: sp("")},
+	}}
+	r := Route{Exposure: "tailnet", Allow: []string{"dual", "missing", "v4", "v6", "empty"}}
+	var b strings.Builder
+	writeRouteACL(&b, r)
+	want := "  allow 100.64.0.1; # allow: dual\n" +
+		"  allow fd7a:115c:a1e0::1; # allow: dual\n" +
+		"  allow 100.64.0.2; # allow: v4\n" +
+		"  allow fd7a:115c:a1e0::3; # allow: v6\n" +
+		"  deny all;\n"
+	if got := b.String(); got != want {
+		t.Errorf("restricted dual-stack ACL = %q, want %q", got, want)
+	}
+	inv = nil
+	b.Reset()
+	writeRouteACL(&b, r)
+	if got, want := b.String(), "  deny all;\n"; got != want {
+		t.Errorf("missing inventory ACL = %q, want %q", got, want)
+	}
+}
+
 func TestValidateRoutesRejectsLocationACL(t *testing.T) {
 	for _, x := range []string{"allow 0.0.0.0/0;", "  deny all;", "satisfy any;"} {
 		r := httpRoute("a", 1, "tailnet", "native")
@@ -797,7 +825,7 @@ func TestBackendAddrPrivate(t *testing.T) {
 
 // Golden: opengist and localai (podman, net.private) proxy straight to the
 // static bridge IP (offset past the .1 gateway and podman's dynamic-IPAM
-// low range), no loopback involved (ROUTING-PLAN §8 step 5 podman follow-up).
+// low range), no loopback involved.
 func TestRoutesVhostPodmanPrivateBackend(t *testing.T) {
 	ip := "10.89.250.102"
 	r := httpRoute("gist", 6157, "public", "native")
@@ -838,7 +866,7 @@ func TestPrepareScriptPrivateCheckByKind(t *testing.T) {
 	}
 }
 
-// srcPortLines is the runtime half of ROUTING-PLAN 8.2: the 80/443
+// srcPortLines is the 80/443
 // admission for one service, from its own routes at the host it is being
 // deployed to (applyPorts turns the lines into @src/@src6/@src_lan). No
 // host-keyed map: a service reaches its own vhost wherever it lands.
@@ -884,7 +912,7 @@ func TestSrcPortLines(t *testing.T) {
 	}
 
 	// Deployed onto a host that declares no services: the lines still come
-	// from the service's own routes (the old per-host map wrote nothing).
+	// from the service's own routes.
 	if got := srcPortLines(s, "h004"); len(got) == 0 {
 		t.Errorf("routes on a host without declared services must still admit: %v", got)
 	}
@@ -896,7 +924,7 @@ func TestSrcPortLines(t *testing.T) {
 	}
 
 	// LAN: a lan route opens @src_lan; a public route via the router does
-	// not (its LAN clients arrive with the WAN source, ROUTING-PLAN 8.2).
+	// not (its LAN clients arrive with the WAN source).
 	r = httpRoute("dash", 8080, "lan", "native")
 	r.Via = nil
 	s = Service{Name: "dash", Routes: map[string]Route{"web": r}}
@@ -1018,11 +1046,11 @@ func usingCaller() Service {
 		Uses: []string{"app.web"}}}
 }
 
-// The callee admits the caller where discovery finds it, not where its
-// service.nix says: a moved caller still reaches the vhost.
+// The callee admits the caller where discovery finds it, not where the
+// registry binds it: a moved caller still reaches the vhost.
 func TestSrcPortLinesUsesCallerHost(t *testing.T) {
 	callee := allowCallee()
-	// Declared h001, actually running on gp3: h001's overlay IP must not be
+	// Bound to h001, actually running on gp3: h001's overlay IP must not be
 	// admitted, gp3's must.
 	useRig(t, map[string]Service{"app": callee, "life": usingCaller()},
 		map[string][]string{"h003": {"app+"}, "gp3": {"life+"}})
@@ -1032,8 +1060,7 @@ func TestSrcPortLinesUsesCallerHost(t *testing.T) {
 }
 
 // A caller installed on two hosts (a stale copy nobody removed, plus the live
-// one) may dial out from either, so both hosts are admitted and the declared
-// host of neither is not.
+// one) may dial out from either, so both hosts are admitted.
 func TestSrcPortLinesUsesEveryCallerHost(t *testing.T) {
 	callee := allowCallee()
 	useRig(t, map[string]Service{"app": callee, "life": usingCaller()},
@@ -1320,7 +1347,7 @@ func TestRefreshCallersEveryCalleeHost(t *testing.T) {
 }
 
 // Destroying a caller must withdraw its admission from the callee's ports
-// file, not re-point it at the caller's declared host: the service is gone.
+// file, not re-point it at the caller's bound host: the service is gone.
 func TestDestroyWithdrawsCallerAdmission(t *testing.T) {
 	r := newRig(t)
 	callee := allowCallee()
@@ -1353,7 +1380,7 @@ func TestDestroyedCallerStaysWithdrawn(t *testing.T) {
 	callee := allowCallee()
 	caller := Service{Name: "svc", Dir: "svc", Kind: "podman", Net: Net{Private: true, IP: sp("10.233.4.2"), Uses: []string{"app.web"}}}
 	// dst keeps the overlay IP the stale copy dialled out as, so admitting the
-	// declared host would put the withdrawn address straight back.
+	// registry binding would put the withdrawn address straight back.
 	hosts := map[string]Host{"src": {User: "root", OverlayIP: sp("100.64.0.1")},
 		"dst": {User: "root", OverlayIP: sp("100.64.0.12")}}
 	reload := func() { // what loadInventory does on the next command
@@ -1399,7 +1426,7 @@ func TestDestroyedCallerNotReadmittedByFallback(t *testing.T) {
 	oldProbe := fleetProbe
 	t.Cleanup(func() { fleetProbe = oldProbe; resetFleetPlacement() })
 	// svc was only on dst; h003 is an unrelated host that fails to answer, so
-	// the sweep is inconclusive and would hand the declared host back.
+	// the sweep is inconclusive and would hand the bound host back.
 	fleetProbe = fakeFleet(map[string][]string{"src": {"app+"}}, "h003")
 	resetFleetPlacement()
 

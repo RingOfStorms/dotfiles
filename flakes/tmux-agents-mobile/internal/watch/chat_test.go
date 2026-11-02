@@ -57,8 +57,12 @@ func TestChatHubTailsSession(t *testing.T) {
 	}
 
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
-	hub := NewChatHub(c, &transcript.Locator{OmpDir: filepath.Join(dir, "omp-home")}, func(it transcript.Item) string {
-		return string(it.Kind) + ":" + it.Text + strings.Repeat("+", len(it.Parts))
+	hub := NewChatHub(c, &transcript.Locator{OmpDir: filepath.Join(dir, "omp-home")}, nil, ChatRenderer{
+		Item: func(it transcript.Item) string {
+			return string(it.Kind) + ":" + it.Text + strings.Repeat("+", len(it.Parts))
+		},
+		Todos: func(p []transcript.TodoPhase) string { return fmt.Sprint(len(p)) },
+		Recap: func(r transcript.Recap) string { return r.Text },
 	}, quiet)
 	hub.interval = 50 * time.Millisecond
 	hub.relocate = 200 * time.Millisecond
@@ -104,6 +108,22 @@ func TestChatHubTailsSession(t *testing.T) {
 	}
 	if len(items.Items) != 1 || items.Items[0].Index != 1 || items.Items[0].HTML != "assistant:+" {
 		t.Fatalf("items = %+v", items)
+	}
+}
+
+func TestCleanTitle(t *testing.T) {
+	cases := map[string]string{
+		"# Summary & Next Steps":            "Summary & Next Steps",
+		"🗺️ MAP: # sensor-capture plan":     "🗺️ MAP: sensor-capture plan",
+		"Fix C# build":                      "Fix C# build",
+		"💬 GROUP: Fix group SMS fallback":   "💬 GROUP: Fix group SMS fallback",
+		"## Possible reasons for shutdown:": "Possible reasons for shutdown:",
+		"Issue #42: crash":                  "Issue #42: crash",
+	}
+	for in, want := range cases {
+		if got := cleanTitle(in); got != want {
+			t.Errorf("cleanTitle(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 

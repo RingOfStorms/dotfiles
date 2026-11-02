@@ -7,9 +7,8 @@
     extra-container.url = "github:erikarvstedt/extra-container";
     # Host-side extra-container eval must stay on 25.11 (issue #40) ...
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
-    # ... the guest runs the nixpkgs rev h001 runs today.
+    # ... the guest is pinned to a fixed rev.
     guestpkgs.url = "github:nixos/nixpkgs/6fcc160353f63555b560f25588925133c8f61f2a";
-    # Locked to the rev h001 runs today (a3e1f7d); bump with `nix flake update puzzles`.
     puzzles.url = "git+ssh://git@git.joshuabell.xyz:3032/ringofstorms/puzzles.git?rev=a3e1f7d37dc38652f3765269709f1ebdd9cc325f";
   };
 

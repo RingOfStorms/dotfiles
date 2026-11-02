@@ -1,6 +1,4 @@
 # vaultwarden (vault.joshuabell.xyz). SQLite, single-user vault.
-# Was a private-network nixos container in hosts/h001/containers/vaultwarden.nix;
-# data copied 1:1 (uid/gid 114 kept inside the container).
 {
   name = "vaultwarden";
   kind = "nixos";
@@ -16,9 +14,6 @@
   # on the WAL state of the stopped copy.
   backupHook = "systemctl start backup-vaultwarden.service";
 
-  # vaultwarden listens on :8222 in its private netns. o002 terminates TLS
-  # for the public name and proxies to h001:80 over the tailnet.
-  # Private network (ROUTING-PLAN §8 step 5): guest 10.233.5.2.
   net = {
     private = true;
     index = 5;

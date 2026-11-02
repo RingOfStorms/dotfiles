@@ -10,7 +10,7 @@ import (
 	"syscall"
 )
 
-// The placement registry side of `cnt move` (PLACEMENT-PLAN §2). A move owns
+// The placement registry side of `cnt move`. A move owns
 // the placement for as long as it runs: it reserves the destination before it
 // touches either host, renews the lease around the steps that can take a while
 // (the final backup among them), commits once the destination serves, and

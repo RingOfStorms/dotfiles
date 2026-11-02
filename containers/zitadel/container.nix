@@ -1,12 +1,11 @@
-# Guest config: services.zitadel copied from hosts/h001/containers/zitadel.nix.
-# zitadel on :8085, postgres on its unix socket only. Zitadel has no
+# Guest config. zitadel on :8085, postgres on its unix socket only. Zitadel has no
 # bind-address setting; it listens on all interfaces. With net.private that
 # is the guest netns, whose firewall admits 8085 from the host only.
 { pkgs, lib, ... }:
 {
   system.stateVersion = "25.05";
 
-  # postgres is 71 by default (config.ids), matching the copied cluster.
+  # postgres is 71 by default (config.ids), matching the persisted cluster.
 
   services.postgresql = {
     enable = true;
@@ -31,7 +30,7 @@
 
   services.zitadel = {
     enable = true;
-    # Masterkey tightened to 0400 owned by zitadel:zitadel (finding M7):
+    # Masterkey is 0400 owned by zitadel:zitadel (tmpfiles rule below):
     # only the zitadel service user can read it inside the container, not
     # every other process sharing the container's root.
     masterKeyFile = "/var/lib/zitadel-keys/masterkey";
@@ -56,7 +55,7 @@
       ExternalPort = 443;
       ExternalSecure = true;
     };
-    # Only used on an empty database (first boot); the copied DB already has it.
+    # Only used on an empty database (first boot); an existing DB already has it.
     steps.FirstInstance = {
       InstanceName = "sso";
       Org = {
@@ -75,8 +74,7 @@
     };
   };
 
-  # Finding M7: tighten masterkey from a previous world-readable 0444 to
-  # 0400 owned by zitadel:zitadel. tmpfiles runs as root before the
+  # Masterkey must be 0400 zitadel:zitadel. tmpfiles runs as root before the
   # zitadel service starts, so this re-asserts ownership/mode on every
   # boot even if the file was restored from backup with different perms.
   systemd.tmpfiles.rules = [

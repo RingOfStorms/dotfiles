@@ -1,6 +1,6 @@
 package containers
 
-// Private container networking (ROUTING-PLAN §8 step 5).
+// Private container networking.
 
 import (
 	"os"
@@ -25,7 +25,7 @@ func TestPrivateVhostUpstream(t *testing.T) {
 	if strings.Contains(v, "127.0.0.1") {
 		t.Fatalf("private vhost must not mention loopback:\n%s", v)
 	}
-	// host network: unchanged
+	// host network: loopback backend
 	h := Service{Name: "puzzles", Routes: s.Routes}
 	if !strings.Contains(routesVhost(h), "proxy_pass http://127.0.0.1:8093;") {
 		t.Fatal("host-network vhost should keep 127.0.0.1")

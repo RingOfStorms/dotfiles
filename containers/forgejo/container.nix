@@ -1,6 +1,6 @@
 # Guest config. forgejo HTTP :3000 on fleetNet.bindAddress (0.0.0.0 in the
 # private netns), builtin SSH :3032 on 0.0.0.0; postgres on its unix socket
-# only. uid/gid 115 pinned to match the copied data.
+# only. uid/gid 115 pinned to match the persisted data.
 {
   pkgs,
   lib,

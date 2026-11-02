@@ -7,8 +7,8 @@
     extra-container.url = "github:erikarvstedt/extra-container";
     # Host-side extra-container eval must stay on 25.11 (issue #40) ...
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
-    # ... the guest runs the exact nixpkgs rev h001's zitadel-nixpkgs input had
-    # (same zitadel + postgres 17 build as the old container).
+    # ... the guest is pinned to a fixed rev (zitadel + postgres 17 matching the
+    # persisted cluster).
     guestpkgs.url = "github:nixos/nixpkgs/331800de5053fcebacf6813adb5db9c9dca22a0c";
   };
 

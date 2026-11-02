@@ -72,8 +72,7 @@ type Config struct {
 	// PlacementsURL is the placement registry's read-only loopback export
 	// (/internal/placements.json). It is the source of truth for which host a
 	// service is bound to; "" means "no registry", so every service is
-	// unplaced. Left nil-empty (unset) the state layer falls back to the Nix
-	// declaration for tests that predate the registry.
+	// unplaced.
 	PlacementsURL string
 	// Topology is the hand-written part of /topology (validated by the
 	// caller); nil means topology.Default().
@@ -178,8 +177,6 @@ func (s *Server) fetchPlacements(ctx context.Context) (map[string]string, string
 // GET; a failed refresh keeps the last good map, because a registry hiccup
 // must not blank every service at once. With no registry configured, and
 // before one has ever answered, no service has a row, so none is placed.
-// A Source that cannot take a binding keeps the declarative hosts, which is
-// the state layer's own fallback for "no registry at all".
 func (s *Server) Merged(ctx context.Context) state.Merged {
 	if s.cfg.PlacementsURL == "" {
 		if bs, ok := s.src.(BoundSource); ok {
@@ -214,8 +211,7 @@ func (s *Server) bound(ctx context.Context) state.Merged {
 	}
 	if reg == nil {
 		// Registered but never answered: no rows are known, so nothing is
-		// bound. Guessing from the Nix declaration would reinstate exactly
-		// the shadow placement this registry replaces.
+		// bound.
 		reg = map[string]string{}
 	}
 	return bs.CurrentBound(reg)
@@ -330,8 +326,7 @@ type Source interface {
 }
 
 // BoundSource is optionally implemented by Source (e.g. *state.Poller) to
-// merge with an explicit placement binding. Without it the server can only
-// render the declarative state, which is what the tests exercise.
+// merge with an explicit placement binding.
 type BoundSource interface {
 	CurrentBound(bound map[string]string) state.Merged
 }
@@ -719,7 +714,6 @@ func (s *Server) handleHostDetail(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
-	// Standard allowlisted host units if not already listed
 	for _, stdUnit := range []string{"fleet-agent.service", "nginx.service", "fail2ban.service", "sshd.service", "tailscaled.service"} {
 		already := false
 		for _, lt := range detail.LogTargets {
@@ -737,7 +731,6 @@ func (s *Server) handleHostDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Query time-series samples and events
 	var samples []store.Sample
 	if hs, ok := s.src.(HistorySource); ok && hs.Store() != nil {
 		samples, _ = hs.Store().QuerySamples(r.Context(), found.Host, found.Replaces, sinceTS, untilTS)

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,17 +43,48 @@ type ChatState struct {
 	Unseen bool   `json:"unseen"`
 }
 
+// ChatMeta is session-wide state: the session's title, for the header, and
+// the agent's todo list, pinned above the composer. TodosHTML is empty when
+// there is nothing left to do.
+type ChatMeta struct {
+	Title     string `json:"title"`
+	TodosHTML string `json:"todos"`
+}
+
+// ChatRecap is omp's idle summary, shown after the last item. HTML is empty
+// when there is none, or the conversation has moved on since.
+type ChatRecap struct {
+	HTML string `json:"html"`
+}
+
+// ChatRenderer turns transcript data into markup; the web layer owns it.
+type ChatRenderer struct {
+	Item  func(transcript.Item) string
+	Todos func([]transcript.TodoPhase) string
+	Recap func(transcript.Recap) string
+}
+
+// headingMark is a markdown heading marker at the start of a title, or right
+// after a "🗺️ MAP: " style label: auto titles are sometimes the reply's first
+// heading.
+var headingMark = regexp.MustCompile(`^([^#:]{0,40}:\s*)?#+\s+`)
+
+func cleanTitle(t string) string {
+	return strings.TrimSpace(headingMark.ReplaceAllString(t, "$1"))
+}
+
 // ErrNoWatcher means nobody is watching that pane's transcript any more.
 var ErrNoWatcher = errors.New("transcript is not being watched")
 
 // ChatHub is the transcript counterpart of Hub: one session reader per pane
 // while somebody is looking, fanned out to every viewer. Items are rendered
-// by Render (the web layer owns markup) and cached per revision.
+// by the renderer and cached per revision.
 type ChatHub struct {
 	tmux    *tmux.Client
 	locator *transcript.Locator
+	history *transcript.History
 	log     *slog.Logger
-	render  func(transcript.Item) string
+	render  ChatRenderer
 
 	interval time.Duration
 	relocate time.Duration
@@ -62,11 +95,13 @@ type ChatHub struct {
 }
 
 // NewChatHub returns a hub that polls session logs every 400ms and checks the
-// pane (still there, same session, agent state) every 2s.
-func NewChatHub(t *tmux.Client, l *transcript.Locator, render func(transcript.Item) string, log *slog.Logger) *ChatHub {
+// pane (still there, same session, agent state, recap) every 2s. history may
+// be nil, which disables recaps.
+func NewChatHub(t *tmux.Client, l *transcript.Locator, history *transcript.History, render ChatRenderer, log *slog.Logger) *ChatHub {
 	return &ChatHub{
 		tmux:     t,
 		locator:  l,
+		history:  history,
 		log:      log,
 		render:   render,
 		interval: 400 * time.Millisecond,
@@ -99,8 +134,9 @@ type cached struct {
 	html string
 }
 
-// Subscribe streams transcript events for a pane: "init", "items", "state",
-// "fallback" (no readable session: show the terminal) and "gone".
+// Subscribe streams transcript events for a pane: "init", "items", "meta",
+// "recap", "state", "fallback" (no readable session: show the terminal) and
+// "gone".
 func (h *ChatHub) Subscribe(pane string) (<-chan Event, func()) {
 	h.mu.Lock()
 	w, ok := h.w[pane]
@@ -166,7 +202,7 @@ func (w *chatWatcher) renderLocked(items []transcript.Item) []RenderedItem {
 	for _, it := range items {
 		c, ok := w.cache[it.ID]
 		if !ok || c.rev != it.Rev || it.ID == "" {
-			c = cached{rev: it.Rev, html: w.hub.render(it)}
+			c = cached{rev: it.Rev, html: w.hub.render.Item(it)}
 			if it.ID != "" {
 				w.cache[it.ID] = c
 			}
@@ -190,6 +226,9 @@ func (w *chatWatcher) run() {
 		path      string
 		state     ChatState
 		haveState bool
+		meta      ChatMeta
+		metaRev   = -1
+		recap     ChatRecap
 		idleSince time.Time
 		nextMark  time.Time
 		nextCheck time.Time
@@ -209,8 +248,32 @@ func (w *chatWatcher) run() {
 		}
 		return Event{Name: name, Data: data}, true
 	}
-	// A viewer that fell behind gets a fresh init instead of the deltas it
-	// could not take.
+	// snapshot is everything a viewer needs to start from scratch.
+	snapshot := func() []Event {
+		var out []Event
+		if w.sess != nil {
+			w.mu.Lock()
+			ev, ok := event("init", w.initLocked())
+			w.mu.Unlock()
+			if ok {
+				out = append(out, ev)
+			}
+			if ev, ok := event("meta", meta); ok {
+				out = append(out, ev)
+			}
+			if ev, ok := event("recap", recap); ok {
+				out = append(out, ev)
+			}
+		}
+		if haveState {
+			if ev, ok := event("state", state); ok {
+				out = append(out, ev)
+			}
+		}
+		return out
+	}
+	// A viewer that fell behind gets a fresh snapshot instead of the deltas
+	// it could not take.
 	broadcast := func(name string, payload any) {
 		ev, ok := event(name, payload)
 		if !ok {
@@ -218,16 +281,51 @@ func (w *chatWatcher) run() {
 		}
 		for s := range subs {
 			if s.stale && w.sess != nil {
-				w.mu.Lock()
-				full, ok := event("init", w.initLocked())
-				w.mu.Unlock()
-				if ok {
+				s.stale = false
+				for _, full := range snapshot() {
 					push(s, full)
-					s.stale = false
 				}
 				continue
 			}
 			push(s, ev)
+		}
+	}
+	// publishMeta sends the title and todo list when they changed.
+	publishMeta := func() {
+		if w.sess == nil || w.sess.MetaRev() == metaRev {
+			return
+		}
+		w.mu.Lock()
+		m := w.sess.Meta()
+		metaRev = w.sess.MetaRev()
+		w.mu.Unlock()
+		next := ChatMeta{Title: cleanTitle(m.Title), TodosHTML: w.hub.render.Todos(m.Todos)}
+		if next != meta {
+			meta = next
+			broadcast("meta", meta)
+		}
+	}
+	// publishRecap shows omp's newest recap while nothing has happened in
+	// the conversation since it was written.
+	publishRecap := func() {
+		if w.sess == nil || w.hub.history == nil {
+			return
+		}
+		w.mu.Lock()
+		id, last := w.sess.ID(), w.sess.LastActivity()
+		w.mu.Unlock()
+		next := ChatRecap{}
+		r, ok, err := w.hub.history.LatestRecap(ctx, id)
+		if err != nil {
+			w.hub.log.Debug("recap lookup", "pane", w.pane, "err", err)
+		}
+		// created_at has whole seconds; the log has milliseconds.
+		if ok && !r.CreatedAt.Before(last.Truncate(time.Second)) {
+			next.HTML = w.hub.render.Recap(r)
+		}
+		if next != recap {
+			recap = next
+			broadcast("recap", recap)
 		}
 	}
 	shutdown := func() {
@@ -273,6 +371,7 @@ func (w *chatWatcher) run() {
 			// have until the pane says otherwise.
 			return true
 		case found == path:
+			publishRecap()
 			return true
 		}
 		sess, err := transcript.Open(found)
@@ -285,6 +384,9 @@ func (w *chatWatcher) run() {
 		init := w.initLocked()
 		w.mu.Unlock()
 		broadcast("init", init)
+		meta, metaRev, recap = ChatMeta{}, -1, ChatRecap{}
+		publishMeta()
+		publishRecap()
 		return true
 	}
 
@@ -314,7 +416,9 @@ func (w *chatWatcher) run() {
 		w.mu.Unlock()
 		if name != "" {
 			broadcast(name, out)
+			publishRecap()
 		}
+		publishMeta()
 	}
 
 	ticker := time.NewTicker(w.hub.interval)
@@ -332,16 +436,8 @@ func (w *chatWatcher) run() {
 				}
 				continue
 			}
-			w.mu.Lock()
-			ev, ok := event("init", w.initLocked())
-			w.mu.Unlock()
-			if ok {
+			for _, ev := range snapshot() {
 				push(s, ev)
-			}
-			if haveState {
-				if ev, ok := event("state", state); ok {
-					push(s, ev)
-				}
 			}
 		case s := <-w.rm:
 			if _, ok := subs[s]; ok {

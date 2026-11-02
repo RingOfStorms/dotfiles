@@ -82,7 +82,7 @@ must be able to fetch that ref, so pair it with `deploy --local`).
 | command | what it does |
 |---|---|
 | `containers status <svc>` | one service in detail: state, on-boot, memory, restarts, firewall ports, the nginx site on the host, and its data dirs with sizes and owners (what backup/move copy) |
-| `containers ls` / `containers ls --all` | each service: kind, declared host, host where it runs, state, uptime, memory. Flags services on the wrong host or on several hosts |
+| `containers ls` / `containers ls --all` | each service: kind, the host the registry binds it to, the host where a copy runs, state, uptime, memory. Flags stray copies and copies on several hosts |
 | `containers watch` | same, refreshed every 5s (`-n secs`, `q` quits) |
 | `containers logs <svc>` | follow the journal inside the container (`--unit` for the nspawn unit, `-n`, `--no-follow`) |
 | `containers deploy <svc>` | create or update from the latest pushed definition on its host (`--host`, `--rev`, `--local` builds here and `nix copy`s) |
@@ -96,34 +96,40 @@ must be able to fetch that ref, so pair it with `deploy --local`).
 | `containers health <svc>` | every route answers on its host (backend and nginx) |
 | `containers destroy <svc>` | uninstall (data kept; `--purge` deletes it). `--host` on a host the registry does not bind removes that stray copy and leaves the row; the bound copy, or a row a move still holds, needs `--force` (the bound copy's row is then removed, revision-guarded) |
 | `containers check-idmap <host>` | the idmap test above |
-| `containers routes [svc]` | declared routes from the inventory: fqdn, proto, port, exposure, auth, via, host (no network). Unconverted services show as `nginx string` |
-| `containers audit [host...] [--stdin]` | read-only: runs `ss -ltnupH` on each host (default: all container hosts) and lists every non-loopback listener as `declared` (a route, `tcpPorts`/`udpPorts` of a service declared on that host), `host` (small allowlist in `cli/routes.go`: 22, 80, 443, 53, tailscale 41641/udp, dhcp, mdns; plus host daemons the host module declares in `/etc/fleet-containers/host-listeners`, e.g. the status endpoint at its configured address; plus, matched by process name rather than port, tailscaled's dynamic sockets on tailnet/wildcard addresses and systemd-resolved LLMNR on 5355) or `UNDECLARED` (incl. ports of `exposure = "local"` routes, and `proto = "http"` backend ports found on a non-loopback address — those must stay on `127.0.0.1`, nginx is the only thing allowed to expose them). Needs root on the remote host to see process names; non-root users get `sudo -n` (fails fast instead of hanging if it needs a password). If sudo there needs a password, plain ssh can't prompt (no TTY): run it on the host itself and feed the file in with `--stdin` (exactly one host): `sudo ss -ltnupH > /tmp/<host>.ss && cnt audit <host> --stdin < /tmp/<host>.ss`, or collect the file with `ssh -t`. Empty `--stdin` input (or input with no listeners) is an error, so a failed collection never looks like a clean host. Otherwise exits 0 |
+| `containers routes [svc]` | declared routes from the inventory: fqdn, proto, port, exposure, auth, via, and the registry-bound host (`-` when unplaced). Unconverted services show as `nginx string` |
+| `containers audit [host...] [--stdin]` | read-only: runs `ss -ltnupH` on each host (default: all container hosts) and lists every non-loopback listener as `declared` (a route, `tcpPorts`/`udpPorts` of a service the registry binds to that host), `host` (small allowlist in `flakes/fleet-agent/internal/containers/routes.go`: 22, 80, 443, 8443, 53, tailscale 41641/udp, dhcp, mdns; plus host daemons the host module declares in `/etc/fleet-containers/host-listeners`, e.g. the status endpoint at its configured address; plus, matched by process name rather than port, tailscaled's dynamic sockets on tailnet/wildcard addresses and systemd-resolved LLMNR on 5355) or `UNDECLARED` (incl. ports of `exposure = "local"` routes, and `proto = "http"` backend ports found on a non-loopback address — those must stay on `127.0.0.1`, nginx is the only thing allowed to expose them). Needs root on the remote host to see process names; non-root users get `sudo -n` (fails fast instead of hanging if it needs a password). If sudo there needs a password, plain ssh can't prompt (no TTY): run it on the host itself and feed the file in with `--stdin` (exactly one host): `sudo ss -ltnupH > /tmp/<host>.ss && cnt audit <host> --stdin < /tmp/<host>.ss`, or collect the file with `ssh -t`. Empty `--stdin` input (or input with no listeners) is an error, so a failed collection never looks like a clean host. With a machine key it also prints `== routing (h005)`: fleet-edge's comparison of the DNS, edge vhost, TCP stream and WAN forward layers against the registry (diagnostic only; omitted without a key). Otherwise exits 0 |
 | `containers port open <svc> <port>/<tcp\|udp> --for <dur> [--from <host\|cidr>]... [--iface tailnet\|lan\|any] [--host h]` | open a port temporarily (see [Temporary ports](#temporary-ports-cnt-port)) |
 | `containers port ls [host...]` / `port close <svc> <port>/<proto> [--from ...] [--iface ...]` | list / close them early |
-| `containers expose <svc>[.<route>] --exposure tailnet\|lan\|public --for DUR\|forever [--reason T]` | widen one http route on its host for a while (ROUTING-PLAN §8 step 7). tailnet/lan: `--for` required, max 24h; the host reverts it at expiry (transient timer, plus `fleet-containers-expose-expire` at boot and every minute). `public` works since 2026-10-28: fleet-edge on h005 adds the public CNAME and pushes an o002 runtime vhost (default 8h, any duration ≥ 1m or `forever`; h005 owns the expiry). Public expose (and `--revoke` of one) signs with this machine's key (`/machine-key.json`, root-only), so run `sudo fleet containers expose ...`: the `cnt` alias does not expand under sudo. `expose --list [host...]` / `expose --revoke <svc>`; `deploy` drops an override; `routes` and `audit` show them |
+| `containers expose <svc>[.<route>] --exposure tailnet\|lan\|public --for DUR\|forever [--reason T]` | widen one http route on its host for a while. tailnet/lan: `--for` required, max 24h; the host reverts it at expiry (transient timer, plus `fleet-containers-expose-expire` at boot and every minute). `public`: fleet-edge on h005 adds the public CNAME and pushes an o002 runtime vhost (default 8h, any duration ≥ 1m or `forever`; h005 owns the expiry). Public expose (and `--revoke` of one) signs with this machine's key (`/machine-key.json`, root-only), so run `sudo fleet containers expose ...`: the `cnt` alias does not expand under sudo. `expose --list [host...]` / `expose --revoke <svc>`; `deploy` drops an override; `routes` and `audit` show them |
 
 The host module adds the shell alias `cnt = "fleet containers"`.
 
 ### Where a service runs
 
-**Placement is runtime.** The fleet-edge placement registry is the source of
-truth for which host a service belongs to, and `cnt` resolves from it:
-`--host` > registry row > discovery. `cnt place <svc> --set <host>` records a
-binding, `cnt place <svc> --adopt` adopts the one copy discovery finds, and
-`cnt place` shows the rows.
+**Placement is runtime state.** The placement registry in fleet-edge on h005
+is the only record of which host a service belongs to; `service.nix` has no
+`host`. `cnt` resolves every command as `--host` > registry row > discovery.
+`cnt place` shows the rows, `cnt place <svc> --host <h>` records a first
+placement, `cnt place <svc> --set <h>` moves the binding, `cnt place <svc>
+--adopt` adopts the one copy discovery finds, `cnt place --verify` checks every
+bound service against what the hosts actually run.
+
+Everything that has to follow a service reads the registry, not Nix: the
+tailnet and LAN DNS answers, the public CNAME set, the o002 vhosts and TCP
+streams, the h005 WAN forwards, and `:80`/`:443` admission on the bound host.
+fleet-edge reconciles them on startup, every 30 s and after every registry
+write, so a move or a first deploy needs no Nix edit and no rebuild. An
+unplaced service has no row and therefore no DNS name, no edge vhost or
+stream, and no forward; that is how a service is offline (`minecraft`).
 
 Registry-backed resolution needs root plus the machine key on an allowlisted
 caller (`sudo fleet containers …`; the `cnt` alias does not expand under
-sudo). Otherwise `cnt` uses discovery and the declared host: a key it cannot
-read, or a registry that fails the request, prints one "placement registry not
+sudo). Otherwise `cnt` resolves by discovery alone: a key it cannot read, or a
+registry that fails the request, prints one "placement registry not
 consulted" warning, and a mutating command that falls through to discovery
 says so too. With no machine key at all (a dev box) the fallback is silent.
-
-`host` in `service.nix` is **deprecated**: a build-time seed that a few Nix
-builders still read (`edgeVirtualHosts`, `webSourcesByHost`, h005's DNS records
-and WAN forwards, the host module's firewall input). Do not add a `host` to a
-new `service.nix`, and do not add a Nix reader for one: phase 5 deletes the
-field together with those readers (`PLACEMENT-PLAN.md` §4/§9 lists every one).
+`--dry-run` never probes, so it needs `--host` (and `move --dry-run` needs
+`--from` when there is no binding).
 
 The CLI still checks where a service **actually** runs: it lists units on each
 host from systemd *and* from disk
@@ -137,9 +143,9 @@ unloaded service is still found.
 - A command with no `--host` uses the registry's host when there is a row (and
   refuses when that host did not answer: silence is not absence). With no row
   it probes **every** container host (`containerHosts` in `flake.nix`, plus
-  every host the registry knows and — while the seed remains — every declared
-  host), adopts the copy when exactly one is installed, and **refuses** when
-  there are several or none, saying which `cnt place` form records the answer.
+  every host the registry knows), adopts the copy when exactly one is
+  installed, and **refuses** when there are several or none, saying which
+  `cnt place` form records the answer.
   `--host h` is the escape hatch for one command, and a first deploy needs it:
   a successful `cnt deploy <svc> --host h` then records the binding itself
   (reserve, then commit — unforced, like every write this command makes). A
@@ -169,17 +175,17 @@ unloaded service is still found.
   elsewhere (that copy would answer the same name). `stop`, `status`, `logs`,
   `attach`, `shell` and `online` keep the local fast path.
 - New container host: import the module there *and* add it to
-  `containerHosts`, or `move --to` it is refused.
+  `containerHosts`, or discovery never probes it and `move --to` it is
+  refused.
 - `move` records itself in the placement registry: it reserves the destination
-  once the source is stopped, commits after the restore check and first backup,
+  before touching any host, commits after the restore check and first backup,
   and retires the source just before uninstalling it. A row another client has
   taken over (a `--force`, a second move) stops it with both hosts untouched,
   and `cnt place <svc> --recover` settles that. A commit whose answer is lost
   is confirmed only by a row that still carries the move's token; a row
   committed with no token (no previous binding) could be anyone's, so the move
   stops with both hosts untouched and the token kept, and a re-run finishes it
-  (the switch uninstalls the source) only with `--force`. No `host =` line
-  needs editing.
+  (the switch uninstalls the source) only with `--force`.
 
 ### nginx at runtime
 
@@ -196,7 +202,7 @@ All `cnt` subcommands accept `--help` or `-h` without loading inventory or
 contacting hosts; these flags also work before the subcommand. Arguments
 after `--` are passed through rather than interpreted as CLI help.
 
-### Routes (ROUTING-PLAN.md §2, step 1)
+### Routes
 
 `routes` in `service.nix` replaces the `nginx` string. A service sets
 either `routes` or `nginx`, not both (`nginx` stays as the escape hatch for
@@ -225,28 +231,30 @@ without `publicWithoutAuth`, `via` on a non-public route, duplicate names.
 The inventory also carries computed `fqdn` (`<name>.joshuabell.xyz`) and
 `url` per http route.
 
-On deploy, every http route with exposure != `local` becomes one `server {}`
-in `<svc>.conf` (:80/:443 v4+v6, wildcard cert, proxy to
-`127.0.0.1:<port>`, `X-Forwarded-Proto https`). tcp/udp routes with exposure
-!= `local` are added to the ports file like `tcpPorts`. For now `tailnet`,
-`lan` and `public` produce the same vhost; the listener split, `allow` and
-the edge/DNS side are later steps of the plan. `local` produces nothing.
+On deploy, every http route with exposure != `local` becomes an **internal**
+`server {}` in `<svc>.conf` (:80/:443 v4+v6, wildcard cert, proxy to
+`127.0.0.1:<port>`, `X-Forwarded-Proto https`, the exposure ACL). A public
+`via = edge` route also gets an **edge** server on `:8443` that answers only
+o002 and is the only place forwarded headers are trusted. tcp/udp routes with
+exposure != `local` are added to the ports file like `tcpPorts`. `local`
+produces nothing.
 
-The runtime ports file admits tailnet-wide HTTP routes from both
-`100.64.0.0/10` and `fd7a:115c:a1e0::/48`. Routes with an `allow` list instead
-admit only those hosts' `overlayIp` and optional `overlayIp6` inventory
-addresses; missing IPv6 addresses never widen admission to the whole /48.
-The host module applies IPv4 `web` lines to `@src` and IPv6 lines to `@src6`.
+`:80`/`:443` admission is runtime too: deploy writes the route's sources as
+`web`/`weblan` lines in the service's ports file, and the host module refills
+`@src`/`@src6`/`@src_lan` from those files, so a host admits web traffic only
+for services it actually runs. Tailnet-wide HTTP routes are admitted from
+both `100.64.0.0/10` and `fd7a:115c:a1e0::/48`. Routes with an `allow` list
+instead admit only those hosts' `overlayIp` and optional `overlayIp6`
+inventory addresses; missing IPv6 addresses never widen admission to the
+whole /48.
 
-`auth = "oauth2-proxy"` routes (any exposure, public included: sso-proxy has
-been public via o002 since 2026-10-28, so a public or `cnt expose`d gated
-route works off the tailnet too) are gated by the
-fleet oauth2-proxy on h005 (`hosts/h005/oauth2-proxy.nix`): nginx
+`auth = "oauth2-proxy"` routes (any exposure; sso-proxy is public via o002,
+so a public or `cnt expose`d gated route works off the tailnet too) are gated
+by the fleet oauth2-proxy on h005 (`hosts/h005/oauth2-proxy.nix`): nginx
 `auth_request`s `http://100.64.0.3:4180/oauth2/auth?allowed_groups=...`,
 sends a 401 to `https://sso-proxy.joshuabell.xyz/oauth2/start`, proxies
 `/oauth2/` and passes `X-Auth-Request-{User,Email,Groups}`. Every generated
-server, gated or not, removes `_oauth2_proxy*` cookies before the backend
-(ROUTING-PLAN §4, §8 step 6).
+server, gated or not, removes `_oauth2_proxy*` cookies before the backend.
 
 ssh logs in as each host's `user` from `hosts/fleet.nix` (override for all hosts
 with `--ssh-user` / `CONTAINERS_SSH_USER`; `root` skips sudo). `--dry-run` prints
@@ -291,7 +299,6 @@ nixos) the guest config.
 {
   name = "atuin";
   kind = "nixos";               # or "podman"
-  host = "h001";                # where it should run
   persist = {                   # key = path inside the container
     postgresql = "/var/lib/postgresql";
     nixos = "/var/lib/nixos";   # keep for nixos-kind: stable UID/GID map
@@ -310,6 +317,10 @@ nixos) the guest config.
   requires = [ ];               # host capabilities, e.g. [ "nfs-h004" "intel-qsv" ]
 }
 ```
+
+`service.nix` describes the service, never where it runs. The first
+`sudo fleet containers deploy <name> --host <h>` places it; after that the
+registry knows the host and plain `cnt deploy <name>` follows it.
 
 `requires` names must appear in the target host's
 `ringofstorms.containers.capabilities`. `deploy` and `move` refuse (before
@@ -363,7 +374,7 @@ that host it runs the `backupHook` (if running), makes SQLite `.backup`
 copies, and snapshots `/srv/containers/<svc>` with tags `fleet` and
 `svc:<name>`. History and retention follow the tag, not the host, so a
 moved service continues its series. Enabled on: h001. Not on h003 (no
-services) or joe (no restic secret yet). See ROUTING-PLAN §9.1.
+services) or joe (no restic secret yet).
 
 On success each service gets a stamp
 `/var/lib/fleet-containers/backup-last/<svc>`
@@ -425,49 +436,59 @@ than deleting it. By hand: stop, move `/srv/containers/<svc>` aside,
 
 ## Moving a service to another host
 
-Data goes through the shared restic repository (ROUTING-PLAN §9.1), so the
-service keeps its `svc:<name>` history and every move is also a restore test.
-Downtime is the stop + backup + restore + first boot.
+Data goes through the shared restic repository, so the service keeps its
+`svc:<name>` history and every move is also a restore test. Downtime is the
+stop + backup + restore + first boot. Routing follows the placement registry,
+so nothing in Nix is edited and no host is rebuilt.
 
 1. Both hosts have `ringofstorms.containers.backup` enabled (same repo); the
    target passes `containers check-idmap <target>` and offers the service's
    `requires` capabilities.
-2. `containers --dry-run move minecraft --to h001` prints the plan (every
-   remote script, in order). Then `containers move minecraft --to h001`:
-   1. **preflight**: target has the host module, `fleet-backup` and the
+2. `sudo fleet containers --dry-run move minecraft --from h003 --to h001`
+   prints the plan (every remote script, in order). Then
+   `sudo fleet containers move minecraft --to h001`:
+   1. **reserve** the destination in the placement registry. The row stays
+      routed to the source; a row another client holds stops the move here,
+      before any host is touched. The token is saved under
+      `$XDG_STATE_HOME/fleet-containers/moves/<svc>.json`, and the lease is
+      renewed as the move advances.
+   2. **preflight**: target has the host module, `fleet-backup` and the
       capabilities, and no running unit or data of the service; the source
       has fleet-backup and the data. A refusal here changes nothing.
-   2. **final backup** on the source: backupHook, blocking stop,
+   3. **final backup** on the source: backupHook, blocking stop,
       `fleet-backup-svc@<svc>`; the snapshot id comes from the fresh stamp
       (an old stamp is never accepted).
-   3. **restore** that snapshot onto the target (the SQLite `.backup` copies
+   4. **restore** that snapshot onto the target (the SQLite `.backup` copies
       replace the excluded live files), then the live PostgreSQL cluster
       dirs (excluded from restic) are copied from the stopped source and
       verified by manifest (paths, types, owners, modes, sizes).
-   4. **deploy** on the target, then **health**: every route answers on the
+   5. **deploy** on the target, then **health**: every route answers on the
       backend (2xx/3xx on its `health` path, otherwise any status below 500)
       and, for http routes with an fqdn, through the target's nginx.
-   5. **restore check**: the same snapshot restored to a scratch dir on the
+   6. **restore check**: the same snapshot restored to a scratch dir on the
       target; every SQLite db must pass `PRAGMA integrity_check`, every PG
       dump must be non-empty, valid gzip and a complete pg_dump (custom format:
       `PGDMP` header). A service whose hook runs pg_dump must have one.
-   6. **first backup** on the target (its stamp must be from the target).
-   7. **switch**: uninstall on the source, data renamed
+   7. **first backup** on the target (its stamp must be from the target).
+   8. **commit** the destination: DNS, o002 vhosts and streams, and WAN
+      forwards follow it on fleet-edge's next reconcile pass.
+   9. **retire** the source (a rollback onto it now needs `--force`), then
+      **switch**: uninstall on the source, data renamed
       `<svc>.moved-<date>` (fleet-backup skips names with a dot).
 
-   A failure in 2-6 uninstalls the target, moves its data aside as
-   `<svc>.failed-move-<time>` and starts the source again if it was running
-   (a stopped service stays stopped). Re-running is safe: the target is
-   marked (`/var/lib/fleet-containers/move-<svc>`) until step 6 finishes, and
-   a re-run clears such leftovers first; data on the target without that
+   A failure before the commit uninstalls the target, moves its data aside
+   as `<svc>.failed-move-<time>`, drops the reservation (restoring the prior
+   binding) and starts the source again if it was running (a stopped service
+   stays stopped). If the move no longer owns the row (taken over, or
+   ownership cannot be confirmed) it leaves both hosts alone; settle that with
+   `cnt place <svc> --recover`. Re-running is safe: the target is marked
+   (`/var/lib/fleet-containers/move-<svc>`) until the first backup finishes,
+   and a re-run clears such leftovers first; data on the target without that
    marker is refused, never overwritten. The source remembers it was running
-   (`move-<svc>.was-running`) across an interrupted run.
-3. Set `host = "h001";` in `service.nix`, commit, push. Until then, commands
-   for the service without `--host` refuse to run.
-4. Point any outside routing at the new host (e.g. the `computerboyz` vhost
-   in `hosts/oracle/o002/nginx.nix` proxies to h003's overlay IP; WAN
-   port-forwards on the router).
-5. When happy, delete `/srv/containers/<svc>.moved-*` on the old host.
+   (`move-<svc>.was-running`) across an interrupted run, and a re-run resumes
+   with the saved token (or `--resume-token`).
+3. Check `cnt place <svc> --verify` and `cnt audit`.
+4. When happy, delete `/srv/containers/<svc>.moved-*` on the old host.
 
 ## Start, stop and reboots
 
@@ -489,6 +510,23 @@ hold marker in `/run/fleet-containers/hold/`. `stop`, `move` and `backup`
 write that marker; `start`, `restart` and `deploy` clear it. A stopped
 service therefore stays stopped when storage comes back.
 
+## Design notes
+
+- Nix declares service identity and routes; only h005's runtime registry
+  declares placement. Discovery reports copies, not a second authority.
+- Runtime firewall sets start empty. Deployment fills admission on the host
+  running the service; nginx checks exposure and the actual transport peer.
+  Edge peers must never inherit internal tailnet access.
+- Low-trust LAN drops precede NixOS port accepts in a separate input chain.
+  LAN SSH is an outage fallback, not an exemption from trust restrictions.
+- Boot-time exposure expiry cannot reload nginx: a unit ordered before nginx
+  that waits for nginx would deadlock. A separate running timer reloads it.
+- Storage guards and stop/backup/move share the hold lock, so recovery cannot
+  restart a service between its stop decision and hold-marker write.
+- Certificate push targets are independent of placement, allowing a host to
+  terminate TLS before its first service arrives. The router uses dedicated,
+  forced-command keys rather than fleet-wide root SSH credentials.
+
 ## Troubleshooting
 
 - `containers logs <svc> --unit` shows nspawn errors (bad bind path, idmap
@@ -504,17 +542,17 @@ service therefore stays stopped when storage comes back.
 ## Practice services: hello-nixos and hello-podman
 
 Two throwaway twins for trying the workflow; both serve the stock "Welcome
-to nginx!" page and declare `host = "lio"`. hello-nixos runs nginx inside an
-nspawn container on port 8081; hello-podman runs `nginx:alpine` on 8082.
-Each persists `/data` (empty) so you can drop a marker file in
-`/srv/containers/<svc>/data` and watch it follow a move.
+to nginx!" page. hello-nixos runs nginx inside an nspawn container on port
+8081; hello-podman runs `nginx:alpine` on 8082. Each persists `/data`
+(empty) so you can drop a marker file in `/srv/containers/<svc>/data` and
+watch it follow a move. `cnt place` shows where each is bound.
 
 ```sh
 cnt deploy hello-nixos && cnt deploy hello-podman
-curl http://lio:8081/ http://lio:8082/
+curl http://<host>:8081/ http://<host>:8082/
 cnt status hello-podman
 cnt stop hello-nixos            # stays down after a reboot
 cnt backup hello-podman
-cnt move hello-nixos --to h003  # no service.nix edit: the move records itself
+cnt move hello-nixos --to lio   # the move records itself in the registry
 cnt destroy hello-podman --purge
 ```

@@ -68,7 +68,7 @@ func TestPlan(t *testing.T) {
 
 // The CNAME set follows the registry: an unplaced service's record is retired
 // only on an exact match (a changed record blocks Apply), a placed one and a
-// hand name are planned as before, and the input spec is left alone.
+// hand name are planned normally, and the input spec is left alone.
 func TestForPlacements(t *testing.T) {
 	s := spec()
 	for i := range s.Records {

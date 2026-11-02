@@ -166,7 +166,7 @@ func TestParseNftSetJSON(t *testing.T) {
 	}
 }
 
-// ---- Task A: audit --stdin
+// ---- audit --stdin
 
 func runAuditStdin(t *testing.T, input string) error {
 	t.Helper()

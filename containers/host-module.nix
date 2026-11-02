@@ -1,14 +1,3 @@
-# Host side of the floating-services setup. Import it once per host:
-#   inputs.containers.nixosModules.default
-#
-# After one rebuild with this module, the host can run any app in
-# containers/<app>/ without another rebuild:
-#   - extra-container installs nspawn units into /etc/systemd-mutable/system
-#   - podman services install the same way (see lib.nix mkPodmanService)
-#   - nginx includes /var/lib/fleet-containers/nginx/*.conf (written by `containers`)
-#   - ports listed in /var/lib/fleet-containers/ports/<name> are opened in the firewall
-#     (added to the nixos-fw `temp-ports` set and re-applied whenever the
-#     firewall is reloaded)
 {
   config,
   lib,
@@ -34,7 +23,6 @@ let
     sources = cfg.nginx.extraWebSources;
     family = "v6";
   };
-  # nginx allow list for nginx.acl (ROUTING-PLAN §2.1), deny-by-default.
   aclText =
     cidrs:
     lib.concatMapStrings (c: "allow ${c};\n") (
@@ -118,7 +106,7 @@ let
   #                                       and its net.uses callers' hosts, and
   #                                       rewritten on the callee host after a
   #                                       `cnt deploy`/`move`/`destroy` of such
-  #                                       a caller (ROUTING-PLAN 8.2)
+  #                                       a caller
   #   weblan <cidr>                       LAN clients on 80/443 (@src_lan)
   # @routes, @routes_lan, @routes_at, @routes_from, @guests, @noinet, @egress
   # and @src, @src6, @src_lan are flushed and refilled on every run, so a
@@ -272,7 +260,6 @@ let
     }) cfg.guards
   );
 
-  # Per-host restic backup of every floating service here (ROUTING-PLAN §9.1).
   # Each service is its own snapshot tagged `fleet` + `svc:<name>`, so parent
   # selection and retention group by tags only, not host: after `cnt move`
   # the new host continues the same service history (the snapshot's
@@ -455,9 +442,8 @@ in
         by wildcard-cert-receiver.nix (imported by this module).
       '';
     };
-    # Internal/edge listener split (ROUTING-PLAN §2.3). Generated vhosts put
-    # public `via = edge` routes on <overlayIp>:edge.port as well; only
-    # edge.peers may connect there (firewall + per-vhost check).
+    # Edge peers reach public routes through a separate listener; they must
+    # not inherit the internal listener's broader tailnet access.
     nginx.edge = {
       port = lib.mkOption {
         type = lib.types.port;
@@ -488,9 +474,7 @@ in
       type = lib.types.package;
       description = "The `containers` CLI, installed system-wide.";
     };
-    # Exposure ACLs for the generated internal :80/:443 servers (ROUTING-PLAN
-    # §2.1): cli/routes.go includes /etc/fleet-containers/nginx-acl-<exposure>.conf
-    # in every tailnet/lan server. Enforced by TCP peer, never by DNS.
+    # Exposure ACLs are enforced by TCP peer, never by DNS.
     nginx.acl = {
       tailnet = lib.mkOption {
         type = lib.types.listOf lib.types.str;
@@ -512,9 +496,7 @@ in
         description = "Also allow 127.0.0.1 and ::1 (only for local health checks via the vhost).";
       };
     };
-    # Read-only GET /status.json for fleet-edge (ROUTING-PLAN.md §5.4); see
-    # cli/statusserver.go for the JSON contract. Off by default.
-    #
+    # Read-only GET /status.json for fleet-edge.
     # The firewall is NOT opened for it: tailscale0 is an untrusted
     # interface (ringofstorms.tailnet.trustInterface = false) and the
     # generated 80/443 admission below does not cover this port, so a host
@@ -542,9 +524,7 @@ in
         /etc/fleet-containers/lan-interface). null: `--iface lan` is refused.
       '';
     };
-    # Private container networking (ROUTING-PLAN §8 step 5) for services
-    # with net.private in service.nix: veth ve-<name>, guest
-    # 10.233.<index>.2, host side lib.nix netHostAddress (10.233.0.1).
+    # Private guests use 10.233.<index>.2 with 10.233.0.1 on the host side.
     privateNetwork.enable = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -806,8 +786,8 @@ in
             "fleet-containers/lan-interface".text = cfg.lanInterface;
           };
 
-        # `cnt port open` (ROUTING-PLAN §8 step 2): temporary ports as nft set
-        # elements with timeouts; the kernel expires them and a firewall
+        # Temporary ports use nft set elements with timeouts; the kernel
+        # expires them and a firewall
         # reload empties the sets (fail closed). ifname "any" is a sentinel
         # the CLI uses for --iface any; the const rules below match it on
         # every interface. Elements carry comment "svc=<svc>".
@@ -1045,15 +1025,9 @@ in
         # writes web/weblan lines per service and applyPorts refills the sets.
         # nginx still enforces the per-vhost exposure ACL; this is TCP admission.
         #
-        # ve-* guests whose packet already `return`ed out of fleet-net's
-        # guest-in chain (fleet-net.nft, priority -5) on an `@egress` match
-        # still have to clear nixos-fw's input-allow (priority 0); the
-        # removed global `tcp dport {22,80,443}` used to admit them
-        # incidentally. Re-admit only those exact flows here, by matching
-        # the same `inet fleet-net egress` set fleet-net.nft already
-        # filled (guest . daddr . proto . port) -- not a blanket `ve-*`
-        # allow. Covers e.g. life (ve-life) -> this host's own nginx at
-        # 10.233.0.1/<overlayIp>:443 for sso-proxy.
+        # A guest allowed by fleet-net at priority -5 must also pass nixos-fw
+        # at priority 0. Mirror exact egress tuples here, not a blanket ve-*
+        # allow, so guests can reach declared host nginx routes.
         networking.firewall.extraInputRules = lib.mkMerge [
           (lib.mkIf (cfg.nginx.openFirewall && webSources4 != [ ]) ''
             ip saddr { ${lib.concatStringsSep ", " webSources4} } tcp dport { 80, 443 } accept comment "generated: http route sources, inventory (ROUTING-PLAN 8.2)"
@@ -1090,7 +1064,7 @@ in
           recommendedOptimisation = lib.mkDefault true;
           recommendedProxySettings = lib.mkDefault true;
           recommendedTlsSettings = lib.mkDefault true;
-          # Edge/internal split (ROUTING-PLAN §2.3), used by generated vhosts:
+          # Generated vhosts distinguish edge traffic by TCP peer:
           #   $fleet_edge_peer          1 when the TCP peer is the edge (o002).
           #                             $realip_remote_addr is the real peer even
           #                             where real_ip rewrote $remote_addr.
@@ -1133,8 +1107,7 @@ in
         environment.etc."fleet-containers/nginx-edge-realip.conf".text =
           lib.concatMapStrings (p: "set_real_ip_from ${p};\n") cfg.nginx.edge.peers
           + "real_ip_header X-Forwarded-For;\nreal_ip_recursive off;\n";
-        # Certificate for the generated internal :443 listeners (one place;
-        # cli/routes.go only `include`s this file). ROUTING-PLAN §8 step 4.
+        # Generated vhosts share one certificate include.
         environment.etc."fleet-containers/nginx-tls.conf".text = ''
           ssl_certificate ${cfg.nginx.tls.certDir}/fullchain.pem;
           ssl_certificate_key ${cfg.nginx.tls.certDir}/key.pem;
@@ -1159,8 +1132,8 @@ in
         # `containers deploy` validates new sites with `nginx -t` before reloading.
         environment.systemPackages = [ config.services.nginx.package ];
 
-        # `cnt expose` (ROUTING-PLAN §8 step 7). Two units, so nothing that
-        # blocks on nginx is ordered before it (deadlock, h001 2026-10-22):
+        # Split boot expiry from reloads: ordering a unit that waits for
+        # nginx before nginx itself would deadlock.
         # - fleet-containers-expose-boot: Before=nginx, `--boot`: reverts
         #   expired files only, never reloads; nginx starts with them.
         # - fleet-containers-expose-expire: the runtime sweep (minute timer,
@@ -1273,8 +1246,7 @@ in
         boot.kernel.sysctl."net.ipv4.conf.all.forwarding" = lib.mkDefault true;
         # Guests ask the host's resolver; freebind, so it binds before any veth exists.
         services.resolved.settings.Resolve.DNSStubListenerExtra = [ "10.233.0.1" ];
-        # Host side of a guest veth, the moment nspawn creates it
-        # (ROUTING-PLAN §8 step 5). nixos-containers only configures
+        # Configure the host veth as soon as it exists. nixos-containers sets
         # ve-<name> in container@'s postStart, which (Type=notify) runs after
         # the guest is READY, so guest units that need the network at boot
         # would stall. udev fires on the veth add; the oneshot reads the
@@ -1309,11 +1281,8 @@ in
         networking.networkmanager.unmanaged = lib.mkIf config.networking.networkmanager.enable [
           "interface-name:ve-*"
         ];
-        # Guest isolation (ROUTING-PLAN §8 step 5). Scope: interfaces in
-        # @guests (ve-<name> of net.private services, from the ports files)
-        # and, as a static fallback while the sets are being refilled, any
-        # source in 10.233.0.0/16. Legacy privateNetwork containers on other
-        # ve-* interfaces/addresses (lio's 10.0.0.x) are not touched.
+        # The subnet fallback protects guests while runtime sets are refilled.
+        # Other privateNetwork subnets are outside this isolation policy.
         networking.nftables.tables.fleet-net = {
           family = "inet";
           content = builtins.readFile ../flakes/fleet-agent/internal/containers/fleet-net.nft;

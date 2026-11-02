@@ -229,7 +229,7 @@ in
             "d ${stateDir} 0755 root root -"
           ];
 
-          # Register listener for `cnt audit` (cli/internal/containers/routes.go).
+          # Register listener for `cnt audit` (internal/containers/routes.go).
           environment.etc."fleet-containers/host-listeners".text = lib.optionalString (m != null) ''
             tcp ${builtins.elemAt m 0} ${builtins.elemAt m 1} host (status endpoint)
           '';

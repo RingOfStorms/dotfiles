@@ -7,7 +7,7 @@
     extra-container.url = "github:erikarvstedt/extra-container";
     # Host-side extra-container eval must stay on 25.11 (issue #40) ...
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
-    # ... the guest runs the nixpkgs rev h001 runs today (searxng unchanged).
+    # ... the guest is pinned to a fixed rev.
     guestpkgs.url = "github:nixos/nixpkgs/6fcc160353f63555b560f25588925133c8f61f2a";
   };
 

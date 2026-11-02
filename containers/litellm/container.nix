@@ -1,4 +1,4 @@
-# Guest config: settings copied verbatim from hosts/h001/mods/litellm.nix.
+# Guest config.
 {
   config,
   lib,
@@ -104,7 +104,7 @@ in
   services.litellm = {
     enable = true;
     port = 8094;
-    # Loopback only; host nginx fronts it (routes.web, tailnet).
+    # 0.0.0.0 in the private netns; host nginx fronts it (routes.web, tailnet).
     host = fleetNet.bindAddress;
     openFirewall = false;
     package = pkgsLitellm.litellm;

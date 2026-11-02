@@ -290,11 +290,10 @@ type HostView struct {
 	SmartFailed int         `json:"smartFailed"`
 	BannedCount int         `json:"bannedCount"`
 
-	// ContainerHost is true when the inventory declares the host runs
-	// containers: it is listed in containerHosts, or at least one service is
-	// declared on it (an unplaced service, host = "", declares nothing). A host
-	// that only answers polls stays false; it is a declaration, not something a
-	// poll can add or remove.
+	// ContainerHost is true when the host is listed in containerHosts or the
+	// placement registry binds at least one service to it. A host that only
+	// answers polls stays false; it is a declaration, not something a poll can
+	// add or remove.
 	ContainerHost bool `json:"containerHost"`
 }
 
@@ -622,13 +621,12 @@ func (p *Poller) Run(ctx context.Context, interval time.Duration) {
 }
 
 // Current merges the latest polls with the static inventory into the
-// dashboard view, with every host taken from the Nix declaration. Safe to
-// call concurrently with Run.
+// dashboard view without a placement binding, so every service is unplaced.
+// Safe to call concurrently with Run.
 func (p *Poller) Current() Merged { return p.CurrentBound(nil) }
 
 // CurrentBound is Current with the placement registry's binding (service ->
-// host). A supplied map wins: a service it does not name is unplaced, so
-// BoundHost is "". A nil map keeps the declarative fallback.
+// host). A service the map does not name is unplaced, so BoundHost is "".
 func (p *Poller) CurrentBound(bound map[string]string) Merged {
 	p.mu.RLock()
 	polls := make(map[string]HostPoll, len(p.polls))
@@ -646,7 +644,7 @@ func (p *Poller) CurrentBound(bound map[string]string) Merged {
 
 // Merge combines inventory with a set of host polls (keyed by host name)
 // into the dashboard view. Exported standalone for testing without a
-// running Poller. A nil bound map keeps the declarative fallback.
+// running Poller. A service the bound map does not name is unplaced.
 func Merge(inv *inventory.Inventory, polls map[string]HostPoll, bound map[string]string) Merged {
 	return MergeAt(inv, polls, time.Now(), bound)
 }
@@ -714,10 +712,9 @@ func mergeWithLast(inv *inventory.Inventory, polls map[string]HostPoll, last map
 		polled[n] = true
 	}
 
-	// Container hosts are declared, not observed: the inventory names them, or
-	// a service is bound to them. A host that only answers polls stays false;
-	// a declared container host stays true with zero containers. An unplaced
-	// service binds to no host and declares nothing.
+	// Container hosts are declared, not observed: a host that only answers
+	// polls stays false, and a declared container host stays true with zero
+	// containers.
 	containerHost := map[string]bool{}
 	for _, n := range inv.ContainerHosts {
 		containerHost[n] = true

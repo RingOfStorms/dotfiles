@@ -1,6 +1,6 @@
-# Guest config: services.life copied from hosts/h001/containers/life.nix.
-# Private network (net.private): life on fleetNet.bindAddress:8080 (0.0.0.0
-# in its netns); postgres on its unix socket only.
+# Guest config. Private network (net.private): life on
+# fleetNet.bindAddress:8080 (0.0.0.0 in its netns); postgres on its unix
+# socket only.
 {
   lib,
   life,
@@ -11,7 +11,7 @@
   imports = [ life.nixosModules.default ];
   system.stateVersion = "26.05";
 
-  # Same ids as before, so the copied files keep working.
+  # Pinned ids so the persisted files keep their owner.
   users.users.life.uid = 917;
   users.groups.life.gid = 917;
   # postgres is 71 by default (config.ids).
@@ -22,7 +22,7 @@
     enable = true;
     publicOrigin = "https://life.joshuabell.xyz";
     listen = "${fleetNet.bindAddress}:8080";
-    # h001's nginx sets X-Forwarded-For (see service.nix).
+    # The host nginx sets X-Forwarded-For (see service.nix).
     trustForwardedFor = true;
 
     zitadel = {

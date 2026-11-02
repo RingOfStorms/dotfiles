@@ -1,26 +1,43 @@
 # fleet-edge
 
-Read-only fleet dashboard and host health/metrics monitor. Packaged like
-`flakes/ports` (stdlib Go, no external Go deps, `go1.22`, runtime `sqlite3`
-for time-series storage), with a NixOS module.
+Fleet dashboard, host health/metrics monitor, and h005's routing authority:
+the placement registry, `cnt expose` overrides, and the reconciler that
+keeps DNS, the o002 edge and the WAN forwards in line with where services
+run. Packaged like `flakes/ports` (stdlib Go, no external Go deps, `go1.22`,
+runtime `sqlite3` for time-series storage), with a NixOS module.
+`MONITORING-PLAN.md` covers the monitoring roadmap.
 
-See `containers/ROUTING-PLAN.md` §5.2/§5.4 and `MONITORING-PLAN.md` for the
-design.
-## What's implemented (this skeleton)
+One binary, `fleet-edge`, runs as several processes:
 
-A single Go binary, `fleet-edge`:
+| Command | Runs on | Role |
+|---|---|---|
+| `fleet-edge` (no subcommand) | h005, `fleet-edge.service` | read-only dashboard and poller (below) |
+| `fleet-edge overrides` | h005, `fleet-edge-overrides.service` | placement registry, expose overrides, routing reconciler ([Routing authority](#routing-authority-fleet-edge-overrides)) |
+| `fleet-edge dns-plan [--apply]` | h005, by hand | diff (and apply) the bunny zone against `dns-records.nix` `publicSpec` |
+| `fleet-edge forwards-apply` | h005, root | install the reconciler's WAN forwards as `table ip fleet-wan-forwards` |
+| `fleet-edge vhost-receive` / `vhost-expire` | o002, ssh forced command / timer | runtime edge vhosts in `/var/lib/fleet-edge-vhosts` |
+| `fleet-edge stream-receive` / `stream-expire` / `stream-seed` | o002, ssh forced command / timer / boot | runtime TCP streams in `/var/lib/fleet-edge-streams` |
+| `fleet-edge share-serve` / `share-apply` / `share-sweep` | o002 | `*.share` temporary sharing (`hosts/_shared_assets/utilities/share-receiver.nix`) |
+| `fleet-edge import-beszel` | by hand | import historical Beszel metrics |
+
+## Dashboard
 
 - Reads a static inventory JSON file (the same shape the `containers` CLI
   produces via `nix eval --json <containers-flake>#inventory`:
   `services`, `hosts`, `containerHosts`). `routes` on a service is
-  optional per-service (absent entirely on services that haven't adopted
-  it); when present, several fields (`name`, `fqdn`, `url`, `auth`,
+  optional; when present, several fields (`name`, `fqdn`, `url`, `auth`,
   `health`) are nullable (e.g. on `tcp`/`udp` routes with no HTTP name),
   and `via` is a **list** of strings (e.g. `["edge"]`), not a single
   string. A missing `routes` map is treated as empty, never an error.
+  The inventory carries no placement.
+- Reads service-to-host bindings from the placement registry's loopback
+  export (`--placements-url`, default
+  `http://127.0.0.1:8098/internal/placements.json`). A service the registry
+  does not bind is **unplaced**; an empty URL or an unavailable registry
+  leaves every service unplaced rather than guessing.
 - Polls each host's status endpoint (see contract below) every 30s with a
   3s timeout, tolerating failures. A host that can't be reached (timeout,
-  refused, bad JSON) is recorded as unreachable; every service declared on
+  refused, bad JSON) is recorded as unreachable; every service bound to
   that host shows `unknown` state rather than failing the page.
 - Stores 30s time-series samples (`host_samples`, `fs_samples`), offline host
   snapshots (`host_last_state`), and host lineage events (`host_events`) in a
@@ -41,8 +58,9 @@ A single Go binary, `fleet-edge`:
 - Serves, on `--listen` (default `127.0.0.1:8099`, behind nginx on `h005` at
   `https://fleet.joshuabell.xyz`):
   - `GET /` — start page of app tiles.
-  - `GET /services` — table of every service: name, declared host, polled state,
-    backup age, routes, description.
+  - `GET /services` — every service grouped by its bound host (unplaced
+    services last): polled state, backup age, routes, description, and the
+    expose overrides.
   - `GET /hosts` — Fleet Health Overview split into Always-On Servers and
     Workstations & Laptops (`ONLINE` / `SLEEP` / `DOWN`), with 24h CPU & Net
     sparklines, bcachefs usable vs. raw storage bars, SMART, Fail2ban, and
@@ -58,39 +76,129 @@ A single Go binary, `fleet-edge`:
   - `GET /healthz` — `ok` (unauthenticated).
   - `GET /api/state.json` — the merged view as JSON.
 
-## What's planned (not in this skeleton — see ROUTING-PLAN §5.2)
+## Routing authority (`fleet-edge-overrides`)
 
-In rough order, per the plan's step list:
+`fleet-edge overrides` is a separate unit (its own DynamicUser, listening on
+`127.0.0.1:8098`, keys via `LoadCredential`) so the dashboard process never
+holds the bunny or ssh push key. h005 nginx proxies `/api/overrides` and
+`/api/placements` to it from overlay addresses (o002 denied) and sets
+`X-Fleet-Peer`; `/internal/*.json` exports stay loopback-only. State lives in
+`/var/lib/fleet-edge-overrides` (persisted).
 
-- **DNS**: tailnet + LAN DNS record generation (dnsmasq `hostsdir`), and
-  public DNS via the bunny API (CNAMEs per §2.2, DDNS for `home`).
-  `fleet-edge` is meant to become the sole holder of the bunny key.
-- **Router forwards**: an nft port-forward map on h005 for `via = "router"`
-  routes, added/removed by `cnt deploy/move/expose`.
-- **Certificates**: wildcard issuance via DNS-01 on h005, distributed to
-  the hosts that terminate TLS (replacing h001's copy of the ACME/bunny
-  key).
-- **Overrides**: authoritative store for temporary `cnt expose` overrides
-  (by/at/until/reason), with expiry enforced on both h005 and the host.
-- **Standalone DNS records**: non-service records in the zone (CNAMEs,
-  TXT, MX), with `cnt dns ls|diff|apply`, and record-ownership tracking so
-  `fleet-edge` never touches records it didn't create.
-- **Narrow, authenticated API** for the above, on h005's overlay IP only,
-  logged.
-- **Dashboard actions** (start/stop/expose/move), behind a separate admin
-  group, starting as "copy this `cnt` command" buttons before any
-  deploy rights are granted (ROUTING-PLAN §5.4).
-- **Audit**: cross-check declared routes against actual listeners, nft,
-  DNS answers and o002 vhosts (ROUTING-PLAN §6.1).
+**Callers.** Every write carries a Zitadel machine token whose `sub` is in
+`services.fleet-edge.overrides.writers` (from `fleet.global.overrideWriters`)
+and must arrive from that writer's overlay IP (`internal/authority`). Writers
+are per host, so a row records which device changed it. Every request,
+refusals included, is a line in the audit log.
 
-None of that exists here. This package only reads inventory and polls
-status endpoints.
+**Expose overrides** (`internal/overrides`): `cnt expose` raises a route's
+exposure for a while. A public override creates a bunny CNAME (TTL 60, deleted
+by record id only while name, type and value still match) and pushes an o002
+vhost; h005 owns the expiry and the sweep re-pushes live rows.
+
+**Placement registry** (`internal/placements`): which host runs each
+service. `placements.json` holds the rows and a registry-wide `revision`
+counter. A row is `prepared` (a move reserved it), `committed`, `retiring`
+(the source is being uninstalled) or `stale` (a reservation whose lease
+expired). `GET /internal/placements.json` exports `{rows, host, conflicts}`,
+where `host` is each service's effective host and an absent entry means
+unplaced. The API (`/api/placements`): `import`, `reserve`, `commit`,
+`retire`, `renew`, `recover`, `DELETE <svc>` (rollback), `GET [?verify=1]`,
+and `GET /api/placements/routing` for the audit. A 30 s sweep observes the
+hosts' status endpoints. See [Design notes](#design-notes) for the rules.
+
+**Reconciler** (`internal/reconcile`): runs at startup, every 30 s and after
+every registry write, and makes these follow the effective hosts:
+
+- **Tailnet and LAN DNS**: one `<ip> <fqdn>` file per route name in
+  `/var/lib/fleet-edge-dns/tailnet/` (overlay IPs) and `.../lan/` (LAN IPs),
+  read by h005's two dnsmasq instances as `hostsdir`s. Both instances keep
+  `local=/<fqdn>/` for every inventory route name, so an unplaced name has
+  no answer rather than a public one.
+- **o002 vhosts**: each `public` + `via = edge` http route of a placed
+  service is pushed as a `kind: placement` request to o002's vhost receiver
+  (`proxy_pass http://<overlayIp>:8443`, the wildcard cert, the route's
+  body/buffering/timeout/websocket settings). Placement vhosts have no expiry.
+- **o002 streams**: each `public` + `via = edge` + `proto = tcp` route
+  (forgejo ssh :3032) is pushed to o002's stream receiver, which writes
+  `/var/lib/fleet-edge-streams/<port>.stream`
+  (`server { listen <port>; proxy_pass <overlayIp>:<port>; }`). o002's
+  firewall admits the port declaratively (`edgeStreamPorts`); only the
+  destination is runtime.
+- **WAN forwards**: each `public` + `via = router` tcp/udp route of a placed
+  service is written to `/var/lib/fleet-edge-forwards/forwards.json`. Root's
+  `forwards-apply` (path unit, nftables start/reload hooks) validates it
+  against the inventory, derives LAN IPs, and replaces
+  `table ip fleet-wan-forwards` in one `nft -f` under flock.
+- `cnt audit` prints `GET /api/placements/routing`: file contents, live A
+  answers from both dnsmasq listeners, o002's vhost and stream lists, and the
+  written vs applied forwards.
+
+**Public DNS** (`internal/bunny`, `dns-plan`): `hosts/h005/dns-records.nix`
+`publicSpec` declares names; effective registry placement filters service
+membership in the desired zone. Only h005 holds the bunny key. `dns-plan`
+reports create / update / keep / conflict / external / unmanaged; `--apply`
+executes only create/update rows and exact-match retires, refuses the whole
+run on any conflict, and never deletes a record the spec does not own.
+
+## Design notes
+
+- **Unplaced is one state.** No row means no DNS name, no edge vhost or
+  stream, no WAN forward, and "unplaced" on the dashboard. There is no
+  enabled/disabled flag.
+- **The token fences a move, not the clock.** `reserve` mints an opaque
+  token; commit, retire, rollback, recover and renew must present it, and a
+  mismatch is a 409. Any row that still carries a token refuses a second
+  reserve. `force` is the only takeover and mints a fresh token, so the
+  displaced client's handle stops working. A token from a move that has ended
+  is refused, never read as "no reservation".
+- **Revisions are incarnations.** Tokenless writes (`import`, `force`, a
+  tokenless `DELETE`) compare-and-swap on the row's `revision`, minted from
+  a counter in `placements.json` that no deletion resets, so a delayed
+  request cannot hit a re-created row. A reserve carrying a token or
+  revision for a service with no row is a 409 rather than a first placement,
+  so a replay cannot bring a deleted row back.
+- **An expired lease fences, it never rolls back.** A move stops its source
+  before the destination serves, so the sweep marks an expired `prepared`
+  row `stale` (effective host: none) and keeps `previous` and the token.
+  Only `recover` (which asks both hosts) or `force` settles it; a host that
+  did not answer, or both ends serving, decides nothing.
+- **Serving, not installed.** Health tracks `installed` and `active`
+  separately: commit and import need both, and only a confirmed uninstall of
+  the previous host clears the rollback binding. Another host serving a
+  bound service is flagged as a `conflict` and never resolved
+  automatically. An unreachable host changes nothing: silence is not
+  absence.
+- **Persist before visible.** Each registry write builds the new rows and
+  revision on a copy, writes it atomically, and only then swaps it in, so a
+  failed write is a 500 that leaves memory and disk as they were.
+- **Reconcile fails closed.** Changes are add-before-remove with one file
+  (or push) per name or port, so a pass that dies halfway leaves earlier
+  answers in place. A stale row, an unreachable host or a host without an
+  address keeps its last answer; nothing is removed on a guess. The host's
+  edge listener already returns 444 to anything it no longer serves.
+- **Streams close by deletion.** nginx's `stream` module has no `return`,
+  and a `server` with no `proxy_pass` fails `nginx -t`, so a closed stream
+  port is a deleted file. The stream directory is persisted; o002 seeds it
+  once (`.seeded` marker) from a Nix snapshot and the reconciler owns it
+  afterwards, so an empty directory stays closed.
+- **Receivers never take nginx text.** h005 sends JSON over a forced-command
+  ssh key; the receiver renders, writes atomically, runs `nginx -t` and
+  reloads, and leaves a `.reload-pending` marker for a failed reload. h005 and
+  o002 are deployed from the same tree, so the receivers have no
+  compatibility path for older callers.
+- **dnsmasq `hostsdir` quirks** (2.93): the directory must exist when dnsmasq
+  starts (tmpfiles creates it), a hidden temp name is still read, so writes
+  are `.new` + `rename`; deleting a file drops the record.
+- **The public zone points only at our servers.** `Spec.Validate` refuses
+  external CNAME targets and duplicate names (cookie scope of the SSO
+  domain).
 
 ## Status endpoint contract
 
-Each host that `fleet-edge` polls is expected to run a small, read-only
-HTTP endpoint (to be added by the host module later; not part of this
-flake). `fleet-edge` substitutes `{overlayIp}` (also `{lanIp}`, `{host}`)
+Each polled host runs fleet-agent's read-only status endpoint, enabled by
+`ringofstorms.fleetAgent`. `fleet-edge` substitutes `{overlayIp}` (also
+`{lanIp}`, `{host}`)
 into `--status-url-template` (default
 `http://{overlayIp}:9101/status.json`) per host from the inventory, then
 does a `GET` with a short timeout.
@@ -443,9 +551,10 @@ health or service state. A mount with no report gets no guessed ring.
 ### What is derived, never declared
 
 - **Inventory hosts and live state** — the inventory supplies hosts, addresses,
-  roles, placement and declared services/routes; fleet-agent polls supply
-  reachability, metrics and health. Unplaced inventory hosts appear in
-  `defaultZone` unless hidden, so a new host needs no spec placement edit.
+  roles and declared services/routes; the placement registry supplies which
+  host runs each service; fleet-agent polls supply reachability, metrics and
+  health. Unplaced inventory hosts appear in `defaultZone` unless hidden, so a
+  new host needs no spec placement edit.
 - **Service and drive detail** — the station panel lists every declared service with
   its exposure, proto, port and URLs, every drive with its SMART finding, the
   filesystems and the fail2ban jails. A red service count means something is
@@ -456,8 +565,8 @@ health or service state. A mount with no report gets no guessed ring.
   empty: overlay membership is a station tag and routes remain direct owner
   branches, not a permanent Headscale station/fan.
 - **`hubs.edge`** — public paths to every placed `via = "edge"` owner.
-- **`hubs.router`** — the same for `via = "router"` routes (`minecraft` has no
-  host today, so h005 leaves this empty rather than draw an empty fan).
+- **`hubs.router`** — the same for `via = "router"` routes of placed services;
+  with none placed (`minecraft` is unplaced) the fan is not drawn.
 - **`hubs.dashboard`** — an edge from the dashboard host to every host with a
   fleet-agent.
 

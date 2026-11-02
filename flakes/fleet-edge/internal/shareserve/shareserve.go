@@ -1,7 +1,7 @@
 // Package shareserve implements `fleet-share-serve` and `fleet-share-apply`,
-// o002's handlers for the `share` ssh user (containers/FLOWS-AUDIT.md §(c),
-// "Local temporary sharing via *.share.joshuabell.xyz"). It never touches
-// h005 or the fleet-edge-overrides state.
+// o002's handlers for the `share` ssh user (local temporary sharing via
+// *.share.joshuabell.xyz). It never touches h005 or the fleet-edge-overrides
+// state.
 //
 // `share` is kept fully unprivileged: it never runs nginx, never writes
 // nginx config text, and never reloads anything. sshd's Match block
@@ -249,8 +249,8 @@ func Render(c *Config, r Request) string {
 		fmt.Fprintf(&b, "  limit_req zone=%s burst=100 nodelay;\n", c.LimitZone)
 	}
 	b.WriteString("  add_header X-Robots-Tag noindex;\n")
-	// Strip oauth2-proxy cookies before the backend (ROUTING-PLAN §4,
-	// shared pattern with nginxSnippets.cookieStrip).
+	// Strip oauth2-proxy cookies before the backend (same pattern as
+	// nginxSnippets.cookieStrip).
 	b.WriteString("  set $fleet_cookie $http_cookie;\n")
 	for range 4 {
 		b.WriteString("  if ($fleet_cookie ~ \"^(.*?)(?:^|;\\s*)_oauth2_proxy[A-Za-z0-9_]*=[^;]*(.*)$\") {\n    set $fleet_cookie $1$2;\n  }\n")

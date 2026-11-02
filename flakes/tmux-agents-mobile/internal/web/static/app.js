@@ -180,6 +180,9 @@
     const list = el.querySelector("[data-items]");
     const earlier = el.querySelector("[data-earlier]");
     const working = el.querySelector("[data-working]");
+    const recap = el.querySelector("[data-recap]");
+    const todoSlot = document.querySelector("[data-todo-slot]");
+    const titleEl = document.querySelector(".top .ctx-title");
     const nodes = new Map(); // item index -> element
     let start = 0;
     let follow = true;
@@ -288,8 +291,36 @@
       stick();
     }
 
+    // omp's session title replaces the pane label in the header; the label
+    // stays as the tooltip and the document title keeps both apart.
+    const paneLabel = titleEl ? titleEl.textContent : "";
+    function setMeta(m) {
+      if (titleEl) {
+        titleEl.textContent = m.title || paneLabel;
+        titleEl.title = m.title ? paneLabel : "";
+      }
+      document.title = (m.title || paneLabel) + " · tmux";
+      if (todoSlot) {
+        // The card's open/closed state is the reader's; keep it across updates.
+        const wasOpen = !!todoSlot.querySelector("details[open]");
+        todoSlot.innerHTML = m.todos || "";
+        todoSlot.hidden = !m.todos;
+        const card = todoSlot.querySelector("details");
+        if (card && wasOpen) card.open = true;
+      }
+      stick();
+    }
+
+    function setRecap(r) {
+      recap.innerHTML = r.html || "";
+      recap.hidden = !r.html;
+      stick();
+    }
+
     const es = new EventSource("/p/" + pane + "/chat/events");
     es.addEventListener("init", (e) => init(JSON.parse(e.data)));
+    es.addEventListener("meta", (e) => setMeta(JSON.parse(e.data)));
+    es.addEventListener("recap", (e) => setRecap(JSON.parse(e.data)));
     es.addEventListener("items", (e) => {
       for (const item of JSON.parse(e.data).items) upsert(item);
       stick();

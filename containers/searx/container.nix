@@ -1,4 +1,4 @@
-# Guest config: settings copied verbatim from hosts/h001/mods/searx.nix.
+# Guest config.
 { pkgs, fleetNet, ... }:
 let
   secretKeyEnvFile = "/var/lib/searx/secret-key.env";
@@ -6,7 +6,7 @@ in
 {
   system.stateVersion = "24.11";
 
-  # Same ids as on h001 bare metal, so the copied files keep working.
+  # Pinned ids so the persisted files keep their owner.
   users.users.searx.uid = 983;
   users.groups.searx.gid = 971;
 

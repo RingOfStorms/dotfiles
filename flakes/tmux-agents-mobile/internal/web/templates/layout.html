@@ -7,14 +7,14 @@
 <meta name="theme-color" content="#11111b">
 <title>{{if .Title}}{{.Title}} · {{end}}tmux</title>
 <link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/static/icon-180.png">
+<link rel="icon" href="{{asset "icon.svg"}}" type="image/svg+xml">
+<link rel="apple-touch-icon" href="{{asset "icon-180.png"}}">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
-<link rel="stylesheet" href="/static/app.css">
-<script src="/static/htmx.min.js" defer></script>
-<script src="/static/app.js" defer></script>
+<link rel="stylesheet" href="{{asset "app.css"}}">
+<script src="{{asset "htmx.min.js"}}" defer></script>
+<script src="{{asset "app.js"}}" defer></script>
 </head>
 <body class="{{.Page}}">
 <header class="top">

@@ -388,9 +388,9 @@ func lockFree(t *testing.T, c *Config) bool {
 	return syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) == nil
 }
 
-// Regression (17818b7a): a reload that systemd queued and then failed must
-// leave the marker, and a later flush (the expire timer) must retry it. The
-// reload runs without the dir lock, so it may wait for the boot expire unit.
+// A reload that systemd queued and then failed must leave the marker, and a
+// later flush (the expire timer) must retry it. The reload runs without the
+// dir lock, so it may wait for the boot expire unit.
 func TestQueuedReloadFailureStaysPendingAndRetried(t *testing.T) {
 	c := testCfg(t)
 	stubRunner(t, false)

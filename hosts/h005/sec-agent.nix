@@ -3,10 +3,8 @@
 import ../_shared_assets/utilities/sec-agent.nix {
   inherit inputs constants;
   role = "machines-hightrust";
-  # H2: h005 is the router; it never initiates nix2nix (fleet root SSH).
-  # It only runs wildcard-push and ups-shutdown, each with its own
-  # dedicated restricted key below. includeGitKeys (default true) stays on
-  # for any git+ssh flake fetches.
+  # The router needs only restricted wildcard-push and ups-shutdown keys,
+  # not the fleet-wide root SSH credential. Git fetch credentials stay on.
   includeFleetSshKeys = false;
   extraSecrets = {
     # Credentials of the shared `josh` atuin account; owned by the local

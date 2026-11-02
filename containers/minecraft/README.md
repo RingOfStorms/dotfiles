@@ -1,21 +1,23 @@
 # Minecraft
 
-> **Inactive since 2026-10-15.** Not deployed anywhere (`host = null` in
-> `service.nix`). It last ran on h003 and was stopped cleanly on 2026-10-09;
-> h003 is being re-imaged (`hosts/h005/readme.md`). The full data dir is backed
-> up on h001 at `/home/luser/backups/minecraft-h003-2026-10-15T2001.tar.zst`
-> (4.0G, taken stopped, so no `dumpall.sql`; the PostgreSQL 17 cluster files
-> are consistent). To bring it back:
+> **Offline: no placement.** The registry has no row for minecraft, so it
+> has no DNS name, no o002 vhost for `computerboyz` and no WAN forward for
+> 25565. It last ran on h003 and was stopped cleanly on 2026-10-09. The full
+> data dir is backed up on h001 at
+> `/home/luser/backups/minecraft-h003-2026-10-15T2001.tar.zst` (4.0G, taken
+> stopped, so no `dumpall.sql`; the PostgreSQL 17 cluster files are
+> consistent). To bring it back:
 >
 > ```sh
 > containers check-idmap <host>
 > containers restore minecraft minecraft-h003-2026-10-15T2001.tar.zst --host <host>
-> containers deploy minecraft --host <host>
+> sudo fleet containers deploy minecraft --host <host>
 > ```
 >
-> then set `host` in `service.nix`, point `computerboyz` in
-> `hosts/oracle/o002/nginx.nix` at the new host's overlay IP, and add a WAN
-> port-forward for 25565 on the router (h005).
+> The deploy records the first placement (reserve + commit). On its next pass
+> fleet-edge on h005 writes the DNS records, pushes the `computerboyz` vhost to
+> o002 and opens the WAN forward for 25565 to the host's LAN IP. Nothing in
+> Nix needs editing.
 
 Velocity proxy and two Paper servers, run as a `nixos`-kind floating container
 (see `../README.md`).
@@ -24,13 +26,14 @@ Velocity proxy and two Paper servers, run as a `nixos`-kind floating container
 Players :25565 -> Velocity (proxy, auth, routing)
                     ├── survival :25566  (127.0.0.1, primary, Paper)
                     └── creative :25567  (127.0.0.1, plugin experiments)
-squaremap :8080  -> host nginx (computerboyz.joshuabell.xyz/map/survival/, overlay IP)
-                 <- o002 terminates TLS and proxies over tailscale
+squaremap :8080  -> host nginx (https://computerboyz.joshuabell.xyz/, edge listener)
+                 <- o002 terminates TLS and proxies over the tailnet
 PostgreSQL 17 (127.0.0.1:5432, trust): LuckPerms, shared by all three
 ```
 
 The container shares the host network. The host opens only 25565, at runtime
-(`tcpPorts`). 8080 is reached through the host nginx site in `service.nix`.
+(the `game` route). 8080 is reached through the vhost `cnt deploy` generates
+from the `web` route.
 
 ## Data
 
@@ -48,7 +51,7 @@ File owners in these dirs are container UIDs (idmapped). Don't chown them.
 ## Everyday
 
 ```sh
-containers ls                         # where it runs, state
+containers ls                         # bound host, where it runs, state
 containers logs minecraft             # follow the container journal
 containers attach minecraft           # tmux session `mc`: velocity / survival / creative
                                  # (Ctrl-b d to detach; on h003 also: mc-attach)
@@ -74,60 +77,10 @@ To restore only the database from the dump: `containers shell minecraft`, then
 
 ```sh
 containers check-idmap h001
-containers move minecraft --to h001
+sudo fleet containers move minecraft --to h001
 ```
 
-Then:
+The move commits the new host to the placement registry; DNS, the o002
+`computerboyz` vhost and the WAN forward for 25565 follow it on fleet-edge's
+next reconcile pass. See `../README.md` for details.
 
-- set `host = "h001";` in `service.nix` and push;
-- point `computerboyz` in `hosts/oracle/o002/nginx.nix` at the new host's
-  overlay IP and rebuild o002;
-- move the WAN port-forward for 25565 to the new host. Today h003 is the
-  router and the public IP, so for any other host add
-  `nat.forwardPorts` on h003.
-
-See `../README.md` for details.
-
-## One-time migration from the old (stateful) container
-
-The old container kept everything in `/var/lib/nixos-containers/minecraft`
-and shared host UIDs (`privateUsers = "no"`). Those UIDs are the guest's own
-numbers, so copied with numeric owners they are already right for the idmap.
-`var/lib/nixos` comes along so the guest keeps the same UID map.
-
-On **h003**, after the host has the new module (push, `nix flake update
-containers` in `hosts/h003`, rebuild):
-
-```sh
-# 0. Check idmap works here
-containers check-idmap h003           # from any machine; or the script in ../README.md
-
-# 1. Make sure it's stopped (blocking) and take a full backup of the old root
-sudo systemctl stop container@minecraft
-sudo tar --numeric-owner --xattrs --acls -czf ~/mc-pre-migration-$(date +%F).tar.gz \
-  -C /var/lib/nixos-containers minecraft
-
-# 2. Copy the data into the new layout
-old=/var/lib/nixos-containers/minecraft
-new=/srv/containers/minecraft
-sudo mkdir -p $new/{srv,secrets,postgresql,nixos}
-sudo rsync -aHAX --numeric-ids $old/srv/minecraft/            $new/srv/
-sudo rsync -aHAX --numeric-ids $old/var/lib/minecraft-secrets/ $new/secrets/
-sudo rsync -aHAX --numeric-ids $old/var/lib/postgresql/        $new/postgresql/
-sudo rsync -aHAX --numeric-ids $old/var/lib/nixos/             $new/nixos/
-sudo ls -ln $new/srv $new/postgresql/17 | head   # owners: minecraft uid, postgres 71
-
-# 3. Remove the old container (its data is in the backup and the copy)
-sudo extra-container destroy minecraft
-
-# 4. Deploy the new one (from any machine)
-containers deploy minecraft
-containers logs minecraft             # wait for "Done" from survival/creative
-```
-
-Verify: connect a client to the public address on 25565; open
-`https://computerboyz.joshuabell.xyz/map/survival/`; `/lp info` in game works
-(LuckPerms ↔ postgres).
-
-If it fails: `containers stop minecraft`, read `containers logs minecraft --unit`. The
-old state is in `~/mc-pre-migration-*.tar.gz`.

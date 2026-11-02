@@ -4,11 +4,14 @@ package web
 
 import (
 	"compress/gzip"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"html/template"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -26,6 +29,38 @@ import (
 
 //go:embed templates/*.html templates/chat/*.html static/*
 var assets embed.FS
+
+// assetVersions maps each static file to a short hash of its content. Pages
+// link /static/<file>?v=<hash>, so a release changes the URL and neither the
+// browser nor the service worker can keep serving the previous build's JS/CSS.
+var assetVersions = func() map[string]string {
+	out := map[string]string{}
+	entries, err := fs.ReadDir(assets, "static")
+	if err != nil {
+		return out
+	}
+	for _, e := range entries {
+		body, err := assets.ReadFile("static/" + e.Name())
+		if err != nil {
+			continue
+		}
+		sum := sha256.Sum256(body)
+		out[e.Name()] = hex.EncodeToString(sum[:6])
+	}
+	return out
+}()
+
+// assetURL is the versioned URL of a static file.
+func assetURL(name string) string {
+	if v, ok := assetVersions[name]; ok {
+		return "/static/" + name + "?v=" + v
+	}
+	return "/static/" + name
+}
+
+func parseTemplates() (*template.Template, error) {
+	return template.New("").Funcs(template.FuncMap{"asset": assetURL}).ParseFS(assets, "templates/*.html")
+}
 
 // Server holds the handlers' dependencies.
 type Server struct {
@@ -45,7 +80,7 @@ type Server struct {
 // in; a directory outside them is rejected, so the form is not a way to start a
 // shell anywhere on the machine.
 func New(t *tmux.Client, hub *watch.Hub, chat *watch.ChatHub, ag *agents.Provider, g *diff.Git, index *dirs.Index, roots []string, dev bool, log *slog.Logger) (*Server, error) {
-	tpl, err := template.New("").ParseFS(assets, "templates/*.html")
+	tpl, err := parseTemplates()
 	if err != nil {
 		return nil, err
 	}

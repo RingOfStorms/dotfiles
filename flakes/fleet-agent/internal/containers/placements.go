@@ -1,6 +1,6 @@
 package containers
 
-// The placement registry on h005 (containers/PLACEMENT-PLAN.md) is the runtime
+// The placement registry on h005 is the runtime
 // answer to "which host runs this service". These are the CLI's paths into it:
 // the same edgeClient the expose API uses (one listener, one machine token,
 // one error shape), and a package-level seam so tests can answer without a
@@ -279,7 +279,7 @@ type placementImportResult struct {
 	Skipped  []string `json:"skipped"`
 }
 
-// placementImportPosts adopts an observed placement (the one-time bootstrap
+// placementImport adopts an observed placement (the one-time bootstrap
 // and `cnt place --adopt`).
 func (c *edgeClient) placementImport(r placementImport) (placementImportResult, error) {
 	var out placementImportResult
@@ -314,8 +314,8 @@ func boundHost(name string) string {
 }
 
 // registryHosts is every host the registry knows about (bound, reserved and
-// previously bound), so discovery also probes hosts the inventory no longer
-// declares.
+// previously bound), so discovery also probes hosts the inventory does not
+// declare.
 func registryHosts() []string {
 	v := registry()
 	if v == nil {

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 const header = `{"type":"session","version":3,"id":"s1","timestamp":"t","cwd":"/x"}
@@ -191,6 +192,162 @@ func TestEditAndAskDetails(t *testing.T) {
 	}
 	if parts[1].Tool.Detail != "Which?\n  1. A\n  2. B" {
 		t.Fatalf("ask detail = %q", parts[1].Tool.Detail)
+	}
+}
+
+func TestSessionMetaTitleAndTodos(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	title := `{"type":"title","v":1,"title":"Fix the thing","source":"auto","pad":"          "}`
+	body := title + "\n" + header + `{"type":"message","id":"u1","parentId":"m0","timestamp":"2026-11-01T10:00:00.500Z","message":{"role":"user","content":"go"}}
+{"type":"message","id":"a1","parentId":"u1","timestamp":"2026-11-01T10:00:05.250Z","message":{"role":"assistant","stopReason":"toolUse","content":[{"type":"toolCall","id":"c1","name":"todo","arguments":{"op":"init"}}]}}
+{"type":"message","id":"r1","parentId":"a1","timestamp":"2026-11-01T10:00:06Z","message":{"role":"toolResult","toolCallId":"c1","toolName":"todo","content":[{"type":"text","text":"ok"}],"details":{"op":"init","phases":[{"name":"Tasks","tasks":[{"content":"one","status":"completed"},{"content":"two","status":"in_progress"},{"content":"three","status":"blocked","blocker":"needs creds"}]}]}}}
+`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.ID() != "s1" {
+		t.Fatalf("id = %q", s.ID())
+	}
+	m := s.Meta()
+	if m.Title != "Fix the thing" {
+		t.Fatalf("title = %q", m.Title)
+	}
+	if len(m.Todos) != 1 || len(m.Todos[0].Tasks) != 3 || m.Todos[0].Tasks[1].Status != TodoInProgress || m.Todos[0].Tasks[2].Blocker != "needs creds" {
+		t.Fatalf("todos = %+v", m.Todos)
+	}
+	if want := time.Date(2026, 11, 1, 10, 0, 6, 0, time.UTC); !s.LastActivity().Equal(want) {
+		t.Fatalf("last activity = %v", s.LastActivity())
+	}
+
+	// omp rewrites the padded title line in place.
+	rev := s.MetaRev()
+	renamed := strings.Replace(body, `"Fix the thing","source":"auto","pad":"          "`, `"Fixed","source":"auto","pad":"                  "`, 1)
+	if len(renamed) != len(body) {
+		t.Fatalf("test rewrite changed the length")
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteAt([]byte(renamed), 0); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+	if _, err := s.Poll(); err != nil {
+		t.Fatal(err)
+	}
+	if s.Meta().Title != "Fixed" || s.MetaRev() == rev {
+		t.Fatalf("title after rewrite = %q (rev %d, was %d)", s.Meta().Title, s.MetaRev(), rev)
+	}
+
+	appendLog(t, path, `{"type":"title_change","id":"t1","parentId":"r1","title":"Renamed by hand"}
+{"type":"custom","id":"e1","parentId":"t1","customType":"user_todo_edit","data":{"phases":[]}}
+`)
+	if _, err := s.Poll(); err != nil {
+		t.Fatal(err)
+	}
+	if m := s.Meta(); m.Title != "Renamed by hand" || len(m.Todos) != 0 {
+		t.Fatalf("meta after edits = %+v", m)
+	}
+}
+
+func TestSettingChangesBecomeDividers(t *testing.T) {
+	// Settings before the first message (m0 in the header, k1) are the
+	// starting state and get no divider.
+	path := writeLog(t, `{"type":"thinking_level_change","id":"k1","parentId":"m0","thinkingLevel":"high"}
+{"type":"message","id":"u1","parentId":"k1","message":{"role":"user","content":"hi"}}
+{"type":"model_change","id":"m1","parentId":"u1","model":"litellm/air-gpt-6","role":"default"}
+{"type":"thinking_level_change","id":"k2","parentId":"m1","thinkingLevel":"high"}
+{"type":"model_change","id":"m2","parentId":"k2","model":"litellm/fast","role":"smol"}
+{"type":"mode_change","id":"d1","parentId":"m2","mode":"plan","data":{}}
+{"type":"message","id":"u2","parentId":"d1","message":{"role":"user","content":"again"}}
+{"type":"mode_change","id":"d2","parentId":"u2","mode":"none"}
+`)
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := kinds(s); got != "user,event,user,event" {
+		t.Fatalf("kinds = %s", got)
+	}
+	items := s.Tail(10)
+	want := []string{"model=air-gpt-6 mode=plan", "mode=default"}
+	var got []string
+	for _, it := range items {
+		if it.Kind != KindEvent {
+			continue
+		}
+		var kv []string
+		for _, st := range it.Settings {
+			kv = append(kv, st.Key+"="+st.Value)
+		}
+		got = append(got, strings.Join(kv, " "))
+	}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("dividers = %q, want %q", got, want)
+	}
+}
+
+func TestBackgroundJobsSettle(t *testing.T) {
+	path := writeLog(t, `{"type":"message","id":"a1","parentId":"m0","message":{"role":"assistant","stopReason":"toolUse","content":[{"type":"toolCall","id":"c1","name":"task","arguments":{"i":"scout","context":"x","tasks":[{"name":"Alpha","agent":"scout","task":"a"},{"name":"Beta","task":"b"}]}},{"type":"toolCall","id":"c2","name":"vibe_spawn","arguments":{"i":"plan","name":"plan","cli":"good","prompt":"p"}}]}}
+{"type":"message","id":"r1","parentId":"a1","message":{"role":"toolResult","toolCallId":"c1","toolName":"task","content":[{"type":"text","text":"Spawned 2 background agents using scout.\n- `+"`Alpha` (job `Alpha`)\\n- `Beta` (job `Beta`)"+`"}]}}
+{"type":"message","id":"r2","parentId":"r1","message":{"role":"toolResult","toolCallId":"c2","toolName":"vibe_spawn","content":[{"type":"text","text":"Spawned good session `+"`plan` (turn job `plan-t1`)"+`. The turn result will be delivered."}]}}
+`)
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobs := func() []Job {
+		var out []Job
+		for _, p := range s.Tail(1)[0].Parts {
+			out = append(out, p.Tool.Jobs...)
+		}
+		return out
+	}
+	if j := jobs(); len(j) != 3 || j[0].ID != "Alpha" || j[0].Agent != "scout" || j[1].Agent != "task" || j[2].ID != "plan-t1" || j[2].Status != ToolRunning {
+		t.Fatalf("jobs = %+v", j)
+	}
+
+	appendLog(t, path, `{"type":"custom_message","id":"n1","parentId":"r2","customType":"async-result","display":true,"content":"<system-notice>\n<task-result id=\"Alpha\" agent=\"scout\" status=\"failed (exit 1)\" duration=\"1m\">\nboom\n</task-result>\n<vibe-turn session=\"plan\" cli=\"good\" turn=\"1\" status=\"completed\" duration=\"5s\">\nok\n</vibe-turn>","details":{"jobs":[{"jobId":"Alpha","type":"task","durationMs":60000},{"jobId":"plan-t1","type":"task","durationMs":5000}]}}
+{"type":"message","id":"a2","parentId":"n1","message":{"role":"assistant","stopReason":"toolUse","content":[{"type":"toolCall","id":"c3","name":"hub","arguments":{"op":"wait","ids":["Beta"]}}]}}
+{"type":"message","id":"r3","parentId":"a2","message":{"role":"toolResult","toolCallId":"c3","toolName":"hub","content":[{"type":"text","text":"done"}],"details":{"op":"wait","jobs":[{"id":"Beta","status":"cancelled","durationMs":1500}]}}}
+`)
+	changed, err := s.Poll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changed) == 0 || changed[0] != 0 {
+		t.Fatalf("changed = %v, want the spawning item first", changed)
+	}
+	s2 := s.Range(0, 1)[0]
+	var got []string
+	for _, p := range s2.Parts {
+		for _, j := range p.Tool.Jobs {
+			got = append(got, j.Name+"="+string(j.Status))
+		}
+	}
+	if strings.Join(got, " ") != "Alpha=error Beta=stopped plan=done" {
+		t.Fatalf("settled = %v", got)
+	}
+	if s2.Parts[0].Tool.Jobs[0].DurationMs != 60000 {
+		t.Fatalf("duration = %d", s2.Parts[0].Tool.Jobs[0].DurationMs)
+	}
+}
+
+func TestSteeredSendStartsNoJob(t *testing.T) {
+	path := writeLog(t, `{"type":"message","id":"a1","parentId":"m0","message":{"role":"assistant","stopReason":"toolUse","content":[{"type":"toolCall","id":"c1","name":"vibe_send","arguments":{"session":"plan","message":"m"}}]}}
+{"type":"message","id":"r1","parentId":"a1","message":{"role":"toolResult","toolCallId":"c1","toolName":"vibe_send","content":[{"type":"text","text":"Steered `+"`plan`"+` mid-turn — the running turn sees your message at its next step."}]}}
+`)
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j := s.Tail(1)[0].Parts[0].Tool.Jobs; len(j) != 0 {
+		t.Fatalf("jobs = %+v", j)
 	}
 }
 

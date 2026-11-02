@@ -1,9 +1,5 @@
-# i001 does not trust tailscale0 (ROUTING-PLAN §5.1). i001 is itself
-# low-trust (hosts/fleet.nix), so the global :22 (hardening.nix) is replaced
-# here: ssh on tailscale0 only from high-trust overlay IPs (ROUTING-PLAN §8
-# step 2), o002 excluded, plus a low-trust-filtered home LAN fallback. It
-# serves nothing else to the tailnet (no container host module). kdeconnect,
-# steam, 41641/udp, icmp and temp-ports stay global (unrelated to this step).
+# Being a low-trust node does not make its SSH public: management still
+# requires a high-trust peer, with a low-trust-filtered LAN fallback.
 { fleet, lib, ... }:
 let
   fleetLib = import ../../containers/lib.nix;

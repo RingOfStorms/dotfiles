@@ -7,7 +7,7 @@
     extra-container.url = "github:erikarvstedt/extra-container";
     # Host-side extra-container eval must stay on 25.11 (issue #40) ...
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
-    # ... the guest runs 26.05 (same as h001; sabnzbd configFile = null needs it).
+    # ... the guest runs 26.05 (sabnzbd configFile = null needs it).
     guestpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     nixarr.url = "github:rasmus-kirk/nixarr";
     nixarr.inputs.nixpkgs.follows = "guestpkgs";
@@ -38,7 +38,7 @@
           # the guest loopback, so stored URLs (localhost:8989 etc.) still work.
           # NFS can't be idmapped and h004 checks raw uids; existing state is
           # owned by host uids. "identity" keeps uids 1:1 (plain binds) but
-          # runs the guest in its own user namespace (C1): container root is
+          # runs the guest in its own user namespace: container root is
           # not host root and the capabilities below are not host capabilities.
           privateUsers = "identity";
           # With privateUsers = "identity", systemd-nspawn retains its

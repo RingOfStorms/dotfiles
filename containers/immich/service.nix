@@ -1,6 +1,5 @@
 # Immich photos (photos.joshuabell.xyz, public via o002): server + ML (CPU)
-# + PostgreSQL 16 (vectorchord) + redis, one container. Was
-# hosts/h001/containers/immich.nix (private-network container 10.0.0.4).
+# + PostgreSQL 16 (vectorchord) + redis, one container.
 # Media (library/upload/thumbs, ~1.7T with paperless) stays on /drives/wd10
 # via a bind in flake.nix; DB + ML cache persist on /srv/containers.
 {
@@ -19,7 +18,7 @@
 
   backupHook = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
 
-  # Private network (ROUTING-PLAN §8 step 5). index is fleet-wide unique.
+  # net.index is fleet-wide unique.
   net = {
     private = true;
     index = 15;

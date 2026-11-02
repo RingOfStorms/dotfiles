@@ -66,9 +66,9 @@ func HTTPHostServices(urlFor func(host string) (string, bool)) HostServices {
 			switch s.Kind {
 			case "", "nixos", "podman":
 				// Every entry in the doc is an installed unit; `active` says
-				// whether it is running. An old agent without the field
-				// reports "" and is read as active, which is what the field
-				// meant when it was added: installed implied running.
+				// whether it is running. An agent too old to send the field
+				// reports "" and is read as active: for such an agent,
+				// installed implies running.
 				out[name] = ServiceState{Installed: true, Active: s.Active == "" || s.Active == "active" || s.Active == "reloading"}
 			}
 		}

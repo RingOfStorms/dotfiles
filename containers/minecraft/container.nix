@@ -555,7 +555,7 @@ in
       survival = {
         enable = true;
         package = pkgs.paperServers.paper-26_3; # pin the release: the bare `paper` alias can point at a release candidate, which rejects release clients
-        jvmOpts = "-Xms4096M -Xmx12288M"; # Matches original joe config
+        jvmOpts = "-Xms4096M -Xmx12288M";
         serverProperties = paperServerProperties {
           port = 25566;
           motd = "Survival";
@@ -656,8 +656,6 @@ in
       };
 
       # ── Paper: Creative (secondary) ──────────────────────────────────
-      # Second Paper instance for plugin experimentation later.
-      # Creative mode with normal world gen.
       creative = {
         enable = true;
         package = pkgs.paperServers.paper-26_3; # pin the release: the bare `paper` alias can point at a release candidate, which rejects release clients

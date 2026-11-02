@@ -1,6 +1,3 @@
-# Receiver for runtime public vhosts pushed by h005's fleet-edge-overrides
-# (containers/ROUTING-PLAN.md §8 step 7, "Public expose design" item 3).
-#
 # h005 runs the vhost or stream receiver over root SSH with one dedicated
 # key. The forced dispatcher selects streams only for the exact command;
 # every other command reaches this vhost receiver. The request is JSON on stdin:

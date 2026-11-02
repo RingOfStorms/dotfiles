@@ -2359,17 +2359,16 @@ func finishNode(n *Node) {
 	}
 	// The name's baseline clears whatever is largest around the head — the
 	// outermost space ring when the host has mounts, otherwise the head circle
-	// itself — plus the ring's stroke. Clearing only ringMax put a ringless
-	// node's 21px name through its own circle and left a ringed one's name on
-	// the ring. 19 is the ascent of the 21px name above its baseline.
+	// itself — plus the ring's stroke, so the 21px name never crosses its own
+	// circle or ring. 19 is the ascent of the 21px name above its baseline.
 	n.LabelY = n.HeadY + max(ringMax, n.R) + 4 + 19
 	// Role and tags are display:none at rest — the side panel and the title
 	// carry them — so neither owns a band. RoleY still points where the role
 	// would print, one name-box under the label, for anything that reads it.
 	n.RoleY = n.LabelY + labelGap
 	// Captions are 16px, so the cpu baseline sits one caption-step under the
-	// name and the mem baseline a full box below that; at the old 16-unit
-	// pitch the two captions overlapped on every gauged station.
+	// name and the mem baseline a full box below that, or the two captions
+	// overlap.
 	//
 	// Bars exist only when the host's latest poll is current. An absent host
 	// draws no bar and prints one "cpu — · mem —" caption at TagsY instead, so
@@ -2387,10 +2386,9 @@ func finishNode(n *Node) {
 	n.TagsY = n.MemBarY + tagsClear
 
 	// The service and health counts are 12px type, and the space beside the
-	// head is only ~62 units wide: a joined "1 to check · 3 banned" (126
-	// units) spilled ~55 units into the neighbouring station there. The
-	// counts get their own band under the badges instead, anchored to the
-	// station's inner edge, where the longest line fits with room to spare.
+	// head is only ~62 units wide, too narrow for a line like "1 to check · 3
+	// banned" (~126 units). The counts get their own band under the badges,
+	// anchored to the station's inner edge, where the longest line fits.
 	// A host keeps its service row with nothing placed on it: placement
 	// changes at runtime, and a station growing a row would move every station
 	// under it between two frames.
@@ -2409,9 +2407,8 @@ func finishNode(n *Node) {
 	// here: a 20px icon is placed by its top-left corner, so -10/-10 centres it
 	// on the head; the state dot sits on the head's left rim, and the tailnet
 	// marker hangs just under it. All three are box-local, so they must be
-	// written after HeadX/HeadY and never left at their zero value — a zeroed
-	// anchor drew every icon at the station's top-left corner instead of on
-	// the circle it describes.
+	// written after HeadX/HeadY and never left at their zero value, which
+	// would draw the icon at the station's top-left corner.
 	n.IconX, n.IconY = n.HeadX-10, n.HeadY-10
 	n.DotX = n.HeadX - n.R - 4
 	n.TsX, n.TsY = n.HeadX-5, n.HeadY+n.R-5

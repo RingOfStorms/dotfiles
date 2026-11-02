@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // Display caps. The log keeps everything; the phone only needs enough to see
@@ -32,13 +34,20 @@ var ErrReset = errors.New("transcript: session must be reloaded")
 type Session struct {
 	Path string
 
+	id    string
 	items []*Item
 	byID  map[string]int
 	tools map[string]toolRef
+	jobs  map[string]jobRef
 	// pending are tool calls still waiting for a result, in call order.
 	pending []string
 	seq     int
 	leaf    string
+
+	meta     Meta
+	metaRev  int
+	settings map[string]string
+	activity time.Time
 
 	offset int64
 	dev    uint64
@@ -47,17 +56,29 @@ type Session struct {
 
 type toolRef struct{ item, part int }
 
+type jobRef struct{ item, part, job int }
+
 // ompEntry is the subset of an omp session record the transcript needs.
 type ompEntry struct {
 	Type         string          `json:"type"`
 	ID           string          `json:"id"`
 	ParentID     *string         `json:"parentId"`
+	Timestamp    string          `json:"timestamp"`
 	CustomType   string          `json:"customType"`
 	Display      bool            `json:"display"`
 	Content      json.RawMessage `json:"content"`
+	Details      json.RawMessage `json:"details"`
+	Data         json.RawMessage `json:"data"`
 	Message      *ompMessage     `json:"message"`
 	Summary      string          `json:"summary"`
 	ShortSummary string          `json:"shortSummary"`
+	Title        string          `json:"title"`
+	// Setting changes: model_change (Role is empty or "default" for the main
+	// model), thinking_level_change, mode_change.
+	Model         string  `json:"model"`
+	Role          string  `json:"role"`
+	ThinkingLevel *string `json:"thinkingLevel"`
+	Mode          string  `json:"mode"`
 }
 
 type ompMessage struct {
@@ -66,6 +87,7 @@ type ompMessage struct {
 	StopReason   string          `json:"stopReason"`
 	ErrorMessage string          `json:"errorMessage"`
 	ToolCallID   string          `json:"toolCallId"`
+	ToolName     string          `json:"toolName"`
 	IsError      bool            `json:"isError"`
 	Details      json.RawMessage `json:"details"`
 	Files        []struct {
@@ -82,11 +104,14 @@ type ompBlock struct {
 	Arguments json.RawMessage `json:"arguments"`
 }
 
-// link is the cheap first-pass decode: just enough to follow the tree.
+// link is the cheap first-pass decode: just enough to follow the tree. The
+// header lines ("title", "session") carry no parent; Title is the session
+// title omp rewrites in place at the top of the file.
 type link struct {
 	Type     string  `json:"type"`
 	ID       string  `json:"id"`
 	ParentID *string `json:"parentId"`
+	Title    string  `json:"title"`
 }
 
 // Open reads a whole session log.
@@ -120,6 +145,21 @@ func (s *Session) Range(from, to int) []Item {
 	return out
 }
 
+// ID is the session id from the log's header; omp keys its side tables
+// (recaps, titles) by it.
+func (s *Session) ID() string { return s.id }
+
+// Meta returns a copy of the session-wide state.
+func (s *Session) Meta() Meta {
+	return Meta{Title: s.meta.Title, Todos: cloneTodos(s.meta.Todos)}
+}
+
+// MetaRev changes whenever Meta does.
+func (s *Session) MetaRev() int { return s.metaRev }
+
+// LastActivity is when the newest message was logged; zero if unknown.
+func (s *Session) LastActivity() time.Time { return s.activity }
+
 // Index returns the position of the item with the given id.
 func (s *Session) Index(id string) (int, bool) {
 	i, ok := s.byID[id]
@@ -141,9 +181,14 @@ func (s *Session) reset() {
 	s.items = nil
 	s.byID = map[string]int{}
 	s.tools = map[string]toolRef{}
+	s.jobs = map[string]jobRef{}
 	s.pending = nil
 	s.leaf = ""
 	s.offset = 0
+	s.meta = Meta{}
+	s.metaRev++
+	s.settings = map[string]string{}
+	s.activity = time.Time{}
 }
 
 // load parses the file from scratch. omp sessions are trees: re-sending an
@@ -175,11 +220,17 @@ func (s *Session) load() error {
 	}
 	var spans []span
 	parents := map[string]string{}
-	leaf := ""
+	leaf, id, title := "", "", ""
 	for start := 0; start < len(data); {
 		end := start + bytes.IndexByte(data[start:], '\n')
 		var l link
 		if json.Unmarshal(data[start:end], &l) == nil {
+			switch l.Type {
+			case "session":
+				id = l.ID
+			case "title":
+				title = l.Title
+			}
 			sp := span{id: l.ID, start: start, end: end}
 			if l.ParentID != nil {
 				sp.parent = *l.ParentID
@@ -209,6 +260,12 @@ func (s *Session) load() error {
 		}
 		s.apply(&e, nil)
 	}
+	s.id = id
+	// The header holds the newest title, including ones set by hand that
+	// leave no title_change entry.
+	if title != "" {
+		s.meta.Title = title
+	}
 	s.leaf = leaf
 	s.offset = int64(len(data))
 	s.dev, s.ino = fileID(st)
@@ -231,6 +288,7 @@ func (s *Session) Poll() ([]int, error) {
 	if dev, ino := fileID(st); dev != s.dev || ino != s.ino || st.Size() < s.offset {
 		return nil, s.reload()
 	}
+	s.refreshTitle(f)
 	if st.Size() == s.offset {
 		return nil, nil
 	}
@@ -273,6 +331,23 @@ func (s *Session) Poll() ([]int, error) {
 	return changed, nil
 }
 
+// refreshTitle re-reads the title header, which omp rewrites in place (it is
+// padded so a new title fits) without necessarily appending anything.
+func (s *Session) refreshTitle(f *os.File) {
+	buf := make([]byte, 4<<10)
+	n, _ := f.ReadAt(buf, 0)
+	line, _, ok := bytes.Cut(buf[:n], []byte("\n"))
+	if !ok {
+		return
+	}
+	var l link
+	if json.Unmarshal(line, &l) != nil || l.Type != "title" || l.Title == "" || l.Title == s.meta.Title {
+		return
+	}
+	s.meta.Title = l.Title
+	s.metaRev++
+}
+
 func (s *Session) reload() error {
 	if err := s.load(); err != nil {
 		return err
@@ -309,12 +384,34 @@ func (s *Session) apply(e *ompEntry, changed *[]int) {
 	switch e.Type {
 	case "message":
 		if e.Message != nil {
+			s.noteActivity(e.Timestamp)
 			s.applyMessage(e, changed)
 		}
 	case "custom_message":
+		if e.CustomType == "async-result" {
+			s.applyAsyncResult(e, changed)
+		}
 		if e.Display {
+			s.noteActivity(e.Timestamp)
 			s.add(&Item{ID: e.ID, Kind: KindNotice, Label: e.CustomType, Text: clip(contentText(e.Content), maxNoticeBytes)}, changed)
 		}
+	case "title_change":
+		if e.Title != "" && e.Title != s.meta.Title {
+			s.meta.Title = e.Title
+			s.metaRev++
+		}
+	case "model_change":
+		// Other roles (smol, slow) configure helper models, not the one
+		// talking.
+		if e.Role == "" || e.Role == "default" || e.Role == "temporary" {
+			s.setting(e.ID, "model", shortModel(e.Model), changed)
+		}
+	case "thinking_level_change":
+		if e.ThinkingLevel != nil {
+			s.setting(e.ID, "thinking", *e.ThinkingLevel, changed)
+		}
+	case "mode_change":
+		s.setting(e.ID, "mode", modeLabel(e.Mode), changed)
 	case "compaction":
 		label := e.ShortSummary
 		if label == "" {
@@ -326,10 +423,83 @@ func (s *Session) apply(e *ompEntry, changed *[]int) {
 			s.add(&Item{ID: e.ID, Kind: KindNotice, Label: "branch summary", Text: clip(e.Summary, maxNoticeBytes)}, changed)
 		}
 	case "custom":
-		if e.CustomType == "session_exit" {
+		switch e.CustomType {
+		case "session_exit":
+			// Background jobs die with the agent.
 			s.stopPending(changed)
+			for id := range s.jobs {
+				s.settleRunningJob(id, changed)
+			}
+		case "user_todo_edit":
+			s.setTodos(e.Data)
 		}
 	}
+}
+
+func (s *Session) noteActivity(ts string) {
+	if t, err := time.Parse(time.RFC3339Nano, ts); err == nil && t.After(s.activity) {
+		s.activity = t
+	}
+}
+
+// setting records a changed session setting as a divider. Settings logged
+// before the conversation starts are the starting state, not a change;
+// re-logged values (omp repeats the thinking level on every model switch)
+// are dropped; back-to-back changes share one divider.
+func (s *Session) setting(id, key, value string, changed *[]int) {
+	if value == "" || s.settings[key] == value {
+		return
+	}
+	s.settings[key] = value
+	if len(s.items) == 0 {
+		return
+	}
+	if n := len(s.items); s.items[n-1].Kind == KindEvent {
+		it := s.items[n-1]
+		s.seq++
+		replaced := false
+		for i := range it.Settings {
+			if it.Settings[i].Key == key {
+				it.Settings[i].Value, replaced = value, true
+			}
+		}
+		if !replaced {
+			it.Settings = append(it.Settings, Setting{Key: key, Value: value})
+		}
+		s.touch(n-1, changed)
+		return
+	}
+	s.add(&Item{ID: id, Kind: KindEvent, Settings: []Setting{{Key: key, Value: value}}}, changed)
+}
+
+// shortModel drops the provider: "litellm/air-claude-opus-5.5" reads as
+// "air-claude-opus-5.5".
+func shortModel(m string) string {
+	if i := strings.LastIndexByte(m, '/'); i >= 0 {
+		return m[i+1:]
+	}
+	return m
+}
+
+func modeLabel(m string) string {
+	switch m {
+	case "none":
+		return "default"
+	case "":
+		return ""
+	}
+	return strings.ReplaceAll(m, "_", " ")
+}
+
+func (s *Session) setTodos(raw json.RawMessage) {
+	var d struct {
+		Phases *[]TodoPhase `json:"phases"`
+	}
+	if json.Unmarshal(raw, &d) != nil || d.Phases == nil {
+		return
+	}
+	s.meta.Todos = *d.Phases
+	s.metaRev++
 }
 
 func (s *Session) applyMessage(e *ompEntry, changed *[]int) {
@@ -417,9 +587,170 @@ func (s *Session) applyMessage(e *ompEntry, changed *[]int) {
 		if json.Unmarshal(m.Details, &d) == nil && d.Diff != "" {
 			t.Diff = clip(d.Diff, maxDiffBytes)
 		}
+		if len(t.Jobs) > 0 {
+			s.startJobs(ref, contentText(m.Content), m.IsError)
+		}
 		s.dropPending(m.ToolCallID)
 		s.touch(ref.item, changed)
+		s.applyToolDetails(m, changed)
 	}
+}
+
+// applyToolDetails picks up session-wide state some tools report: the todo
+// list, and background jobs that waiting tools saw settle.
+func (s *Session) applyToolDetails(m *ompMessage, changed *[]int) {
+	switch m.ToolName {
+	case "todo":
+		if !m.IsError {
+			s.setTodos(m.Details)
+		}
+	case "vibe_wait":
+		var d struct {
+			Wait struct {
+				Settled []struct {
+					JobID  string `json:"jobId"`
+					Status string `json:"status"`
+				} `json:"settled"`
+			} `json:"wait"`
+		}
+		if json.Unmarshal(m.Details, &d) == nil {
+			for _, j := range d.Wait.Settled {
+				s.settleJob(j.JobID, j.Status, 0, changed)
+			}
+		}
+	case "hub":
+		var d struct {
+			Jobs []struct {
+				ID         string `json:"id"`
+				Status     string `json:"status"`
+				DurationMs int64  `json:"durationMs"`
+			} `json:"jobs"`
+		}
+		if json.Unmarshal(m.Details, &d) == nil {
+			for _, j := range d.Jobs {
+				s.settleJob(j.ID, j.Status, j.DurationMs, changed)
+			}
+		}
+	}
+}
+
+// spawnedJob matches how omp's spawning tools name what they started:
+// "`DocsLinks` (job `DocsLinks`)", "`world-plan` (turn job `world-plan-t1`)".
+var spawnedJob = regexp.MustCompile("`([^`]+)` \\((?:turn )?job `([^`]+)`\\)")
+
+// startJobs gives the jobs a spawning call announced their ids, once its
+// result says what was actually started.
+func (s *Session) startJobs(ref toolRef, result string, failed bool) {
+	t := &s.items[ref.item].Parts[ref.part].Tool
+	if failed {
+		for i := range t.Jobs {
+			t.Jobs[i].Status = ToolError
+		}
+		return
+	}
+	ids := map[string]string{}
+	var order []string
+	for _, m := range spawnedJob.FindAllStringSubmatch(result, -1) {
+		if _, ok := ids[m[1]]; !ok {
+			order = append(order, m[1])
+		}
+		ids[m[1]] = m[2]
+	}
+	// A message steered into a turn already running starts nothing new.
+	var jobs []Job
+	for _, j := range t.Jobs {
+		if id, ok := ids[j.Name]; ok {
+			j.ID = id
+			delete(ids, j.Name)
+			jobs = append(jobs, j)
+		}
+	}
+	for _, name := range order {
+		if id, ok := ids[name]; ok {
+			jobs = append(jobs, Job{ID: id, Name: name, Status: ToolRunning})
+		}
+	}
+	t.Jobs = jobs
+	for i, j := range jobs {
+		s.jobs[j.ID] = jobRef{item: ref.item, part: ref.part, job: i}
+	}
+}
+
+// resultTag is the header omp puts on a delivered background result.
+var resultTag = regexp.MustCompile(`<(task-result|vibe-turn) ([^>]*)>`)
+
+var tagAttr = regexp.MustCompile(`(\w[\w-]*)="([^"]*)"`)
+
+// applyAsyncResult settles background jobs when omp delivers their results.
+// The details list the job ids; the status is only reliably in the body's
+// <task-result status="…"> / <vibe-turn status="…"> headers.
+func (s *Session) applyAsyncResult(e *ompEntry, changed *[]int) {
+	var d struct {
+		Jobs []struct {
+			JobID      string `json:"jobId"`
+			Status     string `json:"status"`
+			DurationMs int64  `json:"durationMs"`
+		} `json:"jobs"`
+	}
+	if json.Unmarshal(e.Details, &d) != nil || len(d.Jobs) == 0 {
+		return
+	}
+	statuses := map[string]string{}
+	for _, m := range resultTag.FindAllStringSubmatch(contentText(e.Content), -1) {
+		attrs := map[string]string{}
+		for _, a := range tagAttr.FindAllStringSubmatch(m[2], -1) {
+			attrs[a[1]] = a[2]
+		}
+		id := attrs["id"]
+		if m[1] == "vibe-turn" {
+			id = attrs["session"] + "-t" + attrs["turn"]
+		}
+		statuses[id] = attrs["status"]
+	}
+	for _, j := range d.Jobs {
+		status := j.Status
+		if status == "" {
+			status = statuses[j.JobID]
+		}
+		if status == "" {
+			status = "completed"
+		}
+		s.settleJob(j.JobID, status, j.DurationMs, changed)
+	}
+}
+
+func (s *Session) settleRunningJob(id string, changed *[]int) {
+	if ref, ok := s.jobs[id]; ok && s.items[ref.item].Parts[ref.part].Tool.Jobs[ref.job].Status == ToolRunning {
+		s.settleJob(id, "cancelled", 0, changed)
+	}
+}
+
+func (s *Session) settleJob(id, status string, durationMs int64, changed *[]int) {
+	ref, ok := s.jobs[id]
+	if !ok {
+		return
+	}
+	var next ToolStatus
+	switch {
+	case strings.HasPrefix(status, "completed"):
+		next = ToolDone
+	case strings.HasPrefix(status, "failed"), strings.HasPrefix(status, "aborted"):
+		next = ToolError
+	case strings.HasPrefix(status, "cancelled"):
+		next = ToolStopped
+	default:
+		return
+	}
+	j := &s.items[ref.item].Parts[ref.part].Tool.Jobs[ref.job]
+	if j.Status == next && (durationMs == 0 || j.DurationMs == durationMs) {
+		return
+	}
+	s.seq++
+	j.Status = next
+	if durationMs > 0 {
+		j.DurationMs = durationMs
+	}
+	s.touch(ref.item, changed)
 }
 
 func (s *Session) stopPending(changed *[]int) {
@@ -429,7 +760,10 @@ func (s *Session) stopPending(changed *[]int) {
 	s.seq++
 	for _, id := range s.pending {
 		ref := s.tools[id]
-		s.items[ref.item].Parts[ref.part].Tool.Status = ToolStopped
+		t := &s.items[ref.item].Parts[ref.part].Tool
+		t.Status = ToolStopped
+		// Nothing was started for a call that never returned.
+		t.Jobs = nil
 		s.touch(ref.item, changed)
 	}
 	s.pending = nil
@@ -469,6 +803,7 @@ func newTool(b ompBlock) Tool {
 		t.Intent = v
 	}
 	delete(args, "i")
+	t.Jobs = spawnJobs(b.Name, args)
 
 	if b.Name == "ask" {
 		if q, ok := askDetail(args["questions"]); ok {
@@ -511,6 +846,38 @@ func newTool(b ompBlock) Tool {
 		}
 	}
 	return t
+}
+
+// spawnJobs lists the background agents a call asks for. Their job ids are
+// only known once the result names them (see startJobs).
+func spawnJobs(tool string, args map[string]any) []Job {
+	var jobs []Job
+	switch tool {
+	case "task":
+		tasks, _ := args["tasks"].([]any)
+		for _, raw := range tasks {
+			task, _ := raw.(map[string]any)
+			name, _ := task["name"].(string)
+			if name == "" {
+				continue
+			}
+			agent, _ := task["agent"].(string)
+			if agent == "" {
+				agent = "task"
+			}
+			jobs = append(jobs, Job{Name: name, Agent: agent, Status: ToolRunning})
+		}
+	case "vibe_spawn":
+		if name, ok := args["name"].(string); ok && name != "" {
+			cli, _ := args["cli"].(string)
+			jobs = append(jobs, Job{Name: name, Agent: cli, Status: ToolRunning})
+		}
+	case "vibe_send":
+		if name, ok := args["session"].(string); ok && name != "" {
+			jobs = append(jobs, Job{Name: name, Status: ToolRunning})
+		}
+	}
+	return jobs
 }
 
 // askDetail lays out the ask tool's questions and numbered options; the

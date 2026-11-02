@@ -1,10 +1,10 @@
 // Package edgevhost renders and installs runtime public vhosts on the edge
-// (o002): temporary ones for `cnt expose --exposure public`
-// (containers/ROUTING-PLAN.md §8 step 7, "Public expose design"), and the
-// public routes of placed services (containers/PLACEMENT-PLAN.md §5).
+// (o002): temporary ones for `cnt expose --exposure public`, and the public
+// routes of placed services.
 //
 // h005 (internal/overrides) pushes one JSON Request over a restricted SSH key
-// whose forced command is `fleet-vhost-receive` (hosts/edge-vhost-receiver.nix).
+// whose forced command is `fleet-vhost-receive`
+// (hosts/_shared_assets/utilities/edge-vhost-receiver.nix).
 // The receiver never accepts nginx text: it validates the request against its
 // build-time Config (domain, fleet host -> overlay IP map, names o002 already
 // serves) and renders the server block itself: proxy to the bound host's
@@ -53,9 +53,8 @@ const (
 //
 // A remove carries the Kind of the writer that owns the file (KindExpose or
 // KindPlacement) and, optionally, the Host it expects; the receiver deletes
-// only a file whose header matches (see Handle). A receiver from before
-// this fence ignored both on remove; h005 and o002 deploy together, so
-// o002's receiver always comes from the same build as its callers.
+// only a file whose header matches (see Handle). h005 and o002 deploy
+// together, so the receiver always comes from the same build as its callers.
 type Request struct {
 	Op               string `json:"op"` // add | remove | list
 	Kind             string `json:"kind,omitempty"`

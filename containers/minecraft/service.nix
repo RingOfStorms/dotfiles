@@ -28,7 +28,7 @@
   };
 
   # squaremap (survival), read-only web map on 127.0.0.1:8080. Public via
-  # the edge at https://computerboyz.joshuabell.xyz/ (was /map/survival/).
+  # the edge at https://computerboyz.joshuabell.xyz/.
   routes.web = {
     port = 8080;
     name = "computerboyz";

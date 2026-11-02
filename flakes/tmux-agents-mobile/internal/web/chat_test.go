@@ -42,6 +42,44 @@ func TestRenderChatItemUserTextIsLiteral(t *testing.T) {
 	}
 }
 
+func TestRenderTodos(t *testing.T) {
+	phases := []transcript.TodoPhase{{Name: "Build", Tasks: []transcript.TodoTask{
+		{Content: "done", Status: transcript.TodoCompleted},
+		{Content: "<now>", Status: transcript.TodoInProgress},
+		{Content: "later", Status: transcript.TodoPending},
+	}}}
+	html := RenderTodos(phases)
+	for _, want := range []string{"1/3", "&lt;now&gt;", "td-in_progress", "Build"} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("missing %q: %s", want, html)
+		}
+	}
+	phases[0].Tasks[1].Status = transcript.TodoCompleted
+	phases[0].Tasks[2].Status = transcript.TodoAbandoned
+	if html := RenderTodos(phases); html != "" {
+		t.Fatalf("closed list should hide the card: %s", html)
+	}
+}
+
+func TestRenderEventsJobsAndRecap(t *testing.T) {
+	ev := RenderChatItem(transcript.Item{Kind: transcript.KindEvent, Settings: []transcript.Setting{{Key: "model", Value: "opus"}, {Key: "thinking", Value: "high"}}})
+	if !strings.Contains(ev, `model <span class="eval">opus</span> · thinking <span class="eval">high</span>`) {
+		t.Fatalf("event = %s", ev)
+	}
+	tool := RenderChatItem(transcript.Item{Kind: transcript.KindAssistant, Parts: []transcript.Part{{Kind: transcript.PartTool, Tool: transcript.Tool{
+		Name: "task", Status: transcript.ToolDone,
+		Jobs: []transcript.Job{{Name: "Alpha", Agent: "scout", Status: transcript.ToolDone, DurationMs: 429000}, {Name: "Beta", Status: transcript.ToolRunning}},
+	}}}})
+	for _, want := range []string{"1/2", "Alpha", "scout", "7m9s", `class="st-running"`} {
+		if !strings.Contains(tool, want) {
+			t.Fatalf("missing %q: %s", want, tool)
+		}
+	}
+	if r := RenderRecap(transcript.Recap{Text: "did <x>"}); !strings.Contains(r, "※ recap: did &lt;x&gt;") {
+		t.Fatalf("recap = %s", r)
+	}
+}
+
 func TestSummaryLineSkipsWrapperTags(t *testing.T) {
 	if got := summaryLine("<advisory severity=\"concern\">\n\nVerify the count\nmore"); got != "Verify the count" {
 		t.Fatalf("summaryLine = %q", got)

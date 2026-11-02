@@ -10,8 +10,8 @@ import (
 )
 
 // The fleet-net-nat ruleset (fleet-net-nat.nft) must load, and its
-// tailnet chain must keep the iif/source/edge guards (ROUTING-PLAN §2.1:
-// LAN packets to the overlay IP and the o002 edge are not tailnet peers).
+// tailnet chain must keep the iif/source/edge guards (LAN packets to the
+// overlay IP and the o002 edge are not tailnet peers).
 func natRules(t *testing.T) string {
 	t.Helper()
 	b, err := os.ReadFile("fleet-net-nat.nft")
@@ -103,7 +103,7 @@ func TestNatRulesTailnetFallsThrough(t *testing.T) {
 	}
 }
 
-// H4: lan tcp/udp routes are not in the any-interface @routes; they match
+// lan tcp/udp routes are not in the any-interface @routes; they match
 // only LAN sources (not tailscale0, not guests) in prerouting, and real
 // tailnet peers behind the tailnet guards.
 func TestNatRulesLanScoped(t *testing.T) {

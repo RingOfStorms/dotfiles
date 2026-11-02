@@ -35,7 +35,7 @@
           pname = "tmux-agents-mobile";
           version = "0.1.0";
           src = ./.;
-          vendorHash = "sha256-8zBX8NEzRfduIYJ2QZMSMwlCUlQaPGxzRfcB6zMhtuc=";
+          vendorHash = "sha256-BF3w5Fi7X0Sl5ozEV98WHjuI92p+8DVXrZKfWXLYtOc=";
           nativeBuildInputs = [ pkgs.makeWrapper ];
           # The tmux integration tests start an isolated `tmux -L tamtest-…`
           # server; tmux must be on PATH inside the sandbox, and it needs a

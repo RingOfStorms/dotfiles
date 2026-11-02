@@ -24,15 +24,9 @@ routes because those are facts about the service, but while it has no row the
 25565 forward does not exist, `computerboyz` has neither a DNS record nor an
 o002 vhost, and the dashboard lists it under "unplaced".
 
-Status: **phase 1 done**, **phase 2 done**, **phase 3 implemented, not deployed**,
-**phase 4a implemented, not deployed**. Deploy **h005 first**, then **o002**.
-The stream layer rejects the old receiver's array reply without making changes.
-o002 seeds its stream directory once (first boot/activation, then writes a
-persisted `.seeded` marker) from a Nix snapshot of its former static
-`3032 -> h001` stream, avoiding a cutover gap; thereafter the reconciler owns
-it, and an empty directory stays closed. The directory is persisted, so the
-last-good placement survives reboot. Before and after deployment (and a test move), run
-`git ls-remote ssh://git@git.joshuabell.xyz:3032/<repo>`.
+Status: **all implementation phases are done**, including documentation.
+Deployment and remote verification are separate operational work: deploy
+**h005 first**, then **o002**, and follow the admission gates in §9.
 No deployment or SSH verification is part of this implementation.
 
 ---
@@ -691,20 +685,21 @@ on anything stored in h001's Nix.
 
 ## 9. Phases
 
-| Phase | Scope | Files | Risk |
-|---|---|---|---|
-| **1 (done)** | Registry: rows, state machine, sweep, API, loopback export, auth, audit; reservation tokens + revision CAS; `installed` vs `active` health; fenced expiry with `recover`/`renew`; shared writer auth in `internal/authority`; one listener in `main.go`; flake option text; h005 `/api/placements` nginx location | `flakes/fleet-edge/internal/{authority,placements}/*`, `internal/overrides/overrides.go`, `flakes/fleet-edge/{main.go,flake.nix}`, `hosts/h005/fleet-edge.nix` | None: nothing reads the registry yet |
-| **2** | Read paths: CLI resolution (`resolveHost`/`resolvedHost`/`hostForRead`, `containerHosts`, `backendOf`, `routes.go`, `expose.go`, drift/status output; `checkPlacement` deleted), dashboard grouping, `overrides.Check`; `joe` in `containerHosts`; discovery import command (`cnt place`, including `--recover`); record the binding after a first `--host` deploy; refuse to start a leftover local copy the registry binds elsewhere. `overrideWriters` moved out of this phase (see §9 row 3) | `flakes/fleet-agent/internal/containers/{main.go,move.go,port.go,routes.go,expose.go,placements.go}`, `flakes/fleet-edge/internal/{overrides,state,server,dash,topology}`, `containers/flake.nix` | Medium: a wrong resolution starts a second copy; the refusals above are the guard. CLI tests cover the matrix (`internal/containers/placement_test.go`) |
-| **3** | Reconciler: two DNS `hostsdir`s (tailnet overlay IPs, LAN IPs) written from the registry export, o002 runtime vhosts, `dns-plan` keeps its declarative input (only the CNAME *set* follows the registry, and an unplaced service contributes no name). Writers **done**: `h001`, `h003` and `joe` are in `overrideWriters` (`hosts/fleet.nix:54-62`) by their sec-agent machine userIds, subs unique, and h005's `fleet-edge.nix` maps each to its `overlayIp` | `flakes/fleet-edge/internal/{reconcile,dnsplan,server}`, `hosts/h005/{dns-records.nix,mods/networking.nix}`, `hosts/oracle/o002/nginx.nix`, `hosts/fleet.nix` | High: DNS and o002 are shared. Fail-closed ordering (add before remove, keep the old answer when a host is unreachable) and `cnt audit` checks |
-| **4 (done)** | Move rebind, in `cmdMove` (`move.go:344-554`) + `movestate.go`: reserve on the destination before any host is touched (resume only with a token the caller holds: local move-state file or `--resume-token`), `renew` around the final backup and between the long steps, commit after the restore check and first backup, retire just before the switch; rollback with the token on any failure before the commit (ownership confirmed first, unforced `DELETE`, target down, source restarted), `--recover` after it, and a takeover or unconfirmable ownership stops the move with both hosts untouched. `moveWarning` and its test deleted; the help text and `move.go`'s head comment describe the steps | `flakes/fleet-agent/internal/containers/{move.go,movestate.go,movestate_test.go,move_test.go,main.go,transfer_test.go}`, `containers/{README.md,PLACEMENT-PLAN.md}` | High: irreversible step, so the order is the design. Dry-run prints the same steps without touching the registry; the recorded path, the rollback, the takeovers, the resume and the refusals each have a test against a fake registry |
-| **4a (implemented, not deployed)** | Non-HTTP public routes follow placement: o002 stream receiver, boot seed/expire and timer; h005 validated atomic WAN forwarding; stream/WAN audit | `flakes/fleet-edge/internal/{edgestream,wanforward,reconcile}`, CLI audit, receiver and host Nix modules, `containers/lib.nix`, `containers/tests/edge-streams.nix` | Deploy h005 first (old receiver fails closed), then o002 (seed avoids a gap). Verify `git ls-remote ssh://git@git.joshuabell.xyz:3032/<repo>` before and after deployment and a test move |
-| **5 (implemented, not deployed)** | Removed service host metadata and declarative placement readers; retained placement-free DNS names/public membership, runtime firewall admission and pinned cert targets; CLI/dashboard/expose use registry bindings | Container manifests/library/module/inventory/tests, h005 DNS/certs, fleet-agent and fleet-edge | Deploy in the order and with the admission gate below |
-| **6** | Docs: `containers/README.md`, `containers/minecraft/README.md` (drop the "point computerboyz / set host" move instructions), `ROUTING-PLAN.md` (§5.2 table, §5.3, §8 step 9, the §8 step 4 "no runtime path" paragraph), `flakes/fleet-edge/README.md` | docs | Low |
+All phases below are **done in the repository**. This does not claim that
+the corresponding host configurations have been deployed.
 
-Each phase is one deployable cutover: phase *n* leaves the tree working with
-every caller migrated, and no phase adds a field or an alias that a later phase
-has to remember to delete. 4a is separate from 4 because it touches the public
-edge and can land before or after the move rebind, but not during one.
+| Phase | Completed scope |
+|---|---|
+| **1 (done)** | Placement registry, reservation tokens, revision CAS, sweep, authenticated API and audit |
+| **2 (done)** | Registry-backed CLI resolution, discovery/import, dashboard grouping, expose validation and first-deploy binding |
+| **3 (done)** | Placement-driven tailnet/LAN DNS, public CNAME membership and o002 runtime vhosts |
+| **4 (done)** | Move reserve/renew/commit/retire, rollback, recovery and takeover fencing |
+| **4a (done)** | Placement-driven o002 TCP streams, h005 WAN forwarding and stream/WAN audit |
+| **5 (done)** | No service host metadata or declarative placement readers; runtime admission and placement-independent cert targets |
+| **6 (done)** | Current-state container, Minecraft, routing and fleet-edge documentation; comment cleanup and durable design notes |
+
+Deployment remains ordered: h005 precedes o002 so receiver failures stay
+closed. Check forgejo SSH before and after deployment and a test move.
 
 ### Phase 5 deploy notes
 

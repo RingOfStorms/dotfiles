@@ -437,7 +437,7 @@ func TestSweepRemovesStaleRequestsAndStatuses(t *testing.T) {
 	}
 }
 
-// --- new: symlink / wrong-uid / oversized request attacks ---
+// --- symlink / wrong-uid / oversized request attacks ---
 
 func TestApplyRefusesSymlinkRequest(t *testing.T) {
 	c := testCfg(t)

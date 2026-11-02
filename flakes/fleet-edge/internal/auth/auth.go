@@ -262,14 +262,13 @@ func wantsHTML(r *http.Request) bool {
 }
 
 func (a *Authenticator) checkRequest(r *http.Request) bool {
-	// 1. Check X-API-Key header
 	if key := strings.TrimSpace(r.Header.Get("X-API-Key")); key != "" {
 		if a.matchAPIKey(key) {
 			return true
 		}
 	}
 
-	// 2. Check Authorization: Bearer <token> (either plain API key or Zitadel JWT)
+	// The bearer token is either a plain API key or a Zitadel JWT.
 	if authz := strings.TrimSpace(r.Header.Get("Authorization")); strings.HasPrefix(strings.ToLower(authz), "bearer ") {
 		tok := strings.TrimSpace(authz[7:])
 		if tok != "" {
@@ -284,7 +283,6 @@ func (a *Authenticator) checkRequest(r *http.Request) bool {
 		}
 	}
 
-	// 3. Check signed session cookie
 	if c, err := r.Cookie(SessionCookieName); err == nil && c.Value != "" {
 		if sess, ok := a.verifySessionCookie(c.Value); ok && a.roleAllowed(sess.Roles) {
 			return true

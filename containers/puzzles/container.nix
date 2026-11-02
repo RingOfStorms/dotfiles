@@ -16,7 +16,7 @@
     permittedInsecurePackages = [ "pnpm-9.15.9" ];
   };
 
-  # Same ids as on h001 bare metal, so the copied files keep working.
+  # Pinned ids so the persisted files keep their owner.
   users.users.puzzles.uid = 986;
   users.groups.puzzles.gid = 975;
 
@@ -25,7 +25,7 @@
     # Build with the guest's nixpkgs so the unfree predicate above applies.
     package = pkgs.callPackage "${puzzles}/nix/package.nix" { };
     # 0.0.0.0 in its private netns (the guest firewall admits 8093 only),
-    # 127.0.0.1 if net.private is turned off again.
+    # 127.0.0.1 without net.private.
     settings.http = "${fleetNet.bindAddress}:8093";
   };
 }

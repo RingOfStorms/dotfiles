@@ -1,5 +1,3 @@
-# Fleet oauth2-proxy (containers/ROUTING-PLAN.md §4, §8 step 6).
-#
 # One instance for every `auth = "oauth2-proxy"` route on any container
 # host. Three ways in:
 #   - auth_request subrequests and /oauth2/* from the host vhosts
@@ -18,9 +16,7 @@
 #
 # Session: encrypted cookie `_oauth2_proxy` on .joshuabell.xyz, so a single
 # login covers every gated name; generated vhosts strip it before the
-# backend. Same zitadel client, cookie secret and env file as the legacy
-# instance in containers/trilium (sec: oauth2_proxy_key_file_2026-03-15),
-# so existing sessions stay valid across the move.
+# backend so apps cannot receive the shared login credential.
 {
   config,
   lib,
@@ -40,8 +36,8 @@ let
   clients = map (h: fleet.hosts.${h}.overlayIp) inputs.containers.inventory.containerHosts;
   # Public edge (o002): the only caller allowed to reach the edge listener
   # below, and the only one whose X-Forwarded-* that listener trusts.
-  # Never admitted to the tailnet vhost (ROUTING-PLAN §8 step 2: o002 is
-  # excluded from h005's broad tailnet 80/443 accept in firewall.nix).
+  # Never admitted to the tailnet vhost: firewall.nix excludes o002 from
+  # h005's broad tailnet HTTP accept.
   o002Ip = fleet.hosts.o002.overlayIp;
   o002Ip6 = "fd7a:115c:a1e0::5";
   edgePort = 8443;
@@ -105,9 +101,7 @@ in
       ip:
       "iifname \"tailscale0\" ip saddr ${ip} tcp dport ${toString port} accept comment \"oauth2-proxy auth_request\"\n"
     ) clients
-    # Edge listener below (public sso-proxy): admitted only from o002, v4+v6
-    # (ROUTING-PLAN §8 step 6). o002 never reaches 4180 directly or any other
-    # tailnet port on h005 (firewall.nix excludes it from the broad accept).
+    # o002 reaches only the edge listener, never the proxy's direct port.
     + "iifname \"tailscale0\" ip saddr ${o002Ip} tcp dport ${toString edgePort} accept comment \"oauth2-proxy edge listener, o002 only\"\n"
     + "iifname \"tailscale0\" ip6 saddr ${o002Ip6} tcp dport ${toString edgePort} accept comment \"oauth2-proxy edge listener, o002 only (v6)\"\n";
 
@@ -155,14 +149,9 @@ in
     };
   };
 
-  # Public edge listener (ROUTING-PLAN §8 step 6): plain http, admitted by
-  # the firewall from o002 only (extraInputRules above), serving only
-  # /oauth2/ so a public `rd` and the zitadel callback work. o002's
-  # X-Forwarded-* is trusted here ONLY (real_ip from o002's overlay
-  # addresses alone): every other listener on h005 ignores it. o002's
-  # nginx proxies `sso-proxy.${domain}` to exactly this
-  # `<overlayIp>:${edgePort}`, the edge hop pattern from
-  # containers/lib.nix edgeVirtualHosts.
+  # Only this listener trusts o002's forwarded headers. Restricting it to
+  # /oauth2/ supports public redirects and callbacks without exposing the
+  # internal sign-in vhost or the proxy's direct port.
   services.nginx.virtualHosts."${signinHost}-edge" = {
     serverName = signinHost;
     listen = [
