@@ -487,27 +487,35 @@ func lastForward(es, ts []portEntry, r portReq) bool {
 }
 
 // portCloseScript deletes exactly the given live elements (found by
-// closeTargets from `nft -j list set`), in one nft transaction. With
-// closeGuest (lastForward) it then deletes the guest element of a NixOS
-// guest; that one may already be gone (expired, guest restarted or its
-// firewall reloaded), which is fine.
+// closeTargets from `nft -j list set`), in one nft transaction. A close
+// of forwards runs that transaction and drops their state lines in one
+// critical section on portFwdDir/.lock, so a port-restore in between
+// cannot re-add them; a failed delete (already expired) still drops the
+// stale lines. With closeGuest (lastForward) it then deletes the guest
+// element of a NixOS guest; that one may already be gone (expired, guest
+// restarted or its firewall reloaded), which is fine.
 func portCloseScript(s Service, r portReq, iface string, es []portEntry, closeGuest bool) string {
-	var b strings.Builder
-	b.WriteString("set -eu\n")
-	b.WriteString("nft -f - <<EOF || { echo 'not open (or already expired); see cnt port ls' >&2; exit 1; }\n")
+	const notOpen = "echo 'not open (or already expired); see cnt port ls' >&2; exit 1"
+	var del strings.Builder
 	for _, e := range es {
 		table, key := elemRef(e)
-		fmt.Fprintf(&b, "delete element %s %s { %s }\n", table, e.Set, key)
+		fmt.Fprintf(&del, "delete element %s %s { %s }\n", table, e.Set, key)
 	}
-	b.WriteString("EOF\n")
 	var drop []string
 	for _, e := range es {
 		if strings.HasPrefix(e.Set, "cnt-fwd") {
 			drop = append(drop, q(fwdStateID(e.Set, e.Iface, e.Proto, e.Port, normCIDR(e.From))))
 		}
 	}
+	var b strings.Builder
+	b.WriteString("set -eu\n")
 	if len(drop) > 0 {
-		b.WriteString(fwdStateRewriteScript(s.Name, drop, ""))
+		b.WriteString(fwdStateLockedScript(s.Name,
+			"rc=0\nnft -f - <<EOF || rc=1\n"+del.String()+"EOF\n",
+			drop, "",
+			"[ \"$rc\" = 0 ] || { "+notOpen+"; }\n"))
+	} else {
+		b.WriteString("nft -f - <<EOF || { " + notOpen + "; }\n" + del.String() + "EOF\n")
 	}
 	if closeGuest && guestNet(s) {
 		b.WriteString(guestLeader(s))
@@ -922,15 +930,25 @@ func fwdStateID(m, iface, proto, port, from string) string {
 // "map iface proto port from"), appends the output of adds (shell that
 // echoes lines; may use $now), and removes the file when nothing is left.
 func fwdStateRewriteScript(svc string, drop []string, adds string) string {
+	return fwdStateLockedScript(svc, "", drop, adds, "")
+}
+
+// fwdStateLockedScript is fwdStateRewriteScript with pre run before and
+// post after the rewrite, in the same critical section (a nested flock on
+// the lock would deadlock). post may exit the subshell non-zero.
+func fwdStateLockedScript(svc, pre string, drop []string, adds, post string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "install -d -m755 %s\n(\nflock 9\nst=%s\ntmp=%s\nnow=$(date +%%s)\n{\nif [ -e \"$st\" ]; then\nwhile read -r u m i p po f g gf; do\n",
-		q(portFwdDir), q(portFwdDir+"/"+svc), q(portFwdDir+"/."+svc+".new"))
+	fmt.Fprintf(&b, "install -d -m755 %s\n(\nflock 9\n", q(portFwdDir))
+	b.WriteString(pre)
+	fmt.Fprintf(&b, "st=%s\ntmp=%s\nnow=$(date +%%s)\n{\nif [ -e \"$st\" ]; then\nwhile read -r u m i p po f g gf; do\n",
+		q(portFwdDir+"/"+svc), q(portFwdDir+"/."+svc+".new"))
 	if len(drop) > 0 {
 		fmt.Fprintf(&b, "  case \"$m $i $p $po $f\" in %s) continue ;; esac\n", strings.Join(drop, "|"))
 	}
 	b.WriteString("  case \"$u\" in ''|*[!0-9]*) continue ;; esac\n  [ \"$u\" -gt \"$now\" ] || continue\n  echo \"$u $m $i $p $po $f $g $gf\"\ndone < \"$st\"\nfi\n")
 	b.WriteString(adds)
 	b.WriteString("} > \"$tmp\"\nif [ -s \"$tmp\" ]; then mv -f \"$tmp\" \"$st\"; else rm -f \"$tmp\" \"$st\"; fi\n")
+	b.WriteString(post)
 	fmt.Fprintf(&b, ") 9>%s\n", q(portFwdDir+"/.lock"))
 	return b.String()
 }
@@ -1128,6 +1146,9 @@ func cmdPortRestore(args []string) error {
 			continue
 		}
 		b, err := os.ReadFile(p)
+		if os.IsNotExist(err) {
+			continue // closed (its last forward) while we waited for the lock
+		}
 		if err != nil {
 			errs = append(errs, err.Error())
 			continue

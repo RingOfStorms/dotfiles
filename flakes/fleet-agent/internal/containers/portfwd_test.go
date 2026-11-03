@@ -1,6 +1,7 @@
 package containers
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -205,6 +206,127 @@ func TestPortRestoreNothingToDo(t *testing.T) {
 	must(t, cmdPortRestore(nil))
 	if len(*calls) != 0 {
 		t.Fatalf("restore without state ran nft: %+v", *calls)
+	}
+}
+
+// A port-restore during a close must not bring the closed forward back:
+// close deletes the elements and drops their state lines in one critical
+// section on the lock restore takes. The fake nft deletes, then stalls
+// (the window between the delete and the state removal) until released.
+func TestPortCloseRestoreRace(t *testing.T) {
+	if _, err := exec.LookPath("flock"); err != nil {
+		t.Skip("flock not available")
+	}
+	fwdTestDir(t)
+	must(t, os.MkdirAll(portFwdDir, 0o755))
+	state := filepath.Join(portFwdDir, "gist")
+	must(t, os.WriteFile(state, []byte(fmt.Sprintf("%d cnt-fwd enp1s0 tcp 22 all 10.89.250.102 0\n", time.Now().Unix()+3600)), 0o644))
+	bin := t.TempDir()
+	log, started, release := filepath.Join(bin, "log"), filepath.Join(bin, "started"), filepath.Join(bin, "release")
+	must(t, os.WriteFile(filepath.Join(bin, "nft"), []byte(fmt.Sprintf("#!/bin/sh\nsed 's/^/nft: /' >> %s\ntouch %s\nwhile ! [ -e %s ]; do sleep 0.01; done\n",
+		q(log), q(started), q(release))), 0o755))
+	must(t, os.WriteFile(filepath.Join(bin, "logger"), []byte("#!/bin/sh\nexit 0\n"), 0o755))
+	oR, oT, oM := runNft, fwdTableExists, machineLeader
+	runNft = func(_, s string) error {
+		f, err := os.OpenFile(log, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o644)
+		if err != nil {
+			return err
+		}
+		for _, l := range strings.Split(strings.TrimSpace(s), "\n") {
+			fmt.Fprintf(f, "restore: %s\n", l)
+		}
+		return f.Close()
+	}
+	fwdTableExists = func() bool { return true }
+	machineLeader = func(string) string { return "" }
+	t.Cleanup(func() { runNft, fwdTableExists, machineLeader = oR, oT, oM })
+
+	s := fwdSvc("gist", "podman", "10.89.250.102")
+	sc := portCloseScript(s, portReq{Svc: "gist", Port: 22, Proto: "tcp", Iface: "lan"}, "enp1s0",
+		[]portEntry{{Set: "cnt-fwd", Iface: "enp1s0", Proto: "tcp", Port: "22", From: "all"}}, true)
+	c := exec.Command("sh", "-c", sc)
+	c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+	var out bytes.Buffer
+	c.Stdout, c.Stderr = &out, &out
+	must(t, c.Start())
+	closed := make(chan error, 1)
+	go func() { closed <- c.Wait() }()
+	for i := 0; ; i++ {
+		if _, err := os.Stat(started); err == nil {
+			break
+		}
+		if i == 1000 {
+			c.Process.Kill()
+			t.Fatalf("close never reached nft: %v\n%s", <-closed, out.String())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	restored := make(chan error, 1)
+	go func() { restored <- cmdPortRestore(nil) }()
+	var rerr error
+	done := false
+	select {
+	case rerr = <-restored:
+		done = true
+	case <-time.After(300 * time.Millisecond):
+	}
+	must(t, os.WriteFile(release, nil, 0o644))
+	if err := <-closed; err != nil {
+		t.Fatalf("close: %v\n%s", err, out.String())
+	}
+	if !done {
+		select {
+		case rerr = <-restored:
+		case <-time.After(10 * time.Second):
+			t.Fatal("restore still blocked after the close finished")
+		}
+	}
+	if rerr != nil {
+		t.Fatalf("restore: %v", rerr)
+	}
+	b, _ := os.ReadFile(log)
+	lines := strings.Split(string(b), "\n")
+	del := -1
+	for i, l := range lines {
+		if l == `nft: delete element ip cnt-port cnt-fwd { "enp1s0" . tcp . 22 }` {
+			del = i
+		}
+	}
+	if del < 0 {
+		t.Fatalf("close did not delete the forward:\n%s", b)
+	}
+	for _, l := range lines[del+1:] {
+		if strings.HasPrefix(l, "restore: ") {
+			t.Fatalf("restore re-added the closed forward:\n%s", b)
+		}
+	}
+	if _, err := os.Stat(state); !os.IsNotExist(err) {
+		t.Fatal("state file kept")
+	}
+}
+
+// A close whose nft delete fails (already expired) still drops the stale
+// state line, then reports "not open" and exits 1.
+func TestPortCloseFailedDeleteDropsState(t *testing.T) {
+	if _, err := exec.LookPath("flock"); err != nil {
+		t.Skip("flock not available")
+	}
+	fwdTestDir(t)
+	must(t, os.MkdirAll(portFwdDir, 0o755))
+	state := filepath.Join(portFwdDir, "gist")
+	must(t, os.WriteFile(state, []byte(fmt.Sprintf("%d cnt-fwd enp1s0 tcp 22 all 10.89.250.102 0\n", time.Now().Unix()+3600)), 0o644))
+	bin := stubBin(t)
+	must(t, os.WriteFile(filepath.Join(bin, "nft"), []byte("#!/bin/sh\ncat >/dev/null\nexit 1\n"), 0o755))
+	sc := portCloseScript(fwdSvc("gist", "podman", "10.89.250.102"), portReq{Svc: "gist", Port: 22, Proto: "tcp", Iface: "lan"}, "enp1s0",
+		[]portEntry{{Set: "cnt-fwd", Iface: "enp1s0", Proto: "tcp", Port: "22", From: "all"}}, true)
+	c := exec.Command("sh", "-c", sc)
+	c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+	out, err := c.CombinedOutput()
+	if c.ProcessState.ExitCode() != 1 || !strings.Contains(string(out), "not open (or already expired)") || strings.Contains(string(out), "closed ") {
+		t.Fatalf("exit %v:\n%s", err, out)
+	}
+	if _, err := os.Stat(state); !os.IsNotExist(err) {
+		t.Fatal("stale state line kept")
 	}
 }
 
