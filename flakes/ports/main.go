@@ -65,7 +65,7 @@ type PortEntry struct {
 	Process     string // remote process name if discovered
 	Status      PortStatus
 	Error       string
-	LocalPort   int // local port (usually same as remote)
+	LocalPort   int // local port bound by the forward (defaults to Port)
 	Discovered  bool
 	PID         int    // remote PID, 0 if unknown
 	Cwd         string // remote working dir of process, "" if unknown
@@ -76,6 +76,7 @@ type ViewMode int
 const (
 	ViewNormal ViewMode = iota
 	ViewAddPort
+	ViewEditLocal
 )
 
 type model struct {
@@ -291,6 +292,57 @@ func sortPortsGrouped(entries []PortEntry) {
 	})
 }
 
+// parsePortSpec parses "PORT" (local = remote) or "LOCAL:REMOTE" (ssh -L order).
+func parsePortSpec(s string) (local, remote int, err error) {
+	parse := func(v string) (int, error) {
+		p, err := strconv.Atoi(v)
+		if err != nil || p < 1 || p > 65535 {
+			return 0, fmt.Errorf("invalid port: %s", v)
+		}
+		return p, nil
+	}
+	l, r, mapped := strings.Cut(s, ":")
+	if !mapped {
+		p, err := parse(s)
+		return p, p, err
+	}
+	if local, err = parse(l); err != nil {
+		return 0, 0, err
+	}
+	if remote, err = parse(r); err != nil {
+		return 0, 0, err
+	}
+	return local, remote, nil
+}
+
+// mergeDiscovered combines a fresh discovery with the current list: entries
+// for the same remote port keep their local port and forward state, and
+// manual or non-idle entries no longer discovered are kept.
+func mergeDiscovered(current, discovered []PortEntry) []PortEntry {
+	byPort := make(map[int]PortEntry, len(current))
+	for _, p := range current {
+		byPort[p.Port] = p
+	}
+	merged := make([]PortEntry, 0, len(discovered)+len(current))
+	seen := make(map[int]bool, len(discovered))
+	for _, d := range discovered {
+		if old, ok := byPort[d.Port]; ok {
+			d.LocalPort = old.LocalPort
+			d.Status = old.Status
+			d.Error = old.Error
+		}
+		seen[d.Port] = true
+		merged = append(merged, d)
+	}
+	for _, p := range current {
+		if !seen[p.Port] && (!p.Discovered || p.Status != PortInactive) {
+			merged = append(merged, p)
+		}
+	}
+	sortPortsGrouped(merged)
+	return merged
+}
+
 func sshForward(host, controlPath string, localPort, remotePort int) tea.Cmd {
 	return func() tea.Msg {
 		forwardSpec := fmt.Sprintf("%d:localhost:%d", localPort, remotePort)
@@ -347,9 +399,8 @@ func clearStatusAfter(d time.Duration) tea.Cmd {
 
 func initialModel(host string) model {
 	ti := textinput.New()
-	ti.Placeholder = "8080"
-	ti.CharLimit = 5
-	ti.Width = 10
+	ti.CharLimit = 11
+	ti.Width = 12
 
 	cp := controlSocketPath(host)
 	return model{
@@ -383,13 +434,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.connected = true
 		m.statusMsg = "Connected! Discovering ports..."
-		return m, sshDiscover(m.host, m.controlPath)
+		// Forward ports given on the command line.
+		cmds := []tea.Cmd{sshDiscover(m.host, m.controlPath)}
+		for i, p := range m.ports {
+			m.ports[i].Status = PortForwarding
+			cmds = append(cmds, sshForward(m.host, m.controlPath, p.LocalPort, p.Port))
+		}
+		return m, tea.Batch(cmds...)
 
 	case discoverResultMsg:
 		if msg.err != nil {
 			m.statusMsg = errorStyle.Render("Discovery: " + msg.err.Error() + " (add ports manually with 'a')")
 		} else {
-			m.ports = msg.ports
+			cursorPort := -1
+			if m.cursor >= 0 && m.cursor < len(m.ports) {
+				cursorPort = m.ports[m.cursor].Port
+			}
+			m.ports = mergeDiscovered(m.ports, msg.ports)
+			for i, p := range m.ports {
+				if p.Port == cursorPort {
+					m.cursor = i
+					break
+				}
+			}
 			if m.cursor >= len(m.ports) {
 				m.cursor = len(m.ports) - 1
 			}
@@ -438,10 +505,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		// Handle text input mode
-		if m.viewMode == ViewAddPort {
+		// Handle text input modes
+		if m.viewMode == ViewAddPort || m.viewMode == ViewEditLocal {
 			switch msg.String() {
 			case "enter":
+				mode := m.viewMode
 				val := strings.TrimSpace(m.textInput.Value())
 				m.viewMode = ViewNormal
 				m.textInput.Blur()
@@ -449,21 +517,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if val == "" {
 					return m, nil
 				}
-				port, err := strconv.Atoi(val)
-				if err != nil || port < 1 || port > 65535 {
-					m.statusMsg = errorStyle.Render("Invalid port: " + val)
+				if mode == ViewEditLocal {
+					return m.setLocalPort(val)
+				}
+				local, port, err := parsePortSpec(val)
+				if err != nil {
+					m.statusMsg = errorStyle.Render(err.Error())
 					return m, clearStatusAfter(3 * time.Second)
 				}
 				// Check if already exists
 				for _, p := range m.ports {
 					if p.Port == port {
-						m.statusMsg = errorStyle.Render(fmt.Sprintf("Port %d already in list", port))
+						m.statusMsg = errorStyle.Render(fmt.Sprintf("Port %d already in list (use 'e' to change its local port)", port))
 						return m, clearStatusAfter(3 * time.Second)
 					}
 				}
 				entry := PortEntry{
 					Port:       port,
-					LocalPort:  port,
+					LocalPort:  local,
 					Status:     PortInactive,
 					Discovered: false,
 				}
@@ -477,7 +548,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 				m.ensureVisible()
-				m.statusMsg = fmt.Sprintf("Added port %d", port)
+				if local != port {
+					m.statusMsg = fmt.Sprintf("Added port %d (local %d)", port, local)
+				} else {
+					m.statusMsg = fmt.Sprintf("Added port %d", port)
+				}
 				return m, clearStatusAfter(3 * time.Second)
 			case "esc":
 				m.viewMode = ViewNormal
@@ -544,6 +619,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "a":
 			m.viewMode = ViewAddPort
+			m.textInput.Placeholder = "8080 or 18080:8080"
+			m.textInput.Focus()
+			return m, m.textInput.Cursor.BlinkCmd()
+
+		case "e":
+			if len(m.ports) == 0 {
+				return m, nil
+			}
+			if m.ports[m.cursor].Status == PortForwarding {
+				m.statusMsg = "Forward in progress, try again"
+				return m, clearStatusAfter(3 * time.Second)
+			}
+			m.viewMode = ViewEditLocal
+			m.textInput.Placeholder = strconv.Itoa(m.ports[m.cursor].Port)
+			m.textInput.SetValue(strconv.Itoa(m.ports[m.cursor].LocalPort))
+			m.textInput.CursorEnd()
 			m.textInput.Focus()
 			return m, m.textInput.Cursor.BlinkCmd()
 
@@ -599,6 +690,37 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// setLocalPort changes the local port of the selected entry. An active
+// forward is moved: the old one is cancelled, then the new one is opened.
+func (m model) setLocalPort(val string) (tea.Model, tea.Cmd) {
+	if len(m.ports) == 0 {
+		return m, nil
+	}
+	local, err := strconv.Atoi(val)
+	if err != nil || local < 1 || local > 65535 {
+		m.statusMsg = errorStyle.Render("Invalid port: " + val)
+		return m, clearStatusAfter(3 * time.Second)
+	}
+	p := m.ports[m.cursor]
+	if local == p.LocalPort {
+		return m, nil
+	}
+	m.ports[m.cursor].LocalPort = local
+	m.ports[m.cursor].Error = ""
+	switch p.Status {
+	case PortActive:
+		m.ports[m.cursor].Status = PortForwarding
+		return m, tea.Sequence(
+			sshCancelForward(m.host, m.controlPath, p.LocalPort, p.Port),
+			sshForward(m.host, m.controlPath, local, p.Port),
+		)
+	case PortFailed:
+		m.ports[m.cursor].Status = PortInactive
+	}
+	m.statusMsg = fmt.Sprintf("Port %d will forward to localhost:%d", p.Port, local)
+	return m, clearStatusAfter(3 * time.Second)
 }
 
 // --- Grid layout ---
@@ -677,9 +799,9 @@ func (m model) gridGeometry(slotCount int) (rows, cols, cellWidth int) {
 func (m model) gridRows() int {
 	// Reserve: title(2, PaddingBottom adds one) + blank-after-title(0)
 	//        + detail(1) + scroll-indicator(1, reserved even if absent)
-	//        + add-port(0-2) + status(0-2, PaddingTop adds one) + help(2)
+	//        + port-input(0-2) + status(0-2, PaddingTop adds one) + help(2)
 	overhead := 2 /*title*/ + 1 /*detail*/ + 1 /*scroll-indicator slack*/ + 2 /*help*/
-	if m.viewMode == ViewAddPort {
+	if m.viewMode != ViewNormal {
 		overhead += 2
 	}
 	if m.statusMsg != "" {
@@ -692,11 +814,30 @@ func (m model) gridRows() int {
 	return avail
 }
 
+// hasRemap reports whether any entry forwards to a different local port.
+func (m model) hasRemap() bool {
+	for _, p := range m.ports {
+		if p.LocalPort != p.Port {
+			return true
+		}
+	}
+	return false
+}
+
+// portFieldWidth is the width of the port column: "PPPPP", or
+// "PPPPP→LLLLL" once any entry is remapped.
+func (m model) portFieldWidth() int {
+	if m.hasRemap() {
+		return 11
+	}
+	return 5
+}
+
 // cellWidth returns the width (in cells / runes) of one grid cell. Each cell
 // is "> [X] PPPPP  procname    " padded to a uniform width.
 func (m model) cellWidth() int {
-	// "> " (2) + "[X] " (4) + "PPPPP" (5) + "  " (2) + procname(<=procNameMaxLen) + padding
-	w := 2 + 4 + 5 + 2 + procNameMaxLen + cellPadding
+	// "> " (2) + "[X] " (4) + port field + "  " (2) + procname(<=procNameMaxLen) + padding
+	w := 2 + 4 + m.portFieldWidth() + 2 + procNameMaxLen + cellPadding
 	return w
 }
 
@@ -791,6 +932,11 @@ func (m model) renderCell(slots []layoutSlot, slotIdx, cellWidth int) string {
 	}
 
 	portStr := fmt.Sprintf("%5d", p.Port)
+	if p.LocalPort != p.Port {
+		portStr += fmt.Sprintf("→%-5d", p.LocalPort)
+	} else if m.portFieldWidth() > 5 {
+		portStr += strings.Repeat(" ", m.portFieldWidth()-5)
+	}
 	if selected {
 		portStr = selectedStyle.Render(portStr)
 	}
@@ -944,10 +1090,15 @@ func (m model) View() string {
 		b.WriteString("\n")
 	}
 
-	// Add port input
-	if m.viewMode == ViewAddPort {
+	// Port input
+	switch m.viewMode {
+	case ViewAddPort:
 		b.WriteString("\n")
-		b.WriteString(fmt.Sprintf("  Add port: %s", m.textInput.View()))
+		b.WriteString(fmt.Sprintf("  Add port [local:]remote: %s", m.textInput.View()))
+		b.WriteString("\n")
+	case ViewEditLocal:
+		b.WriteString("\n")
+		b.WriteString(fmt.Sprintf("  Local port for remote %d: %s", m.ports[m.cursor].Port, m.textInput.View()))
 		b.WriteString("\n")
 	}
 
@@ -962,6 +1113,7 @@ func (m model) View() string {
 		"hjkl/arrows: move",
 		"space/enter: toggle",
 		"a: add",
+		"e: local port",
 		"d: remove",
 		"r: refresh",
 		"f: forward all",
@@ -981,15 +1133,19 @@ func usage() {
 
 Usage:
   ports <host>             Start TUI, discover ports on <host>
-  ports <host> <port>...   Forward specified ports immediately and start TUI
+  ports <host> <spec>...   Forward specified ports immediately and start TUI
+
+A spec is PORT (same port locally) or LOCAL:REMOTE (ssh -L order).
 
 Examples:
   ports myserver
   ports dev 3000 5432 8080
+  ports dev 15432:5432     remote 5432 on localhost:15432
 
 The tool establishes an SSH ControlMaster connection and lets you
 interactively toggle port forwards. Ports are discovered automatically
-via 'ss' on the remote host, or can be added manually.
+via 'ss' on the remote host, or can be added manually. Press 'e' to
+change the local port of the selected entry.
 `)
 	os.Exit(1)
 }
@@ -1006,22 +1162,16 @@ func main() {
 
 	m := initialModel(host)
 
-	// Parse any extra port args to pre-add and auto-forward
-	var autoForwardPorts []int
+	// Pre-add ports from the command line; they are forwarded once connected.
 	for _, arg := range os.Args[2:] {
-		port, err := strconv.Atoi(arg)
-		if err != nil || port < 1 || port > 65535 {
-			fmt.Fprintf(os.Stderr, "Invalid port: %s\n", arg)
+		local, port, err := parsePortSpec(arg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
 		}
-		autoForwardPorts = append(autoForwardPorts, port)
-	}
-
-	// Add pre-specified ports
-	for _, port := range autoForwardPorts {
 		m.ports = append(m.ports, PortEntry{
 			Port:       port,
-			LocalPort:  port,
+			LocalPort:  local,
 			Status:     PortInactive,
 			Discovered: false,
 		})
