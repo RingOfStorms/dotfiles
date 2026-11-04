@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"regexp"
 	"strings"
@@ -647,6 +648,7 @@ func newTool(b ompBlock) Tool {
 	delete(args, "i")
 	t.Jobs = spawnJobs(b.Name, args)
 	if b.Name == "ask" {
+		t.Questions = askQuestions(b.Arguments)
 		askArgs(&t, args)
 	}
 	// Edits name their file on the script's first line: "[path#hash]".
@@ -670,6 +672,121 @@ func askArgs(t *Tool, args map[string]any) {
 		t.Detail = clip(q, maxDetailBytes)
 		delete(args, "questions")
 	}
+}
+
+// askQuestions decodes an omp ask call's questions for the native answer
+// form. The list must match omp's dialog question for question, so it is all
+// or nothing: a question without options is valid (omp shows it with only
+// "Other") and is kept, but any malformed entry, wrongly typed field or
+// duplicate id/label disables the form rather than being dropped. Strings are
+// normalized as omp's dialog does (see sanitizeCR). An out-of-range
+// recommendation is cleared.
+func askQuestions(raw json.RawMessage) []AskQuestion {
+	var a struct {
+		Questions json.RawMessage `json:"questions"`
+	}
+	var entries []json.RawMessage
+	if json.Unmarshal(raw, &a) != nil || jsonKind(a.Questions) != '[' || json.Unmarshal(a.Questions, &entries) != nil || len(entries) == 0 {
+		return nil
+	}
+	out := make([]AskQuestion, len(entries))
+	ids := make(map[string]bool, len(entries))
+	for i, e := range entries {
+		q, ok := askQuestion(e)
+		if !ok || ids[q.ID] {
+			return nil
+		}
+		ids[q.ID] = true
+		out[i] = q
+	}
+	return out
+}
+
+// askQuestion validates and decodes one ask question. id, question and
+// options are required; header, multi and recommended are optional (absent or
+// null) but must have the right type when given.
+func askQuestion(raw json.RawMessage) (AskQuestion, bool) {
+	var q AskQuestion
+	var f map[string]json.RawMessage
+	if jsonKind(raw) != '{' || json.Unmarshal(raw, &f) != nil {
+		return q, false
+	}
+	var opts []json.RawMessage
+	if !jsonString(f["id"], &q.ID) || !jsonString(f["question"], &q.Question) ||
+		jsonKind(f["options"]) != '[' || json.Unmarshal(f["options"], &opts) != nil ||
+		!optString(f["header"], &q.Header) {
+		return q, false
+	}
+	if v := f["multi"]; !jsonNull(v) {
+		if k := jsonKind(v); (k != 't' && k != 'f') || json.Unmarshal(v, &q.Multi) != nil {
+			return q, false
+		}
+	}
+	var rec *float64
+	if v := f["recommended"]; !jsonNull(v) {
+		var n float64
+		if jsonKind(v) == '"' || json.Unmarshal(v, &n) != nil || n != math.Trunc(n) {
+			return q, false
+		}
+		rec = &n
+	}
+	q.Options = make([]AskOption, len(opts))
+	labels := make(map[string]bool, len(opts))
+	for i, ro := range opts {
+		var of map[string]json.RawMessage
+		o := &q.Options[i]
+		if jsonKind(ro) != '{' || json.Unmarshal(ro, &of) != nil ||
+			!jsonString(of["label"], &o.Label) || labels[o.Label] ||
+			!optString(of["description"], &o.Description) || !optString(of["preview"], &o.Preview) {
+			return q, false
+		}
+		labels[o.Label] = true
+	}
+	if rec != nil && *rec >= 0 && *rec < float64(len(q.Options)) {
+		n := int(*rec)
+		q.Recommended = &n
+	}
+	return q, true
+}
+
+// jsonKind is the first byte of a JSON value ('{', '[', '"', 't', 'f', 'n',
+// a digit or '-'), or 0 when the value is absent.
+func jsonKind(raw json.RawMessage) byte {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 {
+		return 0
+	}
+	return raw[0]
+}
+
+func jsonNull(raw json.RawMessage) bool {
+	k := jsonKind(raw)
+	return k == 0 || k == 'n'
+}
+
+// jsonString decodes a required JSON string into *dst, normalized.
+func jsonString(raw json.RawMessage, dst *string) bool {
+	if jsonKind(raw) != '"' || json.Unmarshal(raw, dst) != nil {
+		return false
+	}
+	*dst = sanitizeCR(*dst)
+	return true
+}
+
+// optString is jsonString for a field that may be absent or null.
+func optString(raw json.RawMessage, dst *string) bool {
+	return jsonNull(raw) || jsonString(raw, dst)
+}
+
+var crRun = regexp.MustCompile(`\r+`)
+
+// sanitizeCR mirrors omp's sanitizeCarriageReturns: CRLF becomes LF and any
+// remaining run of carriage returns becomes one space.
+func sanitizeCR(s string) string {
+	if !strings.Contains(s, "\r") {
+		return s
+	}
+	return crRun.ReplaceAllString(strings.ReplaceAll(s, "\r\n", "\n"), " ")
 }
 
 // fillToolArgs sets the headline argument (key, else the first common one)

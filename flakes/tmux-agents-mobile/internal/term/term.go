@@ -480,6 +480,13 @@ func executable(path string) bool {
 // ShellEnv is the environment a shell starts with: the service's own minus
 // what belongs to the service (its configuration and systemd's per-unit
 // plumbing), plus the terminal type xterm.js implements.
+//
+// The service's PATH is the unit's (NixOS gives units a minimal one), not the
+// user's. The login shell rebuilds the user's environment from its profiles,
+// but those skip themselves when the variable they export to say "already
+// done" is set, and the service inherits those from the user manager. They
+// are dropped so the profiles run again; otherwise the shell keeps the unit's
+// PATH and the user's own tools (atuin, starship...) are missing.
 func ShellEnv(base []string) []string {
 	env := make([]string, 0, len(base)+2)
 	for _, kv := range base {
@@ -494,7 +501,13 @@ func ShellEnv(base []string) []string {
 			strings.HasPrefix(name, "LISTEN_"),
 			name == "TERM", name == "COLORTERM",
 			// Not inside tmux, whatever the service's environment says.
-			name == "TMUX", name == "TMUX_PANE":
+			name == "TMUX", name == "TMUX_PANE",
+			// Login profiles' run-once markers: NixOS /etc/set-environment and
+			// /etc/profile, nix-darwin's set-environment, Nix's profile script
+			// and home-manager's session variables.
+			name == "__NIXOS_SET_ENVIRONMENT_DONE", name == "__ETC_PROFILE_DONE",
+			name == "__NIX_DARWIN_SET_ENVIRONMENT_DONE", name == "__ETC_PROFILE_NIX_SOURCED",
+			name == "__HM_SESS_VARS_SOURCED", name == "__HM_ZSH_SESS_VARS_SOURCED":
 			continue
 		}
 		env = append(env, kv)

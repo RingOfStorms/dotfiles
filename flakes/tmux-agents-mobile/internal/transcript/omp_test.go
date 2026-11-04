@@ -190,8 +190,26 @@ func TestEditAndAskDetails(t *testing.T) {
 	if parts[0].Tool.Detail != "src/a.go" || parts[0].Tool.Diff != "-old\n+new" || parts[0].Tool.Args != "" {
 		t.Fatalf("edit = %+v", parts[0].Tool)
 	}
-	if parts[1].Tool.Detail != "Which?\n  1. A\n  2. B" {
-		t.Fatalf("ask detail = %q", parts[1].Tool.Detail)
+}
+
+func TestAskKeepsCustomOnlyQuestions(t *testing.T) {
+	tool := newTool(ompBlock{ID: "ask", Name: "ask", Arguments: []byte(`{"questions":[{"id":"custom","question":"Your answer?","options":[]},{"id":"features","question":"Which?","multi":true,"options":[{"label":"A"},{"label":"B"}]}]}`)})
+	if len(tool.Questions) != 2 || tool.Questions[0].ID != "custom" || len(tool.Questions[0].Options) != 0 || tool.Questions[1].ID != "features" || !tool.Questions[1].Multi {
+		t.Fatalf("question order/cardinality changed: %+v", tool.Questions)
+	}
+}
+
+func TestMalformedAskDoesNotOfferPartialAnswers(t *testing.T) {
+	for _, args := range []string{
+		`{"questions":[{"id":"a","question":"One?","options":[]},null]}`,
+		`{"questions":[{"id":"a","question":"One?","options":[null]}]}`,
+		`{"questions":[{"id":"a","question":"One?","options":[{"label":"x\r\ry"},{"label":"x y"}]}]}`,
+		`{"questions":[{"id":"a","question":"One?","options":[]},{"id":"a","question":"Two?","options":[]}]}`,
+	} {
+		tool := newTool(ompBlock{ID: "ask", Name: "ask", Arguments: []byte(args)})
+		if len(tool.Questions) != 0 {
+			t.Fatalf("malformed call offers answers: %s => %+v", args, tool.Questions)
+		}
 	}
 }
 

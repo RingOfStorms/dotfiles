@@ -107,3 +107,11 @@ Each backup is about 7 GB. Restore by uploading the `.tar` during onboarding or 
 - The printer has a DHCP reservation at `10.12.14.21` in `hosts/h005/_constants.nix`.
 - As of 2026-10-30, the printer's web interface is reachable, but the existing PrusaLink integration fails with `Cannot connect` after reload. Reconnection needs the printer's PrusaLink password; this integration exposes neither an options nor a reconfigure flow. The tab currently shows live plug power/energy and a PrusaLink link, with the connection problem stated explicitly.
 - The old camera and torch entities are absent from Home Assistant; they are not included in the replacement tab.
+
+## Living-room TV IR controls
+
+- Switch Manager **Q - Living Room**, config `1`, uses `remote.universal_remote_rm4_mini` for all single-press TV controls. Top left: power toggle; top right: volume up; bottom left: HDMI 2/HDMI 4 alternation; bottom right: volume down. Double-press and hold lighting actions are unchanged.
+- Power and volume were learned through `remote.learn_command` under device `living_room_tv`, commands `power`, `volume_up`, and `volume_down`. Each press sends once. No TV action depends on the webOS entity being available.
+- Input uses `script.living_room_tv_ir_input_toggle` (queued) and `input_select.living_room_tv_last_ir_input` (restored across restarts). The helper records the last requested input, not measured TV state. External remote/CEC changes or missed IR can require a second press.
+- HDMI packets use LG NEC address `0xFB04`, commands `0xCC`/`0xDA`, with two NEC repeat frames and trailing silence. Both ports were physically verified with these packets; the native LG Infrared single-frame buttons failed switching tests. The temporary **LG TV via IR emitter** integration is disabled; the working scripts do not depend on it.
+- Manage switch mappings through the Switch Manager UI or `switch_manager/configs` and `switch_manager/config/save` WebSocket commands. Save the blueprint as its ID (`zha-tuya-4-button-scene`) and preserve all four buttons and their three action slots. Never edit `.storage` directly.

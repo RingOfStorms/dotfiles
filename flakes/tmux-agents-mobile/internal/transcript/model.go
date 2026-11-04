@@ -106,6 +106,32 @@ type Tool struct {
 	// Jobs are the background agents or sessions the call started, kept
 	// current as their results arrive.
 	Jobs []Job
+	// Questions are an omp ask call's structured questions, set once when the
+	// call is parsed and never mutated afterwards, so clones share them.
+	Questions []AskQuestion
+}
+
+// AskQuestion is one question of an omp ask call.
+type AskQuestion struct {
+	ID       string      `json:"id"`
+	Question string      `json:"question"`
+	Header   string      `json:"header,omitempty"`
+	Options  []AskOption `json:"options"`
+	Multi    bool        `json:"multi,omitempty"`
+	// Recommended is the index into Options omp suggests, nil when unset.
+	Recommended *int `json:"recommended,omitempty"`
+}
+
+// Recommends reports whether option i is the recommended one.
+func (q AskQuestion) Recommends(i int) bool {
+	return q.Recommended != nil && *q.Recommended == i
+}
+
+// AskOption is one predefined answer of an ask question.
+type AskOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+	Preview     string `json:"preview,omitempty"`
 }
 
 // Job is one background agent (a task subagent, a vibe session turn) started

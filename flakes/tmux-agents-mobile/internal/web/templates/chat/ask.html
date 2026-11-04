@@ -1,0 +1,14 @@
+{{define "ask"}}<form class="ask" data-ask="{{askData .Questions}}" data-tool-id="{{.ID}}">
+<div class="ask-top"><span class="tglyph">{{toolGlyph .Status}}</span><span class="tname">{{.Name}}</span>{{if .Intent}}<span class="tsum">{{.Intent}}</span>{{end}}</div>
+{{- range $qi, $q := .Questions}}
+<fieldset class="ask-q" data-question-id="{{$q.ID}}" data-multi="{{if $q.Multi}}true{{else}}false{{end}}" aria-labelledby="ask-{{$.ID}}-{{$qi}}">
+<div class="ask-qhead" id="ask-{{$.ID}}-{{$qi}}">{{if $q.Header}}<span class="ask-header">{{$q.Header}}</span>{{end}}<div class="ask-text md">{{md $q.Question}}</div>{{if $q.Multi}}<span class="ask-hint">select all that apply</span>{{end}}</div>
+{{- range $oi, $o := $q.Options}}
+<div class="ask-choice"><label class="ask-opt"><input type="{{if $q.Multi}}checkbox{{else}}radio{{end}}" name="ask-{{$.ID}}-{{$qi}}" value="{{$o.Label}}" data-option-index="{{$oi}}"><span class="ask-opt-body"><span class="ask-label">{{$o.Label}}</span>{{if $q.Recommends $oi}}<span class="ask-rec">recommended</span>{{end}}{{if $o.Description}}<span class="ask-desc">{{$o.Description}}</span>{{end}}</span></label>
+{{- if $o.Preview}}<details class="ask-preview"><summary>preview</summary><div class="md">{{md $o.Preview}}</div></details>{{end}}</div>
+{{- end}}
+<div class="ask-choice ask-other"><label class="ask-opt"><input type="{{if $q.Multi}}checkbox{{else}}radio{{end}}" name="ask-{{$.ID}}-{{$qi}}" data-other><span class="ask-opt-body"><span class="ask-label">Other…</span></span></label><textarea class="ask-custom" data-custom rows="2" placeholder="Type your answer" aria-label="Other answer" hidden></textarea></div>
+</fieldset>
+{{- end}}
+<div class="ask-actions"><button type="submit" class="ask-submit">Submit all answers</button><output class="ask-status" data-ask-status role="status"></output></div>
+</form>{{end}}

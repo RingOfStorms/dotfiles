@@ -463,6 +463,12 @@ func (s *Server) paneKeys(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	unlock, ok := s.input.tryLock(p.ID)
+	if !ok {
+		s.fail(w, http.StatusConflict, "an answer is being submitted to this pane")
+		return
+	}
+	defer unlock()
 	ctx := r.Context()
 
 	var (

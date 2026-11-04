@@ -567,3 +567,25 @@ func TestShellEnvDropsServicePlumbing(t *testing.T) {
 		}
 	}
 }
+
+// The service's PATH is its unit's. A login shell only replaces it with the
+// user's if the profiles' run-once markers, inherited from the user manager,
+// do not tell them it is already done.
+func TestShellEnvLetsLoginProfilesRun(t *testing.T) {
+	env := ShellEnv([]string{
+		"PATH=/nix/store/x-coreutils/bin", "__NIXOS_SET_ENVIRONMENT_DONE=1", "__ETC_PROFILE_DONE=1",
+		"__NIX_DARWIN_SET_ENVIRONMENT_DONE=1", "__ETC_PROFILE_NIX_SOURCED=1",
+		"__HM_SESS_VARS_SOURCED=1", "__HM_ZSH_SESS_VARS_SOURCED=1", "STARSHIP_CONFIG=/home/u/s.toml",
+	})
+	got := strings.Join(env, " ")
+	for _, gone := range []string{"__NIXOS_", "__ETC_PROFILE", "__NIX_DARWIN_", "__HM_"} {
+		if strings.Contains(got, gone) {
+			t.Errorf("env kept %s: %s", gone, got)
+		}
+	}
+	for _, kept := range []string{"PATH=/nix/store/x-coreutils/bin", "STARSHIP_CONFIG=/home/u/s.toml"} {
+		if !strings.Contains(got, kept) {
+			t.Errorf("env lost %s: %s", kept, got)
+		}
+	}
+}

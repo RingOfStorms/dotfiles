@@ -79,6 +79,20 @@ no CDN, Node runtime or separate ttyd process is needed. xterm.js was chosen
 over the newer [ghostty-web](https://github.com/coder/ghostty-web) for its
 established browser input handling and DOM text rendering.
 
+The terminal bundles **JetBrainsMono Nerd Font Mono** (JetBrains Mono 2.304,
+[Nerd Fonts 3.5.1](https://github.com/ryanoasis/nerd-fonts/releases/tag/v3.5.1)):
+regular and bold WOFF2 faces with the full patched glyph set, including Font
+Awesome, Devicons, Powerline and Material Design icons. Mono keeps glyphs in
+one terminal cell. Both faces load before xterm measures its first grid, and
+asset hashes keep the browser/service-worker cache current. No phone font
+installation or CDN is required. Emoji still use the device's emoji font.
+
+The WOFF2 assets total about 2.1 MiB and retain every source glyph. To update,
+extract `JetBrainsMonoNerdFontMono-{Regular,Bold}.ttf` from the pinned release's
+`JetBrainsMono.tar.xz` and run `woff2_compress` (Nix package `woff2`) on each;
+do not subset away the icon ranges. The original SIL OFL, Nerd Fonts license
+and upstream icon attribution table are in `static/jetbrains-mono-LICENSE.txt`.
+
 - Pinch, trackpad Ctrl+wheel, or the menu's **larger/smaller text** changes the
   font size and PTY grid, rather than magnifying a fixed terminal bitmap.
   The font choice is saved in this browser.
@@ -116,6 +130,13 @@ accept these through `extraEnvironment`:
 ```nix
 services.tmux-agents-mobile.extraEnvironment.TAM_TERM_DETACH = "2h";
 ```
+
+Login shells discard inherited Nix/Home Manager profile-initialization markers
+before startup. This lets the profiles rebuild the full user `PATH` instead
+of retaining systemd's restricted service path. In particular, Atuin's zsh
+hook can find `atuin` when it runs its generated commands. After updating from
+a build with the old environment, start a **new shell**; reconnecting does not
+change an existing shell's environment.
 
 **Access is a full shell as the service user**, including `sudo` under that
 account's normal policy. The systemd units deliberately do not impose
@@ -449,8 +470,27 @@ tails the file every 400ms and pushes rendered items over SSE
 result re-renders its call in place. The page loads the last 60 items and
 *show earlier* fetches more (`/p/<id>/chat/earlier?before=N`). If no session
 can be read (agent exited, not an agent), the page falls back to the terminal.
-Input still goes through `send-keys`, so the composer and ⌨ keys behave exactly
-as in the terminal views — `ask` prompts are answered with the arrow/Enter keys.
+The composer and ⌨ keys still use tmux input, as in the terminal views.
+
+Pending omp **`ask` prompts** open as native answer forms rather than collapsed
+tool output: radio buttons for single choices, checkboxes for multiple choices,
+and **Other…** with a multiline text box on every question. Multi-choice answers
+can combine options and custom text, or select nothing. Recommendations are
+badges, not preselected answers. **Submit all answers** sends the whole form;
+transcript refreshes preserve selections, custom text, and focus. Completed or
+cancelled asks return to read-only tool output.
+
+Submission uses `POST /p/<id>/ask`, validates every answer against the live omp
+call, and drives the existing rich terminal dialog without attaching or resizing
+a tmux client. It checks the screen between keys, reconciles existing checkbox
+selections, and confirms the tool result in the session log before reporting
+success. Other mobile key input is refused while submission is in progress.
+Do not type into the desktop dialog during submission: terminal input has no
+atomic, cross-client transaction. Hidden dialogs, open editors, attached notes,
+or unrecognised layouts require finishing/showing the dialog in the terminal;
+errors leave the mobile draft intact. Existing custom answers that differ from
+the mobile draft must be changed or cleared in the terminal first. The terminal
+wrap/fit views and ⌨ keys remain available as the fallback.
 
 ### opencode
 

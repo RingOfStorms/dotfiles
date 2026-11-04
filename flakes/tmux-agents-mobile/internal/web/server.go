@@ -78,6 +78,7 @@ type Server struct {
 	log    *slog.Logger
 	tpl    *template.Template
 	dev    bool
+	input  paneLocks
 }
 
 // New wires the server. roots are the directories a new session may be created
@@ -102,6 +103,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /p/{pane}/chat/earlier", s.chatEarlier)
 	mux.HandleFunc("GET /p/{pane}/history", s.paneHistory)
 	mux.HandleFunc("POST /p/{pane}/keys", s.paneKeys)
+	mux.HandleFunc("POST /p/{pane}/ask", s.paneAsk)
 	mux.HandleFunc("POST /p/{pane}/seen", s.paneSeen)
 	mux.HandleFunc("POST /p/{pane}/focus", s.paneFocus)
 	mux.HandleFunc("POST /p/{pane}/kill", s.paneKill)

@@ -196,6 +196,91 @@
       if (follow) el.scrollTop = el.scrollHeight;
     };
 
+    // Reuse the live form, not just its values: SSE updates must not lose a
+    // custom-answer draft, focus, selection range, or an in-flight submit.
+    function keepAskForms(next, previous) {
+      const forms = new Map([...previous.querySelectorAll("form[data-ask]")]
+        .map((form) => [form.dataset.toolId, form]));
+      for (const form of next.querySelectorAll("form[data-ask]")) {
+        const old = forms.get(form.dataset.toolId);
+        if (old && old.dataset.ask === form.dataset.ask) form.replaceWith(old);
+      }
+    }
+
+    function rememberAskFocus() {
+      const active = document.activeElement;
+      if (!active?.closest("form[data-ask]")) return () => {};
+      const start = active.selectionStart;
+      const end = active.selectionEnd;
+      return () => {
+        if (!active.isConnected) return;
+        active.focus({ preventScroll: true });
+        if (typeof start === "number") active.setSelectionRange(start, end);
+      };
+    }
+
+    function updateCustom(question) {
+      const other = question.querySelector("[data-other]");
+      const custom = question.querySelector("[data-custom]");
+      custom.hidden = !other.checked;
+      custom.required = other.checked;
+    }
+
+    list.addEventListener("change", (event) => {
+      const question = event.target.closest("[data-question-id]");
+      if (!question) return;
+      updateCustom(question);
+      if (event.target.matches("[data-other]") && event.target.checked) {
+        question.querySelector("[data-custom]").focus({ preventScroll: true });
+      }
+    });
+
+    list.addEventListener("submit", async (event) => {
+      const form = event.target.closest("form[data-ask]");
+      if (!form) return;
+      event.preventDefault();
+      if (form.dataset.submitting === "true") return;
+      const status = form.querySelector("[data-ask-status]");
+      const questions = [...form.querySelectorAll("[data-question-id]")];
+      const answers = [];
+      for (const question of questions) {
+        const selectedOptions = [...question.querySelectorAll("input[data-option-index]:checked")]
+          .map((input) => input.value);
+        const other = question.querySelector("[data-other]").checked;
+        const customInput = other ? question.querySelector("[data-custom]").value.trim() : "";
+        if ((other && !customInput) ||
+            (question.dataset.multi !== "true" && selectedOptions.length + Number(other) !== 1)) {
+          status.textContent = "Answer each single-choice question and fill in any selected Other answer.";
+          question.querySelector(other ? "[data-custom]" : "input[data-option-index], [data-other]").focus();
+          return;
+        }
+        answers.push({ id: question.dataset.questionId, selectedOptions,
+          ...(other ? { customInput } : {}) });
+      }
+      form.dataset.submitting = "true";
+      const controls = [...form.querySelectorAll("fieldset, button")];
+      for (const control of controls) control.disabled = true;
+      status.textContent = "Submitting answers…";
+      let failure = "Connection lost. Check the terminal before submitting again.";
+      try {
+        const res = await fetch("/p/" + pane + "/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ toolId: form.dataset.toolId, answers }),
+        });
+        if (!res.ok) {
+          failure = await res.text() || "Could not submit answers.";
+          throw new Error(failure);
+        }
+        status.textContent = "Answers submitted.";
+      } catch {
+        status.textContent = failure;
+        delete form.dataset.submitting;
+        for (const control of controls) control.disabled = false;
+      }
+    });
+
     // Each item arrives as server-rendered HTML. Disclosure state (an expanded
     // tool call) survives re-renders of the same item by tool name + position.
     function build(item) {
@@ -226,8 +311,11 @@
       if (!old && item.i < start) return;
       const next = build(item);
       if (old) {
+        const restoreFocus = rememberAskFocus();
         restoreOpen(next, openState(old));
+        keepAskForms(next, old);
         old.replaceWith(next);
+        restoreFocus();
       } else {
         // Items arrive in order, so a new one goes after every known one.
         list.appendChild(next);
@@ -236,10 +324,14 @@
     }
 
     function init(data) {
+      const restoreFocus = rememberAskFocus();
+      const previous = document.createElement("div");
+      previous.append(...list.children);
       nodes.clear();
-      list.replaceChildren();
       start = data.start;
       for (const item of data.items) upsert(item);
+      keepAskForms(list, previous);
+      restoreFocus();
       earlier.hidden = start <= 0;
       follow = true;
       stick();

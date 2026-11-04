@@ -18,7 +18,7 @@
 // reconnect, output another tab was sent in the meantime: the page reconnects
 // with the generation of the attachment that last drew its screen, so the
 // server can tell.
-(() => {
+(async () => {
   "use strict";
 
   const el = document.getElementById("term");
@@ -34,8 +34,23 @@
   const savedFont = Number(localStorage.getItem(FONT_KEY));
 
   const css = getComputedStyle(document.documentElement);
+  const family = "JetBrainsMono Nerd Font Mono";
+  // xterm measures cells at open, not when a webfont later finishes loading.
+  // Wait for both weights before fitting or starting the PTY at its first size.
+  const faces = [
+    new FontFace(family, `url("${el.dataset.font}")`, { weight: "400" }),
+    new FontFace(family, `url("${el.dataset.fontBold}")`, { weight: "700" }),
+  ];
+  await Promise.all(faces.map(async (face) => {
+    try {
+      await face.load();
+      document.fonts.add(face);
+    } catch (error) {
+      console.warn("Terminal font unavailable; using the system monospace fallback", error);
+    }
+  }));
   const term = new Terminal({
-    fontFamily: css.getPropertyValue("--mono").trim() || "monospace",
+    fontFamily: `"${family}", ${css.getPropertyValue("--mono").trim() || "monospace"}`,
     fontSize: clampFont(savedFont || defaultFont()),
     cursorBlink: true,
     scrollback: 5000,

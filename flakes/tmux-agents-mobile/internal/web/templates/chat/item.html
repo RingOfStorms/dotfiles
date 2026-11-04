@@ -16,14 +16,14 @@
 {{- else if eq .Stop "error"}}<div class="stop st-error">✗ {{if .StopMessage}}{{.StopMessage}}{{else}}error{{end}}</div>{{end -}}
 </div>{{end}}
 
-{{define "tool"}}<details class="tool st-{{.Status}}"><summary><span class="tglyph">{{toolGlyph .Status}}</span><span class="tname">{{.Name}}</span><span class="tsum">{{if .Intent}}{{.Intent}}{{else}}{{firstLine .Detail}}{{end}}</span>{{if gt (len .Jobs) 1}}<span class="tcount">{{jobsDone .Jobs}}/{{len .Jobs}}</span>{{end}}</summary><div class="tbody">
+{{define "tool"}}{{if and (eq .Status "running") .Questions}}{{template "ask" .}}{{else}}<details class="tool st-{{.Status}}"><summary><span class="tglyph">{{toolGlyph .Status}}</span><span class="tname">{{.Name}}</span><span class="tsum">{{if .Intent}}{{.Intent}}{{else}}{{firstLine .Detail}}{{end}}</span>{{if gt (len .Jobs) 1}}<span class="tcount">{{jobsDone .Jobs}}/{{len .Jobs}}</span>{{end}}</summary><div class="tbody">
 {{- if .Detail}}<pre class="tdetail">{{.Detail}}</pre>{{end}}
 {{- if .Args}}<pre class="targs">{{.Args}}</pre>{{end}}
 {{- if .Diff}}<pre class="tdiff">{{range diffLines .Diff}}<span class="{{.Class}}">{{.Text}}</span>
 {{end}}</pre>
 {{- else if .Output}}<pre class="tout">{{.Output}}</pre>
 {{- else if eq .Status "running"}}<div class="tpending">running…</div>{{end -}}
-</div></details>
+</div></details>{{end}}
 {{- if .Jobs}}<ul class="jobs">{{range .Jobs}}<li class="st-{{.Status}}"><span class="tglyph">{{toolGlyph .Status}}</span><span class="jname">{{.Name}}</span>{{if .Agent}}<span class="jagent">{{.Agent}}</span>{{end}}{{with duration .DurationMs}}<span class="jtime">{{.}}</span>{{end}}</li>{{end}}</ul>{{end}}{{end}}
 
 {{define "notice"}}<details class="msg notice"><summary><span class="nlabel">{{noticeLabel .Label}}</span><span class="tsum">{{summaryLine .Text}}{{range .Files}} @{{.}}{{end}}</span></summary><div class="md">{{md (unwrap .Text)}}</div></details>{{end}}

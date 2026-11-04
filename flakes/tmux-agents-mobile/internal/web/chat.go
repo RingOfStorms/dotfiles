@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"strings"
@@ -87,6 +88,10 @@ var chatTemplates = template.Must(template.New("").Funcs(template.FuncMap{
 	"unwrap":      stripWrapperTags,
 	"diffLines":   diffLines,
 	"toolGlyph":   toolGlyph,
+	"askData": func(questions []transcript.AskQuestion) string {
+		data, _ := json.Marshal(questions)
+		return string(data)
+	},
 	"noticeLabel": func(s string) string {
 		return strings.ReplaceAll(s, "-", " ")
 	},
