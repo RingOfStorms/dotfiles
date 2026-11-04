@@ -1504,11 +1504,11 @@
       },
       "locked": {
         "dir": "flakes/tmux-agents-mobile",
-        "lastModified": 1793770634,
-        "narHash": "sha256-ut5O1hmlbq71rwzlysi0BAKxgcIgYu7gRIuqBNiTmvg=",
+        "lastModified": 1793770742,
+        "narHash": "sha256-7iL45cbe8taE5Cx5k5plzUzkjhqtnV5uWdFiylc7YTM=",
         "ref": "refs/heads/master",
-        "rev": "45febb8af7bd1c5306773d20f1c6c4ec6744e373",
-        "revCount": 2497,
+        "rev": "73bac6f3526bca3d76e0180445f27ab937457c78",
+        "revCount": 2498,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
