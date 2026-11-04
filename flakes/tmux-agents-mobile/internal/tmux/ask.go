@@ -963,16 +963,23 @@ var (
 
 // questionShown reports whether the question rows equal the source question.
 // Markdown changes punctuation, so only letters and digits must match; an
-// ellipsis permits a prefix. omp prints link targets as "text (url)", but a
-// renderer may hide them and fence info, so the stripped form is accepted too.
+// ellipsis permits a prefix. omp prints link targets as "text (url)" but drops
+// fence info lines; link targets and fence info are each optional, so every
+// combination is accepted.
 func questionShown(rows []string, question string) bool {
 	raw := strings.Join(rows, " ")
 	shown := questionText(raw)
 	if shown == "" {
 		return false
 	}
-	stripped := mdFenceInfoRE.ReplaceAllString(mdLinkTargetRE.ReplaceAllString(question, "]"), "")
-	for _, want := range []string{questionText(question), questionText(stripped)} {
+	noFence := mdFenceInfoRE.ReplaceAllString(question, "")
+	for _, src := range []string{
+		question,
+		noFence,
+		mdLinkTargetRE.ReplaceAllString(question, "]"),
+		mdLinkTargetRE.ReplaceAllString(noFence, "]"),
+	} {
+		want := questionText(src)
 		if want != "" && (shown == want || (strings.Contains(raw, "…") && strings.HasPrefix(want, shown))) {
 			return true
 		}

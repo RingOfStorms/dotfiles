@@ -84,6 +84,14 @@ func TestAskQuestionAfterWrappedTabsAndMarkdown(t *testing.T) {
 	if !questionShown(header[start:], "Use **[docs](https://example.com/v0)** and `cfg_0`?") {
 		t.Fatal("rendered markdown question was refused")
 	}
+	// omp keeps the link target but drops the fence info line.
+	mixed := "See [docs](https://e.io):\n\n```go\nx := 1\n```"
+	if !questionShown([]string{"See docs (https://e.io):", "x := 1"}, mixed) {
+		t.Fatal("question with link and fenced code was refused")
+	}
+	if questionShown([]string{"See docs (https://e.io):", "x := 2"}, mixed) {
+		t.Fatal("different code was accepted")
+	}
 	if questionShown([]string{"and cfg_0?"}, "Use docs and cfg_0?") {
 		t.Fatal("a suffix of the question was accepted")
 	}
