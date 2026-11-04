@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,6 +27,8 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+
+	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/shellenv"
 )
 
 // Config is the shell every session starts and how long it lives unattached.
@@ -502,12 +505,7 @@ func ShellEnv(base []string) []string {
 			name == "TERM", name == "COLORTERM",
 			// Not inside tmux, whatever the service's environment says.
 			name == "TMUX", name == "TMUX_PANE",
-			// Login profiles' run-once markers: NixOS /etc/set-environment and
-			// /etc/profile, nix-darwin's set-environment, Nix's profile script
-			// and home-manager's session variables.
-			name == "__NIXOS_SET_ENVIRONMENT_DONE", name == "__ETC_PROFILE_DONE",
-			name == "__NIX_DARWIN_SET_ENVIRONMENT_DONE", name == "__ETC_PROFILE_NIX_SOURCED",
-			name == "__HM_SESS_VARS_SOURCED", name == "__HM_ZSH_SESS_VARS_SOURCED":
+			slices.Contains(shellenv.LoginMarkers[:], name):
 			continue
 		}
 		env = append(env, kv)

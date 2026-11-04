@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -161,5 +162,155 @@ func TestEmptyServer(t *testing.T) {
 	c := newTestServer(t)
 	if _, err := c.ListPanes(context.Background()); err == nil {
 		t.Fatal("expected an error when no server is running")
+	}
+}
+
+// TestNewPaneResetsLoginMarkers reproduces the web service creating a pane on
+// a tmux server that a login shell started: the server and session
+// environments carry the Nix/Home Manager run-once markers, while the new pane
+// gets the client's short PATH. A stand-in login shell restores the profile
+// PATH only when every marker is unset or empty, as /etc/profile and
+// hm-session-vars.sh do, so the profile-only command must be found in every
+// pane NewSession and NewWindow create, with or without a program.
+func TestNewPaneResetsLoginMarkers(t *testing.T) {
+	c := newTestServer(t)
+	ctx := context.Background()
+	markers := []string{
+		"__NIXOS_SET_ENVIRONMENT_DONE",
+		"__ETC_PROFILE_DONE",
+		"__NIX_DARWIN_SET_ENVIRONMENT_DONE",
+		"__ETC_PROFILE_NIX_SOURCED",
+		"__HM_SESS_VARS_SOURCED",
+		"__HM_ZSH_SESS_VARS_SOURCED",
+	}
+
+	bin, err := exec.LookPath(c.Bin)
+	if err != nil {
+		t.Fatalf("look up tmux: %v", err)
+	}
+	c.Bin = bin
+
+	fixture := t.TempDir()
+	profileBin := filepath.Join(fixture, "profile-bin")
+	if err := os.Mkdir(profileBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeExec := func(path, body string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeExec(filepath.Join(profileBin, "tam-profile-tool"), "#!/bin/sh\necho profile-tool-ok\n")
+	shell := filepath.Join(fixture, "tam-login-shell")
+	writeExec(shell, fmt.Sprintf(`#!/bin/sh
+fresh=1
+for v in %[1]s; do
+	eval "val=\${$v-}"
+	if [ -n "$val" ]; then fresh=; fi
+done
+if [ -n "$fresh" ]; then
+	PATH='%[2]s':"$PATH"
+	export PATH
+	for v in %[1]s; do export "$v=1"; done
+fi
+if [ "$1" = -c ]; then
+	eval "$2"
+	exit
+fi
+if command -v tam-profile-tool >/dev/null 2>&1; then tam-profile-tool; else echo profile-tool-missing; fi
+read -r line
+`, strings.Join(markers, " "), profileBin))
+	conf := filepath.Join(fixture, "tmux.conf")
+	if err := os.WriteFile(conf, []byte(fmt.Sprintf("set-option -g default-shell '%s'\n", shell)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// The server starts from a login environment that already ran the
+	// profiles, and its base session carries the markers too.
+	start := exec.Command(c.Bin, "-u", "-L", c.Socket, "-f", conf, "new-session", "-d", "-s", "base")
+	start.Env = os.Environ()
+	for _, m := range markers {
+		start.Env = append(start.Env, m+"=1")
+	}
+	if out, err := start.CombinedOutput(); err != nil {
+		t.Fatalf("start server: %v: %s", err, out)
+	}
+	for _, m := range markers {
+		if _, err := c.run(ctx, nil, "set-environment", "-g", m, "1"); err != nil {
+			t.Fatalf("set global %s: %v", m, err)
+		}
+		if _, err := c.run(ctx, nil, "set-environment", "-t", "base", m, "1"); err != nil {
+			t.Fatalf("set session %s: %v", m, err)
+		}
+	}
+
+	// The service's own PATH has no profile directories.
+	t.Setenv("PATH", t.TempDir())
+
+	profileTool := func(pane string) string {
+		t.Helper()
+		var got string
+		waitFor(t, "profile tool result in "+pane, func() bool {
+			out, err := c.Capture(ctx, pane, CaptureOpts{})
+			if err != nil {
+				return false
+			}
+			for _, r := range []string{"profile-tool-ok", "profile-tool-missing"} {
+				if strings.Contains(out, r) {
+					got = r
+					return true
+				}
+			}
+			return false
+		})
+		return got
+	}
+
+	// Control: a plain new-window inherits the markers, so the stand-in
+	// profile skips its PATH and the command is missing.
+	out, err := c.run(ctx, nil, "new-window", "-d", "-P", "-F", "#{pane_id}", "-t", "base:")
+	if err != nil {
+		t.Fatalf("control new-window: %v", err)
+	}
+	if got := profileTool(strings.TrimSpace(string(out))); got != "profile-tool-missing" {
+		t.Fatalf("control pane: %s, want profile-tool-missing", got)
+	}
+
+	dir := t.TempDir()
+	program := "tam-profile-tool || echo profile-tool-missing; read -r line"
+	for _, tc := range []struct {
+		name   string
+		create func() (string, error)
+	}{
+		{"NewSession", func() (string, error) { return c.NewSession(ctx, "fresh", dir, "") }},
+		{"NewSession program", func() (string, error) { return c.NewSession(ctx, "fresh-program", dir, program) }},
+		{"NewWindow", func() (string, error) { return c.NewWindow(ctx, "base", dir, "") }},
+		{"NewWindow program", func() (string, error) { return c.NewWindow(ctx, "base", dir, program) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pane, err := tc.create()
+			if err != nil {
+				t.Fatalf("create: %v", err)
+			}
+			if got := profileTool(pane); got != "profile-tool-ok" {
+				t.Fatalf("pane %s: %s, want profile-tool-ok", pane, got)
+			}
+		})
+	}
+
+	// The reset only applies to the new shells: the server and base session
+	// environments keep their markers.
+	for _, scope := range [][]string{{"-g"}, {"-t", "base"}} {
+		for _, m := range markers {
+			args := append([]string{"show-environment"}, scope...)
+			out, err := c.run(ctx, nil, append(args, m)...)
+			if err != nil {
+				t.Fatalf("show-environment %v %s: %v", scope, m, err)
+			}
+			if got := strings.TrimSpace(string(out)); got != m+"=1" {
+				t.Fatalf("show-environment %v %s = %q, want %s=1", scope, m, got, m)
+			}
+		}
 	}
 }

@@ -131,12 +131,15 @@ accept these through `extraEnvironment`:
 services.tmux-agents-mobile.extraEnvironment.TAM_TERM_DETACH = "2h";
 ```
 
-Login shells discard inherited Nix/Home Manager profile-initialization markers
-before startup. This lets the profiles rebuild the full user `PATH` instead
-of retaining systemd's restricted service path. In particular, Atuin's zsh
-hook can find `atuin` when it runs its generated commands. After updating from
-a build with the old environment, start a **new shell**; reconnecting does not
-change an existing shell's environment.
+New login shells reset inherited Nix/Home Manager profile-initialization
+markers so their profiles rebuild the full user `PATH` instead of retaining
+systemd's restricted service path. This applies both to `/term` and to `/new`
+when creating a session or a window in an existing session. `/term` removes
+the markers from the PTY environment; tmux creation uses per-command `-e NAME=`
+overrides because an existing tmux server/session can still hold the old
+values. Existing panes and global/session settings are not rewritten.
+Atuin's generated zsh hook can then find `atuin`. After updating, create a
+new shell or pane; reconnecting does not repair an existing shell's environment.
 
 **Access is a full shell as the service user**, including `sudo` under that
 account's normal policy. The systemd units deliberately do not impose
@@ -149,9 +152,10 @@ account.
 ## What it needs from tmux (and from the plugin)
 
 The app drives stock tmux: `list-panes`, `capture-pane`, `send-keys`,
-`load-buffer`/`paste-buffer`, `new-session`, and pane options. **No tmux
-configuration changes and no patch to the plugin are required** - it works
-against whatever tmux server is running, and it never attaches a client.
+`load-buffer`/`paste-buffer`, `new-session`, `new-window`, and pane options.
+Creation uses `-e` environment overrides (tmux 3.2 or newer). **No tmux
+configuration changes and no patch to the plugin are required**; the app
+never attaches a client.
 
 The tmux-agents plugin is optional and the app degrades in a defined way:
 

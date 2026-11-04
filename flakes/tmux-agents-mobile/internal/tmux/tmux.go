@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/shellenv"
 )
 
 // sep is the field delimiter used for every -F format. A tab is safe here
@@ -307,7 +309,9 @@ func (c *Client) Paste(ctx context.Context, id, text string) error {
 
 // NewSession creates a detached session in dir and returns its first pane ID.
 func (c *Client) NewSession(ctx context.Context, name, dir, program string) (string, error) {
-	args := []string{"new-session", "-d", "-P", "-F", "#{pane_id}", "-s", name}
+	args := make([]string, 0, 10+2*len(shellenv.LoginMarkers))
+	args = append(args, "new-session", "-d", "-P", "-F", "#{pane_id}", "-s", name)
+	args = loginEnvironment(args)
 	if dir != "" {
 		args = append(args, "-c", dir)
 	}
@@ -323,7 +327,9 @@ func (c *Client) NewSession(ctx context.Context, name, dir, program string) (str
 
 // NewWindow creates a detached window in session and returns its pane ID.
 func (c *Client) NewWindow(ctx context.Context, session, dir, program string) (string, error) {
-	args := []string{"new-window", "-d", "-P", "-F", "#{pane_id}", "-t", session + ":"}
+	args := make([]string, 0, 10+2*len(shellenv.LoginMarkers))
+	args = append(args, "new-window", "-d", "-P", "-F", "#{pane_id}", "-t", session+":")
+	args = loginEnvironment(args)
 	if dir != "" {
 		args = append(args, "-c", dir)
 	}
@@ -335,6 +341,17 @@ func (c *Client) NewWindow(ctx context.Context, session, dir, program string) (s
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// loginEnvironment overrides guards inherited from the tmux server/session.
+// Cleaning the command client's environment alone cannot remove those. tmux
+// ignores -e NAME without '=', and these profiles test for a nonempty value.
+// Per-creation overrides leave existing panes and global/session state alone.
+func loginEnvironment(args []string) []string {
+	for _, name := range shellenv.LoginMarkers {
+		args = append(args, "-e", name+"=")
+	}
+	return args
 }
 
 // HasSession reports whether a session with exactly this name exists.
