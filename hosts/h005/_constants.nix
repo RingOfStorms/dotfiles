@@ -141,6 +141,11 @@
         name = "lio";
         ip = "10.12.14.118";
       }
+      {
+        mac = "a8:dd:ec:05:16:eb";
+        name = "BROADLINK";
+        ip = "10.12.14.103";
+      }
     ];
 
     # Devices that may talk on their VLAN but must never reach the internet

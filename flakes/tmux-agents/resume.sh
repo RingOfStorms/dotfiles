@@ -3,9 +3,17 @@
 # opt, field, agent_kind, runtime_dir, TAB). Everything here is off when
 # @tmux-agents-resume is off.
 #
-# resume.tsv: `session window pane agent ref` per agent pane; ref is the
+# resume.tsv: `session window pane agent ref state` per agent pane; ref is the
 # session JSONL for omp and the session ID for opencode. Rows without the
-# agent column (written before opencode support) are omp.
+# agent column (written before opencode support) are omp; rows without a
+# state (written before state tracking) are live. States:
+#   live      the agent was running at the last save
+#   pending   restore attempted, session not successfully resolved since
+#   gone:T    the agent stopped at epoch T (dropped after resume_grace)
+# A row only leaves the map when its pane closes, another agent takes the
+# pane, its session no longer exists, or its agent stayed gone for the grace
+# period. A pane's title never decides it: shells retitle the pane as soon
+# as an agent dies, which happens at every shutdown and failed resume.
 
 omp_dir="${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}"
 # opencode resolves a relative OPENCODE_DB against its data dir.
@@ -13,6 +21,12 @@ oc_db="${OPENCODE_DB:-opencode.db}"
 [[ $oc_db == /* ]] || oc_db="${XDG_DATA_HOME:-$HOME/.local/share}/opencode/$oc_db"
 state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/tmux-agents"
 resume_file="$state_dir/resume.tsv"
+# Per-row outcome of the last restore (sent / skipped and why / gave up).
+restore_log="$state_dir/restore.log"
+# Seconds a stopped agent keeps its row before a later save drops it.
+# Covers agents dying just before tmux at shutdown. Quitting then restarting
+# before that save can resume the agent again.
+resume_grace=60
 
 resume_on() { [ "$(opt @tmux-agents-resume on)" = on ]; }
 
@@ -148,9 +162,12 @@ oc_sql() {
 	sqlite3 -readonly -batch -noheader -cmd '.timeout 2000' "$oc_db" "$1" 2>/dev/null
 }
 sql_str() { REPLY="'${1//\'/\'\'}'"; }
+# Returns 0 for an existing session, 1 for confirmed absence, 2 on query error.
 opencode_exists() {
+	local result
 	sql_str "$1"
-	[ -n "$(oc_sql "SELECT 1 FROM session_v2 WHERE id = $REPLY")" ]
+	result=$(oc_sql "SELECT 1 FROM session_v2 WHERE id = $REPLY") || return 2
+	[ -n "$result" ]
 }
 opencode_session() {
 	local pid=$1 title=${2#OC | } id="" arg prev="" match="" cwd
@@ -185,47 +202,70 @@ opencode_session() {
 	[ -n "$REPLY" ]
 }
 
-# Writes resume.tsv: one row per agent pane. Run by the tmux-resurrect
-# post-save hook, and by the tick whenever the set of agent panes changes so a
-# kill-server between resurrect saves still has a current map.
-# A pane without a resolvable session keeps its previous row: either resurrect
-# just restored the old agent title onto a fresh shell (a save racing the
-# restore must not wipe the map), or a starting agent hasn't got a session
-# yet. Rows for panes that no longer exist are dropped. Returns 1 while a
-# running agent's session is unresolved, so the tick retries.
+# Splits resume.tsv line $1 into row_s row_w row_p row_agent row_ref
+# row_state, upgrading the older 4- and 5-column formats.
+split_row() {
+	IFS=$TAB read -r row_s row_w row_p row_agent row_ref row_state <<<"$1"
+	[ -n "$row_ref" ] || { row_ref=$row_agent && row_agent=omp; }
+	[ -n "$row_state" ] || row_state=live
+}
+
+# Writes resume.tsv. Run by the tmux-resurrect post-save hook, and by the tick
+# whenever the set of agent panes changes so a kill-server between resurrect
+# saves still has a current map. Per existing pane, by what actually runs in
+# it (not its title):
+#   agent with known session      row = that session, live
+#   agent, session not known yet  old row kept (if the same agent kind);
+#                                 pending stays pending; tick retries
+#   no agent                      pending stays; live becomes gone:now; gone
+#                                 rows older than resume_grace are dropped
+# Rows for closed panes are dropped. A failed or empty pane listing (server
+# exiting) leaves the file untouched.
 cmd_save() (
 	mkdir -p "$state_dir"
 	exec 9>"$state_dir/resume.lock"
 	flock -x 9
 	[ ! -e "$(runtime_dir)/restoring" ] || return 1
-	local tmp="$resume_file.$$" s wi pi ppid cmd title key rc=0 r agent ref
+	local tmp="$resume_file.$$" panes line s wi pi ppid cmd title key row out="" rc=0 r now
 	local -A prev=()
+	panes=$(tmux list-panes -a -F "#{session_name}${TAB}#{window_index}${TAB}#{pane_index}${TAB}#{pane_pid}${TAB}$(field pane_current_command)${TAB}#{pane_title}") || return 1
+	[ -n "$panes" ] || return 1
 	if [ -r "$resume_file" ]; then
-		while IFS=$TAB read -r s wi pi agent ref; do
-			[ -n "$ref" ] || { ref=$agent && agent=omp; }
-			prev["$s:$wi.$pi"]="$agent$TAB$ref"
+		while IFS= read -r line; do
+			[ -n "$line" ] || continue
+			split_row "$line"
+			prev["$row_s:$row_w.$row_p"]="$row_agent$TAB$row_ref$TAB$row_state"
 		done <"$resume_file"
 	fi
+	printf -v now '%(%s)T' -1
 	load_ps
-	: >"$tmp"
 	while IFS=$TAB read -r s wi pi ppid cmd title; do
-		agent_kind "$title" "$cmd"
-		# An opencode title on a shell is stale (resurrect restores titles):
-		# like omp's `π`, it keeps the pane's row.
-		[ -n "$REPLY" ] || agent_kind "$title" opencode
-		[ -n "$REPLY" ] || continue
 		key="$s:$wi.$pi"
+		row=${prev[$key]:-}
+		agent_kind "$title" "$cmd"
+		# Panes with neither an agent title nor a row: nothing to track.
+		[ -n "$REPLY" ] || [ -n "$row" ] || continue
 		session_for_pane "$ppid" "$title" && r=0 || r=$?
-		if [ "$r" = 0 ]; then
-			REPLY="$found_kind$TAB$REPLY"
-		else
-			[ "$r" = 1 ] && rc=1
-			REPLY=${prev[$key]:-}
-			# The pane's old row belongs to a different agent than the one now running.
-			if [ "$r" = 1 ] && [ "${REPLY%%"$TAB"*}" != "$found_kind" ]; then REPLY=""; fi
-		fi
-		[ -n "$REPLY" ] && printf '%s\t%s\t%s\t%s\n' "$s" "$wi" "$pi" "$REPLY" >>"$tmp"
-	done < <(tmux list-panes -a -F "#{session_name}${TAB}#{window_index}${TAB}#{pane_index}${TAB}#{pane_pid}${TAB}$(field pane_current_command)${TAB}#{pane_title}")
+		case "$r" in
+		0) row="$found_kind$TAB$REPLY${TAB}live" ;;
+		1)
+			rc=1
+			if [ "${row%%"$TAB"*}" != "$found_kind" ]; then
+				row=""
+			elif [ "${row##*"$TAB"}" != pending ]; then
+				row="${row%"$TAB"*}${TAB}live"
+			fi
+			;;
+		*)
+			case "${row##*"$TAB"}" in
+			live) row="${row%"$TAB"*}${TAB}gone:$now" ;;
+			gone:*) [ $((now - ${row##*"${TAB}gone:"})) -lt "$resume_grace" ] || row="" ;;
+			esac
+			;;
+		esac
+		[ -z "$row" ] || out+="$s$TAB$wi$TAB$pi$TAB$row"$'\n'
+	done <<<"$panes"
+	printf '%s' "$out" >"$tmp"
 	mv -f "$tmp" "$resume_file"
 	return $rc
 )
@@ -234,46 +274,86 @@ cmd_save() (
 # panes first replay their saved contents, so wait (in the background, up to
 # ~15s) for each to reach a shell. Mode `auto` runs the resume command;
 # `prompt` only types it so you can press Enter (or not). Rows whose session
-# is gone are skipped: `opencode -s` with an unknown ID starts a new session.
-cmd_restore() {
-	local resume_omp resume_oc mode s wi pi agent ref target cmd i line rt ppid shell r
+# is gone are dropped: `opencode -s` with an unknown ID starts a new session.
+# Rows sent a resume become pending, so a resume that never comes up keeps its
+# row; running `tmux-agents restore` again retries it. Each row's outcome goes
+# to restore.log.
+cmd_restore() (
+	local resume_omp resume_oc mode target cmd i line rt ppid shell r out=""
+	local -a rows=()
 	rt=$(runtime_dir)
-	if [ ! -r "$resume_file" ]; then rm -f "$rt/restoring"; return 0; fi
+	mkdir -p "$state_dir"
+	exec 9>"$state_dir/resume.lock"
+	flock -x 9
+	# Also serialize manual restores with saves and other restore workers.
+	trap 'rm -f "$rt/restoring" "$resume_file.$$"' EXIT
+	[ -r "$resume_file" ] || return 0
+	: >"$rt/restoring"
 	resume_omp=$(opt @tmux-agents-resume-command 'omp --resume=')
 	resume_oc=$(opt @tmux-agents-resume-command-opencode 'opencode -s ')
 	mode=$(opt @tmux-agents-resume-mode auto)
 	shell=$(tmux show-option -gqv default-shell)
 	shell=${shell##*/}
+	mapfile -t rows <"$resume_file"
+	printf '%(%F %T)T restore: %d rows, shell %s\n' -1 "${#rows[@]}" "$shell" >"$restore_log"
 	load_ps
-	while IFS=$TAB read -r s wi pi agent ref; do
-		[ -n "$ref" ] || { ref=$agent && agent=omp; }
-		case "$agent" in
-		omp) [ -e "$ref" ] || continue ;;
-		opencode) opencode_exists "$ref" || continue ;;
-		*) continue ;;
+	for line in "${rows[@]}"; do
+		[ -n "$line" ] || continue
+		split_row "$line"
+		target="=$row_s:$row_w.$row_p"
+		case "$row_agent" in
+		omp) [ -e "$row_ref" ] && r=0 || r=1 ;;
+		opencode) opencode_exists "$row_ref" && r=0 || r=$? ;;
+		*) r=1 ;;
 		esac
-		if [ "$agent" = omp ]; then line=$resume_omp; else line=$resume_oc; fi
-		line+=$(printf '%q' "$ref")
-		target="=$s:$wi.$pi"
+		if [ "$r" = 2 ]; then
+			printf '%(%T)T %s skipped: %s session %s lookup failed; retained pending\n' -1 "$target" "$row_agent" "$row_ref" >>"$restore_log"
+			out+="$row_s$TAB$row_w$TAB$row_p$TAB$row_agent$TAB$row_ref${TAB}pending"$'\n'
+			continue
+		fi
+		if [ "$r" != 0 ]; then
+			printf '%(%T)T %s dropped: %s session %s no longer exists\n' -1 "$target" "$row_agent" "$row_ref" >>"$restore_log"
+			continue
+		fi
 		# A manual restore can leave existing agent panes untouched.
-		ppid=$(tmux display-message -p -t "$target" '#{pane_pid}' 2>/dev/null) || continue
+		if ! ppid=$(tmux display-message -p -t "$target" '#{pane_pid}' 2>/dev/null); then
+			printf '%(%T)T %s skipped: no such pane\n' -1 "$target" >>"$restore_log"
+			out+="$line"$'\n'
+			continue
+		fi
 		session_for_pane "$ppid" && r=0 || r=$?
-		[ "$r" = 2 ] || continue # unresolved agents are still running agents
+		if [ "$r" != 2 ]; then # unresolved agents are still running agents
+			printf '%(%T)T %s skipped: %s already running\n' -1 "$target" "$found_kind" >>"$restore_log"
+			out+="$line"$'\n'
+			continue
+		fi
+		out+="$row_s$TAB$row_w$TAB$row_p$TAB$row_agent$TAB$row_ref${TAB}pending"$'\n'
+		if [ "$row_agent" = omp ]; then line=$resume_omp; else line=$resume_oc; fi
+		line+=$(printf '%q' "$row_ref")
 		(
 			for ((i = 0; i < 30; i++)); do
-				cmd=$(tmux display-message -p -t "$target" '#{pane_current_command}' 2>/dev/null) || exit 0
+				if ! cmd=$(tmux display-message -p -t "$target" '#{pane_current_command}' 2>/dev/null); then
+					printf '%(%T)T %s gave up: pane closed\n' -1 "$target" >>"$restore_log"
+					exit 0
+				fi
 				case "$cmd" in
 				"$shell")
 					sleep 0.5 # let the prompt draw so the keys land on it
-					tmux send-keys -t "$target" -l "$line"
-					if [ "$mode" = auto ]; then tmux send-keys -t "$target" Enter; fi
+					if ! tmux send-keys -t "$target" -l "$line" ||
+						{ [ "$mode" = auto ] && ! tmux send-keys -t "$target" Enter; }; then
+						printf '%(%T)T %s gave up: send-keys failed\n' -1 "$target" >>"$restore_log"
+					else
+						printf '%(%T)T %s sent (%s) after %d polls: %s\n' -1 "$target" "$mode" "$i" "$line" >>"$restore_log"
+					fi
 					exit 0
 					;;
 				esac
 				sleep 0.5
 			done
+			printf '%(%T)T %s gave up: pane still runs %s, not %s\n' -1 "$target" "$cmd" "$shell" >>"$restore_log"
 		) </dev/null >/dev/null 2>&1 &
-	done <"$resume_file"
+	done
+	printf '%s' "$out" >"$resume_file.$$"
+	mv -f "$resume_file.$$" "$resume_file"
 	wait
-	rm -f "$rt/restoring"
-}
+)

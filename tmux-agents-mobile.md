@@ -228,12 +228,11 @@ phone's overlay IP (added ad hoc, not committed). Then the real auth path with
 the new Zitadel app and `http://127.0.0.1:8099/auth/callback` registered as a
 second redirect URI.
 
-Later: `homeManagerModules.default` on lio — `systemd.user.services.tmux-agents-mobile`
-(same user as the tmux server, so socket access needs no tricks), `Restart=always`,
-`UMask=0077`, `NoNewPrivileges`, `PrivateTmp=false` (tmux socket lives in
-`/tmp/tmux-<uid>/`), no `ProtectHome` (git needs `~/projects`), loopback bind,
-plus the nginx vhost and an `extraInputRules` line scoped to the phone's overlay
-IP.
+Deployment now uses `nixosModules.default` on lio: a user service for the tmux
+owner, `Restart=on-failure`, `UMask=0077`, loopback bind and a tailnet-only nginx
+vhost. The separate `/term` login-shell tab requires WebSocket proxying and no
+inherited `NoNewPrivileges`, device or namespace sandbox (including for sudo).
+See `flakes/tmux-agents-mobile/README.md` for current deployment details.
 
 ## Phasing
 

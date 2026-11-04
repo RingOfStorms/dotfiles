@@ -467,16 +467,12 @@ func portForwardScript(s Service, r portReq, gfor time.Duration) string {
 }
 
 // lastForward reports whether closing ts leaves no live forward of r's
-// port, so the shared guest element goes too.
+// port, so the shared guest element may go too (portCloseScript also
+// requires that a forward was closed and none of the port stays saved).
 func lastForward(es, ts []portEntry, r portReq) bool {
 	closing := map[portEntry]bool{}
 	for _, e := range ts {
-		if strings.HasPrefix(e.Set, "cnt-fwd") {
-			closing[e] = true
-		}
-	}
-	if len(closing) == 0 {
-		return false
+		closing[e] = true
 	}
 	for _, e := range es {
 		if strings.HasPrefix(e.Set, "cnt-fwd") && !closing[e] && e.Svc == r.Svc && e.Port == strconv.Itoa(r.Port) && e.Proto == r.Proto {
@@ -486,46 +482,94 @@ func lastForward(es, ts []portEntry, r portReq) bool {
 	return true
 }
 
-// portCloseScript deletes exactly the given live elements (found by
-// closeTargets from `nft -j list set`), in one nft transaction. A close
-// of forwards runs that transaction and drops their state lines in one
-// critical section on portFwdDir/.lock, so a port-restore in between
-// cannot re-add them; a failed delete (already expired) still drops the
-// stale lines. With closeGuest (lastForward) it then deletes the guest
-// element of a NixOS guest; that one may already be gone (expired, guest
+// portCloseScript closes r on iface. Host ports only (no net.private, no
+// forward in es): one nft transaction deletes exactly es (closeTargets of
+// `nft -j list set`), "nothing open" when it fails. Forwards: one critical
+// section on portFwdDir/.lock (so a port-restore in between cannot re-add
+// them) deletes each element of es, tolerating missing ones (expired, or
+// flushed by a firewall reload), and drops the saved forwards matching r
+// (fwdClosePats), live or not, deleting their elements too (a port-restore
+// between the listing and the lock re-added them); it exits 1 "nothing
+// open" only when neither a listed element nor a saved forward matched.
+// With closeGuest (lastForward) it then deletes the guest element of a
+// NixOS guest if a forward was closed and no saved forward of the
+// port/proto remains; that element may already be gone (expired, guest
 // restarted or its firewall reloaded), which is fine.
 func portCloseScript(s Service, r portReq, iface string, es []portEntry, closeGuest bool) string {
-	const notOpen = "echo 'not open (or already expired); see cnt port ls' >&2; exit 1"
-	var del strings.Builder
-	for _, e := range es {
-		table, key := elemRef(e)
-		fmt.Fprintf(&del, "delete element %s %s { %s }\n", table, e.Set, key)
-	}
-	var drop []string
+	desc := portDesc(s, r)
+	notOpen := "echo " + q(fmt.Sprintf("nothing open for %s on %s (or already expired); see cnt port ls", desc, iface)) + " >&2; exit 1"
+	fwd, liveFwd := s.Net.Private, false
 	for _, e := range es {
 		if strings.HasPrefix(e.Set, "cnt-fwd") {
-			drop = append(drop, q(fwdStateID(e.Set, e.Iface, e.Proto, e.Port, normCIDR(e.From))))
+			fwd, liveFwd = true, true
 		}
 	}
 	var b strings.Builder
 	b.WriteString("set -eu\n")
-	if len(drop) > 0 {
-		b.WriteString(fwdStateLockedScript(s.Name,
-			"rc=0\nnft -f - <<EOF || rc=1\n"+del.String()+"EOF\n",
-			drop, "",
-			"[ \"$rc\" = 0 ] || { "+notOpen+"; }\n"))
-	} else {
-		b.WriteString("nft -f - <<EOF || { " + notOpen + "; }\n" + del.String() + "EOF\n")
+	if !fwd {
+		b.WriteString("nft -f - <<EOF || { " + notOpen + "; }\n")
+		for _, e := range es {
+			table, key := elemRef(e)
+			fmt.Fprintf(&b, "delete element %s %s { %s }\n", table, e.Set, key)
+		}
+		b.WriteString("EOF\n")
+		fmt.Fprintf(&b, "logger -t cnt-port \"close %s iface=%s n=%d by=${SUDO_USER:-$(id -un)}\"\n", desc, iface, len(es))
+		fmt.Fprintf(&b, "echo \"closed %s on %s (%d element(s))\"\n", desc, iface, len(es))
+		return b.String()
 	}
-	if closeGuest && guestNet(s) {
+	guest := closeGuest && guestNet(s)
+	var pre strings.Builder
+	pre.WriteString("live=0\n")
+	for _, e := range es {
+		table, key := elemRef(e)
+		fmt.Fprintf(&pre, "nft -f - 2>/dev/null <<EOF && live=$((live + 1)) || :\ndelete element %s %s { %s }\nEOF\n", table, e.Set, key)
+	}
+	post := "[ \"$live\" -gt 0 ] || [ \"$dropped\" -gt 0 ] || { " + notOpen + "; }\nguest=0\n"
+	if guest {
+		closed := "[ \"$dropped\" -gt 0 ]"
+		if liveFwd {
+			closed = ":"
+		}
+		post += fmt.Sprintf("left=0\nif [ -e \"$st\" ]; then\nwhile read -r u m i p po f g gf; do [ \"$p $po\" != %s ] || left=1; done < \"$st\"\nfi\nif [ \"$left\" = 0 ] && %s; then guest=1; fi\n",
+			q(r.Proto+" "+strconv.Itoa(r.Port)), closed)
+	}
+	post += "echo \"$live $dropped $guest\"\n"
+	// The locked part reports "<live deleted> <saved dropped> <guest 0|1>";
+	// bash clears -e in command substitutions.
+	b.WriteString("res=$(\nset -e\n" + fwdStateLockedScript(s.Name, pre.String(), fwdClosePats(r, iface), fwdRecDeleteSh, "", post) + ")\nset -- $res\n")
+	if guest {
 		b.WriteString(guestLeader(s))
+		b.WriteString("[ \"$3\" = 1 ] || LEADER=\n")
 		fmt.Fprintf(&b, "case \"$LEADER\" in ''|0) ;; *) nsenter -t \"$LEADER\" -n nft delete element inet nixos-fw %s '{ %s . %d }' 2>/dev/null || true;; esac\n",
 			guestSet, r.Proto, r.Port)
 	}
-	desc := portDesc(s, r)
-	fmt.Fprintf(&b, "logger -t cnt-port \"close %s iface=%s n=%d by=${SUDO_USER:-$(id -un)}\"\n", desc, iface, len(es))
-	fmt.Fprintf(&b, "echo \"closed %s on %s (%d element(s))\"\n", desc, iface, len(es))
+	fmt.Fprintf(&b, "logger -t cnt-port \"close %s iface=%s n=$1 saved=$2 by=${SUDO_USER:-$(id -un)}\"\n", desc, iface)
+	fmt.Fprintf(&b, "echo \"closed %s on %s ($1 live element(s), $2 saved forward(s))\"\n", desc, iface)
 	return b.String()
+}
+
+// fwdClosePats are the fwdStateLockedScript drop patterns for the saved
+// forwards a close of r on iface removes, live or not: closeTargets' match
+// (iface, proto, port; with --from only those sources of the scoped maps)
+// over the state lines.
+func fwdClosePats(r portReq, iface string) []string {
+	id := " " + iface + " " + r.Proto + " " + strconv.Itoa(r.Port) + " "
+	var pats []string
+	for _, m := range fwdMaps {
+		switch {
+		case !scopedSets[m]:
+			if len(r.From) == 0 {
+				pats = append(pats, q(m+id+"all"))
+			}
+		case len(r.From) == 0:
+			pats = append(pats, q(m+id)+"*")
+		default:
+			for _, c := range r.From {
+				pats = append(pats, q(m+id+normCIDR(c)))
+			}
+		}
+	}
+	return pats
 }
 
 // elemRef renders the table and key `delete element` needs for a live
@@ -615,8 +659,10 @@ func portClose(s Service, r portReq, h string) error {
 	if err != nil {
 		return err
 	}
+	// Forwards are decided by the close script: a firewall reload empties
+	// table ip cnt-port, but the saved forwards must still go.
 	ts := closeTargets(es, r, iface)
-	if len(ts) == 0 {
+	if len(ts) == 0 && !s.Net.Private {
 		return fmt.Errorf("%s: nothing open for %s on %s (or already expired); see cnt port ls", h, portDesc(s, r), iface)
 	}
 	return remote(h, true, portCloseScript(s, r, iface, ts, lastForward(es, ts, r)))
@@ -700,7 +746,7 @@ func cmdPort(args []string) error {
 	}
 	if closing {
 		if dryRun {
-			fmt.Printf("[%s (root)] %s\n# then delete every element of %s on --iface %s found in cnt-tmp/cnt-tmp4/cnt-tmp6 and ip %s (comment svc=%s)\n", h, portLsScript, portDesc(s, r), r.Iface, fwdTable, s.Name)
+			fmt.Printf("[%s (root)] %s\n# then delete every element of %s on --iface %s found in cnt-tmp/cnt-tmp4/cnt-tmp6 and ip %s (comment svc=%s), and its saved forwards in %s\n", h, portLsScript, portDesc(s, r), r.Iface, fwdTable, s.Name, portFwdDir)
 			return nil
 		}
 		return portClose(s, r, h)
@@ -930,22 +976,26 @@ func fwdStateID(m, iface, proto, port, from string) string {
 // "map iface proto port from"), appends the output of adds (shell that
 // echoes lines; may use $now), and removes the file when nothing is left.
 func fwdStateRewriteScript(svc string, drop []string, adds string) string {
-	return fwdStateLockedScript(svc, "", drop, adds, "")
+	return fwdStateLockedScript(svc, "", drop, "", adds, "")
 }
 
 // fwdStateLockedScript is fwdStateRewriteScript with pre run before and
 // post after the rewrite, in the same critical section (a nested flock on
-// the lock would deadlock). post may exit the subshell non-zero.
-func fwdStateLockedScript(svc, pre string, drop []string, adds, post string) string {
+// the lock would deadlock), and onDrop run for each unexpired line drop
+// removes (with $m $i $p $po $f set; its stdout goes to the new file).
+// post may exit the subshell non-zero; $dropped there counts the unexpired
+// lines drop removed.
+func fwdStateLockedScript(svc, pre string, drop []string, onDrop, adds, post string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "install -d -m755 %s\n(\nflock 9\n", q(portFwdDir))
 	b.WriteString(pre)
-	fmt.Fprintf(&b, "st=%s\ntmp=%s\nnow=$(date +%%s)\n{\nif [ -e \"$st\" ]; then\nwhile read -r u m i p po f g gf; do\n",
+	fmt.Fprintf(&b, "st=%s\ntmp=%s\nnow=$(date +%%s)\ndropped=0\n{\nif [ -e \"$st\" ]; then\nwhile read -r u m i p po f g gf; do\n",
 		q(portFwdDir+"/"+svc), q(portFwdDir+"/."+svc+".new"))
+	b.WriteString("  case \"$u\" in ''|*[!0-9]*) continue ;; esac\n  [ \"$u\" -gt \"$now\" ] || continue\n")
 	if len(drop) > 0 {
-		fmt.Fprintf(&b, "  case \"$m $i $p $po $f\" in %s) continue ;; esac\n", strings.Join(drop, "|"))
+		fmt.Fprintf(&b, "  case \"$m $i $p $po $f\" in %s)\n%s  dropped=$((dropped + 1)); continue ;; esac\n", strings.Join(drop, "|"), onDrop)
 	}
-	b.WriteString("  case \"$u\" in ''|*[!0-9]*) continue ;; esac\n  [ \"$u\" -gt \"$now\" ] || continue\n  echo \"$u $m $i $p $po $f $g $gf\"\ndone < \"$st\"\nfi\n")
+	b.WriteString("  echo \"$u $m $i $p $po $f $g $gf\"\ndone < \"$st\"\nfi\n")
 	b.WriteString(adds)
 	b.WriteString("} > \"$tmp\"\nif [ -s \"$tmp\" ]; then mv -f \"$tmp\" \"$st\"; else rm -f \"$tmp\" \"$st\"; fi\n")
 	b.WriteString(post)
@@ -983,26 +1033,30 @@ func fwdStateAddScript(s Service, r portReq) string {
 	return fwdStateRewriteScript(s.Name, pats, adds.String())
 }
 
+// fwdRecDeleteSh deletes the forward element of the state line read into
+// $m $i $p $po $f (the key fwdRec.key builds). An element already gone
+// (expired, reloaded) is fine; nft prints nothing.
+var fwdRecDeleteSh = fmt.Sprintf(`  k="$p . $po"
+  case "$m" in *-any) ;; *) k="\"$i\" . $k" ;; esac
+  case "$m" in cnt-fwd4*) k="$k . $f" ;; esac
+  nft delete element ip %s "$m" "{ $k }" </dev/null >/dev/null 2>&1 || :
+`, fwdTable)
+
 // fwdDropScript deletes every forward element svc's state file records,
 // then the file (cleanupScript: destroy and the move's source cleanup).
-// Elements already gone (expired, reloaded) are fine.
 func fwdDropScript(svc string) string {
-	return fmt.Sprintf(`if [ -d %[3]s ]; then
+	return fmt.Sprintf(`if [ -d %[2]s ]; then
 (
 flock 9
 if [ -e %[1]s ]; then
   while read -r u m i p po f g gf; do
     case "$m" in cnt-fwd|cnt-fwd4|cnt-fwd-any|cnt-fwd4-any) ;; *) continue ;; esac
-    k="$p . $po"
-    case "$m" in *-any) ;; *) k="\"$i\" . $k" ;; esac
-    case "$m" in cnt-fwd4*) k="$k . $f" ;; esac
-    nft delete element ip %[2]s "$m" "{ $k }" 2>/dev/null || true
-  done < %[1]s
+%[4]s  done < %[1]s
   rm -f %[1]s
 fi
-) 9>%[4]s
+) 9>%[3]s
 fi
-`, q(portFwdDir+"/"+svc), fwdTable, q(portFwdDir), q(portFwdDir+"/.lock"))
+`, q(portFwdDir+"/"+svc), q(portFwdDir), q(portFwdDir+"/.lock"), fwdRecDeleteSh)
 }
 
 // fwdRec is one parsed state line.

@@ -494,7 +494,8 @@ func TestParseFwdJSONAndClose(t *testing.T) {
 	if lastForward(es, closeTargets(es, r, "tailscale0"), r) {
 		t.Errorf("closing one --from of a leaves its cnt-fwd: not the last")
 	}
-	if mc := (portReq{Svc: "mc", Port: 8000, Proto: "tcp"}); lastForward(es, closeTargets(es, mc, "tailscale0"), mc) {
+	mc := portReq{Svc: "mc", Port: 8000, Proto: "tcp"}
+	if mts := closeTargets(es, mc, "tailscale0"); strings.Contains(portCloseScript(Service{Name: "mc"}, mc, "tailscale0", mts, lastForward(es, mts, mc)), "nsenter") {
 		t.Errorf("host-port close touches the guest")
 	}
 	// The shared guest element lasts as long as the longest live forward.

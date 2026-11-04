@@ -277,6 +277,13 @@ body.inbox main { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
   color: var(--text);
 }
 .card:active { background: var(--surface-2); border-color: var(--accent); }
+/* filter's keyboard pick; the margins keep it clear of the header and the
+   fixed search bar when scrolled into view */
+.card.is-selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  scroll-margin: 12px 0 calc(84px + env(safe-area-inset-bottom));
+}
 
 .card-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .card-top .repo {
@@ -866,3 +873,84 @@ body.inbox .top nav a {
   font-size: 16px;
 }
 body.inbox .top nav a:active { color: var(--text); }
+
+/* ---------- terminal tab ---------- */
+
+/* nav and menu both push right; once the nav has, the menu sits after it. */
+.top nav ~ .menu { margin-left: 0; }
+
+/* Pinned to the visual viewport (term.js sets --app-h/--app-top), so the
+   on-screen keyboard takes rows away instead of covering them. */
+body.term {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--app-top, 0);
+  height: var(--app-h, 100dvh);
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  padding-bottom: 0;
+}
+body.term .top { padding-top: calc(6px + env(safe-area-inset-top)); padding-bottom: 6px; }
+body.term main { overflow: hidden; padding: 0; }
+.term-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--term-bg);
+  padding: 4px 0 0 6px;
+}
+.term {
+  height: 100%;
+  /* Two-finger gestures are the font-size pinch (term.js), not page zoom. */
+  touch-action: pan-x pan-y;
+}
+.term-status {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  z-index: 5;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .4);
+}
+.term-keys {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+.term-keys::-webkit-scrollbar { display: none; }
+.term-keys button {
+  flex: 0 0 auto;
+  min-width: 44px;
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.term-keys button:active { background: var(--line); }
+.term-keys button[aria-pressed="true"] {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}

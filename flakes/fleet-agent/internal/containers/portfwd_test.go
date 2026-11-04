@@ -85,7 +85,7 @@ func TestFwdStateOpenClose(t *testing.T) {
 	// Close of one --from source (live entry as parsed from nft -j: no /32),
 	// the whole close script with nft/logger stubbed.
 	closeOne := []portEntry{{Set: "cnt-fwd4", Iface: "tailscale0", Proto: "tcp", Port: "8000", From: "100.64.0.1"}}
-	sc := portCloseScript(s, portReq{Svc: "app", Port: 8000, Proto: "tcp"}, "tailscale0", closeOne, false)
+	sc := portCloseScript(s, portReq{Svc: "app", Port: 8000, Proto: "tcp", From: []string{"100.64.0.1/32"}}, "tailscale0", closeOne, false)
 	runSh(t, sc, "PATH="+stubBin(t)+":"+os.Getenv("PATH"))
 	if es = readFwdState(t, "app"); len(es) != 3 {
 		t.Fatalf("after closing one source: %+v", es)
@@ -99,8 +99,8 @@ func TestFwdStateOpenClose(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(portFwdDir, "app")); !os.IsNotExist(err) {
 		t.Fatal("empty state file kept")
 	}
-	// Closing only host ports (cnt-tmp) leaves the forward state alone.
-	if sc := portCloseScript(s, portReq{Svc: "app", Port: 8000, Proto: "tcp"}, "tailscale0", []portEntry{{Set: "cnt-tmp", Iface: "tailscale0", Proto: "tcp", Port: "8000", From: "all"}}, false); strings.Contains(sc, "port-fwd") {
+	// Closing only host ports (cnt-tmp, no net.private) leaves the forward state alone.
+	if sc := portCloseScript(Service{Name: "web"}, portReq{Svc: "web", Port: 8000, Proto: "tcp"}, "tailscale0", []portEntry{{Set: "cnt-tmp", Iface: "tailscale0", Proto: "tcp", Port: "8000", From: "all"}}, false); strings.Contains(sc, "port-fwd") {
 		t.Fatalf("host-port close touches forward state:\n%s", sc)
 	}
 }
@@ -305,8 +305,9 @@ func TestPortCloseRestoreRace(t *testing.T) {
 	}
 }
 
-// A close whose nft delete fails (already expired) still drops the stale
-// state line, then reports "not open" and exits 1.
+// A close whose nft delete fails (already expired, or flushed by a reload)
+// still drops the saved forward and succeeds; with neither a live element
+// nor a saved forward it reports "nothing open" and exits 1.
 func TestPortCloseFailedDeleteDropsState(t *testing.T) {
 	if _, err := exec.LookPath("flock"); err != nil {
 		t.Skip("flock not available")
@@ -319,14 +320,188 @@ func TestPortCloseFailedDeleteDropsState(t *testing.T) {
 	must(t, os.WriteFile(filepath.Join(bin, "nft"), []byte("#!/bin/sh\ncat >/dev/null\nexit 1\n"), 0o755))
 	sc := portCloseScript(fwdSvc("gist", "podman", "10.89.250.102"), portReq{Svc: "gist", Port: 22, Proto: "tcp", Iface: "lan"}, "enp1s0",
 		[]portEntry{{Set: "cnt-fwd", Iface: "enp1s0", Proto: "tcp", Port: "22", From: "all"}}, true)
-	c := exec.Command("sh", "-c", sc)
-	c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
-	out, err := c.CombinedOutput()
-	if c.ProcessState.ExitCode() != 1 || !strings.Contains(string(out), "not open (or already expired)") || strings.Contains(string(out), "closed ") {
-		t.Fatalf("exit %v:\n%s", err, out)
+	run := func() (string, int) {
+		c := exec.Command("sh", "-c", sc)
+		c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+		out, _ := c.CombinedOutput()
+		return string(out), c.ProcessState.ExitCode()
+	}
+	if out, rc := run(); rc != 0 || !strings.Contains(out, "closed svc=gist 22/tcp from=all on enp1s0 (0 live element(s), 1 saved forward(s))") {
+		t.Fatalf("exit %d:\n%s", rc, out)
 	}
 	if _, err := os.Stat(state); !os.IsNotExist(err) {
-		t.Fatal("stale state line kept")
+		t.Fatal("saved forward kept")
+	}
+	if out, rc := run(); rc != 1 || !strings.Contains(out, "nothing open for svc=gist 22/tcp from=all on enp1s0") || strings.Contains(out, "closed ") {
+		t.Fatalf("second close: exit %d:\n%s", rc, out)
+	}
+}
+
+// A firewall reload flushes the live forward elements (port-restore puts
+// them back within a minute). A close in between finds nothing live but
+// must still drop the saved forwards, or the next port-restore reopens
+// them; the guest element goes with the last saved forward of the port.
+func TestPortCloseAfterReload(t *testing.T) {
+	if _, err := exec.LookPath("flock"); err != nil {
+		t.Skip("flock not available")
+	}
+	fwdTestDir(t)
+	must(t, os.MkdirAll(portFwdDir, 0o755))
+	now := time.Now().Unix()
+	state := filepath.Join(portFwdDir, "app")
+	must(t, os.WriteFile(state, []byte(fmt.Sprintf("%d cnt-fwd tailscale0 tcp 8000 all 10.233.5.2 1\n%d cnt-fwd-any any tcp 8000 all 10.233.5.2 1\n",
+		now+3600, now+3600)), 0o644))
+	// The host after the reload: no table ip cnt-port, empty cnt-tmp* sets,
+	// so every delete fails. The guest is running (leader 4242).
+	bin := t.TempDir()
+	log := filepath.Join(bin, "log")
+	for name, body := range map[string]string{
+		"nft":        "case \"$*\" in\n'list table'*) exit 1 ;;\n'-j list'*) exit 0 ;;\n'-f -') sed 's/^/nft: /' >> " + q(log) + "; exit 1 ;;\nesac\nexit 1\n",
+		"machinectl": "echo 4242\n",
+		"nsenter":    "echo \"nsenter: $*\" >> " + q(log) + "\n",
+		"sudo":       "exec \"$@\"\n",
+		"logger":     "exit 0\n",
+	} {
+		must(t, os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"+body), 0o755))
+	}
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+	oldHost := localHost
+	localHost = "testhost"
+	t.Cleanup(func() { localHost = oldHost })
+	logged := func() string { b, _ := os.ReadFile(log); return string(b) }
+
+	s := fwdSvc("app", "nixos", "10.233.5.2")
+	// The tailnet forward's saved line goes; the guest element stays for
+	// the saved any forward of 8000/tcp.
+	must(t, portClose(s, portReq{Svc: "app", Port: 8000, Proto: "tcp", Iface: "tailnet"}, "testhost"))
+	if es := readFwdState(t, "app"); len(es) != 1 || es[0].Map != "cnt-fwd-any" {
+		t.Fatalf("after closing tailnet: %+v", es)
+	}
+	if l := logged(); strings.Contains(l, "nsenter") {
+		t.Fatalf("guest element removed while a saved forward of the port remains:\n%s", l)
+	}
+	// The last saved forward of the port: the file and the guest element go.
+	must(t, portClose(s, portReq{Svc: "app", Port: 8000, Proto: "tcp", Iface: "any"}, "testhost"))
+	if _, err := os.Stat(state); !os.IsNotExist(err) {
+		t.Fatalf("state file kept: %v", err)
+	}
+	if l := logged(); !strings.Contains(l, "nsenter: -t 4242 -n nft delete element inet nixos-fw cnt-guest { tcp . 8000 }") {
+		t.Fatalf("guest element not removed:\n%s", l)
+	}
+	// Neither live nor saved: nothing open.
+	if err := portClose(s, portReq{Svc: "app", Port: 8000, Proto: "tcp", Iface: "any"}, "testhost"); err == nil {
+		t.Fatal("close of nothing succeeded")
+	}
+	// The restore after the reload re-adds nothing.
+	calls := stubRestore(t, false, map[string]string{"app": "4242"})
+	must(t, cmdPortRestore(nil))
+	if len(*calls) != 0 {
+		t.Fatalf("restore reopened the closed forwards: %+v", *calls)
+	}
+}
+
+// A port-restore between close's listing (empty after a reload) and its
+// critical section re-adds the forward; close must delete the element of
+// every saved forward it drops, not only the ones it listed. The fake flock
+// stalls before taking the lock until the restore ran; the fake nft and
+// runNft share one file of live forward elements.
+func TestPortCloseRestoreAfterListing(t *testing.T) {
+	realFlock, err := exec.LookPath("flock")
+	if err != nil {
+		t.Skip("flock not available")
+	}
+	fwdTestDir(t)
+	must(t, os.MkdirAll(portFwdDir, 0o755))
+	state := filepath.Join(portFwdDir, "gist")
+	must(t, os.WriteFile(state, []byte(fmt.Sprintf("%d cnt-fwd tailscale0 tcp 22 all 10.89.250.102 0\n", time.Now().Unix()+3600)), 0o644))
+	bin := t.TempDir()
+	live, started, release := filepath.Join(bin, "live"), filepath.Join(bin, "started"), filepath.Join(bin, "release")
+	must(t, os.WriteFile(live, nil, 0o644))
+	for name, body := range map[string]string{
+		// Listing: no table ip cnt-port, empty cnt-tmp* sets. A delete
+		// removes the element from live or fails.
+		"nft": fmt.Sprintf(`case "$*" in
+'list table'*) exit 1 ;;
+'-j list'*) exit 0 ;;
+'-f -') cat >/dev/null; exit 1 ;;
+'delete element ip cnt-port '*)
+  e="$5 $6"
+  grep -qxF "$e" %[1]s || exit 1
+  grep -vxF "$e" %[1]s > %[1]s.new || :
+  mv %[1]s.new %[1]s ;;
+*) exit 1 ;;
+esac
+`, q(live)),
+		"flock":  fmt.Sprintf("touch %s\nwhile ! [ -e %s ]; do sleep 0.01; done\nexec %s \"$@\"\n", q(started), q(release), q(realFlock)),
+		"sudo":   "exec \"$@\"\n",
+		"logger": "exit 0\n",
+	} {
+		must(t, os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"+body), 0o755))
+	}
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+	oldHost := localHost
+	localHost = "testhost"
+	t.Cleanup(func() { localHost = oldHost })
+	oR, oT, oM := runNft, fwdTableExists, machineLeader
+	addRe := regexp.MustCompile(`^add element ip cnt-port (\S+) \{ (.*) timeout `)
+	var restored []string
+	runNft = func(_, s string) error {
+		f, err := os.OpenFile(live, os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			return err
+		}
+		for _, l := range strings.Split(strings.TrimSpace(s), "\n") {
+			restored = append(restored, l)
+			if m := addRe.FindStringSubmatch(l); m != nil {
+				fmt.Fprintf(f, "%s { %s }\n", m[1], m[2])
+			}
+		}
+		return f.Close()
+	}
+	fwdTableExists = func() bool { return true }
+	machineLeader = func(string) string { return "" }
+	t.Cleanup(func() { runNft, fwdTableExists, machineLeader = oR, oT, oM })
+
+	s := fwdSvc("gist", "podman", "10.89.250.102")
+	closed := make(chan error, 1)
+	go func() {
+		closed <- portClose(s, portReq{Svc: "gist", Port: 22, Proto: "tcp", Iface: "tailnet"}, "testhost")
+	}()
+	for i := 0; ; i++ {
+		if _, err := os.Stat(started); err == nil {
+			break
+		}
+		select {
+		case err := <-closed:
+			t.Fatalf("close finished without taking the lock: %v", err)
+		default:
+		}
+		if i == 1000 {
+			t.Fatal("close never reached the lock")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	must(t, cmdPortRestore(nil))
+	if b, _ := os.ReadFile(live); string(b) != "cnt-fwd { \"tailscale0\" . tcp . 22 }\n" {
+		t.Fatalf("restore did not re-add the forward: %q", b)
+	}
+	must(t, os.WriteFile(release, nil, 0o644))
+	select {
+	case err := <-closed:
+		must(t, err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("close still running")
+	}
+	if b, _ := os.ReadFile(live); len(b) != 0 {
+		t.Fatalf("restored forward survived the close:\n%s", b)
+	}
+	if _, err := os.Stat(state); !os.IsNotExist(err) {
+		t.Fatal("state file kept")
+	}
+	restored = nil
+	must(t, cmdPortRestore(nil))
+	if len(restored) != 0 {
+		t.Fatalf("restore reopened the closed forward: %q", restored)
 	}
 }
 

@@ -43,10 +43,10 @@ in
   services.nginx.virtualHosts.${hostname} = config.fleet.wildcardTls // {
     locations."/" = {
       proxyPass = "http://127.0.0.1:${toString port}";
+      proxyWebsockets = true;
       # nginx already sends Host / X-Forwarded-* (nginx-recommended headers in
       # /etc/nginx/nginx.conf); these are the streaming bits.
       extraConfig = ''
-        proxy_http_version 1.1;
         # Server-sent events: the app also sets X-Accel-Buffering: no, this is
         # belt and braces for a proxy that does not honour it.
         proxy_buffering off;

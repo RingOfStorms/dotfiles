@@ -1,0 +1,26 @@
+{{define "term.html"}}{{template "head" .}}
+<div class="term-wrap">
+  <div id="term" class="term"></div>
+  <button id="term-status" class="term-status" type="button" hidden></button>
+</div>
+<div class="term-keys" role="toolbar" aria-label="extra keys">
+  <button type="button" data-send="esc">esc</button>
+  <button type="button" data-send="tab">tab</button>
+  <button type="button" data-mod="ctrl" aria-pressed="false">ctrl</button>
+  <button type="button" data-mod="alt" aria-pressed="false">alt</button>
+  <button type="button" data-send="left" aria-label="left">←</button>
+  <button type="button" data-send="down" aria-label="down">↓</button>
+  <button type="button" data-send="up" aria-label="up">↑</button>
+  <button type="button" data-send="right" aria-label="right">→</button>
+  <button type="button" data-send="^c">^C</button>
+  <button type="button" data-send="|">|</button>
+  <button type="button" data-send="~">~</button>
+  <button type="button" data-send="/">/</button>
+  <button type="button" data-send="-">-</button>
+  <button type="button" data-send="home">home</button>
+  <button type="button" data-send="end">end</button>
+  <button type="button" data-send="pgup">pg↑</button>
+  <button type="button" data-send="pgdn">pg↓</button>
+</div>
+<noscript><p class="error">The terminal needs JavaScript.</p></noscript>
+{{template "foot" .}}{{end}}

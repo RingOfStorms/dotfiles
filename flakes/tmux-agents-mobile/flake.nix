@@ -35,7 +35,7 @@
           pname = "tmux-agents-mobile";
           version = "0.1.0";
           src = ./.;
-          vendorHash = "sha256-BF3w5Fi7X0Sl5ozEV98WHjuI92p+8DVXrZKfWXLYtOc=";
+          vendorHash = "sha256-sRoPHdOGjyRI2o6OQR0D8URGv4f4YG0ZiF9k2M9JLZM=";
           nativeBuildInputs = [ pkgs.makeWrapper ];
           # The tmux integration tests start an isolated `tmux -L tamtest-…`
           # server; tmux must be on PATH inside the sandbox, and it needs a
@@ -130,10 +130,9 @@
                 RestartSec = "5s";
                 UMask = "0077";
                 Environment = lib.mapAttrsToList (name: value: "${name}=${value}") environment;
-                # A user unit cannot carry most systemd hardening (no
-                # capabilities, no namespaces); these two still apply.
-                NoNewPrivileges = true;
-                RestrictSUIDSGID = true;
+                # /term is the user's full login shell. Do not inherit
+                # NoNewPrivileges or a device/namespace sandbox: sudo and
+                # ordinary shell tools must work as they do in a local PTY.
               };
             };
           };
@@ -236,6 +235,8 @@
               default = { };
               description = "Extra environment variables for the service.";
             };
+
+            tailnet = (import ./nix/tailnet.nix { inherit lib; }).options;
           };
 
           config = lib.mkIf cfg.enable {
@@ -256,19 +257,12 @@
                   TAM_HEALTH_LISTEN = cfg.healthListen;
                   TAM_ROOTS = lib.concatStringsSep ":" cfg.roots;
                 }
+                // (import ./nix/tailnet.nix { inherit lib; }).environment cfg.tailnet
                 // cfg.extraEnvironment;
 
-                # Deliberately light sandboxing: this process must reach the
-                # user's tmux socket (/tmp/tmux-<uid>/) and run git in
-                # ~/projects, so PrivateTmp and ProtectHome would break it.
-                NoNewPrivileges = true;
-                RestrictSUIDSGID = true;
-                PrivateDevices = true;
-                ProtectKernelTunables = true;
-                ProtectKernelModules = true;
-                ProtectControlGroups = true;
-                RestrictNamespaces = true;
-                LockPersonality = true;
+                # /term is the user's full login shell: no inherited
+                # privilege, device or namespace restrictions. Authentication
+                # protects access to this account, not a sandboxed subset.
               };
             }
             // lib.optionalAttrs (cfg.environmentFile != null) {

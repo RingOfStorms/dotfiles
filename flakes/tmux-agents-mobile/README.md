@@ -1,11 +1,10 @@
 # tmux-agents-mobile
 
-A phone-sized view of the agent panes on one machine's tmux server, for
-checking in: see what is waiting on you, read the last screen, answer it, peek
-at a diff, start a session.
+A phone-sized view of the agent panes on one machine's tmux server, plus a
+separate full terminal for the service user's login shell.
 
-It **never attaches a tmux client**. It reads `capture-pane`, re-renders the
-text at phone width and writes back with `send-keys`. That is the whole design:
+The **pane views never attach a tmux client**. They read `capture-pane`,
+re-render text at phone width and write back with `send-keys`:
 
 - it cannot resize, zoom or select anything, so the desktop view never moves
   (`window-size latest` makes an attached phone client resize every pane);
@@ -24,9 +23,11 @@ connected.
   label, with the pane's directory on the right. Agent panes each get a card; a
   session with no agent panes gets a single card pointing at its active pane, so
   shell-only worktrees stay reachable (those cards have no glyph). A magnifier
-  button in the bottom corner opens a filter that narrows the list as you type,
-  every term matching like the navigator's `--exact`; closing it clears the
-  query, so a filter is never left applied invisibly. Glyphs are the tmux
+  button in the bottom corner (or `/` on a keyboard) opens a filter that narrows
+  the list as you type, every term matching like the navigator's `--exact`;
+  closing it clears the query, so a filter is never left applied invisibly.
+  While it is open the first match is highlighted, `Ctrl+h/j/k/l` move the
+  highlight through the matches in grid order, and Enter opens it. Glyphs are the tmux
   status line's own: `!` needs input (red), `⠿` working (yellow), `●` done and
   unseen (green), `○` idle and seen (dim).
 - **Pane view** (`/p/<id>`) — live frame over SSE with line-level patches (a
@@ -58,6 +59,71 @@ connected.
 - **Seen / desktop** — viewing a pane on the phone marks it seen and keeps the
   desktop quiet while you watch (`@agent_watch_until`), and *desktop* hands the
   pane to the largest attached client.
+- **Terminal** (`/term`) — a separate interactive login shell on a real PTY,
+  with full-screen applications, font-size pinch zoom and a mobile key bar.
+
+## Full terminal
+
+The **term** navigation link opens the service account's login shell in its
+home directory, not a tmux pane. On lio that is the primary user. It runs the
+normal shell startup files, supports interactive programs such as Vim, and
+does not resize existing desktop panes. Running `tmux attach` yourself inside
+this shell is a normal tmux attachment and can resize those panes.
+
+The browser uses [xterm.js 6](https://github.com/xtermjs/xterm.js), with its DOM
+renderer and fit, web-links and Unicode 11 addons. The Go backend uses
+[creack/pty](https://github.com/creack/pty) and
+[coder/websocket](https://github.com/coder/websocket). Assets and their MIT
+license are vendored in `internal/web/static` and embedded in the binary;
+no CDN, Node runtime or separate ttyd process is needed. xterm.js was chosen
+over the newer [ghostty-web](https://github.com/coder/ghostty-web) for its
+established browser input handling and DOM text rendering.
+
+- Pinch, trackpad Ctrl+wheel, or the menu's **larger/smaller text** changes the
+  font size and PTY grid, rather than magnifying a fixed terminal bitmap.
+  The font choice is saved in this browser.
+- The horizontal key bar supplies Escape, Tab, arrows, navigation keys and
+  one-shot Ctrl/Alt modifiers. Ctrl then C sends Ctrl-C; physical keyboard
+  shortcuts and clipboard input use xterm's normal handling.
+- The terminal follows the visual viewport so the mobile keyboard can shrink
+  the available rows. Real-device Safari keyboard/IME behavior still needs
+  device testing; Chromium touch/viewport emulation is not an iOS test.
+- A shell survives disconnected browsers for **one hour** by default.
+  Reconnecting continues from the last received byte; reloading replays the
+  retained output. One session ID is stored per browser origin: another tab
+  takes over that shell. **New shell** ends the current shell and starts fresh.
+- Output replay retains roughly 512 KiB–1 MiB per shell. After overflow, old
+  output is discarded and the screen resets to retained output; this is not
+  a full terminal-state snapshot, so a full-screen app may need Ctrl-L to
+  redraw. Shells do not survive a service restart. At most eight shells are
+  kept; when full, the longest-detached shell is ended to make room.
+- Historical replay suppresses terminal-query replies until xterm has parsed
+  it, so old Vim queries cannot type escape-response garbage into the current
+  shell. A reconnect carries its screen's attachment generation: after another
+  tab used the shell, output delivered there is history even at a nonzero
+  offset. The replay boundary survives a disconnect midway through redraw.
+  Ordinary reconnects still answer missing live queries; output produced after
+  the other tab disconnected remains live beyond its delivered boundary.
+  Delivery means a successful socket write, not confirmation that the other
+  browser displayed it, so takeover conservatively suppresses replies for
+  that delivered prefix.
+
+`--shell` / `TAM_SHELL` overrides the executable; otherwise `$SHELL`, the
+account's passwd entry, then `/bin/sh` are tried. `--term-detach` /
+`TAM_TERM_DETACH` sets the disconnect lifetime (for example `2h`). Nix modules
+accept these through `extraEnvironment`:
+
+```nix
+services.tmux-agents-mobile.extraEnvironment.TAM_TERM_DETACH = "2h";
+```
+
+**Access is a full shell as the service user**, including `sudo` under that
+account's normal policy. The systemd units deliberately do not impose
+inherited privilege/device/namespace restrictions. They retain `UMask=0077`,
+so new files are private unless shell startup overrides it. The new-session
+form's `roots` limit does not restrict this shell. Keep authentication and
+tailnet exposure controls in place; all authorized users share the same OS
+account.
 
 ## What it needs from tmux (and from the plugin)
 
@@ -119,6 +185,31 @@ Without `--agents` (or when the plugin is older than `rows --json`) the inbox
 still works: sessions and agent panes are detected from pane titles, with repo
 and branch filled in by git.
 
+### Terminal takeover browser regression
+
+`tests/terminal-takeover.mjs` uses real Chrome, xterm, WebSockets, a PTY and Vim.
+It opens A, takes over in B, runs and quits Vim, then resumes A from its nonzero
+offset. It checks that Vim received live replies, takeover-back sends no input,
+and the next shell command executes correctly. It creates an isolated browser
+context and ends its shell afterward. Node/Puppeteer are optional test tools,
+not runtime or Nix-build dependencies.
+
+Run against a disposable, unauthenticated loopback server (Vim on its PATH):
+
+```sh
+go run . --no-auth --listen 127.0.0.1:8199 --health-listen ''
+# In separate terminals:
+google-chrome-stable --headless=new --remote-debugging-port=9333 \
+  --user-data-dir=/tmp/tam-test-chrome --no-first-run about:blank
+npm install --prefix /tmp/tam-browser-test --ignore-scripts puppeteer-core
+TAM_PUPPETEER_PREFIX=/tmp/tam-browser-test node tests/terminal-takeover.mjs
+```
+
+`TAM_URL` and `CHROME_CDP_URL` override the server and Chrome endpoints. Stop
+both disposable processes after testing. The Go suite separately covers plain
+reconnects, interrupted takeover replay, and still-unanswered detached output.
+
+
 ## Authentication is optional
 
 Every route goes through Zitadel **when it is configured**, and the app refuses
@@ -133,14 +224,59 @@ tmux-agents-mobile --no-auth --listen 0.0.0.0:8099 --allow-nonloopback
 `--no-auth` on a non-loopback address is refused unless `--allow-nonloopback`
 is given too, so "exposed and unauthenticated" is always a deliberate,
 two-flag mistake. The header of the UI shows a red **no auth** badge in that
-mode so it is obvious which one you are looking at. (`--dev-no-auth` and
-`--dev-allow-tailnet` still work as aliases.)
+mode so it is obvious which one you are looking at. `TAM_NO_AUTH=1` is the
+same as `--no-auth` (the modules set it when `zitadel.clientId` is empty).
+(`--dev-no-auth` and `--dev-allow-tailnet` still work as aliases.)
 
 **Sign out** clears this app's session and shows a "signed out" page; it does not
 bounce into the OIDC flow, because the identity provider's session usually
 survives and would re-authenticate instantly (which reads as "nothing
 happened"). Ending the Zitadel session as well needs a post-logout redirect URI
 registered on the app - the end-session endpoint is not called.
+
+## Tailnet node (optional, off by default)
+
+`--tsnet-hostname` also serves the UI from **its own node** on a
+Tailscale/Headscale tailnet, using `tailscale.com/tsnet` (userspace WireGuard
+in the process: no tailscaled, TUN device or root, still `CGO_ENABLED=0`). The
+phone reaches it from any network through the tailnet's DERP relay, which
+only ever sees WireGuard ciphertext.
+
+```sh
+tmux-agents-mobile --no-auth \
+  --tsnet-hostname tmux-mac \
+  --tsnet-control-url https://headscale.example.com \
+  --tsnet-authkey-file ~/.secrets/tam-authkey      # first login only
+# then open http://tmux-mac/ (or http://tmux-mac.<magicdns domain>/) on the phone
+```
+
+- **Reaching the node is the authentication.** Requests on the tailnet
+  listener skip Zitadel even when it is configured for `--listen`; the
+  control server's ACLs decide which devices can connect. Its pages show the
+  **no auth** badge and no sign-out.
+- **Register it with a tagged pre-auth key** (`headscale preauthkeys create -u
+  <user-id> --tags tag:lowtrust`). With an ACL that allows `user → tag:*` and
+  has no rule from the tag, every device can open the node but the node cannot
+  open a connection to anything (connection tracking still lets its replies
+  through). That is the `tag:lowtrust` rule in `hosts/oracle/o002/headscale.nix`.
+  It also lets *every* untagged device in, terminal included; narrow `dst` to
+  a dedicated tag and port 80 if that is too wide.
+- **DNS rebinding is refused.** A page on another site can resolve its own
+  name to the node's IP and drive a tailnet browser at it; the listener only
+  answers a `Host` that names the node (short name, MagicDNS name, tailnet
+  IPs) and returns 421 otherwise.
+- **Plain HTTP** on `--tsnet-listen` (default `:80`): WireGuard already
+  encrypts the path, Headscale cannot issue certificates, and the PWA install
+  is the only thing that needs a secure context.
+- The node's keys live in `--tsnet-dir` (default
+  `<user config dir>/tmux-agents-mobile/tsnet`); keep it, or the next start
+  registers a new node with new IPs. Without an auth key the log prints a
+  login URL.
+- `--listen ''` turns the regular listener off, so the tailnet node is the only
+  way in. With the regular listener on and no Zitadel, `--no-auth` and its
+  loopback rule still apply to it.
+
+The modules expose this as `tailnet.{enable,hostname,controlUrl,authKeyFile,stateDir,listen}`.
 
 ## Deployment
 
@@ -157,7 +293,8 @@ Three modules, the same options:
 
 Options worth knowing: `user` (required), `listen` (default
 `127.0.0.1:8099`), `roots` (default `["~"]`, the trust boundary for the
-new-session form), `sessionKeyFile` and `zitadel.{issuer,clientId,projectId,claim,role,redirectUri}`.
+new-session form), `sessionKeyFile`, `zitadel.{issuer,clientId,projectId,claim,role,redirectUri}`
+and `tailnet.*` (see [Tailnet node](#tailnet-node-optional-off-by-default)).
 The Zitadel client is public information, so it can live in the Nix config; a
 session key file avoids logging every phone out on restart.
 
@@ -166,9 +303,11 @@ Set `zitadel.clientId` to gate it behind Zitadel (register
 service runs **unauthenticated** and is then loopback-only - see
 [Authentication is optional](#authentication-is-optional).
 
-`auth.Wrap` covers the entire mux — pages, static assets, SSE and every POST.
-The only route served before the session check is `/auth/*`. `/healthz` lives on
-its own loopback listener so the authenticated mux needs no exception.
+`auth.Wrap` covers the entire mux — pages, static assets, SSE, WebSocket
+handshakes and every POST. The terminal additionally rejects cross-origin
+browser handshakes. The only route served before the session check is
+`/auth/*`. `/healthz` lives on its own loopback listener so the authenticated
+mux needs no exception.
 
 ### The lio setup
 
@@ -180,10 +319,27 @@ public DNS. `hosts/h005/dns-records.nix` answers the name from the tailnet
 dnsmasq with lio's overlay IP, so it resolves for tailnet clients and nowhere
 else.
 
-SSE needs buffering off, which the vhost sets:
+The host pins this package through its git flake input. After publishing a
+change, update `tmux-agents-mobile` in `hosts/lio/flake.lock` and rebuild the
+host to activate the new binary, unit settings and proxy configuration.
+
+SSE needs buffering off and `/term/ws` needs WebSocket upgrades. The NixOS
+vhost sets `proxyWebsockets = true` plus the streaming options below. For a
+hand-written nginx configuration, define a connection map in `http` scope:
+
+```nginx
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+```
+
+and use these directives in the proxy location:
 
 ```nginx
 proxy_http_version 1.1;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection $connection_upgrade;
 proxy_buffering off;
 proxy_read_timeout 1h;
 ```
@@ -205,6 +361,7 @@ proxy that honours it needs no extra configuration.
     enable = true;
     user = "josh";
     listen = "127.0.0.1:8099";        # no auth, so loopback only
+    extraEnvironment.TAM_SHELL = "/bin/zsh";
     # zitadel.clientId = "…";         # omit for the unauthenticated mode
   };
 }
@@ -213,6 +370,8 @@ proxy that honours it needs no extra configuration.
 then `nix build .#darwinConfigurations.<host>.system` / `darwin-rebuild switch`
 as usual. The package wraps `tmux`, `git` and `fzf` (and `procps` on Linux) into
 its `PATH`, so the agent does not depend on the launchd environment having them.
+Set `TAM_SHELL` explicitly on macOS: launchd may omit `$SHELL`, and normal
+macOS users are not listed in `/etc/passwd`.
 
 `homeManagerModules.default` is Linux-only (it writes a systemd user unit);
 use `darwinModules` on macOS.

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="{{if .Viewport}}{{.Viewport}}{{else}}width=device-width, initial-scale=1, viewport-fit=cover{{end}}">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#11111b">
 <title>{{if .Title}}{{.Title}} · {{end}}tmux</title>
@@ -13,9 +13,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="{{asset "app.css"}}">
-<script src="{{asset "htmx.min.js"}}" defer></script>
+{{range .Styles}}<link rel="stylesheet" href="{{asset .}}">
+{{end}}<script src="{{asset "htmx.min.js"}}" defer></script>
 <script src="{{asset "app.js"}}" defer></script>
-</head>
+{{range .Scripts}}<script src="{{asset .}}" defer></script>
+{{end}}</head>
 <body class="{{.Page}}">
 <header class="top">
 {{if .Back}}
@@ -27,7 +29,23 @@
     </div>
     {{if .Sub}}<div class="ctx-sub">{{.Sub}}</div>{{end}}
   </div>
-  {{if .Actions}}
+  {{template "menu" .}}
+{{else}}
+  <a class="brand" href="/">tmux</a>
+  <nav>
+    <a href="/">panes</a>
+    <a href="/term">term</a>
+    <a href="/new">new</a>
+    {{if not .Dev}}<a href="/auth/logout">sign out</a>{{end}}
+  </nav>
+  {{if .Dev}}<span class="badge dev">no auth</span>{{end}}
+  {{template "menu" .}}
+{{end}}
+</header>
+<main>
+{{end}}
+
+{{define "menu"}}{{if .Actions}}
   <details class="menu" data-menu>
     <summary aria-label="actions">⋯</summary>
     <div class="menu-body">
@@ -38,19 +56,7 @@
       {{end}}
     </div>
   </details>
-  {{end}}
-{{else}}
-  <a class="brand" href="/">tmux</a>
-  <nav>
-    <a href="/">panes</a>
-    <a href="/new">new</a>
-    {{if not .Dev}}<a href="/auth/logout">sign out</a>{{end}}
-  </nav>
-  {{if .Dev}}<span class="badge dev">no auth</span>{{end}}
-{{end}}
-</header>
-<main>
-{{end}}
+{{end}}{{end}}
 
 {{define "foot"}}
 </main>

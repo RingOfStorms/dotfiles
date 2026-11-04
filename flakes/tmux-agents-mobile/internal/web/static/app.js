@@ -440,9 +440,41 @@
   const filter = document.getElementById("filter");
   const cardsEl = document.querySelector(".cards");
   const noMatches = document.getElementById("no-matches");
+  const searchbar = document.getElementById("searchbar");
+
+  // While the filter is open one visible card is highlighted and Enter opens
+  // it. It is tracked by href because the poll replaces the card elements.
+  let selected = null;
+
+  const visibleCards = () =>
+    cardsEl ? [...cardsEl.querySelectorAll(".card:not(.hidden-card)")] : [];
+
+  const paintSelection = (scroll) => {
+    if (!cardsEl) return;
+    let hit = null;
+    for (const card of cardsEl.querySelectorAll(".card")) {
+      const on = selected !== null && card.getAttribute("href") === selected;
+      card.classList.toggle("is-selected", on);
+      if (on) hit = card;
+    }
+    if (hit && scroll) hit.scrollIntoView({ block: "nearest" });
+  };
+
+  // Keep the current pick when it still matches, else fall back to the first
+  // match; no selection at all while the filter is closed.
+  const syncSelection = (reset) => {
+    const cards = visibleCards();
+    const searching = searchbar && !searchbar.hidden;
+    if (!searching || cards.length === 0) {
+      selected = null;
+    } else if (reset || !cards.some((c) => c.getAttribute("href") === selected)) {
+      selected = cards[0].getAttribute("href");
+    }
+    paintSelection(reset);
+  };
 
   // Cards are replaced by the poll, so this queries them fresh each time.
-  const applyFilter = () => {
+  const applyFilter = (reset) => {
     if (!cardsEl) return;
     const terms = filter ? filter.value.toLowerCase().split(/\s+/).filter(Boolean) : [];
     let visible = 0;
@@ -453,17 +485,38 @@
       if (on) visible++;
     }
     if (noMatches) noMatches.hidden = visible > 0;
+    syncSelection(reset === true);
+  };
+
+  // Ctrl+h/j/k/l walk the matches in grid order. Hidden cards leave the grid,
+  // so the matches reflow and the column count is read off the first row.
+  const moveSelection = (dir) => {
+    const cards = visibleCards();
+    if (cards.length === 0) return;
+    const top = cards[0].offsetTop;
+    let cols = 0;
+    while (cols < cards.length && cards[cols].offsetTop === top) cols++;
+    let i = cards.findIndex((c) => c.getAttribute("href") === selected);
+    if (i < 0) i = 0;
+    const step = { h: -1, l: 1, k: -cols, j: cols }[dir];
+    const next = i + step;
+    if (next < 0 || next >= cards.length) return;
+    // h/l stay within the row instead of wrapping onto the next one.
+    if ((dir === "h" || dir === "l") && Math.floor(next / cols) !== Math.floor(i / cols)) return;
+    selected = cards[next].getAttribute("href");
+    paintSelection(true);
   };
 
   if (filter) {
     const toggle = document.getElementById("search-toggle");
-    const bar = document.getElementById("searchbar");
+    const bar = searchbar;
     const close = document.getElementById("search-close");
 
     // The filter lives behind a button so the list owns the screen; closing it
     // clears the query, because a filter you cannot see must not stay applied.
     const setOpen = (open) => {
       if (!bar) return;
+      const wasOpen = !bar.hidden;
       bar.hidden = !open;
       if (toggle) {
         toggle.classList.toggle("is-open", open);
@@ -473,25 +526,43 @@
         // Focus synchronously: the click is the user activation that lets the
         // phone open its keyboard, and a rAF in between can lose it.
         filter.focus();
+        if (!wasOpen) syncSelection(true);
         return;
       }
-      if (filter.value !== "") {
-        filter.value = "";
-        applyFilter();
-      }
+      if (filter.value !== "") filter.value = "";
+      applyFilter();
       filter.blur();
     };
 
     toggle?.addEventListener("click", () => setOpen(bar.hidden));
     close?.addEventListener("click", () => setOpen(false));
     filter.addEventListener("keydown", (e) => {
+      // Keys typed while an IME is composing belong to its candidate window.
+      if (e.isComposing) return;
       if (e.key === "Escape") {
         e.preventDefault();
         setOpen(false);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const card = visibleCards().find((c) => c.getAttribute("href") === selected);
+        if (card) window.location.href = card.href;
+      } else if (e.ctrlKey && !e.altKey && !e.metaKey && "hjkl".includes(e.key) && e.key.length === 1) {
+        // Overrides the browser's Ctrl+H/J/K/L (history, downloads, search, URL bar).
+        e.preventDefault();
+        moveSelection(e.key);
       }
     });
-    filter.addEventListener("input", applyFilter);
-    filter.addEventListener("search", applyFilter);
+    filter.addEventListener("input", () => applyFilter(true));
+    filter.addEventListener("search", () => applyFilter(true));
+
+    // "/" anywhere on the list opens the filter, like a pager's search.
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "/" || e.ctrlKey || e.altKey || e.metaKey || e.defaultPrevented) return;
+      const t = e.target;
+      if (t instanceof Element && t.closest("input, textarea, select, [contenteditable]")) return;
+      e.preventDefault();
+      setOpen(true);
+    });
     applyFilter();
   }
 

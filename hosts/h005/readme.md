@@ -38,6 +38,9 @@ fleet-edge, the placement-driven tailnet/LAN DNS and the WAN forwards are live. 
 bunny key, so it issues the wildcard and writes the public records. The service and runtime-routing design is in
 [`flakes/fleet-edge/README.md`](../../flakes/fleet-edge/README.md) and [`containers/README.md`](../../containers/README.md).
 
+The Broadlink remote (`a8:dd:ec:05:16:eb`, hostname `BROADLINK`) has a VLAN20 LAN DHCP
+reservation at `10.12.14.103` in `_constants.nix` (`network.staticLeases`).
+
 ### Fleet oauth2-proxy
 
 One oauth2-proxy serves the whole fleet, listening on `100.64.0.3:4180`. The firewall admits 4180 only from the

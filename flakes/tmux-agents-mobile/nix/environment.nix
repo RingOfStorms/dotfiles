@@ -15,7 +15,13 @@ in
   TAM_ZITADEL_REDIRECT_URI = zitadel.redirectUri;
   TAM_ZITADEL_ROLE = zitadel.role;
 }
+# Without a Zitadel client the app runs unauthenticated; it still refuses a
+# non-loopback `listen` in that mode.
+// lib.optionalAttrs (zitadel.clientId == "") {
+  TAM_NO_AUTH = "1";
+}
 // lib.optionalAttrs (cfg.sessionKeyFile != null) {
   TAM_SESSION_KEY_FILE = cfg.sessionKeyFile;
 }
+// (import ./tailnet.nix { inherit lib; }).environment cfg.tailnet
 // cfg.extraEnvironment

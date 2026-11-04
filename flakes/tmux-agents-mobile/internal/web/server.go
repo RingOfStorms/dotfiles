@@ -16,6 +16,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/agents"
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/diff"
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/dirs"
+	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/term"
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/tmux"
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/watch"
 )
@@ -71,6 +73,8 @@ type Server struct {
 	git    *diff.Git
 	dirs   *dirs.Index
 	roots  []string
+	terms  *term.Manager
+	host   string
 	log    *slog.Logger
 	tpl    *template.Template
 	dev    bool
@@ -78,13 +82,14 @@ type Server struct {
 
 // New wires the server. roots are the directories a new session may be created
 // in; a directory outside them is rejected, so the form is not a way to start a
-// shell anywhere on the machine.
-func New(t *tmux.Client, hub *watch.Hub, chat *watch.ChatHub, ag *agents.Provider, g *diff.Git, index *dirs.Index, roots []string, dev bool, log *slog.Logger) (*Server, error) {
+// shell anywhere on the machine. terms runs the terminal tab's shells.
+func New(t *tmux.Client, hub *watch.Hub, chat *watch.ChatHub, ag *agents.Provider, g *diff.Git, index *dirs.Index, roots []string, terms *term.Manager, dev bool, log *slog.Logger) (*Server, error) {
 	tpl, err := parseTemplates()
 	if err != nil {
 		return nil, err
 	}
-	return &Server{tmux: t, hub: hub, chat: chat, agents: ag, git: g, dirs: index, roots: roots, log: log, tpl: tpl, dev: dev}, nil
+	host, _ := os.Hostname()
+	return &Server{tmux: t, hub: hub, chat: chat, agents: ag, git: g, dirs: index, roots: roots, terms: terms, host: host, log: log, tpl: tpl, dev: dev}, nil
 }
 
 // Handler returns the root handler with all routes and middleware applied.
@@ -104,6 +109,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /new", s.newPage)
 	mux.HandleFunc("GET /new/dirs", s.dirSuggestions)
 	mux.HandleFunc("POST /new", s.newSession)
+	mux.HandleFunc("GET /term", s.termPage)
+	mux.HandleFunc("GET /term/ws", s.termSocket)
 	mux.Handle("GET /static/", http.FileServerFS(assets))
 	// The service worker has to be served from the root: its scope is its own
 	// URL, and the whole app needs to be in scope for installability.
@@ -286,7 +293,9 @@ type gzipWriter struct {
 
 func gzipHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		// A WebSocket upgrade hijacks the connection; a gzip footer written
+		// into it afterwards would corrupt the first frame.
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") || r.Header.Get("Upgrade") != "" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -389,6 +398,12 @@ type Base struct {
 	Glyph      string
 	GlyphClass string
 	Actions    []Action
+
+	// Per-page head additions: a viewport override, and extra stylesheets
+	// and scripts (static file names) loaded after the app's own.
+	Viewport string
+	Styles   []string
+	Scripts  []string
 }
 
 // stateGlyph mirrors tmux-agents' status glyphs exactly, so the same visual

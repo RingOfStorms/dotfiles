@@ -122,18 +122,7 @@ in
         # Deleted by `fleet-edge dns-plan --apply` only while the live record
         # matches name, type and value exactly (else: retire-mismatch, no
         # writes at all). Drop an entry once a plan shows its record gone.
-        # notes and books (made tailnet-only 2026-10-21) are not yet
-        # confirmed gone.
-        retire =
-          map
-            (name: {
-              inherit name;
-              type = "CNAME";
-              value = "o002.${domain}";
-            })
-            [
-              "notes"
-              "books"
-            ];
+        # Entries: { name; type; value; }.
+        retire = [ ];
       };
 }
