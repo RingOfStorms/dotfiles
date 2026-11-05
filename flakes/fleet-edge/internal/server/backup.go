@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"time"
 
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/backup"
@@ -25,6 +26,9 @@ type BackupRow struct {
 	Revision int64
 	Clear    string
 	Default  bool
+	// Unlisted marks a repo a target reports that the inventory does not
+	// name (a canary, a retired service): stats only, no policy invented.
+	Unlisted bool
 }
 
 // BackupTable is the view of /internal/backup.json.
@@ -55,7 +59,8 @@ func ago(ts int64, now time.Time) string {
 }
 
 // BuildBackupTable turns the export into rows: one per subject (the default
-// row first), stats from the holding target, never 0 for an unknown size.
+// row first), then one per repo a target reports outside the inventory;
+// stats from the holding target, never 0 for an unknown size.
 func BuildBackupTable(e backup.Export, pricePerTB float64, now time.Time) BackupTable {
 	t := BackupTable{Targets: e.Targets}
 	byID := map[string]backup.TargetView{}
@@ -70,16 +75,36 @@ func BuildBackupTable(e backup.Export, pricePerTB float64, now time.Time) Backup
 	if def == nil {
 		def = &backup.Row{Subject: backup.Default, Target: backup.None, RetentionLocal: "standard", RetentionB2: "local"}
 	}
-	subjects := append([]string{backup.Default}, e.Subjects...)
-	for _, name := range subjects {
+	listed := map[string]bool{backup.Default: true}
+	for _, n := range e.Subjects {
+		listed[n] = true
+	}
+	var unlisted []string
+	for _, tg := range e.Targets {
+		for n := range tg.Stats {
+			if !listed[n] {
+				listed[n] = true
+				unlisted = append(unlisted, n)
+			}
+		}
+	}
+	sort.Strings(unlisted)
+	subjects := append(append([]string{backup.Default}, e.Subjects...), unlisted...)
+	nInventory := 1 + len(e.Subjects)
+	for i, name := range subjects {
+		isUnlisted := i >= nInventory
 		r := rows[name]
-		if r == nil {
+		switch {
+		case r == nil && isUnlisted:
+			r = &backup.Row{Subject: name, Target: "-", RetentionLocal: "-", RetentionB2: "-"}
+		case r == nil:
 			c := *def
 			c.Subject = name
 			r = &c
 		}
 		v := BackupRow{Subject: name, Target: r.Target, Offsite: r.Offsite, RetentionLocal: r.RetentionLocal,
-			RetentionB2: r.RetentionB2, Default: name == backup.Default, Local: "-", B2: "-", Cost: "-", LastBackup: "-", LastCopy: "-"}
+			RetentionB2: r.RetentionB2, Default: name == backup.Default, Unlisted: isUnlisted,
+			Local: "-", B2: "-", Cost: "-", LastBackup: "-", LastCopy: "-"}
 		if rows[name] != nil {
 			v.Revision = r.Revision
 		}
@@ -88,6 +113,8 @@ func BuildBackupTable(e backup.Export, pricePerTB float64, now time.Time) Backup
 		}
 		tg, ok := byID[r.Target]
 		switch {
+		case isUnlisted:
+			v.TargetNote = "not in inventory"
 		case r.Target == backup.None:
 		case !ok:
 			v.TargetNote = "unknown target"

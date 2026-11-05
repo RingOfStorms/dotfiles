@@ -247,6 +247,27 @@ func TestNonAllowedUser(t *testing.T) {
 	}
 }
 
+// TestUnlistedRepoReadOnly: a repo h004 reports outside the inventory shows
+// up marked, without forms the API would refuse (unknown subject).
+func TestUnlistedRepoReadOnly(t *testing.T) {
+	f := newFx(t)
+	local := int64(10)
+	f.heartbeat(t, "h004", "100.64.0.17", true, map[string]backup.Stats{"canary": {LocalBytes: &local}, "retired": {LocalBytes: &local}})
+	r := httptest.NewRequest("GET", "/backup/", nil)
+	r.RemoteAddr = "127.0.0.1:1"
+	r.Header.Set("X-Auth-Request-Email", admin)
+	r.Header.Set("X-Auth-Request-Groups", "role:admin")
+	g := httptest.NewRecorder()
+	f.ui.ServeHTTP(g, r)
+	page := g.Body.String()
+	if g.Code != 200 || !strings.Contains(page, `retired <span class="warn">(not in inventory)</span>`) {
+		t.Fatalf("page: %d\n%s", g.Code, page)
+	}
+	if strings.Contains(page, `action="/backup/retired/`) || !strings.Contains(page, `action="/backup/canary/policy"`) {
+		t.Fatalf("forms:\n%s", page)
+	}
+}
+
 func TestSetTargetPresetOffsite(t *testing.T) {
 	f := newFx(t)
 	code, page := f.follow(t, f.post("/backup/canary/policy", req{form: setForm("0", "h004", "long", "standard", "on")}))

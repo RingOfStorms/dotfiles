@@ -27,7 +27,7 @@
 <tr>
   <td>{{if .Default}}<em>default</em>{{else}}{{.Subject}}{{end}}{{if .TargetNote}} <span class="warn">({{.TargetNote}})</span>{{end}}</td>
   <td>
-  {{if $.CanWrite}}
+  {{if and $.CanWrite (not .Unlisted)}}
   <form method="post" action="/backup/{{.Subject}}/policy">
     <input type="hidden" name="csrf" value="{{$.Token}}">
     <input type="hidden" name="revision" value="{{.Revision}}">
@@ -48,12 +48,12 @@
   <td title="{{.StatsAt}}">{{.Local}}</td><td title="{{.StatsAt}}">{{.B2}}</td><td>{{.Cost}}</td>
   <td>{{.LastBackup}}</td><td>{{if .Clear}}<span class="warn">clear {{.Clear}}</span>{{end}}</td>
   {{if $.CanWrite}}
-  <td>{{if ne .Target "none"}}<form method="post" action="/backup/{{.Subject}}/off">
+  <td>{{if .Unlisted}}{{else if ne .Target "none"}}<form method="post" action="/backup/{{.Subject}}/off">
     <input type="hidden" name="csrf" value="{{$.Token}}">
     <input type="hidden" name="revision" value="{{.Revision}}">
     <button type="submit">turn off</button>
   </form>{{else}}<span class="muted">off</span>{{end}}</td>
-  <td>{{if not .Default}}<form method="post" action="/backup/{{.Subject}}/clear">
+  <td>{{if not (or .Default .Unlisted)}}<form method="post" action="/backup/{{.Subject}}/clear">
     <input type="hidden" name="csrf" value="{{$.Token}}">
     <select name="scope" aria-label="clear scope">{{range $.Scopes}}<option>{{.}}</option>{{end}}</select>
     <input name="confirm" placeholder="type {{.Subject}}" autocomplete="off" required size="10" aria-label="type the subject name to confirm">

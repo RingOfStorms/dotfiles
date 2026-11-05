@@ -76,6 +76,23 @@ func TestBackupPolicyList(t *testing.T) {
 	}
 }
 
+// A repo a target reports that the inventory does not name is listed after
+// it, marked, with its size and no policy filled in from the default row.
+func TestBackupPolicyListUnlisted(t *testing.T) {
+	f := &fakeEdge{reply: map[string]string{"GET /api/backup": `{"rows":[{"subject":"default","target":"h004","retentionLocal":"standard","retentionB2":"local"}],"targets":[{"id":"h004","url":"rest:http://x:8000/","enabled":true,"stats":{"canary":{"localBytes":3072},"forgejo":{"localBytes":1}}}],"subjects":["forgejo"]}`}}
+	var out bytes.Buffer
+	if err := backupPolicyList(f, &out); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(out.String(), "\n")
+	if !strings.HasPrefix(lines[2], "forgejo ") || !strings.Contains(lines[2], "h004 (default)") {
+		t.Fatalf("forgejo:\n%s", out.String())
+	}
+	if got := strings.Join(strings.Fields(lines[3]), " "); got != "canary - (not in inventory) false - - 0 3.0KiB -" {
+		t.Fatalf("canary: %q", lines[3])
+	}
+}
+
 func TestBackupHeartbeat(t *testing.T) {
 	dir := t.TempDir()
 	stats := filepath.Join(dir, "stats.json")

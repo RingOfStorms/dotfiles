@@ -136,15 +136,40 @@ func backupPolicyList(c edgeDoer, out interface{ Write([]byte) (int, error) }) e
 	w := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
 	fmt.Fprintln(w, "SUBJECT\tTARGET\tOFFSITE\tLOCAL\tB2\tREV\tSIZE\tB2 SIZE\tPENDING")
 	names := append([]string{"default"}, e.Subjects...)
-	for _, n := range names {
+	// Repos a target reports that the inventory does not name (a canary, a
+	// retired service): listed after it, with stats and no invented policy.
+	listed := map[string]bool{"default": true}
+	for _, n := range e.Subjects {
+		listed[n] = true
+	}
+	var unlisted []string
+	for _, t := range e.Targets {
+		for n := range t.Stats {
+			if !listed[n] {
+				listed[n] = true
+				unlisted = append(unlisted, n)
+			}
+		}
+	}
+	sort.Strings(unlisted)
+	nInventory := len(names)
+	names = append(names, unlisted...)
+	for i, n := range names {
 		r, explicit := rows[n]
-		if !explicit {
+		tgt := r.Target
+		switch {
+		case i >= nInventory && !explicit:
+			r = bpRow{Target: "-", RetentionLocal: "-", RetentionB2: "-"}
+			tgt = "- (not in inventory)"
+		case i >= nInventory:
+			tgt += " (not in inventory)"
+		case !explicit:
 			r = rows["default"]
 			r.Revision = 0
-		}
-		tgt := r.Target
-		if !explicit && n != "default" {
-			tgt += " (default)"
+			tgt = r.Target
+			if n != "default" {
+				tgt += " (default)"
+			}
 		}
 		pend := ""
 		if r.Clear != nil && explicit {

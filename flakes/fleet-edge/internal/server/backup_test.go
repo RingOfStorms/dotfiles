@@ -38,3 +38,44 @@ func TestBuildBackupTable(t *testing.T) {
 		t.Fatalf("fresh: %+v", f)
 	}
 }
+
+// TestBuildBackupTableUnlisted: a repo a target reports that the inventory
+// does not name (the svc-canary repo) still gets a row, after the inventory,
+// marked and with no policy invented for it.
+func TestBuildBackupTableUnlisted(t *testing.T) {
+	now := time.Unix(2_000_000, 0)
+	local := int64(5 << 20)
+	e := backup.Export{
+		Rows: []*backup.Row{{Subject: backup.Default, Target: "h004", Offsite: true, RetentionLocal: "long", RetentionB2: "short"}},
+		Targets: []backup.TargetView{
+			{Target: backup.Target{ID: "h004", Pusher: true, Enabled: true, Seen: now.Unix(),
+				Stats: map[string]backup.Stats{
+					"forgejo": {LocalBytes: &local, At: now.Unix()},
+					"zeta":    {LocalBytes: &local, At: now.Unix()},
+					"canary":  {LocalBytes: &local, LastBackup: now.Unix() - 120, At: now.Unix()},
+				}}},
+			{Target: backup.Target{ID: "h009", Enabled: true, Seen: now.Unix(),
+				Stats: map[string]backup.Stats{"canary": {LocalBytes: &local, At: now.Unix()}}}},
+		},
+		Subjects: []string{"forgejo"},
+	}
+	tb := BuildBackupTable(e, 6.95, now)
+	var got []string
+	for _, r := range tb.Rows {
+		got = append(got, r.Subject)
+	}
+	if strings.Join(got, ",") != "default,forgejo,canary,zeta" {
+		t.Fatalf("subjects: %v", got)
+	}
+	if f := tb.Rows[1]; f.Unlisted || f.Target != "h004" || f.TargetNote != "default" {
+		t.Fatalf("forgejo: %+v", f)
+	}
+	c := tb.Rows[2]
+	if !c.Unlisted || c.TargetNote != "not in inventory" || c.Target != "-" || c.Offsite ||
+		c.RetentionLocal != "-" || c.RetentionB2 != "-" || c.OffsiteNote != "" || c.Revision != 0 {
+		t.Fatalf("canary policy: %+v", c)
+	}
+	if c.Local != "5.0 MiB" || c.Cost != "-" || c.LastBackup == "-" || !strings.HasPrefix(c.StatsAt, "h004 @ ") {
+		t.Fatalf("canary stats: %+v", c)
+	}
+}
