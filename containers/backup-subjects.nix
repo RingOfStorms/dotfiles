@@ -1,9 +1,9 @@
 # Backup subjects and their secret grants (containers/BACKUP-PLAN.md §2.7).
 # One registry key machines/backup/restic_svc-<name>_<date> per subject,
-# sub-granted to the hosts listed here (where the subject may be placed) plus
-# every target. Consumed by sec/registry.nix, hosts/*/sec-agent.nix and the
-# target's subjectCredentials. Adding a host here is the reviewed registry
-# change a `cnt move` needs first.
+# sub-granted to exactly the one host the live placement registry (h005
+# fleet-edge placements) binds it to, plus every target. Never list hosts a
+# subject "may run on"; unbound/reserved subjects get no client host. A move
+# destination grant is a separate reviewed change made before `cnt move`.
 let
   date = "2026-11-05";
   subs = {
@@ -19,22 +19,12 @@ let
     atuin = h001;
     dawarich = h001;
     forgejo = h001;
-    hello-nixos = [
-      "h001"
-      "lio"
-      "h003"
-    ];
-    hello-podman = [
-      "h001"
-      "lio"
-    ];
+    hello-nixos = [ "h003" ];
+    hello-podman = [ ]; # unbound in placement registry
     immich = h001;
     life = h001;
     litellm = h001;
-    minecraft = [
-      "h001"
-      "h003"
-    ];
+    minecraft = [ ]; # unbound in placement registry
     open-webui = h001;
     opengist = h001;
     paperless = h001;

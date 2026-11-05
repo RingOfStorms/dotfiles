@@ -155,4 +155,6 @@ assert
 assert builtins.all (k: builtins.any (a: a.value == subj.subs.h004) subj.registry.${k}.access) (
   builtins.attrNames subj.registry
 );
+# placement-exact grants: each subject has at most one client host
+assert builtins.all (n: builtins.length subj.hosts.${n} <= 1) (builtins.attrNames subj.hosts);
 true
