@@ -206,6 +206,7 @@ func runOverrides(args []string) {
 	forwardsFile := fs.String("forwards-file", "", "WAN forwards file root's forwards-apply installs (empty: no WAN layer)")
 	forwardsStatus := fs.String("forwards-status", "/run/fleet-wan-forwards/applied.json", "forwards-apply's record, for the audit")
 	every := fs.Duration("sweep", 30*time.Second, "sweep interval")
+	backupFile := fs.String("backup", "", "JSON {writers: [host], readers: {host: {sub, peer}}, targets: {host: {sub, peer}}, hostSubjects: {host: [name]}} (empty: no /api/backup)")
 	_ = fs.Parse(args)
 	inv, err := inventory.Load(*invFile)
 	if err != nil {
@@ -284,6 +285,15 @@ func runOverrides(args []string) {
 	// to the same loopback port, and each export stays loopback-only.
 	root := http.NewServeMux()
 	root.Handle("/api/placements/routing", routing.Handler(au))
+	if *backupFile != "" {
+		bk, err := newBackup(*backupFile, writers, verifier, inv, *stateDir, pl.Snapshot)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, p := range []string{"/internal/backup.json", "/api/backup", "/api/backup/"} {
+			root.Handle(p, bk.Handler())
+		}
+	}
 	for _, s := range []struct {
 		export, api string
 		h           http.Handler
@@ -498,6 +508,8 @@ func main() {
 		"read-only placement registry export; its binding is where each service runs now (empty: every service is unplaced)")
 	sessionKeyFile := flag.String("session-key-file", envDefault("FLEET_EDGE_SESSION_KEY_FILE", ""), "file holding HMAC session key (optional)")
 	ntfyURL := flag.String("ntfy-url", envDefault("FLEET_EDGE_NTFY_URL", ""), "ntfy topic URL; empty disables notifications")
+	backupURL := flag.String("backup-url", envDefault("FLEET_EDGE_BACKUP_URL", ""), "backup policy loopback export (/internal/backup.json); empty hides the table")
+	b2Price := flag.Float64("b2-price-per-tb-month", 6.95, "B2 price for the backup table's $/mo estimate")
 	downAfter := flag.Duration("health-down-after", 5*time.Minute, "continuous unhealthy duration before notification")
 	flag.Parse()
 
@@ -591,6 +603,8 @@ func main() {
 		Links:         links,
 		OverridesURL:  *overridesURL,
 		PlacementsURL: *placementsURL,
+		BackupURL:     *backupURL,
+		B2PricePerTB:  *b2Price,
 		Topology:      topo,
 		History:       history,
 		GeoIP:         countryDB,

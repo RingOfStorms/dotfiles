@@ -66,12 +66,98 @@ let
     trap - EXIT
   '';
 
+  stateDir = "/var/lib/fleet-backup-target";
+  policyFile = "${stateDir}/policy.json";
+  jq = "${pkgs.jq}/bin/jq";
+  repoUrl = "rest:http://${hosts.${self}.overlayIp or ""}:${toString port}/";
+
+  # Root (the machine key is root-only): register, post stats and finished
+  # clears, save the reply (presets per repo, pending clears) for the
+  # restic-run units below. fleet-edge unreachable: the old reply stays.
+  heartbeatScript = pkgs.writeShellScript "fleet-backup-target-heartbeat" ''
+    set -euo pipefail
+    ${lib.getExe config.ringofstorms.fleetAgent.package} containers backup-policy heartbeat \
+      --id ${lib.escapeShellArg self} --url ${lib.escapeShellArg repoUrl} \
+      --stats ${stateDir}/stats.json --out ${policyFile}
+    chown restic:restic ${policyFile}
+  '';
+
+  # preset NAME: the policy's preset for subject NAME, else cfg.prunePreset
+  # (no policy reply yet: `long` by default, the safe direction).
+  presetFns = ''
+    preset() {
+      local p=""
+      [ -r ${policyFile} ] && p=$(${jq} -r --arg s "$1" '.retention[$s] // empty' ${policyFile} 2>/dev/null || true)
+      case "$p" in short|standard|long) echo "$p" ;; *) echo ${cfg.prunePreset} ;; esac
+    }
+    presetArgs() {
+      case "$1" in
+      ${lib.concatStrings (lib.mapAttrsToList (n: a: "  ${n}) echo ${lib.escapeShellArgs a} ;;\n") presets)}
+      esac
+    }
+  '';
+
+  # Runs as `restic`, hourly: raw size and newest snapshot per repo, as
+  # {subject: {localBytes, lastBackup, at}} (0600). A repo whose stats fail
+  # gets no entry, never a 0.
+  statsScript = pkgs.writeShellScript "fleet-backup-target-stats" ''
+    set -uo pipefail
+    export RESTIC_CACHE_DIR=/var/cache/fleet-backup-target
+    umask 0077
+    out='{}'
+    now=$(${pkgs.coreutils}/bin/date +%s)
+    shopt -s nullglob
+    for repo in ${cfg.dataDir}/svc-*/; do
+      repo=''${repo%/}
+      name=''${repo##*/}
+      cred="''${CREDENTIALS_DIRECTORY:-/nonexistent}/$name"
+      [ -r "$cred" ] || continue
+      pw=$(mktemp)
+      ${pkgs.gnused}/bin/sed -n 's/^RESTIC_PASSWORD=//p' "$cred" | ${pkgs.coreutils}/bin/tail -n1 >"$pw"
+      if size=$(${pkgs.restic}/bin/restic -r "$repo" --password-file "$pw" --no-lock stats --mode raw-data --json </dev/null | ${jq} -e '.total_size'); then
+        last=$(${pkgs.restic}/bin/restic -r "$repo" --password-file "$pw" --no-lock snapshots --latest 1 --json </dev/null | ${jq} -r '[.[].time] | max // empty' || true)
+        lastTs=0
+        [ -n "$last" ] && lastTs=$(${pkgs.coreutils}/bin/date -d "$last" +%s)
+        out=$(${jq} -c --arg s "''${name#svc-}" --argjson b "$size" --argjson l "$lastTs" --argjson at "$now" \
+          '.[$s] = {localBytes: $b, lastBackup: $l, at: $at}' <<<"$out")
+      else
+        echo "stats: $name failed" >&2
+      fi
+      rm -f "$pw"
+    done
+    tmp=$(mktemp ${stateDir}/.stats.XXXXXX)
+    printf '%s\n' "$out" >"$tmp"
+    mv -f "$tmp" ${stateDir}/stats.json
+  '';
+
+  # Runs as `restic` after each heartbeat: executes pending `local` clears
+  # (deletes <dataDir>/svc-<subject>; the next client run re-inits it) and
+  # records them in cleared.json, reported by the next heartbeat. `b2`
+  # clears belong to the pusher tier.
+  clearScript = pkgs.writeShellScript "fleet-backup-target-clear" ''
+    set -euo pipefail
+    umask 0077
+    [ -r ${policyFile} ] || exit 0
+    cleared='{}'
+    [ -r ${stateDir}/cleared.json ] && cleared=$(cat ${stateDir}/cleared.json)
+    for s in $(${jq} -r '.clears // {} | to_entries[] | select(.value == "local") | .key' ${policyFile}); do
+      case "$s" in ""|*[!a-z0-9-]*) echo "clear: bad subject $s" >&2; continue ;; esac
+      echo "clear: deleting ${cfg.dataDir}/svc-$s"
+      rm -rf --one-file-system -- "${cfg.dataDir}/svc-$s"
+      cleared=$(${jq} -c --arg s "$s" '.[$s] = ((.[$s] // []) + ["local"] | unique)' <<<"$cleared")
+    done
+    tmp=$(mktemp ${stateDir}/.cleared.XXXXXX)
+    printf '%s\n' "$cleared" >"$tmp"
+    mv -f "$tmp" ${stateDir}/cleared.json
+  '';
+
   # Runs as `restic`. Subject passwords arrive via LoadCredential (<subject>).
-  # Policy presets arrive in P2; until then every repo uses `cfg.prunePreset`.
+  # Presets come from the policy reply (heartbeat), else cfg.prunePreset.
   pruneScript = pkgs.writeShellScript "fleet-backup-target-prune" ''
     set -uo pipefail
     export RESTIC_CACHE_DIR=/var/cache/fleet-backup-target
     rc=0
+    ${presetFns}
     shopt -s nullglob
     for repo in ${cfg.dataDir}/svc-*/; do
       repo=''${repo%/}
@@ -84,9 +170,11 @@ let
       fi
       pw=$(mktemp)
       ${pkgs.gnused}/bin/sed -n 's/^RESTIC_PASSWORD=//p' "$cred" | ${pkgs.coreutils}/bin/tail -n1 >"$pw"
-      echo "prune: $name (${cfg.prunePreset})"
+      p=$(preset "''${name#svc-}")
+      echo "prune: $name ($p)"
+      # shellcheck disable=SC2046
       ${pkgs.restic}/bin/restic -r "$repo" --password-file "$pw" --retry-lock 2h \
-        forget --prune --group-by "" ${lib.escapeShellArgs presets.${cfg.prunePreset}} </dev/null || rc=1
+        forget --prune --group-by "" $(presetArgs "$p") </dev/null || rc=1
       rm -f "$pw"
     done
     exit $rc
@@ -234,9 +322,71 @@ in
         ExecStart = pruneScript;
         LoadCredential = map (n: "${n}:${cfg.subjectCredentials.${n}}") subjectNames;
         ReadWritePaths = [ cfg.dataDir ];
+        ReadOnlyPaths = [ stateDir ];
         CacheDirectory = "fleet-backup-target";
         Nice = 10;
         IOSchedulingClass = "idle";
+      };
+    };
+
+    systemd.tmpfiles.rules = [ "d ${stateDir} 0700 restic restic -" ];
+
+    systemd.services.fleet-backup-target-heartbeat = {
+      description = "Register this backup target with fleet-edge and fetch its policy";
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      onSuccess = [ "fleet-backup-target-clear.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = heartbeatScript;
+      };
+    };
+    systemd.timers.fleet-backup-target-heartbeat = {
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec = "2m";
+        OnUnitActiveSec = "5m";
+        RandomizedDelaySec = "30s";
+      };
+    };
+
+    systemd.services.fleet-backup-target-stats = {
+      description = "restic raw-data size and newest snapshot per repo";
+      after = [ "restic-rest-server.service" ];
+      unitConfig = mountUnit;
+      serviceConfig = hardening // {
+        Type = "oneshot";
+        User = "restic";
+        Group = "restic";
+        ExecStart = statsScript;
+        LoadCredential = map (n: "${n}:${cfg.subjectCredentials.${n}}") subjectNames;
+        ReadOnlyPaths = [ cfg.dataDir ];
+        ReadWritePaths = [ stateDir ];
+        CacheDirectory = "fleet-backup-target";
+        Nice = 10;
+        IOSchedulingClass = "idle";
+      };
+    };
+    systemd.timers.fleet-backup-target-stats = {
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec = "10m";
+        OnUnitActiveSec = "1h";
+      };
+    };
+
+    systemd.services.fleet-backup-target-clear = {
+      description = "Execute queued local backup clears";
+      unitConfig = mountUnit;
+      serviceConfig = hardening // {
+        Type = "oneshot";
+        User = "restic";
+        Group = "restic";
+        ExecStart = clearScript;
+        ReadWritePaths = [
+          cfg.dataDir
+          stateDir
+        ];
       };
     };
     systemd.timers.fleet-backup-target-prune = {

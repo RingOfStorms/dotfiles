@@ -75,6 +75,11 @@ type Config struct {
 	// service is bound to; "" means "no registry", so every service is
 	// unplaced.
 	PlacementsURL string
+	// BackupURL is the backup policy's loopback export
+	// (/internal/backup.json); "" hides the backup table.
+	BackupURL string
+	// B2PricePerTB is the B2 price ($/TB/month) for the table's estimate.
+	B2PricePerTB float64
 	// Topology is the hand-written part of /topology (validated by the
 	// caller); nil means topology.Default().
 	Topology *topology.Spec
@@ -250,6 +255,9 @@ type IndexData struct {
 	ExposeEnabled bool
 	Expose        []ExposeRow
 	ExposeError   string
+	// Backup policy table, when BackupURL is set.
+	BackupEnabled bool
+	Backup        BackupTable
 }
 
 // HostCardView wraps state.HostView with pre-rendered sparklines and formatted summary fields.
@@ -498,6 +506,10 @@ func (s *Server) handleServices(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.OverridesURL != "" {
 		data.ExposeEnabled = true
 		data.Expose, data.ExposeError = s.fetchOverrides(r.Context(), time.Now())
+	}
+	if s.cfg.BackupURL != "" {
+		data.BackupEnabled = true
+		data.Backup = s.fetchBackup(r.Context(), time.Now())
 	}
 	s.render(w, "services.html", data)
 }

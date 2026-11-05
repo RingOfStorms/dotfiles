@@ -1,0 +1,86 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/authority"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/backup"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/placements"
+)
+
+// backupSpec is the overrides --backup file (hosts/h005/fleet-edge.nix).
+type backupSpec struct {
+	// Writers names override writers that may also write backup policy.
+	Writers      []string                    `json:"writers"`
+	Readers      map[string]authority.Writer `json:"readers"`
+	Targets      map[string]authority.Writer `json:"targets"`
+	HostSubjects map[string][]string         `json:"hostSubjects"`
+}
+
+// newBackup builds the backup authority with its three allowlists.
+func newBackup(path string, overrideWriters map[string]authority.Writer, v authority.TokenVerifier, inv *inventory.Inventory,
+	stateDir string, snap func() placements.Export) (*backup.Service, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var spec backupSpec
+	if err := json.Unmarshal(b, &spec); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	ws := map[string]authority.Writer{}
+	for _, h := range spec.Writers {
+		w, ok := overrideWriters[h]
+		if !ok {
+			return nil, fmt.Errorf("backup writer %s is not an override writer", h)
+		}
+		ws[h] = w
+	}
+	mk := func(m map[string]authority.Writer) (*authority.Auth, error) {
+		if m == nil {
+			m = map[string]authority.Writer{}
+		}
+		return authority.New(m, v, nil)
+	}
+	wa, err := mk(ws)
+	if err != nil {
+		return nil, err
+	}
+	ta, err := mk(spec.Targets)
+	if err != nil {
+		return nil, err
+	}
+	ra, err := mk(spec.Readers)
+	if err != nil {
+		return nil, err
+	}
+	owner := map[string]string{}
+	for h, names := range spec.HostSubjects {
+		for _, n := range names {
+			if _, clash := inv.Services[n]; clash {
+				return nil, fmt.Errorf("host subject %s collides with a service", n)
+			}
+			owner[n] = h
+		}
+	}
+	subjects := func() []string {
+		var out []string
+		for n := range inv.Services {
+			out = append(out, n)
+		}
+		for n := range owner {
+			out = append(out, n)
+		}
+		return out
+	}
+	owns := func(host, subject string) bool {
+		if h, ok := owner[subject]; ok {
+			return h == host
+		}
+		return snap().Host[subject] == host
+	}
+	return backup.New(backup.Config{StateDir: stateDir, Writers: wa, Targets: ta, Readers: ra, Subjects: subjects, Owns: owns})
+}

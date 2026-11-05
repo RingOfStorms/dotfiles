@@ -84,6 +84,33 @@
 {{end}}
 </section>
 {{end}}
+{{if .BackupEnabled}}
+<section class="backup">
+<h2>Backups</h2>
+<p class="summary">Backup policy per subject (read-only here). Change it with <code>cnt backup-policy set &lt;subject&gt; target=&lt;id|none&gt; offsite=&lt;bool&gt; local=&lt;preset&gt; b2=&lt;preset|local&gt;</code>; <em>turn off</em> is <code>target=none</code>; <em>clear</em> is <code>cnt backup-policy clear &lt;subject&gt; local|b2|both</code>.</p>
+{{if .Backup.Error}}<p class="warn">{{.Backup.Error}}</p>
+{{else}}
+<div class="scroll table-wrap">
+<table>
+<thead><tr><th>subject</th><th>target</th><th>B2</th><th>local preset</th><th>B2 preset</th><th>local size</th><th>B2 size</th><th>$/mo</th><th>last backup</th><th>last copied</th><th>pending</th></tr></thead>
+<tbody>
+{{range .Backup.Rows}}
+<tr>
+  <td>{{if .Default}}<em>default</em>{{else}}{{.Subject}}{{end}}</td>
+  <td>{{.Target}}{{if .TargetNote}} <span class="warn">({{.TargetNote}})</span>{{end}}</td>
+  <td><input type="checkbox" disabled{{if .Offsite}} checked{{end}}>{{if .OffsiteNote}} <span class="warn">{{.OffsiteNote}}</span>{{end}}</td>
+  <td>{{.RetentionLocal}}</td><td>{{.RetentionB2}}</td>
+  <td title="{{.StatsAt}}">{{.Local}}</td><td title="{{.StatsAt}}">{{.B2}}</td><td>{{.Cost}}</td>
+  <td>{{.LastBackup}}</td><td>{{.LastCopy}}</td><td>{{if .Clear}}<span class="warn">clear {{.Clear}}</span>{{end}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+</div>
+{{if .Backup.Targets}}<p class="summary">Targets: {{range .Backup.Targets}}<code>{{.ID}}</code>{{if .Pusher}} (pusher){{end}}{{if not .Enabled}} <span class="warn">disabled</span>{{end}}{{if .Stale}} <span class="warn">stale</span>{{end}} {{end}}</p>{{end}}
+{{end}}
+</section>
+{{end}}
 <footer>generated at {{.GeneratedAt}}</footer>
 </main>
 {{template "foot" .}}{{end}}

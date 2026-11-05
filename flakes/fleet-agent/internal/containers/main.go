@@ -190,6 +190,8 @@ commands:
   port ls [host...]            temporarily open ports/forwards, their service and time left
   port close <svc> <port>/<proto> [--from ...] [--iface ...] [--host h]
                                close one early (same --from/--iface as the open)
+  backup-policy list|set|clear|heartbeat
+                               backup policy on h005 (see backup-policy with no args)
   expose <svc>[.<route>] --exposure tailnet|lan|public --for DUR|forever [--reason TEXT] [--host h]
                                widen an http route for a while on its host; the host reverts it
                                at expiry (timer + boot/minute sweep). tailnet/lan: --for required,
@@ -303,6 +305,8 @@ func dispatch(cmd string, rest []string) (known bool, err error) {
 		err = cmdPlace(rest)
 	case "restore-check":
 		err = cmdRestoreCheck(rest)
+	case "backup-policy":
+		err = cmdBackupPolicy(rest)
 	case "health":
 		err = cmdHealth(rest)
 	case "destroy", "rm":

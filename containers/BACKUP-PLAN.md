@@ -1,6 +1,6 @@
 # Fleet backups: backup targets, pushers, one repo per subject
 
-Status: **P1 code written, nothing deployed.** rest-server behaviour was
+Status: **P1 and P2 code written, nothing deployed.** rest-server behaviour was
 measured on loopback fixtures (rest-server 0.14.0, restic 0.18.1), not on h004
 (Appendix A). Revised 2026-11-04 to the user's decisions (§0 items 7–10); the
 2026-11-01 revision is in git.
@@ -673,6 +673,27 @@ registration.
   `hosts/h005/fleet-edge.nix`, `flakes/fleet-agent/backup/target.nix`, `cnt`.
 - **Risk: low–medium.** A new authenticated write API on h005, but no backup
   path consumes it yet.
+- **Code (written 2026-11-04, not deployed):**
+  - `flakes/fleet-edge/internal/backup/backup.go`: rows (`default` row),
+    targets, presets, `backup.json`/`backup-targets.json` (0600, atomic),
+    `backup-audit.log`; routes `GET /api/backup` (writers, targets),
+    `GET|PUT /api/backup/<subject>` (readers: own subjects, no `offsite`),
+    `POST /api/backup/<subject>/clear`, `POST|PUT /api/backup/targets/<id>`
+    (heartbeat returns presets, offsite list, pending clears), loopback
+    `/internal/backup.json`. Wired in `main.go`/`backup.go` (`--backup`).
+  - Dashboard: read-only table on `/services`
+    (`internal/server/backup.go`, `services.html`). Turn off and clear go
+    through `cnt backup-policy` (the dashboard has no write path or token).
+  - `flake.nix` `overrides.backup.*`; `hosts/h005/fleet-edge.nix` enables
+    it with the nginx location. **`targets = { }`** until h004's Zitadel sub
+    is known (same gap as P1).
+  - `cnt backup-policy list|set|clear|heartbeat`
+    (`fleet-agent/internal/containers/backuppolicy.go`).
+  - `backup/target.nix`: heartbeat (5 min, root, machine key), stats (hourly,
+    `restic`), local clear executor (after each heartbeat); prune reads
+    presets from the reply, else `prunePreset`.
+  - Not yet: `lastCopied`/`b2Bytes`/`complete` and the `b2` clear executor
+    (pusher, P4+); the client resolver (P3).
 - **Verify:** `go test ./internal/backup/` covers:
   - 403: wrong-peer registration, a reader `PUT`, a low-trust reader asking
     for another subject.

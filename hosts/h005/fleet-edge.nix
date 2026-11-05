@@ -109,6 +109,21 @@ in
         inherit sub;
         peer = fleet.hosts.${host}.overlayIp;
       }) fleet.global.overrideWriters;
+      # Backup policy (containers/BACKUP-PLAN.md §2.3). Readers see only the
+      # subjects placed on them; writers are the laptops. Targets register
+      # themselves; h004's Zitadel sub is not in the repo yet, so until it
+      # is added here no target can register and every subject resolves to
+      # `none` (P1 "Not yet").
+      backup = {
+        enable = true;
+        writers = [ "lio" "juni" "gp3" "oren" ];
+        readers = lib.mapAttrs (host: sub: {
+          inherit sub;
+          peer = fleet.hosts.${host}.overlayIp;
+        }) fleet.global.overrideWriters;
+        targets = { };
+        hostSubjects = { };
+      };
     };
     inventoryFile = pkgs.writeText "fleet-inventory.json" (builtins.toJSON inputs.containers.inventory);
     title = "Josh's Homelab";
@@ -250,6 +265,19 @@ in
           proxy_set_header X-Fleet-Peer $remote_addr;
           client_max_body_size 16k;
           proxy_read_timeout 180s;
+          ${nginxSnippets.identityClear}
+        '';
+      };
+      locations."/api/backup" = {
+        proxyPass = "http://127.0.0.1:8098";
+        extraConfig = ''
+          deny 100.64.0.5;
+          deny fd7a:115c:a1e0::5;
+          allow 100.64.0.0/10;
+          allow fd7a:115c:a1e0::/48;
+          deny all;
+          proxy_set_header X-Fleet-Peer $remote_addr;
+          client_max_body_size 16k;
           ${nginxSnippets.identityClear}
         '';
       };

@@ -232,6 +232,44 @@
                   }
                 );
               };
+              backup = {
+                enable = lib.mkEnableOption "the backup policy authority (/api/backup, containers/BACKUP-PLAN.md §2.3)";
+                writers = lib.mkOption {
+                  type = lib.types.listOf lib.types.str;
+                  default = [ ];
+                  description = "Override writers (by host) that may also write backup policy and clear.";
+                };
+                readers = lib.mkOption {
+                  type = lib.types.attrsOf (lib.types.submodule {
+                    options = {
+                      sub = lib.mkOption { type = lib.types.strMatching "[0-9]+"; };
+                      peer = lib.mkOption { type = lib.types.str; };
+                    };
+                  });
+                  default = { };
+                  description = "Backup clients: may GET /api/backup/<subject> for subjects placed on them only.";
+                };
+                targets = lib.mkOption {
+                  type = lib.types.attrsOf (lib.types.submodule {
+                    options = {
+                      sub = lib.mkOption { type = lib.types.strMatching "[0-9]+"; };
+                      peer = lib.mkOption { type = lib.types.str; };
+                    };
+                  });
+                  default = { };
+                  description = "Backup targets: may POST /api/backup/targets/<own host> and GET the full view.";
+                };
+                hostSubjects = lib.mkOption {
+                  type = lib.types.attrsOf (lib.types.listOf lib.types.str);
+                  default = { };
+                  description = "Host subjects (ringofstorms.backup.subjects) per host, readable by that host.";
+                };
+                b2PricePerTbMonth = lib.mkOption {
+                  type = lib.types.float;
+                  default = 6.95;
+                  description = "B2 price for the dashboard's $/mo estimate.";
+                };
+              };
               bunnyKeyFile = lib.mkOption {
                 type = lib.types.nullOr lib.types.str;
                 default = null;
@@ -387,6 +425,9 @@
                 live = o.bunnyKeyFile != null && o.pushKeyFile != null;
                 writers = pkgs.writeText "fleet-edge-writers.json" (builtins.toJSON o.writers);
                 knownHosts = pkgs.writeText "fleet-edge-edge-known-hosts" o.knownHosts;
+                backupSpec = pkgs.writeText "fleet-edge-backup.json" (
+                  builtins.toJSON { inherit (o.backup) writers readers targets hostSubjects; }
+                );
               in
               {
                 description = "fleet-edge expose overrides and placement registry";
@@ -412,6 +453,9 @@
                       "--dns-tailnet-server ${lib.escapeShellArg o.dns.tailnetServer}"
                       "--dns-lan-server ${lib.escapeShellArg o.dns.lanServer}"
                       "--forwards-file /var/lib/fleet-edge-forwards/forwards.json"
+                    ]
+                    ++ lib.optionals o.backup.enable [
+                      "--backup ${backupSpec}"
                     ]
                     ++ lib.optionals live [
                       "--bunny-key-file %d/bunny"
@@ -492,6 +536,9 @@
                 # Read-only loopback export; the dashboard holds no token or key.
                 FLEET_EDGE_OVERRIDES_URL = "http://${cfg.overrides.listen}/internal/overrides.json";
               }
+              // lib.optionalAttrs (cfg.overrides.enable && cfg.overrides.backup.enable) {
+                FLEET_EDGE_BACKUP_URL = "http://${cfg.overrides.listen}/internal/backup.json";
+              }
               // lib.optionalAttrs (cfg.auth.apiKeysFile != null) {
                 FLEET_EDGE_API_KEYS_FILE = cfg.auth.apiKeysFile;
               }
@@ -510,7 +557,8 @@
                     --listen ${cfg.listen} \
                     --inventory ${cfg.inventoryFile} \
                     --status-url-template ${lib.escapeShellArg cfg.statusUrlTemplate} \
-                    --health-down-after ${toString cfg.alerts.healthDownMinutes}m
+                    --health-down-after ${toString cfg.alerts.healthDownMinutes}m \
+                    --b2-price-per-tb-month ${toString cfg.overrides.backup.b2PricePerTbMonth}
                 '';
                 Restart = "on-failure";
                 RestartSec = "5s";

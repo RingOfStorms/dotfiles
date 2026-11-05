@@ -1,0 +1,158 @@
+package server
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/backup"
+)
+
+// BackupRow is one subject in the dashboard's backup table.
+type BackupRow struct {
+	Subject, Target, RetentionLocal, RetentionB2 string
+	Offsite                                      bool
+	// OffsiteNote is set when offsite cannot apply ("offsite unavailable").
+	OffsiteNote          string
+	TargetNote           string
+	Local, B2, Cost      string
+	LastBackup, LastCopy string
+	StatsAt              string
+	Clear                string
+	Default              bool
+}
+
+// BackupTable is the view of /internal/backup.json.
+type BackupTable struct {
+	Rows    []BackupRow
+	Targets []backup.TargetView
+	Error   string
+}
+
+func humanBytes(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+func ago(ts int64, now time.Time) string {
+	if ts == 0 {
+		return "-"
+	}
+	return time.Unix(ts, 0).UTC().Format("2006-01-02 15:04") + " (" + now.Sub(time.Unix(ts, 0)).Round(time.Minute).String() + " ago)"
+}
+
+// BuildBackupTable turns the export into rows: one per subject (the default
+// row first), stats from the holding target, never 0 for an unknown size.
+func BuildBackupTable(e backup.Export, pricePerTB float64, now time.Time) BackupTable {
+	t := BackupTable{Targets: e.Targets}
+	byID := map[string]backup.TargetView{}
+	for _, tg := range e.Targets {
+		byID[tg.ID] = tg
+	}
+	rows := map[string]*backup.Row{}
+	for _, r := range e.Rows {
+		rows[r.Subject] = r
+	}
+	def := rows[backup.Default]
+	if def == nil {
+		def = &backup.Row{Subject: backup.Default, Target: backup.None, RetentionLocal: "standard", RetentionB2: "local"}
+	}
+	subjects := append([]string{backup.Default}, e.Subjects...)
+	for _, name := range subjects {
+		r := rows[name]
+		if r == nil {
+			c := *def
+			c.Subject = name
+			r = &c
+		}
+		v := BackupRow{Subject: name, Target: r.Target, Offsite: r.Offsite, RetentionLocal: r.RetentionLocal,
+			RetentionB2: r.RetentionB2, Default: name == backup.Default, Local: "-", B2: "-", Cost: "-", LastBackup: "-", LastCopy: "-"}
+		if rows[name] == nil && !v.Default {
+			v.TargetNote = "default"
+		}
+		tg, ok := byID[r.Target]
+		switch {
+		case r.Target == backup.None:
+		case !ok:
+			v.TargetNote = "unknown target"
+		case !tg.Enabled:
+			v.TargetNote = "disabled"
+		case tg.Stale:
+			v.TargetNote = "stale"
+		}
+		if r.Offsite && (!ok || !tg.Pusher) {
+			v.OffsiteNote = "offsite unavailable"
+		}
+		if r.Clear != nil {
+			v.Clear = r.Clear.Scope + " on " + r.Clear.Target
+			if len(r.Clear.Done) > 0 {
+				v.Clear += fmt.Sprintf(" (done: %v)", r.Clear.Done)
+			}
+		}
+		// Stats: the policy target's, else any target holding the repo.
+		var st *backup.Stats
+		holder := ""
+		if s, has := tg.Stats[name]; ok && has {
+			st, holder = &s, tg.ID
+		} else {
+			for _, o := range e.Targets {
+				if s, has := o.Stats[name]; has {
+					st, holder = &s, o.ID
+					break
+				}
+			}
+		}
+		if st != nil {
+			if st.LocalBytes != nil {
+				v.Local = humanBytes(*st.LocalBytes)
+			}
+			if st.B2Bytes != nil {
+				v.B2 = humanBytes(*st.B2Bytes)
+				v.Cost = fmt.Sprintf("$%.2f", float64(*st.B2Bytes)/1e12*pricePerTB)
+			}
+			v.LastBackup = ago(st.LastBackup, now)
+			v.LastCopy = ago(st.LastCopied, now)
+			if st.At != 0 {
+				v.StatsAt = holder + " @ " + time.Unix(st.At, 0).UTC().Format("2006-01-02 15:04")
+				if now.Sub(time.Unix(st.At, 0)) > 3*time.Hour {
+					v.StatsAt += " (stale)"
+				}
+			}
+		}
+		t.Rows = append(t.Rows, v)
+	}
+	return t
+}
+
+func (s *Server) fetchBackup(ctx context.Context, now time.Time) BackupTable {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.cfg.BackupURL, nil)
+	if err != nil {
+		return BackupTable{Error: err.Error()}
+	}
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return BackupTable{Error: "backup policy unreachable"}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return BackupTable{Error: "backup policy: " + resp.Status}
+	}
+	var e backup.Export
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&e); err != nil {
+		return BackupTable{Error: "bad export: " + err.Error()}
+	}
+	return BuildBackupTable(e, s.cfg.B2PricePerTB, now)
+}
