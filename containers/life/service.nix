@@ -16,7 +16,7 @@
   };
 
   # Logical dump that travels with cnt backups/moves (pgBackRest repo too).
-  backupHook = "mkdir -p /var/lib/life/backups && runuser -u postgres -- pg_dumpall > /var/lib/life/backups/cnt-dumpall.sql";
+  backup.hooks.pre = "mkdir -p /var/lib/life/backups && runuser -u postgres -- pg_dumpall > /var/lib/life/backups/cnt-dumpall.sql";
 
   # sec-agent grants on the host (bound read-only in flake.nix); cnt deploy
   # and cnt move refuse a target host that lacks one.

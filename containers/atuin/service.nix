@@ -4,13 +4,13 @@
   description = "atuin shell-history sync server (atuin.joshuabell.xyz)";
 
   persist = {
-    # PG 17 cluster in ./17 plus dumpall.sql from backupHook.
+    # PG 17 cluster in ./17 plus dumpall.sql from backup.hooks.pre.
     postgresql = "/var/lib/postgresql";
     nixos = "/var/lib/nixos"; # uid/gid map, keeps file owners stable
   };
 
   # Consistent SQL dump that travels with backups/moves.
-  backupHook = "runuser -u postgres -- pg_dumpall > /var/lib/postgresql/dumpall.sql";
+  backup.hooks.pre = "runuser -u postgres -- pg_dumpall > /var/lib/postgresql/dumpall.sql";
 
   net = {
     private = true;

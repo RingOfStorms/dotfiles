@@ -137,7 +137,10 @@ let
 in
 {
   # Backup tiers (containers/BACKUP-PLAN.md §2.1). Off unless a host opts in.
-  imports = [ ./backup/target.nix ];
+  imports = [
+    ./backup/target.nix
+    ./backup/client.nix
+  ];
 
   options.ringofstorms.fleetAgent = {
     enable = lib.mkOption {

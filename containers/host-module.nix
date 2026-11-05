@@ -301,158 +301,30 @@ let
     }) cfg.guards
   );
 
-  # Each service is its own snapshot tagged `fleet` + `svc:<name>`, so parent
-  # selection and retention group by tags only, not host: after `cnt move`
-  # the new host continues the same service history (the snapshot's
-  # hostname field records where it ran).
+  # Backups are the fleet-agent client (flakes/fleet-agent/backup/client.nix,
+  # BACKUP-PLAN.md §2.4): one repo per service (svc-<name>) on the policy's
+  # target, append-only, so nothing here forgets or prunes. Hooks run in the
+  # container; service.nix `backup` supplies them and the excludes.
   bcfg = cfg.backup;
-  fleetServices = builtins.listToAttrs (
-    map (s: lib.nameValuePair s.name s) ((import ./lib.nix).allServices ./.)
-  );
-  hookCase =
-    s:
-    let
-      run =
-        if s.kind == "podman" then
-          "${pkgs.podman}/bin/podman exec ${s.name} sh -c ${lib.escapeShellArg s.backupHook}"
-        else
-          "${pkgs.nixos-container}/bin/nixos-container run ${s.name} -- bash -lc ${lib.escapeShellArg s.backupHook}";
-    in
-    "    ${s.name}) ${run} ;;\n";
-  withHook = builtins.filter (s: (s.backupHook or null) != null) (builtins.attrValues fleetServices);
-  # `fleet-backup` backs up every installed service, then prunes.
-  # `fleet-backup <svc>...` (fleet-backup-svc@<svc>.service, used by `cnt
-  # move`) backs up only those, even if their unit is not running, and does
-  # not prune. On success each service gets a stamp in ${backupStampDir}/<svc>:
-  #   time=<RFC3339 UTC> snapshot=<restic id> host=<hostname>
-  # read by `cnt status-server` (backup age on fleet-edge) and `cnt move`.
   backupStampDir = "${stateDir}/backup-last";
-  backupScript = pkgs.writeShellScript "fleet-backup" ''
-    set -u
-    PATH=${
-      lib.makeBinPath [
-        pkgs.coreutils
-        pkgs.findutils
-        pkgs.gnugrep
-        pkgs.systemd
-        pkgs.sqlite
-        pkgs.restic
-        pkgs.util-linux
-      ]
-    }
-    root=/srv/containers
-    staging=/var/lib/fleet-backup/staging
-    stamps=${backupStampDir}
-    host=$(${pkgs.hostname}/bin/hostname)
-    install -d -m755 "$stamps" "$staging"
-    runHook() {
-      case "$1" in
-    ${lib.concatMapStrings hookCase withHook}    *) return 0 ;;
-      esac
-    }
-    if [ $# -gt 0 ]; then
-      only=1
-      dirs=()
-      for svc in "$@"; do
-        case "$svc" in "" | .* | *.* | */*) echo "bad service name: $svc" >&2; exit 2 ;; esac
-        [ -d "$root/$svc" ] || { echo "$svc: no $root/$svc on $host" >&2; exit 1; }
-        dirs+=("$root/$svc/")
-      done
+  inContainer =
+    s: cmd:
+    if cmd == null then
+      null
+    else if s.kind == "podman" then
+      "${pkgs.podman}/bin/podman exec ${s.name} sh -c ${lib.escapeShellArg cmd}"
     else
-      only=0
-      dirs=("$root"/*/)
-    fi
-    failed=""
-    for dir in "''${dirs[@]}"; do
-      [ -d "$dir" ] || continue
-      svc=$(basename "$dir")
-      case "$svc" in *.*) continue ;; esac # <svc>.moved-<date> leftovers
-      # Only services installed here (unit file from `cnt deploy`); data left
-      # behind without a unit is stale and not backed up.
-      if [ -e ${mutable}/container@$svc.service ]; then unit=container@$svc.service
-      elif [ -e ${mutable}/fleet-$svc.service ]; then unit=fleet-$svc.service
-      else
-        echo "$svc: not installed on $host, skipped" >&2
-        [ "$only" = 0 ] || failed="$failed $svc"
-        continue
-      fi
-      echo "== $svc ($unit)" >&2
-      (
-        set -eu -o pipefail
-        # One run per service at a time (nightly vs `cnt move`).
-        exec 9>"$staging/$svc.lock"
-        flock 9
-        if [ "$(systemctl is-active "$unit" || true)" = active ]; then
-          runHook "$svc" || exit 1
-        else
-          echo "$svc: not running, hook skipped (data is at rest)" >&2
-        fi
-        # Consistent SQLite copies via the online backup API (host side, any
-        # container kind); the live db/-wal/-shm files are excluded.
-        st=$staging/$svc
-        rm -rf "$st"
-        install -d -m700 "$st/sqlite" || exit 1
-        ex=$staging/$svc.excludes
-        : > "$ex" || exit 1
-        find "$dir" -xdev -type f \( -name '*.db' -o -name '*.sqlite' -o -name '*.sqlite3' \) \
-          -not -path '*/postgres/*' -not -path '*/postgresql/*' -print0 |
-        while IFS= read -r -d "" db; do
-          [ "$(head -c 15 "$db")" = "SQLite format 3" ] || continue
-          out="$st/sqlite''${db#$root}"
-          install -d -m700 "$(dirname "$out")"
-          sqlite3 "$db" ".timeout 30000" ".backup '$out'" || exit 1
-          # the copy replaces the live file on restore: keep owner and mode
-          chown --reference="$db" "$out"
-          chmod --reference="$db" "$out"
-          printf '%s\n' "$db" "$db-wal" "$db-shm" "$db-journal" >> "$ex"
-          # opening an idle WAL db creates -wal/-shm; keep the app's owner
-          for f in "$db-wal" "$db-shm"; do [ ! -e "$f" ] || chown --reference="$db" "$f"; done
-        done || exit 1
-        snap=$(restic backup --json --retry-lock 2h --host "$host" --tag fleet --tag "svc:$svc" \
-          --group-by tags --exclude-caches --exclude-file="$ex" \
-          --exclude-file=${excludeFile} "$root/$svc" "$st" |
-          grep -o '"snapshot_id":"[0-9a-f]*"' | tail -n1 | cut -d'"' -f4) || exit 1
-        [ -n "$snap" ] || { echo "$svc: restic printed no snapshot id" >&2; exit 1; }
-        printf 'time=%s snapshot=%s host=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$snap" "$host" > "$stamps/.$svc.new"
-        chmod 644 "$stamps/.$svc.new"
-        mv -f "$stamps/.$svc.new" "$stamps/$svc"
-        echo "$svc: snapshot $snap" >&2
-      ) || { echo "$svc: BACKUP FAILED" >&2; failed="$failed $svc"; }
-    done
-    if [ "$only" = 0 ]; then
-      restic forget --retry-lock 2h --prune --tag fleet --group-by tags ${lib.escapeShellArgs bcfg.pruneOpts} ||
-        failed="$failed (forget)"
-    fi
-    if [ -n "$failed" ]; then echo "failed:$failed" >&2; exit 1; fi
-  '';
-  excludeFile = pkgs.writeText "fleet-backup-excludes" (lib.concatLines bcfg.exclude);
-  backupUnit = {
-    after = [ "network-online.target" ];
-    wants = [ "network-online.target" ];
-    unitConfig = {
-      RequiresMountsFor = [ "/srv/containers" ];
-    }
-    // lib.optionalAttrs (bcfg.environmentFile != null) {
-      ConditionPathExists = bcfg.environmentFile;
-    };
-    environment = {
-      RESTIC_CACHE_DIR = "/var/cache/fleet-backup";
-    }
-    // lib.optionalAttrs (bcfg.repository != null) { RESTIC_REPOSITORY = bcfg.repository; }
-    // lib.optionalAttrs (bcfg.passwordFile != null) { RESTIC_PASSWORD_FILE = bcfg.passwordFile; };
-    serviceConfig = {
-      Type = "oneshot";
-      StateDirectory = "fleet-backup";
-      StateDirectoryMode = "0700";
-      CacheDirectory = "fleet-backup";
-      CacheDirectoryMode = "0700";
-      Nice = 10;
-      IOSchedulingClass = "idle";
-    }
-    // lib.optionalAttrs (bcfg.environmentFile != null) {
-      EnvironmentFile = bcfg.environmentFile;
-    };
-  };
+      "${pkgs.nixos-container}/bin/nixos-container run ${s.name} -- bash -lc ${lib.escapeShellArg cmd}";
+  backupServices = builtins.listToAttrs (
+    map (
+      s:
+      lib.nameValuePair s.name {
+        preHook = inContainer s s.backup.hooks.pre;
+        postHook = inContainer s s.backup.hooks.post;
+        inherit (s.backup) exclude extraPaths;
+      }
+    ) (builtins.filter (s: s.backup.enable) ((import ./lib.nix).allServices ./.))
+  );
 in
 {
   # Receiver for the cert h005 pushes to every host with routes
@@ -629,25 +501,12 @@ in
         default = false;
         description = ''
           Nightly restic backup of every floating service installed on this
-          host: backupHook (if running), SQLite online copies, then one
-          snapshot of /srv/containers/<svc> per service, tagged `fleet` and
-          `svc:<name>` (hostname = this host). Unit: fleet-backup.service.
+          host, one repo per service (svc-<name>) on the target the
+          fleet-edge policy names: backup.hooks.pre (if running), SQLite
+          online copies, the snapshot, backup.hooks.post. Credentials:
+          ringofstorms.backup.client.credentials.<svc> (sec-agent). Unit:
+          fleet-backup.service (flakes/fleet-agent/backup/client.nix).
         '';
-      };
-      environmentFile = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = "EnvironmentFile with RESTIC_REPOSITORY, RESTIC_PASSWORD and backend credentials (usually set by sec-agent configChanges). The unit only starts once it exists.";
-      };
-      repository = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = "RESTIC_REPOSITORY, if not in environmentFile.";
-      };
-      passwordFile = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = "RESTIC_PASSWORD_FILE, if the password is not in environmentFile.";
       };
       schedule = lib.mkOption {
         type = lib.types.str;
@@ -660,29 +519,8 @@ in
           # live DB clusters: the hooks' dumps are what gets restored
           "/srv/containers/*/postgres"
           "/srv/containers/*/postgresql/[0-9]*"
-          # regenerable
-          "/srv/containers/immich/mlcache"
-          "/srv/containers/open-webui/data/hf_home"
-          "/srv/containers/open-webui/data/transformers_home"
-          "/srv/containers/open-webui/data/xet"
-          "/srv/containers/open-webui/data/models--*"
-          "/srv/containers/paperless/data/index"
         ];
-        description = "restic exclude patterns.";
-      };
-      pruneOpts = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
-        default = [
-          "--keep-daily"
-          "7"
-          "--keep-weekly"
-          "5"
-          "--keep-monthly"
-          "12"
-          "--keep-yearly"
-          "3"
-        ];
-        description = "restic forget options (applied per svc tag, across hosts).";
+        description = "Host-wide restic exclude patterns (service-specific ones live in service.nix backup.exclude).";
       };
     };
     guards = lib.mkOption {
@@ -1302,36 +1140,19 @@ in
           # move target, not by hand per host.
           pkgs.sqlite
           pkgs.gzip
-          (pkgs.writeShellScriptBin "fleet-restic" ''
-            # restic with this host's fleet-backup credentials (root only)
-            ${lib.optionalString (bcfg.environmentFile != null) "set -a; . ${bcfg.environmentFile}; set +a"}
-            ${lib.optionalString (bcfg.repository != null) "export RESTIC_REPOSITORY=${bcfg.repository}"}
-            ${lib.optionalString (bcfg.passwordFile != null) "export RESTIC_PASSWORD_FILE=${bcfg.passwordFile}"}
-            export RESTIC_CACHE_DIR=/var/cache/fleet-backup
-            exec ${pkgs.restic}/bin/restic "$@"
-          '')
         ];
         # `cnt move` checks this marker on the target (fleet-restic present).
         environment.etc."fleet-containers/backup".text = "fleet-backup stamps: ${backupStampDir}\n";
-        systemd.services.fleet-backup = backupUnit // {
-          description = "restic backup of floating containers";
-          serviceConfig = backupUnit.serviceConfig // {
-            ExecStart = backupScript;
-          };
-        };
-        # One service now, no prune (`cnt move`): systemctl start fleet-backup-svc@puzzles
-        systemd.services."fleet-backup-svc@" = backupUnit // {
-          description = "restic backup of floating container %i";
-          serviceConfig = backupUnit.serviceConfig // {
-            ExecStart = "${backupScript} %i";
-          };
-        };
-        systemd.timers.fleet-backup = {
-          wantedBy = [ "timers.target" ];
-          timerConfig = {
-            OnCalendar = bcfg.schedule;
-            Persistent = true;
-            RandomizedDelaySec = "15m";
+        ringofstorms.backup.client = {
+          enable = true;
+          inherit (bcfg) schedule;
+          stampDir = backupStampDir;
+          containers = {
+            enable = true;
+            root = fleetLib.dataRoot;
+            mutableDir = mutable;
+            inherit (bcfg) exclude;
+            services = backupServices;
           };
         };
       })

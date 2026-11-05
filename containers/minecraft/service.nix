@@ -51,7 +51,7 @@
 
   # Run before stop when backing up / moving. Output: SQL dump in a
   # persisted dir so it travels with the data.
-  backupHook = "runuser -u postgres -- pg_dumpall > /var/lib/postgresql/dumpall.sql";
+  backup.hooks.pre = "runuser -u postgres -- pg_dumpall > /var/lib/postgresql/dumpall.sql";
 
   # `containers attach minecraft`
   attach = "tmux attach -t mc";

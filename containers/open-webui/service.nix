@@ -33,4 +33,11 @@
     maxBody = "500m";
     extraConfig = "proxy_set_header X-Forwarded-Host $host;";
   };
+  # re-downloadable model caches
+  backup.exclude = [
+    "data/hf_home"
+    "data/transformers_home"
+    "data/xet"
+    "data/models--*"
+  ];
 }

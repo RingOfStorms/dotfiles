@@ -12,11 +12,13 @@
   persist = {
     data = "/var/lib/paperless"; # index, classification model, secret key
     postgres = "/var/lib/postgresql/16";
-    pgdumps = "/var/backup/postgresql"; # nightly postgresqlBackup + backupHook
+    pgdumps = "/var/backup/postgresql"; # nightly postgresqlBackup + backup.hooks.pre
     nixos = "/var/lib/nixos";
   };
 
-  backupHook = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
+  backup.hooks.pre = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
+  # search index, rebuilt by document_index reindex
+  backup.exclude = [ "data/index" ];
 
   net = {
     private = true;

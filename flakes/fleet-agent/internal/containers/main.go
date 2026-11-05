@@ -34,7 +34,7 @@ type Service struct {
 	Persist     map[string]string `json:"persist"`
 	TCPPorts    []int             `json:"tcpPorts"`
 	UDPPorts    []int             `json:"udpPorts"`
-	BackupHook  string            `json:"backupHook"`
+	Backup      BackupSpec        `json:"backup"`
 	Attach      string            `json:"attach"`
 	Internet    *bool             `json:"internet"`
 	Requires    []string          `json:"requires"`
@@ -149,6 +149,7 @@ commands:
                                service is running, whether to stop it; then hook,
                                stop, tar data to this machine, start again
   restore <svc> <file> --host h [--force]
+  restore <svc> --extra all|<path> [--snapshot id] [--repo url] [--into dir] [--host h]
                                unpack a backup into /srv/containers/<svc> on a host
   move <svc> --to h [--from h] [--force] [--resume-token T]
                                move through the restic repo: reserve h in the placement
@@ -307,6 +308,8 @@ func dispatch(cmd string, rest []string) (known bool, err error) {
 		err = cmdRestoreCheck(rest)
 	case "backup-policy":
 		err = cmdBackupPolicy(rest)
+	case "backup-resolve":
+		err = cmdBackupResolve(rest)
 	case "health":
 		err = cmdHealth(rest)
 	case "destroy", "rm":
@@ -1496,13 +1499,13 @@ func cmdAttach(args []string, shell bool) error {
 }
 
 func hookScript(s Service) string {
-	if s.BackupHook == "" {
+	if s.Backup.Hooks.Pre == "" {
 		return ""
 	}
 	if s.Kind == "podman" {
-		return fmt.Sprintf("if systemctl is-active -q %s; then echo 'running backup hook'; podman exec %s sh -c %s; fi\n", unitOf(s), s.Name, q(s.BackupHook))
+		return fmt.Sprintf("if systemctl is-active -q %s; then echo 'running backup hook'; podman exec %s sh -c %s; fi\n", unitOf(s), s.Name, q(s.Backup.Hooks.Pre))
 	}
-	return fmt.Sprintf("if systemctl is-active -q %s; then echo 'running backup hook'; nixos-container run %s -- bash -lc %s; fi\n", unitOf(s), s.Name, q(s.BackupHook))
+	return fmt.Sprintf("if systemctl is-active -q %s; then echo 'running backup hook'; nixos-container run %s -- bash -lc %s; fi\n", unitOf(s), s.Name, q(s.Backup.Hooks.Pre))
 }
 
 // streamFrom runs a remote script and pipes its stdout to w.
@@ -1577,6 +1580,9 @@ func cmdBackup(args []string) error {
 
 func cmdRestore(args []string) error {
 	f := parse(args, "force")
+	if f.vals["extra"] != "" {
+		return cmdRestoreExtra(f)
+	}
 	if len(f.pos) < 2 {
 		return errors.New("usage: containers restore <svc> <file> --host h [--force]")
 	}

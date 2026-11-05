@@ -12,7 +12,7 @@
 
   # Consistent SQLite copy next to the live db, so a restore never depends
   # on the WAL state of the stopped copy.
-  backupHook = "systemctl start backup-vaultwarden.service";
+  backup.hooks.pre = "systemctl start backup-vaultwarden.service";
 
   # sec-agent grant on the host (bound read-only in flake.nix); cnt deploy
   # and cnt move refuse a target host that lacks it.

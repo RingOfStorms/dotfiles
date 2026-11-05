@@ -14,7 +14,7 @@
     nixos = "/var/lib/nixos";
   };
 
-  backupHook = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
+  backup.hooks.pre = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
 
   # net.index is fleet-wide unique.
   net = {

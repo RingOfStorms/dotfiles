@@ -10,13 +10,15 @@
 
   persist = {
     postgres = "/var/lib/postgresql/16";
-    pgdumps = "/var/backup/postgresql"; # nightly postgresqlBackup + backupHook
+    pgdumps = "/var/backup/postgresql"; # nightly postgresqlBackup + backup.hooks.pre
     mlcache = "/var/cache/immich"; # ML models (re-downloadable)
     nixos = "/var/lib/nixos";
     dbro = "/var/lib/immich-dbro"; # immich_ro password (tailnet read-only DB access)
   };
 
-  backupHook = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
+  backup.hooks.pre = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
+  # regenerable ML models
+  backup.exclude = [ "mlcache" ];
 
   # net.index is fleet-wide unique.
   net = {

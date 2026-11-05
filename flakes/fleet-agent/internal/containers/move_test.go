@@ -77,14 +77,21 @@ start)
     sed 's/LIVE/COPY/' "$FAKE_ROOT/$svc/data/app.db" > "$FAKE_REPO/$id/staging/$svc/sqlite/$svc/data/app.db"
     echo "$FAKE_HOST" > "$FAKE_REPO/$id/host"; touch -d "@$(( $(date +%s) + $(ls "$FAKE_REPO" | wc -l) ))" "$FAKE_REPO/$id"
     mkdir -p "$FAKE_STATE/vlfc/backup-last"
-    echo "time=$(date -u +%Y-%m-%dT%H:%M:%SZ) snapshot=$id host=$FAKE_HOST" > "$FAKE_STATE/vlfc/backup-last/$svc" ;;
+    echo "time=$(date -u +%Y-%m-%dT%H:%M:%SZ) snapshot=$id host=$FAKE_HOST target=h004 repo=rest:http://100.64.0.4:8000/svc-$svc/" > "$FAKE_STATE/vlfc/backup-last/$svc" ;;
   *) [ -e "$FAKE_STATE/installed-$2" ] || { echo "Unit $2 not found." >&2; exit 5; }; touch "$FAKE_STATE/active-$2" ;;
   esac ;;
 esac
 exit 0
 `)
+	writeExe(t, filepath.Join(r.bin, "fleet"), "#!"+bash+`
+echo "fleet $*" >> `+r.log+`
+[ "$1 $2" = "containers backup-resolve" ] || exit 2
+if [ -e "$FAKE_STATE/target-none" ]; then echo target=none; else echo target=h004; echo "repo=rest:http://100.64.0.4:8000/svc-$3/"; fi
+`)
 	writeExe(t, filepath.Join(r.bin, "fleet-restic"), "#!"+bash+`
 echo "fleet-restic $*" >> `+r.log+`
+while :; do case "$1" in --subject|-r) shift 2;; *) break;; esac; done
+[ "$1" = snapshots ] && { [ -e "$FAKE_STATE/no-grant" ] && exit 1; exit 0; }
 [ "$1" = restore ] || exit 2
 id=$2; shift 2
 [ "$id" = latest ] && { id=$(ls -t "$FAKE_REPO" | head -n1); shift 2; }
@@ -416,7 +423,7 @@ func TestEvalRestoreCheck(t *testing.T) {
 	if _, err := evalRestoreCheck("sqlite /a.db ok\n", true); err == nil {
 		t.Error("a service with a pg_dump hook must have a dump")
 	}
-	if !needsPGDump(Service{BackupHook: "runuser -u postgres -- pg_dumpall > x"}) || needsPGDump(Service{}) {
+	if !needsPGDump(Service{Backup: BackupSpec{Hooks: BackupHooks{Pre: "runuser -u postgres -- pg_dumpall > x"}}}) || needsPGDump(Service{}) {
 		t.Error("needsPGDump")
 	}
 }
@@ -438,7 +445,7 @@ func TestRestoreCheckScriptOnFiles(t *testing.T) {
 	// take a snapshot, then check it
 	c := exec.Command("ssh", "root@src", "bash -c 'systemctl start fleet-backup-svc@svc.service'")
 	must(t, c.Run())
-	out, err := remoteOut(context.Background(), "src", true, restoreCheckScript(inv.Services["svc"], "latest --tag svc:svc"))
+	out, err := remoteOut(context.Background(), "src", true, restoreCheckScript(inv.Services["svc"], "", "latest --tag svc:svc"))
 	must(t, err)
 	want := map[string]string{
 		"/svc/data/app.db":          "ok",

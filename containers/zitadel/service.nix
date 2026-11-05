@@ -13,7 +13,7 @@
   persist = {
     # PG 17 cluster in ./17.
     postgresql = "/var/lib/postgresql";
-    pgdumps = "/var/backup/postgresql"; # nightly postgresqlBackup + backupHook dump
+    pgdumps = "/var/backup/postgresql"; # nightly postgresqlBackup + backup.hooks.pre dump
     # masterkey (32 bytes). Irreplaceable: without it the DB's encrypted
     # columns are unreadable. Lives in persist so it travels with moves and
     # backups. Not served by sec-agent on purpose (sec logs in via zitadel).
@@ -21,7 +21,7 @@
     nixos = "/var/lib/nixos";
   };
 
-  backupHook = "set -o pipefail; runuser -u postgres -- pg_dumpall | gzip > /var/backup/postgresql/cnt-dumpall.sql.gz";
+  backup.hooks.pre = "set -o pipefail; runuser -u postgres -- pg_dumpall | gzip > /var/backup/postgresql/cnt-dumpall.sql.gz";
 
   # o002 terminates TLS and forwards plain http over the tailnet; the route
   # keeps the default forwardedProto = "https" so zitadel still believes it

@@ -14,7 +14,7 @@
     nixos = "/var/lib/nixos";
   };
 
-  backupHook = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
+  backup.hooks.pre = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
 
   # Login breaks on duplicate X-Forwarded-Proto/Host headers; the generated
   # vhost sends each once.

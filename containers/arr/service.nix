@@ -112,6 +112,5 @@
   };
   # /media-health/ on h001.net lives in hosts/h001/mods/arr-nginx.nix (a
   # static alias of the persist dir, not a backend).
-  backupHook = null;
   attach = null;
 }

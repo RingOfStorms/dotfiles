@@ -437,6 +437,211 @@ let
     else
       secrets;
 
+  # ---------------------------------------------------------------- backup
+  # service.nix `backup` (BACKUP-PLAN.md §3.1, §3.3). Each service is one
+  # backup subject (repo svc-<name>). Host subjects (§3.2) reuse the path and
+  # exclude checks through checkBackupPath/checkBackupExclude.
+  backupForbiddenRoots = [
+    dataRoot
+    "/nix"
+    "/proc"
+    "/sys"
+    "/dev"
+    "/run"
+    "/tmp"
+    "/etc"
+    "/var/lib/fleet-backup"
+  ];
+  pathComponents = p: builtins.filter (c: builtins.isString c && c != "") (builtins.split "/" p);
+  # a == b, or a below b
+  pathUnder = a: b: a == b || builtins.substring 0 (builtins.stringLength b + 1) a == "${b}/";
+
+  # Throws "<where>: <what> ..." unless p is a normalised absolute path that
+  # backups may read. Returns p.
+  checkBackupPath =
+    where: what: p:
+    let
+      fail = msg: throw "${where}: ${what} ${builtins.toJSON p}: ${msg}";
+    in
+    if !builtins.isString p || builtins.match "(/[A-Za-z0-9._@+-]+)+" p == null then
+      fail "must be an absolute path matching ^(/[A-Za-z0-9._@+-]+)+$"
+    else if builtins.any (c: c == "." || c == "..") (pathComponents p) then
+      fail "must not contain . or .. components"
+    else if builtins.any (r: pathUnder p r) backupForbiddenRoots then
+      fail "is under ${
+        builtins.head (builtins.filter (r: pathUnder p r) backupForbiddenRoots)
+      }, which is never an extra backup path"
+    else if builtins.match "/var/lib/secrets.*" p != null then
+      fail "hydrated secrets are never backed up"
+    else
+      p;
+
+  # Relative restic exclude pattern (expanded to <path>/<pattern>).
+  checkBackupExclude =
+    where: e:
+    if
+      !builtins.isString e
+      || e == ""
+      || builtins.substring 0 1 e == "/"
+      || builtins.any (c: c == "..") (pathComponents e)
+    then
+      throw "${where}: exclude ${builtins.toJSON e} must be a non-empty relative pattern without .."
+    else
+      e;
+
+  checkBackupHooks =
+    where: h:
+    let
+      unknown = builtins.filter (k: k != "pre" && k != "post") (builtins.attrNames h);
+      ok = v: v == null || (builtins.isString v && v != "");
+    in
+    if !builtins.isAttrs h then
+      throw "${where}: hooks must be an attrset { pre; post; }"
+    else if unknown != [ ] then
+      throw "${where}: unknown key hooks.${builtins.head unknown}"
+    else if !(ok (h.pre or null) && ok (h.post or null)) then
+      throw "${where}: hooks must be non-empty strings"
+    else
+      {
+        pre = h.pre or null;
+        post = h.post or null;
+      };
+
+  normalizeBackup =
+    s:
+    let
+      where = "containers/${s.name}/service.nix: backup";
+      fail = msg: throw "${where}: ${msg}";
+      b = s.backup or { };
+      unknownIn =
+        allowed: attrs: builtins.filter (k: !(builtins.elem k allowed)) (builtins.attrNames attrs);
+      extraPath =
+        e:
+        let
+          w = "${where}: extraPaths";
+          bad = unknownIn [
+            "path"
+            "requires"
+            "exclude"
+            "mount"
+            "sentinel"
+            "onMove"
+          ] e;
+          path = checkBackupPath w "path" (e.path or null);
+          mount = if (e.mount or null) == null then null else checkBackupPath w "mount" e.mount;
+          sentinel = if (e.sentinel or null) == null then null else checkBackupPath w "sentinel" e.sentinel;
+          onMove = e.onMove or "restore";
+        in
+        if !builtins.isAttrs e then
+          throw "${w}: each entry must be an attrset"
+        else if bad != [ ] then
+          throw "${w}: unknown key ${builtins.head bad}"
+        else if !(builtins.elem (e.requires or null) s.requires) then
+          throw "${w}: ${path}: requires ${
+            builtins.toJSON (e.requires or null)
+          } must be one of the service's requires ${builtins.toJSON s.requires}"
+        else if mount != null && !(pathUnder path mount) then
+          throw "${w}: ${path} is not under mount ${mount}"
+        else if mount != null && sentinel != null && !(pathUnder sentinel mount) then
+          throw "${w}: sentinel ${sentinel} is not under mount ${mount}"
+        else if onMove != "restore" && onMove != "present" then
+          throw "${w}: ${path}: onMove must be \"restore\" or \"present\""
+        else
+          {
+            inherit
+              path
+              mount
+              sentinel
+              onMove
+              ;
+            requires = e.requires;
+            exclude = map (checkBackupExclude "${w}: ${path}") (e.exclude or [ ]);
+          };
+      unknown = unknownIn [
+        "enable"
+        "exclude"
+        "hooks"
+        "extraPaths"
+      ] b;
+      enable = b.enable or true;
+    in
+    if s ? backupHook then
+      throw "containers/${s.name}/service.nix: backupHook was renamed to backup.hooks.pre"
+    else if !builtins.isAttrs b then
+      fail "must be an attrset"
+    else if unknown != [ ] then
+      fail "unknown key ${builtins.head unknown}"
+    else if !builtins.isBool enable then
+      fail "enable must be a bool"
+    else if !enable && builtins.attrNames b != [ "enable" ] then
+      fail "enable = false cannot be combined with other fields"
+    else if !builtins.isList (b.exclude or [ ]) || !builtins.isList (b.extraPaths or [ ]) then
+      fail "exclude and extraPaths must be lists"
+    else
+      {
+        inherit enable;
+        exclude = map (checkBackupExclude where) (b.exclude or [ ]);
+        hooks = checkBackupHooks where (b.hooks or { });
+        extraPaths = map extraPath (b.extraPaths or [ ]);
+      };
+
+  # No backup path may equal or contain another, across all services and
+  # host subjects (two repos holding the same data would make restores
+  # fight). hostSubjects: { <name> = [ "/abs" ... ]; }. Returns services.
+  checkBackupPaths =
+    {
+      services,
+      hostSubjects ? { },
+    }:
+    let
+      entries =
+        builtins.concatLists (
+          map (
+            s:
+            map (e: {
+              owner = "service ${s.name}";
+              inherit (e) path;
+            }) s.backup.extraPaths
+          ) services
+        )
+        ++ builtins.concatLists (
+          map (
+            n:
+            map (p: {
+              owner = "host subject ${n}";
+              path = p;
+            }) hostSubjects.${n}
+          ) (builtins.attrNames hostSubjects)
+        );
+      n = builtins.length entries;
+      idx = builtins.genList (i: i) n;
+      clash = builtins.concatLists (
+        map (
+          i:
+          map
+            (j: [
+              (builtins.elemAt entries i)
+              (builtins.elemAt entries j)
+            ])
+            (
+              builtins.filter (
+                j:
+                j > i
+                && (
+                  pathUnder (builtins.elemAt entries i).path (builtins.elemAt entries j).path
+                  || pathUnder (builtins.elemAt entries j).path (builtins.elemAt entries i).path
+                )
+              ) idx
+            )
+        ) idx
+      );
+      c = builtins.head clash;
+    in
+    if clash != [ ] then
+      throw "backup paths overlap: ${(builtins.elemAt c 0).path} (${(builtins.elemAt c 0).owner}) and ${(builtins.elemAt c 1).path} (${(builtins.elemAt c 1).owner})"
+    else
+      services;
+
   # Defaults so service.nix files can stay short.
   normalize =
     service:
@@ -470,6 +675,7 @@ let
         routes = normalizeRoutes s;
         net = normalizeNet s;
         secrets = normalizeSecrets s;
+        backup = normalizeBackup s;
       };
 
   # The edge listener port on service hosts. Keep in
@@ -494,7 +700,9 @@ let
         d: entries.${d} == "directory" && builtins.pathExists (dir + "/${d}/service.nix")
       ) (builtins.attrNames entries);
     in
-    checkNetIndexes (map (d: normalize (import (dir + "/${d}/service.nix"))) dirs);
+    checkBackupPaths {
+      services = checkNetIndexes (map (d: normalize (import (dir + "/${d}/service.nix"))) dirs);
+    };
 
   # Tailnet peers a host's own http vhosts must not serve: o002 (the public
   # edge, which reaches them through its edge listener instead) and the
@@ -560,6 +768,10 @@ in
     nginxSnippets
     netHostAddress
     checkNetIndexes
+    checkBackupPaths
+    checkBackupPath
+    checkBackupExclude
+    checkBackupHooks
     allServices
     tailnetExcludedOverlayIps
     tailnetExcludedOverlayIps6

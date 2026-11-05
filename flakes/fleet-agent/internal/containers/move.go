@@ -89,11 +89,14 @@ func moveSourceMarker(svc string) string { return moveMarkerDir + "/move-" + svc
 var liveDBGlobs = []string{"postgres", "postgresql/[0-9]*"}
 
 // backupStamp is one line written by fleet-backup on success:
-// time=<RFC3339> snapshot=<id> host=<hostname>
+// time=<RFC3339> snapshot=<id> host=<hostname> [target=<id> repo=<rest url>]
+// (target/repo since P3; a stamp without repo predates per-subject repos).
 type backupStamp struct {
 	Time     time.Time
 	Snapshot string
 	Host     string
+	Target   string
+	Repo     string
 }
 
 func parseStamp(s string) (backupStamp, error) {
@@ -111,6 +114,10 @@ func parseStamp(s string) (backupStamp, error) {
 			b.Snapshot = v
 		case "host":
 			b.Host = v
+		case "target":
+			b.Target = v
+		case "repo":
+			b.Repo = v
 		}
 	}
 	if b.Time.IsZero() || b.Snapshot == "" {
@@ -121,11 +128,16 @@ func parseStamp(s string) (backupStamp, error) {
 			return b, fmt.Errorf("bad snapshot id %q", b.Snapshot)
 		}
 	}
+	if b.Repo != "" {
+		if err := validResolved(stampSubject(b.Repo), bpResolved{Target: "x", Repo: b.Repo}); err != nil {
+			return b, fmt.Errorf("stamp repo: %w", err)
+		}
+	}
 	return b, nil
 }
 
 func backupCheckScript(host string) string {
-	return fmt.Sprintf("if [ ! -e %s ] || ! command -v fleet-restic >/dev/null; then echo \"%s has no fleet-backup (set ringofstorms.containers.backup.enable and its restic credentials)\" >&2; exit 1; fi\n",
+	return fmt.Sprintf("if [ ! -e %s ] || ! command -v fleet-restic >/dev/null; then echo \"%s has no fleet-backup (set ringofstorms.containers.backup.enable and grant its restic_svc-* keys)\" >&2; exit 1; fi\n",
 		q(backupMarker), host)
 }
 
@@ -135,7 +147,7 @@ func backupCheckScript(host string) string {
 func movePreflightTarget(s Service, to string) string {
 	dst := dataDir(s)
 	return strict + fmt.Sprintf(`test -d /etc/systemd-mutable/system || { echo "%[3]s lacks the containers host module" >&2; exit 1; }
-`, unitOf(s), s.Name, to) + backupCheckScript(to) + requiresScript(s, to) + secretsScript(s, to) + fmt.Sprintf(`if [ -e %[6]s ]; then
+`, unitOf(s), s.Name, to) + backupCheckScript(to) + requiresScript(s, to) + secretsScript(s, to) + backupPreflightScript(s, to) + extraPathsPreflightScript(s, to) + fmt.Sprintf(`if [ -e %[6]s ]; then
   echo "%[3]s: leftovers of an unfinished move of %[2]s; removing them" >&2
   %[7]s
 fi
@@ -147,7 +159,7 @@ install -d -m755 %[5]s
 }
 
 func movePreflightSource(s Service, from string) string {
-	return "set -e\n" + backupCheckScript(from) + fmt.Sprintf("test -d %s || { echo \"%s: no %s; nothing to move\" >&2; exit 1; }\n",
+	return "set -e\n" + backupCheckScript(from) + backupPreflightScript(s, from) + fmt.Sprintf("test -d %s || { echo \"%s: no %s; nothing to move\" >&2; exit 1; }\n",
 		q(dataDir(s)), from, dataDir(s))
 }
 
@@ -209,14 +221,15 @@ func stampFrom(out, host string, since time.Time) (backupStamp, error) {
 // data, puts the SQLite copies in place of the excluded live files (files
 // only, so the restored dirs keep their owners/modes), and renames the
 // result into place. Marks the target so a re-run knows it is ours.
-func restoreScript(s Service, from, snap string) string {
+func restoreScript(s Service, from string, st backupStamp) string {
+	snap := st.Snapshot
 	root := inv.DataRoot
 	return strict + fmt.Sprintf(`root=%[1]s
 svc=%[2]s
 tmp=$(mktemp -d "$root/.cnt-move-$svc.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 echo "from=%[3]s snapshot=%[4]s" > %[5]s
-fleet-restic restore %[4]s --target "$tmp"
+%[7]s restore %[4]s --target "$tmp" </dev/null
 test -d "$tmp$root/$svc" || { echo "snapshot %[4]s has no $root/$svc" >&2; exit 1; }
 sq="$tmp"%[6]s/$svc/sqlite/$svc
 if [ -d "$sq" ]; then
@@ -227,7 +240,7 @@ if [ -d "$sq" ]; then
 fi
 mv -T "$tmp$root/$svc" "$root/$svc"
 echo "restored $root/$svc from snapshot %[4]s"
-`, q(root), q(s.Name), from, snap, q(moveMarker(s.Name)), q(backupStaging))
+`, q(root), q(s.Name), from, snap, q(moveMarker(s.Name)), q(backupStaging), resticCmd(s.Name, st.Repo)) + restoreExtraScript(s, st)
 }
 
 // liveDBListScript lists the live DB cluster dirs of the service (relative
@@ -496,7 +509,7 @@ func cmdMove(args []string) error {
 	}
 
 	info("3/9 restoring snapshot %s onto %s, then live DB clusters from the stopped %s", snap.Snapshot, to, from)
-	if err := remote(to, true, restoreScript(s, from, snap.Snapshot)); err != nil {
+	if err := remote(to, true, restoreScript(s, from, snap)); err != nil {
 		return undo("restore on "+to, err, true)
 	}
 	if err := st.renew(); err != nil {
@@ -520,7 +533,7 @@ func cmdMove(args []string) error {
 	if err := st.renew(); err != nil {
 		return undo("the placement of "+s.Name+" was taken over", err, true)
 	}
-	if err := restoreCheck(s, to, snap.Snapshot); err != nil {
+	if err := restoreCheck(s, to, snap.Repo, snap.Snapshot); err != nil {
 		return undo("restore check", err, true)
 	}
 
@@ -682,7 +695,7 @@ chk_tcp() {
 
 // needsPGDump: the service's hook writes a pg_dump(all), so a restore must
 // contain at least one valid dump.
-func needsPGDump(s Service) bool { return strings.Contains(s.BackupHook, "pg_dump") }
+func needsPGDump(s Service) bool { return strings.Contains(s.Backup.Hooks.Pre, "pg_dump") }
 
 // restoreCheckScript restores the snapshot's databases and dumps into a
 // scratch dir on the host and prints one line per file:
@@ -691,10 +704,10 @@ func needsPGDump(s Service) bool { return strings.Contains(s.BackupHook, "pg_dum
 //	pgdump <path> ok|<reason>
 //
 // The scratch dir is always removed.
-func restoreCheckScript(s Service, snap string) string {
+func restoreCheckScript(s Service, repo, snap string) string {
 	return strict + fmt.Sprintf(`scratch=$(mktemp -d /var/tmp/cnt-restore-check-%[1]s.XXXXXX)
 trap 'rm -rf "$scratch"' EXIT
-fleet-restic restore %[2]s --target "$scratch" \
+%[3]s restore %[2]s --target "$scratch" </dev/null \
   --include '*.db' --include '*.sqlite' --include '*.sqlite3' \
   --include '*.sql' --include '*.sql.gz' --include '*.dump' >&2
 for t in sqlite3 gzip; do command -v $t >/dev/null || { echo "restore check needs $t on this host" >&2; exit 1; }; done
@@ -722,7 +735,7 @@ while IFS= read -r -d "" f; do
   case "$tail" in *"dump complete"*) echo "pgdump $p ok" ;; *) echo "pgdump $p truncated" ;; esac
 done
 echo "checked snapshot %[2]s"
-`, s.Name, snap)
+`, s.Name, snap, resticCmd(s.Name, repo))
 }
 
 // evalRestoreCheck turns restoreCheckScript output into a verdict.
@@ -746,7 +759,7 @@ func evalRestoreCheck(out string, needPG bool) (string, error) {
 		}
 	}
 	if needPG && nPG == 0 {
-		bad = append(bad, "no PostgreSQL dump in the snapshot (the backupHook writes one)")
+		bad = append(bad, "no PostgreSQL dump in the snapshot (backup.hooks.pre writes one)")
 	}
 	sum := fmt.Sprintf("%d SQLite db(s), %d PG dump(s)", nSQL, nPG)
 	if len(bad) > 0 {
@@ -755,11 +768,11 @@ func evalRestoreCheck(out string, needPG bool) (string, error) {
 	return sum, nil
 }
 
-func restoreCheck(s Service, h, snap string) error {
+func restoreCheck(s Service, h, repo, snap string) error {
 	if dryRun {
-		return remote(h, true, restoreCheckScript(s, snap))
+		return remote(h, true, restoreCheckScript(s, repo, snap))
 	}
-	out, err := remoteOut(context.Background(), h, true, restoreCheckScript(s, snap))
+	out, err := remoteOut(context.Background(), h, true, restoreCheckScript(s, repo, snap))
 	if err != nil {
 		return err
 	}
@@ -783,7 +796,7 @@ func cmdRestoreCheck(args []string) error {
 		return fmt.Errorf("--snapshot: %w", err)
 	}
 	info("restore check of %s (%s) on %s", s.Name, snap, h)
-	return restoreCheck(s, h, snap)
+	return restoreCheck(s, h, f.vals["repo"], snap)
 }
 
 // cmdHealth: `containers health <svc> [--host h]`, the route check move runs
