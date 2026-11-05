@@ -5,7 +5,7 @@ import ../_shared_assets/utilities/sec-agent.nix {
   # Backups use B2, not fleet SSH. Git+SSH flake inputs still need the
   # Forgejo/GitHub keys supplied by includeGitKeys.
   includeFleetSshKeys = false;
-  extraSecrets = {
+  extraSecrets = (import ../../containers/backup-subjects.nix).clientSecrets "h001" // {
     # Credentials of the shared `josh` atuin account, readable by the local
     # primary user's atuin-autologin.
     "atuin-key-josh_2026-03-15" = {
@@ -48,14 +48,13 @@ import ../_shared_assets/utilities/sec-agent.nix {
       softDepend = [ "container@life" ];
     };
 
-    # EnvironmentFile for h001's restic backups (mods/restic-backup.nix and
-    # fleet-backup, ringofstorms.containers.backup):
+    # EnvironmentFile for h001's host restic job (mods/restic-backup.nix,
+    # old B2 repo, --tag h001). Containers use restic_svc-* (backup-subjects.nix):
     # RESTIC_REPOSITORY, RESTIC_PASSWORD and the backend credentials.
     restic_h001_env_2026-10-01 = {
       remotePath = "machines/high-trust/restic_h001_env_2026-10-01";
       configChanges = {
         services.restic.backups.h001.environmentFile = "$SECRET_PATH";
-        ringofstorms.containers.backup.environmentFile = "$SECRET_PATH";
       };
     };
 

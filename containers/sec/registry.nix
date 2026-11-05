@@ -11,7 +11,8 @@
 # every low-trust key carries both `device_high_trust` and
 # `device_low_trust` (high-trust is a superset). Per-host keys use
 # `sub` grants with Zitadel service-account userIds.
-{
+(import ../backup-subjects.nix).registry
+// {
   # ── high-trust: SSH keys ──────────────────────────────────────
   "machines/high-trust/nix2nix_2026-03-15" = {
     fields = [ "value" ];

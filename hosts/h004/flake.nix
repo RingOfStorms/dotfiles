@@ -104,7 +104,9 @@
               enable = true;
               dataDir = "/data/backups";
               requiresMount = "/data";
-              subjectCredentials.svc-canary = "/var/lib/secrets_manager_hydrated/restic_svc-canary_2026-11-04";
+              subjectCredentials = (import ../../containers/backup-subjects.nix).subjectCredentials // {
+                svc-canary = "/var/lib/secrets_manager_hydrated/restic_svc-canary_2026-11-04";
+              };
             };
           })
         ]

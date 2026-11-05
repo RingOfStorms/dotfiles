@@ -5,7 +5,7 @@ import ../_shared_assets/utilities/sec-agent.nix {
   # This NAS receives SSH/NFS traffic but initiates no fleet root SSH.
   # Git+SSH flake inputs still need includeGitKeys.
   includeFleetSshKeys = false;
-  extraSecrets = {
+  extraSecrets = (import ../../containers/backup-subjects.nix).targetSecrets // {
     # Credentials of the shared `josh` atuin account; owned by the local
     # primary user (luser) so its atuin-autologin can read it.
     "atuin-key-josh_2026-03-15" = {
