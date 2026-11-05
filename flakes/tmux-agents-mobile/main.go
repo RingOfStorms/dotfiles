@@ -208,9 +208,6 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		go serve(ui, ln)
 	}
 
-	// Further transports (e.g. an iroh endpoint) slot in here: build a
-	// net.Listener, wrap the handler, append to servers and go serve(...).
-
 	var health *http.Server
 	if cfg.healthListen != "" {
 		mux := http.NewServeMux()

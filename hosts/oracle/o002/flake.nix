@@ -121,7 +121,6 @@
             }
           )
           ./headscale.nix
-          ./iroh-relay.nix
         ]
         ++ impermanenceModules;
       };
