@@ -665,6 +665,39 @@ in
       }";
     };
 
+  # Backup target (:8000, rest-server) source allow-list, BACKUP-PLAN.md §2.8:
+  # high-trust overlay IPs minus o002 and the target itself, plus the named
+  # low-trust clients (§7). Same shape as the ssh list.
+  #   hosts            fleet.nix hosts
+  #   self             the target's host name
+  #   lowTrustClients  extra host names (must be trust = "low")
+  backupTargetIps =
+    {
+      hosts,
+      self,
+      lowTrustClients ? [ ],
+    }:
+    let
+      exclude = [
+        "o002"
+        self
+      ];
+      pick =
+        f:
+        builtins.filter (ip: ip != null) (
+          map (n: hosts.${n}.${f} or null) (
+            builtins.filter (n: (hosts.${n}.trust or null) == "high" && !(builtins.elem n exclude)) (
+              builtins.attrNames hosts
+            )
+            ++ lowTrustClients
+          )
+        );
+    in
+    {
+      ips = pick "overlayIp";
+      ips6 = pick "overlayIp6";
+    };
+
   # Placement-free DNS route names and public CNAME membership. h005 keeps
   # local= declarations from names; runtime reconciliation supplies host IPs.
   #   dir    the containers directory

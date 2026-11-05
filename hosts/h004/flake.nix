@@ -97,6 +97,14 @@
           ./nfs-data-users-nixarr.nix
           ({
             ringofstorms.fleetAgent.extraFilesystems = [ "/data" ];
+            # Backup target tier (containers/BACKUP-PLAN.md P1). dataDir is
+            # the /data/backups subvolume owned by nfs-data.nix. Subject
+            # logins are added with their registry keys (svc-canary first).
+            ringofstorms.backup.target = {
+              enable = true;
+              dataDir = "/data/backups";
+              requiresMount = "/data";
+            };
           })
         ]
         ++ [

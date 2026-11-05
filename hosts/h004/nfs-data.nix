@@ -110,33 +110,73 @@ lib.mkMerge [
     '';
 
   })
-  ({
-    # C2 (closed): /data/backups must be its own bcachefs subvolume, not a
-    # plain directory on the same filesystem as the /data/nixarr NFS
-    # export root, and must stay 0700 luser:users (not world-readable) so
-    # that even a same-filesystem NFS handle-forge attempt (or an
-    # AUTH_SYS request asserting an arbitrary non-root uid) can't read
-    # fleet host backups. Re-asserted on every boot/activation.
-    systemd.services.ensure-backups-subvolume = {
-      description = "Ensure /data/backups is a bcachefs subvolume";
-      after = [ "data.mount" ];
-      requires = [ "data.mount" ];
-      wantedBy = [ "multi-user.target" ];
-      before = [ "nfs-server.service" ];
-      unitConfig.RequiresMountsFor = "/data";
-      serviceConfig.Type = "oneshot";
-      path = [ pkgs.gawk ];
-      script = ''
-        set -euo pipefail
-        if [ ! -d /data/backups ]; then
-          ${pkgs.bcachefs-tools}/bin/bcachefs subvolume create /data/backups
-        elif ! ${pkgs.bcachefs-tools}/bin/bcachefs subvolume list /data | awk '{print $1}' | grep -qx backups; then
-          echo "ensure-backups-subvolume: /data/backups exists but is not a bcachefs subvolume; refusing to auto-migrate live data, fix manually" >&2
-          exit 1
-        fi
-        chown luser:users /data/backups
-        chmod 0700 /data/backups
-      '';
-    };
-  })
+  (
+    let
+      target = config.ringofstorms.backup.target;
+      owner = if target.enable then "${target.owner}:${target.owner}" else "luser:users";
+    in
+    {
+      # C2 (closed): /data/backups must be its own bcachefs subvolume, not a
+      # plain directory on the same filesystem as the /data/nixarr NFS
+      # export root, and must stay 0700 (owner restic:restic, uid/gid 291,
+      # while the backup target is enabled; BACKUP-PLAN.md §4.3) so that
+      # even a same-filesystem NFS handle-forge attempt (or an AUTH_SYS
+      # request asserting an arbitrary non-root uid) can't read fleet host
+      # backups. Re-asserted on every boot/activation.
+      assertions = [
+        {
+          assertion = !target.enable || target.dataDir == "/data/backups";
+          message = "hosts/h004/nfs-data.nix: ringofstorms.backup.target.dataDir must be /data/backups (the subvolume this unit owns).";
+        }
+      ];
+      systemd.services.ensure-backups-subvolume = {
+        description = "Ensure /data/backups is a bcachefs subvolume";
+        after = [ "data.mount" ];
+        requires = [ "data.mount" ];
+        wantedBy = [ "multi-user.target" ];
+        before = [
+          "nfs-server.service"
+        ]
+        ++ lib.optionals target.enable [
+          "render-htpasswd.service"
+          "restic-rest-server.service"
+          "fleet-backup-target-prune.service"
+        ];
+        requiredBy = lib.optionals target.enable [
+          "restic-rest-server.service"
+          "fleet-backup-target-prune.service"
+        ];
+        unitConfig.RequiresMountsFor = "/data";
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+        path = [
+          pkgs.gawk
+          pkgs.findutils
+        ];
+        script = ''
+          set -euo pipefail
+          if [ ! -d /data/backups ]; then
+            ${pkgs.bcachefs-tools}/bin/bcachefs subvolume create /data/backups
+          elif ! ${pkgs.bcachefs-tools}/bin/bcachefs subvolume list /data | awk '{print $1}' | grep -qx backups; then
+            echo "ensure-backups-subvolume: /data/backups exists but is not a bcachefs subvolume; refusing to auto-migrate live data, fix manually" >&2
+            exit 1
+          fi
+          ${lib.optionalString target.enable ''
+            # Only restic repos (svc-*) and the module's .htpasswd stub belong
+            # here. Anything else (the old l001/o001 rsync trees) means the
+            # §4.4 move has not run: refuse, so rest-server stays down.
+            stray=$(find /data/backups -mindepth 1 -maxdepth 1 ! -name 'svc-*' ! -name .htpasswd -printf '%f ')
+            if [ -n "$stray" ]; then
+              echo "ensure-backups-subvolume: unexpected entries in /data/backups: $stray(run BACKUP-PLAN.md §4.4 first)" >&2
+              exit 1
+            fi
+          ''}
+          chown ${owner} /data/backups
+          chmod 0700 /data/backups
+        '';
+      };
+    }
+  )
 ]

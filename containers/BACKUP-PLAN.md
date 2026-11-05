@@ -1,9 +1,9 @@
 # Fleet backups: backup targets, pushers, one repo per subject
 
-Status: **design, nothing deployed.** rest-server behaviour was measured on
-loopback fixtures (rest-server 0.14.0, restic 0.18.1), not on h004 (Appendix A).
-Revised 2026-11-01 to the user's decisions (§0); the previous revision is in git
-(`b61ebfbb`).
+Status: **P1 code written, nothing deployed.** rest-server behaviour was
+measured on loopback fixtures (rest-server 0.14.0, restic 0.18.1), not on h004
+(Appendix A). Revised 2026-11-04 to the user's decisions (§0 items 7–10); the
+2026-11-01 revision is in git.
 
 Target state: fleet hosts push restic snapshots to a **backup target** over the
 REST protocol and hold no B2 credential. A target that also holds a B2 key is a
@@ -24,6 +24,13 @@ also goes to B2, are runtime toggles in the fleet-edge UI.
    `service.nix` (`backup.extraPaths`, `backup.hooks`) (§3, §5).
 5. fleet-edge state on h005 is backed up as a subject, like a service (§6).
 6. joe (low trust) may back up to h004 under conditions (§7).
+7. Legacy B2 repo `7f023d4a` stays untouched during the migration. It is
+   deleted a few days after the completeness check shows every new per-service
+   repo fully copied to B2 (P6b, §9). No 12-month hold.
+8. The rest of wd10 (`lio_backs`, `forgejo_bak`, `export`, `phone_backups`,
+   `joeb_backup`) is out of scope; the user sorts it manually.
+9. fleet-edge `metrics.db` is part of the `fleet-edge` subject (§6).
+10. The one-time ~485 GiB media re-upload to B2 is approved (§5, P5).
 
 **Does the tier split simplify the design? Yes, for three reasons.**
 - A target needs no B2 key. Phase 1 involves no Backblaze work, and any large
@@ -66,9 +73,9 @@ isolation and append-only, not from tiering.
   **immich** and **paperless** containers (`containers/{immich,paperless}/flake.nix`
   `binds`; both declare `requires = [ "wd10" ]`), not into arr. arr's media
   already lives on h004 (`/data/nixarr`, NFS-mounted at `/nfs/h002/nixarr`).
-  wd10 also holds about 1.04T that no job backs up today: `lio_backs` 818G,
-  `forgejo_bak` 91G, `export` 61G, `phone_backups` 56G, `joeb_backup` 12G
-  (§10).
+  wd10 also holds about 1.04T that no job backs up: `lio_backs` 818G,
+  `forgejo_bak` 91G, `export` 61G, `phone_backups` 56G, `joeb_backup` 12G.
+  Out of scope (§0.8).
 - **h004** has no restic, no rest-server, no B2 key and no containers module.
   `/data` is bcachefs, 51T with 26T free, replicas=2, `nofail`
   (`hosts/h004/data-pool.nix`). `/data/backups` is subvolume id 2 and holds only
@@ -474,12 +481,14 @@ written to them since 2026-06-25, and the `latest` symlinks are **absolute**.
 
 ### 4.3 Ownership
 
-- `ensure-backups-subvolume` keeps the subvolume check, but sets
-  `restic:restic 0700` instead of `luser:users 0700`. It gains `before =
-  [ "render-htpasswd.service" "restic-rest-server.service" ]`. The owner comes
-  from an option the target module sets (`ringofstorms.backup.target.dataDir`
-  ⇒ owner `restic`), so the file has a single source of truth. The C2 comment is
-  updated to "0700 restic:restic".
+- `ensure-backups-subvolume` (`hosts/h004/nfs-data.nix`) keeps the subvolume
+  check and sets `${target.owner}:${target.owner} 0700` (= `restic:restic`)
+  while `ringofstorms.backup.target.enable`, else `luser:users`. It is
+  `before` and `requiredBy` rest-server and the prune unit
+  (`RemainAfterExit`), so a failed check keeps rest-server down. With the
+  target on it also refuses any entry other than `svc-*` and `.htpasswd`, so a
+  deploy before §4.4 fails closed. An assertion pins `dataDir =
+  /data/backups`. The C2 comment says "0700 restic:restic".
 - `restic` has the fixed uid/gid 291 (`ids.uids.restic`), so it is stable across
   h004's impermanent root.
 - `users.users.restic.createHome = lib.mkForce false`. Otherwise the module's
@@ -508,10 +517,13 @@ rm -rf /data/backups/l001 /data/backups/o001
 ls -A /data/backups          # must be empty
 ```
 
-Then deploy P1. After it, verify: `stat -c '%U:%G %a' /data/backups` prints
-`restic:restic 700`, `bcachefs subvolume list /data` still shows `backups 2`,
-and the result survives a reboot (the unit re-asserts it). Rollback before P1 is
-`cp -a` back. After P1, revert the `nfs-data.nix` change, then copy back.
+Then deploy P1. If §4.4 was skipped, `ensure-backups-subvolume` fails on the
+stray `l001`/`o001` and rest-server does not start; nothing is chowned. After
+the deploy, verify: `stat -c '%U:%G %a' /data/backups` prints `restic:restic
+700`, `bcachefs subvolume list /data` still shows `backups 2`, and the result
+survives a reboot (the unit re-asserts it). Rollback before P1 is `cp -a`
+back. After P1, set `target.enable = false` (the unit reverts to
+`luser:users`), deploy, then copy back.
 
 ## 5. Media: h001 → h004 → B2 like any service
 
@@ -532,7 +544,8 @@ and the result survives a reboot (the unit re-asserts it). Rollback before P1 is
   incremental.
 - **B2:** `svc-immich`, `svc-paperless` and `svc-h001-archives` are new, empty
   B2 repos, so the first copy **re-uploads about 485 GiB once** (B2 ingress is
-  free; uplink time only). The old `7f023d4a` media history is not copied (§9).
+  free; uplink time only). Approved (§0.10). The old `7f023d4a` media history
+  is not copied (§9).
 - Retention defaults to `standard` (= the old job's 7/5/12/3). Raise it to `long`
   in the UI if wanted.
 - Dropped from the previous revision: the h004-side media job, the export of
@@ -546,9 +559,16 @@ h005 declares `ringofstorms.backup.subjects.fleet-edge`:
 |---|---|---|
 | `/var/lib/private/fleet-edge-overrides/` | `placements.json` 4.6K, `state.json`, `audit.log`, `placements-audit.log` (all 0600, DynamicUser); `backup*.json` from P2 lands here | yes |
 | `/var/lib/fleet-edge-forwards/forwards.json` | 21 B | yes |
-| `/var/lib/private/fleet-edge/metrics.db` (+ `.pre-beszel-import`) | 232M + 23M, live SQLite | no: telemetry, not registry or overrides (§10) |
+| `/var/lib/private/fleet-edge/metrics.db` | 232M, live SQLite | yes (§0.9), via a hook copy |
+| `/var/lib/private/fleet-edge/metrics.db.pre-beszel-import` | 23M, static | yes |
 
-- All included files are written by atomic rename, so no hook is needed.
+- `metrics.db` is live, and host subjects get no SQLite online copy (§3.4).
+  `hooks.pre` runs `sqlite3 metrics.db ".timeout 30000" ".backup
+  /var/lib/private/fleet-edge/backup/metrics.db"`; the subject includes
+  `backup/` and excludes the live `metrics.db{,-wal,-shm}`. `hooks.post`
+  removes the copy. Restore copies it back over `metrics.db` with fleet-edge
+  stopped.
+- The other included files are written by atomic rename; no hook.
 - Resolution goes through h005's own `/api/backup`, with the cache as fallback
   when fleet-edge is down. **Disaster restore needs no fleet-edge:** stop
   `fleet-edge-overrides`, run `fleet-restic -r
@@ -596,17 +616,44 @@ registration.
   render, prune unit idle until repos exist, `RequiresMountsFor` /
   `ConditionPathIsMountPoint`, firewall + assertions), the `ensure-backups-subvolume`
   ownership change, and one canary subject `svc-canary` (secret, `init`).
-- **Files:** `flakes/fleet-agent/{agent-module.nix,backup/target.nix}`,
-  `hosts/h004/{flake.nix,nfs-data.nix,firewall.nix}`,
-  `containers/sec/registry.nix` (canary), `containers/tests/backup-plan.nix`.
+- **Code (written 2026-11-04, not deployed):**
+  - `flakes/fleet-agent/backup/target.nix`: options `enable`, `dataDir`,
+    `requiresMount`, `lowTrustClients`, `subjectCredentials` (`svc-<x>` →
+    hydrated secret path), `prunePreset` (default `long` until P2), read-only
+    `allowedIps{,6}`, `owner`. Emits rest-server (`8000`, append-only,
+    privateRepos, htpasswd in `/run`), `render-htpasswd` (skips unhydrated
+    secrets, fails on a malformed one), `ExecReload` HUP,
+    `fleet-backup-target-prune` (+ timer 06:00, `User=restic`,
+    `LoadCredential`), and the `:8000` rule (v4 + v6).
+  - `flakes/fleet-agent/agent-module.nix` imports it.
+  - `containers/lib.nix` `backupTargetIps`.
+  - `hosts/h004/flake.nix` enables it; `hosts/h004/nfs-data.nix` owner,
+    ordering, stray-entry guard. `hosts/h004/firewall.nix` is unchanged: the
+    rule lives in the module (§2.8).
+  - `containers/tests/backup-plan.nix`.
+  - **Not yet:** the canary registry key and h004 consumer. h004's Zitadel
+    sub is not in the repo; add it once known (`sub` grants: h004, lio), then
+    `subjectCredentials.svc-canary` and the `extraSecrets` entry with
+    `hardDepend = [ "render-htpasswd" ]`.
 - **Risk: low.** No client writes, and the directory is emptied first. New
   exposure: `:8000` from the allow-list only. Unverified until now: socket
   activation under the module's hardening, and `render-htpasswd` reading root
   0400 secrets.
+- **Deploy order:**
+  1. §4.4 on h004 (copy, diff, `rm`). Risk: deleting before the diff is clean.
+  2. Deploy h004 (pull the new `fleet-agent` input). Risk: if step 1 was
+     skipped, `ensure-backups-subvolume` fails and rest-server stays down
+     (intended); the ssh rule is untouched.
+  3. Check `restic-rest-server.socket` listens, `stat` = `restic:restic 700`,
+     empty htpasswd, `curl` from lio → 401, from h005 → 401, from o002 → timeout.
+  4. Add the canary key (registry, `sec` deploy), the h004 consumer, redeploy
+     h004, `restic init` as `restic`, then the live checks below.
+  5. Reboot h004 once; re-check `stat` and the socket.
 - **Verify:**
   - `nix eval --impure --expr 'import ./containers/tests/backup-plan.nix'`:
-    the allow-list is non-empty, contains lio, excludes o002 and h004, and
-    equals the ssh list.
+    the allow-list is non-empty, contains lio, excludes o002, h004 and every
+    low-trust host, equals the ssh list, and adds joe only via
+    `lowTrustClients`. Passes (2026-11-04).
   - Live, as `svc-canary`:
     - `init`/`backup` from lio works; from an unlisted host it times out.
     - `DELETE …/snapshots/<id>` → 403; another subject's credential → 401.
@@ -717,8 +764,8 @@ registration.
   `hosts/h001/floating-containers.nix`, `hosts/h005/*`, the registry, and
   `sec-agent.nix` on h001 and h005.
 - **Risk: medium–high.** The largest transfer: about 639G to h004, then about
-  485 GiB to B2. The wd10 empty-dir guard is the safety net. B2 storage roughly
-  doubles until §9.
+  485 GiB to B2 (approved, §0.10). The wd10 empty-dir guard is the safety net.
+  B2 storage roughly doubles until P6b.
 - **Verify:**
   - `svc-immich`'s local size is within a few percent of `du` minus excludes.
   - With wd10 unmounted (test on a scratch path), the empty-dir guard fails the
@@ -750,6 +797,26 @@ registration.
   - The pusher's key still copies.
   - `grep -rn restic_h001_env hosts/ containers/` is empty.
 
+### P6b: delete legacy repo `7f023d4a`
+
+- **Gate (all):**
+  1. P6 done.
+  2. `offsite-b2.json` is clean for **every** subject with `offsite = true`
+     (including `svc-immich`, `svc-paperless`, `svc-h001-archives`,
+     `svc-fleet-edge`): each expected snapshot is present on B2 by
+     `(.original // .id)` with matching `time,hostname,paths,tags,tree`, and
+     `check --read-data-subset` passed.
+  3. That has held for a few consecutive days (3 by default) after the last
+     subject's first full copy finished.
+  4. `restic ls latest` from B2 alone succeeds for one container subject and
+     for `svc-immich`, using break-glass passwords only.
+- **Scope:** delete the whole `7f023d4a` prefix in B2 (no tag-scoped prune; no
+  current subject lives there), then drop the legacy password and read-only
+  key from the break-glass record.
+- **Risk: medium, irreversible.** Pre-cutover history, including media, is
+  gone.
+- **Verify:** the bucket lists only `svc-*`; B2 storage drops by about 492 GiB.
+
 ### P7: joe
 
 - **Scope:** §7. `backup.lowTrustClients = [ "joe" ]` on h004, joe's subject
@@ -780,34 +847,24 @@ registration.
 - It holds the pre-cutover container history and the h001 media history
   (`--tag h001`). None of this is copied into the new repos. The containers'
   `svc:*` history is seeded in P3. The media history is not, because it is mixed
-  with paperless and archive paths in single snapshots (§10 #1).
-- **Deletion** is a dated operator step, not a phase. Conditions:
-  1. P6 is done.
-  2. `restic ls latest` from B2 alone succeeds for one container subject and for
-     `svc-immich`, using break-glass passwords only.
-  3. The history window chosen in §10 #1 has passed.
-
-  Then delete the whole repo prefix. No tag-scoped prune is needed, because no
-  current subject lives there.
-- **Cost:** about 1.0 TB stored until then (491.7 GiB legacy + about 516 GiB
+  with paperless and archive paths in single snapshots; it is dropped (§0.7).
+- **Untouched during the migration:** no prune, `rewrite`, key change or delete
+  on it until P6b. Its existing key keeps working until P6 step 5.
+- **Deletion** is P6b, gated on the completeness check, not on a time window.
+- **Cost:** about 1.0 TB stored until P6b (491.7 GiB legacy + about 516 GiB
   new) ≈ $7/mo. After that, about $3.6/mo.
 - **Break-glass record** (`containers/sec/README.md`, break-glass kit): each pusher's bucket key, one
   password per subject, and the legacy password + read-only key until deletion.
 
-## 10. Open decisions
+## 10. Decisions taken (formerly open)
 
-1. **Legacy media history.** (a) Keep `7f023d4a` frozen for 12 months, then
-   delete (about $40 total; recommended). (b) Seed: download about 485 GiB once
-   into a scratch repo, `copy` into each new subject, and `restic rewrite
-   --exclude` the other subjects' paths. This is complex. (c) Delete right after
-   the §9 gate and lose pre-cutover history.
-2. **The rest of wd10** (about 1.04T, not backed up today: `lio_backs` 818G,
-   `forgejo_bak` 91G, `export` 61G, `phone_backups` 56G, `joeb_backup` 12G).
-   Options: host subject(s) on h001 (offsite would add about $7/mo), or
-   explicitly out of scope.
-3. **fleet-edge `metrics.db`** (232M) is excluded by this plan. Include it?
-4. **Confirm** the one-time re-upload of about 485 GiB of media to B2, which
-   follows from decision 4.
+1. **Legacy media history:** not seeded. `7f023d4a` is kept untouched during
+   the migration and deleted a few days after the completeness gate (§0.7,
+   P6b). Pre-cutover media history is lost then.
+2. **The rest of wd10** (about 1.04T): out of scope; the user sorts it
+   manually (§0.8).
+3. **fleet-edge `metrics.db`:** included (§0.9, §6).
+4. **One-time ~485 GiB media re-upload to B2:** approved (§0.10).
 
 Unverified until P1 runs on h004: socket activation under the module's
 `PrivateNetwork`/`PrivateUsers` hardening; `render-htpasswd` under its unit;
