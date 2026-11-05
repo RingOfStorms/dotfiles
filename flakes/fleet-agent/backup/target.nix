@@ -44,7 +44,8 @@ let
     field() { ${pkgs.gnused}/bin/sed -n "s/^$1=//p" "$2" | ${pkgs.coreutils}/bin/tail -n1; }
     ${lib.concatMapStrings (name: ''
       f=${lib.escapeShellArg cfg.subjectCredentials.${name}}
-      if [ ! -r "$f" ]; then
+      # Empty = the agent's tmpfiles placeholder: not hydrated yet.
+      if [ ! -s "$f" ]; then
         echo "render-htpasswd: $f not hydrated; ${name} gets no login" >&2
       else
       u=$(field RESTIC_REST_USERNAME "$f")
