@@ -1080,7 +1080,12 @@ func cmdLogs(args []string) error {
 // ---------------------------------------------------------------- deploy
 
 // prepareScript writes data dirs, nginx site and firewall ports.
-func prepareScript(s Service, host string) string {
+func prepareScript(s Service, host string) (string, error) {
+	// Resolve the ports file first: nothing is emitted if it cannot be.
+	pl, err := portsFileLines(s, host)
+	if err != nil {
+		return "", err
+	}
 	var b strings.Builder
 	b.WriteString("set -euo pipefail\n")
 	b.WriteString("test -d /etc/systemd-mutable/system -o -d /var/lib/fleet-containers || { echo 'host is missing the containers host module (inputs.containers.nixosModules.default)'; exit 1; }\n")
@@ -1110,7 +1115,7 @@ func prepareScript(s Service, host string) string {
 		b.WriteString(fmt.Sprintf("[ -d %[1]s ] || install -d -m755 %[1]s\n", q(dataDir(s)+"/"+k)))
 	}
 	var ports strings.Builder
-	for _, l := range portsFileLines(s, host) {
+	for _, l := range pl {
 		ports.WriteString(l + "\n")
 	}
 	// 80/443 admission for this service's vhosts on this
@@ -1125,7 +1130,7 @@ func prepareScript(s Service, host string) string {
 	b.WriteString("systemctl reload-or-restart fleet-containers-ports.service || true\n")
 	b.WriteString(siteScript(s, host))
 	b.WriteString(dropOverrideScript(s.Name))
-	return b.String()
+	return b.String(), nil
 }
 
 // prunePortsScript closes the temp-ports elements that $old_ports (the
@@ -1362,7 +1367,11 @@ func deploy(s Service, h, ref string, local bool) error {
 		return err
 	}
 	info("deploying %s (%s) to %s from %s", s.Name, s.Kind, h, ref)
-	if err := remote(h, true, prepareScript(s, h)); err != nil {
+	ps, err := prepareScript(s, h)
+	if err != nil {
+		return fmt.Errorf("deploying %s: %w; nothing was written", s.Name, err)
+	}
+	if err := remote(h, true, ps); err != nil {
 		return fmt.Errorf("preparing host: %w", err)
 	}
 	var out string

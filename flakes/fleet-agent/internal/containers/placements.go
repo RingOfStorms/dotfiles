@@ -313,6 +313,33 @@ func boundHost(name string) string {
 	return ""
 }
 
+// errRegistryUnread marks a lookup that failed because the registry could not
+// be read, as opposed to a target the registry does not place.
+var errRegistryUnread = errors.New("placement registry unreadable")
+
+// lookupHost is boundHost that says why it has no answer: an error wrapping
+// errRegistryUnread when the registry could not be read (the caller must not
+// treat the service as unplaced), or a plain error when the registry was read
+// and binds name to no host. A dry run never reads the registry and returns
+// ("", nil), so callers may skip quietly there.
+func lookupHost(name string) (string, error) {
+	v := registry()
+	if v == nil {
+		if dryRun {
+			return "", nil
+		}
+		why := registryUnconsulted()
+		if why == nil {
+			why = errors.New("no machine key on this machine")
+		}
+		return "", fmt.Errorf("%w (%v); %s", errRegistryUnread, why, registryHint)
+	}
+	if h := v.Host[name]; h != "" {
+		return h, nil
+	}
+	return "", fmt.Errorf("%s is not placed in the registry; `cnt place %s --set <host>` first", name, name)
+}
+
 // registryHosts is every host the registry knows about (bound, reserved and
 // previously bound), so discovery also probes hosts the inventory does not
 // declare.

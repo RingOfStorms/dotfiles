@@ -42,13 +42,13 @@ func TestPortsFileLines(t *testing.T) {
 		"ml":  {Port: 3003, Proto: "tcp", Exposure: "local"},
 		"mc":  {Port: 25565, Proto: "tcp", Exposure: "lan"},
 	}
-	got := strings.Join(portsFileLines(s, "h001"), "\n")
+	got := strings.Join(mustPorts(t, s, "h001"), "\n")
 	want := "guest ve-forgejo\ntcp 25565 dnat 10.233.3.2 lan\ntcp 3032 dnat 10.233.3.2\nnoinet ve-forgejo"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
 	h := Service{Name: "x", TCPPorts: []int{8090}, Routes: map[string]Route{"ssh": {Port: 3032, Proto: "tcp", Exposure: "tailnet"}}}
-	if got := strings.Join(portsFileLines(h, "h001"), "\n"); got != "tcp 8090\ntcp 3032" {
+	if got := strings.Join(mustPorts(t, h, "h001"), "\n"); got != "tcp 8090\ntcp 3032" {
 		t.Fatalf("host network: got %q", got)
 	}
 }
@@ -106,7 +106,7 @@ func TestNetExceptionsAndCallers(t *testing.T) {
 		Services: map[string]Service{"open-webui": ow, "litellm": lit, "searx": sx, "remote": rem},
 		Hosts:    map[string]Host{"h001": {OverlayIP: &ov}, "h003": {OverlayIP: &ov3}},
 	}
-	got := strings.Join(netExceptions(ow, "h001"), "\n")
+	got := strings.Join(mustExceptions(t, ow, "h001"), "\n")
 	want := strings.Join([]string{
 		"allow ve-open-webui 10.233.7.2 tcp 8094",
 		"allow ve-open-webui 10.233.0.1 tcp 80",
@@ -139,12 +139,12 @@ func TestPortsFileTailnetDnat(t *testing.T) {
 	inv = &Inventory{Services: map[string]Service{}, Hosts: map[string]Host{"h001": {OverlayIP: &ov}}}
 	s := privSvc("beszel", 12)
 	s.Routes = map[string]Route{"hub": {Port: 8090, Proto: "tcp", Exposure: "tailnet"}}
-	got := strings.Join(portsFileLines(s, "h001"), "\n")
+	got := strings.Join(mustPorts(t, s, "h001"), "\n")
 	if want := "guest ve-beszel\ntcp 8090 dnat 10.233.12.2 100.64.0.13"; got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
 	// Unknown overlay IP: no DNAT at all (fail closed), never any-address.
-	if got := strings.Join(portsFileLines(s, "h009"), "\n"); got != "guest ve-beszel" {
+	if got := strings.Join(mustPorts(t, s, "h009"), "\n"); got != "guest ve-beszel" {
 		t.Fatalf("no overlay: got %q", got)
 	}
 }
@@ -159,7 +159,7 @@ func TestPortsFileTailnetAllow(t *testing.T) {
 		"pg":  {Port: 5432, Proto: "tcp", Exposure: "tailnet", Allow: []string{"lio", "nosuch"}},
 		"bad": {Port: 9, Proto: "tcp", Exposure: "public", Allow: []string{"lio"}},
 	}
-	got := strings.Join(portsFileLines(s, "h001"), "\n")
+	got := strings.Join(mustPorts(t, s, "h001"), "\n")
 	if want := "guest ve-immich\ntcp 5432 dnat 10.233.15.2 100.64.0.13 100.64.0.1"; got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
@@ -170,7 +170,7 @@ func TestPortsFileTailnetAllow(t *testing.T) {
 func TestDeployPrunesDroppedPorts(t *testing.T) {
 	r := newOverrideRig(t)
 	s := Service{Name: "app", Kind: "nixos", TCPPorts: []int{8090}}
-	ps := prepareScript(s, "h001")
+	ps := mustPrepare(t, s, "h001")
 	i, j := strings.Index(ps, "old_ports="), strings.Index(ps, "systemctl reload-or-restart fleet-containers-ports")
 	if i < 0 || j < i || !strings.Contains(ps[i:j], prunePortsScript) {
 		t.Fatalf("prepareScript must prune between the ports write and the reload:\n%s", ps)

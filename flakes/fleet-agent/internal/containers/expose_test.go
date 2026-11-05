@@ -370,7 +370,7 @@ func TestExposeScript(t *testing.T) {
 
 func TestDeployDropsOverride(t *testing.T) {
 	inv = &Inventory{DataRoot: "/srv/containers", Hosts: map[string]Host{}}
-	ps := prepareScript(exposeSvc(), "h001")
+	ps := mustPrepare(t, exposeSvc(), "h001")
 	i, j := strings.LastIndex(ps, "overrides/app"), strings.Index(ps, "nginx -t")
 	if i < 0 || j < 0 || i < j {
 		t.Errorf("deploy must drop the override only after the site:\n%s", ps)
@@ -571,7 +571,7 @@ func TestFullDeployFailureKeepsOverride(t *testing.T) {
 	t.Run("nginx -t", func(t *testing.T) {
 		r := newOverrideRig(t)
 		r.fail("nginx-fail")
-		if r.run(prepareScript(exposeSvc(), "h001")) == nil {
+		if r.run(mustPrepare(t, exposeSvc(), "h001")) == nil {
 			t.Fatal("prepare succeeded")
 		}
 		r.assertSafe()
@@ -583,7 +583,7 @@ func TestFullDeployFailureKeepsOverride(t *testing.T) {
 		old := capDir
 		defer func() { capDir = old }()
 		capDir = filepath.Join(r.dir, "caps")
-		if r.run(prepareScript(s, "h001")) == nil {
+		if r.run(mustPrepare(t, s, "h001")) == nil {
 			t.Fatal("prepare succeeded")
 		}
 		if r.siteNow() != "WIDE" {
@@ -593,7 +593,7 @@ func TestFullDeployFailureKeepsOverride(t *testing.T) {
 	})
 	// Interrupted at any point: cut the script after every line and check.
 	t.Run("interrupted", func(t *testing.T) {
-		lines := strings.SplitAfter(prepareScript(exposeSvc(), "h001"), "\n")
+		lines := strings.SplitAfter(mustPrepare(t, exposeSvc(), "h001"), "\n")
 		for i := range lines {
 			r := newOverrideRig(t)
 			_ = r.run(strings.Join(lines[:i], "") + "\nexit 0\n")
@@ -602,7 +602,7 @@ func TestFullDeployFailureKeepsOverride(t *testing.T) {
 	})
 	t.Run("success", func(t *testing.T) {
 		r := newOverrideRig(t)
-		must(t, r.run(prepareScript(exposeSvc(), "h001")))
+		must(t, r.run(mustPrepare(t, exposeSvc(), "h001")))
 		if _, err := os.Stat(r.ovDir); !os.IsNotExist(err) || strings.Contains(r.siteNow(), "WIDE") {
 			t.Errorf("success: site %q, override dir err %v", r.siteNow(), err)
 		}

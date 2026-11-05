@@ -368,7 +368,7 @@ func TestPrepareScriptRoutes(t *testing.T) {
 		"web": httpRoute("secrets", 8300, "public", "native-oidc"),
 		"raw": {Port: 9000, Proto: "udp", Exposure: "lan", Auth: sp("native")},
 	}}
-	ps := prepareScript(s, "h001")
+	ps := mustPrepare(t, s, "h001")
 	if !strings.Contains(ps, "(generated from routes)") || !strings.Contains(ps, "server_name secrets.joshuabell.xyz;") {
 		t.Errorf("no generated vhost:\n%s", ps)
 	}
@@ -381,7 +381,7 @@ web fd7a:115c:a1e0::/48
 	}
 	// Only a local route: no vhost, old site removed.
 	s.Routes = map[string]Route{"web": {Port: 1, Proto: "http", Exposure: "local"}}
-	if ps := prepareScript(s, "h001"); !strings.Contains(ps, "rm -f /var/lib/fleet-containers/nginx/sec.conf") {
+	if ps := mustPrepare(t, s, "h001"); !strings.Contains(ps, "rm -f /var/lib/fleet-containers/nginx/sec.conf") {
 		t.Errorf("local-only should remove site:\n%s", ps)
 	}
 }
@@ -404,7 +404,7 @@ func TestPrepareScriptNginxGating(t *testing.T) {
 		{"public + tailnet", map[string]Route{"web": pub, "p": tailnetRoute}, true},
 	}
 	for _, c := range cases {
-		ps := prepareScript(Service{Name: "svc", Routes: c.routes}, "joe")
+		ps := mustPrepare(t, Service{Name: "svc", Routes: c.routes}, "joe")
 		if got := strings.Contains(ps, "nginx -t"); got != c.vhost {
 			t.Errorf("%s: nginx -t present=%v, want %v\n%s", c.name, got, c.vhost, ps)
 		}
@@ -743,7 +743,7 @@ func TestSiteScriptVhostOnly(t *testing.T) {
 	if strings.Contains(ss, "ports/") || strings.Contains(ss, "/srv/containers") {
 		t.Errorf("site script must only touch nginx:\n%s", ss)
 	}
-	if ps := prepareScript(s, "h001"); !strings.Contains(ps, ss) {
+	if ps := mustPrepare(t, s, "h001"); !strings.Contains(ps, ss) {
 		t.Error("prepareScript must embed siteScript")
 	}
 }
@@ -919,7 +919,7 @@ func TestPrepareScriptPrivateCheckByKind(t *testing.T) {
 	podman := Service{Name: "localai", Kind: "podman", Net: Net{Private: true, IP: &ip}}
 	nixos := Service{Name: "atuin", Kind: "nixos", Net: Net{Private: true, IP: &nixIP}}
 
-	ps := prepareScript(podman, "joe")
+	ps := mustPrepare(t, podman, "joe")
 	if !strings.Contains(ps, "nft list table inet fleet-noinet") {
 		t.Errorf("podman net.private must check fleet-noinet, got:\n%s", ps)
 	}
@@ -927,7 +927,7 @@ func TestPrepareScriptPrivateCheckByKind(t *testing.T) {
 		t.Errorf("podman net.private must not require privateNetwork.enable:\n%s", ps)
 	}
 
-	ps = prepareScript(nixos, "h001")
+	ps = mustPrepare(t, nixos, "h001")
 	if !strings.Contains(ps, "nft list table ip fleet-net-nat") || !strings.Contains(ps, "privateNetwork.enable") {
 		t.Errorf("nixos net.private must still check fleet-net-nat/privateNetwork.enable:\n%s", ps)
 	}
@@ -1034,7 +1034,7 @@ func TestPrepareScriptWebSources(t *testing.T) {
 	defer func() { inv = old }()
 	inv = &Inventory{DataRoot: "/srv/containers", Hosts: map[string]Host{}, LanSubnet: "10.12.14.0/24"}
 	s := Service{Name: "sec", Routes: map[string]Route{"web": httpRoute("secrets", 8300, "public", "native-oidc")}}
-	ps := prepareScript(s, "h001")
+	ps := mustPrepare(t, s, "h001")
 	want := "web 100.64.0.0/10\nweb fd7a:115c:a1e0::/48\nweblan 10.12.14.0/24\n"
 	printf := strings.Index(ps, "printf %s '")
 	prune := strings.Index(ps, "while read -r pr po mode _")
@@ -1044,7 +1044,7 @@ func TestPrepareScriptWebSources(t *testing.T) {
 	}
 	// A service with no http routes (minecraft's are tcp) writes none.
 	s = Service{Name: "mc", Routes: map[string]Route{"game": Route{Port: 25565, Proto: "tcp", Exposure: "public", Via: []string{"router"}}}}
-	if ps := prepareScript(s, "h001"); strings.Contains(ps, "web 100.64") || strings.Contains(ps, "weblan") {
+	if ps := mustPrepare(t, s, "h001"); strings.Contains(ps, "web 100.64") || strings.Contains(ps, "weblan") {
 		t.Errorf("no http routes, must write no web lines:\n%s", ps)
 	}
 }
@@ -1775,7 +1775,7 @@ func TestNetExceptionsPodman(t *testing.T) {
 		Services: map[string]Service{"gist": gist, "litellm": lit, "searx": sx, "remote": rem, "webui": webui},
 		Hosts:    map[string]Host{"h001": {OverlayIP: &ov}, "h003": {OverlayIP: &ov3}},
 	}
-	got := strings.Join(portsFileLines(gist, "h001"), "\n")
+	got := strings.Join(mustPorts(t, gist, "h001"), "\n")
 	want := strings.Join([]string{
 		"allow 10.89.250.102 10.89.250.1 udp 53",
 		"allow 10.89.250.102 10.89.250.1 tcp 53",
@@ -1801,17 +1801,17 @@ func TestNetExceptionsPodman(t *testing.T) {
 	}
 	// Egress only: no DNS (it names no route), same tuple as nixos.
 	gist.Net.Uses = nil
-	if got := strings.Join(netExceptions(gist, "h001"), "|"); got != "allow 10.89.250.102 10.12.14.181 tcp 9010" {
+	if got := strings.Join(mustExceptions(t, gist, "h001"), "|"); got != "allow 10.89.250.102 10.12.14.181 tcp 9010" {
 		t.Errorf("egress-only podman: got %q", got)
 	}
 	// Without its static IP (an older inventory) nothing is allowed.
 	gist.Net.IP = nil
 	gist.Net.Egress = []string{"10.12.14.181:9010/tcp"}
-	if got := netExceptions(gist, "h001"); got != nil {
+	if got := mustExceptions(t, gist, "h001"); got != nil {
 		t.Errorf("podman without IP: got %v", got)
 	}
 	// nixos caller -> same-host podman route: the static IP, then nginx.
-	got = strings.Join(netExceptions(webui, "h001"), "\n")
+	got = strings.Join(mustExceptions(t, webui, "h001"), "\n")
 	want = strings.Join([]string{
 		"allow ve-webui 10.89.250.102 tcp 6157",
 		"allow ve-webui 10.233.0.1 tcp 80",

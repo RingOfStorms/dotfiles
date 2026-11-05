@@ -404,7 +404,7 @@ func routePorts(s Service) []string {
 // internet = false adds "noinet ve-<name>" (nixos only: a podman service's
 // internet is the fleet-noinet network itself). lib.nix refuses
 // tcpPorts/udpPorts together with net.private.
-func portsFileLines(s Service, host string) []string {
+func portsFileLines(s Service, host string) ([]string, error) {
 	var out []string
 	veth := s.Net.Private && s.Kind != "podman"
 	if veth {
@@ -460,8 +460,11 @@ func portsFileLines(s Service, host string) []string {
 	if veth && s.Internet != nil && !*s.Internet {
 		out = append(out, "noinet ve-"+s.Name)
 	}
-	out = append(out, netExceptions(s, host)...)
-	return out
+	ex, err := netExceptions(s, host)
+	if err != nil {
+		return nil, err
+	}
+	return append(out, ex...), nil
 }
 
 // fleetPlacement is one discovery sweep of the container hosts, cached for
@@ -1252,14 +1255,14 @@ const (
 // A podman service has no DNS of its own (internet = false on the
 // fleet-noinet bridge), so net.uses also allows the bridge's aardvark-dns
 // (10.89.250.1:53) to resolve the route names, as a nixos guest always can.
-func netExceptions(s Service, host string) []string {
+func netExceptions(s Service, host string) ([]string, error) {
 	if !s.Net.Private {
-		return nil
+		return nil, nil
 	}
 	guest, local := "ve-"+s.Name, vethHostAddr
 	if s.Kind == "podman" {
 		if s.Net.IP == nil {
-			return nil
+			return nil, nil
 		}
 		guest, local = *s.Net.IP, podmanHostAddr
 	}
@@ -1288,8 +1291,15 @@ func netExceptions(s Service, host string) []string {
 		if !ok {
 			continue
 		}
-		th := resolvedHost(t)
+		th, err := lookupHost(t.Name)
+		if err != nil {
+			// Fail closed: a ports file missing this allow line silently
+			// cuts the guest off from its callee.
+			return nil, fmt.Errorf("%s net.uses %s: cannot resolve the host of %s: %w", s.Name, u, t.Name, err)
+		}
 		if th == "" {
+			// Dry run: the registry is not read, so there is nothing to admit.
+			fmt.Fprintf(os.Stderr, "note: dry run: %s net.uses %s not resolved (registry not read); its allow lines are omitted\n", s.Name, u)
 			continue
 		}
 		proto, ports := "tcp", []int{80, 443}
@@ -1323,7 +1333,7 @@ func netExceptions(s Service, host string) []string {
 			add(ip, proto, p)
 		}
 	}
-	return out
+	return out, nil
 }
 
 // callerEntry is one `allow <ip>; # net.uses <svc>` line: either a private

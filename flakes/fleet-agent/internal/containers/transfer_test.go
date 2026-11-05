@@ -595,7 +595,7 @@ func TestDeployAndMovePreflightCheckSecrets(t *testing.T) {
 	inv = &Inventory{DataRoot: "/srv/containers", SecretsDir: "/var/lib/secrets_manager_hydrated", Hosts: map[string]Host{}}
 	s := Service{Name: "litellm", Kind: "nixos", Secrets: []string{"litellm-env"}}
 	want := "/var/lib/secrets_manager_hydrated/litellm-env"
-	ps := prepareScript(s, "h003")
+	ps := mustPrepare(t, s, "h003")
 	if !strings.Contains(ps, want) || strings.Index(ps, want) > strings.Index(ps, "install -d") {
 		t.Errorf("deploy prepareScript must check %s before installing anything:\n%s", want, ps)
 	}
