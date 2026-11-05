@@ -269,6 +269,21 @@
                   default = 6.95;
                   description = "B2 price for the dashboard's $/mo estimate.";
                 };
+                uiGroup = lib.mkOption {
+                  type = lib.types.str;
+                  default = "";
+                  example = "admin";
+                  description = ''
+                    oauth2-proxy group (Zitadel role, X-Auth-Request-Groups) whose
+                    members may edit backup policy at /backup/. Empty: only uiUsers.
+                    Identity headers are trusted from loopback (nginx) only.
+                  '';
+                };
+                uiUsers = lib.mkOption {
+                  type = lib.types.listOf lib.types.str;
+                  default = [ ];
+                  description = "oauth2-proxy users/emails that may edit backup policy at /backup/ regardless of group.";
+                };
               };
               bunnyKeyFile = lib.mkOption {
                 type = lib.types.nullOr lib.types.str;
@@ -456,6 +471,9 @@
                     ]
                     ++ lib.optionals o.backup.enable [
                       "--backup ${backupSpec}"
+                      "--backup-ui-group ${lib.escapeShellArg o.backup.uiGroup}"
+                      "--backup-ui-users ${lib.escapeShellArg (lib.concatStringsSep "," o.backup.uiUsers)}"
+                      "--b2-price-per-tb-month ${toString o.backup.b2PricePerTbMonth}"
                     ]
                     ++ lib.optionals live [
                       "--bunny-key-file %d/bunny"

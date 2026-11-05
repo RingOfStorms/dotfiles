@@ -21,8 +21,10 @@ type BackupRow struct {
 	Local, B2, Cost      string
 	LastBackup, LastCopy string
 	StatsAt              string
-	Clear                string
-	Default              bool
+	// Revision is the row revision a write must quote (0: follows default).
+	Revision int64
+	Clear    string
+	Default  bool
 }
 
 // BackupTable is the view of /internal/backup.json.
@@ -78,6 +80,9 @@ func BuildBackupTable(e backup.Export, pricePerTB float64, now time.Time) Backup
 		}
 		v := BackupRow{Subject: name, Target: r.Target, Offsite: r.Offsite, RetentionLocal: r.RetentionLocal,
 			RetentionB2: r.RetentionB2, Default: name == backup.Default, Local: "-", B2: "-", Cost: "-", LastBackup: "-", LastCopy: "-"}
+		if rows[name] != nil {
+			v.Revision = r.Revision
+		}
 		if rows[name] == nil && !v.Default {
 			v.TargetNote = "default"
 		}

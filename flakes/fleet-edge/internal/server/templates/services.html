@@ -87,7 +87,7 @@
 {{if .BackupEnabled}}
 <section class="backup">
 <h2>Backups</h2>
-<p class="summary">Backup policy per subject (read-only here). Change it with <code>cnt backup-policy set &lt;subject&gt; target=&lt;id|none&gt; offsite=&lt;bool&gt; local=&lt;preset&gt; b2=&lt;preset|local&gt;</code>; <em>turn off</em> is <code>target=none</code>; <em>clear</em> is <code>cnt backup-policy clear &lt;subject&gt; local|b2|both</code>.</p>
+<p class="summary">Backup policy per subject. Edit target, presets and B2, turn off or clear at <a href="/backup/">/backup/</a> (oauth2-proxy sign-in; writers need the backup UI group). <code>cnt backup-policy</code> does the same from a laptop.</p>
 {{if .Backup.Error}}<p class="warn">{{.Backup.Error}}</p>
 {{else}}
 <div class="scroll table-wrap">

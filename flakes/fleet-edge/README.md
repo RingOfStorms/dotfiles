@@ -11,7 +11,7 @@ One binary, `fleet-edge`, runs as several processes:
 
 | Command | Runs on | Role |
 |---|---|---|
-| `fleet-edge` (no subcommand) | h005, `fleet-edge.service` | read-only dashboard and poller (below) |
+| `fleet-edge` (no subcommand) | h005, `fleet-edge.service` | dashboard and poller (below); backup edits go through `/backup/` on `overrides` |
 | `fleet-edge overrides` | h005, `fleet-edge-overrides.service` | placement registry, expose overrides, routing reconciler ([Routing authority](#routing-authority-fleet-edge-overrides)) |
 | `fleet-edge dns-plan [--apply]` | h005, by hand | diff (and apply) the bunny zone against `dns-records.nix` `publicSpec` |
 | `fleet-edge forwards-apply` | h005, root | install the reconciler's WAN forwards as `table ip fleet-wan-forwards` |
@@ -195,6 +195,30 @@ retire, retire-mismatch and override); dynamic records are the DDNS-managed
 ones (`home`, from the router's WAN IPv4) that `dns-plan` never writes; `--apply`
 executes only create/update rows and exact-match retires, refuses the whole
 run on any conflict, and never deletes a record the spec does not own.
+
+### Backup policy editor (`/backup/`)
+
+`fleet-edge overrides --backup` serves the backup policy API
+(`/api/backup`, containers/BACKUP-PLAN.md §2.3) and, on the same loopback
+listener, a plain-HTML editor at `/backup/` (`internal/backupui`): per
+subject a target select (registered targets plus `none`), local and B2
+preset selects, an offsite toggle (disabled with the reason unless the
+target is a pusher), *turn off* (target `none`, nothing deleted) and
+*clear* (scope plus the subject name typed as confirmation). Writes call
+the store's own `put`/`clear` under its lock, so validation, revisions
+(stale → 409, shown on the page) and the `offsite needs a pusher` rule are
+the API's. Each POST is one `backup-audit.log` line (`role: ui`, `user`).
+
+- **Identity:** h005's nginx gates `/backup/` with oauth2-proxy
+  `auth_request` (`allowed_groups=admin`) and always overwrites
+  `X-Auth-Request-User/-Email/-Groups` from the subrequest. The service
+  trusts those headers only when the TCP peer is loopback; anything else is
+  403. Writes need `overrides.backup.uiGroup` (`--backup-ui-group`, h005:
+  `admin`) in the groups header or the user/email in `uiUsers`
+  (`--backup-ui-users`); others get a read-only page.
+- **CSRF:** every form carries `HMAC-SHA256(per-process secret, user)`; every
+  POST must carry it and a same-host `Origin` (or `Referer`), else 403.
+  POST only. Results come back via a redirect with an HMAC-signed message.
 
 ## Design notes
 

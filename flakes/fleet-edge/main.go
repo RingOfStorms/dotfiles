@@ -21,6 +21,7 @@ import (
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/alert"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/auth"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/authority"
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/backupui"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/bunny"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/dash"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/edgestream"
@@ -207,6 +208,9 @@ func runOverrides(args []string) {
 	forwardsStatus := fs.String("forwards-status", "/run/fleet-wan-forwards/applied.json", "forwards-apply's record, for the audit")
 	every := fs.Duration("sweep", 30*time.Second, "sweep interval")
 	backupFile := fs.String("backup", "", "JSON {writers: [host], readers: {host: {sub, peer}}, targets: {host: {sub, peer}}, hostSubjects: {host: [name]}} (empty: no /api/backup)")
+	uiGroup := fs.String("backup-ui-group", "", "oauth2-proxy group (Zitadel role) whose members may edit backup policy at /backup/")
+	uiUsers := fs.String("backup-ui-users", "", "comma-separated oauth2-proxy users/emails that may edit backup policy at /backup/")
+	uiPrice := fs.Float64("b2-price-per-tb-month", 6.95, "B2 price for /backup/'s $/mo estimate")
 	_ = fs.Parse(args)
 	inv, err := inventory.Load(*invFile)
 	if err != nil {
@@ -293,6 +297,16 @@ func runOverrides(args []string) {
 		for _, p := range []string{"/internal/backup.json", "/api/backup", "/api/backup/"} {
 			root.Handle(p, bk.Handler())
 		}
+		// Dashboard editor; nginx gates /backup/ with oauth2-proxy and sets
+		// the identity headers (internal/backupui).
+		var users []string
+		for _, u := range strings.Split(*uiUsers, ",") {
+			if u = strings.TrimSpace(u); u != "" {
+				users = append(users, u)
+			}
+		}
+		ui := backupui.New(bk, backupui.Config{Group: *uiGroup, Users: users, B2PricePerTB: *uiPrice})
+		root.Handle("/backup/", ui)
 	}
 	for _, s := range []struct {
 		export, api string

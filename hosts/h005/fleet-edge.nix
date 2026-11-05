@@ -123,6 +123,9 @@ in
         }) fleet.global.overrideWriters;
         targets = { };
         hostSubjects = { };
+        # /backup/ editor (oauth2-proxy-gated below): Zitadel role `admin`
+        # (flatRolesClaim -> X-Auth-Request-Groups) may write.
+        uiGroup = "admin";
       };
     };
     inventoryFile = pkgs.writeText "fleet-inventory.json" (builtins.toJSON inputs.containers.inventory);
@@ -237,6 +240,53 @@ in
         else
           [ ]
       );
+      # Backup policy editor (containers/BACKUP-PLAN.md §2.3), served by
+      # fleet-edge-overrides next to the store. Identity comes only from
+      # oauth2-proxy's auth_request: the X-Auth-Request-* headers are always
+      # overwritten from the subrequest (empty = not sent), and the service
+      # trusts them only from loopback. allowed_groups=admin is enforced by
+      # oauth2-proxy; the service checks the group again for writes.
+      locations."= /oauth2/auth" = {
+        proxyPass = "http://${overlayIp}:4180/oauth2/auth?allowed_groups=admin";
+        recommendedProxySettings = false;
+        extraConfig = ''
+          internal;
+          proxy_pass_request_body off;
+          proxy_set_header Content-Length "";
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $remote_addr;
+          proxy_set_header X-Forwarded-Proto https;
+          proxy_set_header X-Forwarded-Host $host;
+          proxy_set_header X-Forwarded-Uri $request_uri;
+        '';
+      };
+      locations."@fleet_oauth2_signin".extraConfig = ''
+        return 302 https://sso-proxy.${domain}/oauth2/start?rd=https://$host$request_uri;
+      '';
+      locations."/backup/" = {
+        proxyPass = "http://127.0.0.1:8098";
+        extraConfig = ''
+          deny 100.64.0.5;
+          deny fd7a:115c:a1e0::5;
+          allow 100.64.0.0/10;
+          allow fd7a:115c:a1e0::/48;
+          deny all;
+          auth_request /oauth2/auth;
+          error_page 401 = @fleet_oauth2_signin;
+          auth_request_set $fleet_auth_user $upstream_http_x_auth_request_user;
+          auth_request_set $fleet_auth_email $upstream_http_x_auth_request_email;
+          auth_request_set $fleet_auth_groups $upstream_http_x_auth_request_groups;
+          auth_request_set $fleet_auth_cookie $upstream_http_set_cookie;
+          add_header Set-Cookie $fleet_auth_cookie;
+          proxy_set_header Cookie $fleet_cookie;
+          proxy_set_header X-Auth-Request-User $fleet_auth_user;
+          proxy_set_header X-Auth-Request-Email $fleet_auth_email;
+          proxy_set_header X-Auth-Request-Groups $fleet_auth_groups;
+          proxy_set_header X-Fleet-Peer "";
+          client_max_body_size 16k;
+        '';
+      };
       # /internal/* is never proxied; registry exports stay loopback-only.
       locations."/api/overrides" = {
         proxyPass = "http://127.0.0.1:8098";

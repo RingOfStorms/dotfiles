@@ -323,6 +323,7 @@ type auditEntry struct {
 	Host    string `json:"host,omitempty"`
 	Role    string `json:"role,omitempty"`
 	Sub     string `json:"sub,omitempty"`
+	User    string `json:"user,omitempty"`
 	Peer    string `json:"peer,omitempty"`
 	Action  string `json:"action"`
 	Code    int    `json:"code"`
@@ -773,4 +774,47 @@ func pendingScope(c *Clear) string {
 		}
 	}
 	return ""
+}
+
+// UI is the in-process write path for the dashboard editor
+// (internal/backupui). It runs the same put/clear and revision rules as the
+// API under the same lock; the caller authenticates and audits.
+const uiHost = "ui"
+
+// PutAs applies req to subject as dashboard user user.
+func (s *Service) PutAs(user, subject string, req PolicyRequest) (*Row, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !subjectRe.MatchString(subject) || !s.knownSubject(subject) {
+		return nil, fail(404, "unknown subject %q", subject)
+	}
+	req.User = user
+	return s.put(uiHost, subject, req)
+}
+
+// ClearAs queues a clear of subject as dashboard user user.
+func (s *Service) ClearAs(user, subject string, req ClearRequest) (*Row, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !subjectRe.MatchString(subject) || !s.knownSubject(subject) {
+		return nil, fail(404, "unknown subject %q", subject)
+	}
+	req.User = user
+	return s.clear(uiHost, subject, req)
+}
+
+// ErrCode is err's HTTP status (500 for errors not from the store).
+func ErrCode(err error) int {
+	var he *httpErr
+	if errors.As(err, &he) {
+		return he.code
+	}
+	return 500
+}
+
+// AuditUI writes one audit line for a dashboard request.
+func (s *Service) AuditUI(user, peer, action string, code int, msg string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.logAudit(auditEntry{Host: uiHost, Role: "ui", User: user, Peer: peer, Action: action, Code: code, Message: msg})
 }

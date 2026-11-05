@@ -681,9 +681,15 @@ registration.
     `POST /api/backup/<subject>/clear`, `POST|PUT /api/backup/targets/<id>`
     (heartbeat returns presets, offsite list, pending clears), loopback
     `/internal/backup.json`. Wired in `main.go`/`backup.go` (`--backup`).
-  - Dashboard: read-only table on `/services`
-    (`internal/server/backup.go`, `services.html`). Turn off and clear go
-    through `cnt backup-policy` (the dashboard has no write path or token).
+  - Dashboard: table on `/services` (`internal/server/backup.go`) and the
+    editor at `/backup/` (`internal/backupui`, served by `overrides`):
+    target, local/B2 preset, offsite (pusher only), turn off, clear (typed
+    subject name). nginx gates it with oauth2-proxy `auth_request`
+    (`allowed_groups=admin`) and overwrites `X-Auth-Request-*`; the service
+    trusts them from loopback only, requires `uiGroup` (`admin`) or
+    `uiUsers` to write, a per-user HMAC CSRF token and same-origin POST.
+    Writes use the store's `put`/`clear` (409 on a stale revision) and are
+    audit-logged with the UI user.
   - `flake.nix` `overrides.backup.*`; `hosts/h005/fleet-edge.nix` enables
     it with the nginx location. **`targets = { }`** until h004's Zitadel sub
     is known (same gap as P1).
@@ -701,6 +707,10 @@ registration.
     preset, a revision conflict, `clear b2` with no offsite repo.
   - 400: a bad `confirm` or `scope`.
   - one audit line per request.
+  - `go test ./internal/backupui/`: CSRF missing/forged, wrong origin,
+    header spoof off loopback, non-allowed user (403); set
+    target/preset/offsite; offsite on a non-pusher and stale revision (409);
+    clear needs the typed name; one audit line per write.
 
   Live: the canary row renders, its size matches `restic stats`, and a hand
   calculation agrees with $/mo.
