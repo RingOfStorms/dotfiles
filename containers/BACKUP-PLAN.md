@@ -631,10 +631,12 @@ registration.
     ordering, stray-entry guard. `hosts/h004/firewall.nix` is unchanged: the
     rule lives in the module (§2.8).
   - `containers/tests/backup-plan.nix`.
-  - **Not yet:** the canary registry key and h004 consumer. h004's Zitadel
-    sub is not in the repo; add it once known (`sub` grants: h004, lio), then
-    `subjectCredentials.svc-canary` and the `extraSecrets` entry with
-    `hardDepend = [ "render-htpasswd" ]`.
+  - Canary (2026-11-04): h004's Zitadel sub is `394968645089886211`.
+    Registry key `machines/backup/restic_svc-canary_2026-11-04` (`sub`
+    grants: h004, lio), `subjectCredentials.svc-canary` in
+    `hosts/h004/flake.nix`, and the `extraSecrets` entry in
+    `hosts/h004/sec-agent.nix` (`hardDepend = [ "render-htpasswd" ]`).
+    The secret value is not set yet.
 - **Risk: low.** No client writes, and the directory is emptied first. New
   exposure: `:8000` from the allow-list only. Unverified until now: socket
   activation under the module's hardening, and `render-htpasswd` reading root
@@ -691,8 +693,8 @@ registration.
     Writes use the store's `put`/`clear` (409 on a stale revision) and are
     audit-logged with the UI user.
   - `flake.nix` `overrides.backup.*`; `hosts/h005/fleet-edge.nix` enables
-    it with the nginx location. **`targets = { }`** until h004's Zitadel sub
-    is known (same gap as P1).
+    it with the nginx location. `targets.h004` registered
+    with sub `394968645089886211`.
   - `cnt backup-policy list|set|clear|heartbeat`
     (`fleet-agent/internal/containers/backuppolicy.go`).
   - `backup/target.nix`: heartbeat (5 min, root, machine key), stats (hourly,

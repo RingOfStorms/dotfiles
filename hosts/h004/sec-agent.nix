@@ -16,5 +16,13 @@ import ../_shared_assets/utilities/sec-agent.nix {
       mode = "0400";
       hardDepend = [ "atuin-autologin" ];
     };
+    # Backup target login for svc-canary (BACKUP-PLAN P1); rendered into
+    # rest-server's htpasswd.
+    "restic_svc-canary_2026-11-04" = {
+      remotePath = "machines/backup/restic_svc-canary_2026-11-04";
+      field = "value";
+      mode = "0400";
+      hardDepend = [ "render-htpasswd" ];
+    };
   };
 }

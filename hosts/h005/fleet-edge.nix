@@ -111,17 +111,25 @@ in
       }) fleet.global.overrideWriters;
       # Backup policy (containers/BACKUP-PLAN.md §2.3). Readers see only the
       # subjects placed on them; writers are the laptops. Targets register
-      # themselves; h004's Zitadel sub is not in the repo yet, so until it
-      # is added here no target can register and every subject resolves to
-      # `none` (P1 "Not yet").
+      # themselves by their Zitadel machine sub from their overlay IP.
       backup = {
         enable = true;
-        writers = [ "lio" "juni" "gp3" "oren" ];
+        writers = [
+          "lio"
+          "juni"
+          "gp3"
+          "oren"
+        ];
         readers = lib.mapAttrs (host: sub: {
           inherit sub;
           peer = fleet.hosts.${host}.overlayIp;
         }) fleet.global.overrideWriters;
-        targets = { };
+        targets = {
+          h004 = {
+            sub = "394968645089886211";
+            peer = fleet.hosts.h004.overlayIp;
+          };
+        };
         hostSubjects = { };
         # /backup/ editor (oauth2-proxy-gated below): Zitadel role `admin`
         # (flatRolesClaim -> X-Auth-Request-Groups) may write.

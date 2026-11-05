@@ -272,6 +272,23 @@
     ];
   };
 
+  # ── backup subjects (containers/BACKUP-PLAN.md §2.7) ─────────
+  # sub grants only: the hosts the subject is placed on, plus every target.
+  "machines/backup/restic_svc-canary_2026-11-04" = {
+    fields = [ "value" ];
+    description = "Backup subject svc-canary (P1 canary): RESTIC_PASSWORD, RESTIC_REST_USERNAME=svc-canary, RESTIC_REST_PASSWORD.";
+    access = [
+      {
+        type = "sub";
+        value = "394968645089886211"; # h004
+      }
+      {
+        type = "sub";
+        value = "344412093056811011"; # lio
+      }
+    ];
+  };
+
   # ── per-host: h003 ────────────────────────────────────────────
   "machines/by-host/h003/hass_isp_speedtest_token" = {
     fields = [ "value" ];
