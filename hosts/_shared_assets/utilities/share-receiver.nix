@@ -48,7 +48,9 @@ let
         ;
       shareUser = "share";
       # Test the running config as nginx, so missing logs cannot become root-owned.
-      nginxTest = ''${pkgs.util-linux}/bin/runuser -u ${lib.escapeShellArg nginxCfg.user} -g ${lib.escapeShellArg nginxCfg.group} -- "${nginxCfg.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
+      # nginx -t binds the listen ports, so it needs the same CAP_NET_BIND_SERVICE
+      # the nginx unit runs with (plain runuser fails: bind() to 0.0.0.0:80).
+      nginxTest = ''${pkgs.util-linux}/bin/setpriv --reuid=${lib.escapeShellArg nginxCfg.user} --regid=${lib.escapeShellArg nginxCfg.group} --init-groups --inh-caps=+net_bind_service --ambient-caps=+net_bind_service -- "${nginxCfg.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
       nginxReload = "systemctl reload nginx";
       maxFor = 24 * 60 * 60;
     }

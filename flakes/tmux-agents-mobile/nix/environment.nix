@@ -23,5 +23,4 @@ in
 // lib.optionalAttrs (cfg.sessionKeyFile != null) {
   TAM_SESSION_KEY_FILE = cfg.sessionKeyFile;
 }
-// (import ./tailnet.nix { inherit lib; }).environment cfg.tailnet
 // cfg.extraEnvironment

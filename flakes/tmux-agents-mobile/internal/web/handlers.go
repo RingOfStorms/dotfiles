@@ -243,6 +243,42 @@ type PanePage struct {
 	Fit     bool
 	Frame   template.HTML
 	Watched bool
+
+	// Navigation: the session's windows ("workspaces", named as the tmux
+	// status line names them) with their panes, and the other sessions.
+	Windows  []NavWindow
+	Sessions []NavSession
+}
+
+// NavWindow is one workspace tab: the window as the status line draws it
+// (#W with its number on the right) and its panes as the pane borders name
+// them (@pane_name, else the running command).
+type NavWindow struct {
+	Index    int
+	Name     string
+	Active   bool // the session's current window on the desktop
+	Selected bool // the window of the pane on screen
+	Panes    []NavPane
+}
+
+// NavPane is one pane row in the workspace list.
+type NavPane struct {
+	Href       string
+	Label      string
+	Detail     string
+	Agent      string
+	Glyph      string
+	GlyphClass string
+	Active     bool // the window's active pane on the desktop
+	Current    bool // the pane on screen
+}
+
+// NavSession is one entry of the session switcher.
+type NavSession struct {
+	Name    string
+	Label   string
+	Href    string
+	Current bool
 }
 
 func (s *Server) panePage(w http.ResponseWriter, r *http.Request) {
@@ -329,7 +365,97 @@ func (s *Server) panePage(w http.ResponseWriter, r *http.Request) {
 	page.Glyph, page.GlyphClass = stateGlyph(page.State, p.AgentUnseen)
 	page.Actions = paneActions(slug, page.View, native)
 	page.Watched = time.Unix(p.AgentWatchUnix, 0).After(time.Now())
+	page.Windows, page.Sessions = s.paneNav(ctx, p)
 	s.render(w, "pane.html", page)
+}
+
+// paneNav reads the navigation strip for pane p. A failure only hides the
+// strip: the pane itself is still worth showing.
+func (s *Server) paneNav(ctx context.Context, p tmux.Pane) ([]NavWindow, []NavSession) {
+	wins, err := s.tmux.ListWindows(ctx, p.Session)
+	if err != nil {
+		s.log.Warn("pane nav: windows", "err", err)
+		return nil, nil
+	}
+	out := make([]NavWindow, 0, len(wins))
+	for _, w := range wins {
+		nw := NavWindow{Index: w.Index, Name: w.Name, Active: w.Active, Selected: w.Index == p.WindowIndex}
+		for _, wp := range w.Panes {
+			nw.Panes = append(nw.Panes, navPane(wp, p.ID))
+		}
+		out = append(out, nw)
+	}
+	var sessions []NavSession
+	if all, err := s.tmux.ListSessions(ctx); err == nil && len(all) > 1 {
+		for _, ss := range all {
+			sessions = append(sessions, NavSession{Name: ss.Name, Label: ss.Label, Href: "/p/" + Slug(ss.Pane), Current: ss.Name == p.Session})
+		}
+	}
+	return out, sessions
+}
+
+func navPane(wp tmux.Pane, current string) NavPane {
+	np := NavPane{
+		Href:    "/p/" + Slug(wp.ID),
+		Label:   wp.PaneName,
+		Detail:  tildeHome(wp.Path),
+		Active:  wp.Active,
+		Current: wp.ID == current,
+	}
+	kind, label := agents.Detect(wp.Title, wp.Command)
+	np.Agent = kind
+	if np.Label == "" {
+		np.Label = label
+	}
+	if np.Label == "" {
+		np.Label = wp.Command
+	}
+	if kind != "" || wp.AgentState != "" {
+		np.Glyph, np.GlyphClass = stateGlyph(wp.AgentState, wp.AgentUnseen)
+	}
+	return np
+}
+
+// paneSplit opens a new pane next to this one: tmux split-window in the
+// pane's window and current directory, optionally typing the agent command
+// into the new shell exactly as the new-session form does.
+func (s *Server) paneSplit(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.pane(w, r)
+	if !ok {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, http.StatusBadRequest, "invalid form")
+		return
+	}
+	program := r.PostFormValue("program")
+	switch program {
+	case "", "omp":
+	default:
+		s.fail(w, http.StatusBadRequest, "unknown program")
+		return
+	}
+	ctx := r.Context()
+	id, err := s.tmux.SplitWindow(ctx, p.ID, "")
+	if err != nil {
+		s.fail(w, http.StatusConflict, err.Error())
+		return
+	}
+	s.startProgram(ctx, id, program)
+	http.Redirect(w, r, "/p/"+Slug(id), http.StatusSeeOther)
+}
+
+// startProgram types program at a new pane's prompt rather than exec'ing it,
+// so the shell's aliases and wrappers (nono, omp's model flags) apply exactly
+// as on the desktop.
+func (s *Server) startProgram(ctx context.Context, pane, program string) {
+	if program == "" {
+		return
+	}
+	time.Sleep(120 * time.Millisecond)
+	if err := s.tmux.SendText(ctx, pane, program); err == nil {
+		_ = s.tmux.SendKeys(ctx, pane, "Enter")
+	}
 }
 
 // paneEvents streams frame updates. One watcher per pane, shared by every phone
@@ -837,14 +963,7 @@ func (s *Server) newSession(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, http.StatusConflict, err.Error())
 		return
 	}
-	if program != "" {
-		// Typed at the prompt rather than exec'd, so the shell's aliases and
-		// wrappers (nono, omp's model flags) apply exactly as on the desktop.
-		time.Sleep(120 * time.Millisecond)
-		if err := s.tmux.SendText(ctx, paneID, program); err == nil {
-			_ = s.tmux.SendKeys(ctx, paneID, "Enter")
-		}
-	}
+	s.startProgram(ctx, paneID, program)
 	http.Redirect(w, r, "/p/"+Slug(paneID), http.StatusSeeOther)
 }
 
@@ -912,6 +1031,8 @@ func boolInt(v bool) int {
 // away whichever the page opened in.
 func paneActions(slug string, view PaneView, native bool) []Action {
 	actions := []Action{
+		{Label: "open shell here", Post: "/p/" + slug + "/split"},
+		{Label: "open new omp here", Post: "/p/" + slug + "/split", Hidden: []FormValue{{Name: "program", Value: "omp"}}},
 		{Label: "diff", Href: "/p/" + slug + "/diff"},
 		{Label: "history", Href: "/p/" + slug + "/history"},
 	}

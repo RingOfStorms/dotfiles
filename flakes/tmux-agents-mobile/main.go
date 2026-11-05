@@ -24,7 +24,6 @@ import (
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/auth"
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/diff"
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/dirs"
-	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/tailnet"
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/term"
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/tmux"
 	"git.joshuabell.xyz/ringofstorms/tmux-agents-mobile/internal/transcript"
@@ -54,12 +53,6 @@ type config struct {
 	sessionKeyFile  string
 	apiKeysFile     string
 
-	// tsnet: the UI on its own tailnet node. Off while tsnetHostname is empty.
-	tsnetHostname    string
-	tsnetDir         string
-	tsnetControlURL  string
-	tsnetAuthKeyFile string
-	tsnetListen      string
 }
 
 func main() {
@@ -89,13 +82,6 @@ func main() {
 	flag.StringVar(&cfg.sessionKeyFile, "session-key-file", envDefault("TAM_SESSION_KEY_FILE", ""), "HMAC session key file; a random key is generated per boot when empty")
 	flag.StringVar(&cfg.apiKeysFile, "api-keys-file", envDefault("TAM_API_KEYS_FILE", ""), "newline-delimited API keys (machines, tests)")
 
-	flag.StringVar(&cfg.tsnetHostname, "tsnet-hostname", envDefault("TAM_TSNET_HOSTNAME", ""),
-		"also serve the UI from its own tailnet node with this name; reaching it is the authentication (tailnet ACLs decide who can). Empty disables it")
-	flag.StringVar(&cfg.tsnetControlURL, "tsnet-control-url", envDefault("TAM_TSNET_CONTROL_URL", ""), "tailnet coordination server (Headscale URL); empty uses Tailscale's")
-	flag.StringVar(&cfg.tsnetAuthKeyFile, "tsnet-authkey-file", envDefault("TAM_TSNET_AUTHKEY_FILE", ""),
-		"pre-auth key for the node's first login; empty falls back to $TS_AUTHKEY, then a login URL in the log")
-	flag.StringVar(&cfg.tsnetDir, "tsnet-dir", envDefault("TAM_TSNET_DIR", ""), "tailnet node state (keys); empty uses <user config dir>/tmux-agents-mobile/tsnet")
-	flag.StringVar(&cfg.tsnetListen, "tsnet-listen", envDefault("TAM_TSNET_LISTEN", ":80"), "listen address on the tailnet node")
 	flag.Parse()
 	cfg.noAuth = cfg.noAuth || *legacyNoAuth
 	cfg.allowNonLoopback = cfg.allowNonLoopback || *legacyTailnet
@@ -138,13 +124,12 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		return fmt.Errorf("auth: %w", err)
 	}
 
-	tailnetOn := cfg.tsnetHostname != ""
-	if cfg.listen == "" && !tailnetOn {
-		return errors.New("nothing to serve: --listen is empty and --tsnet-hostname is not set")
+	if cfg.listen == "" {
+		return errors.New("nothing to serve: --listen is empty")
 	}
 	if cfg.listen != "" && !authenticator.Enabled() {
 		if !cfg.noAuth {
-			return errors.New("no authentication configured: set TAM_ZITADEL_ISSUER and TAM_ZITADEL_CLIENT_ID, or pass --no-auth for a local-only server (with --tsnet-hostname, --listen '' serves only the tailnet node)")
+			return errors.New("no authentication configured: set TAM_ZITADEL_ISSUER and TAM_ZITADEL_CLIENT_ID, or pass --no-auth for a local-only server")
 		}
 		if !isLoopback(cfg.listen) && !cfg.allowNonLoopback {
 			return fmt.Errorf("--no-auth refuses to listen on %q (it would be wide open); pass --allow-nonloopback to override", cfg.listen)
@@ -223,50 +208,8 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		go serve(ui, ln)
 	}
 
-	if tailnetOn {
-		dir := cfg.tsnetDir
-		if dir == "" {
-			base, err := os.UserConfigDir()
-			if err != nil {
-				return fmt.Errorf("tsnet state directory: %w", err)
-			}
-			dir = filepath.Join(base, "tmux-agents-mobile", "tsnet")
-		}
-		// Reaching the node is the authentication, so its pages carry no login
-		// and no sign-out.
-		tailnetWeb, err := web.New(tmuxClient, hub, chatHub, provider, git, dirIndex, roots, terms, true, log)
-		if err != nil {
-			return err
-		}
-		node, ln, err := tailnet.Listen(tailnet.Config{
-			Hostname:    cfg.tsnetHostname,
-			Dir:         dir,
-			ControlURL:  cfg.tsnetControlURL,
-			AuthKeyFile: cfg.tsnetAuthKeyFile,
-			Addr:        cfg.tsnetListen,
-			Log:         log,
-		})
-		if err != nil {
-			return err
-		}
-		defer node.Close()
-		ts := newUI(node.Guard(tailnetWeb.Handler()))
-		servers = append(servers, ts)
-		go serve(ts, ln)
-
-		upCtx, cancelUp := context.WithCancel(ctx)
-		defer cancelUp()
-		go func() {
-			name, ips, err := node.Up(upCtx)
-			if err != nil {
-				if upCtx.Err() == nil {
-					log.Error("tailnet node did not come up", "err", err)
-				}
-				return
-			}
-			log.Info("listening on the tailnet", "name", name, "ips", ips, "addr", cfg.tsnetListen, "dir", dir)
-		}()
-	}
+	// Further transports (e.g. an iroh endpoint) slot in here: build a
+	// net.Listener, wrap the handler, append to servers and go serve(...).
 
 	var health *http.Server
 	if cfg.healthListen != "" {

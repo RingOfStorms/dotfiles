@@ -32,7 +32,6 @@ in
       description = ''
         Address the UI binds to. Keep it on loopback when there is no
         authentication: the host's proxy terminates TLS and forwards here.
-        Empty disables it (with `tailnet.enable`, only the tailnet node serves).
       '';
     };
 
@@ -109,7 +108,5 @@ in
         description = "Required role from the roles claim; empty allows any project member.";
       };
     };
-
-    tailnet = (import ./tailnet.nix { inherit lib; }).options;
   };
 }

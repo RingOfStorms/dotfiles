@@ -35,7 +35,7 @@
           pname = "tmux-agents-mobile";
           version = "0.1.0";
           src = ./.;
-          vendorHash = "sha256-sRoPHdOGjyRI2o6OQR0D8URGv4f4YG0ZiF9k2M9JLZM=";
+          vendorHash = "sha256-kuRZlCb2OGTNZdgd2eE4A9O4uJqjcA4rF/MaL6OqXyQ=";
           nativeBuildInputs = [ pkgs.makeWrapper ];
           # The tmux integration tests start an isolated `tmux -L tamtest-…`
           # server; tmux must be on PATH inside the sandbox, and it needs a
@@ -235,8 +235,6 @@
               default = { };
               description = "Extra environment variables for the service.";
             };
-
-            tailnet = (import ./nix/tailnet.nix { inherit lib; }).options;
           };
 
           config = lib.mkIf cfg.enable {
@@ -257,7 +255,6 @@
                   TAM_HEALTH_LISTEN = cfg.healthListen;
                   TAM_ROOTS = lib.concatStringsSep ":" cfg.roots;
                 }
-                // (import ./nix/tailnet.nix { inherit lib; }).environment cfg.tailnet
                 // cfg.extraEnvironment;
 
                 # /term is the user's full login shell: no inherited

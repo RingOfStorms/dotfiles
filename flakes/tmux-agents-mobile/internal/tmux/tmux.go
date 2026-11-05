@@ -462,3 +462,87 @@ func atoi64(s string) int64 {
 	n, _ := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
 	return n
 }
+
+// Window is one tmux window (a "workspace" on the phone) with its panes in
+// tmux order.
+type Window struct {
+	Session string
+	Index   int
+	Name    string
+	Active  bool
+	Panes   []Pane
+}
+
+// Session is one row of `list-sessions`. Pane is the active pane of the
+// session's current window: where switching to the session lands.
+type Session struct {
+	Name     string
+	Label    string
+	Windows  int
+	Attached bool
+	Pane     string
+}
+
+// ListWindows returns the windows of one session, each with its panes. One
+// list-panes call: every window has at least one pane, and the pane formats
+// carry the window's name and active flag.
+func (c *Client) ListWindows(ctx context.Context, session string) ([]Window, error) {
+	out, err := c.run(ctx, nil, "list-panes", "-s", "-t", "="+session+":", "-F", format(listFields))
+	if err != nil {
+		return nil, err
+	}
+	return groupWindows(parsePanes(string(out))), nil
+}
+
+// groupWindows folds panes (already in tmux's window, pane order) into windows.
+func groupWindows(panes []Pane) []Window {
+	var wins []Window
+	for _, p := range panes {
+		if n := len(wins); n == 0 || wins[n-1].Session != p.Session || wins[n-1].Index != p.WindowIndex {
+			wins = append(wins, Window{Session: p.Session, Index: p.WindowIndex, Name: p.WindowName, Active: p.WindowActive})
+		}
+		w := &wins[len(wins)-1]
+		w.Panes = append(w.Panes, p)
+	}
+	return wins
+}
+
+var sessionFields = []string{"session_name", "session_windows", "session_attached", "pane_id", "@session_ai_name"}
+
+// ListSessions returns every session of the server, in tmux order.
+func (c *Client) ListSessions(ctx context.Context) ([]Session, error) {
+	out, err := c.run(ctx, nil, "list-sessions", "-F", format(sessionFields))
+	if err != nil {
+		return nil, err
+	}
+	return parseSessions(string(out)), nil
+}
+
+func parseSessions(raw string) []Session {
+	var out []Session
+	for _, line := range strings.Split(strings.TrimRight(raw, "\n"), "\n") {
+		f := strings.Split(line, sep)
+		if line == "" || len(f) < len(sessionFields) {
+			continue
+		}
+		out = append(out, Session{Name: f[0], Windows: atoi(f[1]), Attached: f[2] != "" && f[2] != "0", Pane: f[3], Label: f[4]})
+	}
+	return out
+}
+
+// SplitWindow splits the window holding pane, starting the new pane in that
+// pane's current directory, and returns the new pane's ID. -d keeps the
+// desktop's active pane where it was; only the layout changes.
+func (c *Client) SplitWindow(ctx context.Context, pane, program string) (string, error) {
+	args := make([]string, 0, 12+2*len(shellenv.LoginMarkers))
+	args = append(args, "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "-c", "#{pane_current_path}")
+	args = loginEnvironment(args)
+	if program != "" {
+		args = append(args, program)
+	}
+	out, err := c.run(ctx, nil, args...)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}

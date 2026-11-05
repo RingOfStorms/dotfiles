@@ -107,6 +107,8 @@ in
         "www"
         # o002 exposes only /oauth2/ on h005's edge listener.
         "sso-proxy"
+        # iroh relay (o002/iroh-relay.nix) for tmux-agents-mobile.
+        "relay"
       ]
       # Wildcard names support temporary local sharing.
       ++ map (cname "o002") [ "*.share" ];

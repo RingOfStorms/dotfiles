@@ -107,6 +107,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /p/{pane}/seen", s.paneSeen)
 	mux.HandleFunc("POST /p/{pane}/focus", s.paneFocus)
 	mux.HandleFunc("POST /p/{pane}/kill", s.paneKill)
+	mux.HandleFunc("POST /p/{pane}/split", s.paneSplit)
 	mux.HandleFunc("GET /p/{pane}/diff", s.diffPage)
 	mux.HandleFunc("GET /new", s.newPage)
 	mux.HandleFunc("GET /new/dirs", s.dirSuggestions)

@@ -1,4 +1,17 @@
 {{define "pane.html"}}{{template "head" .}}
+{{if .Windows}}
+<nav class="wsnav" data-wsnav aria-label="workspaces">
+  <div class="ws-tabs" role="tablist">
+    {{if .Sessions}}<select class="ws-session" data-session-switch aria-label="session">
+      {{range .Sessions}}<option value="{{.Href}}"{{if .Current}} selected{{end}}>{{.Name}}{{if .Label}} · {{.Label}}{{end}}</option>{{end}}
+    </select>{{else}}<span class="ws-session static">{{.Pane.Session}}</span>{{end}}
+    {{range .Windows}}<button type="button" role="tab" class="ws-tab{{if .Active}} active{{end}}" data-ws="{{.Index}}" aria-selected="{{if .Selected}}true{{else}}false{{end}}"><span class="ws-name">{{.Name}}</span><span class="ws-num">{{.Index}}</span></button>{{end}}
+  </div>
+  {{range .Windows}}<div class="ws-panes" data-ws-panes="{{.Index}}"{{if not .Selected}} hidden{{end}}>
+    {{range .Panes}}<a class="ws-pane{{if .Current}} current{{end}}{{if .Active}} active{{end}}" href="{{.Href}}"{{if .Current}} aria-current="page"{{end}} title="{{.Detail}}">{{if .Glyph}}<span class="glyph {{.GlyphClass}}">{{.Glyph}}</span>{{end}}<span class="ws-pane-label">{{.Label}}</span>{{if .Agent}}<span class="ws-badge">{{.Agent}}</span>{{end}}</a>{{end}}
+  </div>{{end}}
+</nav>
+{{end}}
 {{if eq .View "native"}}
 <div id="chat" class="chat" data-pane="{{.Slug}}">
   <button type="button" class="earlier" data-earlier hidden>show earlier</button>

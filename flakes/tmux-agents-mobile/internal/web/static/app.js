@@ -27,6 +27,29 @@
     });
   }
 
+  /* ---------------- workspace nav ---------------- */
+
+  // Tabs only switch which window's panes are listed; a pane link navigates.
+  const wsnav = document.querySelector("[data-wsnav]");
+  if (wsnav) {
+    for (const tab of wsnav.querySelectorAll("[data-ws]")) {
+      tab.addEventListener("click", () => {
+        for (const t of wsnav.querySelectorAll("[data-ws]")) {
+          t.setAttribute("aria-selected", String(t === tab));
+        }
+        for (const list of wsnav.querySelectorAll("[data-ws-panes]")) {
+          list.hidden = list.dataset.wsPanes !== tab.dataset.ws;
+        }
+      });
+    }
+    const switcher = wsnav.querySelector("[data-session-switch]");
+    if (switcher) switcher.addEventListener("change", () => location.assign(switcher.value));
+    // Start with the selected tab and the current pane in view.
+    for (const el of wsnav.querySelectorAll('[aria-selected="true"], .ws-pane.current')) {
+      el.scrollIntoView({ block: "nearest", inline: "center" });
+    }
+  }
+
   /* ---------------- confirmations ---------------- */
 
   for (const el of document.querySelectorAll("[data-confirm]")) {

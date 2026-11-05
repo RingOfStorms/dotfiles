@@ -1059,3 +1059,68 @@ body.term main { overflow: hidden; padding: 0; }
   background: var(--accent);
   border-color: var(--accent);
 }
+
+/* ---------- workspace nav (tmux windows + panes) ---------- */
+/* Mirrors the catppuccin status line: #W, then the window number in a filled
+   block on the right; the current window's block is the accent colour. */
+
+.wsnav { flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ws-tabs,
+.ws-panes {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.ws-tabs::-webkit-scrollbar,
+.ws-panes::-webkit-scrollbar { display: none; }
+.ws-panes[hidden] { display: none; }
+.ws-session {
+  flex: 0 0 auto;
+  max-width: 40vw;
+  padding: 0 8px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--green);
+  color: var(--bg);
+  font: 600 13px var(--mono);
+  text-overflow: ellipsis;
+}
+.ws-session.static { display: inline-flex; align-items: center; }
+.ws-tab {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: stretch;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--muted);
+  font: 13px var(--mono);
+}
+.ws-tab .ws-name { display: inline-flex; align-items: center; padding: 0 8px; max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-tab .ws-num { display: inline-flex; align-items: center; padding: 0 7px; background: var(--line); color: var(--text); }
+.ws-tab.active .ws-num { background: var(--mauve); color: var(--bg); }
+.ws-tab[aria-selected="true"] { border-color: var(--accent); color: var(--text); }
+.ws-tab[aria-selected="true"] .ws-num { background: var(--accent); color: var(--bg); }
+.ws-pane {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  color: var(--muted);
+  font: 12px var(--mono);
+  white-space: nowrap;
+}
+.ws-pane.active::after { content: "*"; color: var(--mauve); }
+.ws-pane.current { border-color: var(--accent); color: var(--text); background: var(--surface); }
+.ws-pane-label { max-width: 45vw; overflow: hidden; text-overflow: ellipsis; }
+.ws-badge { padding: 0 5px; border-radius: 4px; background: var(--line); color: var(--yellow); font-size: 11px; }

@@ -314,3 +314,74 @@ read -r line
 		}
 	}
 }
+
+func TestWindowsSessionsAndSplit(t *testing.T) {
+	c := newTestServer(t)
+	ctx := context.Background()
+
+	dir := t.TempDir()
+	first, err := c.NewSession(ctx, "nav", dir, "")
+	if err != nil {
+		t.Fatalf("new-session: %v", err)
+	}
+	if _, err := c.NewSession(ctx, "other", t.TempDir(), ""); err != nil {
+		t.Fatalf("second session: %v", err)
+	}
+	second, err := c.NewWindow(ctx, "nav", t.TempDir(), "")
+	if err != nil {
+		t.Fatalf("new-window: %v", err)
+	}
+	split, err := c.SplitWindow(ctx, first, "")
+	if err != nil {
+		t.Fatalf("split-window: %v", err)
+	}
+	if !strings.HasPrefix(split, "%") || split == first {
+		t.Fatalf("split pane id = %q", split)
+	}
+
+	wins, err := c.ListWindows(ctx, "nav")
+	if err != nil {
+		t.Fatalf("list windows: %v", err)
+	}
+	if len(wins) != 2 {
+		t.Fatalf("windows = %+v", wins)
+	}
+	if len(wins[0].Panes) != 2 || wins[0].Panes[0].ID != first || wins[0].Panes[1].ID != split {
+		t.Fatalf("first window panes = %+v", wins[0].Panes)
+	}
+	if len(wins[1].Panes) != 1 || wins[1].Panes[0].ID != second {
+		t.Fatalf("second window panes = %+v", wins[1].Panes)
+	}
+	// -d on both: the session's current window and active pane are unchanged.
+	if !wins[0].Active || wins[1].Active || !wins[0].Panes[0].Active {
+		t.Fatalf("active flags moved: %+v", wins)
+	}
+	// The split starts in the target pane's directory.
+	waitFor(t, "split pane cwd", func() bool {
+		p, err := c.GetPane(ctx, split)
+		real, _ := filepath.EvalSymlinks(dir)
+		return err == nil && (p.Path == dir || p.Path == real)
+	})
+
+	sessions, err := c.ListSessions(ctx)
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(sessions) != 2 || sessions[0].Name != "nav" || sessions[0].Windows != 2 || sessions[0].Pane != first {
+		t.Fatalf("sessions = %+v", sessions)
+	}
+	if sessions[1].Name != "other" || sessions[1].Attached {
+		t.Fatalf("sessions = %+v", sessions)
+	}
+}
+
+func TestGroupWindows(t *testing.T) {
+	got := groupWindows([]Pane{
+		{ID: "%1", Session: "a", WindowIndex: 1, WindowName: "x", WindowActive: true},
+		{ID: "%2", Session: "a", WindowIndex: 1, WindowName: "x", WindowActive: true},
+		{ID: "%3", Session: "a", WindowIndex: 3, WindowName: "y"},
+	})
+	if len(got) != 2 || len(got[0].Panes) != 2 || got[1].Index != 3 || got[1].Name != "y" || !got[0].Active || got[1].Active {
+		t.Fatalf("groupWindows = %+v", got)
+	}
+}

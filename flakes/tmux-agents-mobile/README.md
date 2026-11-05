@@ -259,50 +259,6 @@ survives and would re-authenticate instantly (which reads as "nothing
 happened"). Ending the Zitadel session as well needs a post-logout redirect URI
 registered on the app - the end-session endpoint is not called.
 
-## Tailnet node (optional, off by default)
-
-`--tsnet-hostname` also serves the UI from **its own node** on a
-Tailscale/Headscale tailnet, using `tailscale.com/tsnet` (userspace WireGuard
-in the process: no tailscaled, TUN device or root, still `CGO_ENABLED=0`). The
-phone reaches it from any network through the tailnet's DERP relay, which
-only ever sees WireGuard ciphertext.
-
-```sh
-tmux-agents-mobile --no-auth \
-  --tsnet-hostname tmux-mac \
-  --tsnet-control-url https://headscale.example.com \
-  --tsnet-authkey-file ~/.secrets/tam-authkey      # first login only
-# then open http://tmux-mac/ (or http://tmux-mac.<magicdns domain>/) on the phone
-```
-
-- **Reaching the node is the authentication.** Requests on the tailnet
-  listener skip Zitadel even when it is configured for `--listen`; the
-  control server's ACLs decide which devices can connect. Its pages show the
-  **no auth** badge and no sign-out.
-- **Register it with a tagged pre-auth key** (`headscale preauthkeys create -u
-  <user-id> --tags tag:lowtrust`). With an ACL that allows `user → tag:*` and
-  has no rule from the tag, every device can open the node but the node cannot
-  open a connection to anything (connection tracking still lets its replies
-  through). That is the `tag:lowtrust` rule in `hosts/oracle/o002/headscale.nix`.
-  It also lets *every* untagged device in, terminal included; narrow `dst` to
-  a dedicated tag and port 80 if that is too wide.
-- **DNS rebinding is refused.** A page on another site can resolve its own
-  name to the node's IP and drive a tailnet browser at it; the listener only
-  answers a `Host` that names the node (short name, MagicDNS name, tailnet
-  IPs) and returns 421 otherwise.
-- **Plain HTTP** on `--tsnet-listen` (default `:80`): WireGuard already
-  encrypts the path, Headscale cannot issue certificates, and the PWA install
-  is the only thing that needs a secure context.
-- The node's keys live in `--tsnet-dir` (default
-  `<user config dir>/tmux-agents-mobile/tsnet`); keep it, or the next start
-  registers a new node with new IPs. Without an auth key the log prints a
-  login URL.
-- `--listen ''` turns the regular listener off, so the tailnet node is the only
-  way in. With the regular listener on and no Zitadel, `--no-auth` and its
-  loopback rule still apply to it.
-
-The modules expose this as `tailnet.{enable,hostname,controlUrl,authKeyFile,stateDir,listen}`.
-
 ## Deployment
 
 Three modules, the same options:
@@ -318,8 +274,8 @@ Three modules, the same options:
 
 Options worth knowing: `user` (required), `listen` (default
 `127.0.0.1:8099`), `roots` (default `["~"]`, the trust boundary for the
-new-session form), `sessionKeyFile`, `zitadel.{issuer,clientId,projectId,claim,role,redirectUri}`
-and `tailnet.*` (see [Tailnet node](#tailnet-node-optional-off-by-default)).
+new-session form), `sessionKeyFile` and
+`zitadel.{issuer,clientId,projectId,claim,role,redirectUri}`.
 The Zitadel client is public information, so it can live in the Nix config; a
 session key file avoids logging every phone out on restart.
 
