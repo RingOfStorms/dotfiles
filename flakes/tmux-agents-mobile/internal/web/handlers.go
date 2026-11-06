@@ -325,9 +325,7 @@ func (s *Server) panePage(w http.ResponseWriter, r *http.Request) {
 	// found; everything else (shells, unsupported agents) gets the terminal.
 	native := false
 	if s.chat != nil {
-		if _, err := s.chat.Locate(ctx, p); err == nil {
-			native = true
-		}
+		native = s.chat.Ready(ctx, p)
 	}
 	page.View = requestedView(r.URL.Query())
 	// Only an explicit terminal view opts out of waiting for the conversation;

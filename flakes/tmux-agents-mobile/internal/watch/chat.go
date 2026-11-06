@@ -468,3 +468,15 @@ func (w *chatWatcher) run() {
 		}
 	}
 }
+
+// Ready reports whether the conversation view can show the pane: its agent's
+// session is found and readable. Locating alone is not enough; a session that
+// is found but cannot be opened makes the stream fall back at once.
+func (h *ChatHub) Ready(ctx context.Context, p tmux.Pane) bool {
+	t, err := h.Locate(ctx, p)
+	if err != nil {
+		return false
+	}
+	_, err = h.locator.Open(t)
+	return err == nil
+}

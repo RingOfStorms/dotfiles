@@ -131,7 +131,7 @@ func (s *Server) paneNative(w http.ResponseWriter, r *http.Request) {
 	if s.chat != nil {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		if _, err := s.chat.Locate(ctx, p); err == nil {
+		if s.chat.Ready(ctx, p) {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
