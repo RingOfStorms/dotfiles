@@ -123,10 +123,16 @@
               wantedBy = [ "default.target" ];
               after = [ "network.target" ];
               # A unit-level directive: the account that owns the tmux server.
-              unitConfig.ConditionUser = cfg.user;
+              unitConfig = {
+                ConditionUser = cfg.user;
+                # Give up after 5 starts in 5 minutes (unit goes `failed`);
+                # the default 10s window never trips with RestartSec=5s.
+                StartLimitIntervalSec = 300;
+                StartLimitBurst = 5;
+              };
               serviceConfig = {
                 ExecStart = "${cfg.package}/bin/tmux-agents-mobile";
-                Restart = "on-failure";
+                Restart = "always";
                 RestartSec = "5s";
                 UMask = "0077";
                 Environment = lib.mapAttrsToList (name: value: "${name}=${value}") environment;
@@ -242,11 +248,13 @@
               Unit = {
                 Description = "tmux-agents-mobile web UI";
                 After = [ "network.target" ];
+                StartLimitIntervalSec = 300;
+                StartLimitBurst = 5;
               };
               Install.WantedBy = [ "default.target" ];
               Service = {
                 ExecStart = "${cfg.package}/bin/tmux-agents-mobile";
-                Restart = "on-failure";
+                Restart = "always";
                 RestartSec = "5s";
                 UMask = "0077";
 
