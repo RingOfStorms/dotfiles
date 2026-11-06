@@ -96,12 +96,17 @@ func (s *Service) ensureCred(subject string) (*Cred, error) {
 	return c, nil
 }
 
-func (s *Service) rotate(subject, why string) (*Cred, error) {
+// rotate bumps subject's REST password; a non-empty bindHost is set as
+// BoundHost in the same step. On a save failure the whole Cred is restored.
+func (s *Service) rotate(subject, why, bindHost string) (*Cred, error) {
 	c := s.creds.Creds[subject]
 	if c == nil {
 		return nil, fail(404, "%s has no credentials yet", subject)
 	}
 	old := *c
+	if bindHost != "" {
+		c.BoundHost = bindHost
+	}
 	c.RestPassword, c.RestRevision, c.RotatedAt = randHex(), c.RestRevision+1, s.cfg.Now().Unix()
 	if err := s.saveCreds(); err != nil {
 		*c = old
@@ -123,14 +128,15 @@ func (s *Service) syncBindings() {
 			continue
 		}
 		prev := c.BoundHost
-		c.BoundHost = host
 		if prev == "" {
+			c.BoundHost = host
 			if err := s.saveCreds(); err != nil {
+				c.BoundHost = prev
 				log.Printf("backup: save credentials: %v", err)
 			}
 			continue
 		}
-		if _, err := s.rotate(n, "placement "+prev+" -> "+host); err != nil {
+		if _, err := s.rotate(n, "placement "+prev+" -> "+host, host); err != nil {
 			log.Printf("backup: rotate %s: %v", n, err)
 		}
 	}
@@ -399,7 +405,7 @@ func (s *Service) RotateAs(user, subject string) (int64, error) {
 	if _, err := s.ensureCred(subject); err != nil {
 		return 0, err
 	}
-	c, err := s.rotate(subject, "manual (ui "+user+")")
+	c, err := s.rotate(subject, "manual (ui "+user+")", "")
 	if err != nil {
 		return 0, err
 	}

@@ -580,7 +580,7 @@ func (s *Service) route(r *http.Request, w http.ResponseWriter, c authority.Call
 		if _, err := s.ensureCred(subject); err != nil {
 			return nil, err
 		}
-		cr, err := s.rotate(subject, "manual ("+c.Host+")")
+		cr, err := s.rotate(subject, "manual ("+c.Host+")", "")
 		if err != nil {
 			return nil, err
 		}

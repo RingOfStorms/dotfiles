@@ -260,3 +260,36 @@ func TestExportImportRoundTrip(t *testing.T) {
 		t.Fatal("new repo password after export must warn")
 	}
 }
+
+func TestSyncBindingsSaveFailureKeepsOldBinding(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	f := newFixture(t)
+	pl := map[string][2]string{"localai": {"lio", ""}}
+	f.place(pl)
+	if _, err := f.s.ensureCred("localai"); err != nil {
+		t.Fatal(err)
+	}
+	before := *f.s.creds.Creds["localai"]
+	if before.BoundHost != "lio" {
+		t.Fatalf("bound: %q", before.BoundHost)
+	}
+	if err := os.Chmod(f.dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(f.dir, 0o700) })
+	pl["localai"] = [2]string{"joe", ""}
+	f.s.syncBindings()
+	if got := *f.s.creds.Creds["localai"]; got != before {
+		t.Fatalf("failed save changed cred: %+v, want %+v", got, before)
+	}
+	if err := os.Chmod(f.dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	f.s.syncBindings()
+	got := f.s.creds.Creds["localai"]
+	if got.BoundHost != "joe" || got.RestRevision != before.RestRevision+1 || got.RestPassword == before.RestPassword {
+		t.Fatalf("no rotation after recovery: %+v", got)
+	}
+}
