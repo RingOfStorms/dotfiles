@@ -132,7 +132,7 @@
                 type = lib.types.bool;
                 default = true;
                 description = ''
-                  tmux-resurrect integration (resume.sh): track which omp or opencode session
+                  tmux-resurrect integration (resume.sh): track which omp, opencode or claude session
                   each agent pane runs and resume it after a restore. Off removes the resurrect hooks.
                 '';
               };
@@ -157,6 +157,11 @@
                 default = "opencode -s ";
                 description = "Command prefix that resumes an opencode session; the session ID is appended.";
               };
+              claudeCommand = lib.mkOption {
+                type = lib.types.str;
+                default = "claude --resume ";
+                description = "Command prefix that resumes a Claude Code session; the session ID is appended.";
+              };
             };
           };
 
@@ -167,6 +172,7 @@
               set -g @tmux-agents-resume-mode '${cfg.resume.mode}'
               set -g @tmux-agents-resume-command '${cfg.resume.ompCommand}'
               set -g @tmux-agents-resume-command-opencode '${cfg.resume.opencodeCommand}'
+              set -g @tmux-agents-resume-command-claude '${cfg.resume.claudeCommand}'
               run-shell '${plugin}/share/tmux-plugins/tmux-agents/bin/tmux-agents resume-init'
             '';
             # mkAfter: must load after catppuccin (formats) and resurrect.
@@ -187,6 +193,7 @@
                   set -g @tmux-agents-resume-mode '${cfg.resume.mode}'
                   set -g @tmux-agents-resume-command '${cfg.resume.ompCommand}'
                   set -g @tmux-agents-resume-command-opencode '${cfg.resume.opencodeCommand}'
+                  set -g @tmux-agents-resume-command-claude '${cfg.resume.claudeCommand}'
                 '';
               }
             ];

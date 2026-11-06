@@ -8,6 +8,10 @@
 # or `OC | <session>`) names the agent but not its state, and survives in
 # restored/stale panes, so it only counts while the pane runs opencode (or the
 # nono sandbox); its state is read from the bottom rows of the screen.
+# Claude Code titles itself `✳ <title>` when idle and `⠂|⠐ <title>` (spinner)
+# while busy; it names its process `claude`, so a pane running `claude` counts
+# even with CLAUDE_CODE_DISABLE_TERMINAL_TITLE. Permission and question
+# dialogs are read from the screen.
 
 TAB=$'\t'
 
@@ -22,7 +26,7 @@ opt() {
 field() { printf '#{?%s,#{%s},-}' "$1" "$1"; }
 undash() { [ "$1" = - ] && REPLY="" || REPLY=$1; }
 
-# Sets REPLY to omp|opencode or empty (not an agent) from a pane's title and
+# Sets REPLY to omp|opencode|claude or empty (not an agent) from a pane's title and
 # #{pane_current_command}; no tmux calls. resume.sh calls
 # `agent_kind "$title" "$cmd"` too, so keep this name and contract stable.
 agent_kind() {
@@ -34,7 +38,13 @@ agent_kind() {
 		*) REPLY="" ;;
 		esac
 		;;
-	*) REPLY="" ;;
+	'✳ '* | '⠂ '* | '⠐ '*)
+		case "$2" in
+		claude | .claude-wrapped | nono) REPLY=claude ;;
+		*) REPLY="" ;;
+		esac
+		;;
+	*) case "$2" in claude | .claude-wrapped) REPLY=claude ;; *) REPLY="" ;; esac ;;
 	esac
 }
 
@@ -43,6 +53,7 @@ classify() {
 	case "$1" in
 	omp) classify_omp "$2" ;;
 	opencode) classify_opencode "$3" ;;
+	claude) classify_claude "$2" "$3" ;;
 	*) REPLY=none ;;
 	esac
 }
@@ -77,6 +88,28 @@ classify_opencode() {
 	done
 	if [[ ${lines[-1]} =~ $re_work ]]; then REPLY=working; fi
 	return 0
+}
+
+# Input: a permission prompt ("Do you want to proceed?", "… make this edit …")
+# or a selection dialog footer ("Esc to cancel") among the last 12 non-blank
+# rows. Otherwise the title's spinner frame means working, `✳` idle.
+classify_claude() {
+	local line re_input n
+	local -a lines=()
+	re_input='^[ │]*(Do you want to |.*Esc to cancel[ │]*$)'
+	while IFS= read -r line; do
+		[[ $line == *[![:space:]]* ]] && lines+=("$line")
+	done < <(tmux capture-pane -p -t "$2" 2>/dev/null)
+	n=${#lines[@]}
+	if [ "$n" -gt 0 ]; then
+		for line in "${lines[@]:n > 12 ? n - 12 : 0}"; do
+			if [[ $line =~ $re_input ]]; then REPLY=input && return 0; fi
+		done
+	fi
+	case "$1" in
+	'⠂ '* | '⠐ '*) REPLY=working ;;
+	*) REPLY=idle ;;
+	esac
 }
 
 # Rank used for roll-ups: input > working > done (idle, unseen) > idle > none.
@@ -123,6 +156,14 @@ agent_label() {
 		REPLY=${l# }
 		;;
 	opencode) if [ "$2" = OpenCode ]; then REPLY=opencode; else REPLY=${2#'OC | '}; fi ;;
+	claude)
+		case "$2" in
+		'✳ '* | '⠂ '* | '⠐ '*) l=${2#??} ;;
+		*) l="" ;;
+		esac
+		[ -n "$l" ] && [ "$l" != "Claude Code" ] || l=claude
+		REPLY=$l
+		;;
 	*) REPLY="" ;;
 	esac
 }

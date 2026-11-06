@@ -134,7 +134,8 @@ git_info() {
 }
 
 # Sets agent to the agent session label of a pane tmux-agents marked as an
-# agent (@agent_state set): omp `π <glyph> label`, opencode `OC | label`.
+# agent (@agent_state set): omp `π <glyph> label`, opencode `OC | label`,
+# claude `<✳|spinner> label`.
 agent_desc() {
   agent=
   [ -n "$1" ] || return 0
@@ -146,6 +147,7 @@ agent_desc() {
       agent="omp: ${agent# }"
       ;;
     'OC | '*) agent="opencode: ${2#'OC | '}" ;;
+    '✳ '* | '⠂ '* | '⠐ '*) agent="claude: ${2#??}" ;;
     *) agent=agent ;;
   esac
   agent=${agent//[$'\n\t\x1f"']/ }

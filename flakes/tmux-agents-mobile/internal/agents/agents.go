@@ -232,6 +232,15 @@ func Detect(title, command string) (kind, label string) {
 				label = "opencode"
 			}
 		}
+	case command == "claude" || command == ".claude-wrapped" ||
+		(command == "nono" && (strings.HasPrefix(title, "✳ ") || strings.HasPrefix(title, "⠂ ") || strings.HasPrefix(title, "⠐ "))):
+		kind = "claude"
+		label = "claude"
+		if r := []rune(title); len(r) > 2 && (r[0] == '✳' || r[0] == '⠂' || r[0] == '⠐') && r[1] == ' ' {
+			if l := string(r[2:]); l != "Claude Code" {
+				label = l
+			}
+		}
 	}
 	return kind, label
 }

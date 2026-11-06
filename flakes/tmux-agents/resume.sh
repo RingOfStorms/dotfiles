@@ -1,10 +1,10 @@
-# tmux-agents resume: map agent panes (omp, opencode) to their sessions and
+# tmux-agents resume: map agent panes (omp, opencode, claude) to their sessions and
 # resume them after tmux-resurrect restores. Sourced by tmux-agents.sh (shares
 # opt, field, agent_kind, runtime_dir, TAB). Everything here is off when
 # @tmux-agents-resume is off.
 #
 # resume.tsv: `session window pane agent ref state` per agent pane; ref is the
-# session JSONL for omp and the session ID for opencode. Rows without the
+# session JSONL for omp and the session ID for opencode and claude. Rows without the
 # agent column (written before opencode support) are omp; rows without a
 # state (written before state tracking) are live. States:
 #   live      the agent was running at the last save
@@ -19,6 +19,7 @@ omp_dir="${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}"
 # opencode resolves a relative OPENCODE_DB against its data dir.
 oc_db="${OPENCODE_DB:-opencode.db}"
 [[ $oc_db == /* ]] || oc_db="${XDG_DATA_HOME:-$HOME/.local/share}/opencode/$oc_db"
+claude_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/tmux-agents"
 resume_file="$state_dir/resume.tsv"
 # Per-row outcome of the last restore (sent / skipped and why / gave up).
@@ -84,7 +85,7 @@ resume_track() {
 }
 
 # Agent running under pane process $1 ($2 = pane title, used by opencode).
-# Sets found_kind (omp|opencode) and REPLY (the row's ref). Returns 1 if an
+# Sets found_kind (omp|opencode|claude) and REPLY (the row's ref). Returns 1 if an
 # agent runs but its session isn't known yet, 2 if no agent process runs in
 # the pane (the pane title can be stale, e.g. restored by resurrect). Sandbox
 # wrappers (nono) run the agent as their child. Needs `load_ps`.
@@ -110,6 +111,7 @@ session_for_pane() {
 		case "${ps_comm[$pid]:-}" in
 		omp) found_kind=omp ;;
 		opencode | .opencode-wrapp) found_kind=opencode ;; # nix wrapper, cut to 15 chars
+		claude | .claude-wrapped) found_kind=claude ;;
 		*)
 			# shellcheck disable=SC2206 # space separated pid list
 			queue+=(${ps_children[$pid]:-})
@@ -202,6 +204,26 @@ opencode_session() {
 	[ -n "$REPLY" ]
 }
 
+# Claude Code writes $claude_dir/sessions/<pid>.json ({"pid":…,"sessionId":…})
+# for each interactive process and keeps it current; transcripts live in
+# $claude_dir/projects/<sanitized-cwd>/<sessionId>.jsonl.
+claude_session() {
+	local f="$claude_dir/sessions/$1.json" json re='"sessionId"[[:space:]]*:[[:space:]]*"([0-9a-fA-F-]+)"'
+	REPLY=""
+	[ -r "$f" ] || return 1
+	json=$(<"$f")
+	[[ $json =~ $re ]] || return 1
+	REPLY=${BASH_REMATCH[1]}
+}
+# 0 if the session's transcript exists, 1 if not.
+claude_exists() {
+	local f
+	for f in "$claude_dir"/projects/*/"$1.jsonl"; do
+		[ -e "$f" ] && return 0
+	done
+	return 1
+}
+
 # Splits resume.tsv line $1 into row_s row_w row_p row_agent row_ref
 # row_state, upgrading the older 4- and 5-column formats.
 split_row() {
@@ -279,7 +301,7 @@ cmd_save() (
 # row; running `tmux-agents restore` again retries it. Each row's outcome goes
 # to restore.log.
 cmd_restore() (
-	local resume_omp resume_oc mode target cmd i line rt ppid shell r out=""
+	local resume_omp resume_oc resume_cc mode target cmd i line rt ppid shell r out=""
 	local -a rows=()
 	rt=$(runtime_dir)
 	mkdir -p "$state_dir"
@@ -291,6 +313,7 @@ cmd_restore() (
 	: >"$rt/restoring"
 	resume_omp=$(opt @tmux-agents-resume-command 'omp --resume=')
 	resume_oc=$(opt @tmux-agents-resume-command-opencode 'opencode -s ')
+	resume_cc=$(opt @tmux-agents-resume-command-claude 'claude --resume ')
 	mode=$(opt @tmux-agents-resume-mode auto)
 	shell=$(tmux show-option -gqv default-shell)
 	shell=${shell##*/}
@@ -304,6 +327,7 @@ cmd_restore() (
 		case "$row_agent" in
 		omp) [ -e "$row_ref" ] && r=0 || r=1 ;;
 		opencode) opencode_exists "$row_ref" && r=0 || r=$? ;;
+		claude) claude_exists "$row_ref" && r=0 || r=1 ;;
 		*) r=1 ;;
 		esac
 		if [ "$r" = 2 ]; then
@@ -328,7 +352,11 @@ cmd_restore() (
 			continue
 		fi
 		out+="$row_s$TAB$row_w$TAB$row_p$TAB$row_agent$TAB$row_ref${TAB}pending"$'\n'
-		if [ "$row_agent" = omp ]; then line=$resume_omp; else line=$resume_oc; fi
+		case "$row_agent" in
+		omp) line=$resume_omp ;;
+		claude) line=$resume_cc ;;
+		*) line=$resume_oc ;;
+		esac
 		line+=$(printf '%q' "$row_ref")
 		(
 			for ((i = 0; i < 30; i++)); do
