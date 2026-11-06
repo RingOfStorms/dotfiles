@@ -1,6 +1,7 @@
 # Fleet backups: backup targets, pushers, one repo per subject
 
-Status: **P1 and P2 code written, nothing deployed.** rest-server behaviour was
+Status: **P1 and P2 code written, nothing deployed.** 2026-11-05: backup
+credentials moved from sec to h005 fleet-edge (§2.7). rest-server behaviour was
 measured on loopback fixtures (rest-server 0.14.0, restic 0.18.1), not on h004
 (Appendix A). Revised 2026-11-04 to the user's decisions (§0 items 7–10); the
 2026-11-01 revision is in git.
@@ -217,14 +218,13 @@ hourly, 0600 `stats.json`). Stale sizes render with a timestamp, never as 0.
 ### 2.5 Target
 
 - `render-htpasswd` is a root oneshot, `before` rest-server, with
-  `reloadPropagatedFrom`. For each hydrated subject secret it hashes
-  `RESTIC_REST_PASSWORD` with `htpasswd -niB` (password on stdin), checks for a
+  `reloadPropagatedFrom`. For each subject login in fleet-edge's heartbeat feed (§2.7) it hashes
+  the REST password with `htpasswd -niB` (password on stdin), checks for a
   `user:$2y$` line, and atomically `mv`s the result to
   `/run/restic-rest-server/htpasswd`. An empty username or password fails the
-  unit before the rename, and with no secrets the file is empty. rest-server
+  unit before the rename, and with no feed yet the file is empty. rest-server
   reads htpasswd only at start or on SIGHUP, so add
-  `ExecReload = kill -HUP $MAINPID`; rotation is `systemctl reload
-  render-htpasswd`. (Measured: a file `ReadOnlyPaths` bind does not pin the
+  `ExecReload = kill -HUP $MAINPID`; the heartbeat re-renders on any change to the feed. (Measured: a file `ReadOnlyPaths` bind does not pin the
   old inode across `rename(2)`.)
 - **Prune** runs per repo, by filesystem path. It loops over
   `${dataDir}/svc-*/` and runs `restic forget --prune --group-by ''
@@ -277,32 +277,68 @@ hourly, 0600 `stats.json`). Stale sizes render with a timestamp, never as 0.
   suffices because every subject lives under `svc-`. A second pusher gets its
   own key.
 
-### 2.7 Secrets
+### 2.7 Secrets (held by h005 fleet-edge)
 
-One key per subject: `machines/backup/restic_<subject>_<date>`. It has a `value`
-field and **`sub` grants only**: the hosts the policy places the subject on,
-plus every target. It never gets a role grant. Contents (names only):
+h005's fleet-edge generates and holds every subject's credentials
+(`backup-credentials.json` in its state dir, 0600, atomic writes; code
+`flakes/fleet-edge/internal/backup/creds.go`). There are no sec registry keys
+for backup subjects. Per subject (32 random bytes, hex, `crypto/rand`, made on
+first need):
 
 ```
-RESTIC_PASSWORD=<repo password, local and B2>
+RESTIC_PASSWORD=<repo password, local and B2; generated once, never rotated>
 RESTIC_REST_USERNAME=svc-<name>
-RESTIC_REST_PASSWORD=<plaintext; targets hash it, never stored hashed here>
+RESTIC_REST_PASSWORD=<HTTP login; rotatable, restRevision counts rotations>
 ```
 
-- A host's key set is exactly the subjects placed on it (`placed.<n>` in
-  `backup-subjects.nix`), plus the destination of an in-flight move
-  (`pendingMove.<n>`). A `cnt move` needs BOTH grants (preflight requires
-  the source credential through prepare and final backup, and the
-  destination's; §2.9):
-  1. set `pendingMove.<n>`, deploy `sec` and the destination;
-  2. `cnt move`;
-  3. after commit: set `placed.<n>` to the destination, drop
-     `pendingMove.<n>`, deploy `sec`, then delete the hydrated copy on the
-     source.
-  The source grant is revoked only after the move commits. Never grant
-  "everything a host might run".
-- Kill switch for one subject: drop the consumer's sub, deploy `sec`, delete
-  the hydrated copy, then `systemctl reload render-htpasswd` on each target.
+- **Clients:** `GET /api/backup/<s>/credentials` (machine token from the
+  host's overlay IP, as for the policy read) answers only if the live
+  placement binds `<s>` to the caller (committed host, or a host subject),
+  or the caller is the destination of an in-flight move. Anything else gets 403.
+  Every fetch is audit-logged. `fleet containers backup-creds <s>` caches the
+  answer root-only (0600) in `/var/lib/fleet-backup/creds/<s>.env`. It uses a
+  fresh answer when the API replies and the cache when it is down, and deletes
+  the cache on a 403. `client.nix` and `fleet-restic` read creds through it.
+  Both move preflights require a fresh fetch, so a move needs no registry
+  step: `cnt move` reserves the destination, which grants it.
+- **Targets, logins:** the heartbeat reply carries every subject's
+  `{username, restPassword, restRevision}`, and never `RESTIC_PASSWORD`. The
+  target writes this root-only, renders htpasswd from it, and reports the
+  applied revision per subject in its next heartbeat.
+- **Targets, repo keys:** `GET /api/backup/targets/<id>/repo-keys` is
+  target-only (the caller must be `<id>`). It returns `RESTIC_PASSWORD` only
+  for the subjects the target holds: the policy target resolves to `<id>`
+  (also by inheriting the default row), or the repo is in `<id>`'s stats.
+  This follows §2.1: a target's root reads every repo it holds. The call is
+  audit-logged. The keys are written root-only, separate from the htpasswd
+  input (`/var/lib/fleet-backup-target-keys/repo-keys/svc-<s>`), and are
+  passed to prune, stats and (P4) the pusher via `LoadCredential`.
+- **Rotation (REST password only):** this happens automatically when a move
+  commits (the placement's committed host changes), or by hand (UI "Rotate",
+  or `cnt backup-policy rotate <s>`, writers). After it, the old host's
+  fetches get 403 (placement). Once each target has applied the new revision,
+  the old password gets 401. Until then the UI shows "rotated, pending on
+  <target>". Rotation revokes **HTTP access only**. The repo password does
+  not rotate (restic's master key stays the same), so data the old host has
+  already copied stays readable to it.
+- **Kill switch for one subject:** rotate. The REST password is then held only
+  by the placed host.
+- **Export/import (`/backup/`, admin, CSRF, `no-store`):** "Export all" gives
+  `# fleet-edge backup credentials export <RFC3339>` plus one line per subject,
+  `svc-<n> RESTIC_PASSWORD=<hex> RESTIC_REST_PASSWORD=<hex>`, with a
+  copy button. It records `lastExportedAt` and the set's hash. A banner warns
+  while any repo password is newer than the last export, or was never
+  exported. "Import" (diff summary, then apply) restores missing subjects
+  after an h005 rebuild. It never overwrites a differing value unless that
+  subject's "overwrite" box is ticked. Per subject: "Reveal" (POST + CSRF,
+  rendered once) and "Rotate REST password".
+- **Threats:**
+  - h005 holds everything. The export, pasted into the password manager, is
+    the only copy outside it. Losing both loses every repo.
+  - A compromised h005 exposes every credential. Append-only rest-server still
+    refuses deletes, and the B2 copies sit behind pushers' own keys.
+  - A placement change grants access. Only the laptop writers (and the move
+    flow they drive) can change placement.
 - `RESTIC_REPOSITORY` must be `rest:http://…` (a bare `http://` parses as a
   local path), with no userinfo: userinfo would be stored in every snapshot.
 - **Changing a target** is a UI edit plus a one-time local `restic copy` of the
@@ -582,7 +618,9 @@ h005 declares `ringofstorms.backup.subjects.fleet-edge`:
   when fleet-edge is down. **Disaster restore needs no fleet-edge:** stop
   `fleet-edge-overrides`, run `fleet-restic -r
   rest:http://100.64.0.17:8000/svc-fleet-edge/ restore latest --target /` with
-  the hydrated subject secret, then start the unit. systemd re-chowns a
+  the `svc-fleet-edge` line from the password-manager export (fleet-edge
+  holds its own credentials, so the export is the only way back in), then
+  start the unit. systemd re-chowns a
   DynamicUser `StateDirectory` on start (to verify in P5).
 - The policy is in the same directory, so the backup also preserves
   `backup.json`.
@@ -627,11 +665,10 @@ registration.
   ownership change, and one canary subject `svc-canary` (secret, `init`).
 - **Code (written 2026-11-04, not deployed):**
   - `flakes/fleet-agent/backup/target.nix`: options `enable`, `dataDir`,
-    `requiresMount`, `lowTrustClients`, `subjectCredentials` (`svc-<x>` →
-    hydrated secret path), `prunePreset` (default `long` until P2), read-only
+    `requiresMount`, `lowTrustClients`, `prunePreset` (default `long` until P2), read-only
     `allowedIps{,6}`, `owner`. Emits rest-server (`8000`, append-only,
-    privateRepos, htpasswd in `/run`), `render-htpasswd` (skips unhydrated
-    secrets, fails on a malformed one), `ExecReload` HUP,
+    privateRepos, htpasswd in `/run`), `render-htpasswd` (from the heartbeat's login feed;
+    fails on a malformed entry), `ExecReload` HUP,
     `fleet-backup-target-prune` (+ timer 06:00, `User=restic`,
     `LoadCredential`), and the `:8000` rule (v4 + v6).
   - `flakes/fleet-agent/agent-module.nix` imports it.
@@ -641,11 +678,8 @@ registration.
     rule lives in the module (§2.8).
   - `containers/tests/backup-plan.nix`.
   - Canary (2026-11-04): h004's Zitadel sub is `394968645089886211`.
-    Registry key `machines/backup/restic_svc-canary_2026-11-04` (`sub`
-    grants: h004, lio), `subjectCredentials.svc-canary` in
-    `hosts/h004/flake.nix`, and the `extraSecrets` entry in
-    `hosts/h004/sec-agent.nix` (`hardDepend = [ "render-htpasswd" ]`).
-    The secret value is not set yet.
+    `svc-canary` is a host subject of lio (`hostSubjects.lio` in
+    `hosts/h005/fleet-edge.nix`); fleet-edge generates its credentials (§2.7).
 - **Risk: low.** No client writes, and the directory is emptied first. New
   exposure: `:8000` from the allow-list only. Unverified until now: socket
   activation under the module's hardening, and `render-htpasswd` reading root
@@ -657,8 +691,8 @@ registration.
      (intended); the ssh rule is untouched.
   3. Check `restic-rest-server.socket` listens, `stat` = `restic:restic 700`,
      empty htpasswd, `curl` from lio → 401, from h005 → 401, from o002 → timeout.
-  4. Add the canary key (registry, `sec` deploy), the h004 consumer, redeploy
-     h004, `restic init` as `restic`, then the live checks below.
+  4. Deploy h005 (canary host subject); h004's next heartbeat renders its
+     login. Then `restic init` as `restic`, then the live checks below.
   5. Reboot h004 once; re-check `stat` and the socket.
 - **Verify:**
   - `nix eval --impure --expr 'import ./containers/tests/backup-plan.nix'`:
@@ -736,24 +770,30 @@ registration.
     `stampDir`. `host-module.nix` delegates to it, its client `forget` is
     **deleted**, and `repository`/`passwordFile`/`pruneOpts` are removed.
   - `cnt`: stamped `-r` restore, preflight, `restore --extra`.
-  - One registry key per subject (18), with consumers in
-    `hosts/{h001,lio,h003}/sec-agent.nix`, and the targets.
+  - Credentials from h005 fleet-edge (§2.7): `backup-creds` cache, the
+    target login feed and `repo-keys`. No sec keys for subjects.
   - The `restic_h001_env` consumers on lio and h003 are removed. h001 keeps its
     copy for its host job.
 - **Order:**
-  1. Stop and mask `fleet-backup` on the three hosts.
-  2. On h004, for each subject: `restic init --copy-chunker-params --from-repo
-     <old> --from-password-file <tmpfs>` as `restic`, then `restic copy
-     --from-repo <old> --tag svc:<name>` (about 31 GiB down from B2).
-  3. Deploy and unmask.
-  4. First runs.
+  1. Deploy h005, then h004. The heartbeat generates every subject's
+     credentials and renders the logins. `repo-keys` writes the repo passwords.
+  2. Open `/backup/` → "Export all" → paste it into the password manager
+     **before any first run**. The banner must clear.
+  3. Stop and mask `fleet-backup` on h001, lio and h003.
+  4. On h004, for each subject: `restic init --copy-chunker-params --from-repo
+     <old> --from-password-file <tmpfs>` as `restic`, with the new repo
+     password from `repo-keys`, then `restic copy --from-repo <old> --tag
+     svc:<name>` (about 31 GiB down from B2).
+  5. Deploy h001, lio and h003, then unmask.
+  6. First runs.
 
-  The old password and key come from the password manager into a tmpfs file
-  that is removed afterwards. h001's host job is untouched and keeps writing
-  `--tag h001` to the old repo.
+  The **old** repo password and B2 key come from the password manager into a
+  tmpfs file that is removed afterwards. No new secret is pasted anywhere.
+  h001's host job is untouched and keeps writing `--tag h001` to the old
+  repo.
 - **Risk: medium.** The retention handover: the target pruner must already run
-  with presets, or nothing bounds the repos. 43G is re-read on h001. A missing
-  grant shows as a 401 and a missed night, visibly.
+  with presets, or nothing bounds the repos. 43G is re-read on h001. A host
+  the placement does not bind gets a 403 and misses the night, visibly.
   - **Rollback:** restore the env consumer and revert. The old repo still holds
     everything.
 - **Verify:**
@@ -763,8 +803,13 @@ registration.
   - `cnt restore-check forgejo` (3 PG dumps) and `puzzles` (2 SQLite).
   - While h001's run is in flight, `svc-puzzles` → `svc-forgejo` and `svc-sec`
     → `svc-secrets` both answer 401.
-  - A real `cnt move hello-nixos`, plus a move whose destination lacks the
-    grant (must fail in preflight).
+  - A real `cnt move hello-nixos`. Afterwards its REST revision is bumped,
+    the UI shows "pending on h004" until the heartbeat applies it, and then the
+    old host's fetch gets 403 and its old password gets 401.
+  - A preflight against a host the placement doesn't bind fails (403).
+  - Rotate test: `cnt backup-policy rotate forgejo`, then the next h004
+    heartbeat applies it, the old password gets 401, and h001's next run
+    fetches the new one.
   - API down: the cached run works; cache deleted: the run fails.
   - Every `init`/`copy` is run with `</dev/null` and distinct password files,
     and exits 0.
