@@ -3,7 +3,6 @@
 #   nix eval --impure --expr 'import ./containers/tests/backup-schema.nix'
 let
   lib = import ../lib.nix;
-  subj = import ../backup-subjects.nix;
   rejects = x: !(builtins.tryEval (builtins.deepSeq x x)).success;
   base = {
     name = "t";
@@ -144,62 +143,24 @@ assert
     services = [ (mk "a" [ "/drives/wd10/a" ]) ];
     hostSubjects.m = [ "/drives/wd10/ab" ];
   } != [ ];
-# the real tree: hooks migrated, excludes moved, every subject has a key
+# the real tree: hooks migrated, excludes moved, excludes moved
 assert builtins.all (s: !(s ? backupHook)) svcs;
 assert (builtins.head (builtins.filter (s: s.name == "forgejo") svcs)).backup.hooks.pre != null;
 assert
   (builtins.head (builtins.filter (s: s.name == "immich") svcs)).backup.exclude == [ "mlcache" ];
-assert
-  builtins.sort builtins.lessThan (builtins.attrNames subj.hosts)
-  == builtins.sort builtins.lessThan (builtins.filter (n: n != "localai") names);
-assert builtins.all (k: builtins.any (a: a.value == subj.subs.h004) subj.registry.${k}.access) (
-  builtins.attrNames subj.registry
+# credentials come from h005 fleet-edge (§2.7): no sec registry key for a
+# backup subject is left, and neither the client nor the target takes
+# credential files any more
+assert builtins.all (k: builtins.match "machines/backup/restic_svc-.*" k == null) (
+  builtins.attrNames (import ../sec/registry.nix)
 );
-# placement-exact grants: placed is null or one known host; pendingMove only
-# during a move (known, != placed, subject placed); <=2 client hosts, 2 only
-# with a pendingMove
-assert
-  subj.check {
-    known = subj.knownHosts;
-    inherit (subj) placed pendingMove;
-  } == [ ];
+assert !(builtins.pathExists ../backup-subjects.nix);
 assert
   let
-    ok =
-      pm:
-      subj.check {
-        known = [
-          "a"
-          "b"
-        ];
-        placed = {
-          x = "a";
-          y = null;
-        };
-        pendingMove = pm;
-      } == [ ];
+    t = builtins.readFile ../../flakes/fleet-agent/backup/target.nix;
+    c = builtins.readFile ../../flakes/fleet-agent/backup/client.nix;
   in
-  ok { }
-  && ok { x = "b"; }
-  && !ok { x = "a"; } # same as placed
-  && !ok { x = "c"; } # unknown dest
-  && !ok { y = "a"; } # subject not placed
-  && !ok { z = "a"; }; # unknown subject
-assert
-  subj.check {
-    known = [ "a" ];
-    placed.x = "c";
-    pendingMove = { };
-  } != [ ]; # unknown placed
-assert
-  subj.clientHostsOf {
-    x = "a";
-    y = null;
-  } { x = "b"; } == {
-    x = [
-      "a"
-      "b"
-    ];
-    y = [ ];
-  };
+  builtins.match ".*subjectCredentials.*" t == null
+  && builtins.match ".*secrets_manager_hydrated.*" c == null
+  && builtins.match ".*backup-creds.*" c != null;
 true

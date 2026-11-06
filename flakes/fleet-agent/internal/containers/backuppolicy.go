@@ -74,9 +74,15 @@ const backupPolicyHelp = `usage: fleet containers backup-policy <command>
   clear <subject> local|b2|both
                                queue a repo deletion on the holding target (asks for
                                the typed confirmation "clear svc-<subject> <scope>")
+  rotate <subject>             new REST password (writers); the old one keeps working
+                               on each target until its heartbeat applies the new one
   heartbeat --id <host> --url <rest:http://…/> [--pusher] [--stats FILE] [--out FILE]
-                               target only: register, post stats, save the reply
-                               (presets, pending clears) for prune/clear units
+            [--creds-out FILE] [--applied FILE]
+                               target only: register, post stats and applied REST
+                               revisions, save the reply (presets, pending clears) for
+                               prune/clear units and the REST logins (root 0600)
+  repo-keys --id <host> --dir DIR
+                               target only: RESTIC_PASSWORD per held repo, DIR/svc-<s>
 
 Writes need a backup writer's machine key: sudo fleet containers backup-policy set …
 `
@@ -99,6 +105,10 @@ func cmdBackupPolicy(args []string) error {
 		return backupPolicyClear(c, args[1:], os.Stdin, os.Stdout)
 	case "heartbeat":
 		return backupHeartbeat(c, args[1:])
+	case "repo-keys":
+		return backupRepoKeys(c, args[1:])
+	case "rotate":
+		return backupRotate(c, args[1:], os.Stdout)
 	}
 	fmt.Fprint(usageOut, backupPolicyHelp)
 	return fmt.Errorf("backup-policy: unknown command %q", args[0])
@@ -261,7 +271,7 @@ func backupPolicyClear(c edgeDoer, args []string, in interface{ Read([]byte) (in
 // stats unit's output: {subject: stats}; cleared.json (next to --out) lists
 // finished clears and is removed once reported.
 func backupHeartbeat(c edgeDoer, args []string) error {
-	var id, url, statsFile, outFile string
+	var id, url, statsFile, outFile, credsOut, appliedFile string
 	pusher := false
 	for len(args) > 0 {
 		switch args[0] {
@@ -273,6 +283,10 @@ func backupHeartbeat(c edgeDoer, args []string) error {
 			statsFile, args = need(args), args[2:]
 		case "--out":
 			outFile, args = need(args), args[2:]
+		case "--creds-out":
+			credsOut, args = need(args), args[2:]
+		case "--applied":
+			appliedFile, args = need(args), args[2:]
 		case "--pusher":
 			pusher, args = true, args[1:]
 		default:
@@ -294,6 +308,14 @@ func backupHeartbeat(c edgeDoer, args []string) error {
 			return err
 		}
 	}
+	if appliedFile != "" {
+		if b, err := os.ReadFile(appliedFile); err == nil {
+			var ap map[string]int64
+			if json.Unmarshal(b, &ap) == nil {
+				body["applied"] = ap
+			}
+		}
+	}
 	clearedFile := filepath.Join(filepath.Dir(outFile), "cleared.json")
 	if b, err := os.ReadFile(clearedFile); err == nil {
 		var cl map[string][]string
@@ -303,6 +325,10 @@ func backupHeartbeat(c edgeDoer, args []string) error {
 	}
 	var reply json.RawMessage
 	if err := c.do("POST", "/api/backup/targets/"+id, body, &reply); err != nil {
+		return err
+	}
+	reply, err := splitHeartbeatReply(reply, credsOut)
+	if err != nil {
 		return err
 	}
 	if body["cleared"] != nil {

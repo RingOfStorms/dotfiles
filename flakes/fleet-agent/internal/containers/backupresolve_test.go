@@ -124,7 +124,7 @@ func TestMoveRefusesTargetWithoutGrant(t *testing.T) {
 	m := newMoveRig(t)
 	must(t, os.WriteFile(m.dstState()+"/no-grant", nil, 0o644))
 	err := runMove(t)
-	if err == nil || !strings.Contains(err.Error(), "preflight") && !strings.Contains(m.calls(), "restic_svc-") {
+	if err == nil || !strings.Contains(err.Error(), "preflight") {
 		t.Fatalf("expected a preflight refusal, got %v", err)
 	}
 	if strings.Contains(m.calls(), "\nsystemctl stop") {

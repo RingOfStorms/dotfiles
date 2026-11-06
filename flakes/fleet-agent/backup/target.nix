@@ -1,7 +1,7 @@
 # Backup target tier (containers/BACKUP-PLAN.md §2.1, §2.5, §2.8, §4.3).
 #
 # rest-server on :8000 (socket activated), append-only, privateRepos, htpasswd
-# rendered into /run from the hydrated per-subject secrets, a per-repo prune
+# rendered into /run from fleet-edge's REST-login feed (heartbeat), a per-repo prune
 # run as `restic`, and the tailnet firewall rule. No B2 key here (pusher tier).
 {
   config,
@@ -26,48 +26,81 @@ let
     RequiresMountsFor = cfg.requiresMount;
     ConditionPathIsMountPoint = cfg.requiresMount;
   };
-  subjectNames = builtins.attrNames cfg.subjectCredentials;
 
   presets = {
-    short = [ "--keep-daily" "3" "--keep-weekly" "2" "--keep-monthly" "1" ];
-    standard = [ "--keep-daily" "7" "--keep-weekly" "5" "--keep-monthly" "12" "--keep-yearly" "3" ];
-    long = [ "--keep-daily" "14" "--keep-weekly" "8" "--keep-monthly" "24" "--keep-yearly" "5" ];
+    short = [
+      "--keep-daily"
+      "3"
+      "--keep-weekly"
+      "2"
+      "--keep-monthly"
+      "1"
+    ];
+    standard = [
+      "--keep-daily"
+      "7"
+      "--keep-weekly"
+      "5"
+      "--keep-monthly"
+      "12"
+      "--keep-yearly"
+      "3"
+    ];
+    long = [
+      "--keep-daily"
+      "14"
+      "--keep-weekly"
+      "8"
+      "--keep-monthly"
+      "24"
+      "--keep-yearly"
+      "5"
+    ];
   };
 
-  # Root oneshot: one `user:$2y$…` line per subject secret, atomic rename.
+  # Root oneshot: one `user:$2y$…` line per subject login from fleet-edge's
+  # heartbeat feed (credsFeed, root 0600; never holds repo passwords), atomic
+  # rename, then applied.json {subject: restRevision} for the next heartbeat.
+  # No feed yet: an empty htpasswd (nobody logs in).
   renderScript = pkgs.writeShellScript "render-htpasswd" ''
     set -euo pipefail
     umask 0077
     install -d -m 0750 -o root -g restic ${htDir}
     tmp=$(mktemp ${htDir}/.htpasswd.XXXXXX)
     trap 'rm -f "$tmp"' EXIT
-    field() { ${pkgs.gnused}/bin/sed -n "s/^$1=//p" "$2" | ${pkgs.coreutils}/bin/tail -n1; }
-    ${lib.concatMapStrings (name: ''
-      f=${lib.escapeShellArg cfg.subjectCredentials.${name}}
-      # Empty = the agent's tmpfiles placeholder: not hydrated yet.
-      if [ ! -s "$f" ]; then
-        echo "render-htpasswd: $f not hydrated; ${name} gets no login" >&2
-      else
-      u=$(field RESTIC_REST_USERNAME "$f")
-      p=$(field RESTIC_REST_PASSWORD "$f")
-      if [ "$u" != ${lib.escapeShellArg name} ] || [ -z "$p" ]; then
-        echo "render-htpasswd: $f: RESTIC_REST_USERNAME must be ${name} and RESTIC_REST_PASSWORD non-empty" >&2
-        exit 1
-      fi
-      line=$(printf '%s' "$p" | ${pkgs.apacheHttpd}/bin/htpasswd -niB "$u")
-      case "$line" in
-        "$u:\$2y\$"*) printf '%s\n' "$line" >>"$tmp" ;;
-        *) echo "render-htpasswd: unexpected htpasswd output for $u" >&2; exit 1 ;;
-      esac
-      fi
-    '') subjectNames}
+    applied='{}'
+    if [ -s ${credsFeed} ]; then
+      while IFS=$'\t' read -r s u p rev; do
+        case "$s" in ""|*[!a-z0-9-]*) echo "render-htpasswd: bad subject '$s'" >&2; exit 1 ;; esac
+        if [ "$u" != "svc-$s" ] || [ -z "$p" ]; then
+          echo "render-htpasswd: $s: username must be svc-$s and the password non-empty" >&2
+          exit 1
+        fi
+        line=$(printf '%s' "$p" | ${pkgs.apacheHttpd}/bin/htpasswd -niB "$u")
+        case "$line" in
+          "$u:\$2y\$"*) printf '%s\n' "$line" >>"$tmp" ;;
+          *) echo "render-htpasswd: unexpected htpasswd output for $u" >&2; exit 1 ;;
+        esac
+        applied=$(${jq} -c --arg s "$s" --argjson r "$rev" '.[$s] = $r' <<<"$applied")
+      done < <(${jq} -r 'to_entries[] | [.key, .value.username, .value.restPassword, (.value.restRevision|tostring)] | @tsv' ${credsFeed})
+    fi
     chgrp restic "$tmp"
     chmod 0640 "$tmp"
     mv -f "$tmp" ${htFile}
     trap - EXIT
+    a=$(mktemp ${keyState}/.applied.XXXXXX)
+    printf '%s\n' "$applied" >"$a"
+    mv -f "$a" ${appliedFile}
   '';
 
   stateDir = "/var/lib/fleet-backup-target";
+  # Root-only: REST logins (htpasswd input) and, separately, the repo
+  # passwords of held repos (prune/stats via LoadCredential). Never readable
+  # by `restic` directly.
+  keyState = "/var/lib/fleet-backup-target-keys";
+  credsFeed = "${keyState}/rest-logins.json";
+  appliedFile = "${keyState}/applied.json";
+  repoKeysDir = "${keyState}/repo-keys";
   policyFile = "${stateDir}/policy.json";
   jq = "${pkgs.jq}/bin/jq";
   repoUrl = "rest:http://${hosts.${self}.overlayIp or ""}:${toString port}/";
@@ -79,8 +112,19 @@ let
     set -euo pipefail
     ${lib.getExe config.ringofstorms.fleetAgent.package} containers backup-policy heartbeat \
       --id ${lib.escapeShellArg self} --url ${lib.escapeShellArg repoUrl} \
-      --stats ${stateDir}/stats.json --out ${policyFile}
+      --stats ${stateDir}/stats.json --out ${policyFile} \
+      --creds-out ${credsFeed}.new --applied ${appliedFile}
     chown restic:restic ${policyFile}
+    # New REST logins (rotation, new subject): re-render and SIGHUP rest-server.
+    if [ -s ${credsFeed}.new ] && ! ${pkgs.diffutils}/bin/cmp -s ${credsFeed}.new ${credsFeed}; then
+      mv -f ${credsFeed}.new ${credsFeed}
+      systemctl reload-or-restart render-htpasswd.service
+    else
+      rm -f ${credsFeed}.new
+    fi
+    # Repo passwords of the repos this target holds (§2.7), for prune/stats.
+    ${lib.getExe config.ringofstorms.fleetAgent.package} containers backup-policy repo-keys \
+      --id ${lib.escapeShellArg self} --dir ${repoKeysDir} >/dev/null
   '';
 
   # preset NAME: the policy's preset for subject NAME, else cfg.prunePreset
@@ -93,7 +137,9 @@ let
     }
     presetArgs() {
       case "$1" in
-      ${lib.concatStrings (lib.mapAttrsToList (n: a: "  ${n}) echo ${lib.escapeShellArgs a} ;;\n") presets)}
+      ${lib.concatStrings (
+        lib.mapAttrsToList (n: a: "  ${n}) echo ${lib.escapeShellArgs a} ;;\n") presets
+      )}
       esac
     }
   '';
@@ -111,7 +157,7 @@ let
     for repo in ${cfg.dataDir}/svc-*/; do
       repo=''${repo%/}
       name=''${repo##*/}
-      cred="''${CREDENTIALS_DIRECTORY:-/nonexistent}/$name"
+      cred="''${CREDENTIALS_DIRECTORY:-/nonexistent}/repo_$name"
       [ -r "$cred" ] || continue
       pw=$(mktemp)
       ${pkgs.gnused}/bin/sed -n 's/^RESTIC_PASSWORD=//p' "$cred" | ${pkgs.coreutils}/bin/tail -n1 >"$pw"
@@ -152,7 +198,8 @@ let
     mv -f "$tmp" ${stateDir}/cleared.json
   '';
 
-  # Runs as `restic`. Subject passwords arrive via LoadCredential (<subject>).
+  # Runs as `restic`. Repo passwords arrive via LoadCredential (repo_svc-<s>,
+  # from the heartbeat's repo-keys fetch).
   # Presets come from the policy reply (heartbeat), else cfg.prunePreset.
   pruneScript = pkgs.writeShellScript "fleet-backup-target-prune" ''
     set -uo pipefail
@@ -163,7 +210,7 @@ let
     for repo in ${cfg.dataDir}/svc-*/; do
       repo=''${repo%/}
       name=''${repo##*/}
-      cred="''${CREDENTIALS_DIRECTORY:-/nonexistent}/$name"
+      cred="''${CREDENTIALS_DIRECTORY:-/nonexistent}/repo_$name"
       if [ ! -r "$cred" ]; then
         echo "prune: $name: no credential on this target, skipped" >&2
         rc=1
@@ -213,16 +260,12 @@ in
       example = [ "joe" ];
       description = "Low-trust hosts also admitted to :${toString port} (§7).";
     };
-    subjectCredentials = lib.mkOption {
-      type = lib.types.attrsOf lib.types.str;
-      default = { };
-      example = {
-        svc-canary = "/var/lib/secrets_manager_hydrated/restic_canary_2026-11-04";
-      };
-      description = "htpasswd user / repo name (svc-<subject>) -> hydrated subject secret (RESTIC_PASSWORD, RESTIC_REST_USERNAME, RESTIC_REST_PASSWORD).";
-    };
     prunePreset = lib.mkOption {
-      type = lib.types.enum [ "short" "standard" "long" ];
+      type = lib.types.enum [
+        "short"
+        "standard"
+        "long"
+      ];
       default = "long";
       description = "Retention preset used until the fleet-edge policy exists (P2). `long` is the safe direction.";
     };
@@ -269,10 +312,6 @@ in
         message = "ringofstorms.backup.target.lowTrustClients must name trust = \"low\" hosts only (high trust is already admitted).";
       }
       {
-        assertion = builtins.all (n: builtins.match "svc-[a-z0-9][a-z0-9-]*" n != null) subjectNames;
-        message = "ringofstorms.backup.target.subjectCredentials keys must be svc-<subject>.";
-      }
-      {
         assertion = config.users.users.restic.uid == 291 && config.users.groups.restic.gid == 291;
         message = "ringofstorms.backup.target: restic must keep the fixed uid/gid 291 (impermanent root).";
       }
@@ -291,7 +330,7 @@ in
     users.users.restic.createHome = lib.mkForce false;
 
     systemd.services.render-htpasswd = {
-      description = "Render rest-server htpasswd from backup subject secrets";
+      description = "Render rest-server htpasswd from fleet-edge's backup REST logins";
       before = [ "restic-rest-server.service" ];
       wantedBy = [ "multi-user.target" ];
       serviceConfig = {
@@ -321,7 +360,7 @@ in
         User = "restic";
         Group = "restic";
         ExecStart = pruneScript;
-        LoadCredential = map (n: "${n}:${cfg.subjectCredentials.${n}}") subjectNames;
+        LoadCredential = [ "repo:${repoKeysDir}" ];
         ReadWritePaths = [ cfg.dataDir ];
         ReadOnlyPaths = [ stateDir ];
         CacheDirectory = "fleet-backup-target";
@@ -330,7 +369,11 @@ in
       };
     };
 
-    systemd.tmpfiles.rules = [ "d ${stateDir} 0700 restic restic -" ];
+    systemd.tmpfiles.rules = [
+      "d ${stateDir} 0700 restic restic -"
+      "d ${keyState} 0700 root root -"
+      "d ${repoKeysDir} 0700 root root -"
+    ];
 
     systemd.services.fleet-backup-target-heartbeat = {
       description = "Register this backup target with fleet-edge and fetch its policy";
@@ -360,7 +403,7 @@ in
         User = "restic";
         Group = "restic";
         ExecStart = statsScript;
-        LoadCredential = map (n: "${n}:${cfg.subjectCredentials.${n}}") subjectNames;
+        LoadCredential = [ "repo:${repoKeysDir}" ];
         ReadOnlyPaths = [ cfg.dataDir ];
         ReadWritePaths = [ stateDir ];
         CacheDirectory = "fleet-backup-target";
@@ -401,7 +444,9 @@ in
 
     networking.firewall.extraInputRules = ''
       iifname "tailscale0" ip saddr { ${lib.concatStringsSep ", " allow.ips} } tcp dport ${toString port} accept comment "generated: restic rest-server, backup clients only"
-      ${lib.optionalString (allow.ips6 != [ ]) ''iifname "tailscale0" ip6 saddr { ${lib.concatStringsSep ", " allow.ips6} } tcp dport ${toString port} accept comment "generated: restic rest-server, backup clients only (v6)"''}
+      ${lib.optionalString (allow.ips6 != [ ])
+        ''iifname "tailscale0" ip6 saddr { ${lib.concatStringsSep ", " allow.ips6} } tcp dport ${toString port} accept comment "generated: restic rest-server, backup clients only (v6)"''
+      }
     '';
   };
 }

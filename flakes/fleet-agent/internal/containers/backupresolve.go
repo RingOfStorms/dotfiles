@@ -225,13 +225,16 @@ func resticCmd(subject, repo string) string {
 }
 
 // backupPreflightScript (both move hosts, §2.9): the subject resolves to a
-// target (not none) on this host, this host holds the subject's credential,
+// target (not none) on this host, h005 hands this host the subject's
+// credentials now (a fresh fetch, not the cache: placed here or the
+// in-flight move's destination),
 // and that credential can read and lock the subject's repo (`snapshots`
 // takes a lock). Without it a move would stop the source and then fail.
 func backupPreflightScript(s Service, host string) string {
 	return fmt.Sprintf(`res=$(fleet containers backup-resolve %[1]s) || { echo "%[2]s: %[1]s resolves to no backup target" >&2; exit 1; }
 case "$res" in *target=none*) echo "%[2]s: %[1]s has backups off (target=none); set a target first" >&2; exit 1 ;; esac
-%[3]s snapshots --latest 1 --quiet </dev/null >/dev/null || { echo "%[2]s cannot read or lock the svc-%[1]s repo (missing grant restic_svc-%[1]s for %[2]s? reviewed registry change, deploy sec, then move)" >&2; exit 1; }
+cr=$(fleet containers backup-creds %[1]s) && case "$cr" in *source=api*) ;; *) false ;; esac || { echo "%[2]s: h005 did not hand out the %[1]s backup credentials (not placed here or reserved as the move destination, or fleet-edge down)" >&2; exit 1; }
+%[3]s snapshots --latest 1 --quiet </dev/null >/dev/null || { echo "%[2]s cannot read or lock the svc-%[1]s repo (wrong credentials, or the target has not applied the REST password yet)" >&2; exit 1; }
 `, s.Name, host, resticCmd(s.Name, ""))
 }
 

@@ -5,7 +5,7 @@ import ../_shared_assets/utilities/sec-agent.nix {
   # Backups use B2, not fleet SSH. Git+SSH flake inputs still need the
   # Forgejo/GitHub keys supplied by includeGitKeys.
   includeFleetSshKeys = false;
-  extraSecrets = (import ../../containers/backup-subjects.nix).clientSecrets "h001" // {
+  extraSecrets = {
     # Credentials of the shared `josh` atuin account, readable by the local
     # primary user's atuin-autologin.
     "atuin-key-josh_2026-03-15" = {
@@ -49,7 +49,7 @@ import ../_shared_assets/utilities/sec-agent.nix {
     };
 
     # EnvironmentFile for h001's host restic job (mods/restic-backup.nix,
-    # old B2 repo, --tag h001). Containers use restic_svc-* (backup-subjects.nix):
+    # old B2 repo, --tag h001). Containers get per-subject credentials from h005 fleet-edge:
     # RESTIC_REPOSITORY, RESTIC_PASSWORD and the backend credentials.
     restic_h001_env_2026-10-01 = {
       remotePath = "machines/high-trust/restic_h001_env_2026-10-01";

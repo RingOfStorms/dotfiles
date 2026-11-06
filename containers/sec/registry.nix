@@ -11,8 +11,7 @@
 # every low-trust key carries both `device_high_trust` and
 # `device_low_trust` (high-trust is a superset). Per-host keys use
 # `sub` grants with Zitadel service-account userIds.
-(import ../backup-subjects.nix).registry
-// {
+{
   # ── high-trust: SSH keys ──────────────────────────────────────
   "machines/high-trust/nix2nix_2026-03-15" = {
     fields = [ "value" ];
@@ -269,23 +268,6 @@
       {
         type = "role";
         value = "device_low_trust";
-      }
-    ];
-  };
-
-  # ── backup subjects (containers/BACKUP-PLAN.md §2.7) ─────────
-  # sub grants only: the hosts the subject is placed on, plus every target.
-  "machines/backup/restic_svc-canary_2026-11-04" = {
-    fields = [ "value" ];
-    description = "Backup subject svc-canary (P1 canary): RESTIC_PASSWORD, RESTIC_REST_USERNAME=svc-canary, RESTIC_REST_PASSWORD.";
-    access = [
-      {
-        type = "sub";
-        value = "394968645089886211"; # h004
-      }
-      {
-        type = "sub";
-        value = "344412093056811011"; # lio
       }
     ];
   };

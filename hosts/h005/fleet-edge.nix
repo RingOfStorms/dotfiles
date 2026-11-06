@@ -130,7 +130,9 @@ in
             peer = fleet.hosts.h004.overlayIp;
           };
         };
-        hostSubjects = { };
+        # P1 canary (§5): a host subject of lio, so lio may fetch its
+        # credentials and h004 serves its login.
+        hostSubjects.lio = [ "canary" ];
         # /backup/ editor (oauth2-proxy-gated below): Zitadel role `admin`
         # (flatRolesClaim -> X-Auth-Request-Groups) may write.
         uiGroup = "admin";

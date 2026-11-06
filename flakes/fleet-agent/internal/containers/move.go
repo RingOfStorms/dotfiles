@@ -137,7 +137,7 @@ func parseStamp(s string) (backupStamp, error) {
 }
 
 func backupCheckScript(host string) string {
-	return fmt.Sprintf("if [ ! -e %s ] || ! command -v fleet-restic >/dev/null; then echo \"%s has no fleet-backup (set ringofstorms.containers.backup.enable and grant its restic_svc-* keys)\" >&2; exit 1; fi\n",
+	return fmt.Sprintf("if [ ! -e %s ] || ! command -v fleet-restic >/dev/null; then echo \"%s has no fleet-backup (set ringofstorms.containers.backup.enable)\" >&2; exit 1; fi\n",
 		q(backupMarker), host)
 }
 

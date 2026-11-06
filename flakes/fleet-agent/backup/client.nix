@@ -1,9 +1,11 @@
 # Backup client tier (containers/BACKUP-PLAN.md §2.1, §2.4, §3).
 #
 # One repo per subject (svc-<name>) on the target the fleet-edge policy
-# names; the per-subject credential (RESTIC_PASSWORD, RESTIC_REST_USERNAME,
-# RESTIC_REST_PASSWORD) is hydrated by sec-agent and registered in
-# `credentials`. Subjects are floating services (the containers module fills
+# names; the per-subject credentials (RESTIC_PASSWORD, RESTIC_REST_USERNAME,
+# RESTIC_REST_PASSWORD) come from h005 fleet-edge (`fleet containers
+# backup-creds`, only while the subject is placed here or this host is its
+# move destination), cached root 0600 in credsDir for when fleet-edge is down
+# (§2.7). Subjects are floating services (the containers module fills
 # `containers`) and host subjects (`ringofstorms.backup.subjects`).
 #
 # The repos are append-only: this client NEVER runs forget or prune.
@@ -20,9 +22,7 @@ let
   fleetLib = import ../../../containers/lib.nix;
   fleetBin = lib.getExe config.ringofstorms.fleetAgent.package;
   cacheFile = "/var/lib/fleet-backup/target.json";
-  credList = pkgs.writeText "fleet-backup-credentials" (
-    lib.concatStrings (lib.mapAttrsToList (n: p: "${n} ${p}\n") cfg.credentials)
-  );
+  credsDir = "/var/lib/fleet-backup/creds";
   cont = cfg.containers;
 
   # Host-subject validation (§3.3): names never collide with a service,
@@ -137,7 +137,7 @@ let
       elif [ -e ${cont.mutableDir}/fleet-$1.service ]; then echo fleet-$1.service
       fi
     }
-    cred() { awk -v s="$1" '$1 == s { print $2 }' ${credList}; }
+    cred() { ${fleetBin} containers backup-creds "$1" --dir ${credsDir} | sed -n 's/^creds=//p'; }
     field() { sed -n "s/^$1=//p" "$2" | tail -n1; }
 
     # Runtime checks for one extra path (§3.3): local, present, mounted.
@@ -211,7 +211,7 @@ let
           *) echo "$name: resolver gave a bad repo '$repo'" >&2; exit 1 ;; esac
 
         c=$(cred "$name")
-        [ -n "$c" ] && [ -s "$c" ] || { echo "$name: no hydrated credential on $host (grant restic_svc-$name in sec-agent.nix)" >&2; exit 1; }
+        [ -n "$c" ] && [ -s "$c" ] || { echo "$name: no backup credentials for $host from h005 (not placed here?)" >&2; exit 1; }
         RESTIC_PASSWORD=$(field RESTIC_PASSWORD "$c")
         RESTIC_REST_USERNAME=$(field RESTIC_REST_USERNAME "$c")
         RESTIC_REST_PASSWORD=$(field RESTIC_REST_PASSWORD "$c")
@@ -307,8 +307,8 @@ let
       esac
     done
     [ -n "$subject" ] || { echo "usage: fleet-restic --subject <name> [-r <repo>] <restic args>" >&2; exit 2; }
-    c=$(${pkgs.gawk}/bin/awk -v s="$subject" '$1 == s { print $2 }' ${credList})
-    [ -n "$c" ] && [ -s "$c" ] || { echo "fleet-restic: no hydrated credential for $subject on this host" >&2; exit 1; }
+    c=$(${fleetBin} containers backup-creds "$subject" --dir ${credsDir} | ${pkgs.gnused}/bin/sed -n 's/^creds=//p')
+    [ -n "$c" ] && [ -s "$c" ] || { echo "fleet-restic: no backup credentials for $subject on this host" >&2; exit 1; }
     field() { ${pkgs.gnused}/bin/sed -n "s/^$1=//p" "$c" | ${pkgs.coreutils}/bin/tail -n1; }
     if [ -z "$repo" ]; then
       res=$(${fleetBin} containers backup-resolve "$subject" --cache ${cacheFile})
@@ -359,14 +359,6 @@ in
         type = lib.types.str;
         default = "/var/lib/fleet-backup/backup-last";
         description = "Success stamps, one file per subject. The containers module sets /var/lib/fleet-containers/backup-last.";
-      };
-      credentials = lib.mkOption {
-        type = lib.types.attrsOf lib.types.str;
-        default = { };
-        example = {
-          forgejo = "/var/lib/secrets_manager_hydrated/restic_svc-forgejo_2026-11-05";
-        };
-        description = "Subject name -> hydrated credential file (usually set by sec-agent configChanges).";
       };
       containers = {
         enable = lib.mkOption {

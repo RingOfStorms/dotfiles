@@ -85,6 +85,7 @@ exit 0
 `)
 	writeExe(t, filepath.Join(r.bin, "fleet"), "#!"+bash+`
 echo "fleet $*" >> `+r.log+`
+if [ "$1 $2" = "containers backup-creds" ]; then [ -e "$FAKE_STATE/no-grant" ] && { echo "h005 403" >&2; exit 1; }; echo "creds=/x/$3.env"; echo source=api; exit 0; fi
 [ "$1 $2" = "containers backup-resolve" ] || exit 2
 if [ -e "$FAKE_STATE/target-none" ]; then echo target=none; else echo target=h004; echo "repo=rest:http://100.64.0.4:8000/svc-$3/"; fi
 `)

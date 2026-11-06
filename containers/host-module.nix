@@ -504,7 +504,8 @@ in
           host, one repo per service (svc-<name>) on the target the
           fleet-edge policy names: backup.hooks.pre (if running), SQLite
           online copies, the snapshot, backup.hooks.post. Credentials:
-          ringofstorms.backup.client.credentials.<svc> (sec-agent). Unit:
+          fetched from h005 fleet-edge while the service is placed here
+          (fleet containers backup-creds). Unit:
           fleet-backup.service (flakes/fleet-agent/backup/client.nix).
         '';
       };

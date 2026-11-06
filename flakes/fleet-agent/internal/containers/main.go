@@ -308,6 +308,8 @@ func dispatch(cmd string, rest []string) (known bool, err error) {
 		err = cmdRestoreCheck(rest)
 	case "backup-policy":
 		err = cmdBackupPolicy(rest)
+	case "backup-creds":
+		err = cmdBackupCreds(rest)
 	case "backup-resolve":
 		err = cmdBackupResolve(rest)
 	case "health":

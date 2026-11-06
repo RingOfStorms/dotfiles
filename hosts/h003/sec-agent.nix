@@ -5,7 +5,7 @@ import ../_shared_assets/utilities/sec-agent.nix {
   # Deploys originate on operator workstations; this host needs no fleet
   # root SSH key. Git+SSH flake inputs still need includeGitKeys.
   includeFleetSshKeys = false;
-  extraSecrets = (import ../../containers/backup-subjects.nix).clientSecrets "h003" // {
+  extraSecrets = {
     # Credentials of the shared `josh` atuin account, readable by the local
     # primary user's atuin-autologin.
     "atuin-key-josh_2026-03-15" = {

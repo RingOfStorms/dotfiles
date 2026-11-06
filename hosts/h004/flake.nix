@@ -98,15 +98,12 @@
           ({
             ringofstorms.fleetAgent.extraFilesystems = [ "/data" ];
             # Backup target tier (containers/BACKUP-PLAN.md P1). dataDir is
-            # the /data/backups subvolume owned by nfs-data.nix. Subject
-            # logins come from their registry keys (sec-agent.nix).
+            # the /data/backups subvolume owned by nfs-data.nix. REST
+            # logins and held repo keys come from h005 fleet-edge (§2.7).
             ringofstorms.backup.target = {
               enable = true;
               dataDir = "/data/backups";
               requiresMount = "/data";
-              subjectCredentials = (import ../../containers/backup-subjects.nix).subjectCredentials // {
-                svc-canary = "/var/lib/secrets_manager_hydrated/restic_svc-canary_2026-11-04";
-              };
             };
           })
         ]
