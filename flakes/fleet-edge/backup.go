@@ -82,5 +82,36 @@ func newBackup(path string, overrideWriters map[string]authority.Writer, v autho
 		}
 		return snap().Host[subject] == host
 	}
-	return backup.New(backup.Config{StateDir: stateDir, Writers: wa, Targets: ta, Readers: ra, Subjects: subjects, Owns: owns})
+	return backup.New(backup.Config{StateDir: stateDir, Writers: wa, Targets: ta, Readers: ra, Subjects: subjects, Owns: owns,
+		Placement: func(subject string) (string, string) {
+			if h, ok := owner[subject]; ok {
+				return h, ""
+			}
+			return placementOf(snap(), subject)
+		}})
+}
+
+// placementOf is subject's committed host and in-flight move destination
+// (BACKUP-PLAN.md §2.7). While a move is prepared (or fenced stale) the
+// source stays the committed host and the reserved destination is pending;
+// once committed (or retiring) the destination is the host.
+func placementOf(e placements.Export, subject string) (host, pending string) {
+	for _, r := range e.Rows {
+		if r.Service != subject {
+			continue
+		}
+		switch r.State {
+		case placements.Prepared, placements.Stale:
+			if r.Previous != nil {
+				host = r.Previous.Host
+			}
+			if r.Host != host {
+				pending = r.Host
+			}
+		default:
+			host = r.Host
+		}
+		return host, pending
+	}
+	return "", ""
 }

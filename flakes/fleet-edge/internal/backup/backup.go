@@ -71,6 +71,9 @@ type Target struct {
 	DeclaredBy string           `json:"declaredBy"`
 	Seen       int64            `json:"seen"`
 	Stats      map[string]Stats `json:"stats,omitempty"`
+	// Applied is the REST password revision per subject this target reports
+	// it has rendered into its htpasswd.
+	Applied map[string]int64 `json:"applied,omitempty"`
 }
 
 // Stale reports whether the last heartbeat is older than StaleAfter.
@@ -113,7 +116,12 @@ type Config struct {
 	Subjects func() []string
 	// Owns reports whether host may read subject (placement or host subject).
 	Owns func(host, subject string) bool
-	Now  func() time.Time
+	// Placement is the live binding of subject: the committed host (or the
+	// owning host of a host subject) and the destination of an in-flight
+	// move ("" for none). It gates credential fetches and, on change of the
+	// committed host, rotates the REST password.
+	Placement func(subject string) (host, pending string)
+	Now       func() time.Time
 }
 
 // Service is the authority.
@@ -124,6 +132,9 @@ type Service struct {
 	targets map[string]*Target
 	rev     int64
 	audit   *os.File
+	// auditNote is extra text for the current request's audit line (mu held).
+	auditNote string
+	creds     *credsFile
 }
 
 type rowsFile struct {
@@ -145,7 +156,10 @@ func New(cfg Config) (*Service, error) {
 	if cfg.Owns == nil {
 		cfg.Owns = func(string, string) bool { return false }
 	}
-	s := &Service{cfg: cfg, rows: map[string]*Row{}, targets: map[string]*Target{}}
+	if cfg.Placement == nil {
+		cfg.Placement = func(string) (string, string) { return "", "" }
+	}
+	s := &Service{cfg: cfg, rows: map[string]*Row{}, targets: map[string]*Target{}, creds: &credsFile{}}
 	var rf rowsFile
 	if err := readJSON(filepath.Join(cfg.StateDir, "backup.json"), &rf); err != nil {
 		return nil, err
@@ -163,6 +177,12 @@ func New(cfg Config) (*Service, error) {
 	}
 	for _, t := range ts {
 		s.targets[t.ID] = t
+	}
+	if err := readJSON(s.credsPath(), s.creds); err != nil {
+		return nil, err
+	}
+	if s.creds.Creds == nil {
+		s.creds.Creds = map[string]*Cred{}
 	}
 	var err error
 	s.audit, err = os.OpenFile(filepath.Join(cfg.StateDir, "backup-audit.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
@@ -424,8 +444,9 @@ func (s *Service) handleAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.auditNote = ""
 	out, err := s.route(r, w, c, role)
-	e := auditEntry{Host: c.Host, Role: role, Sub: c.Sub, Peer: c.Peer, Action: act, Code: 200}
+	e := auditEntry{Host: c.Host, Role: role, Sub: c.Sub, Peer: c.Peer, Action: act, Code: 200, Message: s.auditNote}
 	if err != nil {
 		var he *httpErr
 		if !errors.As(err, &he) {
@@ -458,6 +479,7 @@ func (s *Service) route(r *http.Request, w http.ResponseWriter, c authority.Call
 	if rest == "" {
 		parts = nil
 	}
+	s.syncBindings()
 	full := role == roleWriter || role == roleTarget
 	switch {
 	case len(parts) == 0:
@@ -468,6 +490,19 @@ func (s *Service) route(r *http.Request, w http.ResponseWriter, c authority.Call
 			return nil, fail(403, "readers get /api/backup/<subject> for their own subjects only")
 		}
 		return s.export(), nil
+	case parts[0] == "targets" && len(parts) == 3 && parts[2] == "repo-keys":
+		if r.Method != http.MethodGet {
+			return nil, fail(405, "method not allowed")
+		}
+		if role != roleTarget || c.Host != parts[1] {
+			return nil, fail(403, "%s may not read repo keys of target %s", c.Host, parts[1])
+		}
+		keys, err := s.repoKeys(parts[1])
+		if err != nil {
+			return nil, err
+		}
+		s.auditNote = "repo keys: " + strings.Join(sortedKeys(keys), " ")
+		return map[string]any{"repoKeys": keys}, nil
 	case parts[0] == "targets" && len(parts) == 2:
 		id := parts[1]
 		switch r.Method {
@@ -525,6 +560,31 @@ func (s *Service) route(r *http.Request, w http.ResponseWriter, c authority.Call
 			return nil, err
 		}
 		return s.put(c.Host, subject, req)
+	case len(parts) == 2 && parts[1] == "credentials" && r.Method == http.MethodGet:
+		if subject == Default || !s.mayFetch(c.Host, subject) {
+			return nil, fail(403, "%s is neither placed nor moving to %s: no credentials", subject, c.Host)
+		}
+		cc, err := s.clientCred(subject)
+		if err != nil {
+			return nil, err
+		}
+		s.auditNote = fmt.Sprintf("credentials fetched, restRevision %d", cc.RestRevision)
+		return cc, nil
+	case len(parts) == 2 && parts[1] == "rotate" && r.Method == http.MethodPost:
+		if role != roleWriter {
+			return nil, fail(403, "only writers rotate")
+		}
+		if subject == Default {
+			return nil, fail(400, "the default row has no credentials")
+		}
+		if _, err := s.ensureCred(subject); err != nil {
+			return nil, err
+		}
+		cr, err := s.rotate(subject, "manual ("+c.Host+")")
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"subject": subject, "restRevision": cr.RestRevision}, nil
 	case len(parts) == 2 && parts[1] == "clear" && r.Method == http.MethodPost:
 		if role != roleWriter {
 			return nil, fail(403, "only writers clear")
@@ -682,6 +742,8 @@ type Heartbeat struct {
 	Stats  map[string]Stats `json:"stats"`
 	// Cleared reports finished clears: subject -> scopes done.
 	Cleared map[string][]string `json:"cleared,omitempty"`
+	// Applied reports the REST password revision rendered per subject.
+	Applied map[string]int64 `json:"applied,omitempty"`
 }
 
 // HeartbeatReply tells a target its retention per repo and pending clears.
@@ -691,6 +753,9 @@ type HeartbeatReply struct {
 	Offsite     []string            `json:"offsite"`
 	Clears      map[string]string   `json:"clears"`
 	Presets     map[string][]string `json:"presets"`
+	// Credentials: every subject's HTTP login for htpasswd. Never the repo
+	// password (that is /repo-keys, per held repo).
+	Credentials map[string]RestCred `json:"credentials"`
 }
 
 func (s *Service) heartbeat(host, id string, hb Heartbeat) (HeartbeatReply, error) {
@@ -712,6 +777,9 @@ func (s *Service) heartbeat(host, id string, hb Heartbeat) (HeartbeatReply, erro
 	if hb.Stats != nil {
 		t.Stats = hb.Stats
 	}
+	if hb.Applied != nil {
+		t.Applied = hb.Applied
+	}
 	rowsDirty := false
 	for subject, done := range hb.Cleared {
 		r := s.rows[subject]
@@ -721,6 +789,13 @@ func (s *Service) heartbeat(host, id string, hb Heartbeat) (HeartbeatReply, erro
 		r.Clear.Done = append(r.Clear.Done, done...)
 		rowsDirty = true
 	}
+	for _, n := range s.cfg.Subjects() {
+		if subjectRe.MatchString(n) {
+			if _, err := s.ensureCred(n); err != nil {
+				return HeartbeatReply{}, err
+			}
+		}
+	}
 	if err := s.saveTargets(); err != nil {
 		return HeartbeatReply{}, err
 	}
@@ -729,7 +804,7 @@ func (s *Service) heartbeat(host, id string, hb Heartbeat) (HeartbeatReply, erro
 			return HeartbeatReply{}, err
 		}
 	}
-	rep := HeartbeatReply{Retention: map[string]string{}, RetentionB2: map[string]string{}, Clears: map[string]string{}, Presets: Presets}
+	rep := HeartbeatReply{Retention: map[string]string{}, RetentionB2: map[string]string{}, Clears: map[string]string{}, Presets: Presets, Credentials: s.restFeed()}
 	names := map[string]bool{}
 	for n := range t.Stats {
 		names[n] = true

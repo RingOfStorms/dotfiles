@@ -19,6 +19,7 @@
 </header>
 {{if .Flash}}<p class="summary"><strong>{{.Flash}}</strong></p>{{end}}
 {{if .Error}}<p class="warn">Error {{.Code}}: {{.Error}}</p>{{end}}
+{{if .Creds.ExportStale}}<p class="warn"><strong>Backup credentials not exported{{if .LastExport}} since {{.LastExport}}{{end}}:</strong> a repo password exists that is in no export. Export all and paste it into the password manager; it is the only copy outside h005.</p>{{end}}
 <div class="scroll table-wrap">
 <table>
 <thead><tr><th>subject</th><th>policy (target · local · B2 preset · offsite)</th><th>local size</th><th>B2 size</th><th>$/mo</th><th>last backup</th><th>pending</th>{{if .CanWrite}}<th>turn off</th><th>clear</th>{{end}}</tr></thead>
@@ -65,6 +66,26 @@
 </tbody>
 </table>
 </div>
+<h2>Credentials</h2>
+<p class="summary">fleet-edge holds every subject's repo and REST password (§2.7). Last export: {{if .LastExport}}{{.LastExport}}{{else}}never{{end}}.{{if .Creds.Missing}} Not generated yet: {{range .Creds.Missing}}<code>{{.}}</code> {{end}}(made on export or first fetch).{{end}}</p>
+{{if .CanWrite}}
+<form method="post" action="/backup/_credentials/export"><input type="hidden" name="csrf" value="{{.Token}}"><button type="submit">Export all</button></form>
+<form method="post" action="/backup/_credentials/import">
+  <input type="hidden" name="csrf" value="{{.Token}}">
+  <input type="hidden" name="step" value="preview">
+  <textarea name="text" rows="6" cols="100" placeholder="paste an export to restore missing subjects" spellcheck="false" autocomplete="off"></textarea>
+  <button type="submit">Import (preview)</button>
+</form>
+<table>
+<thead><tr><th>subject</th><th>REST revision</th><th>status</th><th></th><th></th></tr></thead>
+<tbody>
+{{range .Creds.Subjects}}<tr><td>svc-{{.Subject}}</td><td>{{.RestRevision}}</td><td>{{with index $.Pending .Subject}}<span class="warn">{{.}}</span>{{else}}applied{{end}}</td>
+<td><form method="post" action="/backup/{{.Subject}}/reveal"><input type="hidden" name="csrf" value="{{$.Token}}"><button type="submit">Reveal</button></form></td>
+<td><form method="post" action="/backup/{{.Subject}}/rotate"><input type="hidden" name="csrf" value="{{$.Token}}"><button type="submit" class="warn">Rotate REST password</button></form></td></tr>
+{{end}}
+</tbody>
+</table>
+{{end}}
 <p class="summary">Targets: {{range .Targets}}<code>{{.ID}}</code>{{if .Pusher}} (pusher){{end}}{{if not .Enabled}} <span class="warn">disabled</span>{{end}}{{if .Stale}} <span class="warn">stale</span>{{end}} {{else}}none registered{{end}}</p>
 <footer>generated at {{.GeneratedAt}}</footer>
 </main>

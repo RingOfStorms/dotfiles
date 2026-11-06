@@ -22,6 +22,7 @@ import (
 	"embed"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"html/template"
 	"net"
 	"net/http"
@@ -45,6 +46,12 @@ type Store interface {
 	PutAs(user, subject string, req backup.PolicyRequest) (*backup.Row, error)
 	ClearAs(user, subject string, req backup.ClearRequest) (*backup.Row, error)
 	AuditUI(user, peer, action string, code int, msg string)
+	CredentialStatus() backup.CredStatus
+	ExportAs(user string) (string, error)
+	ImportPreview(text string) ([]backup.ImportLine, error)
+	ImportAs(user, text string, overwrite map[string]bool) ([]backup.ImportLine, error)
+	RevealAs(user, subject string) (backup.ClientCred, error)
+	RotateAs(user, subject string) (int64, error)
 }
 
 // Config selects who may write.
@@ -161,6 +168,9 @@ type pageData struct {
 	Scopes       []string
 	Code         int
 	GeneratedAt  string
+	Creds        backup.CredStatus
+	Pending      map[string]string
+	LastExport   string
 }
 
 func (u *UI) render(w http.ResponseWriter, id identity, code int, flash, msg string) {
@@ -171,6 +181,16 @@ func (u *UI) render(w http.ResponseWriter, id identity, code int, flash, msg str
 		Targets: e.Targets, TargetIDs: []string{backup.None}, Presets: []string{"short", "standard", "long"},
 		B2Presets: []string{"local", "short", "standard", "long"}, Scopes: backup.Scopes, Code: code,
 		GeneratedAt: u.cfg.Now().UTC().Format(time.RFC3339)}
+	d.Creds = u.st.CredentialStatus()
+	d.Pending = map[string]string{}
+	for _, c := range d.Creds.Subjects {
+		if len(c.PendingOn) > 0 {
+			d.Pending[c.Subject] = fmt.Sprintf("rotated (rev %d), pending on %s", c.RestRevision, strings.Join(c.PendingOn, ", "))
+		}
+	}
+	if d.Creds.LastExportedAt > 0 {
+		d.LastExport = time.Unix(d.Creds.LastExportedAt, 0).UTC().Format(time.RFC3339)
+	}
 	for _, t := range e.Targets {
 		d.TargetIDs = append(d.TargetIDs, t.ID)
 		pusher[t.ID] = t.Pusher
@@ -229,7 +249,7 @@ func (u *UI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		u.st.AuditUI(id.User, peer, act, code, msg)
 		http.Error(w, msg, code)
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
+	r.Body = http.MaxBytesReader(w, r.Body, 256<<10)
 	if err := r.ParseForm(); err != nil {
 		deny(http.StatusBadRequest, "bad form")
 		return
@@ -249,6 +269,10 @@ func (u *UI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	subject, op := parts[0], parts[1]
+	if subject == "_credentials" || op == "reveal" {
+		u.secretPage(w, id, peer, act, subject, op, r.PostForm)
+		return
+	}
 	var err error
 	var flash string
 	switch op {
@@ -258,6 +282,10 @@ func (u *UI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if op == "off" {
 			flash = subject + ": turned off (target none; nothing deleted)"
 		}
+	case "rotate":
+		var rev int64
+		rev, err = u.st.RotateAs(id.User, subject)
+		flash = fmt.Sprintf("%s: REST password rotated (revision %d); pending until the targets apply it", subject, rev)
 	case "clear":
 		scope := r.PostForm.Get("scope")
 		if typed := strings.TrimSpace(r.PostForm.Get("confirm")); typed != subject {
@@ -343,4 +371,69 @@ func (u *UI) policy(user, subject, op string, f url.Values) error {
 	}
 	_, err = u.st.PutAs(user, subject, req)
 	return err
+}
+
+type secretData struct {
+	User, Token string
+	Title       string
+	Export      string
+	Reveal      *backup.ClientCred
+	Preview     []backup.ImportLine
+	Applied     bool
+	ImportText  string
+	Error       string
+}
+
+// secretPage serves the POST-only pages that show secrets: export, import
+// (preview, then apply) and reveal. They render directly (never via a
+// redirect or a GET URL) with Cache-Control: no-store.
+func (u *UI) secretPage(w http.ResponseWriter, id identity, peer, act, subject, op string, f url.Values) {
+	d := secretData{User: id.User, Token: u.token(id.User)}
+	code := http.StatusOK
+	var err error
+	switch {
+	case subject == "_credentials" && op == "export":
+		d.Title = "Export all backup credentials"
+		d.Export, err = u.st.ExportAs(id.User)
+	case subject == "_credentials" && op == "import":
+		d.Title = "Import backup credentials"
+		d.ImportText = f.Get("text")
+		if f.Get("step") == "apply" {
+			over := map[string]bool{}
+			for k := range f {
+				if s, ok := strings.CutPrefix(k, "overwrite-"); ok && f.Get(k) == "on" {
+					over[s] = true
+				}
+			}
+			d.Preview, err = u.st.ImportAs(id.User, d.ImportText, over)
+			d.Applied = err == nil
+			d.ImportText = ""
+		} else {
+			d.Preview, err = u.st.ImportPreview(d.ImportText)
+		}
+	case op == "reveal":
+		d.Title = "Credentials of svc-" + subject
+		var c backup.ClientCred
+		c, err = u.st.RevealAs(id.User, subject)
+		d.Reveal = &c
+	default:
+		u.st.AuditUI(id.User, peer, act, http.StatusNotFound, "not found")
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		code = errCode(err)
+		d.Error, d.Export, d.Reveal = err.Error(), "", nil
+	}
+	if op != "reveal" && op != "export" {
+		// reveal and export audit themselves with the subject list/hash.
+		u.st.AuditUI(id.User, peer, act, code, d.Error)
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.WriteHeader(code)
+	_ = tmpl.ExecuteTemplate(w, "secret.html", d)
 }
