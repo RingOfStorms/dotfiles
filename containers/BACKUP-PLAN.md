@@ -289,9 +289,18 @@ RESTIC_REST_USERNAME=svc-<name>
 RESTIC_REST_PASSWORD=<plaintext; targets hash it, never stored hashed here>
 ```
 
-- A host's key set is exactly the subjects placed on it. A `cnt move` needs the
-  grant first (reviewed registry change, then deploy, then move; preflight
-  enforces it, §2.9). Never grant "everything a host might run".
+- A host's key set is exactly the subjects placed on it (`placed.<n>` in
+  `backup-subjects.nix`), plus the destination of an in-flight move
+  (`pendingMove.<n>`). A `cnt move` needs BOTH grants (preflight requires
+  the source credential through prepare and final backup, and the
+  destination's; §2.9):
+  1. set `pendingMove.<n>`, deploy `sec` and the destination;
+  2. `cnt move`;
+  3. after commit: set `placed.<n>` to the destination, drop
+     `pendingMove.<n>`, deploy `sec`, then delete the hydrated copy on the
+     source.
+  The source grant is revoked only after the move commits. Never grant
+  "everything a host might run".
 - Kill switch for one subject: drop the consumer's sub, deploy `sec`, delete
   the hydrated copy, then `systemctl reload render-htpasswd` on each target.
 - `RESTIC_REPOSITORY` must be `rest:http://…` (a bare `http://` parses as a

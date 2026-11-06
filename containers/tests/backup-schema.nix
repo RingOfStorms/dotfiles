@@ -155,6 +155,51 @@ assert
 assert builtins.all (k: builtins.any (a: a.value == subj.subs.h004) subj.registry.${k}.access) (
   builtins.attrNames subj.registry
 );
-# placement-exact grants: each subject has at most one client host
-assert builtins.all (n: builtins.length subj.hosts.${n} <= 1) (builtins.attrNames subj.hosts);
+# placement-exact grants: placed is null or one known host; pendingMove only
+# during a move (known, != placed, subject placed); <=2 client hosts, 2 only
+# with a pendingMove
+assert
+  subj.check {
+    known = subj.knownHosts;
+    inherit (subj) placed pendingMove;
+  } == [ ];
+assert
+  let
+    ok =
+      pm:
+      subj.check {
+        known = [
+          "a"
+          "b"
+        ];
+        placed = {
+          x = "a";
+          y = null;
+        };
+        pendingMove = pm;
+      } == [ ];
+  in
+  ok { }
+  && ok { x = "b"; }
+  && !ok { x = "a"; } # same as placed
+  && !ok { x = "c"; } # unknown dest
+  && !ok { y = "a"; } # subject not placed
+  && !ok { z = "a"; }; # unknown subject
+assert
+  subj.check {
+    known = [ "a" ];
+    placed.x = "c";
+    pendingMove = { };
+  } != [ ]; # unknown placed
+assert
+  subj.clientHostsOf {
+    x = "a";
+    y = null;
+  } { x = "b"; } == {
+    x = [
+      "a"
+      "b"
+    ];
+    y = [ ];
+  };
 true
