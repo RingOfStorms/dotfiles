@@ -319,6 +319,7 @@ body.inbox main { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
   text-overflow: ellipsis;
 }
 .card-mid .branch { flex: 0 0 auto; color: var(--muted); font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+.card-mid .ws { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-family: var(--mono); font-weight: 600; }
 
 .card-bot { display: flex; align-items: center; gap: 7px; min-width: 0; margin-top: 3px; }
 .card-bot .plabel {

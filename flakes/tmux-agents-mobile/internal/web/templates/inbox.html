@@ -6,7 +6,7 @@
     </div>
     <div class="card-mid">
       <span class="sess">{{.Session}}</span>
-      {{if .Label}}<span class="ai">{{.Label}}</span>{{end}}
+      {{if .Window}}<span class="ws">{{.Window}}</span>{{else if .Label}}<span class="ai">{{.Label}}</span>{{end}}
       {{if .Branch}}<span class="branch">[{{.Branch}}]</span>{{end}}
     </div>
     {{if .Pane}}
@@ -14,7 +14,6 @@
       {{if .Glyph}}<span class="glyph {{.Class}}">{{.Glyph}}</span>{{end}}
       <span class="plabel">{{.Pane}}</span>
       {{if .Agent}}<span class="agent">{{.Agent}}</span>{{end}}
-      {{if .Window}}<span class="win">{{.Window}}</span>{{end}}
     </div>
     {{if .Others}}<div class="card-others">also: {{.Others}}</div>{{end}}
     {{end}}
