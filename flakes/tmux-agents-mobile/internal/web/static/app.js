@@ -73,6 +73,12 @@
         try {
           const res = await fetch("/p/" + el.dataset.pane + "/native", { cache: "no-store" });
           if (res.status === 204) {
+            // Guard against bouncing: native that falls straight back here.
+            const key = "tam.await." + el.dataset.pane;
+            const now = Date.now();
+            const hits = JSON.parse(sessionStorage.getItem(key) || "[]").filter((t) => now - t < 60000);
+            if (hits.length >= 3) return;
+            sessionStorage.setItem(key, JSON.stringify([...hits, now]));
             location.replace("/p/" + el.dataset.pane + "?view=native");
             return;
           }
@@ -462,7 +468,7 @@
     // terminal view always works.
     es.addEventListener("fallback", () => {
       es.close();
-      location.replace("/p/" + pane + "?view=wrap");
+      location.replace("/p/" + pane + "?await=1");
     });
     es.addEventListener("gone", () => {
       es.close();

@@ -330,7 +330,9 @@ func (s *Server) panePage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	page.View = requestedView(r.URL.Query())
-	explicit := page.View != ""
+	// Only an explicit terminal view opts out of waiting for the conversation;
+	// asking for native while the log is not there yet keeps waiting.
+	explicit := page.View == ViewWrap || page.View == ViewFit
 	if page.View == "" || (page.View == ViewNative && !native) {
 		page.View = ViewWrap
 		if native {
