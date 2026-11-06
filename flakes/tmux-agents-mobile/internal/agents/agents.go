@@ -36,6 +36,8 @@ type Row struct {
 	Window     string   `json:"window"`
 	WindowName string   `json:"window_name"`
 	Panes      int      `json:"panes"`
+	PaneName   string   `json:"pane_name"`
+	Others     string   `json:"others"`
 }
 
 // Provider caches `tmux-agents rows --json` for a second: the navigator refresh
@@ -160,26 +162,57 @@ func (p *Provider) synthesise(ctx context.Context) ([]Row, error) {
 			Path:    g.path,
 			Panes:   len(g.panes),
 		})
-		for _, pn := range g.panes {
-			kind, label := Detect(pn.Title, pn.Command)
-			if kind == "" {
+		wins := windowsOf(g.panes)
+		hasAgents := false
+		for _, w := range wins {
+			hasAgents = hasAgents || w.agents
+		}
+		isShell := func(p tmux.Pane) bool { k, _ := Detect(p.Title, p.Command); return k == "" }
+		for _, w := range wins {
+			if !w.agents {
+				// Same rule as the plugin: agent-less windows are leaves of
+				// their own once the session has agents or several windows.
+				if hasAgents || len(wins) > 1 {
+					rows = append(rows, Row{
+						ID:         fmt.Sprintf("w:%s:%d", g.name, w.index),
+						Kind:       "window",
+						Session:    g.name,
+						Pane:       w.active.ID,
+						Label:      strings.Join(w.names(nil), ", "),
+						Repo:       repo,
+						Branch:     branch,
+						Path:       w.active.Path,
+						Window:     fmt.Sprint(w.index),
+						WindowName: w.active.WindowName,
+						Panes:      len(w.panes),
+					})
+				}
 				continue
 			}
-			rows = append(rows, Row{
-				ID:         "p:" + pn.ID,
-				Kind:       "pane",
-				Session:    g.name,
-				Pane:       pn.ID,
-				Label:      label,
-				Agent:      kind,
-				State:      pn.AgentState,
-				Unseen:     flexBool(pn.AgentUnseen),
-				Repo:       repo,
-				Branch:     branch,
-				Path:       pn.Path,
-				Window:     fmt.Sprint(pn.WindowIndex),
-				WindowName: pn.WindowName,
-			})
+			others := strings.Join(w.names(isShell), ", ")
+			for _, pn := range w.panes {
+				kind, label := Detect(pn.Title, pn.Command)
+				if kind == "" {
+					continue
+				}
+				rows = append(rows, Row{
+					ID:         "p:" + pn.ID,
+					Kind:       "pane",
+					Session:    g.name,
+					Pane:       pn.ID,
+					Label:      label,
+					Agent:      kind,
+					State:      pn.AgentState,
+					Unseen:     flexBool(pn.AgentUnseen),
+					Repo:       repo,
+					Branch:     branch,
+					Path:       pn.Path,
+					Window:     fmt.Sprint(pn.WindowIndex),
+					WindowName: pn.WindowName,
+					PaneName:   pn.PaneName,
+					Others:     others,
+				})
+			}
 		}
 	}
 	return rows, nil
@@ -281,3 +314,47 @@ func (b *flexBool) UnmarshalJSON(data []byte) error {
 
 // Bool reports the decoded value.
 func (b flexBool) Bool() bool { return bool(b) }
+
+// synthWindow is one tmux window while synthesising rows.
+type synthWindow struct {
+	index  int
+	active tmux.Pane
+	panes  []tmux.Pane
+	agents bool
+}
+
+// names lists pane names (@pane_name, else the command) of the panes keep
+// accepts (all when keep is nil), as the pane borders show them.
+func (w synthWindow) names(keep func(tmux.Pane) bool) []string {
+	var out []string
+	for _, p := range w.panes {
+		if keep != nil && !keep(p) {
+			continue
+		}
+		n := p.PaneName
+		if n == "" {
+			n = p.Command
+		}
+		out = append(out, n)
+	}
+	return out
+}
+
+// windowsOf groups panes (in tmux order) by window.
+func windowsOf(panes []tmux.Pane) []synthWindow {
+	var out []synthWindow
+	for _, p := range panes {
+		if n := len(out); n == 0 || out[n-1].index != p.WindowIndex {
+			out = append(out, synthWindow{index: p.WindowIndex, active: p})
+		}
+		w := &out[len(out)-1]
+		w.panes = append(w.panes, p)
+		if p.Active {
+			w.active = p
+		}
+		if k, _ := Detect(p.Title, p.Command); k != "" {
+			w.agents = true
+		}
+	}
+	return out
+}

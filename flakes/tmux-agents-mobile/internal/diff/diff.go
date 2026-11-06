@@ -362,3 +362,13 @@ func (g *Git) timeout() time.Duration {
 	}
 	return g.Timeout
 }
+
+// CommonDir is the absolute path of the git common directory (the main
+// checkout's .git, shared by every linked worktree) for dir.
+func (g *Git) CommonDir(ctx context.Context, dir string) (string, error) {
+	out, err := g.run(ctx, dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}

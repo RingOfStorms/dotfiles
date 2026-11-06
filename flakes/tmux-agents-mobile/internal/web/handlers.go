@@ -41,6 +41,7 @@ type Card struct {
 	Pane   string // pane label, empty for a shell-only session
 	Agent  string
 	Window string // "2:tmux-agent-mobile"
+	Others string // names of the other (non-agent) panes in the window
 
 	Text string // search haystack
 }
@@ -96,19 +97,29 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "inbox.html", page)
 }
 
-// cards flattens the ordered tree (repo, session, panes of that session) into
-// one card per leaf, carrying the enclosing repo/session as context.
+// cards flattens the ordered tree (repo, session, then the session's agent
+// panes and agent-less windows) into one card per leaf, carrying the
+// enclosing repo/session as context.
 func (s *Server) cards(rows []agents.Row) []Card {
 	var cards []Card
 	var session Card
-	agents := 0
+	leaves := 0
 
 	flush := func() {
-		// A session with no agent panes is itself the leaf.
-		if session.Session != "" && agents == 0 {
+		// A session with no agent panes or window rows is itself the leaf.
+		if session.Session != "" && leaves == 0 {
 			cards = append(cards, session)
 		}
-		session, agents = Card{}, 0
+		session, leaves = Card{}, 0
+	}
+	window := func(row agents.Row) string {
+		if row.Window == "" {
+			return ""
+		}
+		if row.WindowName != "" {
+			return row.Window + ":" + row.WindowName
+		}
+		return row.Window
 	}
 
 	for _, row := range rows {
@@ -133,7 +144,7 @@ func (s *Server) cards(rows []agents.Row) []Card {
 			}
 			session.Text = row.Session + " " + row.Label + " " + row.Branch + " " + row.Path
 		case "pane":
-			agents++
+			leaves++
 			card := session
 			card.Href = "/p/" + Slug(row.Pane)
 			card.Path = tildeHome(row.Path)
@@ -141,15 +152,28 @@ func (s *Server) cards(rows []agents.Row) []Card {
 			if card.Pane == "" {
 				card.Pane = row.Agent
 			}
-			card.Agent = row.Agent
-			if row.Window != "" {
-				card.Window = row.Window
-				if row.WindowName != "" {
-					card.Window += ":" + row.WindowName
-				}
+			if row.PaneName != "" && row.PaneName != card.Pane {
+				card.Pane = row.PaneName + " · " + card.Pane
 			}
+			card.Agent = row.Agent
+			card.Window = window(row)
+			card.Others = row.Others
 			card.Glyph, card.Class = stateGlyph(row.State, row.Unseen.Bool())
-			card.Text += " " + row.Label + " " + row.Agent + " " + row.Window + " " + row.WindowName + " " + row.Path
+			card.Text += " " + row.Label + " " + row.PaneName + " " + row.Others + " " + row.Agent + " " + row.Window + " " + row.WindowName + " " + row.Path
+			cards = append(cards, card)
+		case "window":
+			// A workspace without agents, in a session that has other
+			// workspaces: its own leaf, named by its panes.
+			leaves++
+			card := session
+			card.Href = "/p/" + Slug(row.Pane)
+			card.Path = tildeHome(row.Path)
+			if row.Branch != "" {
+				card.Branch = row.Branch
+			}
+			card.Pane = row.Label
+			card.Window = window(row)
+			card.Text += " " + row.Label + " " + row.Window + " " + row.WindowName + " " + row.Path
 			cards = append(cards, card)
 		}
 	}
@@ -231,18 +255,19 @@ func requestedView(q url.Values) PaneView {
 // PanePage is the single-pane viewer.
 type PanePage struct {
 	Base
-	Slug    string
-	Pane    tmux.Pane
-	Target  string
-	Agent   string
-	Label   string
-	State   string
-	Repo    string
-	Branch  string
-	View    PaneView
-	Fit     bool
-	Frame   template.HTML
-	Watched bool
+	Slug        string
+	Pane        tmux.Pane
+	Target      string
+	Agent       string
+	Label       string
+	State       string
+	Repo        string
+	Branch      string
+	View        PaneView
+	Fit         bool
+	Frame       template.HTML
+	Watched     bool
+	AwaitNative bool
 
 	// Navigation: the session's windows ("workspaces", named as the tmux
 	// status line names them) with their panes, and the other sessions.
@@ -305,6 +330,7 @@ func (s *Server) panePage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	page.View = requestedView(r.URL.Query())
+	explicit := page.View != ""
 	if page.View == "" || (page.View == ViewNative && !native) {
 		page.View = ViewWrap
 		if native {
@@ -364,6 +390,9 @@ func (s *Server) panePage(w http.ResponseWriter, r *http.Request) {
 	page.Sub = sub
 	page.Glyph, page.GlyphClass = stateGlyph(page.State, p.AgentUnseen)
 	page.Actions = paneActions(slug, page.View, native)
+	// A new agent has no session log for a moment after it starts: the
+	// terminal view polls and switches to the conversation once it exists.
+	page.AwaitNative = !explicit && !native && s.chat != nil && (page.Agent != "" || r.URL.Query().Get("await") == "1")
 	page.Watched = time.Unix(p.AgentWatchUnix, 0).After(time.Now())
 	page.Windows, page.Sessions = s.paneNav(ctx, p)
 	s.render(w, "pane.html", page)
@@ -442,7 +471,7 @@ func (s *Server) paneSplit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.startProgram(ctx, id, program)
-	http.Redirect(w, r, "/p/"+Slug(id), http.StatusSeeOther)
+	http.Redirect(w, r, "/p/"+Slug(id)+awaitQuery(program), http.StatusSeeOther)
 }
 
 // startProgram types program at a new pane's prompt rather than exec'ing it,
@@ -855,6 +884,7 @@ type NewPage struct {
 	Name      string
 	Program   string
 	Target    string
+	Session   string // preselected in the "new window in" picker
 }
 
 func (s *Server) newPage(w http.ResponseWriter, r *http.Request) {
@@ -876,6 +906,10 @@ func (s *Server) newPage(w http.ResponseWriter, r *http.Request) {
 	if page.Dir == "" && page.FromPane != "" && validPane(page.FromPane) {
 		if p, err := s.tmux.GetPane(ctx, "%"+page.FromPane); err == nil {
 			page.Dir = p.Path
+			if r.URL.Query().Get("root") == "1" {
+				page.Dir = s.repoMain(ctx, p.Path)
+			}
+			page.Session = p.Session
 		}
 	}
 	if page.Dir == "" {
@@ -964,7 +998,7 @@ func (s *Server) newSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.startProgram(ctx, paneID, program)
-	http.Redirect(w, r, "/p/"+Slug(paneID), http.StatusSeeOther)
+	http.Redirect(w, r, "/p/"+Slug(paneID)+awaitQuery(program), http.StatusSeeOther)
 }
 
 // allowedDir resolves a user-supplied directory and refuses anything outside
@@ -1027,25 +1061,34 @@ func boolInt(v bool) int {
 
 // paneActions is the pane page's overflow menu. Keeping every state-changing
 // action in here is what frees the screen for the frame and the composer.
-// Every view other than the current one is offered, so any of them is one tap
-// away whichever the page opened in.
+// Display modes, git commands and "open" actions are submenus so the top level
+// stays short. Every view other than the current one is offered, so any of
+// them is one tap away whichever the page opened in.
 func paneActions(slug string, view PaneView, native bool) []Action {
-	actions := []Action{
-		{Label: "open shell here", Post: "/p/" + slug + "/split"},
-		{Label: "open new omp here", Post: "/p/" + slug + "/split", Hidden: []FormValue{{Name: "program", Value: "omp"}}},
-		{Label: "diff", Href: "/p/" + slug + "/diff"},
-		{Label: "history", Href: "/p/" + slug + "/history"},
-	}
+	var views []Action
 	if native && view != ViewNative {
-		actions = append(actions, Action{Label: "conversation", Href: "/p/" + slug + "?view=native"})
+		views = append(views, Action{Label: "conversation", Href: "/p/" + slug + "?view=native"})
 	}
 	if view != ViewWrap {
-		actions = append(actions, Action{Label: "terminal: wrap text", Href: "/p/" + slug + "?view=wrap"})
+		views = append(views, Action{Label: "terminal: wrap text", Href: "/p/" + slug + "?view=wrap"})
 	}
 	if view != ViewFit {
-		actions = append(actions, Action{Label: "terminal: fit to width", Href: "/p/" + slug + "?view=fit"})
+		views = append(views, Action{Label: "terminal: fit to width", Href: "/p/" + slug + "?view=fit"})
 	}
-	return append(actions, []Action{
+	omp := []FormValue{{Name: "program", Value: "omp"}}
+	return []Action{
+		{Label: "open", Group: []Action{
+			{Label: "shell here (split)", Post: "/p/" + slug + "/split"},
+			{Label: "omp here (split)", Post: "/p/" + slug + "/split", Hidden: omp},
+			{Label: "new workspace at repo root", Post: "/p/" + slug + "/workspace"},
+			{Label: "new workspace at repo root + omp", Post: "/p/" + slug + "/workspace", Hidden: omp},
+			{Label: "new session here…", Href: "/new?pane=" + slug},
+			{Label: "new session at repo root…", Href: "/new?pane=" + slug + "&root=1"},
+		}},
+		{Label: "view", Group: views},
+		{Label: "git", Group: gitActions(slug)},
+		{Label: "diff", Href: "/p/" + slug + "/diff"},
+		{Label: "history", Href: "/p/" + slug + "/history"},
 		{Label: "mark seen", Post: "/p/" + slug + "/seen"},
 		{Label: "open on desktop", Post: "/p/" + slug + "/focus"},
 		{
@@ -1056,7 +1099,7 @@ func paneActions(slug string, view PaneView, native bool) []Action {
 			Class:   "danger",
 		},
 		{Label: "sign out", Href: "/auth/logout"},
-	}...)
+	}
 }
 
 func frameHTML(lines []frame.Line) template.HTML {

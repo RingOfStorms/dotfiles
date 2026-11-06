@@ -23,7 +23,7 @@
 {{else}}
 <pre id="frame" class="frame {{if .Fit}}fit{{else}}wrap{{end}}"
      data-pane="{{.Slug}}"
-     data-fit="{{if .Fit}}1{{else}}0{{end}}">{{.Frame}}</pre>
+     data-fit="{{if .Fit}}1{{else}}0{{end}}"{{if .AwaitNative}} data-await-native{{end}}>{{.Frame}}</pre>
 {{end}}
 
 <form id="compose" class="compose" hx-post="/p/{{.Slug}}/keys" hx-swap="none" method="post" action="/p/{{.Slug}}/keys">

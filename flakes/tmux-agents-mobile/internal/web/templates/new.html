@@ -26,7 +26,7 @@
     <label><input type="radio" name="target" value="session" {{if ne .Target "window"}}checked{{end}}> new session</label>
     <label><input type="radio" name="target" value="window" {{if eq .Target "window"}}checked{{end}}> new window in
       <select name="session">
-      {{range .Sessions}}<option value="{{.}}">{{.}}</option>
+      {{range .Sessions}}<option value="{{.}}"{{if eq . $.Session}} selected{{end}}>{{.}}</option>
       {{end}}
       </select>
     </label>

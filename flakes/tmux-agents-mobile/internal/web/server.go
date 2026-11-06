@@ -108,6 +108,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /p/{pane}/focus", s.paneFocus)
 	mux.HandleFunc("POST /p/{pane}/kill", s.paneKill)
 	mux.HandleFunc("POST /p/{pane}/split", s.paneSplit)
+	mux.HandleFunc("POST /p/{pane}/git", s.paneGit)
+	mux.HandleFunc("POST /p/{pane}/workspace", s.paneWorkspace)
+	mux.HandleFunc("GET /p/{pane}/native", s.paneNative)
 	mux.HandleFunc("GET /p/{pane}/diff", s.diffPage)
 	mux.HandleFunc("GET /new", s.newPage)
 	mux.HandleFunc("GET /new/dirs", s.dirSuggestions)
@@ -384,6 +387,12 @@ type Action struct {
 	Confirm string
 	Hidden  []FormValue
 	Class   string
+	// Input, when set, adds a text field named "arg" (Input is its
+	// placeholder) to a Post action; InputRequired makes it mandatory.
+	Input         string
+	InputRequired bool
+	// Group makes this entry a submenu: Label opens it, Group is its body.
+	Group []Action
 }
 
 // Base is the data every page template needs.

@@ -354,48 +354,73 @@ git_info() {
 tilde() { REPLY=${1/#"$HOME"/\~}; }
 
 # Rows: stable ID, target pane, display. Tree: Git project (blue) > session
-# (purple, AI label, branch, pane count) > agent panes only. A session belongs
-# to its most represented Git repo; first pane wins equal counts. Sessions
-# outside Git are top-level. Session/project rows target the session's active
-# pane.
+# (purple, AI label, branch, pane count) > agent panes and agent-less windows.
+# A session belongs to its most represented Git repo; first pane wins equal
+# counts. Sessions outside Git are top-level. Session/project rows target the
+# session's active pane, window rows the window's active pane.
+# Pane names: `@pane_name`, else `#{pane_current_command}` (what the pane
+# border shows). An agent pane row shows its `@pane_name` and the names of the
+# window's other (non-agent) panes; a window without agents gets its own row
+# listing all its panes, unless it is the only window of an agent-less session
+# (the session row stays the leaf). All names are in the fzf search text.
 CUR_POS=1
 cmd_rows() {
 	local current fmt
 	current=$(tmux display-message -p '#{pane_id}' 2>/dev/null || true)
-	fmt="#{session_name}${TAB}#{window_index}${TAB}$(field window_name)${TAB}#{pane_id}${TAB}#{?#{&&:#{window_active},#{pane_active}},1,0}${TAB}$(field pane_current_command)${TAB}$(field @agent_state)${TAB}$(field @agent_unseen)${TAB}$(field pane_current_path)${TAB}$(field @session_ai_name)${TAB}#{pane_title}"
+	fmt="#{session_name}${TAB}#{window_index}${TAB}$(field window_name)${TAB}#{pane_id}${TAB}#{pane_active}${TAB}#{window_active}${TAB}$(field pane_current_command)${TAB}$(field @agent_state)${TAB}$(field @agent_unseen)${TAB}$(field pane_current_path)${TAB}$(field @session_ai_name)${TAB}$(field @pane_name)${TAB}#{pane_title}"
 	local -a sessions=()
 	local -A s_count=() s_agents=() s_active=() s_path=() s_rank=() s_ai=() counts=() s_repo=() s_branch=() s_main=()
-	local -A s_repos=() branches=() worktrees=()
+	local -A s_repos=() branches=() worktrees=() s_wins=()
+	local -A w_name=() w_active=() w_names=() w_others=() w_agents=()
 	local -A p_label=() p_rank=() repo_name=() repo_root=()
-	local s wi wn pane act command st unseen path ai title common top branch main repo key label
-	while IFS=$TAB read -r s wi wn pane act command st unseen path ai title; do
+	local s wi wn pane pact wact command st unseen path ai pname title common top branch main repo key label wk name cur_wk=""
+	while IFS=$TAB read -r s wi wn pane pact wact command st unseen path ai pname title; do
 		undash "$path" && path=$REPLY
 		undash "$st" && st=$REPLY
 		undash "$unseen" && unseen=$REPLY
+		undash "$command" && command=$REPLY
+		undash "$pname" && pname=$REPLY
 		if [ -z "${s_count[$s]+x}" ]; then
 			sessions+=("$s")
 			s_count[$s]=0
 			s_agents[$s]=""
+			s_wins[$s]=""
 			s_active[$s]=$pane
 			s_path[$s]=$path
 			s_rank[$s]=0
 			undash "$ai" && s_ai[$s]=$REPLY
 		fi
 		s_count[$s]=$((s_count[$s] + 1))
-		if [ "$act" = 1 ]; then
+		if [ "$pact" = 1 ] && [ "$wact" = 1 ]; then
 			s_active[$s]=$pane
 			s_path[$s]=$path
 		fi
+		wk="$s$TAB$wi"
+		if [ -z "${w_active[$wk]+x}" ]; then
+			s_wins[$s]+="$wi "
+			undash "$wn" && w_name[$wk]=$REPLY
+			w_active[$wk]=$pane
+			w_names[$wk]=""
+			w_others[$wk]=""
+			w_agents[$wk]=""
+		fi
+		[ "$pact" = 1 ] && w_active[$wk]=$pane
+		[ "$pane" = "$current" ] && cur_wk=$wk
+		name=${pname:-$command}
+		w_names[$wk]+="${w_names[$wk]:+, }$name"
 		agent_kind "$title" "$command"
 		if [ -n "$REPLY" ]; then
 			agent_label "$REPLY" "$title"
 			label=$REPLY
-			undash "$wn"
-			p_label[$pane]="$label"$'  \033[2m('"$wi:$REPLY"$')\033[0m'
+			[ -n "$pname" ] && label+=" [$pname]"
+			p_label[$pane]=$label
 			s_agents[$s]+="$pane "
+			w_agents[$wk]+="$pane "
 			rank "$st" "$unseen"
 			p_rank[$pane]=$REPLY
 			[ "$REPLY" -gt "${s_rank[$s]}" ] && s_rank[$s]=$REPLY
+		else
+			w_others[$wk]+="${w_others[$wk]:+, }$name"
 		fi
 		git_info "$path"
 		[ -n "$REPLY" ] || continue
@@ -433,10 +458,11 @@ cmd_rows() {
 			sortable+="1${TAB}${s}${TAB}-${TAB}0${TAB}${s}"$'\n'
 		fi
 	done
-	local idx=0 prev="" group _name _main row indent n leaf=0 label
-	# Nav-mode jump keys, one per leaf row (agent panes, and sessions without
-	# agent rows) in display order. Field 3 is the rendered 2-column label;
-	# the navigator hides it in search mode.
+	local idx=0 prev="" group _name _main row indent n leaf=0 label wrows suffix
+	local -a wins=()
+	# Nav-mode jump keys, one per leaf row (agent panes, window rows, and
+	# sessions with neither) in display order. Field 3 is the rendered 2-column
+	# label; the navigator hides it in search mode.
 	local -a jump=(1 2 3 4 5 6 7 8 9 q w e r t y u i o p)
 	jump_label() {
 		if [ -n "${jump[leaf]:-}" ]; then label=$'\033[1;33m'"${jump[leaf]^^}"$'\033[0m'; else label=" "; fi
@@ -468,17 +494,36 @@ cmd_rows() {
 		n=${s_count[$s]}
 		if [ "$n" = 1 ]; then row+=$'  \033[2m(1 pane)\033[0m'; else row+=$'  \033[2m('"$n"$' panes)\033[0m'; fi
 		if [ "${s_rank[$s]}" -gt 0 ]; then row+=" $(glyph "${s_rank[$s]}")"; fi
+		# shellcheck disable=SC2206 # window indexes contain no whitespace
+		wins=(${s_wins[$s]})
+		# Agent-less windows get rows unless this is a one-window session
+		# without agents, whose session row stays the leaf.
+		wrows=0
+		if [ -n "${s_agents[$s]}" ] || [ "${#wins[@]}" -gt 1 ]; then wrows=1; fi
 		label=" "
-		[ -n "${s_agents[$s]}" ] || jump_label
+		[ "$wrows" = 1 ] || jump_label
 		printf 's:%s\t%s\t%s\t%s\n' "$s" "${s_active[$s]}" "$label" "$row"
 		idx=$((idx + 1))
-		[ "${s_active[$s]}" = "$current" ] && CUR_POS=$idx
-		# shellcheck disable=SC2086 # pane IDs contain no whitespace
-		for pane in ${s_agents[$s]}; do
-			jump_label
-			printf 'p:%s\t%s\t%s\t%s  %s %s\n' "$pane" "$pane" "$label" "$indent" "$(glyph "${p_rank[$pane]}")" "${p_label[$pane]}"
-			idx=$((idx + 1))
-			[ "$pane" = "$current" ] && CUR_POS=$idx
+		[ "$s" = "${cur_wk%"$TAB"*}" ] && CUR_POS=$idx
+		[ "$wrows" = 1 ] || continue
+		for wi in "${wins[@]}"; do
+			wk="$s$TAB$wi"
+			if [ -z "${w_agents[$wk]}" ]; then
+				jump_label
+				printf 'w:%s:%s\t%s\t%s\t%s    %s  \033[2m%s\033[0m\n' "$s" "$wi" "${w_active[$wk]}" "$label" "$indent" "$wi:${w_name[$wk]:-}" "${w_names[$wk]}"
+				idx=$((idx + 1))
+				[ "$wk" = "$cur_wk" ] && CUR_POS=$idx
+				continue
+			fi
+			suffix="$wi:${w_name[$wk]:-}"
+			[ -n "${w_others[$wk]}" ] && suffix+=" · ${w_others[$wk]}"
+			# shellcheck disable=SC2086 # pane IDs contain no whitespace
+			for pane in ${w_agents[$wk]}; do
+				jump_label
+				printf 'p:%s\t%s\t%s\t%s  %s %s  \033[2m(%s)\033[0m\n' "$pane" "$pane" "$label" "$indent" "$(glyph "${p_rank[$pane]}")" "${p_label[$pane]}" "$suffix"
+				idx=$((idx + 1))
+				[ "$pane" = "$current" ] && CUR_POS=$idx
+			done
 		done
 	done < <(printf '%s' "$sortable" | LC_ALL=C sort -t "$TAB" -k1,1 -k2,2 -k3,3 -k4,4n -k5,5)
 	return 0
@@ -487,7 +532,12 @@ cmd_rows() {
 # JSON form of the rows tree, for tmux-agents-mobile. The Go service needs the
 # repo/worktree identity and the agent state, not the ANSI rendering: it groups,
 # sorts and previews itself. Same grouping rule as cmd_rows (a session belongs to
-# the repo holding most of its panes; ties use the first pane in list order).
+# the repo holding most of its panes; ties use the first pane in list order) and
+# the same window rows: after each session row, in window-index order, the agent
+# panes of each window, or a `kind: window` row for a window without agents
+# (except the only window of an agent-less session). Pane rows carry their
+# `@pane_name` and `others` (the window's non-agent pane names); a window row's
+# label lists all its pane names and its path/git come from its active pane.
 json_str() {
 	# Parameter expansion instead of a per-character loop: one pass per rule,
 	# and no shellcheck complaints about the backslash case pattern.
@@ -520,18 +570,21 @@ json_obj() {
 
 cmd_rows_json() {
 	local fmt
-	fmt="#{session_name}${TAB}#{window_index}${TAB}$(field window_name)${TAB}#{pane_id}${TAB}#{pane_active}${TAB}#{window_active}${TAB}$(field pane_current_command)${TAB}$(field pane_current_path)${TAB}$(field @agent_state)${TAB}$(field @agent_unseen)${TAB}$(field @session_ai_name)${TAB}#{pane_title}"
+	fmt="#{session_name}${TAB}#{window_index}${TAB}$(field window_name)${TAB}#{pane_id}${TAB}#{pane_active}${TAB}#{window_active}${TAB}$(field pane_current_command)${TAB}$(field pane_current_path)${TAB}$(field @agent_state)${TAB}$(field @agent_unseen)${TAB}$(field @session_ai_name)${TAB}$(field @pane_name)${TAB}#{pane_title}"
 
-	local -a order=() objs=()
-	local -A seen=() count=() active=() apath=() ailabel=() agents=() repo_n=() repo_br=() repo_wt=() repo_sessions=() s_repo=() s_branch=() s_wt=()
-	local s wi wn pane pact wact cmd path st unseen ai title kind label common top branch key best bestrepo
-	local sortable group name r prev pcommon pbranch ptop plabel pkind pst punseen ppane
+	local -a order=() objs=() wins=()
+	local -A seen=() count=() active=() apath=() ailabel=() nagents=() s_wins=() repo_n=() repo_br=() repo_wt=() repo_sessions=() s_repo=() s_branch=() s_wt=()
+	local -A w_name=() w_active=() w_path=() w_common=() w_top=() w_branch=() w_count=() w_names=() w_others=() w_agents=()
+	local s wi wn pane pact wact cmd path st unseen ai pname title kind common top branch key best bestrepo wk name
+	local sortable group r prev pcommon pbranch ptop plabel pkind pst punseen ppane ppath ppname
 
-	while IFS=$TAB read -r s wi wn pane pact wact cmd path st unseen ai title; do
+	while IFS=$TAB read -r s wi wn pane pact wact cmd path st unseen ai pname title; do
+		undash "$cmd" && cmd=$REPLY
 		undash "$path" && path=$REPLY
 		undash "$st" && st=$REPLY
 		undash "$unseen" && unseen=$REPLY
 		undash "$ai" && ai=$REPLY
+		undash "$pname" && pname=$REPLY
 		if [ -z "${seen[$s]+x}" ]; then
 			seen[$s]=1
 			order+=("$s")
@@ -539,7 +592,8 @@ cmd_rows_json() {
 			active[$s]=$pane
 			apath[$s]=$path
 			ailabel[$s]=$ai
-			agents[$s]=""
+			nagents[$s]=0
+			s_wins[$s]=""
 		fi
 		count[$s]=$((count[$s] + 1))
 		if [ "$pact" = 1 ] && [ "$wact" = 1 ]; then
@@ -556,11 +610,33 @@ cmd_rows_json() {
 			repo_br[$key]=$branch
 			if [ "$top" = "${common%/.git}" ]; then repo_wt[$key]=0; else repo_wt[$key]=1; fi
 		fi
+		wk="$s$TAB$wi"
+		if [ -z "${w_count[$wk]+x}" ]; then
+			s_wins[$s]+="$wi "
+			undash "$wn" && w_name[$wk]=$REPLY
+			w_count[$wk]=0
+			w_names[$wk]=""
+			w_others[$wk]=""
+			w_agents[$wk]=""
+		fi
+		w_count[$wk]=$((w_count[$wk] + 1))
+		if [ "$pact" = 1 ] || [ "${w_count[$wk]}" = 1 ]; then
+			w_active[$wk]=$pane
+			w_path[$wk]=$path
+			w_common[$wk]=$common
+			w_top[$wk]=$top
+			w_branch[$wk]=$branch
+		fi
+		name=${pname:-$cmd}
+		w_names[$wk]+="${w_names[$wk]:+, }$name"
 		if [ -n "$kind" ]; then
+			nagents[$s]=$((nagents[$s] + 1))
 			agent_label "$kind" "$title"
 			# `-` sentinels: tab is IFS whitespace, so an empty middle field
 			# would collapse and shift every field after it.
-			agents[$s]+="$pane$TAB${REPLY:--}$TAB$kind$TAB${st:--}$TAB${unseen:--}$TAB$path$TAB${common:--}$TAB${branch:--}$TAB${top:--}$TAB$wi$TAB${wn:--}"$'\n'
+			w_agents[$wk]+="$pane$TAB${REPLY:--}$TAB$kind$TAB${st:--}$TAB${unseen:--}$TAB${path:--}$TAB${common:--}$TAB${branch:--}$TAB${top:--}$TAB${pname:--}"$'\n'
+		else
+			w_others[$wk]+="${w_others[$wk]:+, }$name"
 		fi
 	done < <(tmux list-panes -a -F "$fmt")
 
@@ -606,23 +682,42 @@ cmd_rows_json() {
 			repo "${s_repo[$s]:+${s_repo[$s]%/.git}}" branch "${s_branch[$s]}" \
 			worktree "raw:${s_wt[$s]:-0}" label "${ailabel[$s]}" state "" agent "" \
 			unseen raw:0 panes "raw:${count[$s]}" path "${apath[$s]}")")
-		while IFS=$TAB read -r ppane plabel pkind pst punseen ppath pcommon pbranch ptop pwi pwn; do
-			[ -n "$ppane" ] || continue
-			undash "$plabel" && plabel=$REPLY
-			undash "$pst" && pst=$REPLY
-			undash "$punseen" && punseen=$REPLY
-			undash "$pcommon" && pcommon=$REPLY
-			undash "$pbranch" && pbranch=$REPLY
-			undash "$ptop" && ptop=$REPLY
-			undash "$pwn" && pwn=$REPLY
-			objs+=("$(json_obj \
-				id "p:$ppane" kind pane pane "$ppane" session "$s" \
-				repo "${pcommon:+${pcommon%/.git}}" branch "$pbranch" \
-				worktree "raw:$([ -n "$pcommon" ] && [ "$ptop" != "${pcommon%/.git}" ] && echo 1 || echo 0)" \
-				label "$plabel" agent "$pkind" state "$pst" \
-				unseen "raw:$([ -n "$punseen" ] && echo 1 || echo 0)" panes raw:0 path "$ppath" \
-				window "$pwi" window_name "$pwn")")
-		done <<<"${agents[$s]:-}"
+		# shellcheck disable=SC2206 # window indexes contain no whitespace
+		wins=(${s_wins[$s]})
+		for wi in "${wins[@]}"; do
+			wk="$s$TAB$wi"
+			if [ -z "${w_agents[$wk]}" ]; then
+				# The only window of an agent-less session: the session row is the leaf.
+				[ "${nagents[$s]}" -gt 0 ] || [ "${#wins[@]}" -gt 1 ] || continue
+				pcommon=${w_common[$wk]}
+				ptop=${w_top[$wk]}
+				objs+=("$(json_obj \
+					id "w:$s:$wi" kind window session "$s" pane "${w_active[$wk]}" \
+					window "$wi" window_name "${w_name[$wk]:-}" label "${w_names[$wk]}" \
+					path "${w_path[$wk]}" repo "${pcommon:+${pcommon%/.git}}" branch "${w_branch[$wk]}" \
+					worktree "raw:$([ -n "$pcommon" ] && [ "$ptop" != "${pcommon%/.git}" ] && echo 1 || echo 0)" \
+					agent "" state "" unseen raw:0 panes "raw:${w_count[$wk]}" pane_name "" others "")")
+				continue
+			fi
+			while IFS=$TAB read -r ppane plabel pkind pst punseen ppath pcommon pbranch ptop ppname; do
+				[ -n "$ppane" ] || continue
+				undash "$plabel" && plabel=$REPLY
+				undash "$pst" && pst=$REPLY
+				undash "$punseen" && punseen=$REPLY
+				undash "$ppath" && ppath=$REPLY
+				undash "$pcommon" && pcommon=$REPLY
+				undash "$pbranch" && pbranch=$REPLY
+				undash "$ptop" && ptop=$REPLY
+				undash "$ppname" && ppname=$REPLY
+				objs+=("$(json_obj \
+					id "p:$ppane" kind pane pane "$ppane" session "$s" \
+					repo "${pcommon:+${pcommon%/.git}}" branch "$pbranch" \
+					worktree "raw:$([ -n "$pcommon" ] && [ "$ptop" != "${pcommon%/.git}" ] && echo 1 || echo 0)" \
+					label "$plabel" agent "$pkind" state "$pst" \
+					unseen "raw:$([ -n "$punseen" ] && echo 1 || echo 0)" panes raw:0 path "$ppath" \
+					window "$wi" window_name "${w_name[$wk]:-}" pane_name "$ppname" others "${w_others[$wk]}")")
+			done <<<"${w_agents[$wk]}"
+		done
 	done < <(printf '%s' "$sortable" | LC_ALL=C sort -t "$TAB" -k1,1 -k2,2 -k3,3 -k4,4)
 
 	if [ "${#objs[@]}" -eq 0 ]; then
@@ -653,12 +748,14 @@ cmd_jump() {
 	done <"$rows"
 }
 
-# Navigator ctrl-x: confirm, then kill the session heading or individual pane.
+# Navigator ctrl-x: confirm, then kill the session heading, window row or
+# individual pane.
 cmd_kill() {
 	local id=$1 rows=$2 kind target what ans
 	kind=${id%%:*} target=${id#*:}
 	case "$kind" in
 	s) what="session '$target'" ;;
+	w) what="window '$target'" ;;
 	p) what="pane '$target'" ;;
 	*) return 0 ;;
 	esac
@@ -672,6 +769,9 @@ cmd_kill() {
 			tmux switch-client -l 2>/dev/null || tmux switch-client -n 2>/dev/null || true
 		fi
 		tmux kill-session -t "=$target"
+	elif [ "$kind" = w ]; then
+		# target is SESSION:INDEX (tmux session names cannot contain `:`).
+		tmux kill-window -t "=$target"
 	else
 		tmux kill-pane -t "$target"
 	fi

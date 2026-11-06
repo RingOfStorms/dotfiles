@@ -49,14 +49,18 @@
   <details class="menu" data-menu>
     <summary aria-label="actions">⋯</summary>
     <div class="menu-body">
-      {{range .Actions}}
-        {{if .Href}}<a href="{{.Href}}"{{if .Class}} class="{{.Class}}"{{end}}>{{.Label}}</a>
-        {{else}}<form method="post" action="{{.Post}}">{{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">{{end}}<button{{if .Class}} class="{{.Class}}"{{end}}{{if .Confirm}} data-confirm="{{.Confirm}}"{{end}}>{{.Label}}</button></form>
-        {{end}}
-      {{end}}
+      {{range .Actions}}{{template "menu-item" .}}{{end}}
     </div>
   </details>
 {{end}}{{end}}
+
+{{define "menu-item"}}
+  {{if .Group}}<details class="submenu"><summary>{{.Label}}</summary><div class="submenu-body">{{range .Group}}{{template "menu-item" .}}{{end}}</div></details>
+  {{else if .Href}}<a href="{{.Href}}"{{if .Class}} class="{{.Class}}"{{end}}>{{.Label}}</a>
+  {{else if .Input}}<form method="post" action="{{.Post}}" class="menu-input">{{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">{{end}}<input name="arg" placeholder="{{.Input}}" autocomplete="off" autocapitalize="off" spellcheck="false"{{if .InputRequired}} required{{end}}><button{{if .Class}} class="{{.Class}}"{{end}}{{if .Confirm}} data-confirm="{{.Confirm}}"{{end}}>{{.Label}}</button></form>
+  {{else}}<form method="post" action="{{.Post}}">{{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">{{end}}<button{{if .Class}} class="{{.Class}}"{{end}}{{if .Confirm}} data-confirm="{{.Confirm}}"{{end}}>{{.Label}}</button></form>
+  {{end}}
+{{end}}
 
 {{define "foot"}}
 </main>

@@ -64,6 +64,23 @@
 
   function connect(el) {
     const fit = el.dataset.fit === "1";
+    // A new agent's session log appears a moment after it starts: poll, and
+    // reload into the conversation view once it can be shown (~2 minutes max).
+    if ("awaitNative" in el.dataset) {
+      let tries = 0;
+      const poll = async () => {
+        if (++tries > 80) return;
+        try {
+          const res = await fetch("/p/" + el.dataset.pane + "/native", { cache: "no-store" });
+          if (res.status === 204) {
+            location.replace("/p/" + el.dataset.pane + "?view=native");
+            return;
+          }
+        } catch {}
+        setTimeout(poll, 1500);
+      };
+      setTimeout(poll, 800);
+    }
     const lines = [];
     for (const child of el.children) {
       lines.push({ n: Number(child.dataset.n || 0), h: child.innerHTML });

@@ -449,6 +449,90 @@
   menuAction(".js-font-up", () => setFont(term.options.fontSize + 1, true));
   menuAction(".js-font-down", () => setFont(term.options.fontSize - 1, true));
   menuAction(".js-new-shell", () => newShell(true));
+  menuAction(".js-copy", () => copySelection(true));
+  menuAction(".js-copy-screen", async () => {
+    const buf = term.buffer.active;
+    const rows = [];
+    for (let y = buf.viewportY; y < buf.viewportY + term.rows; y++) {
+      const line = buf.getLine(y);
+      rows.push(line ? line.translateToString(true) : "");
+    }
+    const text = rows.join("\n").replace(/\s+$/, "");
+    if (await writeClipboard(text)) flash("screen copied");
+  });
+  menuAction(".js-keys-toggle", () => setKeys(document.body.classList.contains("no-keys"), true));
+
+  /* ---------------- key bar ---------------- */
+
+  // The extra-keys bar is for touch keyboards. With a fine pointer (desktop)
+  // it starts hidden; the menu toggles it and the choice is remembered.
+  const KEYS_KEY = "tam.term.keys";
+  function setKeys(show, persist) {
+    document.body.classList.toggle("no-keys", !show);
+    if (persist) localStorage.setItem(KEYS_KEY, show ? "1" : "0");
+    refit();
+  }
+  const savedKeys = localStorage.getItem(KEYS_KEY);
+  setKeys(savedKeys === null ? !matchMedia("(pointer: fine)").matches : savedKeys === "1", false);
+
+  /* ---------------- copy ---------------- */
+
+  const flash = (text) => {
+    status(text);
+    setTimeout(() => statusEl.textContent === text && status(""), 1500);
+  };
+  async function writeClipboard(text) {
+    if (!text) return false;
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Plain-http origins have no async clipboard API.
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      let ok = false;
+      try {
+        ok = document.execCommand("copy");
+      } catch {}
+      ta.remove();
+      term.focus();
+      return ok;
+    }
+  }
+  async function copySelection(report) {
+    const text = term.getSelection();
+    if (!text) {
+      if (report) flash("nothing selected · inside tmux use copy mode (prefix [, v, y)");
+      return;
+    }
+    if (await writeClipboard(text)) flash("copied");
+  }
+  // Ctrl+Shift+C copies the xterm selection on desktop (Ctrl+C stays ^C).
+  term.attachCustomKeyEventHandler((e) => {
+    if (e.type === "keydown" && e.ctrlKey && e.shiftKey && (e.key === "C" || e.key === "c")) {
+      copySelection(true);
+      return false;
+    }
+    return true;
+  });
+  // Inside tmux, mouse mode means a drag selects in tmux copy mode, not in
+  // xterm. tmux then sends the yanked text as OSC 52 (set-clipboard), which
+  // lands here. Shift+drag still makes an xterm selection on desktop.
+  term.parser.registerOscHandler(52, (data) => {
+    const i = data.indexOf(";");
+    const payload = i < 0 ? "" : data.slice(i + 1);
+    if (!payload || payload === "?") return true; // reads are never answered
+    try {
+      const bytes = Uint8Array.from(atob(payload), (c) => c.charCodeAt(0));
+      const text = new TextDecoder().decode(bytes);
+      if (!replaying) writeClipboard(text).then((ok) => ok && flash("copied from tmux"));
+    } catch {}
+    return true;
+  });
 
   connect();
   term.focus();

@@ -1124,3 +1124,59 @@ body.term main { overflow: hidden; padding: 0; }
 .ws-pane.current { border-color: var(--accent); color: var(--text); background: var(--surface); }
 .ws-pane-label { max-width: 45vw; overflow: hidden; text-overflow: ellipsis; }
 .ws-badge { padding: 0 5px; border-radius: 4px; background: var(--line); color: var(--yellow); font-size: 11px; }
+
+/* ---------- overflow submenus ---------- */
+.menu-body { max-height: calc(100dvh - 90px); overflow-y: auto; }
+.submenu > summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 15px;
+  padding: 10px 10px;
+  border-radius: 8px;
+  color: var(--text);
+}
+.submenu > summary::-webkit-details-marker { display: none; }
+.submenu > summary::after { content: " ›"; color: var(--muted); }
+.submenu[open] > summary::after { content: " ⌄"; }
+.submenu-body { display: flex; flex-direction: column; gap: 2px; padding-left: 10px; border-left: 2px solid var(--line); margin-left: 8px; }
+.menu-input { display: flex; gap: 6px; align-items: center; padding: 2px 4px; }
+.menu-input input {
+  flex: 1;
+  min-width: 0;
+  font: 14px var(--mono);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 8px;
+}
+.menu-body .menu-input button { width: auto; flex: 0 0 auto; }
+
+/* ---------- overflow submenus ---------- */
+.menu-body { max-height: calc(100dvh - 90px); overflow-y: auto; }
+.submenu > summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 15px;
+  padding: 10px 10px;
+  border-radius: 8px;
+  color: var(--text);
+}
+.submenu > summary::-webkit-details-marker { display: none; }
+.submenu > summary::after { content: " ›"; color: var(--muted); }
+.submenu[open] > summary::after { content: " ⌄"; }
+.submenu-body { display: flex; flex-direction: column; gap: 2px; padding-left: 8px; border-left: 2px solid var(--line); margin-left: 8px; }
+.menu-input { display: flex; gap: 6px; align-items: center; padding: 2px 4px; }
+.menu-input input {
+  flex: 1;
+  min-width: 0;
+  font: 14px var(--mono);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 8px;
+}
+.menu-body .menu-input button { width: auto; flex: 0 0 auto; }
+body.term.no-keys .term-keys { display: none; }
+.card-others { margin-top: 2px; color: var(--muted); font: 11.5px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

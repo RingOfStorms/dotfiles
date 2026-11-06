@@ -110,8 +110,10 @@ func TestPaneActionsOfferOtherViews(t *testing.T) {
 	labels := func(actions []Action) string {
 		var out []string
 		for _, a := range actions {
-			if strings.Contains(a.Href, "view=") {
-				out = append(out, a.Href[strings.Index(a.Href, "view="):])
+			for _, g := range append([]Action{a}, a.Group...) {
+				if strings.Contains(g.Href, "view=") {
+					out = append(out, g.Href[strings.Index(g.Href, "view="):])
+				}
 			}
 		}
 		return strings.Join(out, ",")

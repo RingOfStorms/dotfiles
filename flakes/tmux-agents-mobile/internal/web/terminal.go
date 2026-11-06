@@ -35,6 +35,9 @@ func (s *Server) termPage(w http.ResponseWriter, r *http.Request) {
 	b.Actions = []Action{
 		{Label: "larger text", Href: "#", Class: "js-font-up"},
 		{Label: "smaller text", Href: "#", Class: "js-font-down"},
+		{Label: "copy selection", Href: "#", Class: "js-copy"},
+		{Label: "copy screen", Href: "#", Class: "js-copy-screen"},
+		{Label: "show/hide key bar", Href: "#", Class: "js-keys-toggle"},
 		{Label: "new shell", Href: "/term?new=1", Class: "js-new-shell danger"},
 	}
 	s.render(w, "term.html", b)
