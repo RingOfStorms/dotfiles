@@ -179,122 +179,138 @@ in
         "text-embedding-ada-002"
       ])
       # 宙 Proxy
-      ++ (builtins.map
-        (m: {
-          model_name = "air-${m}";
-          litellm_params = {
-            model = "litellm_proxy/${m}";
-            api_base = "http://10.12.14.181:9010/air_prd";
-            api_key = "na";
-            drop_params = true;
-            # TODO try this instead of sanitized name
-            # additional_drop_params = if [ "messages[*].cacheControl" ];
+      ++ (
+        let
+          # Upstream reasoning_effort_levels; LiteLLM can't infer these for
+          # litellm_proxy/* models, so mirror them into model_info.
+          # curl -L t:9010/air_prd/model/info | jq '.data[] | select(.model_info.reasoning_effort_levels) | {model_name, l: .model_info.reasoning_effort_levels}'
+          reasoningLevels = {
+            "deepseek-4-flash-0731" = [ "none" "minimal" "low" "medium" "high" "xhigh" "max" ];
+            "deepseek-4-pro-0813" = [ "none" "low" "high" "max" ];
+            "deepseek-4.1-flash" = [ "none" "low" "high" "max" ];
+            "deepseek-4.1-flash-1017" = [ "none" "low" "medium" "high" "max" ];
+            "glm-5.2" = [ "none" "low" "high" "max" ];
+            "glm-5.3" = [ "none" "low" "high" "max" ];
+            "glm-5.3-flash" = [ "none" "low" "high" "max" ];
+            "gpt-oss-120b" = [ "none" "minimal" "low" "medium" "high" "xhigh" "max" ];
+            "kimi-k3" = [ "none" "low" "high" "max" ];
           };
-        })
-        # curl -L t:9010/air_prd/models | jq '.data.[].id'
-        [
-          "BGE-small-en-v1.5-BEI"
-          "claude-haiku-4-5-20251001"
-          "claude-haiku-4.5"
-          "claude-haiku-5-5"
-          "claude-haiku-5.5"
-          "claude-opus-4"
-          "claude-opus-4-1-20250805"
-          "claude-opus-4-20250514"
-          "claude-opus-4-5-20251101"
-          "claude-opus-4-6"
-          "claude-opus-4-7"
-          "claude-opus-4-8"
-          "claude-opus-4.1"
-          "claude-opus-4.5"
-          "claude-opus-4.6"
-          "claude-opus-4.7"
-          "claude-opus-4.8"
-          "claude-opus-5"
-          "claude-opus-5-5"
-          "claude-opus-5.5"
-          "claude-sonnet-4"
-          "claude-sonnet-4-20250514"
-          "claude-sonnet-4-5-20250929"
-          "claude-sonnet-4-6"
-          "claude-sonnet-4.5"
-          "claude-sonnet-4.6"
-          "claude-sonnet-5"
-          "claude-sonnet-5-5"
-          "claude-sonnet-5.5"
-          "codex-auto-review"
-          "deepseek-3.1"
-          "deepseek-4-flash-0731"
-          "deepseek-4-pro"
-          "deepseek-4-pro-0813"
-          "deepseek-4.1-flash"
-          "deepseek-4.1-flash-1017"
-          "gemini-2.5-flash"
-          "gemini-2.5-flash-batch"
-          "gemini-2.5-flash-image"
-          "gemini-2.5-flash-lite"
-          "gemini-2.5-pro"
-          "gemini-2.5-pro-batch"
-          "gemini-2.5-pro-passthrough"
-          "gemini-3.1-flash-lite"
-          "gemini-3.1-flash-lite-passthrough"
-          "gemini-3.5-flash"
-          "gemini-3.5-flash-lite"
-          "gemini-3.5-flash-passthrough"
-          "gemini-3.7-flash"
-          "gemini-3.8-flash"
-          "gemini-3.8-live"
-          "gemini-4-argon"
-          "gemini-embedding-001"
-          "gemini-embedding-2"
-          "gemini-live-2.5-flash-native-audio"
-          "glm-4.7"
-          "glm-5"
-          "glm-5.1"
-          "glm-5.2"
-          "glm-5.3"
-          "glm-5.3-flash"
-          "gpt-4.1"
-          "gpt-4.1-mini"
-          "gpt-4o"
-          "gpt-4o-applied-ai"
-          "gpt-4o-mini"
-          "gpt-5"
-          "gpt-5-batch"
-          "gpt-5-mini"
-          "gpt-5-nano"
-          "gpt-5.1"
-          "gpt-5.2"
-          "gpt-5.4"
-          "gpt-5.4-mini"
-          "gpt-5.4-nano"
-          "gpt-5.5"
-          "gpt-5.6-luna"
-          "gpt-5.6-luna-oai"
-          "gpt-5.6-sol"
-          "gpt-5.6-terra"
-          "gpt-6-astra"
-          "gpt-6-luna"
-          "gpt-6-luna-oai"
-          "gpt-6-sol"
-          "gpt-6-sol-oai"
-          "gpt-6.1-sol"
-          "gpt-oss-120b"
-          "kimi-2.5"
-          "kimi-k2.6"
-          "kimi-k2.7-code"
-          "kimi-k3"
-          "minimax-2.5"
-          "o3-mini"
-          "o4-mini"
-          "qwen3-6-35b-a3b-fp8-fm"
-          "qwen3-8-2-4t-a95b-fp8-fm"
-          "text-embedding-005"
-          "text-embedding-3-large"
-          "text-embedding-3-small"
-          "text-embedding-ada-002"
-          "text-embedding-large-exp-03-07"
-        ]
+        in
+        builtins.map
+          (m: {
+            model_name = "air-${m}";
+            litellm_params = {
+              model = "litellm_proxy/${m}";
+              api_base = "http://10.12.14.181:9010/air_prd";
+              api_key = "na";
+              drop_params = true;
+              # TODO try this instead of sanitized name
+              # additional_drop_params = if [ "messages[*].cacheControl" ];
+            };
+          } // (if reasoningLevels ? ${m} then {
+            model_info = {
+              supports_reasoning = true;
+              reasoning_effort_levels = reasoningLevels.${m};
+            };
+          } else { }))
+          # curl -L t:9010/air_prd/models | jq '.data.[].id'
+          [
+            "BGE-small-en-v1.5-BEI"
+            "claude-haiku-4-5-20251001"
+            "claude-haiku-4.5"
+            "claude-haiku-5-5"
+            "claude-haiku-5.5"
+            "claude-opus-4"
+            "claude-opus-4-1-20250805"
+            "claude-opus-4-20250514"
+            "claude-opus-4-5-20251101"
+            "claude-opus-4-6"
+            "claude-opus-4-7"
+            "claude-opus-4-8"
+            "claude-opus-4.1"
+            "claude-opus-4.5"
+            "claude-opus-4.6"
+            "claude-opus-4.7"
+            "claude-opus-4.8"
+            "claude-opus-5"
+            "claude-opus-5-5"
+            "claude-opus-5.5"
+            "claude-sonnet-4"
+            "claude-sonnet-4-20250514"
+            "claude-sonnet-4-5-20250929"
+            "claude-sonnet-4-6"
+            "claude-sonnet-4.5"
+            "claude-sonnet-4.6"
+            "claude-sonnet-5"
+            "claude-sonnet-5-5"
+            "claude-sonnet-5.5"
+            "codex-auto-review"
+            "deepseek-4-flash-0731"
+            "deepseek-4-pro-0813"
+            "deepseek-4.1-flash"
+            "deepseek-4.1-flash-1017"
+            "elephant-1"
+            "gemini-2.5-flash"
+            "gemini-2.5-flash-batch"
+            "gemini-2.5-flash-image"
+            "gemini-2.5-flash-lite"
+            "gemini-2.5-pro"
+            "gemini-2.5-pro-batch"
+            "gemini-2.5-pro-passthrough"
+            "gemini-3.1-flash-lite"
+            "gemini-3.1-flash-lite-passthrough"
+            "gemini-3.5-flash"
+            "gemini-3.5-flash-lite"
+            "gemini-3.5-flash-passthrough"
+            "gemini-3.7-flash"
+            "gemini-3.8-flash"
+            "gemini-3.8-live"
+            "gemini-4-argon"
+            "gemini-embedding-001"
+            "gemini-embedding-2"
+            "gemini-live-2.5-flash-native-audio"
+            "glm-5.2"
+            "glm-5.3"
+            "glm-5.3-flash"
+            "gpt-4.1"
+            "gpt-4.1-mini"
+            "gpt-4o"
+            "gpt-4o-applied-ai"
+            "gpt-4o-mini"
+            "gpt-5"
+            "gpt-5-batch"
+            "gpt-5-mini"
+            "gpt-5-nano"
+            "gpt-5.1"
+            "gpt-5.2"
+            "gpt-5.4"
+            "gpt-5.4-mini"
+            "gpt-5.4-nano"
+            "gpt-5.5"
+            "gpt-5.6-luna"
+            "gpt-5.6-luna-oai"
+            "gpt-5.6-sol"
+            "gpt-5.6-terra"
+            "gpt-6-astra"
+            "gpt-6-luna"
+            "gpt-6-luna-oai"
+            "gpt-6-sol"
+            "gpt-6-sol-oai"
+            "gpt-6.1-sol"
+            "gpt-oss-120b"
+            "kimi-k3"
+            "mammoth-1"
+            "minimax-2.5"
+            "o3-mini"
+            "o4-mini"
+            "qwen3-6-35b-a3b-fp8-fm"
+            "qwen3-8-2-4t-a95b-fp8-fm"
+            "text-embedding-005"
+            "text-embedding-3-large"
+            "text-embedding-3-small"
+            "text-embedding-ada-002"
+            "text-embedding-large-exp-03-07"
+          ]
       );
     };
   };
