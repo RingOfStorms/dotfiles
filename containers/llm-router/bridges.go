@@ -398,40 +398,76 @@ func (s *server) chatViaResponses(w http.ResponseWriter, r *http.Request, m mode
 	}
 
 	out := newSSEWriter(w)
-	// Chat clients key off "index" for tool calls; copilot's responses events
-	// carry output_index, which is the same counter.
-	toolIndex := map[int64]int64{}
-	nextTool := int64(0)
-	hadToolCall := false
-	var usage map[string]any
-
-	chunk := func(delta map[string]any, finish any) map[string]any {
-		return map[string]any{
-			"id":      newID("chatcmpl"),
-			"object":  chatChunkObj,
-			"created": created,
-			"model":   m.ID,
-			"choices": []any{map[string]any{"index": 0, "delta": delta, "finish_reason": finish}},
-		}
+	emitter := &chatChunkWriter{out: out, created: created, modelID: m.ID}
+	failure := streamResponsesAsChat(resp.Body, emitter)
+	if failure != "" && r.Context().Err() == nil {
+		log.Printf("chat->responses %s: stream ended in failure: %s", m.ID, failure)
 	}
+	emitter.finish(failure, includeUsage)
+}
 
-	err = scanSSE(resp.Body, func(ev sseEvent) error {
+// chatChunkWriter turns responses stream events into chat.completion.chunk
+// events. It tracks what it has emitted so the terminal chunk reflects the
+// upstream outcome instead of always claiming success.
+type chatChunkWriter struct {
+	out     *sseWriter
+	created int64
+	modelID string
+
+	// slotFor maps the upstream output_index of a function call to the dense
+	// chat tool_calls index clients expect.
+	slotFor map[int64]int64
+	next    int64
+	// tools counts declared tool calls; used for the finish reason when the
+	// upstream ends without saying why.
+	tools int
+	// length marks a generation the upstream cut off at the token limit.
+	length bool
+	usage  map[string]any
+}
+
+func (c *chatChunkWriter) chunk(delta map[string]any, finish any) map[string]any {
+	return map[string]any{
+		"id":      newID("chatcmpl"),
+		"object":  chatChunkObj,
+		"created": c.created,
+		"model":   c.modelID,
+		"choices": []any{map[string]any{"index": 0, "delta": delta, "finish_reason": finish}},
+	}
+}
+
+func (c *chatChunkWriter) event(delta map[string]any, finish any) error {
+	return c.out.event("", c.chunk(delta, finish))
+}
+
+// streamResponsesAsChat forwards one responses stream to the chat client and
+// returns the failure text when the upstream reported an error or the stream
+// broke before a terminal event. An empty string means the upstream completed.
+func streamResponsesAsChat(body io.Reader, c *chatChunkWriter) string {
+	if c.slotFor == nil {
+		c.slotFor = map[int64]int64{}
+	}
+	var failure string
+	completed := false
+	err := scanSSE(body, func(ev sseEvent) error {
 		payload, err := decodeObject(ev.Data)
 		if err != nil {
 			return nil // tolerate non-JSON keepalives
 		}
+		if failure != "" {
+			return nil
+		}
 		switch str(payload["type"]) {
 		case "response.output_item.added":
-			item, _ := payload["item"].(map[string]any)
+			item := asMap(payload["item"])
 			if str(item["type"]) != "function_call" {
 				return nil
 			}
-			index := num(payload["output_index"])
-			slot := nextTool
-			nextTool++
-			toolIndex[index] = slot
-			hadToolCall = true
-			return out.event("", chunk(map[string]any{
+			slot := c.next
+			c.next++
+			c.tools++
+			c.slotFor[num(payload["output_index"])] = slot
+			return c.event(map[string]any{
 				"tool_calls": []any{map[string]any{
 					"index": slot,
 					"id":    str(item["call_id"]),
@@ -441,53 +477,90 @@ func (s *server) chatViaResponses(w http.ResponseWriter, r *http.Request, m mode
 						"arguments": "",
 					},
 				}},
-			}, nil))
+			}, nil)
 		case "response.function_call_arguments.delta":
-			slot, ok := toolIndex[num(payload["output_index"])]
+			slot, ok := c.slotFor[num(payload["output_index"])]
 			if !ok {
 				return nil
 			}
-			return out.event("", chunk(map[string]any{
+			return c.event(map[string]any{
 				"tool_calls": []any{map[string]any{
 					"index":    slot,
 					"function": map[string]any{"arguments": str(payload["delta"])},
 				}},
-			}, nil))
+			}, nil)
 		case "response.output_text.delta":
-			return out.event("", chunk(map[string]any{"content": str(payload["delta"])}, nil))
+			return c.event(map[string]any{"content": str(payload["delta"])}, nil)
 		case "response.reasoning_text.delta":
-			return out.event("", chunk(map[string]any{"reasoning_content": str(payload["delta"])}, nil))
+			return c.event(map[string]any{"reasoning_content": str(payload["delta"])}, nil)
 		case "response.completed":
-			if r, ok := payload["response"].(map[string]any); ok {
-				usage = usageFromResponses(asMap(r["usage"]))
+			completed = true
+			c.usage = usageFromResponses(asMap(asMap(payload["response"])["usage"]))
+		case "response.incomplete":
+			completed = true
+			c.length = true
+			c.usage = usageFromResponses(asMap(asMap(payload["response"])["usage"]))
+		case "response.failed":
+			completed = true
+			response := asMap(payload["response"])
+			if detail := asMap(response["error"]); detail != nil {
+				failure = str(detail["message"])
 			}
+			if failure == "" {
+				failure = "the upstream reported a failed response"
+			}
+			c.usage = usageFromResponses(asMap(response["usage"]))
 		}
 		return nil
 	})
-	if err != nil && r.Context().Err() == nil {
-		log.Printf("chat->responses %s: stream: %v", m.ID, err)
+	if failure != "" {
+		return failure
 	}
+	if err != nil {
+		return "stream read: " + err.Error()
+	}
+	if !completed {
+		return "stream ended before the upstream finished"
+	}
+	return ""
+}
 
-	finish := "stop"
-	if hadToolCall {
-		finish = "tool_calls"
-	}
-	if err := out.event("", chunk(map[string]any{}, finish)); err != nil {
+// finish writes the terminal chat chunk. A failed stream ends as an error
+// event rather than a successful stop: a client that sees finish_reason
+// "stop" would treat truncated output as a complete answer.
+func (c *chatChunkWriter) finish(failure string, includeUsage bool) {
+	if failure != "" {
+		_ = c.out.event("", map[string]any{
+			"error": map[string]any{"message": "llm-router: upstream stream failed: " + failure, "type": "upstream_error"},
+		})
+		c.out.done()
 		return
 	}
-	if includeUsage && usage != nil {
-		if err := out.event("", map[string]any{
+	reason := "stop"
+	switch {
+	case c.tools > 0:
+		reason = "tool_calls"
+	case c.length:
+		// Chat has no "incomplete": a cut-off generation is finish_reason
+		// "length", which is how clients learn the answer was truncated.
+		reason = "length"
+	}
+	if err := c.event(map[string]any{}, reason); err != nil {
+		return
+	}
+	if includeUsage && c.usage != nil {
+		if err := c.out.event("", map[string]any{
 			"id":      newID("chatcmpl"),
 			"object":  chatChunkObj,
-			"created": created,
-			"model":   m.ID,
+			"created": c.created,
+			"model":   c.modelID,
 			"choices": []any{},
-			"usage":   usage,
+			"usage":   c.usage,
 		}); err != nil {
 			return
 		}
 	}
-	out.done()
+	c.out.done()
 }
 
 func asMap(v any) map[string]any {
@@ -550,6 +623,11 @@ func chatFromResponseBody(modelID string, created int64, payload map[string]any)
 		message["tool_calls"] = toolCalls
 		message["content"] = nil
 		finish = "tool_calls"
+	}
+	// A responses object cut off at the token limit maps to chat's "length";
+	// callers rely on it to know the answer was truncated.
+	if str(payload["status"]) == "incomplete" {
+		finish = "length"
 	}
 	return map[string]any{
 		"id":      newID("chatcmpl"),
@@ -752,20 +830,11 @@ func (s *server) responsesViaChat(w http.ResponseWriter, r *http.Request, m mode
 	if err := state.start(); err != nil {
 		return
 	}
-	err = scanSSE(resp.Body, func(ev sseEvent) error {
-		if strings.TrimSpace(string(ev.Data)) == "[DONE]" {
-			return nil
-		}
-		payload, err := decodeObject(ev.Data)
-		if err != nil {
-			return nil
-		}
-		return state.consumeChatChunk(payload)
-	})
-	if err != nil && r.Context().Err() == nil {
-		log.Printf("responses->chat %s: stream: %v", m.ID, err)
+	failure := state.consumeChatStream(resp.Body)
+	if failure != "" && r.Context().Err() == nil {
+		log.Printf("responses->chat %s: stream ended in failure: %s", m.ID, failure)
 	}
-	state.finish()
+	state.finish(failure)
 }
 
 // responseStream turns chat.completion.chunk events into responses SSE events.
@@ -782,6 +851,8 @@ type responseStream struct {
 	toolCalls  map[int64]*streamToolCall
 	toolOrder  []int64
 	usage      map[string]any
+	// truncated marks a generation the upstream cut off at the token limit.
+	truncated bool
 }
 
 type streamToolCall struct {
@@ -897,8 +968,74 @@ func (s *responseStream) consumeChatChunk(chunk map[string]any) error {
 	return nil
 }
 
-// finish emits the closing events for the response.
-func (s *responseStream) finish() {
+// consumeChatStream forwards one chat.completion.chunk stream into the
+// responses stream and returns failure text when the upstream broke, sent an
+// error, or stopped without a finish_reason. Empty means it finished normally.
+func (s *responseStream) consumeChatStream(body io.Reader) string {
+	var failure string
+	finished := false
+	err := scanSSE(body, func(ev sseEvent) error {
+		if strings.TrimSpace(string(ev.Data)) == "[DONE]" {
+			return nil
+		}
+		payload, err := decodeObject(ev.Data)
+		if err != nil {
+			return nil
+		}
+		if failure != "" {
+			return nil
+		}
+		if detail := asMap(payload["error"]); detail != nil {
+			failure = str(detail["message"])
+			if failure == "" {
+				failure = "the upstream returned an error"
+			}
+			return nil
+		}
+		if err := s.consumeChatChunk(payload); err != nil {
+			return err
+		}
+		choices, _ := payload["choices"].([]any)
+		if len(choices) == 0 {
+			return nil
+		}
+		choice, _ := choices[0].(map[string]any)
+		switch str(choice["finish_reason"]) {
+		case "":
+		case "length":
+			// Cut off at the token limit: an incomplete response, not success.
+			s.truncated = true
+			finished = true
+		default:
+			finished = true
+		}
+		return nil
+	})
+	if failure != "" {
+		return failure
+	}
+	if err != nil {
+		return "stream read: " + err.Error()
+	}
+	if !finished {
+		return "stream ended before the upstream finished"
+	}
+	return ""
+}
+
+// finish closes any open output items and emits the terminal event. A broken
+// stream ends as response.failed and a generation cut off at the token limit
+// as response.incomplete; only a clean upstream exit reports
+// response.completed, because clients treat that as a whole answer.
+func (s *responseStream) finish(failure string) {
+	status := "completed"
+	switch {
+	case failure != "":
+		status = "failed"
+	case s.truncated:
+		status = "incomplete"
+	}
+
 	var output []any
 	text := s.text.String()
 
@@ -912,7 +1049,7 @@ func (s *responseStream) finish() {
 			})
 			item := map[string]any{
 				"id": s.textItemID, "type": "message", "role": "assistant",
-				"status": "completed", "content": []any{part},
+				"status": status, "content": []any{part},
 			}
 			s.emit("response.output_item.done", map[string]any{"output_index": 0, "item": item})
 			output = append(output, item)
@@ -942,15 +1079,23 @@ func (s *responseStream) finish() {
 		})
 		final := map[string]any{
 			"id": itemID, "type": "function_call", "call_id": call.id,
-			"name": call.name, "arguments": arguments, "status": "completed",
+			"name": call.name, "arguments": arguments, "status": status,
 		}
 		s.emit("response.output_item.done", map[string]any{"output_index": outputIndex, "item": final})
 		output = append(output, final)
 	}
 
-	s.emit("response.completed", map[string]any{
-		"response": s.responseObject("completed", output),
-	})
+	response := s.responseObject(status, output)
+	event := "response.completed"
+	switch status {
+	case "failed":
+		event = "response.failed"
+		response["error"] = map[string]any{"code": "upstream_error", "message": failure}
+	case "incomplete":
+		event = "response.incomplete"
+		response["incomplete_details"] = map[string]any{"reason": "max_output_tokens"}
+	}
+	s.emit(event, map[string]any{"response": response})
 }
 
 // responseBodyFromChat converts a complete chat completion into a responses
@@ -984,13 +1129,23 @@ func responseBodyFromChat(modelID string, payload map[string]any) map[string]any
 			"content": []any{map[string]any{"type": "output_text", "text": text.String(), "annotations": []any{}}},
 		}}, output...)
 	}
-	return map[string]any{
+	status := "completed"
+	if len(choices) > 0 {
+		if choice, ok := choices[0].(map[string]any); ok && str(choice["finish_reason"]) == "length" {
+			status = "incomplete"
+		}
+	}
+	out := map[string]any{
 		"id":         newID("resp"),
 		"object":     responseObj,
 		"created_at": time.Now().Unix(),
-		"status":     "completed",
+		"status":     status,
 		"model":      modelID,
 		"output":     output,
 		"usage":      usageToResponses(asMap(payload["usage"])),
 	}
+	if status == "incomplete" {
+		out["incomplete_details"] = map[string]any{"reason": "max_output_tokens"}
+	}
+	return out
 }

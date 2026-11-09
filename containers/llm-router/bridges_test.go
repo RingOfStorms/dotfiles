@@ -234,6 +234,46 @@ func TestChatFromResponseBody(t *testing.T) {
 	}
 }
 
+// TestChatFromIncompleteResponseBody pins that a truncated responses object
+// surfaces as chat finish_reason "length", not a clean stop.
+func TestChatFromIncompleteResponseBody(t *testing.T) {
+	payload := map[string]any{
+		"status": "incomplete",
+		"output": []any{map[string]any{"type": "message", "content": []any{
+			map[string]any{"type": "output_text", "text": "half an ans"},
+		}}},
+	}
+	got := chatFromResponseBody("m", 1, payload)
+	choice := got["choices"].([]any)[0].(map[string]any)
+	if choice["finish_reason"] != "length" {
+		t.Errorf("finish_reason = %v, want length", choice["finish_reason"])
+	}
+}
+
+// TestResponseBodyFromChatMarksTruncation is the other direction: a chat
+// completion that stopped at the token limit is an incomplete response.
+func TestResponseBodyFromChatMarksTruncation(t *testing.T) {
+	payload := map[string]any{
+		"choices": []any{map[string]any{
+			"message":       map[string]any{"role": "assistant", "content": "half"},
+			"finish_reason": "length",
+		}},
+	}
+	got := responseBodyFromChat("m", payload)
+	if got["status"] != "incomplete" {
+		t.Errorf("status = %v, want incomplete", got["status"])
+	}
+	details, _ := got["incomplete_details"].(map[string]any)
+	if details["reason"] != "max_output_tokens" {
+		t.Errorf("incomplete_details = %v", got["incomplete_details"])
+	}
+
+	payload["choices"].([]any)[0].(map[string]any)["finish_reason"] = "stop"
+	if got := responseBodyFromChat("m", payload); got["status"] != "completed" {
+		t.Errorf("completed answer reported as %v", got["status"])
+	}
+}
+
 // TestResponseStreamTranslatesChatChunks drives the streaming bridge with raw
 // chat chunks: text, then a tool call, then the usage-only final chunk.
 func TestResponseStreamTranslatesChatChunks(t *testing.T) {
@@ -244,25 +284,22 @@ func TestResponseStreamTranslatesChatChunks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	chunks := []string{
-		`{"choices":[{"index":0,"delta":{"role":"assistant","content":"Hel"}}]}`,
-		`{"choices":[{"index":0,"delta":{"content":"lo"}}]}`,
-		`{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_a","type":"function","function":{"name":"get_weather","arguments":""}}]}}]}`,
-		`{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"city\":"}}]}}]}`,
-		`{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"Paris\"}"}}]}}]}`,
-		`{"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`,
-		`{"choices":[],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18}}`,
+	raw := strings.Join([]string{
+		`data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"Hel"}}]}`,
+		`data: {"choices":[{"index":0,"delta":{"content":"lo"}}]}`,
+		`data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_a","type":"function","function":{"name":"get_weather","arguments":""}}]}}]}`,
+		`data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"city\":"}}]}}]}`,
+		`data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"Paris\"}"}}]}}]}`,
+		`data: {"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`,
+		`data: {"choices":[],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18}}`,
+		`data: [DONE]`,
+		"",
+	}, "\n\n")
+	failure := state.consumeChatStream(strings.NewReader(raw))
+	if failure != "" {
+		t.Fatalf("stream reported failure: %s", failure)
 	}
-	for _, raw := range chunks {
-		payload, err := decodeObject([]byte(raw))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := state.consumeChatChunk(payload); err != nil {
-			t.Fatal(err)
-		}
-	}
-	state.finish()
+	state.finish(failure)
 
 	body := recorder.body.String()
 	for _, want := range []string{
@@ -288,8 +325,67 @@ func TestResponseStreamTranslatesChatChunks(t *testing.T) {
 	checkSequenceNumbers(t, body)
 }
 
-// TestChatStreamFromResponsesEvents drives the other streaming direction with
-// the event shapes captured from api.githubcopilot.com.
+// TestResponseStreamReportsUpstreamError fails the way a dropped upstream
+// connection does: text arrives, then the stream stops with no finish_reason.
+func TestResponseStreamReportsUpstreamError(t *testing.T) {
+	recorder := newRecordingWriter()
+	state := &responseStream{out: &sseWriter{w: recorder}, modelID: "m", responseID: "resp_test", createdAt: 1}
+	if err := state.start(); err != nil {
+		t.Fatal(err)
+	}
+	raw := "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"partial\"}}]}\n\n"
+	failure := state.consumeChatStream(strings.NewReader(raw))
+	if failure == "" {
+		t.Fatal("truncated stream reported success")
+	}
+	state.finish(failure)
+
+	body := recorder.body.String()
+	if !strings.Contains(body, "event: response.failed") {
+		t.Errorf("missing response.failed:\n%s", body)
+	}
+	if strings.Contains(body, "event: response.completed") {
+		t.Errorf("a broken stream must not report completion:\n%s", body)
+	}
+	if !strings.Contains(body, `"status":"failed"`) {
+		t.Errorf("terminal status not failed:\n%s", body)
+	}
+}
+
+// TestResponseStreamReportsTruncation maps a chat length cut-off to an
+// incomplete response, so a client can tell the answer was truncated.
+func TestResponseStreamReportsTruncation(t *testing.T) {
+	recorder := newRecordingWriter()
+	state := &responseStream{out: &sseWriter{w: recorder}, modelID: "m", responseID: "resp_test", createdAt: 1}
+	if err := state.start(); err != nil {
+		t.Fatal(err)
+	}
+	raw := strings.Join([]string{
+		`data: {"choices":[{"index":0,"delta":{"content":"cut"}}]}`,
+		`data: {"choices":[{"index":0,"delta":{},"finish_reason":"length"}]}`,
+		`data: [DONE]`,
+		"",
+	}, "\n\n")
+	failure := state.consumeChatStream(strings.NewReader(raw))
+	if failure != "" {
+		t.Fatalf("a token-limit stop is not a failure: %s", failure)
+	}
+	state.finish(failure)
+
+	body := recorder.body.String()
+	if !strings.Contains(body, "event: response.incomplete") {
+		t.Errorf("missing response.incomplete:\n%s", body)
+	}
+	if strings.Contains(body, "event: response.completed") {
+		t.Errorf("a truncated generation must not report completion:\n%s", body)
+	}
+	if !strings.Contains(body, `"reason":"max_output_tokens"`) {
+		t.Errorf("missing incomplete_details:\n%s", body)
+	}
+}
+
+// TestChatStreamFromResponsesEvents drives the responses-events-to-chat bridge
+// with the event shapes captured from api.githubcopilot.com.
 func TestChatStreamFromResponsesEvents(t *testing.T) {
 	events := []struct{ name, data string }{
 		{"response.created", `{"type":"response.created","response":{"id":"r","status":"in_progress"}}`},
@@ -301,67 +397,55 @@ func TestChatStreamFromResponsesEvents(t *testing.T) {
 	}
 
 	recorder := newRecordingWriter()
-	out := &sseWriter{w: recorder}
-	var chunks []map[string]any
-	toolIndex := map[int64]int64{}
-	nextTool := int64(0)
-	hadToolCall := false
-	var usage map[string]any
-	emit := func(delta map[string]any, finish any) {
-		chunks = append(chunks, map[string]any{"delta": delta, "finish_reason": finish})
+	emitter := &chatChunkWriter{out: &sseWriter{w: recorder}, created: 1, modelID: "copilot-claude-sonnet-5.5"}
+	failure := streamResponsesAsChat(strings.NewReader(strings.Join(renderEvents(events), "")), emitter)
+	if failure != "" {
+		t.Fatalf("stream reported failure: %s", failure)
 	}
-	// Mirror chatViaResponses' streaming loop without an upstream connection.
-	var streamErr error
-	streamErr = scanSSE(strings.NewReader(strings.Join(renderEvents(events), "")), func(ev sseEvent) error {
-		payload, err := decodeObject(ev.Data)
-		if err != nil {
-			return nil
-		}
-		switch str(payload["type"]) {
-		case "response.output_item.added":
-			item := asMap(payload["item"])
-			slot := nextTool
-			nextTool++
-			toolIndex[num(payload["output_index"])] = slot
-			hadToolCall = true
-			emit(map[string]any{"tool_calls": []any{map[string]any{
-				"index": slot, "id": str(item["call_id"]), "type": "function",
-				"function": map[string]any{"name": str(item["name"]), "arguments": ""},
-			}}}, nil)
-		case "response.function_call_arguments.delta":
-			slot := toolIndex[num(payload["output_index"])]
-			emit(map[string]any{"tool_calls": []any{map[string]any{
-				"index": slot, "function": map[string]any{"arguments": str(payload["delta"])},
-			}}}, nil)
-		case "response.output_text.delta":
-			emit(map[string]any{"content": str(payload["delta"])}, nil)
-		case "response.completed":
-			usage = usageFromResponses(asMap(asMap(payload["response"])["usage"]))
-		}
-		return nil
-	})
-	if streamErr != nil {
-		t.Fatal(streamErr)
-	}
-	finish := "stop"
-	if hadToolCall {
-		finish = "tool_calls"
-	}
-	emit(map[string]any{}, finish)
+	emitter.finish(failure, true)
 
-	if len(chunks) != 5 {
-		t.Fatalf("chunks = %d, want 5", len(chunks))
+	body := recorder.body.String()
+	for _, want := range []string{
+		`"delta":{"content":"Hi"}`,
+		`"finish_reason":"tool_calls"`,
+		`"arguments":"{\"city\":\"Paris\"}"`,
+		`"completion_tokens":18`,
+		"data: [DONE]",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("chat stream missing %q\n%s", want, body)
+		}
 	}
-	if got := chunks[0]["delta"].(map[string]any)["content"]; got != "Hi" {
-		t.Errorf("first chunk content = %v", got)
+	if strings.Count(body, `"content":"Hi"`) != 1 || strings.Count(body, `"content":"!"`) != 1 {
+		t.Errorf("text deltas lost or duplicated:\n%s", body)
 	}
-	if got := chunks[len(chunks)-1]["finish_reason"]; got != "tool_calls" {
-		t.Errorf("finish_reason = %v", got)
+}
+
+// TestChatStreamReportsResponsesFailure pins the truncation bug: copilot can
+// end a responses stream with response.failed, which must not reach the chat
+// client as a successful stop.
+func TestChatStreamReportsResponsesFailure(t *testing.T) {
+	events := []struct{ name, data string }{
+		{"response.created", `{"type":"response.created","response":{"id":"r","status":"in_progress"}}`},
+		{"response.output_text.delta", `{"type":"response.output_text.delta","delta":"partial"}`},
+		{"response.failed", `{"type":"response.failed","response":{"id":"r","status":"failed","error":{"code":"server_error","message":"model crashed"}}}`},
 	}
-	if usage["completion_tokens"] != int64(18) || usage["prompt_tokens"] != int64(50) {
-		t.Errorf("usage = %v", usage)
+
+	recorder := newRecordingWriter()
+	emitter := &chatChunkWriter{out: &sseWriter{w: recorder}, created: 1, modelID: "m"}
+	failure := streamResponsesAsChat(strings.NewReader(strings.Join(renderEvents(events), "")), emitter)
+	if failure != "model crashed" {
+		t.Fatalf("failure = %q, want the upstream error message", failure)
 	}
-	_ = out
+	emitter.finish(failure, true)
+
+	body := recorder.body.String()
+	if strings.Contains(body, `"finish_reason":"stop"`) || strings.Contains(body, `"finish_reason":"tool_calls"`) {
+		t.Errorf("failed stream produced a success finish reason:\n%s", body)
+	}
+	if !strings.Contains(body, "model crashed") {
+		t.Errorf("upstream error not surfaced to the client:\n%s", body)
+	}
 }
 
 // TestScanSSEMultilineData checks the SSE parser joins data lines and ignores
