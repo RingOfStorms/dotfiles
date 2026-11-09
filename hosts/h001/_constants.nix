@@ -28,7 +28,7 @@
       domain = "gist.joshuabell.xyz";
     };
 
-    # Floating containers: containers/{life,litellm,open-webui,searx,trilium,puzzles}
+    # Floating containers: containers/{life,litellm,llm-router,open-webui,searx,trilium,puzzles}
     # (ports, vhosts live there). Domains kept for reference.
     openWebui = {
       domain = "chat.joshuabell.xyz";

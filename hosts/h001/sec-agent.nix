@@ -22,13 +22,17 @@ import ../_shared_assets/utilities/sec-agent.nix {
       softDepend = [ "container@open-webui" ];
     };
 
-    # This is the preformatted EnvironmentFile consumed by LiteLLM. It is a
-    # separate sec key because the old OpenBao template assembled it from the
-    # openrouter api-key field, while sec-agent intentionally renders values
+    # This is the preformatted EnvironmentFile consumed by the LLM gateway
+    # (litellm today, llm-router for the trial). It is a separate sec key
+    # because the old OpenBao template assembled it from the openrouter
+    # api-key field, while sec-agent intentionally renders values
     # byte-for-byte.
     litellm-env = {
       remotePath = "machines/high-trust/litellm-env";
-      softDepend = [ "container@litellm" ];
+      softDepend = [
+        "container@litellm"
+        "container@llm-router"
+      ];
     };
 
     # pgBackRest conf fragment for the Life container ([global]

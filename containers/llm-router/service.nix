@@ -1,0 +1,42 @@
+# llm-router: the fleet's OpenAI-compatible LLM gateway (:8095, private
+# network). Candidate LiteLLM replacement, deployed *alongside* the litellm
+# container for the trial; clients move over once it has proven itself.
+{
+  name = "llm-router";
+  kind = "nixos";
+  description = "LLM gateway, trial alongside litellm (llm-router.joshuabell.xyz)";
+
+  # Copilot device-login token (0600) plus nothing else. Static user pinned in
+  # container.nix, so the token survives restarts and `cnt move`.
+  persist = {
+    data = "/var/lib/llm-router";
+    nixos = "/var/lib/nixos";
+  };
+
+  # sec-agent grant on the host (bound read-only in flake.nix); cnt deploy
+  # and cnt move refuse a target host that lacks it. The key predates the
+  # router: it is the preformatted EnvironmentFile holding OPENROUTER_API_KEY.
+  secrets = [ "litellm-env" ];
+
+  net = {
+    private = true;
+    index = 19;
+    # Local model server on the LAN (air-base in main.go).
+    egress = [ "10.12.14.181:9010/tcp" ];
+  };
+
+  # Streaming completions: no proxy buffering, long timeouts.
+  routes.web = {
+    name = "llm-router";
+    group = "AI";
+    icon = "https://api.iconify.design/fluent-emoji-flat/locomotive.svg";
+    port = 8095;
+    exposure = "tailnet";
+    auth = "native";
+    buffering = false;
+    timeouts = "600s";
+    extraConfig = ''
+      send_timeout 600s;
+    '';
+  };
+}
