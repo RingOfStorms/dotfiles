@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -40,6 +41,11 @@ type model struct {
 
 const catalogTimeout = 45 * time.Second
 
+// errNoCredential marks a provider that has no credential at all. That is an
+// operator choice, not a fault: /health reports the provider as unconfigured
+// and keeps answering 200, so a monitor only fires on real upstream breakage.
+var errNoCredential = errors.New("no credential")
+
 // providerBases maps a provider to its API root (no trailing slash).
 func (s *server) providerBase(provider string) string {
 	switch provider {
@@ -62,13 +68,13 @@ func (s *server) providerHeaders(provider string) (http.Header, error) {
 	case "openrouter":
 		key := openRouterKey()
 		if key == "" {
-			return nil, fmt.Errorf("OPENROUTER_API_KEY is not set")
+			return nil, fmt.Errorf("%w: OPENROUTER_API_KEY is not set", errNoCredential)
 		}
 		h.Set("Authorization", "Bearer "+key)
 	case "copilot":
 		token, err := s.copilot.token()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w: %v", errNoCredential, err)
 		}
 		h.Set("Authorization", "Bearer "+token)
 		h.Set("Editor-Version", "vscode/1.95.0")
@@ -114,6 +120,15 @@ func (s *server) refresh(ctx context.Context) {
 	}
 	var merged []model
 	for _, r := range out {
+		if errors.Is(r.err, errNoCredential) {
+			// No credential: leave the provider out of the catalog and out of
+			// the failed set, so /health stays 200 and the retry loop keeps its
+			// normal interval.
+			log.Printf("catalog: %s: %v (provider unconfigured)", r.provider, r.err)
+			delete(s.failed, r.provider)
+			delete(s.providerModels, r.provider)
+			continue
+		}
 		if r.err != nil {
 			log.Printf("catalog: %s: %v (keeping %d cached models)", r.provider, r.err, len(s.providerModels[r.provider]))
 			s.failed[r.provider] = true
@@ -158,11 +173,14 @@ func (s *server) providerStatus() map[string]string {
 	defer s.mu.RUnlock()
 	status := make(map[string]string, 3)
 	for _, provider := range []string{"air", "copilot", "openrouter"} {
-		if s.failed[provider] {
+		switch {
+		case s.failed[provider]:
 			status[provider] = "error"
-			continue
+		case s.providerModels[provider] == nil:
+			status[provider] = "unconfigured"
+		default:
+			status[provider] = fmt.Sprintf("%d models", len(s.providerModels[provider]))
 		}
-		status[provider] = fmt.Sprintf("%d models", len(s.providerModels[provider]))
 	}
 	return status
 }
