@@ -103,18 +103,26 @@ func TestCatalogGroupsDeploymentsByPublicName(t *testing.T) {
 				}
 				m, ok := s.lookup("air-gpt-test")
 				if !ok || m.Vision || m.Tools || !m.Reasoning || m.CostInput != 0.000003 ||
-					!slices.Equal(m.ReasoningEfforts, []string{"low", "high"}) ||
-					!slices.Equal(m.SupportedParams, []string{"temperature"}) {
+					!slices.Equal(m.ReasoningEfforts, []string{"low", "high"}) {
 					t.Fatalf("unsafe merged metadata: %+v", m)
 				}
 				var info struct {
 					Data []struct {
 						ModelName string `json:"model_name"`
+						ModelInfo struct {
+							Params []string `json:"supported_openai_params"`
+						} `json:"model_info"`
 					}
 				}
 				get("/model/info", &info)
 				if len(info.Data) != 2 || info.Data[0].ModelName != "air-gpt-test" || info.Data[1].ModelName != "air-other" {
 					t.Fatalf("metadata catalog still has deployment rows: %+v", info)
+				}
+				if !slices.Equal(info.Data[0].ModelInfo.Params, []string{"temperature"}) {
+					t.Fatalf("discovery advertises parameters outside the deployment intersection: %v", info.Data[0].ModelInfo.Params)
+				}
+				if info.Data[1].ModelInfo.Params == nil || len(info.Data[1].ModelInfo.Params) != 0 {
+					t.Fatalf("missing upstream parameters must serialize as an empty array: %v", info.Data[1].ModelInfo.Params)
 				}
 			}
 			checkCatalog()

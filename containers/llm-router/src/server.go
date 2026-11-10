@@ -173,18 +173,27 @@ func (s *server) handleModelInfo(w http.ResponseWriter, r *http.Request) {
 	list := s.catalog()
 	data := make([]map[string]any, 0, len(list))
 	for _, m := range list {
-		params := []string{
-			"stream", "stop", "temperature", "top_p", "seed", "presence_penalty",
-			"frequency_penalty", "max_tokens", "max_completion_tokens", "user",
-		}
-		if m.Tools {
-			params = append(params, "tools", "tool_choice", "parallel_tool_calls")
-		}
-		if m.Reasoning {
-			params = append(params, "reasoning_effort")
-		}
-		if m.Mode == "chat" {
-			params = append(params, "response_format")
+		params := m.SupportedParams
+		if m.Provider == "air" {
+			// AIR can route a name to any deployment; advertise only their
+			// merged intersection, including an empty set when none is known.
+			if params == nil {
+				params = []string{}
+			}
+		} else {
+			params = []string{
+				"stream", "stop", "temperature", "top_p", "seed", "presence_penalty",
+				"frequency_penalty", "max_tokens", "max_completion_tokens", "user",
+			}
+			if m.Tools {
+				params = append(params, "tools", "tool_choice", "parallel_tool_calls")
+			}
+			if m.Reasoning {
+				params = append(params, "reasoning_effort")
+			}
+			if m.Mode == "chat" {
+				params = append(params, "response_format")
+			}
 		}
 		info := map[string]any{
 			"mode":                      m.Mode,

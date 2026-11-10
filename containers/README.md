@@ -590,6 +590,8 @@ Discovery exposes one entry per public model ID, not per upstream deployment.
 AIR requests still use the shared model name; AIR chooses the deployment.
 Duplicate deployment metadata uses the lowest token limits, common capability
 flags/parameter sets, and highest published costs. Unknown limits stay unknown.
+AIR's `/model/info` serializes that common parameter set directly; missing
+or disjoint deployment parameter lists produce `[]`, not inferred defaults.
 Lists, individual model lookup and health counts use the same grouped catalog.
 
 ### Dependency updates
