@@ -1,11 +1,11 @@
-# Guest config. ../../containers/llm-router is a stdlib-only Go gateway; it
-# needs no runtime deps beyond a CA bundle.
+# Guest config. ./src is a stdlib-only Go gateway; it needs no runtime deps
+# beyond a CA bundle.
 { pkgs, lib, fleetNet, ... }:
 let
   router = pkgs.buildGoModule {
     pname = "llm-router";
     version = "0.1.0";
-    src = ./.;
+    src = ./src;
     vendorHash = null; # standard library only
     meta.mainProgram = "llm-router";
   };
