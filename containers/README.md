@@ -586,6 +586,11 @@ Notes:
 
 ## LLM router
 
+OMP uses `https://llm.joshuabell.xyz/v1`; shared shell LLM utilities use
+`https://llm.joshuabell.xyz` and append `/v1` themselves. The OMP provider ID
+remains `litellm`, preserving existing model role selections and discovery.
+The `lio` CLI aliases bypass proxies for `llm.joshuabell.xyz`.
+
 Discovery exposes one entry per public model ID, not per upstream deployment.
 AIR requests still use the shared model name; AIR chooses the deployment.
 Duplicate deployment metadata uses the lowest token limits, common capability

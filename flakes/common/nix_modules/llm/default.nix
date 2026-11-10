@@ -33,8 +33,8 @@ in
   options.ringofstorms.llm = {
     baseUrl = mkOption {
       type = types.str;
-      default = "https://litellm.joshuabell.xyz";
-      description = "LiteLLM base URL.";
+      default = "https://llm.joshuabell.xyz";
+      description = "OpenAI-compatible LLM router base URL (without /v1).";
     };
     smart = tierOptions {
       model = "copilot-claude-opus-5.5";

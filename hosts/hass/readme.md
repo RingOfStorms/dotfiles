@@ -101,6 +101,15 @@ Each backup is about 7 GB. Restore by uploading the `.tar` during onboarding or 
 - Built-in **Model Context Protocol Server** integration (enabled)
 - **Fleet Agent** (`local_fleet_agent`, in `./fleet-agent/`): local Home Assistant OS app serving `/status.json` and `/logs.json` on `:9101` (for `fleet-edge` on `h005`). Includes NVMe SMART telemetry (`/dev/nvme0`), `/data` disk usage, CPU/RAM/network/disk I/O, thermal sensors, and Supervisor add-on/core/host status + logs. Rebuild and deploy after changes to `flakes/fleet-agent` with `./fleet-agent/deploy.sh`.
 
+## Switch Manager
+
+- Installed [macpit/Home-Assistant-Switch-Manager](https://github.com/macpit/Home-Assistant-Switch-Manager) **v5.3.7** through Marketplace, replacing deprecated Sian-Lee-SA **v2.0.5**. The old package is uninstalled and no longer appears in the repository list. Panel: `/switch_manager`.
+- Preserved all mappings for **A - Desk** (`0`), **Q - Living Room** (`1`), and **B - Office** (`2`): 36 action slots, 21 configured actions, all using `zha-tuya-4-button-scene`. Compared every saved field before/after; only the new disabled loop settings were added.
+- Marketplace on Core 2026.11.1 required deleting and recreating the empty integration entry before uninstalling the old package. Switch storage is independent of that entry; no switch recreation or re-pairing was needed. Current entry: `01M73S4AMYY7X0HC3638GT2ADS`.
+- Recovery point: configuration-only backup **`d48e481e`**, **Before Switch Manager macpit migration**, on Core 2026.11.1; excludes the database and Apps. Uses the instance's default backup password. A complete pre-migration mapping export is also retained with the migration session.
+- After adding a custom repository, run **Refresh information** before downloading. The first download failed with a missing-manifest error; refreshing metadata and retrying v5.3.7 succeeded. Two Core restarts completed the replacement.
+- Verified the new list and living-room editor, plus ZHA event routing on all three switches using their existing empty top-left hold actions. No physical commands were executed during verification; physical button/radio and device actuation were not re-tested. Hard-refresh any browser tab left open during the migration.
+
 ## Printer dashboard
 
 - The Prusa MK4 view is in **Josh → Printer** (`/dashboard-josh/printer`), not Home. Dashboards are storage-mode; edit through the Home Assistant UI or Lovelace API, never `.storage` files.

@@ -56,7 +56,7 @@
               default = ''
                 providers:
                   litellm:
-                    baseUrl: https://litellm.joshuabell.xyz/v1
+                    baseUrl: https://llm.joshuabell.xyz/v1
                     api: openai-completions
                     auth: none
                     discovery:
