@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -105,6 +106,7 @@ func (s *server) refresh(ctx context.Context) {
 		go func(provider string) {
 			defer wg.Done()
 			models, err := s.fetchProvider(ctx, provider)
+			models = deduplicateModels(models)
 			mu.Lock()
 			out = append(out, result{provider: provider, models: models, err: err})
 			mu.Unlock()
@@ -147,6 +149,40 @@ func (s *server) refresh(ctx context.Context) {
 	}
 	s.models = merged
 	s.byID = byID
+}
+
+// Providers may publish several deployments under one requestable name. Keep
+// one public entry without choosing a deployment: requests still use Upstream.
+// Advertise only limits and capabilities shared by every deployment, and the
+// highest published price rather than understating a possible upstream cost.
+func deduplicateModels(models []model) []model {
+	indexes := make(map[string]int, len(models))
+	unique := models[:0]
+	for _, m := range models {
+		if i, ok := indexes[m.ID]; ok {
+			entry := &unique[i]
+			entry.ContextWindow = min(entry.ContextWindow, m.ContextWindow)
+			entry.MaxTokens = min(entry.MaxTokens, m.MaxTokens)
+			entry.Vision = entry.Vision && m.Vision
+			entry.Reasoning = entry.Reasoning && m.Reasoning
+			entry.Tools = entry.Tools && m.Tools
+			entry.ReasoningEfforts = commonStrings(entry.ReasoningEfforts, m.ReasoningEfforts)
+			entry.SupportedParams = commonStrings(entry.SupportedParams, m.SupportedParams)
+			entry.CostInput = max(entry.CostInput, m.CostInput)
+			entry.CostOutput = max(entry.CostOutput, m.CostOutput)
+			entry.CostCacheRead = max(entry.CostCacheRead, m.CostCacheRead)
+			continue
+		}
+		indexes[m.ID] = len(unique)
+		unique = append(unique, m)
+	}
+	return unique
+}
+
+func commonStrings(left, right []string) []string {
+	return slices.DeleteFunc(left, func(value string) bool {
+		return !slices.Contains(right, value)
+	})
 }
 
 func (s *server) degraded() bool {

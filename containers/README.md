@@ -584,7 +584,15 @@ Notes:
 - Secrets: put them in a persist dir (generated on first boot, as minecraft
   does) or copy them in once with `nixos-container run`.
 
-## LLM router dependency updates
+## LLM router
+
+Discovery exposes one entry per public model ID, not per upstream deployment.
+AIR requests still use the shared model name; AIR chooses the deployment.
+Duplicate deployment metadata uses the lowest token limits, common capability
+flags/parameter sets, and highest published costs. Unknown limits stay unknown.
+Lists, individual model lookup and health counts use the same grouped catalog.
+
+### Dependency updates
 
 `llm-router/src` uses only the Go standard library. The deployed binary is
 built with Go 1.27.4, pinned in `llm-router/container.nix` with the official
