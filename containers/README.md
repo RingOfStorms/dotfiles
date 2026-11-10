@@ -584,6 +584,21 @@ Notes:
 - Secrets: put them in a persist dir (generated on first boot, as minecraft
   does) or copy them in once with `nixos-container run`.
 
+## LLM router dependency updates
+
+`llm-router/src` uses only the Go standard library. The deployed binary is
+built with Go 1.27.4, pinned in `llm-router/container.nix` with the official
+source hash; `src/go.mod` requires that release. Remove the patch override
+once the guest's nixpkgs supplies an equal or newer security release.
+
+Update `guestpkgs` in `llm-router/flake.lock` for supported NixOS 26.05
+runtime packages and CA certificates. Keep the separate host-side nixpkgs
+pin on 25.11 for extra-container compatibility (issue #40); this evaluator
+does not choose the router's Go compiler or the host OS running the container.
+Build the container, run the Go tests with the selected compiler, and scan
+the built binary with `govulncheck -mode=binary` before deploying it with
+`fleet containers deploy llm-router --host h001 --rev <full-revision>`.
+
 ## Nightly restic (fleet-backup)
 
 With `ringofstorms.containers.backup.enable = true` and an `environmentFile`

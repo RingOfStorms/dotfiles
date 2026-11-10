@@ -2,7 +2,16 @@
 # beyond a CA bundle.
 { pkgs, lib, fleetNet, ... }:
 let
-  router = pkgs.buildGoModule {
+  # nixpkgs currently packages 1.27.3. Keep the latest security patch until
+  # the guest input catches up; the source hash is from https://go.dev/dl/.
+  go = pkgs.go_1_27.overrideAttrs (old: {
+    version = "1.27.4";
+    src = pkgs.fetchurl {
+      url = "https://go.dev/dl/go1.27.4.src.tar.gz";
+      hash = "sha256-c8+4VxrsDAEXdofbhxY9Rqog6XeWcncokaoXZU2aYJk=";
+    };
+  });
+  router = (pkgs.buildGo127Module.override { inherit go; }) {
     pname = "llm-router";
     version = "0.1.0";
     src = ./src;
