@@ -1,10 +1,11 @@
 # llm-router: the fleet's OpenAI-compatible LLM gateway (:8095, private
-# network). Candidate LiteLLM replacement, deployed *alongside* the litellm
-# container for the trial; clients move over once it has proven itself.
+# network), served at llm.joshuabell.xyz. Candidate LiteLLM replacement,
+# deployed *alongside* the litellm container for the trial; clients move over
+# once it has proven itself.
 {
   name = "llm-router";
   kind = "nixos";
-  description = "LLM gateway, trial alongside litellm (llm-router.joshuabell.xyz)";
+  description = "LLM gateway, trial alongside litellm (llm.joshuabell.xyz)";
 
   # Copilot device-login token (0600) plus nothing else. Static user pinned in
   # container.nix, so the token survives restarts and `cnt move`.
@@ -27,7 +28,7 @@
 
   # Streaming completions: no proxy buffering, long timeouts.
   routes.web = {
-    name = "llm-router";
+    name = "llm";
     group = "AI";
     icon = "https://api.iconify.design/fluent-emoji-flat/locomotive.svg";
     port = 8095;

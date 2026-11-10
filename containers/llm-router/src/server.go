@@ -52,17 +52,35 @@ func newServer(cfg config) *server {
 
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
+	// LiteLLM answers every API path with and without the /v1 prefix (/models
+	// as well as /v1/models); clients rely on both, so register each handler
+	// under both forms and keep the two sets in one place.
+	handle := func(pattern string, h http.HandlerFunc) {
+		mux.HandleFunc(pattern, h)
+		method, path, ok := strings.Cut(pattern, " ")
+		if !ok {
+			return
+		}
+		switch {
+		case strings.HasPrefix(path, "/v1/"):
+			mux.HandleFunc(method+" "+strings.TrimPrefix(path, "/v1"), h)
+		case strings.HasPrefix(path, "/v"), path == "/health":
+			// Already versioned, or not part of the versioned API.
+		default:
+			mux.HandleFunc(method+" /v1"+path, h)
+		}
+	}
 	mux.HandleFunc("GET /health", s.handleHealth)
-	mux.HandleFunc("GET /v1/models", s.handleModels)
-	mux.HandleFunc("GET /v1/models/{id}", s.handleModel)
-	mux.HandleFunc("POST /v1/chat/completions", s.handleChat)
-	mux.HandleFunc("POST /v1/responses", s.handleResponses)
-	mux.HandleFunc("POST /v1/embeddings", s.handleEmbeddings)
-	mux.HandleFunc("POST /v1/images/generations", s.handleImages)
+	handle("GET /models", s.handleModels)
+	handle("GET /models/{id}", s.handleModel)
+	handle("POST /chat/completions", s.handleChat)
+	handle("POST /responses", s.handleResponses)
+	handle("POST /embeddings", s.handleEmbeddings)
+	handle("POST /images/generations", s.handleImages)
 	// omp's LiteLLM discovery probes these for rich metadata; all answer the
 	// same document.
-	for _, path := range []string{"/model/info", "/v1/model/info", "/v2/model/info", "/model_group/info"} {
-		mux.HandleFunc("GET "+path, s.handleModelInfo)
+	for _, path := range []string{"/model/info", "/v2/model/info", "/model_group/info"} {
+		handle("GET "+path, s.handleModelInfo)
 	}
 	mux.HandleFunc("/v1/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "llm-router: unsupported endpoint "+r.URL.Path)
