@@ -21,3 +21,16 @@ Primary desktop workstation
 | libvirtd | Local VMs |
 | nginx | Floating sites |
 | Per-host agents | sec-agent, fleet-agent, fail2ban, tailscaled |
+
+## OMP and Blender
+
+OMP's `~/.omp/agent/mcp.json` is local and editable. The existing Blender
+server entry is preserved on the first switch and uses `blender-mcp` from
+PATH, so it continues to work after package updates. To add it manually:
+
+```json
+{ "mcpServers": { "blender": { "command": "blender-mcp", "args": [] } } }
+```
+
+The Blender MCP add-on runs generated Python with Blender's user privileges;
+sandboxing the OMP process does not sandbox Blender.

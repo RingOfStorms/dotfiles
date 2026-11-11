@@ -126,12 +126,4 @@ in
       }
     )
   );
-
-  # omp user-level MCP config. Read-only symlink: manage servers here, not via `/mcp add`.
-  home-manager.users.josh.home.file.".omp/agent/mcp.json".text = builtins.toJSON {
-    mcpServers.blender = {
-      command = mcpCommand;
-      args = [ ];
-    };
-  };
 }

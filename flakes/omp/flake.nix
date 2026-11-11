@@ -7,8 +7,7 @@
   outputs =
     { self, omp, ... }:
     {
-      # The NixOS module installs OMP and provides the shell aliases. The
-      # upstream package remains an implementation detail of this wrapper.
+      # The NixOS module installs OMP; user configuration remains local.
       nixosModules.default =
         { config, lib, ... }:
         let
@@ -29,82 +28,59 @@
           };
         };
       homeManagerModules.default =
-        { config, lib, ... }:
+        { config, lib, pkgs, ... }:
         let
           cfg = config.ringofstorms.omp;
         in
         {
           imports = [ omp.homeManagerModules.default ];
 
-          options.ringofstorms.omp = {
-            enable = lib.mkOption {
-              type = lib.types.bool;
-              default = true;
-              description = "Enable OMP for this Home Manager user.";
-            };
-            settings = lib.mkOption {
-              type = lib.types.nullOr lib.types.attrs;
-              default = null;
-              description = ''
-                Declarative OMP settings. null (default) leaves
-                ~/.omp/agent/config.yml stateful and untouched by activation;
-                non-null overwrites it on every switch.
-              '';
-            };
-            modelsFile = lib.mkOption {
-              type = lib.types.lines;
-              default = ''
-                providers:
-                  litellm:
-                    baseUrl: https://llm.joshuabell.xyz/v1
-                    api: openai-completions
-                    auth: none
-                    discovery:
-                      type: litellm
-                    models:
-                      - id: air-gemini-3.8-flash
-                        name: air-gemini-3.8-flash
-                        contextWindow: 128000
-                        maxTokens: 16384
-                    # LiteLLM reports no reasoning metadata for Copilot models, so
-                    # omp would clamp role thinking suffixes (:high etc.) to off.
-                    modelOverrides:
-                      copilot-claude-opus-5.5:
-                        reasoning: true
-                        thinking:
-                          mode: effort
-                          efforts: [low, medium, high, xhigh]
-                      copilot-claude-sonnet-5:
-                        reasoning: true
-                        thinking:
-                          mode: effort
-                          efforts: [low, medium, high, xhigh]
-                      copilot-gpt-6-astra:
-                        reasoning: true
-                        thinking:
-                          mode: effort
-                          efforts: [low, medium, high, xhigh, max]
-                      # LiteLLM advertises air-deepseek-4.1-flash-1017 as text-only
-                      # with no reasoning. Direct probes: it accepts image input and
-                      # always returns reasoning_content (effort is accepted but
-                      # ignored upstream), so declare both capabilities here.
-                      air-deepseek-4.1-flash-1017:
-                        reasoning: true
-                        input: [text, image]
-                        thinking:
-                          mode: effort
-                          efforts: [low, medium, high, xhigh, max]
-              '';
-              description = "YAML model catalog written to ~/.omp/agent/models.yml.";
-            };
+          options.ringofstorms.omp.enable = lib.mkOption {
+            type = lib.types.bool;
+            default = true;
+            description = "Enable OMP for this Home Manager user.";
           };
 
           config = lib.mkIf cfg.enable {
-            programs.omp = {
-              enable = true;
-            }
-            // lib.optionalAttrs (cfg.settings != null) { settings = cfg.settings; };
-            home.file.".omp/agent/models.yml".text = cfg.modelsFile;
+            programs.omp.enable = true;
+
+            # Preserve files previously managed by Home Manager before its
+            # link cleanup removes them. Never touch user-owned files or links.
+            home.activation.ompLocalConfig = lib.hm.dag.entryBetween [ "linkGeneration" ] [ "writeBoundary" ] ''
+              migrateOmpFile() {
+                local name="$1" target="$HOME/.omp/agent/$1" link tmp
+                [[ -L "$target" ]] || return 0
+                link="$(readlink "$target")"
+                case "$link" in
+                  ${builtins.storeDir}/*-home-manager-files/.omp/agent/"$name") ;;
+                  *) return 0 ;;
+                esac
+
+                tmp="$(mktemp "$HOME/.omp/agent/.$name.XXXXXXXX")"
+                if [[ "$name" == mcp.json ]]; then
+                  # The old Blender entry used a versioned store path that can
+                  # be garbage-collected; the system package is on PATH.
+                  if ! ${lib.getExe pkgs.jq} '
+                    .mcpServers.blender.command? as $cmd |
+                    if ($cmd | type) == "string" then
+                      if ($cmd | test("^/nix/store/[a-z0-9]+-blender-mcp-[^/]+/bin/blender-mcp$"))
+                      then .mcpServers.blender.command = "blender-mcp" else . end
+                    else . end
+                  ' "$target" > "$tmp"; then
+                    rm -f "$tmp"
+                    return 1
+                  fi
+                elif ! cat "$target" > "$tmp"; then
+                  rm -f "$tmp"
+                  return 1
+                fi
+                chmod 600 "$tmp"
+                mv -fT "$tmp" "$target"
+              }
+
+              run migrateOmpFile models.yml
+              run migrateOmpFile mcp.json
+            '';
           };
         };
     };

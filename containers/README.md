@@ -586,10 +586,16 @@ Notes:
 
 ## LLM router
 
-OMP uses `https://llm.joshuabell.xyz/v1`; shared shell LLM utilities use
-`https://llm.joshuabell.xyz` and append `/v1` themselves. The OMP provider ID
-remains `litellm`, preserving existing model role selections and discovery.
-The `lio` CLI aliases bypass proxies for `llm.joshuabell.xyz`.
+OMP's per-computer `~/.omp/agent/models.yml` can use
+`https://llm.joshuabell.xyz/v1` with provider ID `litellm`, preserving existing
+model role selections and discovery. Nix no longer manages OMP's `models.yml`,
+`config.yml`, or `mcp.json`; edit them locally on each computer. On the first
+switch, the previous Home Manager-managed model catalog and MCP config are
+copied into writable files; existing local files are left untouched.
+The host flakes pin the shared OMP module: after pushing its change, run
+`nix flake update omp-flake --flake ./hosts/<host>` before deploying each host.
+Shared shell LLM utilities use `https://llm.joshuabell.xyz` and append `/v1`
+themselves. The `lio` CLI aliases bypass proxies for `llm.joshuabell.xyz`.
 
 Shell utilities (`llm_chat`, `gcpropose`, and tmux AI names) share the tier
 defaults in `ringofstorms.llm`: `fast` uses `copilot-claude-haiku-5.5` with
