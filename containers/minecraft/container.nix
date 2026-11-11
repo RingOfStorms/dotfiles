@@ -255,8 +255,8 @@ let
 
   # PlaceholderAPI -- shared placeholder system for plugins
   placeholderapi = pkgs.fetchurl {
-    url = "https://cdn.modrinth.com/data/lKEzGugV/versions/UmbIiI5H/PlaceholderAPI-2.12.2.jar";
-    sha512 = "94addf996ba45e16dbded3fcaf05e8b442212ce0d577f7edc42b743ad9532c1e24115263976126d36f27c0868ab1c03c40c2d13947985124b92dabca4527dddb";
+    url = "https://cdn.modrinth.com/data/lKEzGugV/versions/pIvQcXW8/PlaceholderAPI-2.12.3.jar";
+    hash = "sha256-/eAyWfWvaTjzwz7rTYFAAKGtq/HSMEzhSXC+gfYJpDc=";
   };
 
   # PAPIProxyBridge -- syncs PlaceholderAPI placeholders across Velocity
@@ -289,10 +289,11 @@ let
     sha256 = "7006cf9e5944c75e1b57cc19dc88ed17fc179a0e28354fda424aa32a95aac3d8";
   };
 
-  # squaremap -- 2D top-down web map (survival only)
+  # squaremap -- 2D top-down web map (survival only). Built per Minecraft
+  # version: keep it on the mc<version> build matching the Paper pin below.
   squaremap = pkgs.fetchurl {
-    url = "https://cdn.modrinth.com/data/PFb7ZqK6/versions/GItyEkou/squaremap-paper-mc1.21.11-1.3.12.jar";
-    sha512 = "b35306031aaec4d5cb32c52e0bde7e95321cbce24016e8e9fb9cc1161366c7ba352a864bf1f9a44240e35b886fd933f5fc1b20a2c02ea2ff0ca4b611e7259cd4";
+    url = "https://cdn.modrinth.com/data/PFb7ZqK6/versions/6wmZVQBO/squaremap-paper-mc26.3-1.4.3.jar";
+    hash = "sha256-0TMxeZzVrObAK35iXtpA8PtpxPicN3gyR1i/byX0nwg=";
   };
 
   # squaremap web port (survival map), fronted by the host nginx
