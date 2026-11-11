@@ -190,11 +190,17 @@ let
           def k: {o: (.original // .id), time, hostname, paths, tags, tree};
           [$h[] | k] as $have
           | [$w[] | .keep // [] | .[] | k | select(. as $x | any($have[]; . == $x) | not) | .o]')
-        if [ "$missing" = "[]" ] && R --no-lock check --read-data-subset ${cfg.checkSubset} >/dev/null; then
+        if [ "$missing" != "[]" ]; then
+          echo "copy: $s: B2 incomplete, missing $missing" >&2
+        elif ! R --no-lock check --read-data-subset ${cfg.checkSubset} >/dev/null; then
+          echo "copy: $s: B2 check --read-data-subset ${cfg.checkSubset} failed" >&2
+        else
           complete=true
         fi
+      else
+        echo "copy: $s: B2 completeness unknown (snapshot listing failed)" >&2
       fi
-      [ "$complete" = true ] || echo "copy: $s: B2 incomplete, missing $missing" >&2
+      [ "$complete" = true ] || rc=1
       stats=$(${jq} -c --arg s "$s" --argjson c "$complete" '.[$s].complete = $c' <<<"$stats")
       offsite=$(${jq} -c --arg s "$s" --argjson c "$complete" --argjson m "$missing" --argjson at "$(date +%s)" \
         '.[$s] = {complete: $c, missing: $m, checkedAt: $at}' <<<"$offsite")
