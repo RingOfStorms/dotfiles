@@ -149,15 +149,26 @@ let
         rc=1; rm -f "$pw"; continue
       fi
 
-      echo "copy: $s"
-      if R --retry-lock 2h copy --from-repo "$src" --from-password-file "$pw"; then
-        stats=$(${jq} -c --arg s "$s" --argjson t "$(date +%s)" '.[$s].lastCopied = $t' <<<"$stats")
-      else
-        echo "copy: $s: copy failed" >&2
+      # The B2 keep set, computed on the LOCAL repo (§2.6): copy only those,
+      # so a shallower retentionB2 does not re-copy what B2 pruned.
+      p=$(b2Preset "$s")
+      # shellcheck disable=SC2046
+      want=$(${restic} -r "$src" --password-file "$pw" --no-lock forget --dry-run --json --group-by "" $(presetArgs "$p") </dev/null) || want=""
+      ids=$(${jq} -r '[.[] | .keep // [] | .[] | .id] | unique | .[]' <<<"''${want:-null}" 2>/dev/null) || ids=""
+      if [ -z "$ids" ]; then
+        echo "copy: $s: no B2 keep set from the local repo, copy skipped" >&2
         rc=1
+      else
+        echo "copy: $s ($(wc -w <<<"$ids") snapshots, preset $p)"
+        # shellcheck disable=SC2086
+        if R --retry-lock 2h copy --from-repo "$src" --from-password-file "$pw" $ids; then
+          stats=$(${jq} -c --arg s "$s" --argjson t "$(date +%s)" '.[$s].lastCopied = $t' <<<"$stats")
+        else
+          echo "copy: $s: copy failed" >&2
+          rc=1
+        fi
       fi
 
-      p=$(b2Preset "$s")
       echo "copy: $s: B2 prune ($p)"
       # shellcheck disable=SC2046
       R --retry-lock 2h forget --prune --group-by "" $(presetArgs "$p") || rc=1
@@ -168,11 +179,9 @@ let
         rc=1
       fi
 
-      # Completeness (§2.6): the snapshots the B2 preset keeps, computed on
-      # the LOCAL repo, must all be in B2, matched on (.original // .id) and
-      # the snapshot's content fields. A sampled data read must also pass.
-      # shellcheck disable=SC2046
-      want=$(${restic} -r "$src" --password-file "$pw" --no-lock forget --dry-run --json --group-by "" $(presetArgs "$p") </dev/null) || want=""
+      # Completeness (§2.6): every snapshot of the keep set above must be in
+      # B2, matched on (.original // .id) and the snapshot's content fields.
+      # A sampled data read must also pass.
       have=$(R --no-lock snapshots --json) || have=""
       complete=false
       missing='["unknown"]'
