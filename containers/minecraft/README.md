@@ -3,9 +3,8 @@
 > **Running on h003 since 2026-11-11**, restored from
 > `/home/luser/backups/minecraft-h003-2026-10-15T2001.tar.zst` on h001 (the
 > data as stopped on 2026-10-09). Nightly backups go to h004 (`svc-minecraft`).
-> Known breakage after the restore: squaremap 1.3.12 and PlaceholderAPI 2.12.2
-> fail to load on Paper 26.3 (`NoClassDefFoundError` / `NumberFormatException`),
-> so `computerboyz.joshuabell.xyz` answers 502; the game itself is up.
+> No hairpin NAT on h005: from the home LAN, `home.joshuabell.xyz:25565` (the
+> WAN IP) does not connect; use `10.12.14.180:25565` (h003) there.
 
 Velocity proxy and two Paper servers, run as a `nixos`-kind floating container
 (see `../README.md`).
