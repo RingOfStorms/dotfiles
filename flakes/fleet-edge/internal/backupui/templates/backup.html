@@ -12,87 +12,120 @@
   <a href="/">Apps</a>
   <a href="/services">Services</a>
   <a href="/hosts">Hosts</a>
-  <a href="/topology">Topology</a>
   <a href="/backup/" class="active">Backups</a>
 </nav>
 <main>
-<header>
-<h1>Backup policy</h1>
-<p class="summary">Signed in as <strong>{{.User}}</strong>{{if not .CanWrite}} · <span class="warn">read-only (not in the backup writers group)</span>{{end}}. Every change is audit-logged; <em>turn off</em> sets target <code>none</code> and deletes nothing.</p>
+<header class="page-head">
+<h1>Backups</h1>
+<p class="summary">Signed in as <strong>{{.User}}</strong>{{if not .CanWrite}} · <span class="warn">read-only (not in the backup writers group)</span>{{end}}. Every change is audit-logged.</p>
+<nav class="tabs" aria-label="sections">
+  <a href="/backup/"{{if eq .Tab "policy"}} class="active"{{end}}>Policy</a>
+  <a href="/backup/?tab=credentials"{{if eq .Tab "credentials"}} class="active"{{end}}>Credentials{{if .Creds.ExportStale}} <span class="warn">●</span>{{end}}</a>
+</nav>
 </header>
+<div class="scroll">
 {{if .Flash}}<p class="summary"><strong>{{.Flash}}</strong></p>{{end}}
 {{if .Error}}<p class="warn">Error {{.Code}}: {{.Error}}</p>{{end}}
-{{if .Creds.ExportStale}}<p class="warn"><strong>Backup credentials not exported{{if .LastExport}} since {{.LastExport}}{{end}}:</strong> a repo password exists that is in no export. Export all and paste it into the password manager; it is the only copy outside h005.</p>{{end}}
-<div class="scroll">
+{{if .Creds.ExportStale}}<p class="warn"><strong>Backup credentials not exported{{if .LastExport}} since {{.LastExport}}{{end}}:</strong> a repo password exists that is in no export. Open <a href="/backup/?tab=credentials">Credentials</a>, export all and paste it into the password manager; it is the only copy outside h005.</p>{{end}}
+
+{{if eq .Tab "policy"}}
+<dl class="legend">
+  <dt>Backs up to</dt><dd>the host that stores the service's backups; <em>none</em> stops backups (nothing is deleted).</dd>
+  <dt>Keep on h004 / Keep in B2</dt><dd>how many snapshots the nightly cleanup keeps:
+    {{range .PresetHelp}}<code>{{.Value}}</code> = {{.Label}}; {{end}}
+    <em>same as local</em> uses the h004 setting.</dd>
+  <dt>Copy to B2</dt><dd>also send this service's backups offsite to Backblaze B2.</dd>
+  <dt>default</dt><dd>the first row; every service without its own row follows it.</dd>
+</dl>
+{{if .NoPusher}}<p class="warn">Copy to B2 is unavailable: no backup target sends to B2 yet (the B2 copy job, plan phase P4, is not built). Today every backup stays on h004 only.</p>{{end}}
 <div class="table-wrap">
-<table>
-<thead><tr><th>subject</th><th>policy (target · local · B2 preset · offsite)</th><th>local size</th><th>B2 size</th><th>$/mo</th><th>last backup</th><th>pending</th>{{if .CanWrite}}<th>turn off</th><th>clear</th>{{end}}</tr></thead>
+<table class="policy">
+<thead><tr>
+  <th>service</th><th>backs up to</th><th>keep on h004</th><th>keep in B2</th><th>copy to B2</th>{{if .CanWrite}}<th></th>{{end}}
+  <th>size</th>{{if not .NoPusher}}<th>B2 size</th><th>$/mo</th>{{end}}<th>last backup</th>{{if .CanWrite}}<th>more</th>{{end}}
+</tr></thead>
 <tbody>
 {{range $r := .Rows}}
+{{$f := printf "p-%s" .Subject}}
 <tr>
-  <td>{{if .Default}}<em>default</em>{{else}}{{.Subject}}{{end}}{{if .TargetNote}} <span class="warn">({{.TargetNote}})</span>{{end}}</td>
-  <td>
+  <td>{{if .Default}}<em>default</em>{{else}}{{.Subject}}{{end}}{{if .TargetNote}} <span class="{{if eq .TargetNote "default"}}muted{{else}}warn{{end}}">({{if eq .TargetNote "default"}}follows default{{else}}{{.TargetNote}}{{end}})</span>{{end}}{{if .Clear}}<br><span class="warn">clear {{.Clear}}</span>{{end}}</td>
   {{if and $.CanWrite (not .Unlisted)}}
-  <form method="post" action="/backup/{{.Subject}}/policy">
+  <td><select name="target" form="{{$f}}" aria-label="{{.Subject}}: backs up to">{{range $.TargetIDs}}<option value="{{.Value}}"{{if eq .Value $r.Target}} selected{{end}}>{{.Label}}</option>{{end}}</select></td>
+  <td><select name="retentionLocal" form="{{$f}}" aria-label="{{.Subject}}: keep on h004">{{range $.Presets}}<option value="{{.Value}}"{{if eq .Value $r.RetentionLocal}} selected{{end}}>{{.Label}}</option>{{end}}</select></td>
+  <td><select name="retentionB2" form="{{$f}}" aria-label="{{.Subject}}: keep in B2">{{range $.B2Presets}}<option value="{{.Value}}"{{if eq .Value $r.RetentionB2}} selected{{end}}>{{.Label}}</option>{{end}}</select></td>
+  <td>{{if .OffsiteReason}}<input type="checkbox" disabled{{if .Offsite}} checked{{end}} title="{{.OffsiteReason}}" aria-label="{{.Subject}}: copy to B2 (unavailable: {{.OffsiteReason}})">{{if .Offsite}}<input type="hidden" name="offsite" value="on" form="{{$f}}">{{end}}{{if not $.NoPusher}} <span class="muted">({{.OffsiteReason}})</span>{{end}}
+      {{else}}<input type="checkbox" name="offsite" form="{{$f}}"{{if .Offsite}} checked{{end}} aria-label="{{.Subject}}: copy to B2">{{end}}
+      {{if .OffsiteNote}}<span class="warn">{{.OffsiteNote}}</span>{{end}}</td>
+  <td><form id="{{$f}}" method="post" action="/backup/{{.Subject}}/policy">
     <input type="hidden" name="csrf" value="{{$.Token}}">
     <input type="hidden" name="revision" value="{{.Revision}}">
     <input type="hidden" name="was-target" value="{{.Target}}">
     <input type="hidden" name="was-retentionLocal" value="{{.RetentionLocal}}">
     <input type="hidden" name="was-retentionB2" value="{{.RetentionB2}}">
     <input type="hidden" name="was-offsite" value="{{if .Offsite}}on{{end}}">
-    <select name="target" aria-label="target">{{range $.TargetIDs}}<option{{if eq . $r.Target}} selected{{end}}>{{.}}</option>{{end}}</select>
-    <select name="retentionLocal" aria-label="local preset">{{range $.Presets}}<option{{if eq . $r.RetentionLocal}} selected{{end}}>{{.}}</option>{{end}}</select>
-    <select name="retentionB2" aria-label="B2 preset">{{range $.B2Presets}}<option{{if eq . $r.RetentionB2}} selected{{end}}>{{.}}</option>{{end}}</select>
-    {{if .OffsiteReason}}<label title="{{.OffsiteReason}}"><input type="checkbox" disabled{{if .Offsite}} checked{{end}}> B2</label>{{if .Offsite}}<input type="hidden" name="offsite" value="on">{{end}} <span class="muted">({{.OffsiteReason}})</span>
-    {{else}}<label><input type="checkbox" name="offsite"{{if .Offsite}} checked{{end}}> B2</label>{{end}}
-    {{if .OffsiteNote}}<span class="warn">{{.OffsiteNote}}</span>{{end}}
     <button type="submit">save</button>
-  </form>
-  {{else}}{{.Target}} · {{.RetentionLocal}} · {{.RetentionB2}} · {{if .Offsite}}B2 on{{else}}B2 off{{end}}{{end}}
-  </td>
-  <td title="{{.StatsAt}}">{{.Local}}</td><td title="{{.StatsAt}}">{{.B2}}</td><td>{{.Cost}}</td>
-  <td>{{.LastBackup}}</td><td>{{if .Clear}}<span class="warn">clear {{.Clear}}</span>{{end}}</td>
+  </form></td>
+  {{else}}
+  <td>{{.Target}}</td><td>{{.RetentionLocal}}</td><td>{{if eq .RetentionB2 "local"}}same as local{{else}}{{.RetentionB2}}{{end}}</td><td>{{if .Offsite}}on{{else}}<span class="muted">off</span>{{end}}</td>{{if $.CanWrite}}<td></td>{{end}}
+  {{end}}
+  <td title="{{.StatsAt}}">{{.Local}}</td>{{if not $.NoPusher}}<td title="{{.StatsAt}}">{{.B2}}</td><td>{{.Cost}}</td>{{end}}
+  <td>{{.LastBackup}}</td>
   {{if $.CanWrite}}
-  <td>{{if .Unlisted}}{{else if ne .Target "none"}}<form method="post" action="/backup/{{.Subject}}/off">
-    <input type="hidden" name="csrf" value="{{$.Token}}">
-    <input type="hidden" name="revision" value="{{.Revision}}">
-    <button type="submit">turn off</button>
-  </form>{{else}}<span class="muted">off</span>{{end}}</td>
-  <td>{{if not (or .Default .Unlisted)}}<form method="post" action="/backup/{{.Subject}}/clear">
-    <input type="hidden" name="csrf" value="{{$.Token}}">
-    <select name="scope" aria-label="clear scope">{{range $.Scopes}}<option>{{.}}</option>{{end}}</select>
-    <input name="confirm" placeholder="type {{.Subject}}" autocomplete="off" required size="10" aria-label="type the subject name to confirm">
-    <button type="submit" class="warn">clear</button>
-  </form>{{end}}</td>
+  <td>{{if not .Unlisted}}<details><summary>…</summary>
+    {{if ne .Target "none"}}<form method="post" action="/backup/{{.Subject}}/off">
+      <input type="hidden" name="csrf" value="{{$.Token}}">
+      <input type="hidden" name="revision" value="{{.Revision}}">
+      <button type="submit" title="set backs-up-to to none; deletes nothing">stop backups</button>
+    </form>{{end}}
+    {{if not .Default}}<form method="post" action="/backup/{{.Subject}}/clear">
+      <input type="hidden" name="csrf" value="{{$.Token}}">
+      <label>delete stored backups in <select name="scope" aria-label="clear scope">{{range $.Scopes}}<option>{{.}}</option>{{end}}</select></label>
+      <input name="confirm" placeholder="type {{.Subject}}" autocomplete="off" required size="10" aria-label="type the subject name to confirm">
+      <button type="submit" class="warn">delete</button>
+    </form>{{end}}
+  </details>{{end}}</td>
   {{end}}
 </tr>
 {{end}}
 </tbody>
 </table>
 </div>
-<h2>Credentials</h2>
-<p class="summary">fleet-edge holds every subject's repo and REST password (§2.7). Last export: {{if .LastExport}}{{.LastExport}}{{else}}never{{end}}.{{if .Creds.Missing}} Not generated yet: {{range .Creds.Missing}}<code>{{.}}</code> {{end}}(made on export or first fetch).{{end}}</p>
+<p class="summary">Targets: {{range .Targets}}<code>{{.ID}}</code>{{if .Pusher}} (copies to B2){{else}} (local only){{end}}{{if not .Enabled}} <span class="warn">disabled</span>{{end}}{{if .Stale}} <span class="warn">stale</span>{{end}} {{else}}none registered{{end}}</p>
+{{end}}
+
+{{if eq .Tab "credentials"}}
+<p class="summary">fleet-edge holds every service's repo password (encrypts its backups; never changes) and REST password (logs in to h004; rotated after a move). Last export: {{if .LastExport}}{{.LastExport}}{{else}}never{{end}}.{{if .Creds.Missing}} Not generated yet: {{range .Creds.Missing}}<code>{{.}}</code> {{end}}(made on export or first fetch).{{end}}</p>
 {{if .CanWrite}}
-<form method="post" action="/backup/_credentials/export"><input type="hidden" name="csrf" value="{{.Token}}"><button type="submit">Export all</button></form>
+<section>
+<h2>Export and restore</h2>
+<form method="post" action="/backup/_credentials/export"><input type="hidden" name="csrf" value="{{.Token}}"><button type="submit">Export all</button> <span class="muted">shows every password once, with a copy button, for the password manager</span></form>
 <form method="post" action="/backup/_credentials/import">
   <input type="hidden" name="csrf" value="{{.Token}}">
   <input type="hidden" name="step" value="preview">
-  <textarea name="text" rows="6" cols="100" placeholder="paste an export to restore missing subjects" spellcheck="false" autocomplete="off"></textarea>
+  <p><textarea name="text" rows="6" cols="100" placeholder="paste an export to restore missing services (e.g. after rebuilding h005)" spellcheck="false" autocomplete="off"></textarea></p>
   <button type="submit">Import (preview)</button>
 </form>
+</section>
+<section>
+<h2>Per service</h2>
+<div class="table-wrap">
 <table>
-<thead><tr><th>subject</th><th>REST revision</th><th>status</th><th></th><th></th></tr></thead>
+<thead><tr><th>service</th><th>REST revision</th><th>status on targets</th><th></th><th></th></tr></thead>
 <tbody>
-{{range .Creds.Subjects}}<tr><td>svc-{{.Subject}}</td><td>{{.RestRevision}}</td><td>{{with index $.Pending .Subject}}<span class="warn">{{.}}</span>{{else}}applied{{end}}</td>
+{{range .Creds.Subjects}}<tr><td>{{.Subject}}</td><td>{{.RestRevision}}</td><td>{{with index $.Pending .Subject}}<span class="warn">{{.}}</span>{{else}}applied{{end}}</td>
 <td><form method="post" action="/backup/{{.Subject}}/reveal"><input type="hidden" name="csrf" value="{{$.Token}}"><button type="submit">Reveal</button></form></td>
-<td><form method="post" action="/backup/{{.Subject}}/rotate"><input type="hidden" name="csrf" value="{{$.Token}}"><button type="submit" class="warn">Rotate REST password</button></form></td></tr>
+<td><form method="post" action="/backup/{{.Subject}}/rotate"><input type="hidden" name="csrf" value="{{$.Token}}"><button type="submit" class="warn" title="new REST password; the old one stops working once h004 applies it">Rotate REST password</button></form></td></tr>
 {{end}}
 </tbody>
 </table>
-{{end}}
-<p class="summary">Targets: {{range .Targets}}<code>{{.ID}}</code>{{if .Pusher}} (pusher){{end}}{{if not .Enabled}} <span class="warn">disabled</span>{{end}}{{if .Stale}} <span class="warn">stale</span>{{end}} {{else}}none registered{{end}}</p>
 </div>
+</section>
+{{else}}
+<p class="muted">Credentials need the backup writers group.</p>
+{{end}}
+{{end}}
 <footer>generated at {{.GeneratedAt}}</footer>
+</div>
 </main>
 </body>
 </html>

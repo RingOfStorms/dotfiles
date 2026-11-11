@@ -65,7 +65,7 @@ func TestServicesShowsCertificateExpiry(t *testing.T) {
 		return []state.Certificate{{URL: "https://photos.example.com", Expires: time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC), Expiring: true}}
 	}})
 	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services?tab=tls", nil))
 	for _, text := range []string{"TLS certificates", "https://photos.example.com", "2026-11-05", "expires in under 14 days"} {
 		if !strings.Contains(w.Body.String(), text) {
 			t.Fatalf("missing %q: %s", text, w.Body.String())
@@ -110,6 +110,17 @@ func TestHandleAPIStateJSON(t *testing.T) {
 	}
 	if len(got.Services) != 1 || got.Services[0].Name != "photos" {
 		t.Fatalf("unexpected api state: %+v", got)
+	}
+}
+
+func TestTopologyRoutesAreNotServed(t *testing.T) {
+	srv := New(fakeSource{m: sample()}, Config{})
+	for _, path := range []string{"/topology", "/topology.svg", "/api/topology/frame", "/api/topology/timeline", "/api/topology/traffic", "/static/topology.js"} {
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want 404", path, w.Code)
+		}
 	}
 }
 
@@ -365,9 +376,9 @@ func TestServicesExposeSection(t *testing.T) {
 	inv := &inventory.Inventory{Services: map[string]inventory.Service{}, Hosts: map[string]inventory.Host{}}
 	srv := New(fakeSource{m: state.Merge(inv, nil, nil)}, Config{OverridesURL: exp.URL})
 	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services?tab=expose", nil))
 	body := w.Body.String()
-	for _, want := range []string{"Expose overrides", "app.example.com", "forever (no expiry)", "removing", "mismatch", ">missing<", "lio"} {
+	for _, want := range []string{"app.example.com", "forever (no expiry)", "removing", "mismatch", ">missing<", "lio"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("services page lacks %q", want)
 		}
@@ -378,7 +389,7 @@ func TestServicesExposeSection(t *testing.T) {
 	// Export down: page still renders, with the error.
 	exp.Close()
 	w = httptest.NewRecorder()
-	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services?tab=expose", nil))
 	if w.Code != 200 || !strings.Contains(w.Body.String(), "unreachable") {
 		t.Errorf("down: %d", w.Code)
 	}

@@ -9,8 +9,15 @@
   {{if .BackupStale}}<strong class="warn">{{.BackupStale}}</strong> backups stale (&gt;36h) ·{{end}}
   <strong>{{.HostsUp}}</strong>/<strong>{{.HostsTotal}}</strong> hosts reachable
 </p>
+<nav class="tabs" aria-label="sections">
+  <a href="/services"{{if eq .Tab "overview"}} class="active"{{end}}>Overview<span class="count">{{.TotalServices}}</span></a>
+  {{if .Certificates}}<a href="/services?tab=tls"{{if eq .Tab "tls"}} class="active"{{end}}>TLS certificates<span class="count">{{len .Certificates}}</span></a>{{end}}
+  {{if .ExposeEnabled}}<a href="/services?tab=expose"{{if eq .Tab "expose"}} class="active"{{end}}>Expose</a>{{end}}
+  {{if .BackupEnabled}}<a href="/services?tab=backups"{{if eq .Tab "backups"}} class="active"{{end}}>Backups</a>{{end}}
+</nav>
 </header>
 <div class="scroll">
+{{if eq .Tab "overview"}}
 <div class="table-wrap">
 <table>
 <thead>
@@ -54,15 +61,18 @@
 </tbody>
 </table>
 </div>
-{{if .Certificates}}
-<section><h2>TLS certificates</h2>
+{{end}}
+{{if eq .Tab "tls"}}
+<section>
+<div class="table-wrap">
 <table><thead><tr><th>route</th><th>expires</th><th>status</th></tr></thead><tbody>
 {{range .Certificates}}<tr><td>{{.URL}}</td><td>{{if not .Error}}{{.Expires}}{{end}}</td><td>{{if .Error}}<span class="warn">{{.Error}}</span>{{else if .Expiring}}<strong class="warn">expires in under 14 days</strong>{{else}}ok{{end}}</td></tr>{{end}}
-</tbody></table></section>
+</tbody></table>
+</div>
+</section>
 {{end}}
-{{if .ExposeEnabled}}
+{{if eq .Tab "expose"}}
 <section class="expose">
-<h2>Expose overrides</h2>
 <p class="summary">Public <code>cnt expose</code> overrides held by fleet-edge-overrides on h005 (read-only; change with <code>cnt expose</code>).</p>
 {{if .ExposeError}}<p class="warn">{{.ExposeError}}</p>
 {{else if not .Expose}}<p>none active</p>
@@ -85,10 +95,9 @@
 {{end}}
 </section>
 {{end}}
-{{if .BackupEnabled}}
+{{if eq .Tab "backups"}}
 <section class="backup">
-<h2>Backups</h2>
-<p class="summary">Backup policy per subject. Edit target, presets and B2, turn off or clear at <a href="/backup/">/backup/</a> (oauth2-proxy sign-in; writers need the backup UI group). <code>cnt backup-policy</code> does the same from a laptop.</p>
+<p class="summary">Read-only summary. To change a service's backups, use <a href="/backup/">Backups</a> (admin sign-in) or <code>cnt backup-policy</code> from a laptop.</p>
 {{if .Backup.Error}}<p class="warn">{{.Backup.Error}}</p>
 {{else}}
 <div class="table-wrap">

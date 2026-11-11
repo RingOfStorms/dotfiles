@@ -96,9 +96,10 @@ func TestExportImportUI(t *testing.T) {
 	}
 }
 
+// getPage fetches the Credentials tab (export state, rotation status).
 func (f *fx) getPage(t *testing.T) (int, string) {
 	t.Helper()
-	r := httptest.NewRequest("GET", "/backup/", nil)
+	r := httptest.NewRequest("GET", "/backup/?tab=credentials", nil)
 	r.RemoteAddr = "127.0.0.1:4000"
 	r.Header.Set("X-Auth-Request-Email", admin)
 	r.Header.Set("X-Auth-Request-Groups", "role:admin")

@@ -117,17 +117,6 @@
                 description = "Continuous service health failure before an ntfy notification.";
               };
             };
-            geoipCountryFile = lib.mkOption {
-              type = lib.types.str;
-              default = "";
-              example = "/var/lib/fleet-edge/dbip-country-lite.csv.gz";
-              description = ''
-                Path to an offline DB-IP Lite Country CSV (plain or gzip) used
-                to label banned addresses with an IP-registration country.
-                Empty disables country lookups. Nothing is downloaded at
-                runtime; the file must be provisioned locally.
-              '';
-            };
 
             auth = {
               zitadel = {
@@ -398,26 +387,6 @@
               );
             };
 
-            topology = lib.mkOption {
-              type = lib.types.nullOr lib.types.json;
-              default = null;
-              description = ''
-                /topology diagram spec, passed as FLEET_EDGE_TOPOLOGY. The
-                schema is `topology.Spec` in internal/topology/topology.go:
-                width, height, columns[]{id,label,flex,zones[]{id,label,
-                kind,flex,layout,cols,fill,box,group}}, nodes[]{id,host,
-                label,kind,zone,segment,role,badges[],lines[],href},
-                links[]{from,to,kind,label}, dns{zone,records[]{name,type,
-                value,dynamic,ttl}}, defaultZone, hide[] and
-                hubs{tailnet,edge,router,dashboard}. A column owns a share of
-                the width and its own height; a zone inside it owns a share of
-                that column's leftover. Hosts, container placement, public
-                paths, tailnet membership and agent polling are derived from
-                the inventory, so the spec only carries what the inventory
-                cannot know. Host bindings and every reference are validated at
-                startup. null keeps the built-in single-zone diagram.
-              '';
-            };
           };
 
           config = lib.mkIf cfg.enable {
@@ -537,7 +506,6 @@
                 FLEET_EDGE_ICON_BASE = cfg.iconBase;
                 FLEET_EDGE_LINKS = toString (pkgs.writeText "fleet-edge-links.json" (builtins.toJSON cfg.links));
                 FLEET_EDGE_DB = cfg.dbPath;
-                FLEET_EDGE_GEOIP_COUNTRY_FILE = cfg.geoipCountryFile;
                 FLEET_EDGE_NTFY_URL = cfg.alerts.ntfyUrl;
                 FLEET_EDGE_ZITADEL_ISSUER = if cfg.auth.zitadel.enable then cfg.auth.zitadel.issuer else "";
                 FLEET_EDGE_ZITADEL_PROJECT_ID = if cfg.auth.zitadel.enable then cfg.auth.zitadel.projectId else "";
@@ -563,11 +531,7 @@
               // lib.optionalAttrs (cfg.auth.sessionKeyFile != null) {
                 FLEET_EDGE_SESSION_KEY_FILE = cfg.auth.sessionKeyFile;
               }
-              // lib.optionalAttrs (cfg.topology != null) {
-                FLEET_EDGE_TOPOLOGY = toString (
-                  pkgs.writeText "fleet-edge-topology.json" (builtins.toJSON cfg.topology)
-                );
-              };
+              ;
 
               serviceConfig = {
                 ExecStart = ''

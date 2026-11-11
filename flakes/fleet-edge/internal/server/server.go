@@ -17,13 +17,10 @@ import (
 	"time"
 
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/dash"
-	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/geoip"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/placements"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/state"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/store"
-	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/topology"
-	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/traffic"
 )
 
 //go:embed templates/*.html
@@ -80,21 +77,6 @@ type Config struct {
 	BackupURL string
 	// B2PricePerTB is the B2 price ($/TB/month) for the table's estimate.
 	B2PricePerTB float64
-	// Topology is the hand-written part of /topology (validated by the
-	// caller); nil means topology.Default().
-	Topology *topology.Spec
-	// History records topology snapshots for the atlas replay endpoints.
-	// nil disables history: those endpoints report "unavailable" instead of
-	// pretending to have recorded anything.
-	History History
-	// TrafficProviders are the traffic modes the atlas may answer for. nil
-	// means the default registry (deterministic simulation plus an explicit
-	// "real traffic is not connected" answer); an entry can be swapped for a
-	// measured provider without touching the API.
-	TrafficProviders traffic.Registry
-	// GeoIP is the offline country database for banned addresses; nil means
-	// no country answers at all.
-	GeoIP *geoip.DB
 }
 
 // ExposeRow is one public expose override on /services (from the export).
@@ -258,6 +240,8 @@ type IndexData struct {
 	// Backup policy table, when BackupURL is set.
 	BackupEnabled bool
 	Backup        BackupTable
+	// Tab is the selected section: overview, tls, expose or backups.
+	Tab string
 }
 
 // HostCardView wraps state.HostView with pre-rendered sparklines and formatted summary fields.
@@ -282,14 +266,6 @@ type HostsData struct {
 	ReachableCount  int
 	SleepingCount   int
 	UnreachableHost int
-}
-
-// TopologyData is the view model for topology.html.
-type TopologyData struct {
-	Common
-	Diagram                        topology.Diagram
-	Layers                         []topology.Layer
-	Polled, Online, Sleeping, Down int
 }
 
 // LogTargetOption represents one selectable log source in the drill-down log viewer.
@@ -384,25 +360,14 @@ func New(src Source, cfg Config) *Server {
 	if hc == nil {
 		hc = &http.Client{Timeout: 5 * time.Second}
 	}
-	if cfg.Topology == nil {
-		cfg.Topology = topology.Default()
-	}
-	if cfg.TrafficProviders == nil {
-		cfg.TrafficProviders = traffic.DefaultRegistry(cfg.Topology.Hubs.Router)
-	}
 	s := &Server{src: src, cfg: cfg, httpClient: hc, mux: http.NewServeMux()}
 	s.mux.HandleFunc("/", s.handleStart)
 	s.mux.HandleFunc("/services", s.handleServices)
 	s.mux.HandleFunc("/hosts", s.handleHosts)
 	s.mux.HandleFunc("/hosts/", s.handleHostDetail)
-	s.mux.HandleFunc("/topology", s.handleTopology)
-	s.mux.HandleFunc("/topology.svg", s.handleTopologySVG)
 	s.mux.HandleFunc("/healthz", s.handleHealthz)
 	s.mux.HandleFunc("/api/state.json", s.handleAPIState)
 	s.mux.HandleFunc("/api/hosts/", s.handleAPIHostSubroute)
-	s.mux.HandleFunc("/api/topology/timeline", s.handleAtlasTimeline)
-	s.mux.HandleFunc("/api/topology/frame", s.handleAtlasFrame)
-	s.mux.HandleFunc("/api/topology/traffic", s.handleAtlasTraffic)
 	s.mux.Handle("/static/", http.StripPrefix("/static/", staticHandler()))
 	if cfg.Background != "" && !isURL(cfg.Background) {
 		path := cfg.Background
@@ -503,12 +468,23 @@ func (s *Server) handleServices(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	data.HostsTotal, data.HostsUp = hostCounts(m)
-	if s.cfg.OverridesURL != "" {
-		data.ExposeEnabled = true
-		data.Expose, data.ExposeError = s.fetchOverrides(r.Context(), time.Now())
+	data.ExposeEnabled = s.cfg.OverridesURL != ""
+	data.BackupEnabled = s.cfg.BackupURL != ""
+	// Unknown or unavailable tabs fall back to the overview.
+	switch tab := r.URL.Query().Get("tab"); {
+	case tab == "tls" && data.Certificates != nil,
+		tab == "expose" && data.ExposeEnabled,
+		tab == "backups" && data.BackupEnabled:
+		data.Tab = tab
+	default:
+		data.Tab = "overview"
 	}
-	if s.cfg.BackupURL != "" {
-		data.BackupEnabled = true
+	// Fetch only the section on screen: each is a round trip to h005's
+	// overrides service.
+	switch data.Tab {
+	case "expose":
+		data.Expose, data.ExposeError = s.fetchOverrides(r.Context(), time.Now())
+	case "backups":
 		data.Backup = s.fetchBackup(r.Context(), time.Now())
 	}
 	s.render(w, "services.html", data)
@@ -579,50 +555,6 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.render(w, "hosts.html", data)
-}
-
-func (s *Server) diagram(ctx context.Context) topology.Diagram {
-	m := s.Merged(ctx)
-	now := m.GeneratedAt
-	if now.IsZero() {
-		now = time.Now().UTC()
-	}
-	return topology.Build(s.cfg.Topology, m, now)
-}
-
-func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
-	d := s.diagram(r.Context())
-	data := TopologyData{Common: s.common("topology"), Diagram: d, Layers: topology.Layers}
-	// Counted over the drawn hosts, the same way topology.js recounts
-	// after each live refresh.
-	for _, n := range d.Nodes {
-		switch n.State {
-		case "online":
-			data.Online++
-		case "sleeping":
-			data.Sleeping++
-		case "down":
-			data.Down++
-		default:
-			continue
-		}
-		data.Polled++
-	}
-	s.render(w, "topology.html", data)
-}
-
-// handleTopologySVG serves the diagram alone: a self-contained download and
-// the source topology.js swaps in for live status. With ?at= it replays the
-// recorded snapshot of that instant, never the current one.
-func (s *Server) handleTopologySVG(w http.ResponseWriter, r *http.Request) {
-	if s.snapshotSVG(w, r) {
-		return
-	}
-	w.Header().Set("Content-Type", "image/svg+xml; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	if err := tmpl.ExecuteTemplate(w, "topology.svg", s.diagram(r.Context())); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
 }
 
 func parseRangeWindow(rangeKey string) (string, time.Duration) {

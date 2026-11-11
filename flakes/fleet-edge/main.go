@@ -26,7 +26,6 @@ import (
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/dash"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/edgestream"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/edgevhost"
-	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/geoip"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/overrides"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/placements"
@@ -35,8 +34,6 @@ import (
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/shareserve"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/state"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/store"
-	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/timeline"
-	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/topology"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/wanforward"
 )
 
@@ -499,16 +496,12 @@ func main() {
 	pollTimeout := flag.Duration("poll-timeout", 3*time.Second, "per-host poll timeout")
 	dbPath := flag.String("db", envDefault("FLEET_EDGE_DB", ""), "path to SQLite metrics database (empty disables persistence)")
 	title := flag.String("title", envDefault("FLEET_EDGE_TITLE", "fleet-edge"), "page title (env FLEET_EDGE_TITLE)")
-	geoipFile := flag.String("geoip-country-file", envDefault("FLEET_EDGE_GEOIP_COUNTRY_FILE", ""),
-		"offline DB-IP Lite Country CSV(.gz) for banned-address countries (empty disables lookups)")
 	background := flag.String("background", envDefault("FLEET_EDGE_BACKGROUND", ""),
 		"background image: http(s) URL used directly, or a local file served at /assets/bg (env FLEET_EDGE_BACKGROUND)")
 	iconBase := flag.String("icon-base", envDefault("FLEET_EDGE_ICON_BASE", dash.DefaultIconBase),
 		"CDN template for named icons, {name} substituted (env FLEET_EDGE_ICON_BASE)")
 	linksFile := flag.String("links", envDefault("FLEET_EDGE_LINKS", ""),
 		"JSON array of extra start-page links [{name,url,icon,group,description,host,exposure}] (env FLEET_EDGE_LINKS)")
-	topologyFile := flag.String("topology", envDefault("FLEET_EDGE_TOPOLOGY", ""),
-		"JSON topology spec: columns, physical devices, links and the DNS zone (empty shows inventory hosts)")
 	zitadelIssuer := flag.String("zitadel-issuer", envDefault("FLEET_EDGE_ZITADEL_ISSUER", ""), "Zitadel OIDC issuer URL")
 	zitadelProjectID := flag.String("zitadel-project-id", envDefault("FLEET_EDGE_ZITADEL_PROJECT_ID", ""), "Zitadel project ID")
 	zitadelClaim := flag.String("zitadel-claim", envDefault("FLEET_EDGE_ZITADEL_CLAIM", "flatRolesClaim"), "Zitadel roles claim")
@@ -539,13 +532,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("loading links: %v", err)
 	}
-	topo, err := topology.Load(*topologyFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := topo.Validate(inv); err != nil {
-		log.Fatal(err)
-	}
 	if bg := *background; bg != "" && !strings.HasPrefix(bg, "http://") && !strings.HasPrefix(bg, "https://") {
 		if _, err := os.Stat(*background); err != nil {
 			log.Fatalf("background: %v", err)
@@ -561,15 +547,6 @@ func main() {
 		}
 		st = opened
 		poller.SetStore(st)
-	}
-	history := timeline.NewRecorder(st)
-
-	var countryDB *geoip.DB
-	if *geoipFile != "" {
-		countryDB, err = geoip.Load(*geoipFile)
-		if err != nil {
-			log.Fatalf("loading country database %s: %v", *geoipFile, err)
-		}
 	}
 
 	var sessionSecret []byte
@@ -603,9 +580,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Poll once synchronously so the atlas's first snapshot captures observed
-	// health. Starting the recorder alongside an unpolled poller would record
-	// every host as down for the first 30 s.
+	// Poll once synchronously so startup health checks see observed state.
 	poller.PollOnce(ctx)
 	go poller.Run(ctx, *pollInterval)
 
@@ -619,16 +594,6 @@ func main() {
 		PlacementsURL: *placementsURL,
 		BackupURL:     *backupURL,
 		B2PricePerTB:  *b2Price,
-		Topology:      topo,
-		History:       history,
-		GeoIP:         countryDB,
-	})
-	// The atlas samples on its own schedule so history covers the whole day,
-	// not just the moments someone had the page open. It records the bound
-	// state: a replay must show where a service ran then, not what the Nix
-	// declaration once said.
-	go history.Run(ctx, func() state.Merged { return srv.Merged(ctx) }, func(err error) {
-		log.Printf("atlas: recording snapshot: %v", err)
 	})
 	go monitor.Run(ctx, srv.Merged, func(err error) { log.Printf("alerts: %v", err) })
 	httpServer := &http.Server{

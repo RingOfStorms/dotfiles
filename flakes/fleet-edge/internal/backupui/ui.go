@@ -110,6 +110,17 @@ func identify(r *http.Request) (identity, bool) {
 	return id, id.User != ""
 }
 
+// presetLabel spells out a retention preset's `restic forget` arguments,
+// e.g. "standard: 7 daily, 5 weekly, 12 monthly, 3 yearly".
+func presetLabel(name string) string {
+	args := backup.Presets[name]
+	var parts []string
+	for i := 0; i+1 < len(args); i += 2 {
+		parts = append(parts, args[i+1]+" "+strings.TrimPrefix(args[i], "--keep-"))
+	}
+	return name + ": " + strings.Join(parts, ", ")
+}
+
 func (u *UI) mayWrite(id identity) bool {
 	for _, x := range u.cfg.Users {
 		if x != "" && x == id.User {
@@ -156,31 +167,44 @@ type rowView struct {
 	OffsiteReason string
 }
 
+// option is one <select> entry: the stored value and what it means.
+type option struct{ Value, Label string }
+
 type pageData struct {
 	User, Token  string
 	CanWrite     bool
 	Flash, Error string
-	Rows         []rowView
-	Targets      []backup.TargetView
-	TargetIDs    []string
-	Presets      []string
-	B2Presets    []string
-	Scopes       []string
-	Code         int
-	GeneratedAt  string
-	Creds        backup.CredStatus
-	Pending      map[string]string
-	LastExport   string
+	// Tab is "policy" or "credentials".
+	Tab         string
+	Rows        []rowView
+	Targets     []backup.TargetView
+	TargetIDs   []option
+	Presets     []option
+	B2Presets   []option
+	PresetHelp  []option
+	Scopes      []string
+	Code        int
+	GeneratedAt string
+	Creds       backup.CredStatus
+	Pending     map[string]string
+	LastExport  string
+	// NoPusher: no registered target copies to B2 yet, so every B2 toggle
+	// is off with the same reason; the page says so once.
+	NoPusher bool
 }
 
-func (u *UI) render(w http.ResponseWriter, id identity, code int, flash, msg string) {
+func (u *UI) render(w http.ResponseWriter, id identity, code int, tab, flash, msg string) {
 	e := u.st.Snapshot()
 	tb := server.BuildBackupTable(e, u.cfg.B2PricePerTB, u.cfg.Now())
 	pusher := map[string]bool{}
-	d := pageData{User: id.User, Token: u.token(id.User), CanWrite: u.mayWrite(id), Flash: flash, Error: msg,
-		Targets: e.Targets, TargetIDs: []string{backup.None}, Presets: []string{"short", "standard", "long"},
-		B2Presets: []string{"local", "short", "standard", "long"}, Scopes: backup.Scopes, Code: code,
-		GeneratedAt: u.cfg.Now().UTC().Format(time.RFC3339)}
+	d := pageData{User: id.User, Token: u.token(id.User), CanWrite: u.mayWrite(id), Flash: flash, Error: msg, Tab: tab,
+		Targets: e.Targets, TargetIDs: []option{{backup.None, "none (no backups)"}}, Scopes: backup.Scopes, Code: code,
+		GeneratedAt: u.cfg.Now().UTC().Format(time.RFC3339), NoPusher: true}
+	for _, p := range []string{"short", "standard", "long"} {
+		d.Presets = append(d.Presets, option{p, p})
+		d.PresetHelp = append(d.PresetHelp, option{p, strings.TrimPrefix(presetLabel(p), p+": ")})
+	}
+	d.B2Presets = append([]option{{"local", "same as local"}}, d.Presets...)
 	d.Creds = u.st.CredentialStatus()
 	d.Pending = map[string]string{}
 	for _, c := range d.Creds.Subjects {
@@ -192,8 +216,11 @@ func (u *UI) render(w http.ResponseWriter, id identity, code int, flash, msg str
 		d.LastExport = time.Unix(d.Creds.LastExportedAt, 0).UTC().Format(time.RFC3339)
 	}
 	for _, t := range e.Targets {
-		d.TargetIDs = append(d.TargetIDs, t.ID)
+		d.TargetIDs = append(d.TargetIDs, option{t.ID, t.ID})
 		pusher[t.ID] = t.Pusher
+		if t.Pusher {
+			d.NoPusher = false
+		}
 	}
 	for _, r := range tb.Rows {
 		v := rowView{BackupRow: r}
@@ -210,6 +237,14 @@ func (u *UI) render(w http.ResponseWriter, id identity, code int, flash, msg str
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.WriteHeader(code)
 	_ = tmpl.ExecuteTemplate(w, "backup.html", d)
+}
+
+// pageTab is the tab a GET asks for; anything else is the policy tab.
+func pageTab(s string) string {
+	if s == "credentials" {
+		return s
+	}
+	return "policy"
 }
 
 // ServeHTTP: GET /backup/ renders; POST /backup/<subject>/{policy,off,clear}.
@@ -235,7 +270,7 @@ func (u *UI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				code = c
 			}
 		}
-		u.render(w, id, code, flash, msg)
+		u.render(w, id, code, pageTab(q.Get("tab")), flash, msg)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -305,7 +340,11 @@ func (u *UI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		u.st.AuditUI(id.User, peer, act, code, "")
 	}
-	u.redirect(w, r, id.User, code, flash, errText(err))
+	tab := "policy"
+	if op == "rotate" {
+		tab = "credentials"
+	}
+	u.redirect(w, r, id.User, code, tab, flash, errText(err))
 }
 
 func errText(err error) string {
@@ -331,9 +370,12 @@ func (u *UI) flashSig(user, code, flash, msg string) string {
 
 // redirect is the post/redirect/get step; the result page carries code
 // (e.g. 409 for a stale revision) as its HTTP status.
-func (u *UI) redirect(w http.ResponseWriter, r *http.Request, user string, code int, flash, msg string) {
+func (u *UI) redirect(w http.ResponseWriter, r *http.Request, user string, code int, tab, flash, msg string) {
 	c := strconv.Itoa(code)
 	q := url.Values{"code": {c}, "sig": {u.flashSig(user, c, flash, msg)}}
+	if tab != "policy" {
+		q.Set("tab", tab)
+	}
 	if flash != "" {
 		q.Set("ok", flash)
 	}

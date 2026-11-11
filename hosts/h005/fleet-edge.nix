@@ -207,11 +207,6 @@ in
           "tailnet"
       ))
     ];
-    # /topology diagram: physical gear, cabling and the explanation panel.
-    # Inventory hosts, container placement, public `via = edge` paths,
-    # tailnet membership and the fleet-agent poll fan are derived by
-    # fleet-edge itself; see hosts/h005/topology.nix.
-    topology = import ./topology.nix { inherit fleet constants; };
     auth.zitadel = {
       enable = true;
       issuer = "https://sso.${domain}";
