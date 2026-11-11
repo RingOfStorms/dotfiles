@@ -187,7 +187,9 @@ copied, plus two actions:
 - **Clear** takes a scope `local|b2|both` and a typed confirmation
   (`clear svc-x b2`). It is audited, and only the target that holds the repo
   executes it, on its next heartbeat; fleet-edge never runs restic. `local`
-  deletes the repo, and the next run re-inits it. `b2` deletes the
+  deletes the repo. Nothing re-creates it (§2.5): the client backup fails
+  until `restic init` is run as `restic` on the target (2026-11-11:
+  vaultwarden, re-init by hand after its clear). `b2` deletes the
   subject's B2 prefix and sets `offsite = false` in the same operation.
   `both` does local first, then B2. A clear naming a repo the target does
   not hold, or `b2` on a subject without an offsite repo, returns 409.

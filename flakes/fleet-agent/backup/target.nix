@@ -189,7 +189,8 @@ let
   '';
 
   # Runs as `restic` after each heartbeat: executes pending `local` clears
-  # (deletes <dataDir>/svc-<subject>; the next client run re-inits it) and
+  # (deletes <dataDir>/svc-<subject>; nothing re-inits it: client backups
+  # fail until `restic init` is run as `restic`, §2.5) and
   # records them in cleared.json, reported by the next heartbeat. `b2`
   # clears belong to the pusher tier.
   clearScript = pkgs.writeShellScript "fleet-backup-target-clear" ''
