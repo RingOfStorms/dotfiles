@@ -724,3 +724,5 @@ footer {
 .legend { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem 0; }
 .legend dt { color: var(--text); font-weight: 600; display: inline; }
 .legend dd { display: inline; margin: 0 1rem 0 0.3rem; }
+section h2 { font-size: 1.05rem; margin: 1.25rem 0 0.6rem 0; }
+section form { margin: 0 0 0.6rem 0; }

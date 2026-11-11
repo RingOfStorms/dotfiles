@@ -26,7 +26,7 @@
 <div class="scroll">
 {{if .Flash}}<p class="summary"><strong>{{.Flash}}</strong></p>{{end}}
 {{if .Error}}<p class="warn">Error {{.Code}}: {{.Error}}</p>{{end}}
-{{if .Creds.ExportStale}}<p class="warn"><strong>Backup credentials not exported{{if .LastExport}} since {{.LastExport}}{{end}}:</strong> a repo password exists that is in no export. Open <a href="/backup/?tab=credentials">Credentials</a>, export all and paste it into the password manager; it is the only copy outside h005.</p>{{end}}
+{{if .Creds.ExportStale}}<p class="warn"><strong>Backup credentials not exported{{if .LastExport}} since {{.LastExport}}{{end}}:</strong> a repo password exists that is in no export. {{if eq .Tab "credentials"}}Use Export all below{{else}}Open <a href="/backup/?tab=credentials">Credentials</a>, export all{{end}} and paste it into the password manager; it is the only copy outside h005.</p>{{end}}
 
 {{if eq .Tab "policy"}}
 <dl class="legend">
