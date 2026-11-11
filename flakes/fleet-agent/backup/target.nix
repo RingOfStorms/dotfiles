@@ -199,6 +199,15 @@ let
     umask 0077
     export RESTIC_CACHE_DIR=/var/cache/fleet-backup-target
     [ -r ${policyFile} ] || exit 0
+    ${lib.optionalString pusher.enable ''
+      # Pusher host: the copier reads <dataDir>/svc-* as its source. Share its
+      # lock; a busy copier leaves local clears pending for the next heartbeat.
+      exec 9>${stateDir}/pusher.lock
+      if ! ${pkgs.util-linux}/bin/flock -n 9; then
+        echo "clear: a B2 copy run holds the pusher lock; retrying on the next heartbeat"
+        exit 0
+      fi
+    ''}
     cleared='{}'
     [ -r ${stateDir}/cleared.json ] && cleared=$(cat ${stateDir}/cleared.json)
     rc=0

@@ -125,9 +125,10 @@ let
     [ -r ${offsiteFile} ] && offsite=$(cat ${offsiteFile})
     for s in $(${jq} -r '.offsite // [] | .[]' ${policyFile}); do
       validName "$s" || { echo "copy: bad subject '$s'" >&2; rc=1; continue; }
-      # Still offsite, no B2 clear pending (a clear sets offsite=false)?
-      if ! ${jq} -e --arg s "$s" '((.offsite // []) | index($s)) != null and (.clears[$s] // "") != "b2"' ${policyFile} >/dev/null; then
-        echo "copy: $s: no longer offsite or a B2 clear is pending, skipped"
+      # Still offsite, and no clear of any scope pending (a local clear
+      # deletes the copy's source, a b2 clear its destination)?
+      if ! ${jq} -e --arg s "$s" '((.offsite // []) | index($s)) != null and ((.clears // {}) | has($s) | not)' ${policyFile} >/dev/null; then
+        echo "copy: $s: no longer offsite or a clear is pending, skipped"
         continue
       fi
       src=${target.dataDir}/svc-$s
