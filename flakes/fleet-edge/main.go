@@ -205,8 +205,10 @@ func runOverrides(args []string) {
 	forwardsStatus := fs.String("forwards-status", "/run/fleet-wan-forwards/applied.json", "forwards-apply's record, for the audit")
 	every := fs.Duration("sweep", 30*time.Second, "sweep interval")
 	backupFile := fs.String("backup", "", "JSON {writers: [host], readers: {host: {sub, peer}}, targets: {host: {sub, peer}}, hostSubjects: {host: [name]}} (empty: no /api/backup)")
-	uiGroup := fs.String("backup-ui-group", "", "oauth2-proxy group (Zitadel role) whose members may edit backup policy at /backup/")
-	uiUsers := fs.String("backup-ui-users", "", "comma-separated oauth2-proxy users/emails that may edit backup policy at /backup/")
+	uiGroup := fs.String("backup-ui-group", "", "Zitadel role (from the dashboard session) whose members may edit backup policy at /backup/")
+	uiUsers := fs.String("backup-ui-users", "", "comma-separated session names (email or username) that may edit backup policy at /backup/")
+	sessionKeyFile := fs.String("session-key-file", "", "the dashboard's session HMAC key: /backup/ accepts its fleet_session cookie (required with --backup)")
+	uiRole := fs.String("session-role", "", "role a session needs to reach /backup/ at all (the dashboard's --zitadel-role)")
 	uiPrice := fs.Float64("b2-price-per-tb-month", 6.95, "B2 price for /backup/'s $/mo estimate")
 	_ = fs.Parse(args)
 	inv, err := inventory.Load(*invFile)
@@ -294,8 +296,23 @@ func runOverrides(args []string) {
 		for _, p := range []string{"/internal/backup.json", "/api/backup", "/api/backup/"} {
 			root.Handle(p, bk.Handler())
 		}
-		// Dashboard editor; nginx gates /backup/ with oauth2-proxy and sets
-		// the identity headers (internal/backupui).
+		// Dashboard editor: reachable only with the dashboard's own login
+		// (fleet_session, verified here with the shared key), never via
+		// request headers.
+		if *sessionKeyFile == "" {
+			log.Fatal("overrides: --backup needs --session-key-file (the dashboard's session key)")
+		}
+		sk, err := os.ReadFile(*sessionKeyFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		sessions, err := auth.New(auth.Config{
+			Zitadel:       auth.ZitadelConfig{AllowedRole: *uiRole},
+			SessionSecret: []byte(strings.TrimSpace(string(sk))),
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
 		var users []string
 		for _, u := range strings.Split(*uiUsers, ",") {
 			if u = strings.TrimSpace(u); u != "" {
@@ -303,7 +320,7 @@ func runOverrides(args []string) {
 			}
 		}
 		ui := backupui.New(bk, backupui.Config{Group: *uiGroup, Users: users, B2PricePerTB: *uiPrice})
-		root.Handle("/backup/", ui)
+		root.Handle("/backup/", sessions.Require("/auth/login", ui))
 	}
 	for _, s := range []struct {
 		export, api string

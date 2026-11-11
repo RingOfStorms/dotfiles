@@ -13,8 +13,7 @@ func TestRevealIsPostCSRFOnly(t *testing.T) {
 	f := newFx(t)
 	g := httptest.NewRequest("GET", "/backup/forgejo/reveal", nil)
 	g.RemoteAddr = "127.0.0.1:1"
-	g.Header.Set("X-Auth-Request-Email", admin)
-	g.Header.Set("X-Auth-Request-Groups", "role:admin")
+	g = as(g, admin, "role:admin")
 	w := httptest.NewRecorder()
 	f.ui.ServeHTTP(w, g)
 	if w.Code != http.StatusMethodNotAllowed {
@@ -101,8 +100,7 @@ func (f *fx) getPage(t *testing.T) (int, string) {
 	t.Helper()
 	r := httptest.NewRequest("GET", "/backup/?tab=credentials", nil)
 	r.RemoteAddr = "127.0.0.1:4000"
-	r.Header.Set("X-Auth-Request-Email", admin)
-	r.Header.Set("X-Auth-Request-Groups", "role:admin")
+	r = as(r, admin, "role:admin")
 	g := httptest.NewRecorder()
 	f.ui.ServeHTTP(g, r)
 	if g.Header().Get("Cache-Control") != "no-store" {

@@ -186,7 +186,7 @@ func TestAPIKeyAndOIDCFlow(t *testing.T) {
 		t.Fatalf("expected 401 for cross-project JWT, got %d", rec.Code)
 	}
 
-	// 8. Userinfo subject mismatch is rejected by fetchUserInfoRoles
+	// 8. Userinfo subject mismatch is rejected by fetchUserInfo
 	badUI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/.well-known/openid-configuration":
@@ -215,8 +215,8 @@ func TestAPIKeyAndOIDCFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if roles, err := authnMismatch.fetchUserInfoRoles(req.Context(), "tok", "user-123"); err == nil || len(roles) != 0 {
-		t.Fatalf("expected error on userinfo subject mismatch, got roles=%v err=%v", roles, err)
+	if ui, err := authnMismatch.fetchUserInfo(req.Context(), "tok", "user-123"); err == nil || len(ui.Roles) != 0 {
+		t.Fatalf("expected error on userinfo subject mismatch, got roles=%v err=%v", ui.Roles, err)
 	}
 }
 

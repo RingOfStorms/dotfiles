@@ -115,8 +115,7 @@ func (f *fx) post(path string, q req) *httptest.ResponseRecorder {
 	r.RemoteAddr = q.remote
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.Header.Set("Origin", q.origin)
-	r.Header.Set("X-Auth-Request-Email", q.user)
-	r.Header.Set("X-Auth-Request-Groups", q.groups)
+	r = as(r, q.user, q.groups)
 	w := httptest.NewRecorder()
 	f.ui.ServeHTTP(w, r)
 	return w
@@ -130,8 +129,7 @@ func (f *fx) follow(t *testing.T, w *httptest.ResponseRecorder) (int, string) {
 	}
 	r := httptest.NewRequest("GET", w.Header().Get("Location"), nil)
 	r.RemoteAddr = "127.0.0.1:4000"
-	r.Header.Set("X-Auth-Request-Email", admin)
-	r.Header.Set("X-Auth-Request-Groups", "role:admin")
+	r = as(r, admin, "role:admin")
 	g := httptest.NewRecorder()
 	f.ui.ServeHTTP(g, r)
 	return g.Code, g.Body.String()
@@ -200,8 +198,7 @@ func TestWrongOrigin(t *testing.T) {
 	r := httptest.NewRequest("POST", "/backup/canary/off", strings.NewReader(url.Values{"csrf": {f.ui.token(admin)}, "revision": {"0"}}.Encode()))
 	r.RemoteAddr = "127.0.0.1:1"
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	r.Header.Set("X-Auth-Request-Email", admin)
-	r.Header.Set("X-Auth-Request-Groups", "admin")
+	r = as(r, admin, "admin")
 	w := httptest.NewRecorder()
 	f.ui.ServeHTTP(w, r)
 	if w.Code != 403 {
@@ -209,19 +206,39 @@ func TestWrongOrigin(t *testing.T) {
 	}
 }
 
-func TestHeaderSpoofOffLoopback(t *testing.T) {
-	f := newFx(t)
-	w := f.post("/backup/canary/policy", req{remote: "100.64.0.9:5555", form: setForm("0", "h004", "long", "local", "")})
-	if w.Code != 403 || f.row("canary") != nil {
-		t.Fatalf("spoof: %d", w.Code)
+// as attaches a verified identity, as auth.Require does after checking the
+// session cookie.
+func as(r *http.Request, user, groups string) *http.Request {
+	var roles []string
+	for _, g := range strings.Split(groups, ",") {
+		if g = strings.TrimSpace(g); g != "" {
+			roles = append(roles, g)
+		}
 	}
-	r := httptest.NewRequest("GET", "/backup/", nil)
-	r.RemoteAddr = "100.64.0.9:5555"
-	r.Header.Set("X-Auth-Request-Email", admin)
-	g := httptest.NewRecorder()
-	f.ui.ServeHTTP(g, r)
-	if g.Code != 403 {
-		t.Fatalf("spoof GET: %d", g.Code)
+	return r.WithContext(auth.WithIdentity(r.Context(), auth.Identity{Subject: user, Name: user, Roles: roles}))
+}
+
+// TestHeadersAreNotIdentity: the old oauth2-proxy headers, even from
+// loopback, are not an identity; only a verified session is.
+func TestHeadersAreNotIdentity(t *testing.T) {
+	f := newFx(t)
+	for _, method := range []string{"GET", "POST"} {
+		r := httptest.NewRequest(method, "/backup/", nil)
+		if method == "POST" {
+			r = httptest.NewRequest(method, "/backup/canary/policy", strings.NewReader(setForm("0", "h004", "long", "local", "").Encode()))
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+		r.RemoteAddr = "127.0.0.1:1"
+		r.Header.Set("X-Auth-Request-Email", admin)
+		r.Header.Set("X-Auth-Request-Groups", "admin")
+		g := httptest.NewRecorder()
+		f.ui.ServeHTTP(g, r)
+		if g.Code != 403 {
+			t.Fatalf("%s with forged headers: %d", method, g.Code)
+		}
+	}
+	if f.row("canary") != nil {
+		t.Fatal("forged POST wrote a row")
 	}
 }
 
@@ -239,7 +256,7 @@ func TestNonAllowedUser(t *testing.T) {
 	// Read-only render for the guest has no forms.
 	r := httptest.NewRequest("GET", "/backup/", nil)
 	r.RemoteAddr = "127.0.0.1:1"
-	r.Header.Set("X-Auth-Request-User", "guest")
+	r = as(r, "guest", "")
 	g := httptest.NewRecorder()
 	f.ui.ServeHTTP(g, r)
 	if g.Code != 200 || strings.Contains(g.Body.String(), "<form") {
@@ -255,8 +272,7 @@ func TestUnlistedRepoReadOnly(t *testing.T) {
 	f.heartbeat(t, "h004", "100.64.0.17", true, map[string]backup.Stats{"canary": {LocalBytes: &local}, "retired": {LocalBytes: &local}})
 	r := httptest.NewRequest("GET", "/backup/", nil)
 	r.RemoteAddr = "127.0.0.1:1"
-	r.Header.Set("X-Auth-Request-Email", admin)
-	r.Header.Set("X-Auth-Request-Groups", "role:admin")
+	r = as(r, admin, "role:admin")
 	g := httptest.NewRecorder()
 	f.ui.ServeHTTP(g, r)
 	page := g.Body.String()
@@ -373,7 +389,7 @@ func TestSignedFlashOnly(t *testing.T) {
 	f := newFx(t)
 	r := httptest.NewRequest("GET", "/backup/?ok=pwned&code=200&sig=x", nil)
 	r.RemoteAddr = "127.0.0.1:1"
-	r.Header.Set("X-Auth-Request-User", admin)
+	r = as(r, admin, "")
 	w := httptest.NewRecorder()
 	f.ui.ServeHTTP(w, r)
 	if strings.Contains(w.Body.String(), "pwned") {

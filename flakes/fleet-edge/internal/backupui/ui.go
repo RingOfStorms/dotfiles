@@ -3,11 +3,11 @@
 // next to the backup store, so every write goes through the same put/clear
 // and revision rules as /api/backup.
 //
-// Identity: h005's nginx gates /backup/ with oauth2-proxy auth_request and
-// overwrites X-Auth-Request-User/-Email/-Groups from the subrequest (never
-// the client's). Those headers are trusted only when the TCP peer is
-// loopback (nginx); anything else is refused. Writes then need Group in the
-// groups header or the user/email in Users.
+// Identity: the handler is mounted behind auth.Require (the dashboard's
+// Zitadel session cookie, verified with the shared session key; role
+// `admin` to enter). It reads the caller only from that verified session,
+// never from request headers. Writes additionally need Group among the
+// session's roles or the user in Users.
 //
 // CSRF: token = HMAC-SHA256(secret, user), secret random per process; every
 // form carries it and every POST must match it, plus a same-host
@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/auth"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/backup"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/server"
 )
@@ -56,9 +57,9 @@ type Store interface {
 
 // Config selects who may write.
 type Config struct {
-	// Group (an oauth2-proxy group, i.e. a Zitadel role) that may write.
+	// Group (a Zitadel role from the verified session) that may write.
 	Group string
-	// Users (oauth2-proxy user or email) that may write regardless of group.
+	// Users (session name: email or username) that may write regardless of group.
 	Users        []string
 	B2PricePerTB float64
 	// Secret keys the CSRF HMAC; nil draws a random one.
@@ -91,23 +92,14 @@ type identity struct {
 	Groups []string
 }
 
-// identify reads the oauth2-proxy identity nginx set; ok is false when the
-// peer is not loopback (headers could be the client's) or no user is set.
+// identify returns the caller auth.Require verified (session cookie); ok is
+// false when the handler was reached without it.
 func identify(r *http.Request) (identity, bool) {
-	host, _, _ := net.SplitHostPort(r.RemoteAddr)
-	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
+	a, ok := auth.FromContext(r.Context())
+	if !ok || a.Name == "" {
 		return identity{}, false
 	}
-	id := identity{User: strings.TrimSpace(r.Header.Get("X-Auth-Request-User"))}
-	if e := strings.TrimSpace(r.Header.Get("X-Auth-Request-Email")); e != "" {
-		id.User = e
-	}
-	for _, g := range strings.Split(r.Header.Get("X-Auth-Request-Groups"), ",") {
-		if g = strings.TrimSpace(g); g != "" {
-			id.Groups = append(id.Groups, g)
-		}
-	}
-	return id, id.User != ""
+	return identity{User: a.Name, Groups: a.Roles}, true
 }
 
 // presetLabel spells out a retention preset's `restic forget` arguments,
@@ -131,7 +123,7 @@ func (u *UI) mayWrite(id identity) bool {
 		return false
 	}
 	for _, g := range id.Groups {
-		// oauth2-proxy may prefix groups ("role:admin"); accept both.
+		// Zitadel roles may arrive prefixed ("role:admin"); accept both.
 		if g == u.cfg.Group || strings.HasSuffix(g, ":"+u.cfg.Group) {
 			return true
 		}

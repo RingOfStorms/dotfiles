@@ -69,9 +69,32 @@ type jwksKey struct {
 
 type sessionPayload struct {
 	Subject   string   `json:"sub"`
+	Name      string   `json:"name,omitempty"`
 	Roles     []string `json:"roles,omitempty"`
 	IssuedAt  int64    `json:"iat"`
 	ExpiresAt int64    `json:"exp"`
+}
+
+// Identity is the authenticated caller Wrap and Require attach to the request.
+// Name is the login's email (else preferred username, else subject); API
+// keys get "api-key".
+type Identity struct {
+	Subject string
+	Name    string
+	Roles   []string
+}
+
+type ctxKey struct{}
+
+// FromContext returns the identity Wrap/Require attached, if any.
+func FromContext(ctx context.Context) (Identity, bool) {
+	id, ok := ctx.Value(ctxKey{}).(Identity)
+	return id, ok
+}
+
+// WithIdentity attaches id to ctx (used by tests of downstream handlers).
+func WithIdentity(ctx context.Context, id Identity) context.Context {
+	return context.WithValue(ctx, ctxKey{}, id)
 }
 
 // Authenticator guards fleet-edge HTTP routes with either:
@@ -221,8 +244,8 @@ func (a *Authenticator) Wrap(next http.Handler) http.Handler {
 			return
 		}
 
-		if a.checkRequest(r) {
-			next.ServeHTTP(w, r)
+		if id, ok := a.checkRequest(r); ok {
+			next.ServeHTTP(w, r.WithContext(WithIdentity(r.Context(), id)))
 			return
 		}
 
@@ -261,10 +284,43 @@ func wantsHTML(r *http.Request) bool {
 	return true
 }
 
-func (a *Authenticator) checkRequest(r *http.Request) bool {
+// Require is Wrap for a process that does not run the login flow itself (it
+// shares the session key with the one that does): a valid session cookie
+// with the allowed role passes with its identity attached; a browser without
+// one is sent to loginURL; anything else is 401. API keys and bearer tokens
+// are not accepted here.
+func (a *Authenticator) Require(loginURL string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if c, err := r.Cookie(SessionCookieName); err == nil && c.Value != "" {
+			if sess, ok := a.verifySessionCookie(c.Value); ok && a.roleAllowed(sess.Roles) {
+				next.ServeHTTP(w, r.WithContext(WithIdentity(r.Context(), sess.identity())))
+				return
+			}
+		}
+		if wantsHTML(r) && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+			q := url.Values{"return_to": {r.URL.RequestURI()}}
+			http.Redirect(w, r, loginURL+"?"+q.Encode(), http.StatusFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = io.WriteString(w, `{"error":"unauthorized"}`+"\n")
+	})
+}
+
+func (p sessionPayload) identity() Identity {
+	n := p.Name
+	if n == "" {
+		n = p.Subject
+	}
+	return Identity{Subject: p.Subject, Name: n, Roles: p.Roles}
+}
+
+func (a *Authenticator) checkRequest(r *http.Request) (Identity, bool) {
+	apiKey := Identity{Subject: "api-key", Name: "api-key"}
 	if key := strings.TrimSpace(r.Header.Get("X-API-Key")); key != "" {
 		if a.matchAPIKey(key) {
-			return true
+			return apiKey, true
 		}
 	}
 
@@ -273,11 +329,11 @@ func (a *Authenticator) checkRequest(r *http.Request) bool {
 		tok := strings.TrimSpace(authz[7:])
 		if tok != "" {
 			if a.matchAPIKey(tok) {
-				return true
+				return apiKey, true
 			}
 			if a.cfg.Zitadel.Issuer != "" {
 				if id, err := a.VerifyZitadelToken(tok); err == nil && a.roleAllowed(id.Roles) {
-					return true
+					return Identity{Subject: id.Subject, Name: id.displayName(), Roles: id.Roles}, true
 				}
 			}
 		}
@@ -285,11 +341,11 @@ func (a *Authenticator) checkRequest(r *http.Request) bool {
 
 	if c, err := r.Cookie(SessionCookieName); err == nil && c.Value != "" {
 		if sess, ok := a.verifySessionCookie(c.Value); ok && a.roleAllowed(sess.Roles) {
-			return true
+			return sess.identity(), true
 		}
 	}
 
-	return false
+	return Identity{}, false
 }
 
 func (a *Authenticator) matchAPIKey(candidate string) bool {
@@ -317,10 +373,11 @@ func (a *Authenticator) roleAllowed(roles []string) bool {
 }
 
 // mintSessionCookie creates an HMAC-SHA256 signed cookie value.
-func (a *Authenticator) mintSessionCookie(sub string, roles []string) (string, error) {
+func (a *Authenticator) mintSessionCookie(sub, name string, roles []string) (string, error) {
 	now := a.cfg.Now()
 	p := sessionPayload{
 		Subject:   sub,
+		Name:      name,
 		Roles:     roles,
 		IssuedAt:  now.Unix(),
 		ExpiresAt: now.Add(SessionTTL).Unix(),
@@ -482,10 +539,17 @@ func (a *Authenticator) handleCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no verifiable JWT returned by OIDC provider", http.StatusUnauthorized)
 		return
 	}
-	// Fallback to /oidc/v1/userinfo when roles aren't embedded in the ID/access JWT
-	if !a.roleAllowed(verified.Roles) && tokens.AccessToken != "" {
-		if uiRoles, err := a.fetchUserInfoRoles(r.Context(), tokens.AccessToken, verified.Subject); err == nil && len(uiRoles) > 0 {
-			verified.Roles = appendUniqueStrings(verified.Roles, uiRoles...)
+	// Fallback to /oidc/v1/userinfo when roles (or, for audit names, the
+	// email/username) aren't embedded in the ID/access JWT.
+	if (!a.roleAllowed(verified.Roles) || (verified.Email == "" && verified.Username == "")) && tokens.AccessToken != "" {
+		if ui, err := a.fetchUserInfo(r.Context(), tokens.AccessToken, verified.Subject); err == nil {
+			verified.Roles = appendUniqueStrings(verified.Roles, ui.Roles...)
+			if verified.Email == "" {
+				verified.Email = ui.Email
+			}
+			if verified.Username == "" {
+				verified.Username = ui.Username
+			}
 		}
 	}
 	if !a.roleAllowed(verified.Roles) {
@@ -493,7 +557,7 @@ func (a *Authenticator) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cookieVal, err := a.mintSessionCookie(verified.Subject, verified.Roles)
+	cookieVal, err := a.mintSessionCookie(verified.Subject, verified.displayName(), verified.Roles)
 	if err != nil {
 		http.Error(w, "failed to mint session", http.StatusInternalServerError)
 		return
@@ -599,10 +663,10 @@ func (a *Authenticator) exchangeCode(r *http.Request, code, verifier string) (to
 	}
 	return tr, nil
 }
-func (a *Authenticator) fetchUserInfoRoles(ctx context.Context, accessToken, expectedSub string) ([]string, error) {
+func (a *Authenticator) fetchUserInfo(ctx context.Context, accessToken, expectedSub string) (VerifiedToken, error) {
 	disc, err := a.getDiscovery()
 	if err != nil {
-		return nil, err
+		return VerifiedToken{}, err
 	}
 	uiEndpoint := disc.UserinfoEndpoint
 	if uiEndpoint == "" {
@@ -610,26 +674,31 @@ func (a *Authenticator) fetchUserInfoRoles(ctx context.Context, accessToken, exp
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uiEndpoint, nil)
 	if err != nil {
-		return nil, err
+		return VerifiedToken{}, err
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Accept", "application/json")
 	resp, err := a.cfg.HTTPClient.Do(req)
 	if err != nil {
-		return nil, err
+		return VerifiedToken{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("userinfo HTTP %d", resp.StatusCode)
+		return VerifiedToken{}, fmt.Errorf("userinfo HTTP %d", resp.StatusCode)
 	}
 	var claims map[string]any
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&claims); err != nil {
-		return nil, err
+		return VerifiedToken{}, err
 	}
 	if expectedSub != "" && extractSubject(claims) != expectedSub {
-		return nil, errors.New("userinfo subject mismatch")
+		return VerifiedToken{}, errors.New("userinfo subject mismatch")
 	}
-	return extractRoles(claims, a.cfg.Zitadel.Claim, a.cfg.Zitadel.ProjectID), nil
+	return VerifiedToken{
+		Subject:  expectedSub,
+		Roles:    extractRoles(claims, a.cfg.Zitadel.Claim, a.cfg.Zitadel.ProjectID),
+		Email:    jsonString(claims, "email"),
+		Username: jsonString(claims, "preferred_username"),
+	}, nil
 }
 
 func appendUniqueStrings(base []string, extra ...string) []string {
@@ -646,10 +715,23 @@ func appendUniqueStrings(base []string, extra ...string) []string {
 	return base
 }
 
-// VerifiedToken holds the verified subject and roles from a Zitadel JWT.
+// VerifiedToken holds the verified subject, roles and display claims from a
+// Zitadel JWT.
 type VerifiedToken struct {
-	Subject string
-	Roles   []string
+	Subject  string
+	Roles    []string
+	Email    string
+	Username string
+}
+
+// displayName: email, else preferred username, else subject (audit logs).
+func (t VerifiedToken) displayName() string {
+	for _, s := range []string{t.Email, t.Username} {
+		if s != "" {
+			return s
+		}
+	}
+	return t.Subject
 }
 
 // VerifyZitadelToken verifies a raw RS256 JWT against Zitadel's JWKS and checks
@@ -742,8 +824,10 @@ func (a *Authenticator) VerifyZitadelToken(raw string) (VerifiedToken, error) {
 		return VerifiedToken{}, errors.New("JWT missing subject")
 	}
 	return VerifiedToken{
-		Subject: sub,
-		Roles:   extractRoles(claims, a.cfg.Zitadel.Claim, a.cfg.Zitadel.ProjectID),
+		Subject:  sub,
+		Roles:    extractRoles(claims, a.cfg.Zitadel.Claim, a.cfg.Zitadel.ProjectID),
+		Email:    jsonString(claims, "email"),
+		Username: jsonString(claims, "preferred_username"),
 	}, nil
 }
 

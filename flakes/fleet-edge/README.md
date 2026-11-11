@@ -204,13 +204,17 @@ the store's own `put`/`clear` under its lock, so validation, revisions
 (stale → 409, shown on the page) and the `offsite needs a pusher` rule are
 the API's. Each POST is one `backup-audit.log` line (`role: ui`, `user`).
 
-- **Identity:** h005's nginx gates `/backup/` with oauth2-proxy
-  `auth_request` (`allowed_groups=admin`) and always overwrites
-  `X-Auth-Request-User/-Email/-Groups` from the subrequest. The service
-  trusts those headers only when the TCP peer is loopback; anything else is
-  403. Writes need `overrides.backup.uiGroup` (`--backup-ui-group`, h005:
-  `admin`) in the groups header or the user/email in `uiUsers`
-  (`--backup-ui-users`); others get a read-only page.
+- **Identity: one login for the whole UI.** The dashboard's Zitadel login
+  (`auth.zitadel`) signs the `fleet_session` cookie with the session key
+  (`auth.sessionKeyFile`, else a per-boot random key in
+  `/run/fleet-edge-session/key`). `fleet-edge-overrides` gets the same key
+  (`--session-key-file`, LoadCredential) and serves `/backup/` only to a
+  valid session holding the dashboard's role (`--session-role`); a browser
+  without one is redirected to `/auth/login` and comes back afterwards.
+  Request headers are never identity. Writes need `overrides.backup.uiGroup`
+  (`--backup-ui-group`, h005: `admin`) among the session's roles, or the
+  login's name (email, else username) in `uiUsers` (`--backup-ui-users`);
+  others get a read-only page.
 - **CSRF:** every form carries `HMAC-SHA256(per-process secret, user)`; every
   POST must carry it and a same-host `Origin` (or `Referer`), else 403.
   POST only. Results come back via a redirect with an HMAC-signed message.

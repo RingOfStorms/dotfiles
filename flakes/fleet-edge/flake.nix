@@ -65,6 +65,8 @@
         let
           cfg = config.services.fleet-edge;
           fleetEdgePkg = cfg.package;
+          sessionKey =
+            if cfg.auth.sessionKeyFile != null then cfg.auth.sessionKeyFile else "/run/fleet-edge-session/key";
         in
         {
           options.services.fleet-edge = {
@@ -164,7 +166,12 @@
               sessionKeyFile = lib.mkOption {
                 type = lib.types.nullOr lib.types.str;
                 default = null;
-                description = "Optional path to HMAC session signing key file.";
+                description = ''
+                  HMAC key that signs the dashboard's login cookie. Null: a fresh
+                  random key in /run per boot (everyone logs in again after a
+                  reboot). With overrides.backup, fleet-edge-overrides reads the
+                  same key so /backup/ accepts the dashboard's login.
+                '';
               };
             };
 
@@ -188,10 +195,23 @@
                 description = "CNAME target for override records.";
               };
               dns = {
-                tailnetDir = lib.mkOption { type = lib.types.str; default = "/var/lib/fleet-edge-dns/tailnet"; };
-                lanDir = lib.mkOption { type = lib.types.str; default = "/var/lib/fleet-edge-dns/lan"; };
-                tailnetServer = lib.mkOption { type = lib.types.str; default = ""; description = "Tailnet dnsmasq IP:port for routing audit."; };
-                lanServer = lib.mkOption { type = lib.types.str; default = "127.0.0.1:9053"; };
+                tailnetDir = lib.mkOption {
+                  type = lib.types.str;
+                  default = "/var/lib/fleet-edge-dns/tailnet";
+                };
+                lanDir = lib.mkOption {
+                  type = lib.types.str;
+                  default = "/var/lib/fleet-edge-dns/lan";
+                };
+                tailnetServer = lib.mkOption {
+                  type = lib.types.str;
+                  default = "";
+                  description = "Tailnet dnsmasq IP:port for routing audit.";
+                };
+                lanServer = lib.mkOption {
+                  type = lib.types.str;
+                  default = "127.0.0.1:9053";
+                };
               };
               zitadel = {
                 issuer = lib.mkOption {
@@ -229,22 +249,26 @@
                   description = "Override writers (by host) that may also write backup policy and clear.";
                 };
                 readers = lib.mkOption {
-                  type = lib.types.attrsOf (lib.types.submodule {
-                    options = {
-                      sub = lib.mkOption { type = lib.types.strMatching "[0-9]+"; };
-                      peer = lib.mkOption { type = lib.types.str; };
-                    };
-                  });
+                  type = lib.types.attrsOf (
+                    lib.types.submodule {
+                      options = {
+                        sub = lib.mkOption { type = lib.types.strMatching "[0-9]+"; };
+                        peer = lib.mkOption { type = lib.types.str; };
+                      };
+                    }
+                  );
                   default = { };
                   description = "Backup clients: may GET /api/backup/<subject> for subjects placed on them only.";
                 };
                 targets = lib.mkOption {
-                  type = lib.types.attrsOf (lib.types.submodule {
-                    options = {
-                      sub = lib.mkOption { type = lib.types.strMatching "[0-9]+"; };
-                      peer = lib.mkOption { type = lib.types.str; };
-                    };
-                  });
+                  type = lib.types.attrsOf (
+                    lib.types.submodule {
+                      options = {
+                        sub = lib.mkOption { type = lib.types.strMatching "[0-9]+"; };
+                        peer = lib.mkOption { type = lib.types.str; };
+                      };
+                    }
+                  );
                   default = { };
                   description = "Backup targets: may POST /api/backup/targets/<own host> and GET the full view.";
                 };
@@ -263,15 +287,15 @@
                   default = "";
                   example = "admin";
                   description = ''
-                    oauth2-proxy group (Zitadel role, X-Auth-Request-Groups) whose
-                    members may edit backup policy at /backup/. Empty: only uiUsers.
-                    Identity headers are trusted from loopback (nginx) only.
+                    Zitadel role (from the dashboard login session) whose members
+                    may edit backup policy at /backup/. Empty: only uiUsers.
+                    /backup/ reads identity only from the verified session cookie.
                   '';
                 };
                 uiUsers = lib.mkOption {
                   type = lib.types.listOf lib.types.str;
                   default = [ ];
-                  description = "oauth2-proxy users/emails that may edit backup policy at /backup/ regardless of group.";
+                  description = "Login names (email, else username) that may edit backup policy at /backup/ regardless of group.";
                 };
               };
               bunnyKeyFile = lib.mkOption {
@@ -396,7 +420,8 @@
               "z /var/lib/private 0700 root root -"
               # Shared flock for dns-plan --apply and fleet-edge-overrides.
               "d /run/fleet-edge-bunny 1777 root root -"
-            ] ++ lib.optionals cfg.overrides.enable [
+            ]
+            ++ lib.optionals cfg.overrides.enable [
               "d ${cfg.overrides.dns.tailnetDir} 0775 root fleet-edge-dns -"
               "d ${cfg.overrides.dns.lanDir} 0775 root fleet-edge-dns -"
               "d /var/lib/fleet-edge-forwards 0775 root fleet-edge-dns -"
@@ -410,13 +435,25 @@
                 writers = pkgs.writeText "fleet-edge-writers.json" (builtins.toJSON o.writers);
                 knownHosts = pkgs.writeText "fleet-edge-edge-known-hosts" o.knownHosts;
                 backupSpec = pkgs.writeText "fleet-edge-backup.json" (
-                  builtins.toJSON { inherit (o.backup) writers readers targets hostSubjects; }
+                  builtins.toJSON {
+                    inherit (o.backup)
+                      writers
+                      readers
+                      targets
+                      hostSubjects
+                      ;
+                  }
                 );
               in
               {
                 description = "fleet-edge expose overrides and placement registry";
                 wantedBy = [ "multi-user.target" ];
-                after = [ "network-online.target" "systemd-tmpfiles-setup.service" ];
+                after = [
+                  "network-online.target"
+                  "systemd-tmpfiles-setup.service"
+                  "fleet-edge-session-key.service"
+                ];
+                requires = lib.optionals o.backup.enable [ "fleet-edge-session-key.service" ];
                 wants = [ "network-online.target" ];
                 path = [ pkgs.openssh ];
                 serviceConfig = {
@@ -442,6 +479,8 @@
                       "--backup ${backupSpec}"
                       "--backup-ui-group ${lib.escapeShellArg o.backup.uiGroup}"
                       "--backup-ui-users ${lib.escapeShellArg (lib.concatStringsSep "," o.backup.uiUsers)}"
+                      "--session-key-file %d/session"
+                      "--session-role ${lib.escapeShellArg cfg.auth.zitadel.allowedRole}"
                       "--b2-price-per-tb-month ${toString o.backup.b2PricePerTbMonth}"
                     ]
                     ++ lib.optionals live [
@@ -451,15 +490,22 @@
                       "--known-hosts ${knownHosts}"
                     ]
                   );
-                  LoadCredential = lib.optionals live [
-                    "bunny:${o.bunnyKeyFile}"
-                    "push:${o.pushKeyFile}"
-                  ];
+                  LoadCredential =
+                    lib.optionals live [
+                      "bunny:${o.bunnyKeyFile}"
+                      "push:${o.pushKeyFile}"
+                    ]
+                    ++ lib.optionals o.backup.enable [ "session:${sessionKey}" ];
                   Restart = "on-failure";
                   RestartSec = "5s";
                   StateDirectory = "fleet-edge-overrides";
                   StateDirectoryMode = "0700";
-                  ReadWritePaths = [ "/run/fleet-edge-bunny" o.dns.tailnetDir o.dns.lanDir "/var/lib/fleet-edge-forwards" ];
+                  ReadWritePaths = [
+                    "/run/fleet-edge-bunny"
+                    o.dns.tailnetDir
+                    o.dns.lanDir
+                    "/var/lib/fleet-edge-forwards"
+                  ];
                   SupplementaryGroups = [ "fleet-edge-dns" ];
                   DynamicUser = true;
                   UMask = "0077";
@@ -495,10 +541,37 @@
               }
             );
 
+            # One login for the whole UI: the dashboard signs fleet_session with
+            # this key and fleet-edge-overrides verifies it for /backup/. Root
+            # 0600; each unit gets it via LoadCredential.
+            systemd.services.fleet-edge-session-key = {
+              description = "fleet-edge login session key";
+              before = [
+                "fleet-edge.service"
+                "fleet-edge-overrides.service"
+              ];
+              serviceConfig = {
+                Type = "oneshot";
+                RemainAfterExit = true;
+                UMask = "0077";
+              };
+              script = lib.optionalString (cfg.auth.sessionKeyFile == null) ''
+                if [ ! -s ${sessionKey} ]; then
+                  install -d -m 0700 ${dirOf sessionKey}
+                  head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' >${sessionKey}.tmp
+                  mv -f ${sessionKey}.tmp ${sessionKey}
+                fi
+              '';
+            };
+
             systemd.services.fleet-edge = {
               description = "fleet-edge read-only dashboard";
               wantedBy = [ "multi-user.target" ];
-              after = [ "network-online.target" ];
+              after = [
+                "network-online.target"
+                "fleet-edge-session-key.service"
+              ];
+              requires = [ "fleet-edge-session-key.service" ];
               wants = [ "network-online.target" ];
 
               environment = {
@@ -527,11 +600,7 @@
               }
               // lib.optionalAttrs (cfg.auth.apiKeysFile != null) {
                 FLEET_EDGE_API_KEYS_FILE = cfg.auth.apiKeysFile;
-              }
-              // lib.optionalAttrs (cfg.auth.sessionKeyFile != null) {
-                FLEET_EDGE_SESSION_KEY_FILE = cfg.auth.sessionKeyFile;
-              }
-              ;
+              };
 
               serviceConfig = {
                 ExecStart = ''
@@ -540,13 +609,15 @@
                     --inventory ${cfg.inventoryFile} \
                     --status-url-template ${lib.escapeShellArg cfg.statusUrlTemplate} \
                     --health-down-after ${toString cfg.alerts.healthDownMinutes}m \
-                    --b2-price-per-tb-month ${toString cfg.overrides.backup.b2PricePerTbMonth}
+                    --b2-price-per-tb-month ${toString cfg.overrides.backup.b2PricePerTbMonth} \
+                    --session-key-file %d/session
                 '';
                 Restart = "on-failure";
                 RestartSec = "5s";
 
                 StateDirectory = "fleet-edge";
                 StateDirectoryMode = "0750";
+                LoadCredential = [ "session:${sessionKey}" ];
 
                 DynamicUser = true;
                 ProtectSystem = "strict";
