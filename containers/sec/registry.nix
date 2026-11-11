@@ -55,6 +55,16 @@
       }
     ];
   };
+  "machines/by-host/h004/restic_b2_h004_2026-11-11" = {
+    fields = [ "value" ];
+    description = "h004 backup pusher B2 app key (bucket belljm-LoiuasdV3-system-backups, prefix svc-): AWS_ACCESS_KEY_ID=… / AWS_SECRET_ACCESS_KEY=… lines.";
+    access = [
+      {
+        type = "sub";
+        value = "394968645089886211"; # h004
+      }
+    ];
+  };
   "machines/by-host/h005/wildcard_push_2026-10-22" = {
     fields = [ "value" ];
     description = "Dedicated SSH private key for h005 wildcard-push (restricted to fleet-cert-receive on h001 and o002).";
