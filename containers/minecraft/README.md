@@ -1,23 +1,11 @@
 # Minecraft
 
-> **Offline: no placement.** The registry has no row for minecraft, so it
-> has no DNS name, no o002 vhost for `computerboyz` and no WAN forward for
-> 25565. It last ran on h003 and was stopped cleanly on 2026-10-09. The full
-> data dir is backed up on h001 at
-> `/home/luser/backups/minecraft-h003-2026-10-15T2001.tar.zst` (4.0G, taken
-> stopped, so no `dumpall.sql`; the PostgreSQL 17 cluster files are
-> consistent). To bring it back:
->
-> ```sh
-> containers check-idmap <host>
-> containers restore minecraft minecraft-h003-2026-10-15T2001.tar.zst --host <host>
-> sudo fleet containers deploy minecraft --host <host>
-> ```
->
-> The deploy records the first placement (reserve + commit). On its next pass
-> fleet-edge on h005 writes the DNS records, pushes the `computerboyz` vhost to
-> o002 and opens the WAN forward for 25565 to the host's LAN IP. Nothing in
-> Nix needs editing.
+> **Running on h003 since 2026-11-11**, restored from
+> `/home/luser/backups/minecraft-h003-2026-10-15T2001.tar.zst` on h001 (the
+> data as stopped on 2026-10-09). Nightly backups go to h004 (`svc-minecraft`).
+> Known breakage after the restore: squaremap 1.3.12 and PlaceholderAPI 2.12.2
+> fail to load on Paper 26.3 (`NoClassDefFoundError` / `NumberFormatException`),
+> so `computerboyz.joshuabell.xyz` answers 502; the game itself is up.
 
 Velocity proxy and two Paper servers, run as a `nixos`-kind floating container
 (see `../README.md`).
