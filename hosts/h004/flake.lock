@@ -79,11 +79,11 @@
       },
       "locked": {
         "dir": "flakes/fleet-agent",
-        "lastModified": 1793944058,
-        "narHash": "sha256-JBccilWlgLfPf1AlVILcTrHjdiMW5kXXWE3Kh7TfrSw=",
+        "lastModified": 1794410908,
+        "narHash": "sha256-OUqgx5xYWd3bEB9a734x+2h2KqpGen6Ltoc6dACrcT8=",
         "ref": "refs/heads/master",
-        "rev": "216b51823e4db50639aea9c5cf2c35fd86e910e7",
-        "revCount": 2524,
+        "rev": "274b3f279c3c8b2b4e2ad33020729d2e45d0bc1a",
+        "revCount": 2548,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
