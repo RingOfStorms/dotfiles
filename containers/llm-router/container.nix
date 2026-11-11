@@ -17,13 +17,11 @@ let
       name = "air";
       type = "litellm";
       base_url_env = "LITELLM_UPSTREAM_URL";
-      api_key_env = "na";
     }
     {
       name = "llm";
       type = "litellm";
       base_url_env = "LITELLM_UPSTREAM_URL_2";
-      api_key_env = "na";
     }
     {
       name = "copilot";
@@ -63,7 +61,6 @@ in
     wants = [ "network-online.target" ];
     after = [ "network-online.target" ];
     environment.COPILOT_TOKEN_FILE = "/var/lib/llm-router/copilot-token";
-    environment.LITELLM_UPSTREAM_API_KEY = "na";
     serviceConfig = {
       ExecStart = "${lib.getExe router} --listen ${fleetNet.bindAddress}:8095 --upstreams ${upstreamConfig}";
       User = "llm-router";
