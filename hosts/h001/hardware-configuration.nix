@@ -37,7 +37,10 @@
     ];
   };
 
-  fileSystems."/drives/wd10" = {
+  # Bulk media disk (10T WD), the `bulk` capability: immich/paperless
+  # extraPaths live under /srv/bulk (host-neutral path, so a move to a host
+  # without this disk restores into a plain /srv/bulk there).
+  fileSystems."/srv/bulk" = {
     device = "/dev/sda";
     fsType = "ext4";
   };

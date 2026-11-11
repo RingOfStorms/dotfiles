@@ -10,6 +10,10 @@
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
     stt_ime.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/stt_ime";
     # stt_ime.url = "path:../../flakes/stt_ime";
+    hex = {
+      url = "github:anomalyco/hex/v3.4.0";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
     containers.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=containers";
     omp-flake.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/omp";
@@ -62,6 +66,7 @@
           })
         ];
         nixosModules = [
+          ./hex.nix
           inputs.de_plasma.nixosModules.default
           ({
             ringofstorms.dePlasma = {

@@ -22,7 +22,7 @@
     capabilities = [
       "nfs-h004" # /nfs/h002/nixarr autofs mount of the h004 NAS (path name kept: stored in arr app state)
       "intel-qsv" # /dev/dri, 11th gen iGPU (hardware-transcoding.nix)
-      "wd10" # /drives/wd10 local 10T ext4 (immich, paperless media)
+      "bulk" # /srv/bulk: the 10T WD disk (immich, paperless media)
     ];
     # The media stack only runs while the NAS is reachable: take h004 down
     # and `arr` stops within ~a minute; bring it back and the guard starts

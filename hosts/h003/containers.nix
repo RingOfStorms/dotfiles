@@ -14,6 +14,9 @@
 {
   ringofstorms.containers = {
     enable = true;
+    # /srv/bulk: plain directory on the root disk for bulk service data
+    # (immich, paperless extraPaths); restored here by `cnt move`.
+    capabilities = [ "bulk" ];
     # LAN subnet for `exposure = "lan"` routes (nginx-acl-lan.conf).
     nginx.acl.lan = [ "10.12.14.0/24" ];
     privateNetwork.enable = true;
