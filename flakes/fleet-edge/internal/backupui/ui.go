@@ -39,7 +39,9 @@ import (
 //go:embed templates/*.html
 var tfs embed.FS
 
-var tmpl = template.Must(template.ParseFS(tfs, "templates/*.html"))
+// Pages share the dashboard's frame (server's layout.html: nav, title,
+// background), so /backup/ looks like the rest of the UI.
+var tmpl = server.ParseLayout(template.Must(template.ParseFS(tfs, "templates/*.html")))
 
 // Store is the subset of *backup.Service the editor uses.
 type Store interface {
@@ -62,6 +64,9 @@ type Config struct {
 	// Users (session name: email or username) that may write regardless of group.
 	Users        []string
 	B2PricePerTB float64
+	// Title and Background: the dashboard's (services.fleet-edge.title,
+	// .background), for the shared page frame.
+	Title, Background string
 	// Secret keys the CSRF HMAC; nil draws a random one.
 	Secret []byte
 	Now    func() time.Time
@@ -111,6 +116,10 @@ func presetLabel(name string) string {
 		parts = append(parts, args[i+1]+" "+strings.TrimPrefix(args[i], "--keep-"))
 	}
 	return name + ": " + strings.Join(parts, ", ")
+}
+
+func (u *UI) chrome() server.Common {
+	return server.Chrome("backup", u.cfg.Title, u.cfg.Background)
 }
 
 func (u *UI) mayWrite(id identity) bool {
@@ -163,6 +172,7 @@ type rowView struct {
 type option struct{ Value, Label string }
 
 type pageData struct {
+	server.Common
 	User, Token  string
 	CanWrite     bool
 	Flash, Error string
@@ -189,7 +199,7 @@ func (u *UI) render(w http.ResponseWriter, id identity, code int, tab, flash, ms
 	e := u.st.Snapshot()
 	tb := server.BuildBackupTable(e, u.cfg.B2PricePerTB, u.cfg.Now())
 	pusher := map[string]bool{}
-	d := pageData{User: id.User, Token: u.token(id.User), CanWrite: u.mayWrite(id), Flash: flash, Error: msg, Tab: tab,
+	d := pageData{Common: u.chrome(), User: id.User, Token: u.token(id.User), CanWrite: u.mayWrite(id), Flash: flash, Error: msg, Tab: tab,
 		Targets: e.Targets, TargetIDs: []option{{backup.None, "none (no backups)"}}, Scopes: backup.Scopes, Code: code,
 		GeneratedAt: u.cfg.Now().UTC().Format(time.RFC3339), NoPusher: true}
 	for _, p := range []string{"short", "standard", "long"} {
@@ -408,8 +418,9 @@ func (u *UI) policy(user, subject, op string, f url.Values) error {
 }
 
 type secretData struct {
+	server.Common
 	User, Token string
-	Title       string
+	Heading     string
 	Export      string
 	Reveal      *backup.ClientCred
 	Preview     []backup.ImportLine
@@ -422,15 +433,15 @@ type secretData struct {
 // (preview, then apply) and reveal. They render directly (never via a
 // redirect or a GET URL) with Cache-Control: no-store.
 func (u *UI) secretPage(w http.ResponseWriter, id identity, peer, act, subject, op string, f url.Values) {
-	d := secretData{User: id.User, Token: u.token(id.User)}
+	d := secretData{Common: u.chrome(), User: id.User, Token: u.token(id.User)}
 	code := http.StatusOK
 	var err error
 	switch {
 	case subject == "_credentials" && op == "export":
-		d.Title = "Export all backup credentials"
+		d.Heading = "Export all backup credentials"
 		d.Export, err = u.st.ExportAs(id.User)
 	case subject == "_credentials" && op == "import":
-		d.Title = "Import backup credentials"
+		d.Heading = "Import backup credentials"
 		d.ImportText = f.Get("text")
 		if f.Get("step") == "apply" {
 			over := map[string]bool{}
@@ -446,7 +457,7 @@ func (u *UI) secretPage(w http.ResponseWriter, id identity, peer, act, subject, 
 			d.Preview, err = u.st.ImportPreview(d.ImportText)
 		}
 	case op == "reveal":
-		d.Title = "Credentials of svc-" + subject
+		d.Heading = "Credentials of svc-" + subject
 		var c backup.ClientCred
 		c, err = u.st.RevealAs(id.User, subject)
 		d.Reveal = &c

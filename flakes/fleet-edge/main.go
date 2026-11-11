@@ -210,6 +210,8 @@ func runOverrides(args []string) {
 	sessionKeyFile := fs.String("session-key-file", "", "the dashboard's session HMAC key: /backup/ accepts its fleet_session cookie (required with --backup)")
 	uiRole := fs.String("session-role", "", "role a session needs to reach /backup/ at all (the dashboard's --zitadel-role)")
 	uiPrice := fs.Float64("b2-price-per-tb-month", 6.95, "B2 price for /backup/'s $/mo estimate")
+	uiTitle := fs.String("title", "", "the dashboard's title, for /backup/'s shared page frame")
+	uiBackground := fs.String("background", "", "the dashboard's background (URL, or a file the dashboard serves at /assets/bg)")
 	_ = fs.Parse(args)
 	inv, err := inventory.Load(*invFile)
 	if err != nil {
@@ -319,7 +321,7 @@ func runOverrides(args []string) {
 				users = append(users, u)
 			}
 		}
-		ui := backupui.New(bk, backupui.Config{Group: *uiGroup, Users: users, B2PricePerTB: *uiPrice})
+		ui := backupui.New(bk, backupui.Config{Group: *uiGroup, Users: users, B2PricePerTB: *uiPrice, Title: *uiTitle, Background: *uiBackground})
 		root.Handle("/backup/", sessions.Require("/auth/login", ui))
 	}
 	for _, s := range []struct {

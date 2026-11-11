@@ -481,7 +481,13 @@
                       "--backup-ui-users ${lib.escapeShellArg (lib.concatStringsSep "," o.backup.uiUsers)}"
                       "--session-key-file %d/session"
                       "--session-role ${lib.escapeShellArg cfg.auth.zitadel.allowedRole}"
+                      "--title ${lib.escapeShellArg cfg.title}"
                       "--b2-price-per-tb-month ${toString o.backup.b2PricePerTbMonth}"
+                    ]
+                    ++ lib.optionals (o.backup.enable && cfg.background != null) [
+                      "--background ${
+                        lib.escapeShellArg (if builtins.isPath cfg.background then "${cfg.background}" else cfg.background)
+                      }"
                     ]
                     ++ lib.optionals live [
                       "--bunny-key-file %d/bunny"

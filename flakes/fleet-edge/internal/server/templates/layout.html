@@ -13,7 +13,7 @@
   <a href="/"{{if eq .Page "start"}} class="active"{{end}}>Apps</a>
   <a href="/services"{{if eq .Page "services"}} class="active"{{end}}>Services</a>
   <a href="/hosts"{{if eq .Page "hosts"}} class="active"{{end}}>Hosts</a>
-  <a href="/backup/">Backups</a>
+  <a href="/backup/"{{if eq .Page "backup"}} class="active"{{end}}>Backups</a>
   <a href="/api/state.json">JSON</a>
 </nav>
 {{end}}

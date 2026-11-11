@@ -397,15 +397,32 @@ func staticHandler() http.Handler {
 }
 
 func (s *Server) common(page string) Common {
-	c := Common{Page: page, Title: s.cfg.Title}
+	return Chrome(page, s.cfg.Title, s.cfg.Background)
+}
+
+// Chrome is the shared page frame (nav, title, background) for page. Pages
+// rendered by other packages (backupui) use it with ParseLayout so the
+// whole UI looks the same. A local background file is served by the
+// dashboard at /assets/bg.
+func Chrome(page, title, background string) Common {
+	if title == "" {
+		title = "fleet-edge"
+	}
+	c := Common{Page: page, Title: title}
 	switch {
-	case s.cfg.Background == "":
-	case isURL(s.cfg.Background):
-		c.Background = s.cfg.Background
+	case background == "":
+	case isURL(background):
+		c.Background = background
 	default:
 		c.Background = "/assets/bg"
 	}
 	return c
+}
+
+// ParseLayout adds the shared "head"/"foot" frame (templates/layout.html)
+// to t, for pages rendered outside this package.
+func ParseLayout(t *template.Template) *template.Template {
+	return template.Must(t.ParseFS(templateFS, "templates/layout.html"))
 }
 
 func hostCounts(m state.Merged) (total, up int) {

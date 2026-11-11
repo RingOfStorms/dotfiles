@@ -1,19 +1,4 @@
-{{define "backup.html"}}<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Backups · fleet-edge</title>
-<link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-<nav class="topnav">
-  <a class="brand" href="/">fleet-edge</a>
-  <a href="/">Apps</a>
-  <a href="/services">Services</a>
-  <a href="/hosts">Hosts</a>
-  <a href="/backup/" class="active">Backups</a>
-</nav>
+{{define "backup.html"}}{{template "head" .}}
 <main>
 <header class="page-head">
 <h1>Backups</h1>
@@ -127,6 +112,4 @@
 <footer>generated at {{.GeneratedAt}}</footer>
 </div>
 </main>
-</body>
-</html>
-{{end}}
+{{template "foot" .}}{{end}}
