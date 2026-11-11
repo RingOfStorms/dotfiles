@@ -89,7 +89,8 @@
       "inputs": {
         "extra-container": "extra-container",
         "guestpkgs": "guestpkgs",
-        "nixpkgs": "nixpkgs_2"
+        "nixpkgs": "nixpkgs_2",
+        "zitadelpkgs": "zitadelpkgs"
       }
     },
     "systems": {
@@ -104,6 +105,22 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default",
+        "type": "github"
+      }
+    },
+    "zitadelpkgs": {
+      "locked": {
+        "lastModified": 1794332761,
+        "narHash": "sha256-V9VzCbkBC+OEP+4r3lrV/WCBkncNn8rgjvbasZ5tK7Q=",
+        "owner": "byteflavour",
+        "repo": "nixpkgs",
+        "rev": "b1d866102a281a5c7a2d083eedd4d27f628c9b41",
+        "type": "github"
+      },
+      "original": {
+        "owner": "byteflavour",
+        "repo": "nixpkgs",
+        "rev": "b1d866102a281a5c7a2d083eedd4d27f628c9b41",
         "type": "github"
       }
     }

@@ -7,9 +7,9 @@
     extra-container.url = "github:erikarvstedt/extra-container";
     # Host-side extra-container eval must stay on 25.11 (issue #40) ...
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
-    # ... the guest is pinned to a fixed rev (zitadel + postgres 17 matching the
-    # persisted cluster).
+    # Keep the guest and PostgreSQL 17 unchanged; only Zitadel comes from the PR.
     guestpkgs.url = "github:nixos/nixpkgs/331800de5053fcebacf6813adb5db9c9dca22a0c";
+    zitadelpkgs.url = "github:byteflavour/nixpkgs/b1d866102a281a5c7a2d083eedd4d27f628c9b41";
   };
 
   outputs =
@@ -17,6 +17,7 @@
       extra-container,
       nixpkgs,
       guestpkgs,
+      zitadelpkgs,
       ...
     }:
     let
@@ -29,6 +30,7 @@
           service = import ./service.nix;
           config = import ./container.nix;
           guestNixpkgs = guestpkgs;
+          specialArgs.zitadelPackage = zitadelpkgs.legacyPackages.${system}.zitadel;
           # Network: service.nix net (private, 10.233.13.2); idmapped persist (ext4).
         };
       };

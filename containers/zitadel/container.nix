@@ -1,7 +1,17 @@
 # Guest config. zitadel on :8085, postgres on its unix socket only. Zitadel has no
 # bind-address setting; it listens on all interfaces. With net.private that
 # is the guest netns, whose firewall admits 8085 from the host only.
-{ pkgs, lib, ... }:
+{ config, pkgs, lib, zitadelPackage, ... }:
+let
+  cfg = config.services.zitadel;
+  settingsFormat = pkgs.formats.yaml { };
+  configFile = settingsFormat.generate "zitadel-config.yaml" cfg.settings;
+  args = lib.cli.toCommandLineShellGNU { } {
+    config = cfg.extraSettingsPaths ++ [ configFile ];
+    masterkeyFile = cfg.masterKeyFile;
+    inherit (cfg) tlsMode;
+  };
+in
 {
   system.stateVersion = "25.05";
 
@@ -30,6 +40,7 @@
 
   services.zitadel = {
     enable = true;
+    package = zitadelPackage;
     # Masterkey is 0400 owned by zitadel:zitadel (tmpfiles rule below):
     # only the zitadel service user can read it inside the container, not
     # every other process sharing the container's root.
@@ -55,23 +66,6 @@
       ExternalPort = 443;
       ExternalSecure = true;
     };
-    # Only used on an empty database (first boot); an existing DB already has it.
-    steps.FirstInstance = {
-      InstanceName = "sso";
-      Org = {
-        Name = "SSO";
-        Human = {
-          UserName = "admin@joshuabell.xyz";
-          FirstName = "admin";
-          LastName = "admin";
-          Email.Address = "admin@joshuabell.xyz";
-          Email.Verified = true;
-          Password = "Password1!";
-          PasswordChangeRequired = true;
-        };
-      };
-      LoginPolicy.AllowRegister = false;
-    };
   };
 
   # Masterkey must be 0400 zitadel:zitadel. tmpfiles runs as root before the
@@ -84,5 +78,12 @@
   systemd.services.zitadel = {
     requires = [ "postgresql.service" ];
     after = [ "postgresql.service" ];
+    # Restore the existing database before starting: this is not a new-instance
+    # bootstrap. Keep Login V1; adopting the separate Login V2 app is not part
+    # of this upgrade. setup must succeed before the server can start.
+    script = lib.mkForce ''
+      zitadel setup ${args} --init-projections=true
+      exec zitadel start ${args}
+    '';
   };
 }
