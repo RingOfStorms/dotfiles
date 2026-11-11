@@ -19,9 +19,8 @@ import (
 // /copilot_internal/v2/token exchange hands out is not needed, and that
 // endpoint answers 403 to a plain OAuth token anyway.
 //
-// The token therefore only has to be obtained once and stored: replicate what
-// LiteLLM did with its github_copilot device flow, but keep the token in this
-// container's state dir so the gateway needs no other service running.
+// The token is obtained through the Copilot device flow and stored locally,
+// allowing the gateway to authenticate without a separate credential service.
 const copilotOAuthClientID = "Iv1.b507a08c87ecfe98" // VS Code Copilot plugin
 
 type copilotAuth struct {
@@ -71,13 +70,12 @@ func (a *copilotAuth) token() (string, error) {
 	return token, nil
 }
 
-// readCopilotToken accepts either a bare token file or a github-copilot config
-// directory/file (hosts.json, apps.json), which is the shape LiteLLM leaves
-// behind and the shape `gh`-adjacent tools write.
+// readCopilotToken accepts a bare token file or the standard GitHub CLI
+// Copilot configuration directory/file formats.
 func readCopilotToken(path string) (string, error) {
 	info, err := os.Stat(path)
 	if err != nil {
-		return "", fmt.Errorf("no copilot token at %s", path)
+		return "", fmt.Errorf("Copilot credential is unavailable")
 	}
 	if info.IsDir() {
 		for _, name := range []string{"hosts.json", "apps.json"} {
@@ -85,16 +83,16 @@ func readCopilotToken(path string) (string, error) {
 				return token, nil
 			}
 		}
-		return "", fmt.Errorf("no copilot token in %s", path)
+		return "", fmt.Errorf("Copilot credential is unavailable")
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", fmt.Errorf("read copilot token: %w", err)
+		return "", fmt.Errorf("read Copilot credential")
 	}
 	text := strings.TrimSpace(string(data))
 	if !strings.HasPrefix(text, "{") {
 		if text == "" {
-			return "", fmt.Errorf("copilot token file %s is empty", path)
+			return "", fmt.Errorf("Copilot credential file is empty")
 		}
 		return text, nil
 	}
@@ -102,14 +100,14 @@ func readCopilotToken(path string) (string, error) {
 		OAuthToken string `json:"oauth_token"`
 	}
 	if err := json.Unmarshal([]byte(text), &hosts); err != nil {
-		return "", fmt.Errorf("parse %s: %w", path, err)
+		return "", fmt.Errorf("parse Copilot credential: %w", err)
 	}
 	for key, entry := range hosts {
 		if strings.HasPrefix(key, "github.com") && entry.OAuthToken != "" {
 			return entry.OAuthToken, nil
 		}
 	}
-	return "", fmt.Errorf("no github.com oauth_token in %s", path)
+	return "", fmt.Errorf("no Copilot credential in configuration file")
 }
 
 // ensureToken keeps a Copilot credential on disk. It runs for the life of the

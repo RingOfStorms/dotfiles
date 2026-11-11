@@ -185,7 +185,7 @@
   };
   "machines/high-trust/litellm-env" = {
     fields = [ "value" ];
-    description = "LiteLLM EnvironmentFile (OpenRouter API key).";
+    description = "LLM gateway EnvironmentFile (OpenRouter key and router upstream settings).";
     access = [
       {
         type = "role";

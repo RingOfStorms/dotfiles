@@ -18,19 +18,37 @@ type server struct {
 	client  *http.Client
 	copilot *copilotAuth
 
-	mu             sync.RWMutex
-	models         []model
-	byID           map[string]model
-	providerModels map[string][]model
-	failed         map[string]bool
+	mu              sync.RWMutex
+	models          []model
+	byID            map[string]model
+	providerModels  map[string][]model
+	failed          map[string]bool
+	collisionFailed map[string]bool
+	upstreamByName  map[string]upstreamConfig
+	upstreamAuth    map[string]string
 }
 
 func newServer(cfg config) *server {
+	validated, err := validateUpstreams(cfg.upstreams)
+	if err != nil {
+		panic(err)
+	}
+	cfg.upstreams = validated
 	tokenPath := os.Getenv("COPILOT_TOKEN_FILE")
 	if tokenPath == "" {
-		tokenPath = defaultCopilotTokenFile
+		for _, upstream := range validated {
+			if upstream.Type != "copilot" || upstream.APIKeyEnv != "" {
+				continue
+			}
+			configDir, err := os.UserConfigDir()
+			if err != nil {
+				panic(fmt.Errorf("resolve user config directory: %w", err))
+			}
+			tokenPath = configDir + string(os.PathSeparator) + "llm-router" + string(os.PathSeparator) + "copilot-token"
+			break
+		}
 	}
-	return &server{
+	s := &server{
 		cfg: cfg,
 		client: &http.Client{
 			// No overall timeout: completion streams can run for many minutes.
@@ -44,17 +62,75 @@ func newServer(cfg config) *server {
 				ExpectContinueTimeout: time.Second,
 			},
 		},
-		copilot:        newCopilotAuth(tokenPath),
-		providerModels: map[string][]model{},
-		failed:         map[string]bool{},
+		copilot:         newCopilotAuth(tokenPath),
+		providerModels:  map[string][]model{},
+		failed:          map[string]bool{},
+		collisionFailed: map[string]bool{},
+		upstreamByName:  make(map[string]upstreamConfig, len(validated)),
+		upstreamAuth:    make(map[string]string, len(validated)),
 	}
+	for _, upstream := range validated {
+		s.upstreamByName[upstream.Name] = upstream
+		if upstream.APIKeyEnv != "" {
+			s.upstreamAuth[upstream.Name] = strings.TrimSpace(os.Getenv(upstream.APIKeyEnv))
+		}
+	}
+	return s
+}
+
+func (s *server) hasCopilot() bool {
+	for _, upstream := range s.cfg.upstreams {
+		if upstream.Type == "copilot" && upstream.APIKeyEnv == "" {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *server) upstream(name string) (upstreamConfig, bool) {
+	u, ok := s.upstreamByName[name]
+	return u, ok
+}
+
+func (s *server) providerBase(name string) string {
+	upstream, ok := s.upstream(name)
+	if !ok {
+		return ""
+	}
+	return upstream.BaseURL
+}
+
+func (s *server) providerHeaders(name string) (http.Header, error) {
+	upstream, ok := s.upstream(name)
+	if !ok {
+		return nil, fmt.Errorf("unknown upstream %q", name)
+	}
+	h := make(http.Header)
+	if upstream.APIKeyEnv != "" {
+		key := s.upstreamAuth[name]
+		if key == "" {
+			return nil, fmt.Errorf("%w: credential environment variable %s is not set", errNoCredential, upstream.APIKeyEnv)
+		}
+		h.Set("Authorization", "Bearer "+key)
+	} else if upstream.Type == "copilot" {
+		token, err := s.copilot.token()
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", errNoCredential, err)
+		}
+		h.Set("Authorization", "Bearer "+token)
+	}
+	if upstream.Type == "copilot" {
+		h.Set("Editor-Version", "vscode/1.95.0")
+		h.Set("Copilot-Integration-Id", "vscode-chat")
+		h.Set("X-GitHub-Api-Version", "2025-04-01")
+	}
+	return h, nil
 }
 
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
-	// LiteLLM answers every API path with and without the /v1 prefix (/models
-	// as well as /v1/models); clients rely on both, so register each handler
-	// under both forms and keep the two sets in one place.
+	// The router answers API paths with and without the /v1 prefix; clients
+	// rely on both forms.
 	handle := func(pattern string, h http.HandlerFunc) {
 		mux.HandleFunc(pattern, h)
 		method, path, ok := strings.Cut(pattern, " ")
@@ -174,9 +250,8 @@ func (s *server) handleModelInfo(w http.ResponseWriter, r *http.Request) {
 	data := make([]map[string]any, 0, len(list))
 	for _, m := range list {
 		params := m.SupportedParams
-		if m.Provider == "air" {
-			// AIR can route a name to any deployment; advertise only their
-			// merged intersection, including an empty set when none is known.
+		if m.Provider == "litellm" {
+			// LiteLLM metadata preserves its advertised supported parameters.
 			if params == nil {
 				params = []string{}
 			}
@@ -203,7 +278,7 @@ func (s *server) handleModelInfo(w http.ResponseWriter, r *http.Request) {
 			"supports_prompt_caching":   true,
 			"supports_response_schema":  true,
 			"supported_openai_params":   params,
-			"base_model":                m.Provider + "/" + m.Upstream,
+			"base_model":                m.UpstreamName + "/" + m.Upstream,
 		}
 		if m.ContextWindow > 0 {
 			info["max_input_tokens"] = m.ContextWindow
@@ -228,7 +303,7 @@ func (s *server) handleModelInfo(w http.ResponseWriter, r *http.Request) {
 			"litellm_params": map[string]any{
 				// A non-"openai" prefix keeps omp on the chat dialect, which
 				// the router always serves (bridging where needed).
-				"model": m.Provider + "/" + m.Upstream,
+				"model": m.UpstreamName + "/" + m.Upstream,
 			},
 			"model_info": info,
 		})
@@ -280,8 +355,12 @@ func (s *server) resolveRequest(w http.ResponseWriter, body map[string]any) (mod
 
 // forward sends body to the upstream path and streams the response back
 // verbatim (status, content type and body), which covers both JSON and SSE.
-func (s *server) forward(w http.ResponseWriter, r *http.Request, provider, path string, body map[string]any) {
-	headers, err := s.providerHeaders(provider)
+func (s *server) forward(w http.ResponseWriter, r *http.Request, upstreamName, path string, body map[string]any) {
+	if upstreamName == "" {
+		writeError(w, http.StatusServiceUnavailable, "llm-router: model has no upstream identity")
+		return
+	}
+	headers, err := s.providerHeaders(upstreamName)
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, "llm-router: "+err.Error())
 		return
@@ -291,10 +370,10 @@ func (s *server) forward(w http.ResponseWriter, r *http.Request, provider, path 
 		writeError(w, http.StatusInternalServerError, "llm-router: encode body: "+err.Error())
 		return
 	}
-	url := s.providerBase(provider) + path
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, url, strings.NewReader(string(payload)))
+	requestURL := s.providerBase(upstreamName) + path
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, requestURL, strings.NewReader(string(payload)))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "llm-router: build request: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "llm-router: build upstream request")
 		return
 	}
 	for k, vs := range headers {
@@ -313,7 +392,7 @@ func (s *server) forward(w http.ResponseWriter, r *http.Request, provider, path 
 		if r.Context().Err() != nil {
 			return // client went away
 		}
-		writeError(w, http.StatusBadGateway, "llm-router: "+err.Error())
+		writeError(w, http.StatusBadGateway, "llm-router: upstream request failed")
 		return
 	}
 	defer resp.Body.Close()
@@ -359,7 +438,7 @@ func (s *server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case m.ChatEndpoint:
-		s.forward(w, r, m.Provider, "/chat/completions", body)
+		s.forward(w, r, m.UpstreamName, "/chat/completions", body)
 	case m.ResponsesEndpoint:
 		s.chatViaResponses(w, r, m, body)
 	default:
@@ -379,7 +458,7 @@ func (s *server) handleResponses(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case m.ResponsesEndpoint:
-		s.forward(w, r, m.Provider, "/responses", body)
+		s.forward(w, r, m.UpstreamName, "/responses", body)
 	case m.ChatEndpoint:
 		s.responsesViaChat(w, r, m, body)
 	default:
@@ -407,7 +486,7 @@ func (s *server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 			body["input"] = []any{body["input"]}
 		}
 	}
-	s.forward(w, r, m.Provider, "/embeddings", body)
+	s.forward(w, r, m.UpstreamName, "/embeddings", body)
 }
 
 // handleImages serves POST /v1/images/generations for image models.
@@ -424,7 +503,7 @@ func (s *server) handleImages(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "llm-router: model "+m.ID+" is not an image generation model")
 		return
 	}
-	s.forward(w, r, m.Provider, "/images/generations", body)
+	s.forward(w, r, m.UpstreamName, "/images/generations", body)
 }
 
 // logUpstreamFailure logs a non-2xx upstream reply for the bridged paths, where
@@ -434,8 +513,11 @@ func logUpstreamFailure(what string, status int, body []byte) {
 }
 
 // postJSON performs a non-streaming (or streamed-to-buffer) upstream POST.
-func (s *server) postJSON(ctx context.Context, provider, path string, body map[string]any) (*http.Response, error) {
-	headers, err := s.providerHeaders(provider)
+func (s *server) postJSON(ctx context.Context, upstreamName, path string, body map[string]any) (*http.Response, error) {
+	if upstreamName == "" {
+		return nil, fmt.Errorf("model has no upstream identity")
+	}
+	headers, err := s.providerHeaders(upstreamName)
 	if err != nil {
 		return nil, err
 	}
@@ -443,9 +525,9 @@ func (s *server) postJSON(ctx context.Context, provider, path string, body map[s
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.providerBase(provider)+path, strings.NewReader(string(payload)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.providerBase(upstreamName)+path, strings.NewReader(string(payload)))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("build upstream request")
 	}
 	for k, vs := range headers {
 		for _, v := range vs {

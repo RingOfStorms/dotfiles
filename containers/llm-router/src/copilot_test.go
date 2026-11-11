@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -103,5 +104,70 @@ func TestWriteTokenFile(t *testing.T) {
 	}
 	if got, err := readCopilotToken(path); err != nil || got != "gho_written" {
 		t.Fatalf("round trip: got %q, %v", got, err)
+	}
+}
+
+func TestLoadUpstreamsResolvesEnvironmentURLs(t *testing.T) {
+	t.Setenv("TEST_UPSTREAM_URL", "https://example.test/api")
+	path := filepath.Join(t.TempDir(), "upstreams.json")
+	if err := os.WriteFile(path, []byte(`[{"name":"private","type":"litellm","base_url_env":"TEST_UPSTREAM_URL","api_key_env":"TEST_UPSTREAM_KEY"}]`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := loadUpstreams(path)
+	if err != nil {
+		t.Fatalf("load upstream config: %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "private" || got[0].Type != "litellm" || got[0].BaseURL != "https://example.test/api" || got[0].BaseURLEnv != "" || got[0].APIKeyEnv != "TEST_UPSTREAM_KEY" {
+		t.Fatalf("environment URL not resolved and normalized: %+v", got)
+	}
+}
+
+func TestLoadUpstreamsRejectsInvalidConfiguration(t *testing.T) {
+	t.Setenv("VALID_UPSTREAM_URL", "https://valid.example/v1")
+	t.Setenv("EMPTY_UPSTREAM_URL", "")
+	secretURL := "http://private.example:badport/private/path"
+	t.Setenv("INVALID_UPSTREAM_URL", secretURL)
+	tests := []struct {
+		name string
+		json string
+	}{
+		{name: "malformed JSON", json: `[{"name":`},
+		{name: "unknown type", json: `[{"name":"x","type":"not-a-provider","base_url":"https://example.test"}]`},
+		{name: "duplicate names", json: `[{"name":"x","type":"litellm","base_url":"https://one.test"},{"name":"x","type":"litellm","base_url":"https://two.test"}]`},
+		{name: "invalid URL", json: `[{"name":"x","type":"litellm","base_url":"not a URL"}]`},
+		{name: "missing URL environment", json: `[{"name":"x","type":"litellm","base_url_env":"MISSING_UPSTREAM_URL"}]`},
+		{name: "missing URL", json: `[{"name":"x","type":"litellm"}]`},
+		{name: "conflicting URL sources", json: `[{"name":"x","type":"litellm","base_url":"https://one.test","base_url_env":"VALID_UPSTREAM_URL"}]`},
+		{name: "empty URL environment", json: `[{"name":"x","type":"litellm","base_url_env":"EMPTY_UPSTREAM_URL"}]`},
+		{name: "invalid environment URL", json: `[{"name":"x","type":"litellm","base_url_env":"INVALID_UPSTREAM_URL"}]`},
+		{name: "OpenRouter requires API key env", json: `[{"name":"router","type":"openrouter","base_url":"https://example.test/api/v1"}]`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "upstreams.json")
+			if err := os.WriteFile(path, []byte(tt.json), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := loadUpstreams(path); err == nil {
+				t.Fatal("loadUpstreams succeeded, want configuration error")
+			} else if strings.Contains(err.Error(), secretURL) {
+				t.Errorf("configuration error exposed upstream URL: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateUpstreamsAcceptsSeveralIdentitiesPerType(t *testing.T) {
+	got, err := validateUpstreams([]upstreamConfig{
+		{Name: "one", Type: "litellm", BaseURL: "http://one.example/v1"},
+		{Name: "two", Type: "litellm", BaseURL: "http://two.example/v1"},
+		{Name: "region", Type: "openrouter", BaseURL: "https://openrouter.example/api/v1", APIKeyEnv: "REGION_KEY"},
+		{Name: "github", Type: "copilot", BaseURL: "https://copilot.example"},
+	})
+	if err != nil {
+		t.Fatalf("multiple upstream identities should be valid: %v", err)
+	}
+	if len(got) != 4 {
+		t.Fatalf("validated upstream count = %d, want four", len(got))
 	}
 }

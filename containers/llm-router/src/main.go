@@ -1,11 +1,9 @@
-// Command llm-router is the fleet's OpenAI-compatible LLM gateway: the static
-// replacement for the LiteLLM proxy that used to serve :8094. It merges one
-// model catalog over three upstreams (宙 Proxy "air", GitHub Copilot,
-// OpenRouter) and bridges the two upstream dialects where a model only speaks
-// one of them.
-//
-// Model ids keep the LiteLLM naming so existing clients (open-webui, omp,
-// llm_chat) need no changes: air-<id>, copilot-<id>, openrouter/<slug>.
+// Command llm-router is a generic OpenAI-compatible gateway. It merges model
+// catalogs from configured upstreams and bridges model API dialects where
+// needed.
+
+// Public model IDs are namespaced by upstream identity: <name>-<id> for
+// LiteLLM and Copilot upstreams, and <name>/<id> for OpenRouter.
 package main
 
 import (
@@ -17,48 +15,36 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 )
 
 type config struct {
-	listen         string
-	airBase        string
-	openrouterBase string
-	copilotBase    string
-	refresh        time.Duration
+	listen    string
+	upstreams []upstreamConfig
+	refresh   time.Duration
 }
-
-const (
-	defaultAirBase        = "http://10.12.14.181:9010/air_prd"
-	defaultOpenRouterBase = "https://openrouter.ai/api/v1"
-	defaultCopilotBase    = "https://api.githubcopilot.com"
-	// Inside the state dir (service.nix persist.data), so a device login
-	// survives restarts and `cnt move`.
-	defaultCopilotTokenFile = "/var/lib/llm-router/copilot-token"
-)
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
 	cfg := config{
-		listen:         "0.0.0.0:8094",
-		airBase:        defaultAirBase,
-		openrouterBase: defaultOpenRouterBase,
-		copilotBase:    defaultCopilotBase,
-		refresh:        10 * time.Minute,
+		listen:  "0.0.0.0:8094",
+		refresh: 10 * time.Minute,
 	}
+	var upstreamsPath string
 	flag.StringVar(&cfg.listen, "listen", cfg.listen, "address to listen on")
-	flag.StringVar(&cfg.airBase, "air-base", cfg.airBase, "宙 Proxy base URL")
-	flag.StringVar(&cfg.openrouterBase, "openrouter-base", cfg.openrouterBase, "OpenRouter API base URL")
-	flag.StringVar(&cfg.copilotBase, "copilot-base", cfg.copilotBase, "GitHub Copilot API base URL")
+	flag.StringVar(&upstreamsPath, "upstreams", "", "JSON upstream configuration file")
 	flag.DurationVar(&cfg.refresh, "refresh", cfg.refresh, "catalog refresh interval")
 	flag.Parse()
-
-	cfg.airBase = strings.TrimRight(cfg.airBase, "/")
-	cfg.openrouterBase = strings.TrimRight(cfg.openrouterBase, "/")
-	cfg.copilotBase = strings.TrimRight(cfg.copilotBase, "/")
+	if upstreamsPath == "" {
+		log.Fatal("--upstreams is required")
+	}
+	var err error
+	cfg.upstreams, err = loadUpstreams(upstreamsPath)
+	if err != nil {
+		log.Fatalf("invalid --upstreams configuration: %v", err)
+	}
 
 	s := newServer(cfg)
 
@@ -67,10 +53,12 @@ func main() {
 
 	// Load the catalog synchronously: a client connecting right after boot
 	// must see a full model list. Upstream fetches run in parallel under one
-	// deadline, so a dead upstream costs one timeout, not one per provider.
+	// deadline, so a dead upstream costs one timeout, not one per upstream.
 	s.refresh(ctx)
 	go s.refreshLoop(ctx)
-	go s.copilot.ensureToken(ctx)
+	if s.hasCopilot() {
+		go s.copilot.ensureToken(ctx)
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.listen,
@@ -93,9 +81,9 @@ func main() {
 	}
 }
 
-// refreshLoop re-reads every upstream catalog on an interval. While a provider
-// has failed at least once, it retries on a short interval so a provider that
-// was unreachable at boot appears within a minute instead of an hour.
+// refreshLoop re-reads every configured upstream catalog on an interval. While
+// an upstream has failed, it retries on a short interval so it can recover
+// quickly.
 func (s *server) refreshLoop(ctx context.Context) {
 	for {
 		delay := s.cfg.refresh

@@ -20,8 +20,8 @@ func fakeUpstream(t *testing.T, body string) *httptest.Server {
 }
 
 func testServer(upstream string, m model) (*server, http.Handler) {
-	s := newServer(config{airBase: upstream})
-	s.providerModels = map[string][]model{"air": {m}}
+	s := newServer(config{upstreams: []upstreamConfig{{Name: "litellm", Type: "litellm", BaseURL: upstream}}})
+	s.providerModels = map[string][]model{"litellm": {m}}
 	s.models = []model{m}
 	s.byID = map[string]model{m.ID: m}
 	return s, s.routes()
@@ -44,11 +44,11 @@ func TestChatHandlerFailsWhenUpstreamResponseFails(t *testing.T) {
 		"",
 	}, "\n"))
 
-	m := model{ID: "air-x", Upstream: "x", Provider: "air", Mode: "chat", ResponsesEndpoint: true}
+	m := model{ID: "litellm-x", Upstream: "x", Provider: "litellm", UpstreamName: "litellm", Mode: "chat", ResponsesEndpoint: true}
 	_, handler := testServer(upstream.URL, m)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions",
-		strings.NewReader(`{"model":"air-x","stream":true,"messages":[{"role":"user","content":"hi"}]}`))
+		strings.NewReader(`{"model":"litellm-x","stream":true,"messages":[{"role":"user","content":"hi"}]}`))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -70,11 +70,11 @@ func TestResponsesHandlerFailsWhenUpstreamChatBreaks(t *testing.T) {
 		"",
 	}, "\n"))
 
-	m := model{ID: "air-y", Upstream: "y", Provider: "air", Mode: "chat", ChatEndpoint: true}
+	m := model{ID: "litellm-y", Upstream: "y", Provider: "litellm", UpstreamName: "litellm", Mode: "chat", ChatEndpoint: true}
 	_, handler := testServer(upstream.URL, m)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses",
-		strings.NewReader(`{"model":"air-y","stream":true,"input":"hi"}`))
+		strings.NewReader(`{"model":"litellm-y","stream":true,"input":"hi"}`))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -100,11 +100,11 @@ func TestResponsesHandlerCompletesOnCleanStream(t *testing.T) {
 		"",
 	}, "\n"))
 
-	m := model{ID: "air-z", Upstream: "z", Provider: "air", Mode: "chat", ChatEndpoint: true}
+	m := model{ID: "litellm-z", Upstream: "z", Provider: "litellm", UpstreamName: "litellm", Mode: "chat", ChatEndpoint: true}
 	_, handler := testServer(upstream.URL, m)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses",
-		strings.NewReader(`{"model":"air-z","stream":true,"input":"hi"}`))
+		strings.NewReader(`{"model":"litellm-z","stream":true,"input":"hi"}`))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 

@@ -366,12 +366,12 @@ func (s *server) chatViaResponses(w http.ResponseWriter, r *http.Request, m mode
 		includeUsage = boolean(opts["include_usage"])
 	}
 
-	resp, err := s.postJSON(r.Context(), m.Provider, "/responses", reqBody)
+	resp, err := s.postJSON(r.Context(), m.UpstreamName, "/responses", reqBody)
 	if err != nil {
 		if r.Context().Err() != nil {
 			return
 		}
-		writeError(w, http.StatusBadGateway, "llm-router: "+err.Error())
+		writeError(w, http.StatusBadGateway, "llm-router: upstream request failed")
 		return
 	}
 	defer resp.Body.Close()
@@ -795,12 +795,12 @@ func (s *server) responsesViaChat(w http.ResponseWriter, r *http.Request, m mode
 		reqBody["stream_options"] = map[string]any{"include_usage": true}
 	}
 
-	resp, err := s.postJSON(r.Context(), m.Provider, "/chat/completions", reqBody)
+	resp, err := s.postJSON(r.Context(), m.UpstreamName, "/chat/completions", reqBody)
 	if err != nil {
 		if r.Context().Err() != nil {
 			return
 		}
-		writeError(w, http.StatusBadGateway, "llm-router: "+err.Error())
+		writeError(w, http.StatusBadGateway, "llm-router: upstream request failed")
 		return
 	}
 	defer resp.Body.Close()

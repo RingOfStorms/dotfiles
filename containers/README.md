@@ -587,8 +587,9 @@ Notes:
 ## LLM router
 
 OMP's per-computer `~/.omp/agent/models.yml` can use
-`https://llm.joshuabell.xyz/v1` with provider ID `litellm`, preserving existing
-model role selections and discovery. Nix no longer manages OMP's `models.yml`,
+`https://llm.joshuabell.xyz/v1` with provider ID `litellm`. The router names
+LiteLLM models `litellm-<model>`; update any locally saved model selections
+that used the former prefix. Nix no longer manages OMP's `models.yml`,
 `config.yml`, or `mcp.json`; edit them locally on each computer. On the first
 switch, the previous Home Manager-managed model catalog and MCP config are
 copied into writable files; existing local files are left untouched.
@@ -602,13 +603,48 @@ defaults in `ringofstorms.llm`: `fast` uses `copilot-claude-haiku-5.5` with
 `reasoning_effort: low`; `smart` uses `copilot-claude-opus-5.5` with
 `reasoning_effort: medium`.
 
+The Open WebUI container still targets the separate legacy `litellm` service
+and keeps its existing image model ID; update that setting if moving it to
+`llm-router`.
+
+`llm-router/container.nix` declares an array of upstreams. Each entry has a
+unique `name`, `type` (`litellm`, `copilot`, or `openrouter`), and either
+`base_url` or `base_url_env`, the name of an environment variable holding the
+API root. Add another entry with a different name to use a second LiteLLM
+server. Public model IDs use `<name>-<model>` for LiteLLM and Copilot and
+`<name>/<model>` for OpenRouter. Names are stable client-facing namespaces.
+If two upstreams produce the same public model ID, the router excludes that
+ID and reports the affected upstreams as errors in `/health`.
+
+Outside Nix, run `llm-router --upstreams upstreams.json`. The file is a JSON
+array, for example:
+
+```json
+[
+  { "name": "first", "type": "litellm", "base_url": "https://first.example/v1", "api_key_env": "FIRST_KEY" },
+  { "name": "second", "type": "litellm", "base_url": "https://second.example/v1", "api_key_env": "SECOND_KEY" }
+]
+```
+
+LiteLLM sends no authorization header unless `api_key_env` is set; OpenRouter
+requires it. Copilot uses device login unless `api_key_env` is set.
+
+Before deploying, add `LITELLM_UPSTREAM_URL` to the existing `litellm-env`
+secret EnvironmentFile with the current LiteLLM upstream's API root. To use a
+different API key for an upstream, set its `api_key_env` to the name of a
+variable in that EnvironmentFile. Do not put credentials in the Nix array.
+The configured LiteLLM upstream uses the placeholder key `na` and OpenRouter
+uses `OPENROUTER_API_KEY`; Copilot uses its device-login token. Add any
+additional LAN destinations to `llm-router/service.nix`'s `net.egress`.
+
 Discovery exposes one entry per public model ID, not per upstream deployment.
-AIR requests still use the shared model name; AIR chooses the deployment.
-Duplicate deployment metadata uses the lowest token limits, common capability
-flags/parameter sets, and highest published costs. Unknown limits stay unknown.
-AIR's `/model/info` serializes that common parameter set directly; missing
-or disjoint deployment parameter lists produce `[]`, not inferred defaults.
-Lists, individual model lookup and health counts use the same grouped catalog.
+Requests use the upstream's shared model name, and the upstream chooses its
+deployment. Duplicate deployment metadata uses the lowest token limits,
+common capability flags/parameter sets, and highest published costs. Unknown
+limits stay unknown. `/model/info` serializes that common parameter set
+directly; missing or disjoint deployment parameter lists produce `[]`, not
+inferred defaults. Lists, individual model lookup and health counts use the
+same grouped catalog.
 
 ### Dependency updates
 

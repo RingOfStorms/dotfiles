@@ -11,17 +11,16 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 )
 
-// model is one entry of the merged catalog plus what the router needs to know
-// to serve it. Upstream is the id the provider's API expects; ID is the public
-// (LiteLLM-compatible) alias.
+// model is one entry of the merged catalog plus routing metadata. Upstream is
+// the provider's model id; UpstreamName binds it to one configured server.
 type model struct {
 	ID                 string
 	Upstream           string
-	Provider           string // air | copilot | openrouter
+	UpstreamName       string
+	Provider           string // litellm | copilot | openrouter
 	Mode               string // chat | embedding | image_generation | ...
 	ChatEndpoint       bool   // provider serves /chat/completions for it
 	ResponsesEndpoint  bool   // provider serves /responses for it
@@ -42,112 +41,94 @@ type model struct {
 
 const catalogTimeout = 45 * time.Second
 
-// errNoCredential marks a provider that has no credential at all. That is an
-// operator choice, not a fault: /health reports the provider as unconfigured
-// and keeps answering 200, so a monitor only fires on real upstream breakage.
+// errNoCredential marks an upstream that lacks a required credential. Health
+// reports it as unconfigured rather than a failure.
 var errNoCredential = errors.New("no credential")
-
-// providerBases maps a provider to its API root (no trailing slash).
-func (s *server) providerBase(provider string) string {
-	switch provider {
-	case "air":
-		return s.cfg.airBase
-	case "openrouter":
-		return s.cfg.openrouterBase
-	case "copilot":
-		return s.cfg.copilotBase
-	}
-	return ""
-}
-
-// providerHeaders returns the upstream auth/support headers for a provider.
-func (s *server) providerHeaders(provider string) (http.Header, error) {
-	h := make(http.Header)
-	switch provider {
-	case "air":
-		h.Set("Authorization", "Bearer na")
-	case "openrouter":
-		key := openRouterKey()
-		if key == "" {
-			return nil, fmt.Errorf("%w: OPENROUTER_API_KEY is not set", errNoCredential)
-		}
-		h.Set("Authorization", "Bearer "+key)
-	case "copilot":
-		token, err := s.copilot.token()
-		if err != nil {
-			return nil, fmt.Errorf("%w: %v", errNoCredential, err)
-		}
-		h.Set("Authorization", "Bearer "+token)
-		h.Set("Editor-Version", "vscode/1.95.0")
-		h.Set("Copilot-Integration-Id", "vscode-chat")
-		h.Set("X-GitHub-Api-Version", "2025-04-01")
-	default:
-		return nil, fmt.Errorf("unknown provider %q", provider)
-	}
-	return h, nil
-}
 
 func (s *server) refresh(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, catalogTimeout)
 	defer cancel()
 
 	type result struct {
-		provider string
-		models   []model
-		err      error
+		name   string
+		models []model
+		err    error
 	}
-	var (
-		wg  sync.WaitGroup
-		mu  sync.Mutex
-		out []result
-	)
-	for _, provider := range []string{"air", "copilot", "openrouter"} {
-		wg.Add(1)
-		go func(provider string) {
-			defer wg.Done()
-			models, err := s.fetchProvider(ctx, provider)
+	results := make(chan result, len(s.cfg.upstreams))
+	for _, configured := range s.cfg.upstreams {
+		upstream := configured
+		go func() {
+			models, err := s.fetchProvider(ctx, upstream)
 			models = deduplicateModels(models)
-			mu.Lock()
-			out = append(out, result{provider: provider, models: models, err: err})
-			mu.Unlock()
-		}(provider)
+			results <- result{name: upstream.Name, models: models, err: err}
+		}()
 	}
-	wg.Wait()
+	for range s.cfg.upstreams {
+		r := <-results
+		s.mu.Lock()
+		if errors.Is(r.err, errNoCredential) {
+			log.Printf("catalog: %s: %v (upstream unconfigured)", r.name, r.err)
+			delete(s.failed, r.name)
+			delete(s.providerModels, r.name)
+		} else if r.err != nil {
+			log.Printf("catalog: %s: %v (keeping %d cached models)", r.name, r.err, len(s.providerModels[r.name]))
+			s.failed[r.name] = true
+		} else {
+			delete(s.failed, r.name)
+			s.providerModels[r.name] = r.models
+			log.Printf("catalog: %s: %d models", r.name, len(r.models))
+		}
+		s.mu.Unlock()
+	}
+	s.rebuildCatalog()
+}
 
+func (s *server) rebuildCatalog() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.providerModels == nil {
-		s.providerModels = map[string][]model{}
-		s.failed = map[string]bool{}
+	s.collisionFailed = make(map[string]bool)
+	merged := make([]model, 0)
+	for _, upstream := range s.cfg.upstreams {
+		merged = append(merged, s.providerModels[upstream.Name]...)
 	}
-	var merged []model
-	for _, r := range out {
-		if errors.Is(r.err, errNoCredential) {
-			// No credential: leave the provider out of the catalog and out of
-			// the failed set, so /health stays 200 and the retry loop keeps its
-			// normal interval.
-			log.Printf("catalog: %s: %v (provider unconfigured)", r.provider, r.err)
-			delete(s.failed, r.provider)
-			delete(s.providerModels, r.provider)
-			continue
+	sort.Slice(merged, func(i, j int) bool {
+		if merged[i].ID == merged[j].ID {
+			return merged[i].UpstreamName < merged[j].UpstreamName
 		}
-		if r.err != nil {
-			log.Printf("catalog: %s: %v (keeping %d cached models)", r.provider, r.err, len(s.providerModels[r.provider]))
-			s.failed[r.provider] = true
-			merged = append(merged, s.providerModels[r.provider]...)
-			continue
-		}
-		delete(s.failed, r.provider)
-		s.providerModels[r.provider] = r.models
-		merged = append(merged, r.models...)
-		log.Printf("catalog: %s: %d models", r.provider, len(r.models))
-	}
-	sort.Slice(merged, func(i, j int) bool { return merged[i].ID < merged[j].ID })
+		return merged[i].ID < merged[j].ID
+	})
 	byID := make(map[string]model, len(merged))
+	collisions := make(map[string][]string)
 	for _, m := range merged {
+		if _, collided := collisions[m.ID]; collided {
+			collisions[m.ID] = append(collisions[m.ID], m.UpstreamName)
+			continue
+		}
+		if existing, ok := byID[m.ID]; ok {
+			collisions[m.ID] = []string{existing.UpstreamName, m.UpstreamName}
+			delete(byID, m.ID)
+			continue
+		}
 		byID[m.ID] = m
 	}
-	s.models = merged
+	for id, names := range collisions {
+		unique := make(map[string]struct{}, len(names))
+		for _, name := range names {
+			unique[name] = struct{}{}
+			s.collisionFailed[name] = true
+		}
+		ordered := make([]string, 0, len(unique))
+		for name := range unique {
+			ordered = append(ordered, name)
+		}
+		sort.Strings(ordered)
+		log.Printf("catalog: public model ID %q conflicts across upstreams %s; excluding it", id, strings.Join(ordered, ", "))
+	}
+	s.models = make([]model, 0, len(byID))
+	for _, m := range byID {
+		s.models = append(s.models, m)
+	}
+	sort.Slice(s.models, func(i, j int) bool { return s.models[i].ID < s.models[j].ID })
 	s.byID = byID
 }
 
@@ -188,7 +169,7 @@ func commonStrings(left, right []string) []string {
 func (s *server) degraded() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return len(s.failed) > 0
+	return len(s.failed) > 0 || len(s.collisionFailed) > 0
 }
 
 func (s *server) lookup(id string) (model, bool) {
@@ -207,40 +188,40 @@ func (s *server) catalog() []model {
 func (s *server) providerStatus() map[string]string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	status := make(map[string]string, 3)
-	for _, provider := range []string{"air", "copilot", "openrouter"} {
+	status := make(map[string]string, len(s.cfg.upstreams))
+	for _, upstream := range s.cfg.upstreams {
 		switch {
-		case s.failed[provider]:
-			status[provider] = "error"
-		case s.providerModels[provider] == nil:
-			status[provider] = "unconfigured"
+		case s.failed[upstream.Name] || s.collisionFailed[upstream.Name]:
+			status[upstream.Name] = "error"
+		case s.providerModels[upstream.Name] == nil:
+			status[upstream.Name] = "unconfigured"
 		default:
-			status[provider] = fmt.Sprintf("%d models", len(s.providerModels[provider]))
+			status[upstream.Name] = fmt.Sprintf("%d models", len(s.providerModels[upstream.Name]))
 		}
 	}
 	return status
 }
 
-func (s *server) fetchProvider(ctx context.Context, provider string) ([]model, error) {
-	headers, err := s.providerHeaders(provider)
+func (s *server) fetchProvider(ctx context.Context, upstream upstreamConfig) ([]model, error) {
+	headers, err := s.providerHeaders(upstream.Name)
 	if err != nil {
 		return nil, err
 	}
-	switch provider {
-	case "air":
-		return s.fetchAir(ctx, headers)
+	switch upstream.Type {
+	case "litellm":
+		return s.fetchLiteLLM(ctx, upstream, headers)
 	case "copilot":
-		return s.fetchCopilot(ctx, headers)
+		return s.fetchCopilot(ctx, upstream, headers)
 	case "openrouter":
-		return s.fetchOpenRouter(ctx, headers)
+		return s.fetchOpenRouter(ctx, upstream, headers)
 	}
-	return nil, fmt.Errorf("unknown provider %q", provider)
+	return nil, fmt.Errorf("unknown upstream type %q", upstream.Type)
 }
 
-func (s *server) getJSON(ctx context.Context, url string, headers http.Header, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func (s *server) getJSON(ctx context.Context, requestURL string, headers http.Header, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("build catalog request")
 	}
 	for k, vs := range headers {
 		for _, v := range vs {
@@ -250,19 +231,22 @@ func (s *server) getJSON(ctx context.Context, url string, headers http.Header, o
 	req.Header.Set("Accept", "application/json")
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("catalog request failed")
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
 	if err != nil {
-		return err
+		return fmt.Errorf("read catalog response")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("GET %s: HTTP %d: %s", url, resp.StatusCode, truncate(string(body), 300))
+		return fmt.Errorf("catalog response returned HTTP %d", resp.StatusCode)
 	}
 	dec := json.NewDecoder(strings.NewReader(string(body)))
 	dec.UseNumber()
-	return dec.Decode(out)
+	if err := dec.Decode(out); err != nil {
+		return fmt.Errorf("decode catalog response: %w", err)
+	}
+	return nil
 }
 
 func truncate(s string, n int) string {
@@ -349,17 +333,15 @@ func contentString(v any) string {
 	return ""
 }
 
-// fetchAir reads 宙 Proxy's LiteLLM-format model metadata. The upstream is
-// itself a LiteLLM proxy, so /model/info is the authoritative catalog and
-// already carries reasoning levels and limits.
-func (s *server) fetchAir(ctx context.Context, headers http.Header) ([]model, error) {
+// fetchLiteLLM reads a LiteLLM-format model catalog, including rich metadata.
+func (s *server) fetchLiteLLM(ctx context.Context, upstream upstreamConfig, headers http.Header) ([]model, error) {
 	var payload struct {
 		Data []struct {
 			ModelName string         `json:"model_name"`
 			ModelInfo map[string]any `json:"model_info"`
 		} `json:"data"`
 	}
-	if err := s.getJSON(ctx, s.cfg.airBase+"/model/info", headers, &payload); err != nil {
+	if err := s.getJSON(ctx, upstream.BaseURL+"/model/info", headers, &payload); err != nil {
 		return nil, err
 	}
 	models := make([]model, 0, len(payload.Data))
@@ -369,9 +351,10 @@ func (s *server) fetchAir(ctx context.Context, headers http.Header) ([]model, er
 		}
 		info := entry.ModelInfo
 		m := model{
-			ID:               "air-" + entry.ModelName,
+			ID:               upstream.Name + "-" + entry.ModelName,
 			Upstream:         entry.ModelName,
-			Provider:         "air",
+			UpstreamName:     upstream.Name,
+			Provider:         upstream.Type,
 			Mode:             str(info["mode"]),
 			DisplayName:      entry.ModelName,
 			ContextWindow:    num(info["max_input_tokens"]),
@@ -392,7 +375,7 @@ func (s *server) fetchAir(ctx context.Context, headers http.Header) ([]model, er
 		case "embedding":
 			m.EmbeddingsEndpoint = true
 		case "":
-			// Modal-less entries in air's catalog are chat models.
+			// Catalog entries without a mode are chat models.
 			m.Mode = "chat"
 			m.ChatEndpoint = true
 			m.ResponsesEndpoint = true
@@ -405,7 +388,7 @@ func (s *server) fetchAir(ctx context.Context, headers http.Header) ([]model, er
 // fetchCopilot reads GitHub Copilot's model list. supported_endpoints decides
 // which dialect a model speaks: chat-only models (Claude, Gemini, Kimi) reject
 // /responses, and the GPT-5/6 family rejects /chat/completions.
-func (s *server) fetchCopilot(ctx context.Context, headers http.Header) ([]model, error) {
+func (s *server) fetchCopilot(ctx context.Context, upstream upstreamConfig, headers http.Header) ([]model, error) {
 	var payload struct {
 		Data []struct {
 			ID                 string         `json:"id"`
@@ -415,7 +398,7 @@ func (s *server) fetchCopilot(ctx context.Context, headers http.Header) ([]model
 			Capabilities       map[string]any `json:"capabilities"`
 		} `json:"data"`
 	}
-	if err := s.getJSON(ctx, s.cfg.copilotBase+"/models", headers, &payload); err != nil {
+	if err := s.getJSON(ctx, upstream.BaseURL+"/models", headers, &payload); err != nil {
 		return nil, err
 	}
 	models := make([]model, 0, len(payload.Data))
@@ -428,9 +411,10 @@ func (s *server) fetchCopilot(ctx context.Context, headers http.Header) ([]model
 		limits, _ := entry.Capabilities["limits"].(map[string]any)
 
 		m := model{
-			ID:               "copilot-" + entry.ID,
+			ID:               upstream.Name + "-" + entry.ID,
 			Upstream:         entry.ID,
-			Provider:         "copilot",
+			UpstreamName:     upstream.Name,
+			Provider:         upstream.Type,
 			DisplayName:      entry.Name,
 			ContextWindow:    num(limits["max_context_window_tokens"]),
 			MaxTokens:        num(limits["max_output_tokens"]),
@@ -453,8 +437,7 @@ func (s *server) fetchCopilot(ctx context.Context, headers http.Header) ([]model
 			m.Mode = "embedding"
 			m.EmbeddingsEndpoint = true
 		case "chat":
-			// Legacy chat models carry no supported_endpoints and are not in
-			// Copilot's picker; skip them like LiteLLM did.
+			// Models without supported_endpoints are not in the model picker.
 			if !entry.ModelPickerEnabled || !(hasChat || hasResponses) {
 				continue
 			}
@@ -476,7 +459,7 @@ func (s *server) fetchCopilot(ctx context.Context, headers http.Header) ([]model
 // fetchOpenRouter reads OpenRouter's catalog. Every entry is a chat model that
 // speaks both dialects; supported_parameters tells whether tools/reasoning are
 // available.
-func (s *server) fetchOpenRouter(ctx context.Context, headers http.Header) ([]model, error) {
+func (s *server) fetchOpenRouter(ctx context.Context, upstream upstreamConfig, headers http.Header) ([]model, error) {
 	var payload struct {
 		Data []struct {
 			ID            string         `json:"id"`
@@ -489,7 +472,7 @@ func (s *server) fetchOpenRouter(ctx context.Context, headers http.Header) ([]mo
 			Supported     []string       `json:"supported_parameters"`
 		} `json:"data"`
 	}
-	if err := s.getJSON(ctx, s.cfg.openrouterBase+"/models", headers, &payload); err != nil {
+	if err := s.getJSON(ctx, upstream.BaseURL+"/models", headers, &payload); err != nil {
 		return nil, err
 	}
 	models := make([]model, 0, len(payload.Data))
@@ -499,9 +482,10 @@ func (s *server) fetchOpenRouter(ctx context.Context, headers http.Header) ([]mo
 		}
 		input := stringsOf(entry.Architecture["input_modalities"])
 		m := model{
-			ID:                "openrouter/" + entry.ID,
+			ID:                upstream.Name + "/" + entry.ID,
 			Upstream:          entry.ID,
-			Provider:          "openrouter",
+			UpstreamName:      upstream.Name,
+			Provider:          upstream.Type,
 			Mode:              "chat",
 			ChatEndpoint:      true,
 			ResponsesEndpoint: true,

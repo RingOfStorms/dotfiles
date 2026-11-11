@@ -16,13 +16,13 @@
 
   # sec-agent grant on the host (bound read-only in flake.nix); cnt deploy
   # and cnt move refuse a target host that lacks it. The key predates the
-  # router: it is the preformatted EnvironmentFile holding OPENROUTER_API_KEY.
+  # router: it is the preformatted EnvironmentFile for upstream settings.
   secrets = [ "litellm-env" ];
 
   net = {
     private = true;
     index = 19;
-    # Local model server on the LAN (air-base in main.go).
+    # Local LiteLLM-compatible server on the LAN.
     egress = [ "10.12.14.181:9010/tcp" ];
   };
 

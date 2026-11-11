@@ -469,8 +469,8 @@ func TestScanSSEMultilineData(t *testing.T) {
 
 // TestModelJSONLiteLLMShape pins the discovery document clients depend on.
 func TestModelJSONLiteLLMShape(t *testing.T) {
-	got := modelJSON(model{ID: "air-m", Mode: "chat", ContextWindow: 1000, MaxTokens: 100})
-	if got["id"] != "air-m" || got["object"] != "model" || got["mode"] != "chat" {
+	got := modelJSON(model{ID: "litellm-m", Mode: "chat", ContextWindow: 1000, MaxTokens: 100})
+	if got["id"] != "litellm-m" || got["object"] != "model" || got["mode"] != "chat" {
 		t.Fatalf("model JSON = %v", got)
 	}
 	if got["created"] != 1677610602 {
