@@ -76,12 +76,7 @@ func newBackup(path string, overrideWriters map[string]authority.Writer, v autho
 		}
 		return out
 	}
-	owns := func(host, subject string) bool {
-		if h, ok := owner[subject]; ok {
-			return h == host
-		}
-		return snap().Host[subject] == host
-	}
+	owns := func(host, subject string) bool { return ownsSubject(owner, snap(), host, subject) }
 	return backup.New(backup.Config{StateDir: stateDir, Writers: wa, Targets: ta, Readers: ra, Subjects: subjects, Owns: owns,
 		Placement: func(subject string) (string, string) {
 			if h, ok := owner[subject]; ok {
@@ -89,6 +84,17 @@ func newBackup(path string, overrideWriters map[string]authority.Writer, v autho
 			}
 			return placementOf(snap(), subject)
 		}})
+}
+
+// ownsSubject: host may read subject's backup policy. Same rule as credential
+// fetches (§2.7): the host subject's owner, else the committed host or the
+// destination of an in-flight move (its preflight resolves the policy).
+func ownsSubject(owner map[string]string, e placements.Export, host, subject string) bool {
+	if h, ok := owner[subject]; ok {
+		return h == host
+	}
+	h, pending := placementOf(e, subject)
+	return host != "" && (host == h || host == pending)
 }
 
 // placementOf is subject's committed host and in-flight move destination
