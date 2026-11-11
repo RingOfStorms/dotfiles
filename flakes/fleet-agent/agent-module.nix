@@ -140,6 +140,7 @@ in
   imports = [
     ./backup/target.nix
     ./backup/client.nix
+    ./backup/pusher.nix
   ];
 
   options.ringofstorms.fleetAgent = {

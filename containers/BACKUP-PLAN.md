@@ -1,10 +1,10 @@
 # Fleet backups: backup targets, pushers, one repo per subject
 
-Status: **P1 and P2 code written, nothing deployed.** 2026-11-05: backup
-credentials moved from sec to h005 fleet-edge (§2.7). rest-server behaviour was
-measured on loopback fixtures (rest-server 0.14.0, restic 0.18.1), not on h004
-(Appendix A). Revised 2026-11-04 to the user's decisions (§0 items 7–10); the
-2026-11-01 revision is in git.
+Status: **P1–P3 deployed. P4 code written (2026-11-11), not deployed.**
+2026-11-05: backup credentials moved from sec to h005 fleet-edge (§2.7).
+rest-server behaviour was measured on loopback fixtures (rest-server 0.14.0,
+restic 0.18.1), not on h004 (Appendix A). Revised 2026-11-04 to the user's
+decisions (§0 items 7–10); the 2026-11-01 revision is in git.
 
 Target state: fleet hosts push restic snapshots to a **backup target** over the
 REST protocol and hold no B2 credential. A target that also holds a B2 key is a
@@ -836,6 +836,22 @@ registration.
   - A→B→C: `original` chains, and raw IDs intersect in 0.
   - `clear a b2` leaves `b` byte-identical and flips only `a.offsite`.
   - With the new key, the old repo's prefix answers 401/403.
+- **Status (2026-11-11): code written, not deployed.**
+  - Key slot `machines/by-host/h004/restic_b2_h004_2026-11-11` (sub h004
+    only) is live in sec and filled. The key must also have
+    `listAllBucketNames` (B2 requires it for bucket-restricted S3 keys).
+  - Units: `fleet-backup-pusher-copy` (timer 07:30, after the 06:00 local
+    prune) does init-if-missing, copy, B2 prune, raw size and completeness
+    per offsite subject. `fleet-backup-pusher-clear` runs after each
+    heartbeat and purges `svc-<s>/` on B2 (rclone, hard delete) for a pending
+    `b2` clear. The heartbeat sends `--pusher` and merges `b2-stats.json`.
+  - A policy reply older than 30 min means copy/clear nothing (exit 1).
+  - Measured on local fixtures: the completeness gate reports an uncopied
+    newest snapshot as missing, then `[]` after the copy; `cat config` exits
+    10 on a missing repo (the init trigger).
+  - Deploy order: h004 (needs `nix flake update fleet-agent` in
+    `hosts/h004`), tick offsite for forgejo only, `systemctl start
+    fleet-backup-pusher-copy`, run the verify list above, then tick the rest.
 
 ### P5: media, archives and fleet-edge as subjects
 

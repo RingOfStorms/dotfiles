@@ -12,6 +12,7 @@
 }:
 let
   cfg = config.ringofstorms.backup.target;
+  pusher = config.ringofstorms.backup.pusher;
   hosts = fleet.hosts or { };
   self = config.networking.hostName;
   fleetLib = import ../../../containers/lib.nix;
@@ -110,9 +111,19 @@ let
   # restic-run units below. fleet-edge unreachable: the old reply stays.
   heartbeatScript = pkgs.writeShellScript "fleet-backup-target-heartbeat" ''
     set -euo pipefail
+    stats=${stateDir}/stats.json
+    ${lib.optionalString pusher.enable ''
+      # Pusher tier: its B2 fields (b2-stats.json) merged per subject.
+      if [ -r ${stateDir}/b2-stats.json ]; then
+        stats=$(mktemp)
+        trap 'rm -f "$stats"' EXIT
+        cat ${stateDir}/stats.json ${stateDir}/b2-stats.json 2>/dev/null \
+          | ${jq} -s 'reduce .[] as $x ({}; . * $x)' >"$stats"
+      fi
+    ''}
     ${lib.getExe config.ringofstorms.fleetAgent.package} containers backup-policy heartbeat \
       --id ${lib.escapeShellArg self} --url ${lib.escapeShellArg repoUrl} \
-      --stats ${stateDir}/stats.json --out ${policyFile} \
+      --stats "$stats" --out ${policyFile} ${lib.optionalString pusher.enable "--pusher"} \
       --creds-out ${credsFeed}.new --applied ${appliedFile}
     chown restic:restic ${policyFile}
     # New REST logins (rotation, new subject): re-render and SIGHUP rest-server.

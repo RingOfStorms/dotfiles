@@ -105,6 +105,12 @@
               dataDir = "/data/backups";
               requiresMount = "/data";
             };
+            # Pusher tier (P4): copies offsite subjects to B2 (svc-* prefix key).
+            ringofstorms.backup.pusher = {
+              enable = true;
+              bucket = "belljm-LoiuasdV3-system-backups";
+              b2EnvFile = "/var/lib/secrets_manager_hydrated/restic_b2_h004_2026-11-11";
+            };
           })
         ]
         ++ [
