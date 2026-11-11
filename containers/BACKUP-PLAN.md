@@ -1,6 +1,6 @@
 # Fleet backups: backup targets, pushers, one repo per subject
 
-Status: **P1–P3 deployed. P4 code written (2026-11-11), not deployed.**
+Status: **P1–P4 deployed** (P4 on h004 2026-11-11; `clear … b2` not yet run live).
 2026-11-05: backup credentials moved from sec to h005 fleet-edge (§2.7).
 rest-server behaviour was measured on loopback fixtures (rest-server 0.14.0,
 restic 0.18.1), not on h004 (Appendix A). Revised 2026-11-04 to the user's
@@ -836,22 +836,34 @@ registration.
   - A→B→C: `original` chains, and raw IDs intersect in 0.
   - `clear a b2` leaves `b` byte-identical and flips only `a.offsite`.
   - With the new key, the old repo's prefix answers 401/403.
-- **Status (2026-11-11): code written, not deployed.**
+- **Status (2026-11-11): deployed on h004; 13 subjects offsite. Verified
+  live except `clear … b2`.**
   - Key slot `machines/by-host/h004/restic_b2_h004_2026-11-11` (sub h004
-    only) is live in sec and filled. The key must also have
-    `listAllBucketNames` (B2 requires it for bucket-restricted S3 keys).
+    only). The B2 key is bucket-restricted, prefix `svc-`, read/write, and
+    has `listAllBucketNames` (B2 requires it for bucket-restricted S3 keys).
   - Units: `fleet-backup-pusher-copy` (timer 07:30, after the 06:00 local
-    prune) does init-if-missing, copy, B2 prune, raw size and completeness
-    per offsite subject. `fleet-backup-pusher-clear` runs after each
-    heartbeat and purges `svc-<s>/` on B2 (rclone, hard delete) for a pending
-    `b2` clear. The heartbeat sends `--pusher` and merges `b2-stats.json`.
+    prune) per offsite subject: init if missing (restic exit 10), compute
+    the B2 keep set on the local repo, copy only those IDs (a shallower
+    `retentionB2` is never re-copied), B2 prune, raw size, completeness.
+    Missing snapshots, a failed `check --read-data-subset` or an unknown
+    result fail the unit. Stats are written after each subject.
+    `fleet-backup-pusher-clear` runs after each heartbeat; it marks both
+    `b2-stats.json` and `offsite-b2.json` incomplete, purges `svc-<s>/`
+    (rclone, hard delete), then drops the subject from both. Copy and clear
+    share `pusher.lock` (clear skips while a copy runs). The heartbeat sends
+    `--pusher` and merges `b2-stats.json`.
   - A policy reply older than 30 min means copy/clear nothing (exit 1).
-  - Measured on local fixtures: the completeness gate reports an uncopied
-    newest snapshot as missing, then `[]` after the copy; `cat config` exits
-    10 on a missing repo (the init trigger).
-  - Deploy order: h004 (needs `nix flake update fleet-agent` in
-    `hosts/h004`), tick offsite for forgejo only, `systemctl start
-    fleet-backup-pusher-copy`, run the verify list above, then tick the rest.
+  - Measured live (2026-11-11): first upload of 13 subjects, about 26 GiB
+    raw in B2, took 3h10m at about 4 MiB/s (home uplink). An unchanged
+    re-run copied 0 snapshots and every `b2Bytes` was byte-identical. B2
+    holds exactly the local `short` keep set (sec: 4 and 4). vaultwarden's
+    B2 repo refuses sec's password. The new key gets `Access Denied` on
+    `…/h001` and restic exit 10 on an absent `svc-` repo.
+  - Measured on local fixtures with the generated script: a corrupted B2
+    pack fails `read-data-subset` (rc=1, complete=false in both files); a
+    copy that skips snapshots is reported missing (rc=1).
+  - Not yet exercised live: `clear <s> b2` and a clear during a running
+    copy.
 
 ### P5: media, archives and fleet-edge as subjects
 
