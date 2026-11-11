@@ -10,7 +10,8 @@
   <strong>{{.HostsUp}}</strong>/<strong>{{.HostsTotal}}</strong> hosts reachable
 </p>
 </header>
-<div class="scroll table-wrap">
+<div class="scroll">
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -66,7 +67,7 @@
 {{if .ExposeError}}<p class="warn">{{.ExposeError}}</p>
 {{else if not .Expose}}<p>none active</p>
 {{else}}
-<div class="scroll table-wrap">
+<div class="table-wrap">
 <table>
 <thead><tr><th>service</th><th>route</th><th>host</th><th>state</th><th>left</th><th>dns</th><th>edge</th><th>by</th></tr></thead>
 <tbody>
@@ -90,7 +91,7 @@
 <p class="summary">Backup policy per subject. Edit target, presets and B2, turn off or clear at <a href="/backup/">/backup/</a> (oauth2-proxy sign-in; writers need the backup UI group). <code>cnt backup-policy</code> does the same from a laptop.</p>
 {{if .Backup.Error}}<p class="warn">{{.Backup.Error}}</p>
 {{else}}
-<div class="scroll table-wrap">
+<div class="table-wrap">
 <table>
 <thead><tr><th>subject</th><th>target</th><th>B2</th><th>local preset</th><th>B2 preset</th><th>local size</th><th>B2 size</th><th>$/mo</th><th>last backup</th><th>last copied</th><th>pending</th></tr></thead>
 <tbody>
@@ -98,7 +99,7 @@
 <tr>
   <td>{{if .Default}}<em>default</em>{{else}}{{.Subject}}{{end}}</td>
   <td>{{.Target}}{{if .TargetNote}} <span class="warn">({{.TargetNote}})</span>{{end}}</td>
-  <td><input type="checkbox" disabled{{if .Offsite}} checked{{end}}>{{if .OffsiteNote}} <span class="warn">{{.OffsiteNote}}</span>{{end}}</td>
+  <td>{{if .Offsite}}on{{else}}<span class="muted">off</span>{{end}}{{if .OffsiteNote}} <span class="warn">{{.OffsiteNote}}</span>{{end}}</td>
   <td>{{.RetentionLocal}}</td><td>{{.RetentionB2}}</td>
   <td title="{{.StatsAt}}">{{.Local}}</td><td title="{{.StatsAt}}">{{.B2}}</td><td>{{.Cost}}</td>
   <td>{{.LastBackup}}</td><td>{{.LastCopy}}</td><td>{{if .Clear}}<span class="warn">clear {{.Clear}}</span>{{end}}</td>
@@ -111,6 +112,7 @@
 {{end}}
 </section>
 {{end}}
+</div>
 <footer>generated at {{.GeneratedAt}}</footer>
 </main>
 {{template "foot" .}}{{end}}

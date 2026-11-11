@@ -9,7 +9,10 @@
 <body>
 <nav class="topnav">
   <a class="brand" href="/">fleet-edge</a>
+  <a href="/">Apps</a>
   <a href="/services">Services</a>
+  <a href="/hosts">Hosts</a>
+  <a href="/topology">Topology</a>
   <a href="/backup/" class="active">Backups</a>
 </nav>
 <main>
@@ -20,7 +23,8 @@
 {{if .Flash}}<p class="summary"><strong>{{.Flash}}</strong></p>{{end}}
 {{if .Error}}<p class="warn">Error {{.Code}}: {{.Error}}</p>{{end}}
 {{if .Creds.ExportStale}}<p class="warn"><strong>Backup credentials not exported{{if .LastExport}} since {{.LastExport}}{{end}}:</strong> a repo password exists that is in no export. Export all and paste it into the password manager; it is the only copy outside h005.</p>{{end}}
-<div class="scroll table-wrap">
+<div class="scroll">
+<div class="table-wrap">
 <table>
 <thead><tr><th>subject</th><th>policy (target · local · B2 preset · offsite)</th><th>local size</th><th>B2 size</th><th>$/mo</th><th>last backup</th><th>pending</th>{{if .CanWrite}}<th>turn off</th><th>clear</th>{{end}}</tr></thead>
 <tbody>
@@ -87,6 +91,7 @@
 </table>
 {{end}}
 <p class="summary">Targets: {{range .Targets}}<code>{{.ID}}</code>{{if .Pusher}} (pusher){{end}}{{if not .Enabled}} <span class="warn">disabled</span>{{end}}{{if .Stale}} <span class="warn">stale</span>{{end}} {{else}}none registered{{end}}</p>
+</div>
 <footer>generated at {{.GeneratedAt}}</footer>
 </main>
 </body>
