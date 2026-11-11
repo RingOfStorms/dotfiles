@@ -41,8 +41,8 @@ in
       reasoning = "medium";
     };
     fast = tierOptions {
-      model = "copilot-gemini-3.8-flash";
-      reasoning = "high";
+      model = "copilot-claude-haiku-5.5";
+      reasoning = "low";
     };
   };
 

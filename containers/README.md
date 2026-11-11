@@ -591,6 +591,11 @@ OMP uses `https://llm.joshuabell.xyz/v1`; shared shell LLM utilities use
 remains `litellm`, preserving existing model role selections and discovery.
 The `lio` CLI aliases bypass proxies for `llm.joshuabell.xyz`.
 
+Shell utilities (`llm_chat`, `gcpropose`, and tmux AI names) share the tier
+defaults in `ringofstorms.llm`: `fast` uses `copilot-claude-haiku-5.5` with
+`reasoning_effort: low`; `smart` uses `copilot-claude-opus-5.5` with
+`reasoning_effort: medium`.
+
 Discovery exposes one entry per public model ID, not per upstream deployment.
 AIR requests still use the shared model name; AIR chooses the deployment.
 Duplicate deployment metadata uses the lowest token limits, common capability
