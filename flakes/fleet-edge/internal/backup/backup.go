@@ -805,7 +805,15 @@ func (s *Service) heartbeat(host, id string, hb Heartbeat) (HeartbeatReply, erro
 		}
 	}
 	rep := HeartbeatReply{Retention: map[string]string{}, RetentionB2: map[string]string{}, Clears: map[string]string{}, Presets: Presets, Credentials: s.restFeed()}
+	// Every known subject gets an entry, not only the ones with an explicit row
+	// or a stats line: a subject without a row inherits the default row (§2.3),
+	// and the target's pruner reads this map per repo. Leaving inherited
+	// subjects out made the pruner fall back to its own preset, and a freshly
+	// seeded target (default row only, stats not measured yet) got an empty map.
 	names := map[string]bool{}
+	for _, n := range s.cfg.Subjects() {
+		names[n] = true
+	}
 	for n := range t.Stats {
 		names[n] = true
 	}

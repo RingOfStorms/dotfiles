@@ -304,4 +304,54 @@ func TestOneAuditLinePerRequest(t *testing.T) {
 	}
 }
 
+// TestHeartbeatCoversEverySubject: the target's pruner looks up
+// .retention[<subject>] for each repo it holds, so every known subject must be
+// in the reply, including the ones that inherit the default row and the ones
+// this target has not measured yet (a freshly seeded target has no stats).
+func TestHeartbeatCoversEverySubject(t *testing.T) {
+	f := newFixture(t)
+	hb := func(h Heartbeat) HeartbeatReply {
+		r := httptest.NewRequest("POST", "/api/backup/targets/h004", strings.NewReader(mustJSON(h)))
+		r.RemoteAddr = "127.0.0.1:1"
+		r.Header.Set("X-Fleet-Peer", "100.64.0.17")
+		r.Header.Set("Authorization", "Bearer good-h004")
+		w := httptest.NewRecorder()
+		f.s.Handler().ServeHTTP(w, r)
+		if w.Code != 200 {
+			t.Fatalf("hb: %d %s", w.Code, w.Body)
+		}
+		var rep HeartbeatReply
+		if err := json.Unmarshal(w.Body.Bytes(), &rep); err != nil {
+			t.Fatal(err)
+		}
+		return rep
+	}
+	// Before any row exists the built-in default row still answers for every
+	// subject: a newly deployed target must be able to prune what it holds.
+	if rep := hb(Heartbeat{URL: "rest:http://h/", Pusher: true}); rep.Retention["forgejo"] != "standard" {
+		t.Fatalf("built-in default: %v", rep.Retention)
+	}
+	if code, out := f.do(t, "lio", "100.64.0.1", "PUT", "/api/backup/default", PolicyRequest{Target: str("h004")}); code != 200 {
+		t.Fatalf("default: %d %v", code, out)
+	}
+	// Every subject inherits the default row, stats or no stats.
+	rep := hb(Heartbeat{URL: "rest:http://h/", Pusher: true})
+	for _, n := range []string{"canary", "localai", "forgejo"} {
+		if rep.Retention[n] != "standard" || rep.RetentionB2[n] != "standard" {
+			t.Fatalf("%s: retention %v / b2 %v", n, rep.Retention, rep.RetentionB2)
+		}
+	}
+	if _, ok := rep.Retention[Default]; ok {
+		t.Fatalf("default row leaked into the reply: %v", rep.Retention)
+	}
+	// An explicit row wins over the default.
+	if code, out := f.do(t, "lio", "100.64.0.1", "PUT", "/api/backup/forgejo", PolicyRequest{Target: str("h004"), RetentionLocal: str("short")}); code != 200 {
+		t.Fatalf("forgejo: %d %v", code, out)
+	}
+	rep = hb(Heartbeat{URL: "rest:http://h/", Pusher: true})
+	if rep.Retention["forgejo"] != "short" || rep.Retention["canary"] != "standard" {
+		t.Fatalf("mixed: %v", rep.Retention)
+	}
+}
+
 func mustJSON(v any) string { b, _ := json.Marshal(v); return string(b) }
