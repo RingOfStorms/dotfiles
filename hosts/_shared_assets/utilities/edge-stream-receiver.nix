@@ -8,7 +8,7 @@ let
   hosts = lib.mapAttrs (_: h: h.overlayIp) (lib.filterAttrs (_: h: (h.overlayIp or null) != null) fleet.hosts);
   receiverConfig = pkgs.writeText "fleet-edge-stream.json" (builtins.toJSON {
     inherit dir hosts ports;
-    nginxTest = ''${pkgs.util-linux}/bin/runuser -u ${lib.escapeShellArg nginx.user} -g ${lib.escapeShellArg nginx.group} -- "${nginx.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
+    nginxTest = ''${pkgs.util-linux}/bin/setpriv --reuid=${lib.escapeShellArg nginx.user} --regid=${lib.escapeShellArg nginx.group} --init-groups --inh-caps=+net_bind_service --ambient-caps=+net_bind_service -- "${nginx.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
     # Blocking, and its exit status is not enough: ExecReload is nginx -t
     # plus kill -HUP, and the master can still fail to load the config (e.g.
     # a taken port). The receiver clears .reload-pending only once

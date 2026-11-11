@@ -104,11 +104,12 @@ rec {
       sshHostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGTAz6n35c3r8kSuWJM1JzMVx6jK+0EBwpJA5eTIvy3N";
     };
     # Containers host (router until 2026-10-15, re-imaged; hosts/h003/readme.md).
-    # LAN by plain DHCP; services are reached over the tailnet.
+    # LAN address is a static DHCP reservation on h005 (hosts/h005/_constants.nix).
     h003 = {
       user = "luser";
       overlayIp = "100.64.0.4";
       overlayIp6 = "fd7a:115c:a1e0::4";
+      lanIp = "10.12.14.180";
       trust = "high";
       role = "server";
       alwaysOn = true;

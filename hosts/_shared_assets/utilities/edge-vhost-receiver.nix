@@ -48,8 +48,10 @@ let
       loginLogFormat = login.logFormat;
       accessLog = "/var/log/nginx/access.log";
       # Test as the nginx service identity, never root: nginx -t opens logs
-      # and otherwise recreates a missing log as root-owned.
-      nginxTest = ''${pkgs.util-linux}/bin/runuser -u ${lib.escapeShellArg nginxCfg.user} -g ${lib.escapeShellArg nginxCfg.group} -- "${nginxCfg.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
+      # and otherwise recreates a missing log as root-owned. It also binds the
+      # listeners, so it needs the unit's CAP_NET_BIND_SERVICE (runuser drops
+      # it: "bind() to 0.0.0.0:80 failed (13: Permission denied)").
+      nginxTest = ''${pkgs.util-linux}/bin/setpriv --reuid=${lib.escapeShellArg nginxCfg.user} --regid=${lib.escapeShellArg nginxCfg.group} --init-groups --inh-caps=+net_bind_service --ambient-caps=+net_bind_service -- "${nginxCfg.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
       # Blocking, and its exit status is not enough: ExecReload is nginx -t
       # plus kill -HUP, and the master can still fail to load the config. The
       # receiver clears .reload-pending only once nginxMainPid's workers have

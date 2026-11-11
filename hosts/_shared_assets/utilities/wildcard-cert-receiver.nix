@@ -37,7 +37,7 @@ let
   nginxCfg = config.services.nginx;
   # The config path differs per host (o002 has no /etc/nginx/nginx.conf):
   # test exactly what the running unit was started with.
-  nginxTest = ''${pkgs.util-linux}/bin/runuser -u ${lib.escapeShellArg nginxCfg.user} -g ${lib.escapeShellArg nginxCfg.group} -- "${nginxCfg.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
+  nginxTest = ''${pkgs.util-linux}/bin/setpriv --reuid=${lib.escapeShellArg nginxCfg.user} --regid=${lib.escapeShellArg nginxCfg.group} --init-groups --inh-caps=+net_bind_service --ambient-caps=+net_bind_service -- "${nginxCfg.package}/bin/nginx" -t -c "$(systemctl show -p ExecStart --value nginx | grep -o -- '-c [^ ;]*' | head -1 | cut -d' ' -f2)"'';
 
   # Point <dirFor name>/current at $2 (a v-* name) atomically.
   swap = ''

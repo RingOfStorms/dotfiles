@@ -86,6 +86,12 @@
         name = "H001";
         ip = "10.12.14.10";
       }
+      # Containers host: fixed so h005 can WAN-forward placed services to it.
+      {
+        mac = "84:47:09:5a:3c:f1";
+        name = "H003";
+        ip = "10.12.14.180";
+      }
       {
         mac = "30:56:0f:4f:52:5f";
         name = "H004";
