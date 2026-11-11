@@ -190,6 +190,9 @@ let
       offsite=$(${jq} -c --arg s "$s" --argjson c "$complete" --argjson m "$missing" --argjson at "$(date +%s)" \
         '.[$s] = {complete: $c, missing: $m, checkedAt: $at}' <<<"$offsite")
       rm -f "$pw"
+      # Per subject, so the dashboard sees progress during a long first run.
+      writeJson ${b2StatsFile} "$stats"
+      writeJson ${offsiteFile} "$offsite"
     done
     writeJson ${b2StatsFile} "$stats"
     writeJson ${offsiteFile} "$offsite"
