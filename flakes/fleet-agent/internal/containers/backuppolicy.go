@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,6 +37,21 @@ type bpClear struct {
 	Scope  string   `json:"scope"`
 	Target string   `json:"target"`
 	Done   []string `json:"done"`
+}
+
+// finished: every scope of the clear is reported done ("both" = local + b2).
+// fleet-edge keeps finished clears on the row as the audit record.
+func (c *bpClear) finished() bool {
+	need := []string{c.Scope}
+	if c.Scope == "both" {
+		need = []string{"local", "b2"}
+	}
+	for _, n := range need {
+		if !slices.Contains(c.Done, n) {
+			return false
+		}
+	}
+	return true
 }
 
 type bpRow struct {
@@ -182,7 +198,7 @@ func backupPolicyList(c edgeDoer, out interface{ Write([]byte) (int, error) }) e
 			}
 		}
 		pend := ""
-		if r.Clear != nil && explicit {
+		if r.Clear != nil && explicit && !r.Clear.finished() {
 			pend = "clear " + r.Clear.Scope
 		}
 		s := stats(n)

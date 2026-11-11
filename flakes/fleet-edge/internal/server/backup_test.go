@@ -39,6 +39,28 @@ func TestBuildBackupTable(t *testing.T) {
 	}
 }
 
+// TestBuildBackupTableClears: a finished clear stays on the row as a record
+// but is not shown; a partly done one says what runs next.
+func TestBuildBackupTableClears(t *testing.T) {
+	now := time.Unix(2_000_000, 0)
+	e := backup.Export{
+		Rows: []*backup.Row{
+			{Subject: "a", Target: "h004", Clear: &backup.Clear{Scope: "both", Target: "h004", Done: []string{"local", "b2"}}},
+			{Subject: "b", Target: "h004", Clear: &backup.Clear{Scope: "both", Target: "h004", Done: []string{"local"}}},
+			{Subject: "c", Target: "h004", Clear: &backup.Clear{Scope: "b2", Target: "h004"}},
+		},
+		Targets:  []backup.TargetView{{Target: backup.Target{ID: "h004", Pusher: true, Enabled: true, Seen: now.Unix()}}},
+		Subjects: []string{"a", "b", "c"},
+	}
+	got := map[string]string{}
+	for _, r := range BuildBackupTable(e, 6.95, now).Rows {
+		got[r.Subject] = r.Clear
+	}
+	if got["a"] != "" || got["b"] != "both on h004 (done: [local], b2 next)" || got["c"] != "b2 on h004" {
+		t.Fatalf("clears: %q", got)
+	}
+}
+
 // TestBuildBackupTableUnlisted: a repo a target reports that the inventory
 // does not name (the svc-canary repo) still gets a row, after the inventory,
 // marked and with no policy invented for it.

@@ -63,7 +63,7 @@ func TestBackupPolicyClearNeedsTypedConfirm(t *testing.T) {
 }
 
 func TestBackupPolicyList(t *testing.T) {
-	f := &fakeEdge{reply: map[string]string{"GET /api/backup": `{"rows":[{"subject":"default","target":"none","retentionLocal":"standard","retentionB2":"local"},{"subject":"canary","target":"h004","retentionLocal":"short","retentionB2":"local","revision":3}],"targets":[{"id":"h004","url":"rest:http://x:8000/","enabled":true,"stats":{"canary":{"localBytes":2048}}}],"subjects":["canary","forgejo"]}`}}
+	f := &fakeEdge{reply: map[string]string{"GET /api/backup": `{"rows":[{"subject":"default","target":"none","retentionLocal":"standard","retentionB2":"local"},{"subject":"canary","target":"h004","retentionLocal":"short","retentionB2":"local","revision":3},{"subject":"done1","target":"h004","retentionLocal":"short","retentionB2":"local","clear":{"scope":"both","target":"h004","done":["local","b2"]}},{"subject":"half","target":"h004","retentionLocal":"short","retentionB2":"local","clear":{"scope":"both","target":"h004","done":["local"]}}],"targets":[{"id":"h004","url":"rest:http://x:8000/","enabled":true,"stats":{"canary":{"localBytes":2048}}}],"subjects":["canary","forgejo","done1","half"]}`}}
 	var out bytes.Buffer
 	if err := backupPolicyList(f, &out); err != nil {
 		t.Fatal(err)
@@ -72,6 +72,15 @@ func TestBackupPolicyList(t *testing.T) {
 	for _, want := range []string{"canary", "2.0KiB", "none (default)", "target h004"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("missing %q in\n%s", want, s)
+		}
+	}
+	// A finished clear is not pending; a half-done one still is.
+	for _, line := range strings.Split(s, "\n") {
+		if strings.HasPrefix(line, "done1 ") && strings.Contains(line, "clear") {
+			t.Fatalf("finished clear listed as pending: %q", line)
+		}
+		if strings.HasPrefix(line, "half ") && !strings.Contains(line, "clear both") {
+			t.Fatalf("pending clear missing: %q", line)
 		}
 	}
 }

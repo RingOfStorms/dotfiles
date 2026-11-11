@@ -127,9 +127,11 @@ func BuildBackupTable(e backup.Export, pricePerTB float64, now time.Time) Backup
 			v.OffsiteNote = "offsite unavailable"
 		}
 		if r.Clear != nil {
-			v.Clear = r.Clear.Scope + " on " + r.Clear.Target
-			if len(r.Clear.Done) > 0 {
-				v.Clear += fmt.Sprintf(" (done: %v)", r.Clear.Done)
+			if p := r.Clear.Pending(); p != "" {
+				v.Clear = r.Clear.Scope + " on " + r.Clear.Target
+				if len(r.Clear.Done) > 0 {
+					v.Clear += fmt.Sprintf(" (done: %v, %s next)", r.Clear.Done, p)
+				}
 			}
 		}
 		// Stats: the policy target's, else any target holding the repo.

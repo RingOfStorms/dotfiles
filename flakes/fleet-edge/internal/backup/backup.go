@@ -848,6 +848,10 @@ func (s *Service) heartbeat(host, id string, hb Heartbeat) (HeartbeatReply, erro
 	return rep, nil
 }
 
+// Pending is the scope of c still to run ("" once finished). A finished
+// clear stays on the row as the audit record; views show only pending ones.
+func (c *Clear) Pending() string { return pendingScope(c) }
+
 // pendingScope is what remains of a clear: "local" first, then "b2".
 func pendingScope(c *Clear) string {
 	done := map[string]bool{}
