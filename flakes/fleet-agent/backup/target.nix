@@ -189,25 +189,42 @@ let
   '';
 
   # Runs as `restic` after each heartbeat: executes pending `local` clears
-  # (deletes <dataDir>/svc-<subject>; nothing re-inits it: client backups
-  # fail until `restic init` is run as `restic`, §2.5) and
-  # records them in cleared.json, reported by the next heartbeat. `b2`
-  # clears belong to the pusher tier.
+  # (deletes <dataDir>/svc-<subject>) and records them in cleared.json,
+  # reported by the next heartbeat. A subject whose policy target is still
+  # this host (reply `.local`) gets an empty repo again with its existing
+  # password, so its client's next backup works; a turned-off subject is
+  # left without a repo. `b2` clears belong to the pusher tier.
   clearScript = pkgs.writeShellScript "fleet-backup-target-clear" ''
     set -euo pipefail
     umask 0077
+    export RESTIC_CACHE_DIR=/var/cache/fleet-backup-target
     [ -r ${policyFile} ] || exit 0
     cleared='{}'
     [ -r ${stateDir}/cleared.json ] && cleared=$(cat ${stateDir}/cleared.json)
+    rc=0
     for s in $(${jq} -r '.clears // {} | to_entries[] | select(.value == "local") | .key' ${policyFile}); do
       case "$s" in ""|*[!a-z0-9-]*) echo "clear: bad subject $s" >&2; continue ;; esac
-      echo "clear: deleting ${cfg.dataDir}/svc-$s"
-      rm -rf --one-file-system -- "${cfg.dataDir}/svc-$s"
+      repo=${cfg.dataDir}/svc-$s
+      echo "clear: deleting $repo"
+      rm -rf --one-file-system -- "$repo"
       cleared=$(${jq} -c --arg s "$s" '.[$s] = ((.[$s] // []) + ["local"] | unique)' <<<"$cleared")
+      if ${jq} -e --arg s "$s" '(.local // []) | index($s) != null' ${policyFile} >/dev/null; then
+        cred="''${CREDENTIALS_DIRECTORY:-/nonexistent}/repo_svc-$s"
+        pw=$(mktemp)
+        ${pkgs.gnused}/bin/sed -n 's/^RESTIC_PASSWORD=//p' "$cred" 2>/dev/null | ${pkgs.coreutils}/bin/tail -n1 >"$pw" || true
+        if [ -s "$pw" ] && ${pkgs.restic}/bin/restic init -r "$repo" --password-file "$pw" </dev/null >/dev/null; then
+          echo "clear: $s: re-created an empty $repo (target is still this host)"
+        else
+          echo "clear: $s: re-creating $repo failed; its backups fail until restic init is run as restic" >&2
+          rc=1
+        fi
+        rm -f "$pw"
+      fi
     done
     tmp=$(mktemp ${stateDir}/.cleared.XXXXXX)
     printf '%s\n' "$cleared" >"$tmp"
     mv -f "$tmp" ${stateDir}/cleared.json
+    exit $rc
   '';
 
   # Runs as `restic`. Repo passwords arrive via LoadCredential (repo_svc-<s>,
@@ -439,6 +456,8 @@ in
         User = "restic";
         Group = "restic";
         ExecStart = clearScript;
+        LoadCredential = [ "repo:${repoKeysDir}" ];
+        CacheDirectory = "fleet-backup-target";
         ReadWritePaths = [
           cfg.dataDir
           stateDir

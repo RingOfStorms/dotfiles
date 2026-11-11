@@ -748,11 +748,14 @@ type Heartbeat struct {
 
 // HeartbeatReply tells a target its retention per repo and pending clears.
 type HeartbeatReply struct {
-	Retention   map[string]string   `json:"retention"`
-	RetentionB2 map[string]string   `json:"retentionB2"`
-	Offsite     []string            `json:"offsite"`
-	Clears      map[string]string   `json:"clears"`
-	Presets     map[string][]string `json:"presets"`
+	Retention   map[string]string `json:"retention"`
+	RetentionB2 map[string]string `json:"retentionB2"`
+	Offsite     []string          `json:"offsite"`
+	// Local: subjects whose policy target is this target (a cleared local
+	// repo is re-initialised only for these).
+	Local   []string            `json:"local"`
+	Clears  map[string]string   `json:"clears"`
+	Presets map[string][]string `json:"presets"`
 	// Credentials: every subject's HTTP login for htpasswd. Never the repo
 	// password (that is /repo-keys, per held repo).
 	Credentials map[string]RestCred `json:"credentials"`
@@ -830,6 +833,9 @@ func (s *Service) heartbeat(host, id string, hb Heartbeat) (HeartbeatReply, erro
 			b2 = r.RetentionLocal
 		}
 		rep.RetentionB2[n] = b2
+		if r.Target == id {
+			rep.Local = append(rep.Local, n)
+		}
 		if r.Target == id && r.Offsite && t.Pusher {
 			rep.Offsite = append(rep.Offsite, n)
 		}
@@ -838,6 +844,7 @@ func (s *Service) heartbeat(host, id string, hb Heartbeat) (HeartbeatReply, erro
 		}
 	}
 	sort.Strings(rep.Offsite)
+	sort.Strings(rep.Local)
 	return rep, nil
 }
 

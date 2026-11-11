@@ -187,9 +187,11 @@ copied, plus two actions:
 - **Clear** takes a scope `local|b2|both` and a typed confirmation
   (`clear svc-x b2`). It is audited, and only the target that holds the repo
   executes it, on its next heartbeat; fleet-edge never runs restic. `local`
-  deletes the repo. Nothing re-creates it (§2.5): the client backup fails
-  until `restic init` is run as `restic` on the target (2026-11-11:
-  vaultwarden, re-init by hand after its clear). `b2` deletes the
+  deletes the repo. If the subject's policy target is still that host (the
+  heartbeat reply's `local` list), the target re-creates an empty repo with
+  the subject's existing password, so the next client backup works; a
+  turned-off subject is left without a repo. This is the one exception to
+  §2.5's manual `init`. `b2` deletes the
   subject's B2 prefix and sets `offsite = false` in the same operation.
   `both` does local first, then B2. A clear naming a repo the target does
   not hold, or `b2` on a subject without an offsite repo, returns 409.
@@ -242,7 +244,9 @@ hourly, 0600 `stats.json`). Stale sizes render with a timestamp, never as 0.
   `ConditionPathIsMountPoint=/data`. `/data` is `nofail`, and without these a
   pool-less boot would accept backups onto the root filesystem.
 - Nothing auto-creates repos. `restic init` per subject is an explicit step (§8)
-  run as `restic`, with the chunker params copied (§2.6).
+  run as `restic`, with the chunker params copied (§2.6). Exception: a
+  `local` clear re-creates the repo it deleted when the subject still
+  targets this host (§2.3).
 
 ### 2.6 Pusher
 

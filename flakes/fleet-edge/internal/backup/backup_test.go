@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -351,6 +352,17 @@ func TestHeartbeatCoversEverySubject(t *testing.T) {
 	rep = hb(Heartbeat{URL: "rest:http://h/", Pusher: true})
 	if rep.Retention["forgejo"] != "short" || rep.Retention["canary"] != "standard" {
 		t.Fatalf("mixed: %v", rep.Retention)
+	}
+	// Local lists exactly the subjects whose target is this host; a row
+	// turned off (target none) drops out, so its cleared repo is not re-created.
+	if !slices.Contains(rep.Local, "forgejo") || !slices.Contains(rep.Local, "canary") {
+		t.Fatalf("local: %v", rep.Local)
+	}
+	if code, out := f.do(t, "lio", "100.64.0.1", "PUT", "/api/backup/forgejo", PolicyRequest{Target: str(None), Revision: 2}); code != 200 {
+		t.Fatalf("forgejo off: %d %v", code, out)
+	}
+	if rep = hb(Heartbeat{URL: "rest:http://h/", Pusher: true}); slices.Contains(rep.Local, "forgejo") || !slices.Contains(rep.Local, "canary") {
+		t.Fatalf("local after off: %v", rep.Local)
 	}
 }
 
