@@ -216,9 +216,16 @@ let
     [ -r ${stateDir}/cleared.json ] && cleared=$(cat ${stateDir}/cleared.json)
     stats='{}'
     [ -r ${b2StatsFile} ] && stats=$(cat ${b2StatsFile})
+    offsite='{}'
+    [ -r ${offsiteFile} ] && offsite=$(cat ${offsiteFile})
     for s in $(${jq} -r '.clears // {} | to_entries[] | select(.value == "b2") | .key' ${policyFile}); do
       validName "$s" || { echo "clear: bad subject '$s'" >&2; rc=1; continue; }
       echo "clear: deleting ${cfg.bucket}/svc-$s/ on B2"
+      # Invalidate first: a failed or killed purge must not leave complete:true.
+      stats=$(${jq} -c --arg s "$s" 'if .[$s] then .[$s].complete = false else . end' <<<"$stats")
+      offsite=$(${jq} -c --arg s "$s" 'if .[$s] then .[$s].complete = false else . end' <<<"$offsite")
+      writeJson ${b2StatsFile} "$stats"
+      writeJson ${offsiteFile} "$offsite"
       rclone=${pkgs.rclone}/bin/rclone
       # rclone exit 3 = directory not found: nothing (left) under the prefix.
       $rclone purge ":b2:${cfg.bucket}/svc-$s"
@@ -229,6 +236,7 @@ let
       if { [ $e -eq 0 ] && [ -z "$left" ]; } || [ $e -eq 3 ]; then
         cleared=$(${jq} -c --arg s "$s" '.[$s] = ((.[$s] // []) + ["b2"] | unique)' <<<"$cleared")
         stats=$(${jq} -c --arg s "$s" 'del(.[$s])' <<<"$stats")
+        offsite=$(${jq} -c --arg s "$s" 'del(.[$s])' <<<"$offsite")
       else
         echo "clear: $s: objects remain under svc-$s/ (lsf exit $e)" >&2
         rc=1
@@ -236,6 +244,7 @@ let
     done
     writeJson ${stateDir}/cleared.json "$cleared"
     writeJson ${b2StatsFile} "$stats"
+    writeJson ${offsiteFile} "$offsite"
     exit $rc
   '';
 
