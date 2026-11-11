@@ -17,6 +17,7 @@ let
   policyFile = "${stateDir}/policy.json";
   b2StatsFile = "${stateDir}/b2-stats.json";
   offsiteFile = "${stateDir}/offsite-b2.json";
+  lockFile = "${stateDir}/pusher.lock";
   jq = "${pkgs.jq}/bin/jq";
   restic = "${pkgs.restic}/bin/restic";
   base = "s3:${cfg.endpoint}/${cfg.bucket}";
@@ -112,6 +113,11 @@ let
   copyScript = pkgs.writeShellScript "fleet-backup-pusher-copy" ''
     ${prologue}
     ${presetArgs}
+    # One lock for copy and clear (§2.6): a clear must never purge a repo
+    # the copier is writing, and the copier must not re-add a cleared
+    # subject's stats. The policy is re-read per subject under the lock.
+    exec 9>${lockFile}
+    flock 9
     rc=0
     stats='{}'
     [ -r ${b2StatsFile} ] && stats=$(cat ${b2StatsFile})
@@ -119,6 +125,11 @@ let
     [ -r ${offsiteFile} ] && offsite=$(cat ${offsiteFile})
     for s in $(${jq} -r '.offsite // [] | .[]' ${policyFile}); do
       validName "$s" || { echo "copy: bad subject '$s'" >&2; rc=1; continue; }
+      # Still offsite, no B2 clear pending (a clear sets offsite=false)?
+      if ! ${jq} -e --arg s "$s" '((.offsite // []) | index($s)) != null and (.clears[$s] // "") != "b2"' ${policyFile} >/dev/null; then
+        echo "copy: $s: no longer offsite or a B2 clear is pending, skipped"
+        continue
+      fi
       src=${target.dataDir}/svc-$s
       dst=${base}/svc-$s
       if [ ! -f "$src/config" ]; then
@@ -194,6 +205,12 @@ let
     ${prologue}
     export RCLONE_B2_ACCOUNT=$AWS_ACCESS_KEY_ID RCLONE_B2_KEY=$AWS_SECRET_ACCESS_KEY RCLONE_B2_HARD_DELETE=true
     export RCLONE_CONFIG=/dev/null
+    # Busy copier: leave the clear pending; the next heartbeat retries it.
+    exec 9>${lockFile}
+    if ! flock -n 9; then
+      echo "clear: a copy run holds ${lockFile}; retrying on the next heartbeat"
+      exit 0
+    fi
     rc=0
     cleared='{}'
     [ -r ${stateDir}/cleared.json ] && cleared=$(cat ${stateDir}/cleared.json)
@@ -284,7 +301,10 @@ in
       ];
       wants = [ "network-online.target" ];
       unitConfig = mountUnit;
-      path = [ pkgs.coreutils ];
+      path = [
+        pkgs.coreutils
+        pkgs.util-linux
+      ];
       serviceConfig = hardening // {
         Type = "oneshot";
         User = "restic";
@@ -318,6 +338,7 @@ in
       path = [
         pkgs.coreutils
         pkgs.gnugrep
+        pkgs.util-linux
       ];
       serviceConfig = hardening // {
         Type = "oneshot";
