@@ -194,14 +194,6 @@ type BackupExtraPath struct {
 	Exclude  []string `json:"exclude"`
 	Mount    string   `json:"mount"`
 	Sentinel string   `json:"sentinel"`
-	OnMove   string   `json:"onMove"`
-}
-
-func (b BackupExtraPath) onMove() string {
-	if b.OnMove == "" {
-		return "restore"
-	}
-	return b.OnMove
 }
 
 // stampSubject is the subject a stamped repo URL names (…/svc-<subject>/).
@@ -238,61 +230,91 @@ cr=$(fleet containers backup-creds %[1]s) && case "$cr" in *source=api*) ;; *) f
 `, s.Name, host, resticCmd(s.Name, ""))
 }
 
-// extraPathsPreflightScript checks each extra path's onMove rule on the
-// destination (§3.4): restore needs it missing or empty, present needs it
-// local and non-empty.
+// extraPathGuard refuses foreign data but permits a sync interrupted after its
+// marker was written. Symlinks and non-directories are never safe sync targets.
+func extraPathGuard(subject, path string) string {
+	return fmt.Sprintf(`if [ -L %[1]s ] || { [ -e %[1]s ] && [ ! -d %[1]s ]; }; then echo %[3]s >&2; exit 1; fi
+if [ -d %[1]s ] && [ -n "$(ls -A %[1]s)" ] && [ ! -f %[2]s ]; then echo %[4]s >&2; exit 1; fi
+`, q(path), q(filepath.Join(path, ".cnt-sync-"+subject)), q(path+" is not a local directory"), q(path+" exists and is not empty without this service's sync marker; move it away or use --into <scratch dir>"))
+}
+
+// extraPathsPreflightScript checks ownership and the backing filesystem on the
+// destination. Missing paths are checked against their nearest existing parent.
 func extraPathsPreflightScript(s Service, host string) string {
 	var b strings.Builder
 	for _, e := range s.Backup.ExtraPaths {
-		p := q(e.Path)
-		switch e.onMove() {
-		case "present":
-			fmt.Fprintf(&b, `if [ ! -d %[1]s ] || [ -z "$(ls -A %[1]s)" ]; then echo "%[2]s: %[3]s (onMove=present) is missing or empty; stage it with cnt restore %[4]s --extra %[3]s" >&2; exit 1; fi
-case "$(findmnt -no FSTYPE -T %[1]s)" in nfs*|cifs|smb3|fuse.sshfs|autofs|9p) echo "%[2]s: %[3]s is a remote path" >&2; exit 1 ;; esac
-`, p, host, e.Path, s.Name)
-		default:
-			fmt.Fprintf(&b, `if [ -e %[1]s ] && [ -n "$(ls -A %[1]s)" ]; then echo "%[2]s: %[3]s (onMove=restore) exists and is not empty; move it away first" >&2; exit 1; fi
-`, p, host, e.Path)
-		}
+		b.WriteString(extraPathGuard(s.Name, e.Path))
+		fmt.Fprintf(&b, `check=%[1]s
+while [ ! -e "$check" ]; do check=$(dirname "$check"); done
+case "$(findmnt -no FSTYPE -T "$check")" in nfs*|cifs|smb3|fuse.sshfs|autofs|9p) echo %[2]s >&2; exit 1 ;; esac
+`, q(e.Path), q(host+": "+e.Path+" is a remote path"))
 	}
 	return b.String()
 }
 
-// restoreExtraScript restores the onMove=restore extra paths from the
-// stamped snapshot at their absolute paths (move step 3).
-func restoreExtraScript(s Service, st backupStamp) string {
-	var paths []string
-	for _, e := range s.Backup.ExtraPaths {
-		if e.onMove() == "restore" {
-			paths = append(paths, e.Path)
-		}
-	}
+// backupExtraSyncScript mirrors only the selected paths, preserving excluded
+// caches and the resume marker. Subtree restore avoids touching siblings and
+// permits --exclude with --delete (restic rejects --include plus --exclude).
+// A second, non-recursive restore applies P's own metadata: subtree restore
+// does not restore its root directory's owner/mode. Both forms were exercised
+// with restic 0.18.1. The marker is installed before transferring any data and
+// excluded from deletion, so interruptions remain resumable.
+func backupExtraSyncScript(s Service, repo, snapshot string, paths []BackupExtraPath, targetRoot string, allowForeign bool) string {
 	if len(paths) == 0 {
 		return ""
 	}
-	return extraRestoreScript(s, st.Repo, st.Snapshot, paths, "")
-}
-
-// extraRestoreScript restores paths from snap. into "" restores in place
-// (refusing non-empty destinations); otherwise under the scratch dir into.
-func extraRestoreScript(s Service, repo, snap string, paths []string, into string) string {
 	var b strings.Builder
 	b.WriteString(strict)
-	incl := ""
-	for _, p := range paths {
-		if into == "" {
-			fmt.Fprintf(&b, "if [ -e %[1]s ] && [ -n \"$(ls -A %[1]s)\" ]; then echo \"%[2]s exists and is not empty; use --into <scratch dir>\" >&2; exit 1; fi\n", q(p), p)
+	cmd := resticCmd(s.Name, repo)
+	tag := ""
+	if snapshot == "latest" {
+		tag = " --tag " + q("svc:"+s.Name)
+	}
+	// Check all paths before modifying any, including on manual restores.
+	for _, e := range paths {
+		p := e.Path
+		if targetRoot != "" {
+			p = filepath.Join(targetRoot, strings.TrimPrefix(p, "/"))
 		}
-		incl += " --include " + q(p)
+		if !allowForeign {
+			b.WriteString(extraPathGuard(s.Name, p))
+		}
 	}
-	tgt := "/"
-	if into != "" {
-		tgt = into
-		fmt.Fprintf(&b, "install -d -m700 %s\n", q(into))
+	for _, e := range paths {
+		p := e.Path
+		if targetRoot != "" {
+			p = filepath.Join(targetRoot, strings.TrimPrefix(p, "/"))
+		}
+		marker := ".cnt-sync-" + s.Name
+		fmt.Fprintf(&b, "install -d %s\ntouch %s\n", q(p), q(filepath.Join(p, marker)))
+		excludes := " --exclude " + q("/"+marker)
+		for _, pattern := range e.Exclude {
+			excludes += " --exclude " + q("/"+pattern)
+		}
+		fmt.Fprintf(&b, "%s restore %s%s --target %s --overwrite if-changed --delete%s </dev/null\n", cmd, q(snapshot+":"+e.Path), tag, q(p), excludes)
+		// Escape the basename as a literal restic glob; filesystem names can
+		// contain glob metacharacters even though configured paths rarely do.
+		base := strings.NewReplacer("\\", "\\\\", "*", "\\*", "?", "\\?", "[", "\\[").Replace(filepath.Base(e.Path))
+		fmt.Fprintf(&b, "%s restore %s%s --target %s --overwrite if-changed --include %s --include %s </dev/null\n", cmd, q(snapshot+":"+filepath.Dir(e.Path)), tag, q(filepath.Dir(p)), q("/"+base), q("!/"+base+"/*"))
+		fmt.Fprintf(&b, "echo %s\n", q("synced "+p+" from "+snapshot+"; resume marker "+filepath.Join(p, marker)))
 	}
-	fmt.Fprintf(&b, "%s restore %s --target %s%s </dev/null\n", resticCmd(s.Name, repo), snap, q(tgt), incl)
-	fmt.Fprintf(&b, "echo 'restored extra paths of %s from %s into %s'\n", s.Name, strings.ReplaceAll(snap, "'", ""), tgt)
 	return b.String()
+}
+
+// extraRestoreScript selects configured paths for cnt restore --extra. --into
+// mirrors below the scratch root; in-place restores require a resume marker
+// whenever a destination is already non-empty.
+func extraRestoreScript(s Service, repo, snap string, paths []string, into string) string {
+	var selected []BackupExtraPath
+	for _, e := range s.Backup.ExtraPaths {
+		for _, p := range paths {
+			if e.Path == p {
+				selected = append(selected, e)
+				break
+			}
+		}
+	}
+	return backupExtraSyncScript(s, repo, snap, selected, into, into != "")
 }
 
 // cmdRestoreExtra: `cnt restore <svc> --extra all|<path> [--snapshot id]
@@ -313,7 +335,7 @@ func cmdRestoreExtra(f flags) error {
 	}
 	snap := f.vals["snapshot"]
 	if snap == "" {
-		snap = "latest --tag svc:" + s.Name
+		snap = "latest"
 	} else if _, err := parseStamp("time=2000-01-01T00:00:00Z snapshot=" + snap); err != nil {
 		return fmt.Errorf("--snapshot: %w", err)
 	}

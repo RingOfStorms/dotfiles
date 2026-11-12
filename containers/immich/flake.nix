@@ -29,11 +29,11 @@
           config = import ./container.nix;
           guestNixpkgs = guestpkgs;
           # Network: service.nix net (private, 10.233.15.2); idmapped persist (ext4).
-          # Media stays on /drives/wd10 (service.nix requires "wd10"); not in
-          # persist, so `cnt backup` skips it (the host's restic job covers it).
+          # Media on /srv/bulk (service.nix requires "bulk"); backed up and
+          # moved as service.nix backup.extraPaths.
           binds = [
             {
-              host = "/drives/wd10/immich/media";
+              host = "/srv/bulk/immich/media";
               container = "/var/lib/immich";
             }
           ];

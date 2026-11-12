@@ -1,13 +1,14 @@
 # Paperless-ngx (docs.joshuabell.xyz, tailnet-only): web + celery + tika +
 # gotenberg + PostgreSQL 16 + redis, one container.
-# media/ and consume/ stay on /drives/wd10 via binds in flake.nix; the
+# media/ and consume/ live on /srv/bulk/paperless (capability `bulk`),
+# bound in by flake.nix and backed up as extraPaths; the
 # paperless dataDir (index, classifier, secret key) and DB persist on
 # /srv/containers.
 {
   name = "paperless";
   kind = "nixos";
   description = "Paperless-ngx documents (docs.joshuabell.xyz)";
-  requires = [ "wd10" ];
+  requires = [ "bulk" ];
 
   persist = {
     data = "/var/lib/paperless"; # index, classification model, secret key
@@ -19,6 +20,20 @@
   backup.hooks.pre = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
   # search index, rebuilt by document_index reindex
   backup.exclude = [ "data/index" ];
+  backup.extraPaths = [
+    {
+      path = "/srv/bulk/paperless/media";
+      requires = "bulk";
+      exclude = [ "documents/thumbnails" ]; # regenerable
+      # paperless keeps this lock file; missing = disk not mounted or not synced
+      sentinel = "/srv/bulk/paperless/media/media.lock";
+    }
+    {
+      # ingestion queue, legitimately empty
+      path = "/srv/bulk/paperless/consume";
+      requires = "bulk";
+    }
+  ];
 
   net = {
     private = true;

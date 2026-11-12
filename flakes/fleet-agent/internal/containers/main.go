@@ -149,17 +149,24 @@ commands:
                                service is running, whether to stop it; then hook,
                                stop, tar data to this machine, start again
   restore <svc> <file> --host h [--force]
-  restore <svc> --extra all|<path> [--snapshot id] [--repo url] [--into dir] [--host h]
                                unpack a backup into /srv/containers/<svc> on a host
+  restore <svc> --extra all|<path> [--snapshot id] [--repo url] [--into dir] [--host h]
+                               sync extra paths from restic (including deletions),
+                               preserving excluded caches; refuses foreign non-empty
+                               paths unless --into selects a scratch directory
   move <svc> --to h [--from h] [--force] [--resume-token T]
                                move through the restic repo: reserve h in the placement
                                registry first (a reservation another client holds stops
-                               the move before any host is touched), final backup on the
-                               source, restore on h, deploy + route health, restore check,
-                               first backup on h, then commit the move and retire the
-                               source (<svc>.moved-<date>). A failure before the commit
-                               undoes h, drops the reservation and restarts the source,
-                               but only while the move still owns the placement; a
+                               the move before any host is touched), pre-sync extra
+                               paths while the source serves, final backup on the source,
+                               delta-sync and restore on h, deploy + route health,
+                               restore check, first backup on h, then commit the move
+                               and retire the source (<svc>.moved-<date>); source extra
+                               paths are retained. A failure before the commit undoes h,
+                               drops the reservation and restarts the source. Synced extra
+                               paths remain; their resume markers are removed only if the
+                               move failed before restore step 3. Rollback acts
+                               only while the move still owns the placement; a
                                taken-over or unconfirmable row leaves both hosts alone
                                (settle it with 'place <svc> --recover'). An interrupted
                                run resumes with the token saved under

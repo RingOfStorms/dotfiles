@@ -12,6 +12,8 @@
 # rebuilding this host.
 { ... }:
 {
+  # Impermanent root: bulk service data (capability `bulk`) must survive reboots.
+  environment.persistence."/persist".directories = [ "/srv/bulk" ];
   ringofstorms.containers = {
     enable = true;
     # /srv/bulk: plain directory on the root disk for bulk service data

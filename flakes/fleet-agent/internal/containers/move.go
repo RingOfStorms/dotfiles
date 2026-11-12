@@ -13,14 +13,18 @@ package containers
 //	1 preflight   target has the host module, fleet-backup (fleet-restic) and
 //	              the service's capabilities; source has fleet-backup and the
 //	              data; leftovers of an interrupted move on the target are
-//	              cleared (only if marked as ours)
+//	              cleared (only if marked as ours). Extra paths must be local
+//	              and empty, or marked .cnt-sync-<svc>; pre-sync them from the
+//	              latest service snapshot while the source still serves,
+//	              renewing the lease before and after the sync
 //	2 final backup  backupHook while running, blocking stop on the source,
 //	              fleet-backup-svc@<svc> (one service, no prune), snapshot id
 //	              read from the fresh stamp; the lease is renewed before and
 //	              after it
 //	3 restore     that snapshot onto the target (SQLite .backup copies put
-//	              in place of the excluded live files), then the excluded
-//	              live PG clusters copied from the stopped source with the
+//	              in place of the excluded live files), delta-sync every extra
+//	              path from the stamped snapshot, then the excluded live PG
+//	              clusters copied from the stopped source with the
 //	              manifest-verified tar
 //	4 deploy      on the target, then health-check every route
 //	5 restore check  scratch restore of the same snapshot on the target:
@@ -35,9 +39,10 @@ package containers
 //	              and installed, destination serving); a re-run with the held
 //	              token redoes only 8-9
 //	9 switch      uninstall on the source, rename its data <svc>.moved-<date>
-//	              (fleet-backup skips it)
+//	              (fleet-backup skips it); extra paths are kept in place and
+//	              marked best-effort for a later move back to this host
 //
-// Steps 0, 2 (renewals) and 7-8 are the placement registry. The token ties
+// Steps 0, 1-2 (renewals) and 7-8 are the placement registry. The token ties
 // every later write to this move, so a client that wakes up late cannot finish
 // or undo one another device has taken over. Only a machine without a registry
 // client (no machine key) moves the service unrecorded; a registry that is
@@ -47,11 +52,13 @@ package containers
 // Any failure in 1 releases the reservation. Any failure in 2-6 first confirms,
 // with the token, that this move still owns the placement; then it undoes the
 // target: stop confirmed (killed if needed), uninstall, data moved aside as
-// <svc>.failed-move-<time>, marker removed last; then the reservation is
-// dropped (routing goes back to the source) and the source starts again if it
-// was running. If that rollback fails the source is NOT started (no two live
-// copies): both stay stopped, the error says what to do by hand. After the
-// commit only the operator rolls back, with `containers place <svc> --recover`.
+// <svc>.failed-move-<time>, marker removed last. Synced extra paths are kept
+// in place; only a failure before step 3 removes their sync markers. Then
+// the reservation is dropped (routing goes back to the source) and the source
+// starts again if this move stopped it and it was running. If that rollback
+// fails the source is NOT started (no two live copies): both stay stopped,
+// the error says what to do by hand. After the commit only the operator rolls
+// back, with `containers place <svc> --recover`.
 //
 // A row another client has taken over (our token is gone: a --force, a second
 // move, a `place --set`), or one whose ownership the registry cannot confirm,
@@ -64,6 +71,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -229,7 +237,7 @@ svc=%[2]s
 tmp=$(mktemp -d "$root/.cnt-move-$svc.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 echo "from=%[3]s snapshot=%[4]s" > %[5]s
-%[7]s restore %[4]s --target "$tmp" </dev/null
+%[7]s restore %[4]s --target "$tmp" --include %[8]s --include %[9]s </dev/null
 test -d "$tmp$root/$svc" || { echo "snapshot %[4]s has no $root/$svc" >&2; exit 1; }
 sq="$tmp"%[6]s/$svc/sqlite/$svc
 if [ -d "$sq" ]; then
@@ -240,7 +248,7 @@ if [ -d "$sq" ]; then
 fi
 mv -T "$tmp$root/$svc" "$root/$svc"
 echo "restored $root/$svc from snapshot %[4]s"
-`, q(root), q(s.Name), from, snap, q(moveMarker(s.Name)), q(backupStaging), resticCmd(s.Name, st.Repo)) + restoreExtraScript(s, st)
+`, q(root), q(s.Name), from, snap, q(moveMarker(s.Name)), q(backupStaging), resticCmd(s.Name, st.Repo), q(dataDir(s)), q(backupStaging+"/"+s.Name)) + backupExtraSyncScript(s, st.Repo, snap, s.Backup.ExtraPaths, "", false)
 }
 
 // liveDBListScript lists the live DB cluster dirs of the service (relative
@@ -320,22 +328,49 @@ func retireTargetBody(s Service) string {
 	return disableScript(s) + stopConfirmScript(s) + uninstallUnlessAbsent(s) + cleanupScript(s) +
 		"cnt_down || { echo \"" + unitOf(s) + " came back up during uninstall\" >&2; exit 1; }\n" +
 		fmt.Sprintf("if [ -e %[1]s ]; then d=%[1]s.failed-move-$(date +%%Y%%m%%dT%%H%%M%%S); [ ! -e \"$d\" ] || d=$d-$$; mv -T %[1]s \"$d\"; fi\nrm -f %[2]s\n",
-			q(dataDir(s)), q(moveMarker(s.Name)))
+			q(dataDir(s)), q(moveMarker(s.Name))) + moveExtraPathsRollbackScript(s, true)
 }
 
 // rollbackTargetScript undoes a partial move on the target.
 func rollbackTargetScript(s Service) string { return strict + retireTargetBody(s) }
 
+// moveExtraPathsRollbackScript never removes synced data. Before restore
+// starts, discard only the sync markers; after it starts, keep them so a
+// retry can delta-sync the same destination.
+func moveExtraPathsRollbackScript(s Service, restoreStarted bool) string {
+	var b strings.Builder
+	for _, e := range s.Backup.ExtraPaths {
+		if !restoreStarted {
+			fmt.Fprintf(&b, "rm -f %s\n", q(e.Path+"/.cnt-sync-"+s.Name))
+			fmt.Fprintf(&b, "echo %s\n", q("kept synced extra path "+e.Path+" in place; removed its sync marker (restore had not started)"))
+		} else {
+			fmt.Fprintf(&b, "echo %s\n", q("kept synced extra path "+e.Path+" and its sync marker in place for a retry"))
+		}
+	}
+	return b.String()
+}
+
 // switchScript retires the source copy once it is confirmed stopped:
 // <svc>.moved-<date> (with the time added if that exists already, e.g. a
 // second move the same day). The was-running marker goes last.
 func switchScript(s Service) string {
+	var extra strings.Builder
+	for _, e := range s.Backup.ExtraPaths {
+		fmt.Fprintf(&extra, `if [ -d %[1]s ] && [ ! -L %[1]s ]; then
+  case "$(findmnt -no FSTYPE -T %[1]s 2>/dev/null || true)" in
+    ""|nfs*|cifs|smb3|fuse.sshfs|autofs|9p) ;;
+    *) touch %[2]s || echo %[3]s >&2 ;;
+  esac
+fi
+`, q(e.Path), q(filepath.Join(e.Path, ".cnt-sync-"+s.Name)), q("could not mark retained source extra path "+e.Path+" for a move back"))
+		fmt.Fprintf(&extra, "echo %s\n", q("source extra path "+e.Path+" kept in place"))
+	}
 	return strict + disableScript(s) + stopConfirmScript(s) + uninstallUnlessAbsent(s) + cleanupScript(s) +
 		"cnt_down || { echo \"" + unitOf(s) + " came back up during uninstall\" >&2; exit 1; }\n" + fmt.Sprintf(`d=%[1]s.moved-$(date +%%F)
 [ ! -e "$d" ] || d=%[1]s.moved-$(date +%%F-%%H%%M%%S)
 mv -T %[1]s "$d"
 echo "source data kept as $d"
-`, q(dataDir(s))) + "rm -f " + q(moveSourceMarker(s.Name)) + "\n"
+`, q(dataDir(s))) + extra.String() + "rm -f " + q(moveSourceMarker(s.Name)) + "\n"
 }
 
 // restartSourceAfterUndo: the source may only start again if the target
@@ -436,8 +471,7 @@ func cmdMove(args []string) error {
 		return fmt.Errorf("preflight on %s: %w (nothing changed)", from, err)
 	}
 
-	info("2/9 final backup on %s: hook, stop, fleet-backup-svc@%s", from, s.Name)
-	wasRunning := !dryRun
+	wasRunning, finalBackupStarted, extraSyncStarted := false, false, false
 	undo := func(step string, err error, target bool) error {
 		msg := fmt.Sprintf("%s: %v", step, err)
 		// Rolling back or restarting acts for whoever owns the placement, so
@@ -468,10 +502,17 @@ func cmdMove(args []string) error {
 				msg += rollbackFailedMsg(s, from, to, e)
 			}
 		}
+		if !target && extraSyncStarted {
+			if e := remote(to, true, strict+moveExtraPathsRollbackScript(s, false)); e != nil {
+				msg += fmt.Sprintf("\nremoving extra-path sync markers on %s FAILED (%v); synced paths were left in place", to, e)
+			}
+		}
 		if !targetDown {
 			return errors.New(msg)
 		}
-		if restartSourceAfterUndo(targetDown, wasRunning) {
+		if !finalBackupStarted {
+			msg += fmt.Sprintf("\n%s was left as it was on %s; the final backup had not started", s.Name, from)
+		} else if restartSourceAfterUndo(targetDown, wasRunning) {
 			info("starting %s again on %s", s.Name, from)
 			if e := remote(from, true, strict+enableScript(s)+"systemctl start "+unitOf(s)+"\nsystemctl is-active "+unitOf(s)+"\nrm -f "+q(moveSourceMarker(s.Name))+"\n"); e != nil {
 				msg += fmt.Sprintf("\nrestart on %s FAILED (%v): containers start %s --host %s", from, e, s.Name, from)
@@ -484,16 +525,36 @@ func cmdMove(args []string) error {
 		st.release()
 		return errors.New(msg)
 	}
+	if len(s.Backup.ExtraPaths) > 0 {
+		info("1/9 pre-sync extra paths onto %s while %s still serves", to, from)
+		if err := st.renew(); err != nil {
+			return undo("renewing the placement before extra-path pre-sync", err, false)
+		}
+		extraSyncStarted = true
+		if err := remote(to, true, backupExtraSyncScript(s, "", "latest", s.Backup.ExtraPaths, "", false)); err != nil {
+			return undo("extra-path pre-sync on "+to, err, false)
+		}
+		if err := st.renew(); err != nil {
+			return undo("renewing the placement after extra-path pre-sync", err, false)
+		}
+	}
+
+	info("2/9 final backup on %s: hook, stop, fleet-backup-svc@%s", from, s.Name)
 	var snap backupStamp
 	if dryRun {
+		finalBackupStarted = true
 		remote(from, true, finalBackupScript(s))
 		snap.Snapshot = "<snapshot-from-step-2>"
 	} else {
 		// The final backup stops the source and may take a while: the lease
 		// is renewed on both sides of it.
 		if err := st.renew(); err != nil {
+			if extraSyncStarted {
+				return undo("renewing the placement before final backup", err, false)
+			}
 			return fmt.Errorf("%w (nothing changed on %s)", err, from)
 		}
+		finalBackupStarted = true
 		out, err := remoteOut(context.Background(), from, true, finalBackupScript(s))
 		wasRunning = wasActive(out)
 		if err != nil {
@@ -508,7 +569,7 @@ func cmdMove(args []string) error {
 		}
 	}
 
-	info("3/9 restoring snapshot %s onto %s, then live DB clusters from the stopped %s", snap.Snapshot, to, from)
+	info("3/9 restoring snapshot %s and delta-syncing extra paths onto %s, then live DB clusters from the stopped %s", snap.Snapshot, to, from)
 	if err := remote(to, true, restoreScript(s, from, snap)); err != nil {
 		return undo("restore on "+to, err, true)
 	}
@@ -697,19 +758,23 @@ chk_tcp() {
 // contain at least one valid dump.
 func needsPGDump(s Service) bool { return strings.Contains(s.Backup.Hooks.Pre, "pg_dump") }
 
-// restoreCheckScript restores the snapshot's databases and dumps into a
-// scratch dir on the host and prints one line per file:
+// restoreCheckScript restores only the service data/staging databases and dumps
+// into a scratch dir on the host and prints one line per file:
 //
 //	sqlite <path> <integrity_check result>
 //	pgdump <path> ok|<reason>
 //
 // The scratch dir is always removed.
 func restoreCheckScript(s Service, repo, snap string) string {
+	var includes strings.Builder
+	for _, root := range []string{dataDir(s), backupStaging + "/" + s.Name} {
+		for _, pattern := range []string{"*.db", "*.sqlite", "*.sqlite3", "*.sql", "*.sql.gz", "*.dump"} {
+			fmt.Fprintf(&includes, " --include %s", q(root+"/**/"+pattern))
+		}
+	}
 	return strict + fmt.Sprintf(`scratch=$(mktemp -d /var/tmp/cnt-restore-check-%[1]s.XXXXXX)
 trap 'rm -rf "$scratch"' EXIT
-%[3]s restore %[2]s --target "$scratch" </dev/null \
-  --include '*.db' --include '*.sqlite' --include '*.sqlite3' \
-  --include '*.sql' --include '*.sql.gz' --include '*.dump' >&2
+%[3]s restore %[2]s --target "$scratch"%[4]s </dev/null >&2
 for t in sqlite3 gzip; do command -v $t >/dev/null || { echo "restore check needs $t on this host" >&2; exit 1; }; done
 cd "$scratch"
 find . -type f \( -name '*.db' -o -name '*.sqlite' -o -name '*.sqlite3' \) -print0 |
@@ -735,7 +800,7 @@ while IFS= read -r -d "" f; do
   case "$tail" in *"dump complete"*) echo "pgdump $p ok" ;; *) echo "pgdump $p truncated" ;; esac
 done
 echo "checked snapshot %[2]s"
-`, s.Name, snap, resticCmd(s.Name, repo))
+`, s.Name, snap, resticCmd(s.Name, repo), includes.String())
 }
 
 // evalRestoreCheck turns restoreCheckScript output into a verdict.

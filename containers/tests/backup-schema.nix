@@ -83,7 +83,7 @@ assert rejects (ep {
 });
 assert rejects (ep {
   path = "/drives/wd10/x";
-  onMove = "copy";
+  onMove = "restore";
 });
 assert rejects (ep {
   path = "/drives/wd10/x";
@@ -100,7 +100,6 @@ assert
       path = "/drives/wd10/x";
       mount = "/drives/wd10";
       sentinel = "/drives/wd10/.mounted";
-      onMove = "restore";
       requires = "wd10";
       exclude = [ "cache" ];
     }

@@ -29,15 +29,15 @@
           config = import ./container.nix;
           guestNixpkgs = guestpkgs;
           # Network: service.nix net (private).
-          # Media stays on /drives/wd10 (service.nix requires "wd10"); not in
-          # persist, so `cnt backup` skips it (the host's restic job covers it).
+          # Media on /srv/bulk (service.nix requires "bulk"); backed up and
+          # moved as service.nix backup.extraPaths.
           binds = [
             {
-              host = "/drives/wd10/paperless/media";
+              host = "/srv/bulk/paperless/media";
               container = "/var/lib/paperless/media";
             }
             {
-              host = "/drives/wd10/paperless/consume";
+              host = "/srv/bulk/paperless/consume";
               container = "/var/lib/paperless/consume";
             }
           ];

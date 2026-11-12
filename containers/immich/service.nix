@@ -1,12 +1,14 @@
 # Immich photos (photos.joshuabell.xyz, public via o002): server + ML (CPU)
 # + PostgreSQL 16 (vectorchord) + redis, one container.
-# Media (library/upload/thumbs, ~1.7T with paperless) stays on /drives/wd10
-# via a bind in flake.nix; DB + ML cache persist on /srv/containers.
+# Media (upload/library, ~420G without the regenerable thumbs and
+# encoded-video) lives on /srv/bulk/immich/media (capability `bulk`), bound in
+# by flake.nix and backed up as an extraPath; DB + ML cache persist on
+# /srv/containers.
 {
   name = "immich";
   kind = "nixos";
   description = "Immich photos (photos.joshuabell.xyz)";
-  requires = [ "wd10" ];
+  requires = [ "bulk" ];
 
   persist = {
     postgres = "/var/lib/postgresql/16";
@@ -19,6 +21,20 @@
   backup.hooks.pre = "runuser -u postgres -- pg_dumpall > /var/backup/postgresql/cnt-dumpall.sql";
   # regenerable ML models
   backup.exclude = [ "mlcache" ];
+  backup.extraPaths = [
+    {
+      path = "/srv/bulk/immich/media";
+      requires = "bulk";
+      # regenerable (immich rebuilds them from the originals)
+      exclude = [
+        "thumbs"
+        "encoded-video"
+      ];
+      # immich writes .immich into each media folder; missing = disk not
+      # mounted (h001) or data not synced, so the backup refuses.
+      sentinel = "/srv/bulk/immich/media/upload/.immich";
+    }
+  ];
 
   # net.index is fleet-wide unique.
   net = {

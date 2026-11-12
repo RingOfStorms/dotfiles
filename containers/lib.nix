@@ -525,12 +525,10 @@ let
             "exclude"
             "mount"
             "sentinel"
-            "onMove"
           ] e;
           path = checkBackupPath w "path" (e.path or null);
           mount = if (e.mount or null) == null then null else checkBackupPath w "mount" e.mount;
           sentinel = if (e.sentinel or null) == null then null else checkBackupPath w "sentinel" e.sentinel;
-          onMove = e.onMove or "restore";
         in
         if !builtins.isAttrs e then
           throw "${w}: each entry must be an attrset"
@@ -544,15 +542,12 @@ let
           throw "${w}: ${path} is not under mount ${mount}"
         else if mount != null && sentinel != null && !(pathUnder sentinel mount) then
           throw "${w}: sentinel ${sentinel} is not under mount ${mount}"
-        else if onMove != "restore" && onMove != "present" then
-          throw "${w}: ${path}: onMove must be \"restore\" or \"present\""
         else
           {
             inherit
               path
               mount
               sentinel
-              onMove
               ;
             requires = e.requires;
             exclude = map (checkBackupExclude "${w}: ${path}") (e.exclude or [ ]);

@@ -87,6 +87,9 @@ func TestParseStampRepo(t *testing.T) {
 }
 
 func TestRestoreUsesStampedRepo(t *testing.T) {
+	oldInv := inv
+	t.Cleanup(func() { inv = oldInv })
+	inv = &Inventory{DataRoot: "/srv/containers"}
 	s := Service{Name: "forgejo", Kind: "nixos"}
 	st := backupStamp{Snapshot: "ab12", Repo: "rest:http://100.64.0.4:8000/svc-forgejo/"}
 	for name, sc := range map[string]string{
@@ -100,22 +103,26 @@ func TestRestoreUsesStampedRepo(t *testing.T) {
 
 func TestExtraPathScripts(t *testing.T) {
 	s := Service{Name: "immich", Backup: BackupSpec{ExtraPaths: []BackupExtraPath{
-		{Path: "/drives/wd10/immich", OnMove: "present"},
+		{Path: "/drives/wd10/immich", Exclude: []string{"thumbs", "nested/cache"}},
 		{Path: "/var/lib/immich-extra"},
 	}}}
 	pf := extraPathsPreflightScript(s, "h003")
-	if !strings.Contains(pf, "'/drives/wd10/immich' ] || [ -z") || !strings.Contains(pf, "onMove=restore") {
-		t.Fatalf("preflight:\n%s", pf)
+	for _, want := range []string{".cnt-sync-immich", "exists and is not empty", "findmnt", "nfs*|cifs|smb3|fuse.sshfs|autofs|9p"} {
+		if !strings.Contains(pf, want) {
+			t.Fatalf("preflight lacks %q:\n%s", want, pf)
+		}
 	}
-	r := restoreExtraScript(s, backupStamp{Snapshot: "ab", Repo: "rest:http://x/svc-immich/"})
-	if strings.Contains(r, "wd10") || !strings.Contains(r, "--include '/var/lib/immich-extra'") || !strings.Contains(r, "--target '/'") {
-		t.Fatalf("move restores present paths or misses restore ones:\n%s", r)
+	r := backupExtraSyncScript(s, "rest:http://x/svc-immich/", "ab", s.Backup.ExtraPaths, "", false)
+	for _, want := range []string{"-r 'rest:http://x/svc-immich/'", "restore 'ab:/drives/wd10/immich'", "--target '/drives/wd10/immich'", "--overwrite if-changed --delete --exclude '/.cnt-sync-immich' --exclude '/thumbs' --exclude '/nested/cache'", "--include '/immich' --include '!/immich/*'", "restore 'ab:/var/lib/immich-extra'"} {
+		if !strings.Contains(r, want) {
+			t.Fatalf("sync lacks %q:\n%s", want, r)
+		}
 	}
-	into := extraRestoreScript(s, "", "latest --tag svc:immich", []string{"/drives/wd10/immich"}, "/tmp/x")
-	if strings.Contains(into, "is not empty") || !strings.Contains(into, "--target '/tmp/x'") {
+	into := extraRestoreScript(s, "", "latest", []string{"/drives/wd10/immich"}, "/tmp/x")
+	if strings.Contains(into, "is not empty") || !strings.Contains(into, "--target '/tmp/x/drives/wd10/immich'") || !strings.Contains(into, "restore 'latest:/drives/wd10/immich' --tag 'svc:immich'") {
 		t.Fatalf("--into:\n%s", into)
 	}
-	if restoreExtraScript(Service{Name: "a"}, backupStamp{}) != "" {
+	if backupExtraSyncScript(Service{Name: "a"}, "", "", nil, "", false) != "" {
 		t.Fatal("no extra paths should add nothing")
 	}
 }

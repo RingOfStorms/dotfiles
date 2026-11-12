@@ -3,6 +3,8 @@ package containers
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,6 +77,11 @@ start)
     cp -a "$FAKE_ROOT/$svc" "$FAKE_REPO/$id/data/"
     rm -rf "$FAKE_REPO/$id/data/$svc/postgres" "$FAKE_REPO/$id/data/$svc/data/app.db"
     sed 's/LIVE/COPY/' "$FAKE_ROOT/$svc/data/app.db" > "$FAKE_REPO/$id/staging/$svc/sqlite/$svc/data/app.db"
+    for p in "$FAKE_ROOT"/extra-*; do
+      [ -d "$p" ] || continue
+      mkdir -p "$FAKE_REPO/$id/extra"
+      cp -a "$p" "$FAKE_REPO/$id/extra/"
+    done
     echo "$FAKE_HOST" > "$FAKE_REPO/$id/host"; touch -d "@$(( $(date +%s) + $(ls "$FAKE_REPO" | wc -l) ))" "$FAKE_REPO/$id"
     mkdir -p "$FAKE_STATE/vlfc/backup-last"
     echo "time=$(date -u +%Y-%m-%dT%H:%M:%SZ) snapshot=$id host=$FAKE_HOST target=h004 repo=rest:http://100.64.0.4:8000/svc-$svc/" > "$FAKE_STATE/vlfc/backup-last/$svc" ;;
@@ -94,10 +101,21 @@ echo "fleet-restic $*" >> `+r.log+`
 while :; do case "$1" in --subject|-r) shift 2;; *) break;; esac; done
 [ "$1" = snapshots ] && { [ -e "$FAKE_STATE/no-grant" ] && exit 1; exit 0; }
 [ "$1" = restore ] || exit 2
-id=$2; shift 2
+ref=$2; shift 2
+id=${ref%%:*}; sub=""
+[ "$ref" = "$id" ] || sub=${ref#*:}
 [ "$id" = latest ] && { id=$(ls -t "$FAKE_REPO" | head -n1); shift 2; }
 [ -d "$FAKE_REPO/$id" ] || { echo "no snapshot $id" >&2; exit 1; }
 while [ $# -gt 0 ]; do case "$1" in --target) tgt=$2; shift 2;; *) shift;; esac; done
+if [ -n "$sub" ]; then
+  base=${sub##*/}
+  [ -d "$FAKE_REPO/$id/extra/$base" ] || exit 0 # parent metadata-only pass
+  echo "extra-sync $FAKE_HOST $id $sub" >> `+r.log+`
+  [ -e "$FAKE_STATE/fail-extra-sync" ] && exit 1
+  mkdir -p "$tgt"
+  cp -a "$FAKE_REPO/$id/extra/$base/." "$tgt/"
+  exit 0
+fi
 mkdir -p "$tgt$FAKE_ROOT" "$tgt$FAKE_STATE/vlfb/staging"
 cp -a "$FAKE_REPO/$id/data/." "$tgt$FAKE_ROOT/"
 cp -a "$FAKE_REPO/$id/staging/." "$tgt$FAKE_STATE/vlfb/staging/"
@@ -110,9 +128,13 @@ f=$2; if grep -q CORRUPT "$f"; then echo "*** in database main ***"; echo "Page 
 	writeExe(t, out+"/bin/fleet-install", "#!"+bash+"\ntouch \"$FAKE_STATE/active-fleet-svc.service\" \"$FAKE_STATE/installed-fleet-svc.service\" \"$FAKE_STATE/podman-svc\"\n")
 	writeExe(t, filepath.Join(r.bin, "nix"), "#!/bin/sh\necho "+out+"\n")
 	writeExe(t, filepath.Join(r.bin, "podman"), "#!"+bash+`
-[ "$1 $2" = "container exists" ] || exit 125
-[ -e "$FAKE_STATE/podman-$3" ]
+case "$1 $2" in
+"container exists") [ -e "$FAKE_STATE/podman-$3" ] ;;
+"exec svc") echo "podman $*" >> `+r.log+`; shift 2; exec "$@" ;;
+*) exit 125 ;;
+esac
 `)
+	writeExe(t, filepath.Join(r.bin, "findmnt"), "#!/bin/sh\necho ext4\n")
 	must(t, os.WriteFile(r.root+".state/podman-svc", nil, 0o644))
 	return m
 }
@@ -164,6 +186,276 @@ func (m *moveRig) assertTargetClean(t *testing.T) {
 	}
 }
 
+// seedExtraSnapshot gives pre-sync an existing service snapshot. File-level
+// mirror semantics live in the shared helper's tests, not this lifecycle fake.
+func (m *moveRig) seedExtraSnapshot(t *testing.T) (string, backupStamp) {
+	t.Helper()
+	p := filepath.Join(m.root, "extra-docs")
+	must(t, os.MkdirAll(p, 0o755))
+	must(t, os.WriteFile(filepath.Join(p, "payload"), []byte("before"), 0o644))
+	s := inv.Services["svc"]
+	s.Backup.ExtraPaths = []BackupExtraPath{{Path: p, Exclude: []string{"cache/**"}}}
+	inv.Services["svc"] = s
+	out, err := remoteOut(context.Background(), "src", true, "set -e\n"+backupRunScript(s))
+	must(t, err)
+	st, err := stampFrom(out, "src", time.Now())
+	must(t, err)
+	must(t, os.WriteFile(m.log, nil, 0o644))
+	return p, st
+}
+
+func TestMoveExtraPathsTwoPhaseSequence(t *testing.T) {
+	m := newMoveRig(t)
+	p, initial := m.seedExtraSnapshot(t)
+	dst := filepath.Join(m.dst, filepath.Base(p))
+	s := inv.Services["svc"]
+	s.Backup.Hooks.Pre = "set -e; test -f " + q(dst+"/.cnt-sync-svc") + "; test \"$(cat " + q(dst+"/payload") + ")\" = before; echo \"backup-hook $FAKE_HOST $(systemctl is-active fleet-svc.service)\" >> " + q(m.log) + "; echo final > " + q(p+"/payload")
+	inv.Services["svc"] = s
+	if err := runMove(t); err != nil {
+		t.Fatalf("move: %v\n%s", err, m.calls())
+	}
+	final, err := parseStamp(readFile(t, m.srcState()+"/vlfc/backup-last/svc"))
+	must(t, err)
+	c := m.calls()
+	idx := func(line string) int {
+		i := strings.Index(c, "\n"+line)
+		if i < 0 {
+			t.Fatalf("call %q missing:\n%s", line, c)
+		}
+		return i
+	}
+	pre := idx("extra-sync dst " + initial.Snapshot + " " + dst)
+	hook := idx("backup-hook src active")
+	stop := idx("systemctl stop fleet-svc.service")
+	// SSH also logs the script before executing it; select the actual backup
+	// invocation after the executed hook/stop rather than its script text.
+	backup := stop + strings.Index(c[stop:], "\nsystemctl start fleet-backup-svc@svc.service")
+	delta := idx("extra-sync dst " + final.Snapshot + " " + dst)
+	if !(pre < hook && hook < stop && stop < backup && backup < delta) {
+		t.Errorf("wrong order: pre-sync %d, hook %d, stop %d, final backup %d, delta %d", pre, hook, stop, backup, delta)
+	}
+	if strings.Count(c, "\nextra-sync dst ") != 2 {
+		t.Errorf("expected one pre-sync and one stamped delta:\n%s", c)
+	}
+	if strings.LastIndex(c, "\nsystemctl start fleet-backup-svc@svc.service") < delta {
+		t.Error("first target backup did not follow delta sync")
+	}
+	for _, root := range []string{p, dst} {
+		if got := readFile(t, root+"/payload"); got != "final\n" {
+			t.Errorf("%s payload = %q", root, got)
+		}
+	}
+	if !exists(dst + "/.cnt-sync-svc") {
+		t.Error("successful sync lost its resume marker")
+	}
+	if !exists(p + "/.cnt-sync-svc") {
+		t.Error("retained source extra path is not marked for a move back")
+	}
+	// The old source's stale copy is service-owned, not foreign data, when it
+	// later becomes a destination again. Exercise the same preflight guard.
+	if out, err := remoteOut(context.Background(), "src", true, strict+extraPathsPreflightScript(s, "src")); err != nil {
+		t.Errorf("retained source refused as a future destination: %v\n%s", err, out)
+	}
+	if !strings.Contains(c, "source extra path "+p+" kept in place") {
+		t.Error("source extra-path retention not logged")
+	}
+}
+
+func TestMoveExtraPathsPreflightRefusals(t *testing.T) {
+	for _, reason := range []string{"foreign data", "another service marker", "remote filesystem"} {
+		t.Run(reason, func(t *testing.T) {
+			m := newMoveRig(t)
+			p, _ := m.seedExtraSnapshot(t)
+			dst := filepath.Join(m.dst, filepath.Base(p))
+			if reason == "remote filesystem" {
+				writeExe(t, filepath.Join(m.bin, "findmnt"), "#!/bin/sh\necho nfs4\n")
+			} else {
+				must(t, os.MkdirAll(dst, 0o755))
+				must(t, os.WriteFile(dst+"/foreign", []byte("untouched"), 0o644))
+				if reason == "another service marker" {
+					must(t, os.WriteFile(dst+"/.cnt-sync-other", nil, 0o644))
+				}
+			}
+			err := runMove(t)
+			if err == nil || !strings.Contains(err.Error(), "preflight on dst") {
+				t.Fatalf("expected preflight refusal, got %v", err)
+			}
+			if strings.Contains(m.calls(), "\nextra-sync ") || strings.Contains(m.calls(), "\nsystemctl stop ") {
+				t.Fatalf("sync or stop ran after preflight refusal:\n%s", m.calls())
+			}
+			if reason != "remote filesystem" && readFile(t, dst+"/foreign") != "untouched" {
+				t.Error("foreign data changed")
+			}
+			m.assertSourceIntact(t)
+		})
+	}
+}
+
+func TestMoveExtraPathsFailureBeforeRestoreKeepsDataOnly(t *testing.T) {
+	for _, step := range []string{"pre-sync running", "pre-sync stopped", "final backup"} {
+		t.Run(step, func(t *testing.T) {
+			m := newMoveRig(t)
+			p, _ := m.seedExtraSnapshot(t)
+			dst := filepath.Join(m.dst, filepath.Base(p))
+			must(t, os.MkdirAll(dst, 0o755))
+			must(t, os.WriteFile(dst+"/existing", []byte("keep me"), 0o644))
+			must(t, os.WriteFile(dst+"/.cnt-sync-svc", nil, 0o644))
+			want := "extra-path pre-sync"
+			if step == "final backup" {
+				want = "final backup"
+				must(t, os.WriteFile(m.srcState()+"/skip-backup", nil, 0o644))
+			} else {
+				must(t, os.WriteFile(m.dstState()+"/fail-extra-sync", nil, 0o644))
+			}
+			if step == "pre-sync stopped" {
+				must(t, os.Remove(m.srcState()+"/active-fleet-svc.service"))
+			}
+			err := runMove(t)
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("expected %s failure, got %v\n%s", step, err, m.calls())
+			}
+			if exists(dst+"/.cnt-sync-svc") || readFile(t, dst+"/existing") != "keep me" {
+				t.Error("rollback must remove only the sync marker, not extra data")
+			}
+			if !strings.Contains(m.calls(), "removed its sync marker (restore had not started)") {
+				t.Error("pre-restore retention not logged")
+			}
+			if step == "final backup" {
+				m.assertSourceIntact(t)
+				if got := readFile(t, dst+"/payload"); got != "before" {
+					t.Errorf("pre-synced data was not retained: %q", got)
+				}
+			} else {
+				if strings.Contains(m.calls(), "\nsystemctl stop ") || strings.Contains(m.calls(), "\nsystemctl start ") {
+					t.Fatalf("source lifecycle changed before final backup:\n%s", m.calls())
+				}
+				if got := exists(m.srcState() + "/active-fleet-svc.service"); got != (step == "pre-sync running") {
+					t.Errorf("source running = %v after %s", got, step)
+				}
+			}
+			m.assertTargetClean(t)
+		})
+	}
+}
+
+func TestMoveExtraPathsFailureAfterRestoreRemainsResumable(t *testing.T) {
+	for _, step := range []string{"delta sync", "deploy", "restore check"} {
+		t.Run(step, func(t *testing.T) {
+			m := newMoveRig(t)
+			p, _ := m.seedExtraSnapshot(t)
+			dst := filepath.Join(m.dst, filepath.Base(p))
+			s := inv.Services["svc"]
+			s.Backup.Hooks.Pre = "echo final > " + q(p+"/payload")
+			if step == "delta sync" {
+				s.Backup.Hooks.Pre += "; touch " + q(m.dstState()+"/fail-extra-sync")
+			} else if step == "deploy" {
+				writeExe(t, filepath.Join(m.bin, "nix"), "#!/bin/sh\nexit 1\n")
+			} else {
+				must(t, os.WriteFile(filepath.Join(m.root, "svc/data/app.db"), []byte("SQLite format 3\x00LIVE CORRUPT"), 0o644))
+			}
+			inv.Services["svc"] = s
+			err := runMove(t)
+			want := step
+			if step == "delta sync" {
+				want = "restore on dst"
+			}
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("expected %s failure, got %v\n%s", step, err, m.calls())
+			}
+			if !exists(dst+"/.cnt-sync-svc") || !exists(dst+"/payload") {
+				t.Error("post-restore rollback must retain synced data and marker")
+			}
+			if !strings.Contains(m.calls(), "and its sync marker in place for a retry") {
+				t.Error("resumable rollback not logged")
+			}
+			m.assertSourceIntact(t)
+			m.assertTargetClean(t)
+			if step == "delta sync" {
+				must(t, os.Remove(m.dstState()+"/fail-extra-sync"))
+				s.Backup.Hooks.Pre = "echo final > " + q(p+"/payload")
+				inv.Services["svc"] = s
+			} else if step == "deploy" {
+				writeExe(t, filepath.Join(m.bin, "nix"), "#!/bin/sh\necho "+filepath.Join(filepath.Dir(m.root), "out")+"\n")
+			} else {
+				must(t, os.WriteFile(filepath.Join(m.root, "svc/data/app.db"), []byte("SQLite format 3\x00LIVE"), 0o644))
+			}
+			if err := runMove(t); err != nil {
+				t.Fatalf("retry of marked extra path: %v\n%s", err, m.calls())
+			}
+			if readFile(t, dst+"/payload") != "final\n" || !exists(dst+"/.cnt-sync-svc") {
+				t.Error("retry did not finish the marked sync")
+			}
+		})
+	}
+}
+
+func TestMoveExtraPathsRenewsAroundPreSync(t *testing.T) {
+	m, reg := moveOnRegistry(t)
+	p, _ := m.seedExtraSnapshot(t)
+	marker := filepath.Join(m.dst, filepath.Base(p), ".cnt-sync-svc")
+	var renewals []struct{ synced, sourceRunning bool }
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/placements/renew" {
+			reg.mu.Lock()
+			renewals = append(renewals, struct{ synced, sourceRunning bool }{
+				exists(marker), exists(m.srcState() + "/active-fleet-svc.service"),
+			})
+			reg.mu.Unlock()
+		}
+		reg.serve(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	usePlacementServer(t, srv)
+	if err := runMove(t); err != nil {
+		t.Fatalf("move: %v\n%s", err, m.calls())
+	}
+	reg.mu.Lock()
+	defer reg.mu.Unlock()
+	if len(renewals) < 4 {
+		t.Fatalf("missing pre-sync/final-backup lease renewals: %+v", renewals)
+	}
+	for i, want := range []struct{ synced, sourceRunning bool }{
+		{false, true}, {true, true}, {true, true}, {true, false},
+	} {
+		if renewals[i] != want {
+			t.Errorf("renewal %d = %+v, want %+v", i+1, renewals[i], want)
+		}
+	}
+}
+
+func TestMoveRestoresOnlyServiceDataAndStaging(t *testing.T) {
+	newMoveRig(t)
+	s := inv.Services["svc"]
+	s.Backup.ExtraPaths = []BackupExtraPath{{Path: "/srv/bulk"}}
+	script := restoreScript(s, "src", backupStamp{Snapshot: "abc"})
+	line := ""
+	for _, l := range strings.Split(script, "\n") {
+		if strings.Contains(l, "--target \"$tmp\"") {
+			line = l
+			break
+		}
+	}
+	for _, path := range []string{dataDir(s), backupStaging + "/" + s.Name} {
+		if !strings.Contains(line, "--include "+q(path)) {
+			t.Errorf("main restore omits scoped include %s: %s", path, line)
+		}
+	}
+	if strings.Contains(line, "/srv/bulk") {
+		t.Error("main restore includes the bulk extra path")
+	}
+	check := restoreCheckScript(s, "", "abc")
+	for _, root := range []string{dataDir(s), backupStaging + "/" + s.Name} {
+		for _, pattern := range []string{"*.db", "*.sqlite", "*.sqlite3", "*.sql", "*.sql.gz", "*.dump"} {
+			if !strings.Contains(check, "--include "+q(root+"/**/"+pattern)) {
+				t.Errorf("restore check omits scoped %s/%s", root, pattern)
+			}
+		}
+	}
+	if strings.Contains(check, "--include '*.db'") || strings.Contains(check, "/srv/bulk") {
+		t.Error("restore check can include unrelated extra-path databases/dumps")
+	}
+}
+
 func TestMoveHappyPath(t *testing.T) {
 	m := newMoveRig(t)
 	if err := runMove(t); err != nil {
@@ -206,7 +498,7 @@ func TestMoveHappyPath(t *testing.T) {
 		}
 		return i
 	}
-	stop, fb, rc := idx("systemctl stop fleet-svc.service"), idx("systemctl start fleet-backup-svc@svc.service"), idx("--include")
+	stop, fb, rc := idx("systemctl stop fleet-svc.service"), idx("systemctl start fleet-backup-svc@svc.service"), idx("scratch=$(mktemp")
 	if !(stop < fb && fb < rc) {
 		t.Errorf("wrong order: stop %d, backup %d, restore check %d", stop, fb, rc)
 	}

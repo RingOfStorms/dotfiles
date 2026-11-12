@@ -41,4 +41,9 @@
         "container@${constants.services.nixarr.containerName}.service";
     };
   };
+
+  # Hand-made archives (cnt backup tarballs, pre-migration snapshots): a host
+  # subject, repo svc-h001-archives (BACKUP-PLAN.md §5). Registered in
+  # hosts/h005/fleet-edge.nix backup.hostSubjects.
+  ringofstorms.backup.subjects.h001-archives.paths = [ "/home/luser/backups" ];
 }

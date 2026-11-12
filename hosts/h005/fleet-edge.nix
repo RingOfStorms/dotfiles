@@ -63,6 +63,28 @@ in
 {
   imports = [ inputs.fleet-edge.nixosModules.default ];
 
+  # fleet-edge state as backup host subject `fleet-edge` (BACKUP-PLAN.md §6),
+  # repo svc-fleet-edge on h004. metrics.db is live SQLite: the pre hook takes
+  # an online copy outside the DynamicUser state dir and the live files are
+  # excluded. Restore: see BACKUP-PLAN.md §6 (no fleet-edge needed).
+  ringofstorms.backup.subjects.fleet-edge = {
+    paths = [
+      "/var/lib/private/fleet-edge-overrides"
+      "/var/lib/fleet-edge-forwards"
+      "/var/lib/private/fleet-edge"
+      "/var/backup/fleet-edge"
+    ];
+    exclude = [
+      "metrics.db"
+      "metrics.db-wal"
+      "metrics.db-shm"
+    ];
+    hooks = {
+      pre = "install -d -m700 /var/backup/fleet-edge && ${pkgs.sqlite}/bin/sqlite3 /var/lib/private/fleet-edge/metrics.db '.timeout 30000' '.backup /var/backup/fleet-edge/metrics-online.db'";
+      post = "rm -f /var/backup/fleet-edge/metrics-online.db";
+    };
+  };
+
   systemd.services.fleet-wan-forwards = {
     description = "Apply placement-owned WAN forwards";
     after = [ "nftables.service" ];
@@ -120,10 +142,19 @@ in
           "gp3"
           "oren"
         ];
-        readers = lib.mapAttrs (host: sub: {
-          inherit sub;
-          peer = fleet.hosts.${host}.overlayIp;
-        }) fleet.global.overrideWriters;
+        readers =
+          lib.mapAttrs (host: sub: {
+            inherit sub;
+            peer = fleet.hosts.${host}.overlayIp;
+          }) fleet.global.overrideWriters
+          // {
+            # h005 backs up its own state (host subject fleet-edge) by calling
+            # its own API from its overlay IP.
+            h005 = {
+              sub = "395294573078773763";
+              peer = fleet.hosts.h005.overlayIp;
+            };
+          };
         targets = {
           h004 = {
             sub = "394968645089886211";
@@ -132,7 +163,11 @@ in
         };
         # P1 canary (§5): a host subject of lio, so lio may fetch its
         # credentials and h004 serves its login.
-        hostSubjects.lio = [ "canary" ];
+        hostSubjects = {
+          lio = [ "canary" ];
+          h001 = [ "h001-archives" ];
+          h005 = [ "fleet-edge" ];
+        };
         # /backup/ editor: the dashboard login (auth.zitadel below, role
         # `admin`) gets in; role `admin` may also write.
         uiGroup = "admin";

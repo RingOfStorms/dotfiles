@@ -27,18 +27,18 @@
 
     paths = [
       # immich originals + immich's own DB dumps (media/backups)
-      "/drives/wd10/immich/media"
+      "/srv/bulk/immich/media"
       # paperless documents + consume dir
-      "/drives/wd10/paperless"
+      "/srv/bulk/paperless"
       # hand-made archives (cnt backup tarballs, pre-migration snapshots)
       "/home/luser/backups"
     ];
 
     exclude = [
       # regenerable
-      "/drives/wd10/immich/media/thumbs"
-      "/drives/wd10/immich/media/encoded-video"
-      "/drives/wd10/paperless/media/documents/thumbnails"
+      "/srv/bulk/immich/media/thumbs"
+      "/srv/bulk/immich/media/encoded-video"
+      "/srv/bulk/paperless/media/documents/thumbnails"
     ];
 
     extraBackupArgs = [
@@ -66,5 +66,5 @@
     ];
   };
 
-  systemd.services.restic-backups-h001.unitConfig.RequiresMountsFor = [ "/drives/wd10" ];
+  systemd.services.restic-backups-h001.unitConfig.RequiresMountsFor = [ "/srv/bulk" ];
 }

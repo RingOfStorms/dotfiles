@@ -66,6 +66,7 @@ isolation and append-only, not from tiering.
   `hosts/h001/mods/restic-backup.nix` prunes `--tag h001` with the same keep-set.
   Both work only because S3 is not append-only.
 - **h001 host job** (`hosts/h001/mods/restic-backup.nix`) backs up
+  (paths as of 2026-11-01; the disk is at `/srv/bulk` since 2026-11-11, §5)
   `/drives/wd10/immich/media` (excluding `thumbs` and `encoded-video`),
   `/drives/wd10/paperless` (excluding `media/documents/thumbnails`) and
   `/home/luser/backups`. Measured 2026-11-01: `/drives/wd10/immich` 639G,
@@ -376,7 +377,8 @@ lio.
   - the destination holds the subject's secret;
   - it can read the stamped repo (`snapshots <id>`) and lock the destination
     repo;
-  - every extra path passes its `onMove` rule (§3.4).
+  - every extra path is local on the destination and either empty or marked
+    by an earlier sync of this service (§3.4).
 - The SQLite overlay comes from the restored snapshot's staging copy, never the
   destination's live staging directory.
 - `cnt restore <svc> --latest` alone queries every enabled target (401 =
@@ -396,12 +398,11 @@ backup = {
   };
   extraPaths = [
     {
-      path = "/drives/wd10/immich/media";
-      requires = "wd10";               # a host capability, must be in the service's `requires`
+      path = "/srv/bulk/immich/media";
+      requires = "bulk";               # a host capability, must be in the service's `requires`
       exclude = [ "thumbs" "encoded-video" ];  # relative to `path`
-      mount = "/drives/wd10";          # optional: `findmnt -T <path>` TARGET must equal this
-      sentinel = null;                 # optional: absolute file that must exist (e.g. /drives/wd10/.wd10-online)
-      onMove = "present";              # "restore" (default) | "present"
+      mount = null;                    # optional: `findmnt -T <path>` TARGET must equal this
+      sentinel = "/srv/bulk/immich/media/upload/.immich";  # optional: file that must exist
     }
   ];
 };
@@ -449,8 +450,8 @@ build.
 - No overlap: no path may be a prefix of another, within one service or across
   all services and host subjects (a `checkBackupPaths` pass beside
   `checkNetIndexes`). Two repos holding the same data would make restores fight.
-- `exclude` patterns must be relative and contain no `..`. `onMove` ∈
-  {`restore`, `present`}. Hooks are non-empty strings.
+- `exclude` patterns must be relative and contain no `..`. Hooks are non-empty
+  strings. (`onMove` was removed 2026-11-11: every extra path moves, §3.4.)
 - `mount` and `sentinel` are optional. If set, each must be absolute and
   normalised like `path`. `path` must be equal to or under `mount`, and
   `sentinel` must be under `mount` when both are set. Set at least one for any
@@ -464,12 +465,12 @@ with a clear message, and the other subjects still run, if:
   it".
 - the path is missing.
 - `mount` is set and `findmnt -no TARGET -T <path>` ≠ `mount`. An unmounted
-  `/drives/wd10` resolves to `/`, so it fails here instead of producing an
-  empty snapshot that retention would let replace the real data.
+  disk resolves to its parent filesystem, so it fails here instead of producing
+  an empty snapshot that retention would let replace the real data.
 - `sentinel` is set and the file does not exist (`[ -f <sentinel> ]`).
 
 **Empty directories are allowed.** A queue such as
-`/drives/wd10/paperless/consume` is legitimately empty once ingestion drains
+`/srv/bulk/paperless/consume` is legitimately empty once ingestion drains
 it. Emptiness is never used as a mount check.
 
 ### 3.4 Snapshot, move and restore
@@ -485,21 +486,32 @@ it. Emptiness is never used as a mount check.
   host as a host subject there. Pulling data over NFS from h004 only to push it
   back to h004 is never right. Example: arr's `/data/nixarr` belongs to h004 and
   is deliberately not backed up (re-downloadable).
-- **`cnt move`**:
-  - `onMove = "restore"`: the path is restored from the stamped snapshot to the
-    same absolute path on the destination, before start, like
-    `/srv/containers/<svc>`. Preflight refuses if the destination path exists
-    and is non-empty.
-  - `onMove = "present"`: the path is not restored. Preflight refuses unless the
-    destination path is local and non-empty. Use this for bulk data on a
-    capability disk (immich media), where restoring 639G inside a move window is
-    wrong; stage it first with `cnt restore --extra`.
+- **`cnt move`** syncs every extra path from the service's own repo in two
+  phases, so bulk data never has to be staged by hand:
+  - **Pre-sync, before the source stops:** the destination restores each extra
+    path from the latest `svc:<svc>` snapshot (`restic restore
+    '<snap>:<parent>' --include /<base> --overwrite if-changed --delete`). This
+    can take hours (immich: ~420G at LAN speed); the source keeps serving and
+    the placement lease is renewed around it. A marker `<path>/.cnt-sync-<svc>`
+    is written first.
+  - **Delta, after the final backup:** the same sync from the stamped snapshot
+    transfers only what changed and deletes what was deleted on the source.
+  - Excluded subtrees (regenerable thumbnails, transcodes) are not in the
+    snapshot; the sync never deletes them on the destination, and the service
+    regenerates them there.
+  - Preflight refuses a destination path that is non-empty without the marker
+    (foreign data), or a remote filesystem. With the marker it resumes.
+  - The source keeps its copy of every extra path after the switch, as with
+    `<svc>.moved-<date>`.
+- Extra paths use host-neutral locations (`/srv/bulk/...`, capability `bulk`):
+  on h001 a disk is mounted there; on h003 it is a plain persisted directory.
 - **`cnt restore <svc> [--snapshot <id>] [--extra all|<path>] [--into <dir>]`**:
   the default restores the `/srv/containers` part only. `--extra` adds extra
   paths at their absolute paths on the service's current host, after the
   capability check, and refuses non-empty destinations unless `--into` points at
-  a scratch directory. `restore-check` covers the `/srv/containers` part. Extra
-  paths are covered by the target's `check --read-data-subset`.
+  a scratch directory, or carries the sync marker. `restore-check` covers the
+  `/srv/containers` part. Extra paths are covered by the target's `check
+  --read-data-subset`.
 
 ## 4. h004 storage
 
@@ -578,29 +590,34 @@ back. After P1, set `target.enable = false` (the unit reverts to
 
 ## 5. Media: h001 → h004 → B2 like any service
 
+- **2026-11-11:** the wd10 disk is mounted at `/srv/bulk` (was `/drives/wd10`)
+  and the capability is `bulk` (was `wd10`), so the paths are the same on any
+  host. h003 offers `bulk` as a persisted directory on its root disk (816G
+  free), which is what makes immich and paperless movable there.
 - `containers/immich/service.nix`: `backup.extraPaths = [ { path =
-  "/drives/wd10/immich/media"; requires = "wd10"; exclude = [ "thumbs"
-  "encoded-video" ]; onMove = "present"; } ]`, plus `exclude = [ "mlcache" ]`.
-- `containers/paperless/service.nix`: `/drives/wd10/paperless/media` (exclude
-  `documents/thumbnails`) and `/drives/wd10/paperless/consume`, both
-  `requires = "wd10"`, `onMove = "restore"` (650M); plus `exclude = [
-  "data/index" ]`.
+  "/srv/bulk/immich/media"; requires = "bulk"; exclude = [ "thumbs"
+  "encoded-video" ]; sentinel = "/srv/bulk/immich/media/upload/.immich"; } ]`,
+  plus `exclude = [ "mlcache" ]`. Measured 2026-11-11: upload 418G, backups
+  (immich's DB dumps) 4.1G; excluded thumbs 25G, encoded-video 196G.
+- `containers/paperless/service.nix`: `/srv/bulk/paperless/media` (exclude
+  `documents/thumbnails`, sentinel `media.lock`) and
+  `/srv/bulk/paperless/consume` (no sentinel: legitimately empty), both
+  `requires = "bulk"` (650M); plus `exclude = [ "data/index" ]`.
 - h001: `ringofstorms.backup.subjects.h001-archives.paths = [
   "/home/luser/backups" ]` (48G).
 - `hosts/h001/mods/restic-backup.nix` keeps running alongside until P6 deletes
-  it, along with its `restic_h001_env` consumer.
-- First push is about 639G minus thumbs and encoded video, over the tailnet to
-  h004 (both on 10.12.14.0/24, so the path is direct). Start it by hand off-hours
+  it, along with its `restic_h001_env` consumer (paths moved to `/srv/bulk`).
+- First push is about 420G over the LAN to h004. Start it by hand off-hours
   with `systemctl start fleet-backup-svc@immich`. Nightly runs after that are
   incremental.
 - **B2:** `svc-immich`, `svc-paperless` and `svc-h001-archives` are new, empty
-  B2 repos, so the first copy **re-uploads about 485 GiB once** (B2 ingress is
-  free; uplink time only). Approved (§0.10). The old `7f023d4a` media history
-  is not copied (§9).
+  B2 repos, so the first copy **re-uploads about 470 GiB once** (B2 ingress is
+  free; uplink time only, ~1.5 days at 4 MiB/s). Approved (§0.10). The old
+  `7f023d4a` media history is not copied (§9).
 - Retention defaults to `standard` (= the old job's 7/5/12/3). Raise it to `long`
   in the UI if wanted.
 - Dropped from the previous revision: the h004-side media job, the export of
-  `/drives/wd10` to h004, and the `host-h001` subject.
+  the disk to h004, and the `host-h001` subject.
 
 ## 6. fleet-edge state on h005
 
@@ -615,10 +632,13 @@ h005 declares `ringofstorms.backup.subjects.fleet-edge`:
 
 - `metrics.db` is live, and host subjects get no SQLite online copy (§3.4).
   `hooks.pre` runs `sqlite3 metrics.db ".timeout 30000" ".backup
-  /var/lib/private/fleet-edge/backup/metrics.db"`; the subject includes
-  `backup/` and excludes the live `metrics.db{,-wal,-shm}`. `hooks.post`
-  removes the copy. Restore copies it back over `metrics.db` with fleet-edge
-  stopped.
+  /var/backup/fleet-edge/metrics-online.db"` (outside the DynamicUser state
+  dir, and not under `/var/lib/fleet-backup`, which §3.3 forbids); the subject
+  includes `/var/backup/fleet-edge` and excludes the live
+  `metrics.db{,-wal,-shm}`. `hooks.post` removes the copy. Restore copies it
+  over `metrics.db` with fleet-edge stopped.
+- h005 calls its own `/api/backup` as a reader (its overlay IP and machine
+  sub are in `backup.readers`, `hosts/h005/fleet-edge.nix`).
 - The other included files are written by atomic rename; no hook.
 - Resolution goes through h005's own `/api/backup`, with the cache as fallback
   when fleet-edge is down. **Disaster restore needs no fleet-edge:** stop
@@ -884,15 +904,14 @@ registration.
 - **Files:** `containers/{immich,paperless}/service.nix`,
   `hosts/h001/floating-containers.nix`, `hosts/h005/*`, the registry, and
   `sec-agent.nix` on h001 and h005.
-- **Risk: medium–high.** The largest transfer: about 639G to h004, then about
-  485 GiB to B2 (approved, §0.10). The wd10 empty-dir guard is the safety net.
+- **Risk: medium–high.** The largest transfer: about 420G to h004, then about
+  470 GiB to B2 (approved, §0.10). The sentinels are the safety net.
   B2 storage roughly doubles until P6b.
 - **Verify:**
   - `svc-immich`'s local size is within a few percent of `du` minus excludes.
-  - With wd10 unmounted (test on a scratch path), the empty-dir guard fails the
-    subject.
-  - `cnt move` preflight for immich refuses a destination without media
-    (`present`).
+  - With the sentinel missing (test on a scratch path), the subject fails.
+  - `cnt move` preflight for immich refuses a destination path holding foreign
+    data, and a dry run shows the pre-sync and delta steps.
   - `cnt restore paperless --extra all --into /tmp/x` round-trips.
   - fleet-edge disaster drill on a scratch directory.
   - Completeness record clean for all new subjects.
