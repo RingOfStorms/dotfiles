@@ -53,11 +53,11 @@
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1794457533,
-        "narHash": "sha256-35/Ux0lSoF6KS8ZDL+IijItViDW+fq/9cpLgZZlBKC0=",
+        "lastModified": 1794513885,
+        "narHash": "sha256-GWnnE3ia5olYfAZ9zRSW6v7tkT+u+5t0/QNMGCRdqqQ=",
         "ref": "refs/heads/master",
-        "rev": "d48d0c8d4c07cc4dbe8fbde1ccb49f9cbad37b3f",
-        "revCount": 2581,
+        "rev": "b74b437c6c0878e75c7f6f55a4e1b0c1968686e2",
+        "revCount": 2583,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -74,11 +74,11 @@
       },
       "locked": {
         "dir": "containers",
-        "lastModified": 1794457533,
-        "narHash": "sha256-35/Ux0lSoF6KS8ZDL+IijItViDW+fq/9cpLgZZlBKC0=",
+        "lastModified": 1794513885,
+        "narHash": "sha256-GWnnE3ia5olYfAZ9zRSW6v7tkT+u+5t0/QNMGCRdqqQ=",
         "ref": "refs/heads/master",
-        "rev": "d48d0c8d4c07cc4dbe8fbde1ccb49f9cbad37b3f",
-        "revCount": 2581,
+        "rev": "b74b437c6c0878e75c7f6f55a4e1b0c1968686e2",
+        "revCount": 2583,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -124,11 +124,11 @@
       },
       "locked": {
         "dir": "flakes/de_plasma",
-        "lastModified": 1794431748,
-        "narHash": "sha256-2bAwpOMZ5v7j9GT3RvFQXFFcTjEWQ+r/6b+y5nU5DGY=",
+        "lastModified": 1794513885,
+        "narHash": "sha256-GWnnE3ia5olYfAZ9zRSW6v7tkT+u+5t0/QNMGCRdqqQ=",
         "ref": "refs/heads/master",
-        "rev": "b6496fc5a4ef87e5b03efa07060e336fda7bdd65",
-        "revCount": 2560,
+        "rev": "b74b437c6c0878e75c7f6f55a4e1b0c1968686e2",
+        "revCount": 2583,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -299,11 +299,11 @@
       },
       "locked": {
         "dir": "flakes/flatpaks",
-        "lastModified": 1794431748,
-        "narHash": "sha256-2bAwpOMZ5v7j9GT3RvFQXFFcTjEWQ+r/6b+y5nU5DGY=",
+        "lastModified": 1794513885,
+        "narHash": "sha256-GWnnE3ia5olYfAZ9zRSW6v7tkT+u+5t0/QNMGCRdqqQ=",
         "ref": "refs/heads/master",
-        "rev": "b6496fc5a4ef87e5b03efa07060e336fda7bdd65",
-        "revCount": 2560,
+        "rev": "b74b437c6c0878e75c7f6f55a4e1b0c1968686e2",
+        "revCount": 2583,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -469,11 +469,11 @@
     },
     "nixpkgs-unstable": {
       "locked": {
-        "lastModified": 1794042290,
-        "narHash": "sha256-ziZn2PvCJE5JEEpqTdxXwJpPB+L3YqoCpTAMCzyaP3U=",
+        "lastModified": 1794386569,
+        "narHash": "sha256-x9sADJvoVG0L6RejZB+/BB4YiGZFBZrfTlhF4uBq1tQ=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "f4a03c008967841f2a0b3cb7c436fc6fc31671f6",
+        "rev": "d4f25a3e562008648d45bcf2d70bcc7422cad84e",
         "type": "github"
       },
       "original": {
@@ -1170,11 +1170,11 @@
       },
       "locked": {
         "dir": "flakes/omp",
-        "lastModified": 1794431748,
-        "narHash": "sha256-2bAwpOMZ5v7j9GT3RvFQXFFcTjEWQ+r/6b+y5nU5DGY=",
+        "lastModified": 1794513885,
+        "narHash": "sha256-GWnnE3ia5olYfAZ9zRSW6v7tkT+u+5t0/QNMGCRdqqQ=",
         "ref": "refs/heads/master",
-        "rev": "b6496fc5a4ef87e5b03efa07060e336fda7bdd65",
-        "revCount": 2560,
+        "rev": "b74b437c6c0878e75c7f6f55a4e1b0c1968686e2",
+        "revCount": 2583,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -1229,11 +1229,11 @@
       },
       "locked": {
         "dir": "flakes/ports",
-        "lastModified": 1794431748,
-        "narHash": "sha256-2bAwpOMZ5v7j9GT3RvFQXFFcTjEWQ+r/6b+y5nU5DGY=",
+        "lastModified": 1794513885,
+        "narHash": "sha256-GWnnE3ia5olYfAZ9zRSW6v7tkT+u+5t0/QNMGCRdqqQ=",
         "ref": "refs/heads/master",
-        "rev": "b6496fc5a4ef87e5b03efa07060e336fda7bdd65",
-        "revCount": 2560,
+        "rev": "b74b437c6c0878e75c7f6f55a4e1b0c1968686e2",
+        "revCount": 2583,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -1404,11 +1404,11 @@
       },
       "locked": {
         "dir": "flakes/stt_ime",
-        "lastModified": 1794431748,
-        "narHash": "sha256-2bAwpOMZ5v7j9GT3RvFQXFFcTjEWQ+r/6b+y5nU5DGY=",
+        "lastModified": 1794513885,
+        "narHash": "sha256-GWnnE3ia5olYfAZ9zRSW6v7tkT+u+5t0/QNMGCRdqqQ=",
         "ref": "refs/heads/master",
-        "rev": "b6496fc5a4ef87e5b03efa07060e336fda7bdd65",
-        "revCount": 2560,
+        "rev": "b74b437c6c0878e75c7f6f55a4e1b0c1968686e2",
+        "revCount": 2583,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -1526,11 +1526,11 @@
     "tmux-agents": {
       "locked": {
         "dir": "flakes/tmux-agents",
-        "lastModified": 1794431748,
-        "narHash": "sha256-2bAwpOMZ5v7j9GT3RvFQXFFcTjEWQ+r/6b+y5nU5DGY=",
+        "lastModified": 1794513885,
+        "narHash": "sha256-GWnnE3ia5olYfAZ9zRSW6v7tkT+u+5t0/QNMGCRdqqQ=",
         "ref": "refs/heads/master",
-        "rev": "b6496fc5a4ef87e5b03efa07060e336fda7bdd65",
-        "revCount": 2560,
+        "rev": "b74b437c6c0878e75c7f6f55a4e1b0c1968686e2",
+        "revCount": 2583,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -1548,11 +1548,11 @@
       },
       "locked": {
         "dir": "flakes/tmux-agents-mobile",
-        "lastModified": 1794457533,
-        "narHash": "sha256-35/Ux0lSoF6KS8ZDL+IijItViDW+fq/9cpLgZZlBKC0=",
+        "lastModified": 1794513885,
+        "narHash": "sha256-GWnnE3ia5olYfAZ9zRSW6v7tkT+u+5t0/QNMGCRdqqQ=",
         "ref": "refs/heads/master",
-        "rev": "d48d0c8d4c07cc4dbe8fbde1ccb49f9cbad37b3f",
-        "revCount": 2581,
+        "rev": "b74b437c6c0878e75c7f6f55a4e1b0c1968686e2",
+        "revCount": 2583,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
