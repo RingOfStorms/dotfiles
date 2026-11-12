@@ -17,8 +17,6 @@
     fleet-agent.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/fleet-agent";
     # de_plasma.url = "path:../../flakes/de_plasma";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
-    # stt_ime.url = "path:../../flakes/stt_ime";
-    stt_ime.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/stt_ime";
     # ports.url = "path:../../flakes/ports";
     ports.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/ports";
 
@@ -178,13 +176,6 @@
             };
           })
           inputs.common.nixosModules.jetbrains_font
-          inputs.stt_ime.nixosModules.default
-          ({
-            ringofstorms.sttIme = {
-              enable = true;
-              model = "tiny.en";
-            };
-          })
           inputs.ports.nixosModules.default
           ({ ringofstorms.ports.enable = true; })
 

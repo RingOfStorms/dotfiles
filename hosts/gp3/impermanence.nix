@@ -41,8 +41,7 @@ in
     ];
     files = shared.system.files ++ [ ];
     users."${primaryUser}" = {
-      # stt_ime whisper model (~488MB small.en); otherwise re-downloaded every boot.
-      directories = shared.user.directories ++ [ ".cache/stt-stream" ];
+      directories = shared.user.directories;
       files = shared.user.files ++ [ ];
     };
   };

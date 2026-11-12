@@ -49,9 +49,6 @@ in
         ".config/google-chrome-tempus"
         ".config/google-chrome-tempus-np"
 
-        # Hugging Face hub cache (used by hf-hub for whisper.cpp etc.).
-        ".cache/huggingface"
-
         # LM Studio: downloaded models, chats, settings, bundled
         # runtime. Easily multi-GB once a model is pulled.
         ".lmstudio"

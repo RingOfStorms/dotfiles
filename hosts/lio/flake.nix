@@ -8,8 +8,6 @@
     secrets_manager.url = "git+https://git.joshuabell.xyz/ringofstorms/secrets_manager.git";
     flatpaks.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/flatpaks";
     de_plasma.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/de_plasma";
-    stt_ime.url = "git+https://git.joshuabell.xyz/ringofstorms/dotfiles?dir=flakes/stt_ime";
-    # stt_ime.url = "path:../../flakes/stt_ime";
     hex = {
       url = "github:anomalyco/hex/v3.4.0";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -73,15 +71,6 @@
               enable = true;
               gpu.amd.enable = true;
               noScreenOff = true;
-            };
-          })
-          inputs.stt_ime.nixosModules.default
-          ({
-            ringofstorms.sttIme = {
-              enable = true;
-              gpuBackend = "hip";
-              useGpu = true;
-              model = "large-v3-turbo";
             };
           })
           inputs.ports.nixosModules.default

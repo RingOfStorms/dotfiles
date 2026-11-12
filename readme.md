@@ -28,7 +28,6 @@ standalone flakes that any host can import.
 │   ├── beszel/            #   Beszel monitoring agent/hub
 │   ├── de_plasma/         #   KDE Plasma desktop (plasma-manager)
 │   ├── flatpaks/          #   nix-flatpak integration
-│   ├── stt_ime/           #   Local speech-to-text input method for Fcitx5
 │   └── ports/             #   SSH port-forwarding TUI (Go)
 ├── utilities/
 │   ├── nixos-install-disko/  # Installer ISO + full bring-up guide (see below)
@@ -109,6 +108,17 @@ sudo nixos-rebuild switch --flake ./hosts/lio#lio --no-write-lock-file \
 
 The whole-repository `git+file` references retain the sibling files imported by
 these flakes; a bare `path:./flakes/common` does not.
+
+## Dictation
+
+Hex is enabled only on **lio**, with the existing hold-Right-Alt shortcut.
+Other hosts have no speech-to-text keyboard integration. Fcitx5 and Mozc remain
+available for ordinary keyboard and Japanese input.
+
+The former `flakes/stt_ime` project, including its Git history, now lives in
+[`ringofstorms/stt_ime`](https://git.joshuabell.xyz/ringofstorms/stt_ime).
+Its flake inputs, NixOS modules, and STT input-method entries have been removed
+from this configuration. Deploy each affected host normally to apply the removal.
 
 ## Installing a new machine
 
