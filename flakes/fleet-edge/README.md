@@ -75,8 +75,10 @@ settings plus global and strict login zones, 429 responses and fail2ban logs.
   optional: without it the HMAC secret is random per process, so every
   restart ends the browser sessions. `/healthz`, `/auth/login`,
   `/auth/callback` (also `/callback`), and `/auth/logout` are exempt from the
-  session check; other `/auth/*` paths are not. h005 enables Zitadel with
-  the `admin` role, so its dashboard, APIs and static assets all require a session or API key.
+  session check; other `/auth/*` paths are not. GET/HEAD requests for the
+  install manifest and its two icons are also exempt (see below). h005
+  enables Zitadel with the `admin` role; dashboard pages, APIs, and all other
+  static assets still require a session or API key.
 - Serves, on `--listen` (default `127.0.0.1:8099`, behind nginx on `h005` at
   `https://fleet.joshuabell.xyz`):
   - `GET /` — start page of app tiles.
@@ -93,6 +95,30 @@ settings plus global and strict login zones, 429 responses and fail2ban logs.
     (proxying `:9101/logs.json`).
   - `GET /healthz` — `ok` (unauthenticated).
   - `GET /api/state.json` — the merged view as JSON.
+
+### Install on a phone
+
+After deploying Fleet Edge, open `https://fleet.joshuabell.xyz/` in Chrome,
+sign in, then choose **Add to home screen → Install** (wording varies by
+Chrome version). Use a normal tab, not Incognito. Installation needs a
+trusted HTTPS connection; an HTTP LAN address or certificate-warning
+bypass is not sufficient. Localhost is suitable for development checks.
+
+The shared page head advertises `/manifest.webmanifest`. It uses the
+configured dashboard title, a stable root app ID, root start URL/scope,
+and standalone display. Embedded `/static/icon-192.png` and
+`/static/icon-512.png` are PNG icons with maskable-safe artwork. These
+three exact resources allow anonymous GET/HEAD so installers can fetch
+them without a session cookie; they contain no inventory or user data.
+Launching the installed app still requires the normal login and network
+access (including the tailnet wherever required).
+
+There is no service worker or offline dashboard cache. Current Chrome
+[supports menu installation without a service worker](https://developer.chrome.com/blog/update-install-criteria).
+This avoids persisting private fleet pages or displaying stale health
+data offline. If installation remains unavailable after deployment,
+reload the page and check Chrome DevTools **Application → Manifest** for
+manifest/icon errors and verify the HTTPS certificate is trusted.
 
 ## Routing authority (`fleet-edge-overrides`)
 
@@ -330,7 +356,8 @@ On h005 (`hosts/h005/fleet-edge.nix`) the inventory is generated at build
 time from the `containers` flake input (`builtins.toJSON
 inputs.containers.inventory` via `pkgs.writeText`). **Refreshing the
 inventory = redeploying h005** (after `nix flake update containers` in
-`hosts/h005`). It is served tailnet-only at `http://h005.net.joshuabell.xyz/`.
+`hosts/h005`). Use `https://fleet.joshuabell.xyz/` for the dashboard and
+PWA installation.
 
 ## NixOS module (used by h005)
 

@@ -366,6 +366,7 @@ func New(src Source, cfg Config) *Server {
 	s.mux.HandleFunc("/hosts", s.handleHosts)
 	s.mux.HandleFunc("/hosts/", s.handleHostDetail)
 	s.mux.HandleFunc("/healthz", s.handleHealthz)
+	s.mux.Handle("/manifest.webmanifest", manifestHandler(cfg.Title))
 	s.mux.HandleFunc("/api/state.json", s.handleAPIState)
 	s.mux.HandleFunc("/api/hosts/", s.handleAPIHostSubroute)
 	s.mux.Handle("/static/", http.StripPrefix("/static/", staticHandler()))
@@ -394,6 +395,34 @@ func staticHandler() http.Handler {
 		panic(err)
 	}
 	return http.FileServer(http.FS(sub))
+}
+
+// Installation metadata is public; it must not contain inventory or user data.
+func manifestHandler(title string) http.Handler {
+	manifest, err := json.Marshal(map[string]any{
+		"id":               "/",
+		"name":             title,
+		"short_name":       title,
+		"start_url":        "/",
+		"scope":            "/",
+		"display":          "standalone",
+		"background_color": "#1b1d23",
+		"theme_color":      "#1b1d23",
+		"icons": []map[string]string{
+			{"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+			{"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/manifest+json")
+		w.Header().Set("Cache-Control", "no-cache")
+		if r.Method != http.MethodHead {
+			_, _ = w.Write(manifest)
+		}
+	})
 }
 
 func (s *Server) common(page string) Common {
