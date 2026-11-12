@@ -223,7 +223,7 @@ func (a *Authenticator) oidcEnabled() bool {
 }
 
 // Wrap protects next with API key and/or Zitadel OIDC session authentication.
-// `/healthz` and `/auth/*` are handled directly before session enforcement.
+// Health, login endpoints, and GET/HEAD install metadata are session-exempt.
 func (a *Authenticator) Wrap(next http.Handler) http.Handler {
 	if !a.Enabled() {
 		return next
@@ -233,6 +233,13 @@ func (a *Authenticator) Wrap(next http.Handler) http.Handler {
 		case "/healthz":
 			next.ServeHTTP(w, r)
 			return
+		case "/manifest.webmanifest", "/static/icon-192.png", "/static/icon-512.png":
+			// Chrome's installer fetches metadata without the browser's session.
+			// Keep this exact allowlist: other assets can contain private data.
+			if r.Method == http.MethodGet || r.Method == http.MethodHead {
+				next.ServeHTTP(w, r)
+				return
+			}
 		case "/auth/login":
 			a.handleLogin(w, r)
 			return
