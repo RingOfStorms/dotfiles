@@ -11,6 +11,10 @@ REST protocol and hold no B2 credential. A target that also holds a B2 key is a
 **pusher** and copies repos off site. Which target a service uses, and whether it
 also goes to B2, are runtime toggles in the fleet-edge UI.
 
+For observed data locations, archive provenance and verified copies (including
+coverage gaps), see [INVENTORY.md](INVENTORY.md). It is a dated inventory,
+not a deletion approval or a live backup-status view.
+
 ## 0. Decisions (user, 2026-11-01)
 
 1. Build all of it; this plan is the spec.
@@ -610,10 +614,11 @@ back. After P1, set `target.enable = false` (the unit reverts to
 - First push is about 420G over the LAN to h004. Start it by hand off-hours
   with `systemctl start fleet-backup-svc@immich`. Nightly runs after that are
   incremental.
-- **B2:** `svc-immich`, `svc-paperless` and `svc-h001-archives` are new, empty
-  B2 repos, so the first copy **re-uploads about 470 GiB once** (B2 ingress is
-  free; uplink time only, ~1.5 days at 4 MiB/s). Approved (§0.10). The old
-  `7f023d4a` media history is not copied (§9).
+- **B2:** `svc-immich` and `svc-fleet-edge` are new, empty B2 repos (and
+  `svc-paperless` grows), so the first copy **re-uploads about 420 GiB once**
+  (B2 ingress is free; uplink time only, ~20h at the measured 6 MiB/s).
+  Approved (§0.10). `h001-archives` stays h004-only (`offsite = false`, user
+  decision 2026-11-12, §P6). The old `7f023d4a` media history is not copied (§9).
 - Retention defaults to `standard` (= the old job's 7/5/12/3). Raise it to `long`
   in the UI if wanted.
 - Dropped from the previous revision: the h004-side media job, the export of
@@ -919,7 +924,13 @@ registration.
 ### P6: retire the old fleet-wide credential
 
 - **Gate:** `offsite-b2.json` is clean for every `offsite` subject, including
-  `svc-immich`, for 7 consecutive days.
+  `svc-immich`, for 7 consecutive days. `h001-archives` is outside this gate
+  by decision: **2026-11-12, the user accepted it as h004-only**
+  (`offsite = false`). It holds hand-made migration tarballs (§5). P6 step 1
+  only stops new copies of them reaching B2; the old repo, with their existing
+  snapshots, stays until P6b. After P6b they have no offsite copy: the
+  originals in `/home/luser/backups` on h001 plus the `svc-h001-archives`
+  backup on h004 remain, so losing both hosts loses them.
 - **Scope, in this order:**
   1. Delete `hosts/h001/mods/restic-backup.nix` and its `sec-agent.nix` entry.
   2. Create a **read-only** B2 key scoped to the old repo's prefix
@@ -942,14 +953,21 @@ registration.
 - **Gate (all):**
   1. P6 done.
   2. `offsite-b2.json` is clean for **every** subject with `offsite = true`
-     (including `svc-immich`, `svc-paperless`, `svc-h001-archives`,
-     `svc-fleet-edge`): each expected snapshot is present on B2 by
+     (including `svc-immich`, `svc-paperless`, `svc-fleet-edge`;
+     `h001-archives` is h004-only by decision, §P6): each expected snapshot
+     is present on B2 by
      `(.original // .id)` with matching `time,hostname,paths,tags,tree`, and
      `check --read-data-subset` passed.
   3. That has held for a few consecutive days (3 by default) after the last
      subject's first full copy finished.
   4. `restic ls latest` from B2 alone succeeds for one container subject and
      for `svc-immich`, using break-glass passwords only.
+  5. Every subject the old repo holds (`restic snapshots` tags) is either
+     `offsite = true` or has a recorded local-only decision. As of
+     2026-11-12 the old repo holds `svc:litellm`, `svc:llm-router`,
+     `svc:searx`, `svc:hello-nixos`, `svc:hello-podman` (none offsite yet,
+     no decision) and `svc:beszel` (service retired; its metrics live in
+     fleet-edge). `h001-archives` is local-only by decision (§P6).
 - **Scope:** delete the whole `7f023d4a` prefix in B2 (no tag-scoped prune; no
   current subject lives there), then drop the legacy password and read-only
   key from the break-glass record.

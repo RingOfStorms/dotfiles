@@ -33,6 +33,9 @@ in
     imports = [ inputs.hex.homeManagerModules.hex ];
 
     programs.plasma.input.keyboard.layouts = lib.mkForce [ { layout = "us-hex"; } ];
+    # KDE cannot filter this portal event by application; other apps' remote
+    # control starts will also be silent, but permissions are unchanged.
+    programs.plasma.configFile."xdg-desktop-portal-kde.notifyrc"."Event\\/remotedesktopstarted".Action = "None";
     programs.hex = {
       enable = true;
       package = pkgs.callPackage "${inputs.hex}/nix/package.nix" { inherit rustPlatform; };
@@ -42,6 +45,8 @@ in
         shortcut_mode = "hold";
         double_tap_lock = false;
         double_tap_only = false;
+        paste_with_shift = false;
+        "labs.terminal_paste_shortcut" = false;
       };
       shortcut = "f19";
     };

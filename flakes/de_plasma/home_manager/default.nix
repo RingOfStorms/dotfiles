@@ -16,6 +16,27 @@ in
   options = { };
   config = mkIf cfg.enable {
     programs.feh.enable = true; # Image preview
+
+    # Handle paste in the terminal, including shells reached through SSH/tmux.
+    # Keep Ctrl+C for SIGINT and the existing copy/paste shortcuts unchanged.
+    programs.kitty.keybindings = mkIf config.programs.kitty.enable {
+      "ctrl+v" = "paste_from_clipboard";
+    };
+    programs.foot.settings.key-bindings = mkIf config.programs.foot.enable {
+      clipboard-paste = "Control+v Control+Shift+v XF86Paste";
+    };
+
+    # Konsole stores action shortcuts in XMLGUI files, not konsolerc.
+    # Embedded terminals keep their host application's shortcut handling.
+    xdg.dataFile."kxmlgui5/konsole/sessionui.rc".text = ''
+      <!DOCTYPE gui>
+      <gui name="konsole" version="1">
+        <ActionProperties>
+          <Action name="edit_paste" shortcut="Ctrl+V; Ctrl+Shift+V; Shift+Ins"/>
+        </ActionProperties>
+      </gui>
+    '';
+
     programs.plasma = {
       enable = true;
       immutableByDefault = true;

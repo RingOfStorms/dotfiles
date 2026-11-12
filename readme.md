@@ -79,6 +79,37 @@ nixos-rebuild switch --flake ./hosts/<host>#<host> --target-host <host>
 Most machines pull the shared `flakes/*` from the git remote, so **commit and
 push before deploying** a host that isn't building from a local path.
 
+## KDE terminal clipboard shortcuts
+
+The shared Plasma Home Manager module adds **Ctrl+V** to paste in standalone
+Konsole, Kitty, and Foot. Existing **Ctrl+Shift+V** paste and **Ctrl+Shift+C**
+copy remain available; **Ctrl+C** still interrupts the foreground process
+(SIGINT). Kitty and Foot bindings are only added when those terminals are enabled.
+
+The terminal consumes Ctrl+V before the shell, tmux, SSH, or terminal editor
+receives it. Literal insertion and Vim's visual-block shortcut therefore no
+longer use Ctrl+V in these terminals. Ordinary GUI shortcuts are unchanged.
+Embedded terminals in Dolphin/Kate retain their existing shortcuts; these need
+application changes, not just Konsole's configurable action binding.
+
+After committing and pushing, update the `de_plasma` input in each KDE host's
+flake, deploy normally, and restart the terminal application:
+
+```sh
+nix flake update de_plasma --flake ./hosts/<host>
+```
+
+To apply the working-tree change on lio without updating lock files:
+
+```sh
+sudo nixos-rebuild switch --flake ./hosts/lio#lio --no-write-lock-file \
+  --override-input common "git+file://$PWD?dir=flakes/common" \
+  --override-input de_plasma "git+file://$PWD?dir=flakes/de_plasma"
+```
+
+The whole-repository `git+file` references retain the sibling files imported by
+these flakes; a bare `path:./flakes/common` does not.
+
 ## Installing a new machine
 
 Bring-up (custom ISO → disko + bcachefs → impermanence → secrets bootstrap) is

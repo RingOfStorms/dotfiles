@@ -25,12 +25,15 @@ Primary desktop workstation
 ## Hex
 
 Hex v3.4.0 starts with Josh's graphical session and downloads its default
-model at login. Hold Right Alt to dictate; lio maps that key to F19, so it
-no longer acts as Alt or AltGr. Left Alt and Fcitx5/Mozc remain available.
-KDE may ask to approve Hex's global shortcut and remote keyboard control for
-paste. A fresh Plasma login is needed for the keyboard layout change. Hex's
-Nix guide does not claim KDE Wayland support; the existing `stt_ime` remains
-enabled during this trial.
+model at login. Hold Right Alt to dictate and paste with Ctrl+V. Right Alt is
+mapped to F19 and no longer acts as Alt or AltGr; Left Alt and Fcitx5/Mozc
+remain available. KDE may ask to approve Hex's global shortcut and remote
+keyboard control for paste. A fresh Plasma login is needed for the keyboard
+layout change. Hex's Nix guide does not claim KDE Wayland support; the
+existing `stt_ime` remains enabled during this trial.
+
+The KDE portal's remote-control-start popup is disabled for all apps on lio;
+permission prompts and the active-session indicator remain enabled.
 
 ## OMP and Blender
 
