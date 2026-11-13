@@ -20,7 +20,8 @@ in
     # Handle paste in the terminal, including shells reached through SSH/tmux.
     # Keep Ctrl+C for SIGINT and the existing copy/paste shortcuts unchanged.
     programs.kitty.keybindings = mkIf config.programs.kitty.enable {
-      "ctrl+v" = "paste_from_clipboard";
+      # Terminal-specific handlers, such as Kitty's image-aware paste, take precedence.
+      "ctrl+v" = lib.mkDefault "paste_from_clipboard";
     };
     programs.foot.settings.key-bindings = mkIf config.programs.foot.enable {
       clipboard-paste = "Control+v Control+Shift+v XF86Paste";
