@@ -24,9 +24,7 @@ in
   environment.persistence."/persist" = {
     enable = true;
     hideMounts = true;
-    directories = shared.system.directories ++ [
-      "/var/lib/secrets_manager_hydrated"
-    ];
+    directories = shared.system.directories;
     files = shared.system.files ++ [ ];
     users."${primaryUser}" = {
       directories = shared.user.directories ++ [ ];

@@ -20,6 +20,11 @@ in some category). This invariant lets consumers (host `impermanence.nix`
 files) merge sets together with simple list concatenation and no
 attribute-existence checks.
 
+The `essentials` set includes sec-agent's `/machine-key.json` identity and
+`/var/lib/secrets_manager_hydrated` directory, keeping hydrated secrets
+available across root wipes before the agent re-fetches them. Hosts selecting
+`essentials` do not need a separate hydrated-secrets persistence entry.
+
 ## Adding a new set
 
 1. Create a new `<name>.nix` here. Keep it scoped to one logical

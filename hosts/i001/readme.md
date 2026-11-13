@@ -25,8 +25,8 @@ Single SATA SSD, encrypted bcachefs with impermanence (`hosts/i001/flake.nix`
 | `sda3` | 7.5 GB | swap | `29c89516-e6ed-4f91-adf7-646451a8e26f` | swap |
 
 - `/` is wiped each boot. What survives is listed in `impermanence.nix` (shared
-  set + `/var/lib/secrets_manager_hydrated`, Spotify login). Old roots land in
-  `/.snapshots/old_roots`.
+  sets, including hydrated secrets via `essentials`, plus Spotify login).
+  Old roots land in `/.snapshots/old_roots`.
 - **Unlock:** `usbKey = true`. A USB stick holding the bcachefs `/key` stays
   plugged in, so the TV boots unattended (see
   `utilities/nixos-install-disko/usb_key.md`). Without the stick, boot asks

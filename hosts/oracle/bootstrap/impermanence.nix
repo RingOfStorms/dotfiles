@@ -22,12 +22,7 @@ in
   environment.persistence."/persist" = {
     enable = true;
     hideMounts = true;
-    directories = shared.system.directories ++ [
-      # sec-agent: rendered secret blobs written by the secrets manager
-      # agent. Must survive the impermanence root-wipe so services can
-      # read their secrets across reboots even before the agent re-fetches.
-      "/var/lib/secrets_manager_hydrated"
-    ];
+    directories = shared.system.directories;
     files = shared.system.files ++ [ ];
     users."${primaryUser}" = {
       directories = shared.user.directories ++ [ ];

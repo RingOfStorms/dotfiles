@@ -2,6 +2,7 @@
 #
 # - /var/log: journal + service logs across boots
 # - /var/lib/nixos: nixos-generated state (uid map, etc.)
+# - /var/lib/secrets_manager_hydrated: sec-agent secrets available before re-fetch
 # - /var/lib/systemd/{coredump,timers}: systemd state
 # - /etc/nixos: legacy config dir (some tools still read it)
 # - /machine-key.json: sec-agent machine identity (Zitadel JWT key)
@@ -16,6 +17,7 @@
     directories = [
       "/var/log"
       "/var/lib/nixos"
+      "/var/lib/secrets_manager_hydrated"
       "/var/lib/systemd/coredump"
       "/var/lib/systemd/timers"
       "/etc/nixos"

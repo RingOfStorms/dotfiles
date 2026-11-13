@@ -23,7 +23,6 @@ in
     enable = true;
     hideMounts = true;
     directories = shared.system.directories ++ [
-      "/var/lib/secrets_manager_hydrated"
       # Headscale coordination DB (node registrations) — must survive the
       # impermanence root-wipe or every node would have to re-register.
       "/var/lib/headscale"

@@ -25,7 +25,6 @@ in
     enable = true;
     hideMounts = true;
     directories = shared.system.directories ++ [
-      "/var/lib/secrets_manager_hydrated"
       # NFSv4 client/lock state; keeps clients' grace-period reclaim working
       # across reboots.
       "/var/lib/nfs"
