@@ -1,8 +1,17 @@
 # Data and backup inventory
 
-Observed **2026-11-12**, primarily around 09:40–10:00 CST. This is a dated inventory, not a live dashboard. See [BACKUP-PLAN.md](BACKUP-PLAN.md) for backup design, retention and retirement gates.
+Observed **2026-11-12**, primarily around 09:40–10:00 CST, with the subsequent decisions below. This is a dated inventory, not a live dashboard. See [README.md](README.md) for backup operation and [BACKUP-PLAN.md](BACKUP-PLAN.md) for remaining retirement work.
 
 Scope: the container data, media disks, migration archives and backup stores discussed during the backup rollout, on h001, h003, h004, h005, joe and lio. This is **not** a complete inventory of every workstation home directory or every fleet host.
+
+## Subsequent decisions and results (2026-11-13)
+
+- All 15 previously enabled offsite subjects passed the morning copy/completeness and sampled-read checks, including Immich and Paperless. The historical tables below retain their Nov 12 observations; they do not describe the latest verification status.
+- The user declared litellm, llm-router, searx, hello-nixos and hello-podman state disposable: no future backups required. Their `backup.enable` declarations are disabled; existing snapshots are not deleted by that setting. This also means restore-based moves need backups temporarily enabled or the service must be redeployed and re-authenticated without preserving its state.
+- Minecraft's first B2 copy passed completeness and sampled-read verification on Nov 13: 3,667,830,622 stored bytes, no missing snapshots; all 16 enabled subjects report complete after the 15:26 CST run. `h001-archives` remains local-only (h001 originals plus h004 backup).
+- The user waived the fixed seven-day retirement wait. Legacy B2 deletion stays last, after backup/restore proof through the proposed h001-to-h003 service moves. No personal archive deletion was approved by these decisions.
+- The old h001 backup job and active sec registry/grants were removed live. Hydrated old credentials were removed from h001/h003, absent on h004/h005/o002, but lio needs sudo cleanup and gp3/juni/oren were unreachable. The external Backblaze key is not revoked by these removals.
+- Low-trust provenance is deployed: h005 and h004 retain `localai: low`, while no LocalAI repository or size is reported. Target history lives in `written-by.json`, separately from measured stats; the warning persists across moves and missing measurements and never certifies high trust.
 
 ## Reading this inventory
 
@@ -205,7 +214,7 @@ The rsync directories were moved out of `/data/backups` when it became the resti
 
 Backup operating state, separate from the repository data:
 
-- `/var/lib/fleet-backup-target/`: policy reply, `stats.json`, `b2-stats.json`, `offsite-b2.json`, clear bookkeeping and lock.
+- `/var/lib/fleet-backup-target/`: policy reply, `stats.json`, `b2-stats.json`, `offsite-b2.json`, persistent low-trust history `written-by.json`, clear bookkeeping and lock.
 - `/var/lib/fleet-backup-target-keys/`: applied revisions, REST logins and `repo-keys/svc-<subject>` credentials. Secret contents not included here.
 - `/var/cache/fleet-backup-target/`: restic cache, not another backup copy.
 
@@ -250,7 +259,7 @@ Important older `h001` snapshots contain **more than photo/document history**:
 - Later retained snapshots through Nov 11: old media paths and `/home/luser/backups`.
 - `39145da2` (Nov 12): `/home/luser/backups`, `/srv/bulk/immich/media`, `/srv/bulk/paperless`.
 
-The legacy host job is still active as a scheduled backup path. **P6 stops future writes, not existing B2 data. P6b deletes the legacy offsite history.** After that, archives retain h001 originals plus the h004 backup by the user's local-only decision. The same decision has **not** been recorded for litellm, llm-router, searx or hello-*; their replacement offsite coverage must be settled before claiming legacy coverage is redundant. Minecraft is also currently local-only, but has no `svc:minecraft` group in this legacy repository.
+At the Nov 12 survey, the legacy host job was still enabled. P6 retirement removes future writes, not existing B2 data; P6b deletes legacy offsite history. Afterwards archives retain h001 originals plus the h004 backup. The Nov 13 decisions above supersede the earlier unresolved coverage questions for litellm, llm-router, searx, hello-* and Minecraft.
 
 ## Verification and maintenance
 
@@ -259,7 +268,7 @@ This inventory was grounded in:
 - Live placement registry, directory/file metadata and filesystem mounts on the listed hosts.
 - h004 `policy.json`, `stats.json`, `offsite-b2.json`, `b2-stats.json`; local stats at about **08:50 CST** and policy refreshed at about **09:34 CST**. Last completion file update was **Nov 11 22:58 CST** while the pusher was still handling Immich.
 - Live `fleet-restic` snapshot roots and file listings for Immich, Paperless, fleet-edge and h001-archives; `restic-h001 snapshots --json` for legacy history.
-- Service `service.nix` / `flake.nix` declarations; [host backup defaults](host-module.nix); [backup client](../flakes/fleet-agent/backup/client.nix); [h001 host subjects](../hosts/h001/floating-containers.nix); [legacy h001 job](../hosts/h001/mods/restic-backup.nix); [h005 subject](../hosts/h005/fleet-edge.nix); [h004 target/pusher](../hosts/h004/flake.nix).
+- Service `service.nix` / `flake.nix` declarations; [host backup defaults](host-module.nix); [backup client](../flakes/fleet-agent/backup/client.nix); [h001 host subjects](../hosts/h001/floating-containers.nix); the since-retired `hosts/h001/mods/restic-backup.nix` (git history); [h005 subject](../hosts/h005/fleet-edge.nix); [h004 target/pusher](../hosts/h004/flake.nix).
 
 To update coverage, read the policy and completion files together, preserving each subject's `checkedAt`; compare the required snapshot IDs to what was copied. `restic snapshots --latest 1` may return one result **per path group**; sort snapshot metadata by time when a single newest snapshot is needed. Repo disk usage and process disk reads do not prove completeness or upload progress. B2 data-pack listings can measure transferred storage, but a completed retention-set check and restore verification remain separate requirements.
 

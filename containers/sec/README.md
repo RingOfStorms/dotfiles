@@ -1,12 +1,15 @@
-# sec + zitadel cutover (h001, in place)
+# sec + zitadel recovery and cutover history
 
-Done on h001 on 2026-10-17; kept as the recipe for a re-run or a move.
+The in-place cutover below completed on h001 on 2026-10-17. It is a historical
+recipe for recovering the old layout, not the current way to move these
+services; use [`fleet containers move`](../README.md#moving-a-service-to-another-host)
+for an ordinary move and the break-glass instructions below for a cold restore.
 
-`containers/zitadel` and `containers/sec` replace h001's old
-`containers/zitadel.nix` nspawn container and `mods/sec.nix` unit. The
-host-side removal is in the same change, so **deploying the h001 config and
-the containers is one window.** Agents keep their hydrated cache, so a short
-outage is harmless. Don't delete the old data until both containers work.
+`containers/zitadel` and `containers/sec` replaced h001's old
+`containers/zitadel.nix` nspawn container and `mods/sec.nix` unit. For a re-run
+of that historical cutover, deploying the host config and containers is one
+window. Agents keep their hydrated cache, so a short outage is harmless.
+Don't delete old data until both containers work.
 
 Steps marked 🔑 move secret material. Copy it with `cp -a`/`rsync` only;
 never print it.
@@ -45,8 +48,12 @@ never print it.
    - log in to secrets.joshuabell.xyz/ui
    - `systemctl restart sec-agent` on one host, then on another host
    - log in via life, open-webui, trilium
-6. Run restic once (`systemctl start restic-backups-h001`). Check that the
-   zitadel hook ran and that `staging/sqlite/sec/data/sec.db` exists.
+6. With the current backup client, run `systemctl start fleet-backup-svc@zitadel`
+   and `systemctl start fleet-backup-svc@sec`. Check that the Zitadel dump hook
+   ran, then run `sudo fleet containers restore-check zitadel` and
+   `sudo fleet containers restore-check sec`. Sec's SQLite online copy is
+   under `/var/lib/fleet-backup/staging/sec/sqlite/sec/data/sec.db`; a staging
+   file on the live host is not an independent backup.
 7. **Done 2026-10-22.** Archived `/var/lib/zitadel` and
    `/var/lib/secrets_manager` to
    `/root/retired-2026-10-22-zitadel-sec.tar.zst` on h001, then deleted them.
@@ -57,10 +64,13 @@ never print it.
    port files, and keeps `/srv/containers/<svc>`. Don't use `cnt stop` here.
    It only disables the unit and leaves its nginx snippet behind, so that
    snippet would clash with the old host vhosts.
-2. Then switch h001 to the previous generation
-   (`nixos-rebuild switch --rollback`, or the pre-cutover commit). If you
+2. Then switch h001 to the pre-cutover generation or commit. A generic
+   `nixos-rebuild switch --rollback` only selects the previous generation;
+   it does not necessarily select that historical configuration. If you
    switch first and stop afterwards, you also stop the restored old
-   `container@zitadel`, because it has the same unit name.
+   `container@zitadel`, because it has the same unit name. Restore the
+   archived old directories before starting the old services; they no
+   longer exist in the live layout.
 
 The old dirs (`/var/lib/zitadel`, `/var/lib/secrets_manager`) were archived
 to `/root/retired-2026-10-22-zitadel-sec.tar.zst` on h001 and deleted on
@@ -69,24 +79,88 @@ not touched.
 
 ## Break-glass kit and cold restore
 
-The kit lives outside the fleet, in the password manager, and holds **keys
-only**:
+Keep recovery material **outside the fleet**, in the password manager. The
+current per-subject architecture requires:
 
-- the restic env (repository, password, backend credentials);
-- sec's encryption key, `/srv/containers/sec/data/db.key`;
-- zitadel's master key, `/srv/containers/zitadel/keys/masterkey` (32 raw
-  bytes, stored base64);
-- the emergency ssh key `root_fleet_backup`, whose public half is authorized
+- The fleet-edge backup credential export: one `RESTIC_PASSWORD` per subject
+  (the same password for h004 and B2), plus its REST login for h004 access.
+  h005 generates these credentials; using **Export all** in `/backup/` is not
+  complete until the export has been saved outside h005. Its export banner
+  tracks newly generated passwords, not proof that a password-manager copy
+  has actually been stored. Current export completion is not confirmed here.
+- Each pusher's bucket URL and B2 application key. The user confirmed the
+  old `restic_h001_env` and new `restic_b2_h004` entries were saved to the
+  password manager on 2026-11-13; that does **not** include newly generated
+  per-subject restic passwords. h004's new key is scoped to `svc-`, not the
+  legacy repository. Preserve the legacy repository's actual URL, password
+  and restricted recovery key until P6b deletion. `7f023d4a` is a repository
+  label, **not a verified B2 prefix**; identify the actual URL/prefix safely
+  before touching legacy objects.
+- Sec's encryption key, `/srv/containers/sec/data/db.key`.
+- Zitadel's master key, `/srv/containers/zitadel/keys/masterkey` (32 raw
+  bytes, stored base64).
+- The emergency SSH key `root_fleet_backup`, whose public half is authorized
   for root on every host by the common `hardening.nix`.
 
-The keys decrypt data but don't contain it. `sec.db` and zitadel's
-PostgreSQL state otherwise exist only on the bound host and in the one restic
-repository. A second, independent copy of `/srv/containers/sec/data` and
-`/srv/containers/zitadel/{pgdumps,keys}` shares neither that repo nor its
-credentials (e.g. a second restic repo on h004, or a periodic encrypted
-export); without it, a damaged repo plus a lost host means key recovery only,
-no restore.
+Copy or import key material only into root-readable files; do not print it,
+put credentials in repository URLs, paste it into chat or commit it. The
+current [`fleet-restic`](../README.md#nightly-restic-fleet-backup) wrapper
+fetches subject credentials from h005 and only accepts REST repositories;
+it is not the B2-only disaster-recovery command. Use plain `restic` with
+independently recovered credentials when h005 is unavailable.
 
-**Cold-restore test**, on a spare host, twice: once from a restic snapshot,
-once from the independent copy plus the password-manager keys alone. It
-passes when a zitadel login works and a sec-agent fetches its secrets.
+Keys are not a data backup. Sec and Zitadel now have separate repositories
+on h004 and offsite copies through h004's B2 pusher; their successful B2
+retention-set checks were recorded on 2026-11-13. Those records do not prove
+that every later snapshot has been copied, or that the current offline kit
+can recover the services. Staging SQL/SQLite dumps on the running host are
+not an independent copy.
+
+The old backup note recorded an independent sec/Zitadel data export and a
+cold-restore test as completed on 2026-10-22; this README previously described
+a keys-only kit and a test still to do. Preserve that historical report,
+but **current availability and restoreability of the independent export
+have not been confirmed**. Locate that export and retain it: it must share
+neither the service repositories nor their credentials to provide an
+independent recovery path. The pre-cutover
+`/root/retired-2026-10-22-zitadel-sec.tar.zst` is separate historical rollback
+data on h001, outside current backup subjects; it is not a confirmed
+replacement for that off-fleet export.
+
+### Recovering application state
+
+Use the [B2-only recovery commands](../README.md#b2-only-recovery-independent-of-h005h004)
+to restore the Sec and Zitadel subject snapshots into separate scratch trees
+using the off-fleet passwords. Do not deploy/start applications against
+partially restored data or change live placement for a scratch test.
+
+- **Sec:** its live database is excluded. Copy
+  `<scratch>/var/lib/fleet-backup/staging/sec/sqlite/sec/data/sec.db` over
+  `<scratch>/srv/containers/sec/data/sec.db`, preserving mode/owner, before
+  installing recovered state at `/srv/containers/sec/data`. Keep `db.key`
+  with it; test `PRAGMA integrity_check` without dumping records.
+- **Zitadel:** keep `/srv/containers/zitadel/keys/masterkey` and its dump
+  `/srv/containers/zitadel/pgdumps/cnt-dumpall.sql.gz`. The snapshot does not
+  hold the raw PostgreSQL 17 cluster. The dump is gzip-compressed
+  **`pg_dumpall` SQL**, so import with `psql`, not `pg_restore`. Neither
+  `fleet-restic` nor `restore-check` imports it. Prepare a compatible clean
+  recovery database with Zitadel stopped, resolving the module's ensured
+  `zitadel` role/database versus the dump's role/database creation statements
+  before loading. The guest's first-start initialization must not race the
+  import. No unattended Zitadel SQL cold-import runbook has been verified;
+  the application-level login test remains essential.
+
+An ordinary `cnt move` is different: it restores snapshot files and SQLite
+overlays, then copies excluded PostgreSQL clusters from the stopped,
+surviving source. A successful move is not proof of SQL recovery from B2
+after both the source and h004 are lost.
+
+**Cold-restore acceptance:** restore on a spare host from B2 alone using
+password-manager credentials, with h005 unavailable; separately restore
+from the independent data export plus the application keys. For each,
+verify SQLite integrity and the PostgreSQL dump, then verify a Zitadel
+login and a sec-agent secret fetch. A snapshot listing or dump-format check
+alone does not satisfy the application-level recovery test. P6 retires the
+old shared credential and future writes; P6b deletes its legacy B2 history.
+That deletion remains deferred until B2-only recovery and the requested
+h001 → h003 restore/move proof, not merely the waived seven-day wait.

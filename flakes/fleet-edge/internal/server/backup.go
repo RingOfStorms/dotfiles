@@ -22,6 +22,7 @@ type BackupRow struct {
 	Local, B2, Cost      string
 	LastBackup, LastCopy string
 	StatsAt              string
+	WrittenBy            string
 	// Revision is the row revision a write must quote (0: follows default).
 	Revision int64
 	Clear    string
@@ -88,6 +89,12 @@ func BuildBackupTable(e backup.Export, pricePerTB float64, now time.Time) Backup
 			}
 		}
 	}
+	for n, writtenBy := range e.WrittenBy {
+		if writtenBy == backup.WrittenByLow && !listed[n] {
+			listed[n] = true
+			unlisted = append(unlisted, n)
+		}
+	}
 	sort.Strings(unlisted)
 	subjects := append(append([]string{backup.Default}, e.Subjects...), unlisted...)
 	nInventory := 1 + len(e.Subjects)
@@ -105,6 +112,16 @@ func BuildBackupTable(e backup.Export, pricePerTB float64, now time.Time) Backup
 		v := BackupRow{Subject: name, Target: r.Target, Offsite: r.Offsite, RetentionLocal: r.RetentionLocal,
 			RetentionB2: r.RetentionB2, Default: name == backup.Default, Unlisted: isUnlisted,
 			Local: "-", B2: "-", Cost: "-", LastBackup: "-", LastCopy: "-"}
+		if e.WrittenBy[name] == backup.WrittenByLow {
+			v.WrittenBy = backup.WrittenByLow
+		}
+		// Provenance is the union of all histories, not whichever holder supplies
+		// the size/time (the policy target may only have newer snapshots).
+		for _, holder := range e.Targets {
+			if holder.Stats[name].WrittenBy == backup.WrittenByLow {
+				v.WrittenBy = backup.WrittenByLow
+			}
+		}
 		if rows[name] != nil {
 			v.Revision = r.Revision
 		}

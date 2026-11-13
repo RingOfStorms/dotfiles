@@ -22,8 +22,8 @@
     # LAN subnet for `exposure = "lan"` routes (nginx-acl-lan.conf).
     nginx.acl.lan = [ "10.12.14.0/24" ];
     privateNetwork.enable = true;
-    # Shares h001's fleet repository; snapshots group by service tags, not
-    # host. sec-agent.nix supplies environmentFile via configChanges.
+    # Per-subject snapshots to h004; only h004 holds the B2 pusher key.
+    # Credentials come from fleet-edge via this host's machine identity.
     backup = {
       enable = true;
       schedule = "03:00";

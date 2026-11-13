@@ -5,6 +5,9 @@
   kind = "nixos";
   description = "SearXNG metasearch (private, used by open-webui)";
 
+  # Search configuration is declarative; the generated key is disposable.
+  backup.enable = false;
+
   persist = {
     data = "/var/lib/searx"; # secret-key.env
     nixos = "/var/lib/nixos";

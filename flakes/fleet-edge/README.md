@@ -220,7 +220,7 @@ run on any conflict, and never deletes a record the spec does not own.
 ### Backup policy editor (`/backup/`)
 
 `fleet-edge overrides --backup` serves the backup policy API
-(`/api/backup`, containers/BACKUP-PLAN.md §2.3) and, on the same loopback
+(`/api/backup`; see [Credentials, policy and retention](../../containers/README.md#credentials-policy-and-retention)) and, on the same loopback
 listener, a plain-HTML editor at `/backup/` (`internal/backupui`): per
 subject a target select (registered targets plus `none`), local and B2
 preset selects, an offsite toggle (disabled with the reason unless the

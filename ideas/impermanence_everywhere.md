@@ -22,32 +22,64 @@ Impermanence (`flakes/impermanence`, `ringofstorms.impermanence` on bcachefs wit
 
 ## Plan for `h001` (Evacuate to `h003` → Re-image → Move Back)
 
-Because all stateful services on `h001` now live in floating containers (`containers/*`) managed by `cnt` (`fleet containers`), `h001` no longer has sprawling `/var/lib/<service>` host state. The only non-container data on `h001` is on the separate `/drives/wd10` disk (`immich/media`, `paperless`, etc.), which stays untouched during a root NVMe re-image.
+Stateful services use `/srv/containers/<svc>` and declared bulk extra paths
+under `/srv/bulk`. On h001, `/srv/bulk` is the separate WD disk (formerly
+`/drives/wd10`); on h003 it is persistent storage on the root NVMe. A root
+re-image still needs a separate audit of host identity, `/home/luser/backups`,
+retired roots and other non-container data in the [dated inventory](../containers/INVENTORY.md).
+Preserve personal media/archives; a current service snapshot is not permission
+to delete historical data.
 
-### Step 0: Prerequisites on `h003` (see `ideas/resilience.md` §2)
-1. Enable `ringofstorms.containers.privateNetwork.enable = true` in `hosts/h003/containers.nix` (required for `net.private` containers like `sec`, `vaultwarden`, `zitadel`).
-2. Enable `ringofstorms.containers.backup` on `h003` (wire `restic_h001_env_2026-10-01` in `hosts/h003/sec-agent.nix` so `cnt move` preflight passes).
-3. Wire `_shared_assets/utilities/wildcard-cert-receiver.nix` on `h003` + add `"h003"` to `hosts/h005/wildcard-cert.nix` (`nginx.acl.lan` + `nginx.edge.blockInternal = true`).
-4. Ensure `h003` has enough disk space on `/persist/srv/containers` for the services being evacuated.
+### Step 0: Verify `h003` Readiness (see `ideas/resilience.md` §2)
+1. h003 already configures private networking, the nightly backup client,
+   wildcard-cert reception and the `bulk` capability. Verify deployed units,
+   idmapped mounts, certs and hydrated service secrets before evacuation.
+2. Verify source and destination clients, each selected service's enabled
+   backups and runtime target policy. The reserved destination fetches fresh
+   per-subject credentials from fleet-edge with its machine identity; do not
+   restore the retired shared B2 secret or `backup.environmentFile` option.
+3. Check space for `/srv/containers` **and** each declared `/srv/bulk` extra
+   path on h003's NVMe. Match all `requires` capabilities; h003 does not
+   currently offer `nfs-h004` or `intel-qsv`.
+
 ### Step 1: Evacuate Services to `h003`
-1. Move portable floating containers (`zitadel`, `sec`, `forgejo`, `vaultwarden`, `atuin`, `trilium`, `matrix`, `dawarich`, `life`, `puzzles`, `searx`, `opengist`, `open-webui`, `litellm`, etc.) to `h003` using `cnt move <svc> --to h003`.
-   - Note: Services requiring `h001`-only hardware capabilities (`wd10` for `immich`/`paperless`, or `nfs-h004`/`intel-qsv` for `arr` unless temporarily mounted on `h003`) can either be stopped during the maintenance window (`cnt stop <svc>`) after a fresh `fleet-backup` run + local backup on `/drives/wd10`, or temporarily given an NFS mount on `h003`.
-2. Update `host = "h003"` in `containers/<svc>/service.nix` for evacuated services and redeploy `h005` (`dns-records.nix`) / `o002` (`nginx.nix`) if needed so routes stay live while `h001` is on the bench.
+1. Select backup-enabled portable services from the current runtime placement
+   (`cnt place`) and inventory, then use `cnt move <svc> --to h003`. The move
+   pre-syncs declared local bulk paths and retains the source bulk copy; allow
+   time and space for that transfer. See [Moving a service](../containers/README.md#moving-a-service-to-another-host).
+   - Immich/Paperless require `bulk`, not the retired `wd10` capability; h003
+     can receive their declared extra paths if it has space. arr still needs
+     `nfs-h004`/`intel-qsv`: retain those capabilities on a suitable host or
+     leave it stopped during maintenance, preserving its state and h004 media.
+   - `litellm`, `llm-router`, `searx`, `hello-nixos` and `hello-podman` disable
+     nightly backups. Deliberately redeploy/re-authenticate their disposable
+     state on the target; do not run restore-based `cnt move` unless backups
+     are explicitly enabled first.
+2. Placement is runtime state in fleet-edge, not a `host` field in
+   `service.nix`. A successful move commits placement and reconciles routing
+   without h005/o002 rebuilds. For deliberate disposable redeploys, stop the
+   old copy, deploy to the chosen host and intentionally rebind with
+   `cnt place <svc> --set h003`; do not leave two serving copies.
+3. Prove independent recovery before re-imaging: a successful move can copy
+   PostgreSQL clusters from the surviving source, so it does not demonstrate
+   a B2-only dump import. Restore representative SQLite copies, PostgreSQL
+   dumps and bulk paths to scratch and verify application data using the
+   [recovery runbook](../containers/README.md#b2-only-recovery-independent-of-h005h004).
 
 ### Step 2: Re-image `h001` Root onto Encrypted bcachefs + Impermanence
 1. Follow `utilities/nixos-install-disko/readme.md` (same pattern as `h003`, `h004`, `h005`):
-   - Disconnect or leave `/drives/wd10` unmounted (`RequiresMountsFor` / `nofail`) so the installer only touches the boot NVMe.
+   - Disconnect or leave the disk normally mounted at `/srv/bulk` unmounted so the installer only touches the boot NVMe.
    - Partition the boot NVMe via `disko` single-drive encrypted bcachefs (`@root`, `@nix`, `@persist`, `@snapshots`).
    - Create a USB unlock stick (`utilities/nixos-install-disko/usb_key.md`), label `"h001 key"`, leave plugged in.
 2. Add `hosts/h001/impermanence.nix`:
    - Shared `essentials` + `tailscale` persistence.
    - `/var/lib/secrets_manager_hydrated` and `/persist/machine-key.json`.
    - `/srv/containers`, `/var/lib/fleet-containers`, `/etc/systemd-mutable`, `/var/lib/containers` (podman), `/var/lib/fleet-cert`.
-3. Install, verify unattended USB unlock, verify `/drives/wd10` and `/nfs/h002/nixarr` autofs mounts cleanly, and verify `sec-agent` hydrates.
+3. Install, verify unattended USB unlock, verify `/srv/bulk` and `/nfs/h002/nixarr` mounts, and verify `sec-agent` hydrates. Restore retained host data/identity before resuming its services.
 
 ### Step 3: Move Services Back to `h001`
-1. Restart `wd10`-bound services (`immich`, `paperless`, `arr`) from their preserved state / B2 snapshot.
-2. `cnt move <svc> --to h001` for the services that belong on `h001` permanently (and leave any services on `h003` that make sense to keep distributed).
+1. Restore any non-evacuated service roots and required SQLite copies/PostgreSQL dumps before starting them; reconnect preserved `/srv/bulk` and h004 NFS media as appropriate. A B2 restore is not automatic PostgreSQL recovery.
+2. `cnt move <svc> --to h001` for backup-enabled services returning from h003; placement/routing follow at runtime. Deliberately redeploy disposable services instead, and leave any services on h003 that make sense to keep distributed.
 
 ---
 
@@ -56,14 +88,14 @@ Because all stateful services on `h001` now live in floating containers (`contai
 `lio` is the daily driver workstation, so minimizing disruption and guaranteeing zero lost local work is the priority.
 
 ### Step 1: Complete & Verify `lio` Restic Backup
-1. Deploy `hosts/lio/restic.nix` (see `ideas/restic_backups.md`) backing up `/home/josh` (and any needed paths on `/mnt/nvme1tb`) to B2.
+1. Declare and deploy a host backup subject for the selected `/home/josh` paths (and any needed `/mnt/nvme1tb` data), using the per-subject h004/B2 architecture in `containers/README.md`. No full-home backup is established by the container backup timer; verify coverage and an independent restore before re-imaging.
 2. Audit unpushed git repos / dirty worktrees across `/home/josh/projects`:
    ```sh
    find ~/projects -name .git -type d -prune -exec dirname {} \; | while read -r r; do
      git -C "$r" status --porcelain -b | grep -E 'ahead|^[MADRCU?!]' && echo "=== $r ==="
    done
    ```
-3. Take a secondary local copy of critical `/home/josh` directories onto `/mnt/nvme1tb` (the second NVMe disk) or `/drives/wd10` on `h001` for fast local restore after re-imaging (so we don't have to pull hundreds of GBs back down from B2).
+3. Take a secondary local copy of critical `/home/josh` directories onto `/mnt/nvme1tb` (the second NVMe disk) or a dedicated path under `/srv/bulk` on h001 for fast local restore after re-imaging; confirm that copy and its destination survive the planned install.
 
 ### Step 2: Re-image `lio` Root NVMe onto bcachefs + Impermanence
 1. Model `hosts/lio/impermanence.nix` after `juni/impermanence.nix` and `joe/impermanence.nix`:

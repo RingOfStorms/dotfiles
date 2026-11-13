@@ -302,7 +302,7 @@ let
   );
 
   # Backups are the fleet-agent client (flakes/fleet-agent/backup/client.nix,
-  # BACKUP-PLAN.md §2.4): one repo per service (svc-<name>) on the policy's
+  # containers/README.md, Nightly restic): one repo per service (svc-<name>) on the policy's
   # target, append-only, so nothing here forgets or prunes. Hooks run in the
   # container; service.nix `backup` supplies them and the excludes.
   bcfg = cfg.backup;

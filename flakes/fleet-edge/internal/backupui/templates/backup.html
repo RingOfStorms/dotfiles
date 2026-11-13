@@ -21,8 +21,9 @@
     <em>same as local</em> uses the h004 setting.</dd>
   <dt>Copy to B2</dt><dd>also send this service's backups offsite to Backblaze B2.</dd>
   <dt>default</dt><dd>the first row; every service without its own row follows it.</dd>
+  <dt>Low-trust history</dt><dd>a low-trust host could have supplied repository data. This warning survives moves and clears; no warning means unknown provenance, not verified high trust.</dd>
 </dl>
-{{if .NoPusher}}<p class="warn">Copy to B2 is unavailable: no backup target sends to B2 yet (the B2 copy job, plan phase P4, is not built). Today every backup stays on h004 only.</p>{{end}}
+{{if .NoPusher}}<p class="warn">Copy to B2 is unavailable: no registered backup target currently advertises the pusher capability.</p>{{end}}
 <div class="table-wrap">
 <table class="policy">
 <thead><tr>
@@ -33,7 +34,7 @@
 {{range $r := .Rows}}
 {{$f := printf "p-%s" .Subject}}
 <tr>
-  <td>{{if .Default}}<em>default</em>{{else}}{{.Subject}}{{end}}{{if .TargetNote}} <span class="{{if eq .TargetNote "default"}}muted{{else}}warn{{end}}">({{if eq .TargetNote "default"}}follows default{{else}}{{.TargetNote}}{{end}})</span>{{end}}{{if .Clear}}<br><span class="warn">clear {{.Clear}}</span>{{end}}</td>
+  <td>{{if .Default}}<em>default</em>{{else}}{{.Subject}}{{end}}{{if eq .WrittenBy "low"}}<br><span class="warn" title="writtenBy: low; possible low-trust data in repository history">low-trust history</span>{{end}}{{if .TargetNote}} <span class="{{if eq .TargetNote "default"}}muted{{else}}warn{{end}}">({{if eq .TargetNote "default"}}follows default{{else}}{{.TargetNote}}{{end}})</span>{{end}}{{if .Clear}}<br><span class="warn">clear {{.Clear}}</span>{{end}}</td>
   {{if and $.CanWrite (not .Unlisted)}}
   <td><select name="target" form="{{$f}}" aria-label="{{.Subject}}: backs up to">{{range $.TargetIDs}}<option value="{{.Value}}"{{if eq .Value $r.Target}} selected{{end}}>{{.Label}}</option>{{end}}</select></td>
   <td><select name="retentionLocal" form="{{$f}}" aria-label="{{.Subject}}: keep on h004">{{range $.Presets}}<option value="{{.Value}}"{{if eq .Value $r.RetentionLocal}} selected{{end}}>{{.Label}}</option>{{end}}</select></td>

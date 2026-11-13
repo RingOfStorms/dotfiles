@@ -1,6 +1,6 @@
 package backup
 
-// Per-subject backup credentials (containers/BACKUP-PLAN.md §2.7). fleet-edge
+// Per-subject backup credentials (containers/README.md, Credentials, policy and retention). fleet-edge
 // generates and holds them; nothing else stores them except the operator's
 // export.
 //
@@ -48,6 +48,9 @@ type credsFile struct {
 	LastExportedAt int64            `json:"lastExportedAt,omitempty"`
 	LastExportHash string           `json:"lastExportHash,omitempty"`
 	Creds          map[string]*Cred `json:"creds"`
+	// WrittenBy is monotonic subject history, independent of current placement
+	// and whether any target currently reports the repo. Only "low" is stored.
+	WrittenBy map[string]string `json:"writtenBy,omitempty"`
 }
 
 // RestCred is the target feed entry: never the repo password.
@@ -82,6 +85,9 @@ func (s *Service) saveCreds() error { return writeAtomic(s.credsPath(), s.creds)
 
 // ensureCred returns subject's credentials, generating them on first need.
 func (s *Service) ensureCred(subject string) (*Cred, error) {
+	if err := s.recordPlacement(subject); err != nil {
+		return nil, err
+	}
 	if c := s.creds.Creds[subject]; c != nil {
 		return c, nil
 	}
@@ -121,8 +127,13 @@ func (s *Service) rotate(subject, why, bindHost string) (*Cred, error) {
 // host loses fetch access via placement and, once targets apply the new
 // revision, HTTP access too.
 func (s *Service) syncBindings() {
+	s.refreshProvenance()
 	for _, n := range sortedKeys(s.creds.Creds) {
 		c := s.creds.Creds[n]
+		if err := s.recordPlacement(n); err != nil {
+			log.Printf("backup: save provenance for %s: %v", n, err)
+			continue
+		}
 		host, _ := s.cfg.Placement(n)
 		if host == "" || host == c.BoundHost {
 			continue
@@ -177,7 +188,7 @@ func (s *Service) restFeed() map[string]RestCred {
 }
 
 // holds: the policy target (own row or the default row) is id, or id's
-// stats list the repo (§2.1: a target's root reads every repo it holds).
+// stats list the repo (containers/README.md, Nightly restic: a target's root reads every repo it holds).
 func (s *Service) holds(id, subject string) bool {
 	if s.effective(subject).Target == id {
 		return true
@@ -355,6 +366,9 @@ func (s *Service) ImportAs(user, text string, overwrite map[string]bool) ([]Impo
 	for _, l := range lines {
 		switch {
 		case l.Action == "new":
+			if err := s.recordPlacement(l.Subject); err != nil {
+				return nil, err
+			}
 			host, _ := s.cfg.Placement(l.Subject)
 			s.creds.Creds[l.Subject] = &Cred{ResticPassword: l.resticPassword, RestUsername: "svc-" + l.Subject,
 				RestPassword: l.restPassword, RestRevision: 1, CreatedAt: now, BoundHost: host}

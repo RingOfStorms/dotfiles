@@ -2,8 +2,8 @@
 import ../_shared_assets/utilities/sec-agent.nix {
   inherit inputs constants;
   role = "machines-hightrust";
-  # Backups use B2, not fleet SSH. Git+SSH flake inputs still need the
-  # Forgejo/GitHub keys supplied by includeGitKeys.
+  # Backups use per-subject credentials from fleet-edge, not fleet SSH.
+  # Git+SSH flake inputs still need the keys supplied by includeGitKeys.
   includeFleetSshKeys = false;
   extraSecrets = {
     # Credentials of the shared `josh` atuin account, readable by the local
@@ -50,16 +50,6 @@ import ../_shared_assets/utilities/sec-agent.nix {
     life_backup_env_2026-09-30 = {
       remotePath = "machines/high-trust/life_backup_env_2026-09-30";
       softDepend = [ "container@life" ];
-    };
-
-    # EnvironmentFile for h001's host restic job (mods/restic-backup.nix,
-    # old B2 repo, --tag h001). Containers get per-subject credentials from h005 fleet-edge:
-    # RESTIC_REPOSITORY, RESTIC_PASSWORD and the backend credentials.
-    restic_h001_env_2026-10-01 = {
-      remotePath = "machines/high-trust/restic_h001_env_2026-10-01";
-      configChanges = {
-        services.restic.backups.h001.environmentFile = "$SECRET_PATH";
-      };
     };
 
     sabnzbd_api_key_2026-07-15 = {

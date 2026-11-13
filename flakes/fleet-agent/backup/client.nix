@@ -1,11 +1,11 @@
-# Backup client tier (containers/BACKUP-PLAN.md §2.1, §2.4, §3).
+# Backup client tier (containers/README.md, Nightly restic).
 #
 # One repo per subject (svc-<name>) on the target the fleet-edge policy
 # names; the per-subject credentials (RESTIC_PASSWORD, RESTIC_REST_USERNAME,
 # RESTIC_REST_PASSWORD) come from h005 fleet-edge (`fleet containers
 # backup-creds`, only while the subject is placed here or this host is its
 # move destination), cached root 0600 in credsDir for when fleet-edge is down
-# (§2.7). Subjects are floating services (the containers module fills
+# (README: Credentials, policy and retention). Subjects are floating services (the containers module fills
 # `containers`) and host subjects (`ringofstorms.backup.subjects`).
 #
 # The repos are append-only: this client NEVER runs forget or prune.
@@ -25,7 +25,7 @@ let
   credsDir = "/var/lib/fleet-backup/creds";
   cont = cfg.containers;
 
-  # Host-subject validation (§3.3): names never collide with a service,
+  # Host-subject validation (README: Subject declarations and consistent data): names never collide with a service,
   # paths pass the same checks as service extraPaths and overlap nothing.
   serviceNames = map (s: s.name) (fleetLib.allServices ../../../containers);
   checkedSubjects = lib.mapAttrs (
@@ -140,7 +140,7 @@ let
     cred() { ${fleetBin} containers backup-creds "$1" --dir ${credsDir} | sed -n 's/^creds=//p'; }
     field() { sed -n "s/^$1=//p" "$2" | tail -n1; }
 
-    # Runtime checks for one extra path (§3.3): local, present, mounted.
+    # Runtime extra-path checks (README: Subject declarations and consistent data): local, present, mounted.
     checkExtra() { # path mount sentinel
       local p=$1 m=$2 snt=$3 fs tgt
       [ -e "$p" ] || { echo "$p: missing" >&2; return 1; }
@@ -392,7 +392,7 @@ in
     };
     subjects = lib.mkOption {
       default = { };
-      description = "Host subjects (BACKUP-PLAN.md §3.2): non-container data backed up as repo svc-<name>.";
+      description = "Host subjects (containers/README.md, Subject declarations and consistent data): non-container data backed up as repo svc-<name>.";
       type = lib.types.attrsOf (
         lib.types.submodule {
           options = {

@@ -438,9 +438,9 @@ let
       secrets;
 
   # ---------------------------------------------------------------- backup
-  # service.nix `backup` (BACKUP-PLAN.md §3.1, §3.3). Each service is one
-  # backup subject (repo svc-<name>). Host subjects (§3.2) reuse the path and
-  # exclude checks through checkBackupPath/checkBackupExclude.
+  # service.nix `backup` (containers/README.md, Subject declarations and
+  # consistent data). Each service is one subject (repo svc-<name>). Host
+  # subjects reuse the path/exclude checks through checkBackupPath/checkBackupExclude.
   backupForbiddenRoots = [
     dataRoot
     "/nix"
@@ -872,9 +872,9 @@ in
       }";
     };
 
-  # Backup target (:8000, rest-server) source allow-list, BACKUP-PLAN.md §2.8:
-  # high-trust overlay IPs minus o002 and the target itself, plus the named
-  # low-trust clients (§7). Same shape as the ssh list.
+  # Backup target (:8000, rest-server) source allow-list:
+  # high-trust overlay IPs minus o002 and the target itself, plus explicitly
+  # admitted low-trust clients (containers/README.md, Nightly restic).
   #   hosts            fleet.nix hosts
   #   self             the target's host name
   #   lowTrustClients  extra host names (must be trust = "low")

@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// Backup client resolver (containers/BACKUP-PLAN.md §2.4, P3):
+// Backup client resolver (containers/README.md, Nightly restic):
 //
 //	fleet containers backup-resolve <subject> [--cache FILE]
 //
@@ -187,7 +187,7 @@ type BackupHooks struct {
 	Post string `json:"post"`
 }
 
-// BackupExtraPath is one service.nix backup.extraPaths entry (§3.1).
+// BackupExtraPath is one service.nix backup.extraPaths entry (containers/README.md, Subject declarations and consistent data).
 type BackupExtraPath struct {
 	Path     string   `json:"path"`
 	Requires string   `json:"requires"`
@@ -216,7 +216,7 @@ func resticCmd(subject, repo string) string {
 	return c
 }
 
-// backupPreflightScript (both move hosts, §2.9): the subject resolves to a
+// backupPreflightScript (both move hosts; containers/README.md, Moving a service to another host): the subject resolves to a
 // target (not none) on this host, h005 hands this host the subject's
 // credentials now (a fresh fetch, not the cache: placed here or the
 // in-flight move's destination),

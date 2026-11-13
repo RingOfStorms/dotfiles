@@ -11,8 +11,7 @@
       "100.64.0.0/10"
       "fd7a:115c:a1e0::/48"
     ];
-    # Shares the repository and schedule with mods/restic-backup.nix;
-    # sec-agent.nix supplies environmentFile for both jobs.
+    # Per-subject snapshots to h004; only h004 holds the B2 pusher key.
     backup = {
       enable = true;
       schedule = "03:00";
@@ -43,7 +42,7 @@
   };
 
   # Hand-made archives (cnt backup tarballs, pre-migration snapshots): a host
-  # subject, repo svc-h001-archives (BACKUP-PLAN.md §5). Registered in
+  # subject, repo svc-h001-archives (containers/README.md, Nightly restic). Registered in
   # hosts/h005/fleet-edge.nix backup.hostSubjects.
   ringofstorms.backup.subjects.h001-archives.paths = [ "/home/luser/backups" ];
 }

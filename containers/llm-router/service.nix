@@ -7,8 +7,11 @@
   kind = "nixos";
   description = "LLM gateway, trial alongside litellm (llm.joshuabell.xyz)";
 
-  # Copilot device-login token (0600) plus nothing else. Static user pinned in
-  # container.nix, so the token survives restarts and `cnt move`.
+  # Device-login state is disposable; re-authenticate after loss.
+  backup.enable = false;
+
+  # Copilot device-login token (0600) plus nothing else. The pinned static
+  # user preserves it across local restarts; a fresh placement re-authenticates.
   persist = {
     data = "/var/lib/llm-router";
     nixos = "/var/lib/nixos";

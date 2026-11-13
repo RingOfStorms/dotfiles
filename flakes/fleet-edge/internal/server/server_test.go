@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/backup"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/dash"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/inventory"
 	"git.joshuabell.xyz/ringofstorms/fleet-edge/internal/state"
@@ -399,6 +400,80 @@ func TestServicesExposeSection(t *testing.T) {
 	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services", nil))
 	if strings.Contains(w.Body.String(), "Expose overrides") {
 		t.Error("section shown without OverridesURL")
+	}
+}
+
+func TestServicesBackupsRendersLowTrustHistory(t *testing.T) {
+	now := time.Now().UTC()
+	local, oldLocal := int64(10<<20), int64(1<<20)
+	e := backup.Export{
+		Rows: []*backup.Row{{Subject: "canary", Target: "h004", RetentionLocal: "standard", RetentionB2: "local"}},
+		Targets: []backup.TargetView{
+			{Target: backup.Target{ID: "h004", Enabled: true, Seen: now.Unix(), Stats: map[string]backup.Stats{
+				"canary": {LocalBytes: &local, At: now.Unix()},
+			}}},
+			{Target: backup.Target{ID: "h009", Enabled: true, Seen: now.Add(-24 * time.Hour).Unix(), Stats: map[string]backup.Stats{
+				"canary": {LocalBytes: &oldLocal, At: now.Add(-24 * time.Hour).Unix(), WrittenBy: backup.WrittenByLow},
+			}}, Stale: true},
+		},
+		Subjects:  []string{"canary", "forgejo", "unknown"},
+		WrittenBy: map[string]string{"forgejo": backup.WrittenByLow, "retired": backup.WrittenByLow},
+	}
+	export := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(e); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer export.Close()
+	srv := New(fakeSource{m: sample()}, Config{BackupURL: export.URL})
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/services?tab=backups", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+	page := w.Body.String()
+	if !strings.Contains(page, "Read-only summary") || strings.Contains(page, "<form") {
+		t.Fatalf("backups summary is not read-only:\n%s", page)
+	}
+	const warning = `<span class="warn" title="writtenBy: low; possible low-trust data in repository history">low-trust history</span>`
+	if strings.Count(page, warning) != 3 {
+		t.Errorf("want exactly three low-trust subject warnings:\n%s", page)
+	}
+	for _, tc := range []struct {
+		subject string
+		low     bool
+	}{
+		{"canary", true},
+		{"forgejo", true},
+		{"retired", true},
+		{"unknown", false},
+	} {
+		var row string
+		for _, candidate := range strings.Split(page, "</tr>") {
+			if strings.Contains(candidate, "<td>"+tc.subject) {
+				row = candidate
+				break
+			}
+		}
+		if row == "" {
+			t.Fatalf("subject %q missing from rendered backups table:\n%s", tc.subject, page)
+		}
+		if strings.Contains(row, warning) != tc.low {
+			t.Errorf("%s low-trust warning = %t, want %t:\n%s", tc.subject, strings.Contains(row, warning), tc.low, row)
+		}
+		if !tc.low && (strings.Contains(row, "writtenBy:") || strings.Contains(row, "low-trust history")) {
+			t.Errorf("unknown subject has a provenance warning:\n%s", row)
+		}
+		if tc.subject == "canary" && (!strings.Contains(row, "10.0 MiB") || strings.Contains(row, "1.0 MiB")) {
+			t.Errorf("warning displaced selected holder's newer size:\n%s", row)
+		}
+		if (tc.subject == "forgejo" || tc.subject == "retired") && strings.Count(row, `<td title="">-</td>`) != 2 {
+			t.Errorf("provenance-only subject has invented sizes:\n%s", row)
+		}
+		if tc.subject == "retired" && !strings.Contains(row, "not in inventory") {
+			t.Errorf("provenance-only retired subject lacks inventory warning:\n%s", row)
+		}
 	}
 }
 

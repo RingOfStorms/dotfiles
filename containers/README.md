@@ -104,8 +104,9 @@ must be able to fetch that ref, so pair it with `deploy --local`).
 | `containers attach <svc>` | the service console (`attach` in service.nix); `shell` for root shell |
 | `containers backup <svc>` | asks where to save (default `~/backups`) and, if running, whether to stop it; then hook, stop, tar `/srv/containers/<svc>` to this machine, start again (`-o file\|dir`, `--live`, `-y`) |
 | `containers restore <svc> <file> --host h` | unpack a backup on a host (`--force` renames existing data) |
-| `containers move <svc> --to h` | final restic backup on the source, restore on the target, deploy + route health, restore check, first backup on the target, then commit the move to the placement registry and retire the source. A failure before the commit undoes the target, drops the reservation and restarts the source |
-| `containers restore-check <svc> [--snapshot ID]` | restore a `svc:<svc>` snapshot to a scratch dir on its host: SQLite `integrity_check`, PG dumps complete |
+| `containers restore <svc> --extra all\|/configured/path [--snapshot ID] [--repo REST_REPO] [--into /absolute/scratch] --host h` | restore declared extra paths (latest by default); uses deleting sync, so choose dedicated scratch when using `--into` |
+| `containers move <svc> --to h` | pre-sync extra paths, final restic backup on the source, restore on the target, copy excluded PostgreSQL clusters from the stopped source, deploy + route health, restore check and first target backup; then commit placement and retire source. Backups must be enabled. Pre-commit rollback restarts the source and keeps synced extra data for retry |
+| `containers restore-check <svc> [--snapshot ID] [--repo REST_REPO]` | restore a `svc:<svc>` snapshot to scratch on its host: SQLite `integrity_check`, PG dump completeness; no PostgreSQL import or application test |
 | `containers health <svc>` | every route answers on its host (backend and nginx) |
 | `containers destroy <svc>` | uninstall (data kept; `--purge` deletes it). `--host` on a host the registry does not bind removes that stray copy and leaves the row; the bound copy, or a row a move still holds, needs `--force` (the bound copy's row is then removed, revision-guarded) |
 | `containers check-idmap <host>` | the idmap test above |
@@ -515,7 +516,7 @@ nixos) the guest config.
     auth = "native";
   };
   secrets = [ ];                # file names under fleet.global.secretsDir
-  backupHook = "runuser -u postgres -- pg_dumpall > /var/lib/postgresql/dumpall.sql";
+  backup.hooks.pre = "runuser -u postgres -- pg_dumpall > /var/lib/postgresql/dumpall.sql";
   attach = null;                # command for `containers attach`
   requires = [ ];               # host capabilities, e.g. [ "nfs-h004" "intel-qsv" ]
 }
@@ -663,31 +664,315 @@ the built binary with `govulncheck -mode=binary` before deploying it with
 
 ## Nightly restic (fleet-backup)
 
-With `ringofstorms.containers.backup.enable = true` and an `environmentFile`
-(RESTIC_REPOSITORY, RESTIC_PASSWORD, backend creds; normally a sec-agent
-secret wired through `configChanges`), the host runs `fleet-backup.service`
-nightly (`backup.schedule`, default 03:00). For every service installed on
-that host it runs the `backupHook` (if running), makes SQLite `.backup`
-copies, and snapshots `/srv/containers/<svc>` with tags `fleet` and
-`svc:<name>`. History and retention follow the tag, not the host, so a
-moved service continues its series. Enabled on h001, lio and h003 (one
-shared repository); not on joe, so a service there has no nightly snapshot
-and `move` refuses it as source or target.
+### Architecture and current coverage
 
-On success each service gets a stamp
-`/var/lib/fleet-containers/backup-last/<svc>`
-(`time=<RFC3339> snapshot=<id> host=<h>`). The status endpoint reports it as
-`lastBackup` and fleet-edge shows the age per service, flagged **stale** after
-36h. SQLite `.backup` copies keep the live file's owner and mode (they replace
-it on restore). One run per service at a time (flock in the staging dir).
+`ringofstorms.containers.backup.enable = true` enables the **client** tier:
+`fleet-backup.service` runs at `backup.schedule` (03:00 by default, persistent,
+up to 15 minutes random delay). The client runs on h001, h003 and lio; h005
+uses the same client for its `fleet-edge` host subject. Joe is not enabled.
+There is no shared client B2 key, shared repository or client-side prune.
+
+A **subject** is one floating service or one named host-data set. Every subject
+has its own `svc-<name>` repository and credentials. The current target is
+h004: clients write to `rest:http://100.64.0.17:8000/svc-<name>/`, stored as
+`/data/backups/svc-<name>`. rest-server's private-repository login restricts
+each client credential to its own path; append-only access refuses snapshot
+and repository-key deletion. It does not prevent a client writing bad data,
+consuming space, or reading data it already has credentials for. h004 runs
+no containers and owns local retention. Its root can read held repositories.
+
+h004's `/data/backups` is a dedicated bcachefs subvolume, kept `0700` and
+owned by `restic:restic` while the target is enabled, separate from the NFS
+export root. Only `svc-*` repositories and the `.htpasswd` stub belong there;
+unexpected entries keep rest-server down. The archive migration moved the
+old `l001`/`o001` rsync trees to `/data/rsync-archive`, **not** into subject
+repositories. Retain those archives when resolving the guard; do not delete
+them or treat `latest` as a new backup tier. See the [h004 archive inventory](INVENTORY.md#h004-nas-data-and-older-host-archives).
+
+Only h004's **pusher** holds its new B2 application key, scoped to `svc-` in
+the backup bucket. For offsite-enabled subjects it copies the B2 retention
+set from the local repository into a separate B2 `svc-<name>/` repository,
+then prunes, measures and checks that copy. Local and B2 repositories use
+the same per-subject restic password. There is no cross-subject deduplication;
+an empty offsite repository requires a full first upload.
+
+**Status recorded 2026-11-13:** all 16 enabled B2 subjects, including Immich
+and Minecraft, passed retention-set completeness and sampled-read checks;
+the follow-on job ended successfully at 15:26 CST. An `offsite` policy flag
+alone is intent, not completed coverage, and a successful check covers only
+the retention set at its own `checkedAt` time, not a full restore.
+
+- `h001-archives` (`/home/luser/backups`) is deliberately h004-only, accepted
+  2026-11-12. Originals remain on h001; legacy B2 history remains until the
+  separate legacy-deletion gate. Losing both h001 and h004 afterwards loses
+  those archives.
+- `litellm`, `llm-router`, `searx`, `hello-nixos` and `hello-podman` declare
+  `backup.enable = false` by the user's disposable-data decision on
+  2026-11-13. That does not delete existing snapshots. The backup-driven
+  `cnt move` path is unavailable for disabled subjects; deliberately redeploy
+  disposable services rather than assuming a restore-based move will work.
+- Joe/LocalAI has no reported h004 repository and is not enrolled as a backup
+  client. A low-trust client can only be admitted explicitly to its own
+  append-only repositories; it can never be a target/pusher. h004's
+  `ringofstorms.backup.target.lowTrustClients` alone is insufficient: the
+  Headscale ACL in `hosts/oracle/o002/headscale.nix` currently denies
+  low-trust outbound access. Admission needs a reviewed, narrow Joe-source
+  rule for h004:8000 and the required h005/auth endpoints, not a broad
+  low-trust → trusted-network allow. No such network change is made here.
+  Joe is confirmed tagged `lowtrust` in Headscale. h005's firewall also drops
+  low-trust HTTPS, and Joe does not accept tailnet DNS; enrollment needs an
+  intentional h005 API exception plus hostname resolution preserving TLS,
+  not only the h004 storage rule.
+  Preserve custom models, hand-edited YAML and voice packs when deciding
+  coverage: no blanket `models`/`backends` exclusion has been approved.
+  Low-trust history is marked by `writtenBy: low` in backup metadata and shown
+  in the CLI and both backup views. It is a conservative possible-origin
+  warning, not a claim that every snapshot was written on Joe; an absent
+  marker means unknown, never verified high trust. The marker persists across
+  moves, rollbacks, retirement, clears and unavailable measurements. The target
+  keeps `written-by.json` separately from `stats.json`, so history never
+  invents a held repository, size or fresh measurement. It cannot waive the
+  user's trust decision for a restore onto a high-trust host.
+- Container backup enablement does **not** cover workstation homes, arbitrary
+  bind mounts or whole host disks. The [dated inventory](INVENTORY.md) records
+  known originals, archives and copies without authorizing deletion.
+
+### Subject declarations and consistent data
+
+Service backup configuration is plain data in `service.nix`:
+
+```nix
+backup = {
+  enable = true;                  # default; false must be the only field
+  exclude = [ "cache" ];          # patterns relative to /srv/containers/<svc>
+  # hooks.pre / hooks.post are optional guest shell commands; see the dump example above.
+  extraPaths = [ {
+    path = "/srv/bulk/example/media";
+    requires = "bulk";            # must also be in the service's requires
+    exclude = [ "thumbnails" ];   # relative to this extra path
+    sentinel = "/srv/bulk/example/media/.present"; # optional regular file
+    # mount = "/srv/bulk";        # optional exact mountpoint check
+  } ];
+};
+```
+
+`backup.hooks.pre` replaces the obsolete `backupHook` field. Hooks, if used,
+must be non-empty command strings. Extra paths are explicit local source
+paths: they must exist, must not be NFS/CIFS/SSHFS/autofs/9p-backed, and must
+pass their declared mount/sentinel checks. Do not back up the NAS through a
+client's mount; back up data on its owning host. Names/paths/excludes are
+validated, unsafe roots and hydrated-secret trees are rejected, and declared
+source paths may not overlap across subjects. Excludes are non-empty relative
+patterns without `..`.
+
+Non-container data uses `ringofstorms.backup.subjects.<name> = { paths =
+[ "/absolute/local/path" ]; exclude = [ "relative-pattern" ]; hooks = {
+pre = "host command"; post = "host command"; }; };`. Paths must be non-empty,
+and the subject name may not collide with a container. Host hooks run as root
+on the host. Declaring a host subject enables the client by default; register
+its host ownership in h005's `backup.hostSubjects` so the machine-token API
+can authorize it. Host subjects do **not** get automatic SQLite copies:
+write a pre-hook online backup, include the copy and exclude the live DB and
+its WAL/SHM. h005's `fleet-edge` subject does this for `metrics.db` and also
+includes its placement, policy, credential, metrics and forward state.
+
+For installed, enabled services the nightly client runs pre-hooks if active,
+makes owner/mode-preserving SQLite `.backup` copies under
+`/var/lib/fleet-backup/staging/<svc>/sqlite/<svc>/…`, and backs up the service
+root, staging copies and declared extra paths with tags `fleet` and
+`svc:<name>`. Live SQLite files/sidecars and raw PostgreSQL clusters are
+excluded; PostgreSQL dumps are the snapshot recovery source. A stopped
+service's hook is skipped, so check the age of its existing dump. Dotted
+`.moved-*`/`.retired-*` roots and uninstalled data are not nightly subjects.
+Staging copies beside live data are not another backup tier.
+
+Immich includes `/srv/bulk/immich/media` (excluding `thumbs` and
+`encoded-video`, with `upload/.immich` sentinel); Paperless includes its media
+(excluding `documents/thumbnails`, with `media.lock` sentinel) and consume
+queue. The snapshot does not include everything under `/srv/bulk`, and
+`svc-arr` does not include h004's `/data/nixarr` media library.
+
+On success a container host writes
+`/var/lib/fleet-containers/backup-last/<subject>` with `time`, `snapshot`,
+`host`, `target` and `repo`. Non-container clients default to
+`/var/lib/fleet-backup/backup-last`. fleet-agent reports the stamp as
+`lastBackup`; fleet-edge flags container backup age stale after 36 hours.
+One flock per subject serializes nightly and move backups. A success stamp
+is local-target backup evidence, not an offsite completion claim.
+
+### Credentials, policy and retention
+
+h005 fleet-edge generates subject credentials on first need. A client uses
+its root-only machine key to obtain a Zitadel machine token for
+`/api/backup/<subject>/credentials`; it is authorized only while placement
+binds that service to the host, while the host is the reserved move
+destination, or for an explicitly registered host subject. REST username is
+`svc-<name>`; the repository password and HTTP password are separate values.
+Target logins/held repo keys are delivered separately to the target.
+
+`fleet containers backup-creds <subject>` caches credentials root-only under
+`/var/lib/fleet-backup/creds/<subject>.env`. Target resolution caches policy
+under `/var/lib/fleet-backup/target.json`. An unreachable API may use cached
+state; no usable cache means failure, never a guessed repository. A credential
+403 or 404 removes that subject's cache. Move preflights require a **fresh** fetch.
+Do not print credential files, put passwords in repository URLs or commit
+them. `RESTIC_REPOSITORY` needs the `rest:` prefix, with no userinfo.
+
+Use the authenticated h005 `/backup/?tab=credentials` UI to export all subject credentials
+to the password manager outside the fleet; newly generated passwords make
+the export banner stale. Export UI state is not confirmation that an external
+copy has been saved. Import restores missing credentials after h005 recovery;
+differing existing values need an explicit overwrite choice. REST-password
+rotation (UI or `backup-policy rotate`) revokes HTTP access once targets have
+applied the revision, and moves rotate it on placement commit. It does not
+rotate the repository encryption password or revoke already copied plaintext.
+The [break-glass runbook](sec/README.md#break-glass-kit-and-cold-restore)
+lists the separate application keys and pusher keys needed for recovery.
+
+Policy is runtime state on h005, not per-service Nix placement. Every subject
+inherits unset values from `default`:
+
+| Field | Meaning |
+|---|---|
+| `target` | Enabled, non-stale target ID, or `none` to stop new backups |
+| `offsite` | Copy through that target's pusher; rejected for a non-pusher target |
+| `retentionLocal` | `short`, `standard` or `long` (default `standard`) |
+| `retentionB2` | Same presets, or `local` to follow local retention (default) |
+
+| Preset | Keep daily / weekly / monthly / yearly |
+|---|---|
+| `short` | 3 / 2 / 1 / none |
+| `standard` | 7 / 5 / 12 / 3 |
+| `long` | 14 / 8 / 24 / 5 |
+
+Target-side `forget --prune --group-by ""` applies retention per repository,
+not per host/path group. Clients never prune. Turning policy off does not
+delete a repository or stop target-side retention. The target uses cached
+policy and a `long` fallback when a preset is unavailable. The B2 pusher
+requires a policy reply no older than 30 minutes, otherwise it copies/clears
+nothing. Heartbeats refresh target policy/credentials every 5 minutes;
+h004's local prune runs at 06:00 (+ up to 30 minutes), local stats hourly,
+and offsite copy at 07:30. See [h004 operations](../hosts/h004/readme.md#backup-target-and-offsite-pusher).
+
+**Clear is deletion, not turn-off.** An authorized writer queues a typed,
+audited `local`, `b2` or `both` clear for the target to execute. Local clear
+reinitializes an empty repo with the existing subject password only if the
+subject still targets that host. B2 clear deletes the subject prefix and
+turns off offsite policy; `both` clears local first. Do not use clear to retire
+historical archives without a separate deletion decision.
+
+The pusher computes the expected B2 keep-set on the **local** repository,
+matches copied snapshots by `(.original // .id)` plus
+`time,hostname,paths,tags,tree`, and runs a sampled
+`check --read-data-subset` (100M by default). Results are in h004
+`/var/lib/fleet-backup-target/offsite-b2.json` as `complete`, `missing`,
+`checkedAt`; `b2-stats.json` supplies `lastCopied` and sizes. A sample is not
+a full-data restore test. Repository size, process disk reads and copied
+pack counts do not prove the required snapshot set is complete.
+
+### Operator commands
+
+Run client commands on the subject's authorized host; `sudo fleet containers`
+uses the machine key (`cnt` does not expand under `sudo`).
 
 ```sh
-sudo systemctl start fleet-backup                 # run now (all, then prune)
-sudo systemctl start fleet-backup-svc@puzzles     # one service, no prune (what move uses)
-cnt restore-check puzzles                         # latest svc:puzzles snapshot, scratch dir
-sudo fleet-restic snapshots --tag svc:puzzles     # restic with the host's creds
-sudo fleet-restic restore latest --tag svc:puzzles --target /tmp/r
+sudo systemctl start fleet-backup                     # all local subjects, never prune
+sudo systemctl start fleet-backup-svc@puzzles         # one subject
+sudo fleet containers backup-resolve puzzles         # target/repo, not credentials
+sudo fleet containers backup-creds puzzles           # cache file path, not key contents
+sudo fleet-restic --subject puzzles snapshots --tag svc:puzzles
+sudo fleet-restic --subject puzzles restore latest --tag svc:puzzles --target /tmp/puzzles-restore
+sudo fleet containers restore-check puzzles          # restored SQLite + PG dump checks
 ```
+
+Policy reads/writes use a configured writer's machine key (not an arbitrary
+subject client). Supported forms are:
+
+```sh
+sudo fleet containers backup-policy list
+sudo fleet containers backup-policy set puzzles target=h004 offsite=true local=standard b2=local
+sudo fleet containers backup-policy rotate puzzles
+# Destructive example, not a health check: prompts for "clear svc-puzzles b2".
+sudo fleet containers backup-policy clear puzzles b2
+```
+
+New local repositories require an explicit init as `restic` after the target
+has received the subject password; no `backup-init` CLI exists. **[INFERENCE]**
+The following transient unit mirrors the module's `LoadCredential` pattern;
+it has not been executed as part of this docs cleanup. The held key is an env
+file containing `RESTIC_PASSWORD=…`, not a bare `--password-file` value.
+
+```sh
+# On h004, only for a deliberately provisioned new subject with no existing repo.
+restic_bin=$(command -v restic) || exit 1
+sudo systemd-run --wait --collect --uid=restic --gid=restic \
+  -p PrivateTmp=yes -p RequiresMountsFor=/data -p ConditionPathIsMountPoint=/data \
+  -p LoadCredential=repo:/var/lib/fleet-backup-target-keys/repo-keys/svc-NEW_SUBJECT \
+  /bin/sh -eu -c 'umask 077; . "$CREDENTIALS_DIRECTORY/repo"; export RESTIC_PASSWORD; exec "$1" -r "$2" init' \
+  init "$restic_bin" /data/backups/svc-NEW_SUBJECT
+```
+
+Do not reinitialize an existing repo or treat a policy row as a stored backup.
+Existing history can be seeded by an explicit `restic copy`; copying chunker
+parameters when initializing helps future deduplication but does not copy
+history. The pusher initializes missing B2 destinations from the local repo's
+chunker parameters. Local clear is the only automatic local reinitialization,
+and only for a subject that still targets that host.
+
+`fleet-restic --subject <name> [-r <rest:http(s)://…>] <restic args>` requires
+the subject and accepts only REST repositories; pass wrapper flags **before**
+the restic subcommand. It resolves the subject's target unless `-r` is given,
+but still fetches/caches credentials from h005. It is not a general B2 wrapper
+or an API-independent disaster path. Scratch restores contain staged SQLite
+copies rather than replacing live files; explicitly overlay copies from the
+**restored snapshot**, not live-host staging, before running the app.
+
+### Remaining coverage and legacy retirement
+
+The obsolete direct-B2 proposal has been folded into this runbook. Remaining
+coverage decisions are not implied by container enablement:
+
+- Lio's `/home/josh` and `/mnt/nvme1tb` need an explicitly inventoried host
+  subject before an impermanence re-image. Candidate irreplaceable paths
+  from the old notes are `Documents`, `projects`, `Pictures`, `Desktop`,
+  `.ssh`, `.gnupg` and `.config/nixos-config` under `/home/josh`, plus selected
+  critical `/mnt/nvme1tb` paths. Review regenerable caches, build outputs,
+  `node_modules`, `.direnv`, `.venv`, Steam/OCI caches and Trash for exclusions;
+  do not assume all Downloads, VM images or ISO files are disposable.
+- O002's Headscale state under `/persist/var/lib/headscale` needs an off-host
+  subject and a SQLite online-copy hook. Persistence alone is not a backup.
+- Life still declares internal restic and pgBackRest jobs in addition to
+  `svc-life`; their independent destination and health have not been verified
+  here. Preserve them until their recovery role is established.
+- Fleet-edge implements minute-polled, deduplicated alerts for placed-service
+  health, missing/stale backup stamps and certificate expiry. Push delivery
+  is not configured (`alerts.ntfyUrl` is empty), and no backup `OnFailure`
+  or external dead-man configuration was found. That monitor does not cover
+  generic host subjects or pusher completeness; a dashboard age warning is
+  not an active recovery/notification guarantee.
+
+**P6 is retirement of future legacy writes and the shared credential; P6b
+is deletion of legacy B2 history.** On 2026-11-13 h001 was switched: legacy
+`restic-backups-h001` timer/service are absent and inactive, and
+`fleet-backup.timer` is active. Sec's old-secret active registry fields/grants
+and hydrated copies on h001/h003 were removed; two encrypted historical
+tombstone versions remain in Sec. No hydrated copy was found on h004, h005
+or o002. Lio still has its root-only old file (sudo unavailable during the
+survey); juni, oren and gp3 were unreachable over SSH. Clean those hosts
+with administrator access and revoke the old B2 key through the user's
+Backblaze account; no account-admin credential is available to automate it.
+P6 is not fully closed. The user confirmed password-manager
+saves of the old `restic_h001_env` and new `restic_b2_h004` entries on
+2026-11-13; the latest fleet-edge subject-password export is still essential
+and is not included in either env entry. The seven-day wait was waived on
+2026-11-13; legacy deletion is still deferred until B2-only recovery and the
+requested h001 → h003 restore/move proof. Preserve a restricted recovery key,
+password and safely identified legacy URL until deletion is authorized.
+`7f023d4a` is a repository label, **not a verified object prefix**. Pre-cutover
+media/history is not automatically equivalent to new snapshots, and no
+archive deletion is authorized by this documentation cleanup. The temporary
+[closeout checklist](BACKUP-PLAN.md) remains while these pending gates need
+tracking; this runbook and the dated inventory preserve the enduring context.
 
 ## Backup
 
@@ -697,13 +982,13 @@ containers backup minecraft -y -o /mnt/nas/   # no questions (scripts, cron)
 ```
 
 The archive is `/srv/containers/<svc>` with numeric owners, xattrs and ACLs,
-taken while the service is stopped (after the backupHook, e.g. a SQL dump).
+taken while the service is stopped (after `backup.hooks.pre`, e.g. a SQL dump).
 It restores on any host.
 
 If the service is running, `backup` asks before stopping it (it is started
 again afterwards); answering no cancels, `--live` copies without stopping.
 If it is already stopped it is backed up as is, without asking, and its
-backupHook is skipped (it needs the service running). Without a terminal
+pre-hook is skipped (it needs the service running). Without a terminal
 (cron, pipes) nothing is asked: the directory is `~/backups` and a running
 service is only stopped with `--yes`. The directory is created if missing.
 
@@ -735,16 +1020,95 @@ to `<dir>.pre-restore-<epoch>` rather than deleting it. By hand: stop, move
 `/srv/containers/<svc>` aside,
 `sudo tar --numeric-owner -xpf backup.tar.gz -C /srv/containers`, start.
 
+The archive command covers the service root, **not** `backup.extraPaths`.
+Recover separately declared media paths with the implemented extra-path flow:
+
+```sh
+# Run where the subject is placed (h001 here); a move destination needs a live reservation.
+sudo fleet containers restore immich --extra all --host h001 --into /srv/recovery/immich
+sudo fleet containers restore-check immich --host h001 --snapshot SNAPSHOT_ID --repo rest:http://100.64.0.17:8000/svc-immich/
+```
+
+`restore --extra all|/configured/path` defaults to the latest subject snapshot;
+use `--snapshot ID` and optional `--repo rest:http(s)://…` to pin a source.
+`--host` names the destination executing the restore. `--into /absolute/scratch`
+maps an extra path to `<scratch>/<absolute/source/path>` (for example,
+`/srv/recovery/immich/srv/bulk/immich/media`). It disables the preexisting-data
+guard but sync still deletes files absent from the snapshot: use a dedicated
+scratch tree, never an important populated directory. Without `--into`, a
+destination must be absent, empty, or carry `.cnt-sync-<svc>`; symlink and
+non-directory destinations are refused. The sync preserves declared excludes
+and its marker, and restores source-directory metadata.
+Place REST `--repo` **after the subcommand**: global `--repo` before the command
+selects the flake source instead. The current CLI has no ordinary
+`restore <svc> --latest`, no non-extra snapshot-restore handler and no
+cross-target newest-snapshot search. Use a plain restic scratch restore for
+the service root, preserving numeric ownership, and overlay staged SQLite
+copies before transferring recovered state to its live path.
+
+### B2-only recovery, independent of h005/h004
+
+On an isolated recovery host, recover the subject password and bucket key
+from the password manager into root-only files without displaying contents.
+Use plain `restic`, not the REST-only `fleet-restic` wrapper. For example,
+with `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` already supplied securely
+to the recovery process and the subject password in `/run/keys/subject-password`:
+
+```sh
+sudo --preserve-env=AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY restic \
+  -r s3:https://s3.us-west-002.backblazeb2.com/belljm-LoiuasdV3-system-backups/svc-sec \
+  --password-file /run/keys/subject-password snapshots --tag svc:sec
+sudo --preserve-env=AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY restic \
+  -r s3:https://s3.us-west-002.backblazeb2.com/belljm-LoiuasdV3-system-backups/svc-sec \
+  --password-file /run/keys/subject-password restore SNAPSHOT_ID --target /srv/recovery/sec
+```
+
+These commands do not read the source host, h004 or the fleet-edge API. Choose
+and record a real snapshot ID from the listing; only the subject's actual
+checked retention set is promised by a completion record. Do not restore
+straight over live data. For Sec, explicitly copy the recovered snapshot's
+`var/lib/fleet-backup/staging/sec/sqlite/sec/data/sec.db` over its recovered
+`srv/containers/sec/data/sec.db`, preserving owner/mode, and retain `db.key`.
+
+**PostgreSQL is not imported automatically.** The restic snapshot contains
+dumps, not the excluded raw cluster. A disaster restore must prepare a clean,
+compatible PostgreSQL recovery environment, resolve module-created
+roles/databases versus dump contents, and import the dump before starting
+the application. `pg_dumpall` SQL (including Zitadel's
+`pgdumps/cnt-dumpall.sql.gz`) loads with `psql`; a custom-format `PGDMP` dump
+uses `pg_restore`. There is no turnkey PostgreSQL cold-import command in
+this CLI. `restore-check` checks SQLite integrity and PG dump completeness;
+it does not load PostgreSQL or prove a working application. Verify an actual
+login/data read after recovery, and apply the user's trust decision before
+running any snapshot written by a low-trust host.
+
+For h005 disaster recovery, the `fleet-edge` subject includes credentials
+and policy, so the off-fleet export must bootstrap access. Restore into
+scratch with plain restic, stop the affected fleet-edge units, recover their
+state directories, and copy the snapshot's
+`var/backup/fleet-edge/metrics-online.db` over the recovered `metrics.db`
+before starting the metrics service. Preserve DynamicUser state ownership
+semantics; do not treat the excluded live SQLite file as the backup.
+
+
 ## Moving a service to another host
 
-Data goes through the shared restic repository, so the service keeps its
-`svc:<name>` history and every move is also a restore test. Downtime is the
-stop + backup + restore + first boot. Routing follows the placement registry,
-so nothing in Nix is edited and no host is rebuilt.
+Data goes through the **subject's** restic repository, so a service keeps its
+`svc:<name>` history across hosts. The move pins the repository and snapshot
+from its fresh final-backup stamp, not a newest-snapshot guess across targets.
+Downtime is stop + backup + restore + first boot. Routing follows the
+placement registry, so nothing in Nix is edited and no host is rebuilt.
+A move tests restoration from the local backup target, not B2-only disaster
+recovery; it also needs the surviving source for raw PostgreSQL clusters.
 
-1. Both hosts have `ringofstorms.containers.backup` enabled (same repo); the
-   target passes `containers check-idmap <target>` and offers the service's
-   `requires` capabilities.
+1. Both hosts have `ringofstorms.containers.backup` enabled, the subject has
+   backups enabled and resolves to a target (not `none`), and the destination
+   can freshly fetch its subject credentials after reservation. The target
+   passes `containers check-idmap <target>` and offers the service's
+   `requires` capabilities. Declared extra paths must be local and absent,
+   empty, or carry `.cnt-sync-<svc>` from a prior extra-path restore/sync.
+   There is no standalone `cnt sync` command; move and `restore --extra`
+   provide this synchronization.
 2. `sudo fleet containers --dry-run move minecraft --from h003 --to h001`
    prints the plan (every remote script, in order). Then
    `sudo fleet containers move minecraft --to h001`:
@@ -756,9 +1120,12 @@ so nothing in Nix is edited and no host is rebuilt.
    2. **preflight**: target has the host module, `fleet-backup` and the
       capabilities, and no running unit or data of the service; the source
       has fleet-backup and the data. A refusal here changes nothing.
-   3. **final backup** on the source: backupHook, blocking stop,
-      `fleet-backup-svc@<svc>`; the snapshot id comes from the fresh stamp
-      (an old stamp is never accepted).
+      Extra paths are pre-synced from the latest subject snapshot while the
+      source keeps serving; the final stopped-source snapshot supplies the
+      delta sync in the restore step.
+   3. **final backup** on the source: `backup.hooks.pre`, blocking stop,
+      `fleet-backup-svc@<svc>`; the snapshot ID and repository come from the
+      fresh stamp (an old stamp is never accepted).
    4. **restore** that snapshot onto the target (the SQLite `.backup` copies
       replace the excluded live files), then the live PostgreSQL cluster
       dirs (excluded from restic) are copied from the stopped source and
@@ -788,6 +1155,9 @@ so nothing in Nix is edited and no host is rebuilt.
    marker is refused, never overwritten. The source remembers it was running
    (`move-<svc>.was-running`) across an interrupted run, and a re-run resumes
    with the saved token (or `--resume-token`).
+   Synced extra-path data is kept on rollback. Sync markers are removed if
+   failure precedes the restore step, and retained once that step starts,
+   allowing a deliberate retry without treating partial media as live data.
 
    **Why commit comes before retire.** The switch renames the source's data,
    after which routing can no longer just point back at it. So the commit
@@ -859,7 +1229,11 @@ Two throwaway twins for trying the workflow; both serve the stock "Welcome
 to nginx!" page. hello-nixos runs nginx inside an nspawn container on port
 8081; hello-podman runs `nginx:alpine` on 8082. Each persists `/data`
 (empty) so you can drop a marker file in `/srv/containers/<svc>/data` and
-watch it follow a move. `cnt place` shows where each is bound.
+practice archive backup/restore. `cnt place` shows where each is bound.
+Both services deliberately disable nightly backups, so `cnt move` is not
+available for them in the current configuration; redeploy their disposable
+state, or explicitly change backup policy/declarations before a restore-based
+move exercise.
 
 ```sh
 cnt deploy hello-nixos && cnt deploy hello-podman
@@ -867,6 +1241,5 @@ curl http://<host>:8081/ http://<host>:8082/
 cnt status hello-podman
 cnt stop hello-nixos            # stays down after a reboot
 cnt backup hello-podman
-cnt move hello-nixos --to lio   # the move records itself in the registry
 cnt destroy hello-podman --purge
 ```

@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// Per-subject backup credentials from h005 fleet-edge (BACKUP-PLAN.md §2.7):
+// Per-subject backup credentials from h005 fleet-edge (containers/README.md, Credentials, policy and retention):
 //
 //	fleet containers backup-creds <subject> [--dir DIR]
 //

@@ -242,7 +242,7 @@
                 );
               };
               backup = {
-                enable = lib.mkEnableOption "the backup policy authority (/api/backup, containers/BACKUP-PLAN.md §2.3)";
+                enable = lib.mkEnableOption "the backup policy authority (/api/backup, containers/README.md, Credentials, policy and retention)";
                 writers = lib.mkOption {
                   type = lib.types.listOf lib.types.str;
                   default = [ ];

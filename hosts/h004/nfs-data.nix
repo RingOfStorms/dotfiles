@@ -38,8 +38,8 @@ let
   # permissions, and an AUTH_SYS client asserting uid 1000/gid 100
   # (matching backups' 0700 luser:users owner) could use a forged handle
   # to read it straight through the /data/nixarr export -- confirmed live
-  # 2026-10-22 (see ideas/restic_backups.md and the bcachefs subvolume
-  # fix below, C2):
+  # 2026-10-22 (the reproduced handle-forging check and the bcachefs
+  # subvolume fix are recorded here, C2):
   # splicing the real f_handle bytes of /data/backups/.c2-canary-test into
   # a valid /data/nixarr wire filehandle and calling open_by_handle_at()
   # from h001 as uid 1000 succeeded and read the canary's contents with
@@ -76,7 +76,9 @@ lib.mkMerge [
       # root filesystem to media clients.
       exports = ''
         ${exportRoot} ${
-          lib.concatMapStringsSep " " (ip: "${ip}(rw,sync,subtree_check,root_squash,fsid=0)") (nfsClients ++ nfsClients6)
+          lib.concatMapStringsSep " " (ip: "${ip}(rw,sync,subtree_check,root_squash,fsid=0)") (
+            nfsClients ++ nfsClients6
+          )
         }
       '';
     };
@@ -119,7 +121,7 @@ lib.mkMerge [
       # C2 (closed): /data/backups must be its own bcachefs subvolume, not a
       # plain directory on the same filesystem as the /data/nixarr NFS
       # export root, and must stay 0700 (owner restic:restic, uid/gid 291,
-      # while the backup target is enabled; BACKUP-PLAN.md §4.3) so that
+      # while the backup target is enabled; containers/README.md, Nightly restic) so that
       # even a same-filesystem NFS handle-forge attempt (or an AUTH_SYS
       # request asserting an arbitrary non-root uid) can't read fleet host
       # backups. Re-asserted on every boot/activation.
@@ -166,10 +168,10 @@ lib.mkMerge [
           ${lib.optionalString target.enable ''
             # Only restic repos (svc-*) and the module's .htpasswd stub belong
             # here. Anything else (the old l001/o001 rsync trees) means the
-            # §4.4 move has not run: refuse, so rest-server stays down.
+            # archive migration is incomplete: refuse, so rest-server stays down.
             stray=$(find /data/backups -mindepth 1 -maxdepth 1 ! -name 'svc-*' ! -name .htpasswd -printf '%f ')
             if [ -n "$stray" ]; then
-              echo "ensure-backups-subvolume: unexpected entries in /data/backups: $stray(run BACKUP-PLAN.md §4.4 first)" >&2
+              echo "ensure-backups-subvolume: unexpected non-svc entries in /data/backups (only svc-* repositories and .htpasswd belong here): $stray; retain legacy rsync archives under /data/rsync-archive before starting rest-server; see containers/README.md (Nightly restic) and containers/INVENTORY.md (h004 NAS data and older host archives)" >&2
               exit 1
             fi
           ''}

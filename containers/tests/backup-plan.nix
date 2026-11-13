@@ -1,4 +1,4 @@
-# Eval test for the backup target allow-list (BACKUP-PLAN.md §2.8, P1).
+# Eval test for the backup target allow-list (containers/README.md, Nightly restic).
 # Run from the repo root:
 #   nix eval --impure --expr 'import ./containers/tests/backup-plan.nix'
 # Returns true, or throws on the first failed check.

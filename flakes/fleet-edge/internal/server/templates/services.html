@@ -98,6 +98,7 @@
 {{if eq .Tab "backups"}}
 <section class="backup">
 <p class="summary">Read-only summary. To change a service's backups, use <a href="/backup/">Backups</a> (admin sign-in) or <code>cnt backup-policy</code> from a laptop.</p>
+<p class="summary">Low-trust history means a low-trust host could have supplied repository data; the warning survives moves and clears. No warning means unknown provenance, not verified high trust.</p>
 {{if .Backup.Error}}<p class="warn">{{.Backup.Error}}</p>
 {{else}}
 <div class="table-wrap">
@@ -106,7 +107,7 @@
 <tbody>
 {{range .Backup.Rows}}
 <tr>
-  <td>{{if .Default}}<em>default</em>{{else}}{{.Subject}}{{end}}</td>
+  <td>{{if .Default}}<em>default</em>{{else}}{{.Subject}}{{end}}{{if eq .WrittenBy "low"}}<br><span class="warn" title="writtenBy: low; possible low-trust data in repository history">low-trust history</span>{{end}}</td>
   <td>{{.Target}}{{if .TargetNote}} <span class="warn">({{.TargetNote}})</span>{{end}}</td>
   <td>{{if .Offsite}}on{{else}}<span class="muted">off</span>{{end}}{{if .OffsiteNote}} <span class="warn">{{.OffsiteNote}}</span>{{end}}</td>
   <td>{{.RetentionLocal}}</td><td>{{.RetentionB2}}</td>

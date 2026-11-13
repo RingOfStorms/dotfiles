@@ -97,15 +97,15 @@
           ./nfs-data-users-nixarr.nix
           ({
             ringofstorms.fleetAgent.extraFilesystems = [ "/data" ];
-            # Backup target tier (containers/BACKUP-PLAN.md P1). dataDir is
-            # the /data/backups subvolume owned by nfs-data.nix. REST
-            # logins and held repo keys come from h005 fleet-edge (§2.7).
+            # Backup target tier (containers/README.md, Nightly restic).
+            # dataDir is the /data/backups subvolume owned by nfs-data.nix;
+            # REST logins and held repo keys come from h005 fleet-edge.
             ringofstorms.backup.target = {
               enable = true;
               dataDir = "/data/backups";
               requiresMount = "/data";
             };
-            # Pusher tier (P4): copies offsite subjects to B2 (svc-* prefix key).
+            # Pusher tier: copies offsite subjects to B2 (svc-* prefix key).
             ringofstorms.backup.pusher = {
               enable = true;
               bucket = "belljm-LoiuasdV3-system-backups";

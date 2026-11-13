@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// Backup policy CLI and target heartbeat (containers/BACKUP-PLAN.md §2.3, P2).
+// Backup policy CLI and target heartbeat (containers/README.md, Credentials, policy and retention).
 // Both talk to h005's /api/backup with the host's machine token.
 
 // edgeDoer is the slice of edgeClient the backup commands use (tests fake it).
@@ -31,6 +31,7 @@ type bpStats struct {
 	LastCopied int64  `json:"lastCopied,omitempty"`
 	Complete   *bool  `json:"complete,omitempty"`
 	At         int64  `json:"at,omitempty"`
+	WrittenBy  string `json:"writtenBy,omitempty"`
 }
 
 type bpClear struct {
@@ -76,9 +77,10 @@ type bpTarget struct {
 }
 
 type bpExport struct {
-	Rows     []bpRow    `json:"rows"`
-	Targets  []bpTarget `json:"targets"`
-	Subjects []string   `json:"subjects"`
+	Rows      []bpRow           `json:"rows"`
+	Targets   []bpTarget        `json:"targets"`
+	Subjects  []string          `json:"subjects"`
+	WrittenBy map[string]string `json:"writtenBy,omitempty"`
 }
 
 const backupPolicyHelp = `usage: fleet containers backup-policy <command>
@@ -93,7 +95,7 @@ const backupPolicyHelp = `usage: fleet containers backup-policy <command>
   rotate <subject>             new REST password (writers); the old one keeps working
                                on each target until its heartbeat applies the new one
   heartbeat --id <host> --url <rest:http://…/> [--pusher] [--stats FILE] [--out FILE]
-            [--creds-out FILE] [--applied FILE]
+            [--provenance FILE] [--creds-out FILE] [--applied FILE]
                                target only: register, post stats and applied REST
                                revisions, save the reply (presets, pending clears) for
                                prune/clear units and the REST logins (root 0600)
@@ -159,8 +161,19 @@ func backupPolicyList(c edgeDoer, out interface{ Write([]byte) (int, error) }) e
 		}
 		return bpStats{}
 	}
+	writtenBy := func(subject string) string {
+		if e.WrittenBy[subject] == "low" {
+			return "low"
+		}
+		for _, t := range e.Targets {
+			if t.Stats[subject].WrittenBy == "low" {
+				return "low"
+			}
+		}
+		return "unknown"
+	}
 	w := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(w, "SUBJECT\tTARGET\tOFFSITE\tLOCAL\tB2\tREV\tSIZE\tB2 SIZE\tPENDING")
+	fmt.Fprintln(w, "SUBJECT\tTARGET\tOFFSITE\tLOCAL\tB2\tREV\tSIZE\tB2 SIZE\tWRITTEN BY\tPENDING")
 	names := append([]string{"default"}, e.Subjects...)
 	// Repos a target reports that the inventory does not name (a canary, a
 	// retired service): listed after it, with stats and no invented policy.
@@ -175,6 +188,12 @@ func backupPolicyList(c edgeDoer, out interface{ Write([]byte) (int, error) }) e
 				listed[n] = true
 				unlisted = append(unlisted, n)
 			}
+		}
+	}
+	for n, origin := range e.WrittenBy {
+		if origin == "low" && !listed[n] {
+			listed[n] = true
+			unlisted = append(unlisted, n)
 		}
 	}
 	sort.Strings(unlisted)
@@ -202,8 +221,8 @@ func backupPolicyList(c edgeDoer, out interface{ Write([]byte) (int, error) }) e
 			pend = "clear " + r.Clear.Scope
 		}
 		s := stats(n)
-		fmt.Fprintf(w, "%s\t%s\t%v\t%s\t%s\t%d\t%s\t%s\t%s\n", n, tgt, r.Offsite, r.RetentionLocal, r.RetentionB2, r.Revision,
-			fmtBytes(s.LocalBytes), fmtBytes(s.B2Bytes), pend)
+		fmt.Fprintf(w, "%s\t%s\t%v\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", n, tgt, r.Offsite, r.RetentionLocal, r.RetentionB2, r.Revision,
+			fmtBytes(s.LocalBytes), fmtBytes(s.B2Bytes), writtenBy(n), pend)
 	}
 	fmt.Fprintln(w)
 	for _, t := range e.Targets {
@@ -287,7 +306,7 @@ func backupPolicyClear(c edgeDoer, args []string, in interface{ Read([]byte) (in
 // stats unit's output: {subject: stats}; cleared.json (next to --out) lists
 // finished clears and is removed once reported.
 func backupHeartbeat(c edgeDoer, args []string) error {
-	var id, url, statsFile, outFile, credsOut, appliedFile string
+	var id, url, statsFile, provenanceFile, outFile, credsOut, appliedFile string
 	pusher := false
 	for len(args) > 0 {
 		switch args[0] {
@@ -297,6 +316,8 @@ func backupHeartbeat(c edgeDoer, args []string) error {
 			url, args = need(args), args[2:]
 		case "--stats":
 			statsFile, args = need(args), args[2:]
+		case "--provenance":
+			provenanceFile, args = need(args), args[2:]
 		case "--out":
 			outFile, args = need(args), args[2:]
 		case "--creds-out":
@@ -320,6 +341,17 @@ func backupHeartbeat(c edgeDoer, args []string) error {
 				return fmt.Errorf("%s: %w", statsFile, err)
 			}
 			body["stats"] = st
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	if provenanceFile != "" {
+		if b, err := os.ReadFile(provenanceFile); err == nil {
+			var writtenBy map[string]string
+			if err := json.Unmarshal(b, &writtenBy); err != nil {
+				return fmt.Errorf("%s: %w", provenanceFile, err)
+			}
+			body["writtenBy"] = writtenBy
 		} else if !errors.Is(err, os.ErrNotExist) {
 			return err
 		}

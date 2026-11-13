@@ -8,7 +8,7 @@ import (
 
 // A move's preflight on the destination resolves the subject's backup policy,
 // so the destination may read it while the move is in flight, and only then
-// (BACKUP-PLAN §2.7). Regression: the reader check used the committed host
+// (containers/README.md, Credentials, policy and retention). Regression: the reader check used the committed host
 // only, so every `cnt move` failed its destination preflight with 403.
 func TestOwnsSubjectFollowsPlacement(t *testing.T) {
 	owner := map[string]string{"canary": "lio"}

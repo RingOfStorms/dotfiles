@@ -1,5 +1,5 @@
 // Package backupui is the dashboard's backup policy editor (/backup/,
-// containers/BACKUP-PLAN.md §2.3). It runs inside `fleet-edge overrides`
+// flakes/fleet-edge/README.md, Backup policy editor). It runs inside `fleet-edge overrides`
 // next to the backup store, so every write goes through the same put/clear
 // and revision rules as /api/backup.
 //

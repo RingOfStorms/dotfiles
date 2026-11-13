@@ -1,5 +1,5 @@
-// Package backup is h005's backup policy authority (containers/BACKUP-PLAN.md
-// §2.3, P2): per-subject policy rows, target registration and stats, and
+// Package backup is h005's backup policy authority (containers/README.md,
+// Credentials, policy and retention): per-subject policy rows, target registration and stats, and
 // queued *clear* requests that only the holding target executes.
 //
 // Three allowlists (internal/authority, each a sub and overlay-IP pair):
@@ -42,7 +42,7 @@ const None = "none"
 // Default is the fallback policy row's subject.
 const Default = "default"
 
-// Presets are the `restic forget` arguments per retention preset (§2.3).
+// Presets are the `restic forget` arguments per retention preset (containers/README.md, Credentials, policy and retention).
 var Presets = map[string][]string{
 	"short":    {"--keep-daily", "3", "--keep-weekly", "2", "--keep-monthly", "1"},
 	"standard": {"--keep-daily", "7", "--keep-weekly", "5", "--keep-monthly", "12", "--keep-yearly", "3"},
@@ -50,6 +50,10 @@ var Presets = map[string][]string{
 }
 
 var subjectRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+
+// WrittenByLow is a sticky risk marker, never a high-trust attestation.
+// An absent marker means unknown, not that all snapshots are trustworthy.
+const WrittenByLow = "low"
 
 // Stats is a target's view of one subject repo. Pointers: absent is not 0.
 type Stats struct {
@@ -59,7 +63,8 @@ type Stats struct {
 	LastCopied int64  `json:"lastCopied,omitempty"`
 	Complete   *bool  `json:"complete,omitempty"`
 	At         int64  `json:"at,omitempty"`
-	WrittenBy  string `json:"writtenBy,omitempty"`
+	// WrittenBy is low when any known writer could have supplied low-trust data.
+	WrittenBy string `json:"writtenBy,omitempty"`
 }
 
 // Target is one registered backup target.
@@ -121,7 +126,11 @@ type Config struct {
 	// move ("" for none). It gates credential fetches and, on change of the
 	// committed host, rotates the REST password.
 	Placement func(subject string) (host, pending string)
-	Now       func() time.Time
+	// HostTrust comes from the operator's fleet inventory, never a request.
+	HostTrust func(host string) string
+	// LowTrustSubjects is durable placement evidence, including retired bindings.
+	LowTrustSubjects func() map[string]bool
+	Now              func() time.Time
 }
 
 // Service is the authority.
@@ -159,6 +168,12 @@ func New(cfg Config) (*Service, error) {
 	if cfg.Placement == nil {
 		cfg.Placement = func(string) (string, string) { return "", "" }
 	}
+	if cfg.HostTrust == nil {
+		cfg.HostTrust = func(string) string { return "" }
+	}
+	if cfg.LowTrustSubjects == nil {
+		cfg.LowTrustSubjects = func() map[string]bool { return nil }
+	}
 	s := &Service{cfg: cfg, rows: map[string]*Row{}, targets: map[string]*Target{}, creds: &credsFile{}}
 	var rf rowsFile
 	if err := readJSON(filepath.Join(cfg.StateDir, "backup.json"), &rf); err != nil {
@@ -183,6 +198,12 @@ func New(cfg Config) (*Service, error) {
 	}
 	if s.creds.Creds == nil {
 		s.creds.Creds = map[string]*Cred{}
+	}
+	if s.creds.WrittenBy == nil {
+		s.creds.WrittenBy = map[string]string{}
+	}
+	if err := s.loadProvenance(); err != nil {
+		return nil, err
 	}
 	var err error
 	s.audit, err = os.OpenFile(filepath.Join(cfg.StateDir, "backup-audit.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
@@ -273,11 +294,15 @@ type Export struct {
 	Targets  []TargetView        `json:"targets"`
 	Presets  map[string][]string `json:"presets"`
 	Subjects []string            `json:"subjects"`
+	// WrittenBy includes history even when no target currently reports stats.
+	WrittenBy map[string]string `json:"writtenBy,omitempty"`
 }
 
 func (s *Service) export() Export {
 	now := s.cfg.Now()
+	s.refreshProvenance()
 	e := Export{Now: now.Unix(), Rows: s.sortedRows(), Presets: Presets}
+	e.WrittenBy = s.creds.WrittenBy
 	for _, t := range s.sortedTargets() {
 		e.Targets = append(e.Targets, TargetView{Target: *t, Stale: t.Stale(now)})
 	}
@@ -287,11 +312,52 @@ func (s *Service) export() Export {
 	return e
 }
 
-// Snapshot is the full view, for in-process callers.
+// Snapshot is the full view for in-process callers. It owns its mutable data:
+// dashboard rendering happens after the lock is released, while heartbeats and
+// provenance refreshes may update the authority's rows and maps.
 func (s *Service) Snapshot() Export {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.export()
+	e := s.export()
+	e.WrittenBy = make(map[string]string, len(s.creds.WrittenBy))
+	for subject, writtenBy := range s.creds.WrittenBy {
+		e.WrittenBy[subject] = writtenBy
+	}
+	for i, row := range e.Rows {
+		copy := *row
+		if row.Clear != nil {
+			clear := *row.Clear
+			clear.Done = append([]string(nil), row.Clear.Done...)
+			copy.Clear = &clear
+		}
+		e.Rows[i] = &copy
+	}
+	for i := range e.Targets {
+		target := &e.Targets[i]
+		stats := make(map[string]Stats, len(target.Stats))
+		for subject, st := range target.Stats {
+			if st.LocalBytes != nil {
+				value := *st.LocalBytes
+				st.LocalBytes = &value
+			}
+			if st.B2Bytes != nil {
+				value := *st.B2Bytes
+				st.B2Bytes = &value
+			}
+			if st.Complete != nil {
+				value := *st.Complete
+				st.Complete = &value
+			}
+			stats[subject] = st
+		}
+		target.Stats = stats
+		applied := make(map[string]int64, len(target.Applied))
+		for subject, revision := range target.Applied {
+			applied[subject] = revision
+		}
+		target.Applied = applied
+	}
+	return e
 }
 
 // effective is subject's row or the default row (with Subject set).
@@ -564,6 +630,11 @@ func (s *Service) route(r *http.Request, w http.ResponseWriter, c authority.Call
 		if subject == Default || !s.mayFetch(c.Host, subject) {
 			return nil, fail(403, "%s is neither placed nor moving to %s: no credentials", subject, c.Host)
 		}
+		if s.cfg.HostTrust(c.Host) == WrittenByLow {
+			if err := s.markLow(subject); err != nil {
+				return nil, err
+			}
+		}
 		cc, err := s.clientCred(subject)
 		if err != nil {
 			return nil, err
@@ -744,6 +815,8 @@ type Heartbeat struct {
 	Cleared map[string][]string `json:"cleared,omitempty"`
 	// Applied reports the REST password revision rendered per subject.
 	Applied map[string]int64 `json:"applied,omitempty"`
+	// WrittenBy carries low-only history independently of held repositories.
+	WrittenBy map[string]string `json:"writtenBy,omitempty"`
 }
 
 // HeartbeatReply tells a target its retention per repo and pending clears.
@@ -759,15 +832,40 @@ type HeartbeatReply struct {
 	// Credentials: every subject's HTTP login for htpasswd. Never the repo
 	// password (that is /repo-keys, per held repo).
 	Credentials map[string]RestCred `json:"credentials"`
+	// WrittenBy is monotonic subject history, including repos not currently held.
+	WrittenBy map[string]string `json:"writtenBy,omitempty"`
 }
 
 func (s *Service) heartbeat(host, id string, hb Heartbeat) (HeartbeatReply, error) {
 	if !strings.HasPrefix(hb.URL, "rest:http") {
 		return HeartbeatReply{}, fail(400, "url must be rest:http(s)://…")
 	}
-	for name := range hb.Stats {
+	for name, st := range hb.Stats {
 		if !subjectRe.MatchString(name) {
 			return HeartbeatReply{}, fail(400, "bad subject %q in stats", name)
+		}
+		if st.WrittenBy != "" && st.WrittenBy != WrittenByLow {
+			return HeartbeatReply{}, fail(400, "writtenBy must be low or omitted")
+		}
+	}
+	for name, writtenBy := range hb.WrittenBy {
+		if !subjectRe.MatchString(name) || writtenBy != WrittenByLow {
+			return HeartbeatReply{}, fail(400, "writtenBy history must map valid subjects to low")
+		}
+	}
+	for name := range hb.WrittenBy {
+		if err := s.markLow(name); err != nil {
+			return HeartbeatReply{}, err
+		}
+	}
+	for name, st := range hb.Stats {
+		if err := s.recordPlacement(name); err != nil {
+			return HeartbeatReply{}, err
+		}
+		if st.WrittenBy == WrittenByLow {
+			if err := s.markLow(name); err != nil {
+				return HeartbeatReply{}, err
+			}
 		}
 	}
 	now := s.cfg.Now()
@@ -779,6 +877,7 @@ func (s *Service) heartbeat(host, id string, hb Heartbeat) (HeartbeatReply, erro
 	t.URL, t.Pusher, t.DeclaredBy, t.Seen = hb.URL, hb.Pusher, host, now.Unix()
 	if hb.Stats != nil {
 		t.Stats = hb.Stats
+		s.applyProvenance(t)
 	}
 	if hb.Applied != nil {
 		t.Applied = hb.Applied
@@ -808,8 +907,9 @@ func (s *Service) heartbeat(host, id string, hb Heartbeat) (HeartbeatReply, erro
 		}
 	}
 	rep := HeartbeatReply{Retention: map[string]string{}, RetentionB2: map[string]string{}, Clears: map[string]string{}, Presets: Presets, Credentials: s.restFeed()}
+	rep.WrittenBy = s.creds.WrittenBy
 	// Every known subject gets an entry, not only the ones with an explicit row
-	// or a stats line: a subject without a row inherits the default row (§2.3),
+	// or a stats line: a subject without a row inherits the default row,
 	// and the target's pruner reads this map per repo. Leaving inherited
 	// subjects out made the pruner fall back to its own preset, and a freshly
 	// seeded target (default row only, stats not measured yet) got an empty map.

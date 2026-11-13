@@ -63,10 +63,11 @@ in
 {
   imports = [ inputs.fleet-edge.nixosModules.default ];
 
-  # fleet-edge state as backup host subject `fleet-edge` (BACKUP-PLAN.md §6),
-  # repo svc-fleet-edge on h004. metrics.db is live SQLite: the pre hook takes
-  # an online copy outside the DynamicUser state dir and the live files are
-  # excluded. Restore: see BACKUP-PLAN.md §6 (no fleet-edge needed).
+  # fleet-edge state as backup host subject `fleet-edge` (containers/README.md,
+  # Subject declarations and consistent data), repo svc-fleet-edge on h004.
+  # metrics.db is live SQLite: the pre hook takes an online copy outside the
+  # DynamicUser state dir and excludes the live files. Restore without
+  # fleet-edge: containers/README.md, B2-only recovery, independent of h005/h004.
   ringofstorms.backup.subjects.fleet-edge = {
     paths = [
       "/var/lib/private/fleet-edge-overrides"
@@ -131,8 +132,8 @@ in
         inherit sub;
         peer = fleet.hosts.${host}.overlayIp;
       }) fleet.global.overrideWriters;
-      # Backup policy (containers/BACKUP-PLAN.md §2.3). Readers see only the
-      # subjects placed on them; writers are the laptops. Targets register
+      # Backup policy (containers/README.md, Credentials, policy and retention).
+      # Readers see only subjects placed on them; writers are the laptops. Targets register
       # themselves by their Zitadel machine sub from their overlay IP.
       backup = {
         enable = true;
@@ -280,7 +281,7 @@ in
         else
           [ ]
       );
-      # Backup policy editor (containers/BACKUP-PLAN.md §2.3), served by
+      # Backup policy editor (flakes/fleet-edge/README.md, Backup policy editor), served by
       # fleet-edge-overrides next to the store. It accepts only the
       # dashboard's own login cookie (fleet_session, shared session key);
       # without one it redirects to the dashboard's /auth/login.

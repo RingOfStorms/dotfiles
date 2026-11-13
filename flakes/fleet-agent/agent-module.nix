@@ -136,7 +136,7 @@ let
   '';
 in
 {
-  # Backup tiers (containers/BACKUP-PLAN.md §2.1). Off unless a host opts in.
+  # Backup tiers (containers/README.md, Nightly restic). Off unless a host opts in.
   imports = [
     ./backup/target.nix
     ./backup/client.nix

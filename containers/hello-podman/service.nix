@@ -1,12 +1,15 @@
 # Test service (podman kind): stock nginx welcome page, nothing else.
-# Twin of ../hello-nixos; use the pair to practise deploy/stop/move.
+# Twin of ../hello-nixos; practise deploy/stop, or enable backups for move tests.
 {
   name = "hello-podman";
   kind = "podman";
   description = "test: nginx splash page in a podman container";
 
-  # Survives restarts and travels with `move`. Unused by nginx; drop marker
-  # files in /srv/containers/hello-podman/data to see them follow a move.
+  # Test markers are disposable. Restore-based moves require backups enabled.
+  backup.enable = false;
+
+  # Unused by nginx; test markers survive local restarts only while backups
+  # are disabled. Enable backups explicitly before testing a stateful move.
   persist = {
     data = "/data";
   };

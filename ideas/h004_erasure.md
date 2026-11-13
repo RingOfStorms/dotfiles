@@ -7,11 +7,11 @@ This file is **not a plan to execute now** — it's a record of what we want to 
 ## Status / TL;DR
 
 - **Decision (2026-10-23):** **Keep waiting.** Do not enable EC on `/data` yet.
-- **What's already done on `h004`:**
-  - `h004` is running **Linux 6.18.56** with **`bcachefs-tools` 1.39.6**, and the `/data` pool has already been upgraded on-disk to **bcachefs format v1.39** (`hosts/h004/readme.md:52-57`).
-  - The old 750 GB Seagate hybrid (`ST750LX003`) was removed from the pool and formatted as a standalone `/scratch` mount (`hosts/h004/data-pool.nix:27-38`).
-  - A 5th 12 TB drive (WD Red Plus `WD-B01XWD2D`) was burned in and added to `/data` (`hosts/h004/readme.md:29`). The pool is now a homogeneous **5× 12 TB array (50.2 TB raw)**.
-- **Why we're still waiting:** Even though we are past filesystem v1.38 (now on v1.39), upstream bcachefs is still landing frequent EC (erasure coding) bugfix commits (stripe allocation, rebalance/evacuate edge cases, scrub/resilver stability). We have no external place to back up 10+ TB of media, so we are waiting until the rate of upstream EC bugfixes drops and community reports settle before flipping `--erasure_code=1` on `/data`.
+- **Already done by 2026-10-23 on `h004`** (historical observations, not a current kernel survey):
+  - h004 was running **Linux 6.18.56** with **`bcachefs-tools` 1.39.6**, and the `/data` pool had been upgraded on-disk to **bcachefs format v1.39** ([host storage](../hosts/h004/readme.md#storage)).
+  - The old 750 GB Seagate hybrid (`ST750LX003`) was removed from the pool and formatted as a standalone `/scratch` mount (`hosts/h004/data-pool.nix`).
+  - A 5th 12 TB drive (WD Red Plus `WD-B01XWD2D`) was burned in and added to `/data` ([host hardware](../hosts/h004/readme.md#hardware)). The pool became a homogeneous **5× 12 TB array (50.2 TB raw)**.
+- **Why we're still waiting:** Even though we are past filesystem v1.38 (now on v1.39), upstream bcachefs is still landing frequent EC (erasure coding) bugfix commits (stripe allocation, rebalance/evacuate edge cases, scrub/resilver stability). We have no external place to back up 10+ TB of media, so we are waiting until the rate of upstream EC bugfixes drops and community reports settle before flipping `--erasure_code=1` on `/data`. The pool also now holds the fleet's primary restic backup repositories under `/data/backups`; it is not just replaceable media. See [h004's backup operations](../hosts/h004/readme.md#backup-target-and-offsite-pusher) for the current copy and recovery model.
 
 ## Standing Trigger to Revisit
 
@@ -56,7 +56,7 @@ Scratch: Seagate ST750LX003 750 GB hybrid (standalone unencrypted bcachefs at /s
 | `data_replicas` | **1** | EC provides the redundancy; storing replicas on top would defeat the point. |
 | `metadata_replicas` | **2** (unchanged) | Metadata is **not** erasure-coded in bcachefs — only data extents are. Metadata is <1% of array, so 2× replication cost is negligible and protects the FS tree. Non-negotiable. |
 | `erasure_code` | **1** (on) | Enables Reed-Solomon parity stripes. |
-| Stripe redundancy | **1** (RAID5-like, 4+1) | Survives 1 drive loss, matching current `replicas=2` tolerance. `/data/nixarr` is replaceable media; critical fleet backups live on Backblaze B2, not `h004`. |
+| Stripe redundancy | **1** (RAID5-like, 4+1) | Survives 1 drive loss, matching current `replicas=2` tolerance. `/data/nixarr` is replaceable media, but `/data/backups` holds per-subject fleet backups. Only offsite-enabled subjects with a completed B2 check have a verified offsite copy; `h001-archives` is deliberately local-only. Filesystem redundancy is not a backup. |
 | Migration style | **In-place, online** | Filesystem stays mounted throughout. Background rewrite via `bcachefs data rereplicate /data`. |
 
 ---
@@ -74,6 +74,8 @@ Scratch: Seagate ST750LX003 750 GB hybrid (standalone unencrypted bcachefs at /s
 No NixOS kernel/package prep is needed anymore (`h004` is already on nixos-26.05 with bcachefs 1.39+). All commands run as root on `h004`.
 
 ### 1. Pre-Flight Health Check
+
+Before changing pool options, establish a usable recovery path for the repositories in `/data/backups`, not just drive health. Check the current per-subject B2 completion records and test recovery independently of h004. The accepted local-only `h001-archives` backup still depends on h001's originals surviving a loss of this pool; its legacy B2 history remains only until the separate legacy-deletion gate is met. A configured `offsite` flag, repository size or running copy process is not evidence that the required snapshots are recoverable offsite.
 
 ```sh
 uname -r

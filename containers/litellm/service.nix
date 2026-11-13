@@ -6,6 +6,9 @@
   kind = "nixos";
   description = "LiteLLM proxy (tailnet, litellm.joshuabell.xyz)";
 
+  # Disposable credentials/cache; re-authenticate after loss instead of restoring.
+  backup.enable = false;
+
   persist = {
     # DynamicUser state: github_copilot token dir, .config, caches.
     data = "/var/lib/private/litellm";

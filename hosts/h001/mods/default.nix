@@ -10,6 +10,5 @@
     ./hardware-transcoding.nix
     # sec + zitadel run in floating containers (containers/{sec,zitadel}).
     # ./vault.nix
-    ./restic-backup.nix
   ];
 }

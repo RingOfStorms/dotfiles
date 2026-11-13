@@ -1,4 +1,4 @@
-# Backup pusher tier (containers/BACKUP-PLAN.md §2.6, P4). Runs on a target:
+# Backup pusher tier (containers/README.md, Nightly restic). Runs on a target:
 # copies each offsite subject's local repo to <b2Repository>/svc-<s> (same
 # repo password at both ends), prunes it with the B2 preset, measures it,
 # records completeness, and executes `b2` clears. The B2 key is restricted
@@ -113,7 +113,7 @@ let
   copyScript = pkgs.writeShellScript "fleet-backup-pusher-copy" ''
     ${prologue}
     ${presetArgs}
-    # One lock for copy and clear (§2.6): a clear must never purge a repo
+    # One lock for copy and clear: a clear must never purge a repo
     # the copier is writing, and the copier must not re-add a cleared
     # subject's stats. The policy is re-read per subject under the lock.
     exec 9>${lockFile}
@@ -150,7 +150,7 @@ let
         rc=1; rm -f "$pw"; continue
       fi
 
-      # The B2 keep set, computed on the LOCAL repo (§2.6): copy only those,
+      # The B2 keep set, computed on the LOCAL repo: copy only those,
       # so a shallower retentionB2 does not re-copy what B2 pruned.
       p=$(b2Preset "$s")
       # shellcheck disable=SC2046
@@ -180,7 +180,7 @@ let
         rc=1
       fi
 
-      # Completeness (§2.6): every snapshot of the keep set above must be in
+      # Completeness: every snapshot of the keep set above must be in
       # B2, matched on (.original // .id) and the snapshot's content fields.
       # A sampled data read must also pass.
       have=$(R --no-lock snapshots --json) || have=""

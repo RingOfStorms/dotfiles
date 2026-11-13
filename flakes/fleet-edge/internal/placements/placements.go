@@ -143,13 +143,15 @@ type Config struct {
 
 // Service is the running registry.
 type Service struct {
-	cfg   Config
-	auth  *authority.Auth
-	mu    sync.Mutex
-	rows  map[string]*Row // key: service
-	rev   int64           // last revision issued; outlives the rows
-	audit *os.File
-	write func(string, []byte, os.FileMode) error // the state write; a test seam
+	cfg  Config
+	auth *authority.Auth
+	mu   sync.Mutex
+	rows map[string]*Row // key: service
+	rev  int64           // last revision issued; outlives the rows
+	// lowTrustSubjects outlives bindings, retirement, rollback and deletion.
+	lowTrustSubjects map[string]bool
+	audit            *os.File
+	write            func(string, []byte, os.FileMode) error // the state write; a test seam
 }
 
 // state is the on-disk shape: the rows plus the registry-wide revision
@@ -158,8 +160,9 @@ type Service struct {
 // for the same service must not reuse the number the destroyed deployment
 // still holds.
 type state struct {
-	Revision int64  `json:"revision"`
-	Rows     []*Row `json:"rows"`
+	Revision         int64           `json:"revision"`
+	Rows             []*Row          `json:"rows"`
+	LowTrustSubjects map[string]bool `json:"lowTrustSubjects,omitempty"`
 }
 
 // New loads state and opens the audit log.
@@ -181,6 +184,7 @@ func New(cfg Config) (*Service, error) {
 			return nil, fmt.Errorf("%s: %w", s.statePath(), err)
 		}
 		s.rev = st.Revision
+		s.lowTrustSubjects = st.LowTrustSubjects
 		for _, r := range st.Rows {
 			// A file without a counter (the bare-array format an earlier
 			// version wrote) seeds it from the rows, so the numbering continues
@@ -192,6 +196,16 @@ func New(cfg Config) (*Service, error) {
 		}
 	} else if !os.IsNotExist(err) {
 		return nil, err
+	}
+	if s.lowTrustSubjects == nil {
+		s.lowTrustSubjects = map[string]bool{}
+	}
+	before := len(s.lowTrustSubjects)
+	s.recordLowTrust(s.lowTrustSubjects, s.rows)
+	if len(s.lowTrustSubjects) != before {
+		if err := s.saveState(s.rows, s.rev, s.lowTrustSubjects); err != nil {
+			return nil, err
+		}
 	}
 	s.audit, err = os.OpenFile(filepath.Join(cfg.StateDir, "placements-audit.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
@@ -267,10 +281,17 @@ func (st *stage) nextRev() int64 {
 // registry's. On failure nothing is assigned, so memory keeps holding the state
 // a restart would load.
 func (st *stage) persist() error {
-	if err := st.s.saveState(st.rows, st.rev); err != nil {
+	low := make(map[string]bool, len(st.s.lowTrustSubjects))
+	for subject, marked := range st.s.lowTrustSubjects {
+		low[subject] = marked
+	}
+	// Capture both old and staged bindings before a rollback/delete erases them.
+	st.s.recordLowTrust(low, st.s.rows)
+	st.s.recordLowTrust(low, st.rows)
+	if err := st.s.saveState(st.rows, st.rev, low); err != nil {
 		return err
 	}
-	st.s.rows, st.s.rev = st.rows, st.rev
+	st.s.rows, st.s.rev, st.s.lowTrustSubjects = st.rows, st.rev, low
 	if st.s.cfg.Notify != nil {
 		st.s.cfg.Notify()
 	}
@@ -289,8 +310,8 @@ func (st *stage) commit(r *Row) (*Row, error) {
 
 func (s *Service) statePath() string { return filepath.Join(s.cfg.StateDir, "placements.json") }
 
-func (s *Service) saveState(rows map[string]*Row, rev int64) error {
-	st := state{Revision: rev, Rows: sortedRows(rows)}
+func (s *Service) saveState(rows map[string]*Row, rev int64, low map[string]bool) error {
+	st := state{Revision: rev, Rows: sortedRows(rows), LowTrustSubjects: low}
 	b, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
 		return err
@@ -300,6 +321,16 @@ func (s *Service) saveState(rows map[string]*Row, rev int64) error {
 		return err
 	}
 	return os.Rename(tmp, s.statePath())
+}
+
+// recordLowTrust uses operator-declared host trust, not the placement writer's
+// identity: a high-trust operator can place data on a low-trust destination.
+func (s *Service) recordLowTrust(low map[string]bool, rows map[string]*Row) {
+	for subject, r := range rows {
+		if s.cfg.Inventory.Hosts[r.Host].Trust == "low" || (r.Previous != nil && s.cfg.Inventory.Hosts[r.Previous.Host].Trust == "low") {
+			low[subject] = true
+		}
+	}
 }
 
 func sortedRows(rows map[string]*Row) []*Row {
@@ -378,10 +409,16 @@ type Export struct {
 	Host map[string]string `json:"host"`
 	// Conflicts maps a service to another host that also reports it.
 	Conflicts map[string]string `json:"conflicts,omitempty"`
+	// LowTrustSubjects records possible low-trust data origin, not current trust.
+	LowTrustSubjects map[string]bool `json:"lowTrustSubjects,omitempty"`
 }
 
 func (s *Service) export() Export {
 	e := Export{Rows: sortedRows(s.rows), Host: map[string]string{}, Conflicts: map[string]string{}}
+	e.LowTrustSubjects = make(map[string]bool, len(s.lowTrustSubjects))
+	for subject, low := range s.lowTrustSubjects {
+		e.LowTrustSubjects[subject] = low
+	}
 	for _, r := range e.Rows {
 		if h := r.Effective(); h != "" {
 			e.Host[r.Service] = h

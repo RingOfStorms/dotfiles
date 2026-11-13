@@ -1,5 +1,5 @@
 # Eval test for the service.nix backup schema and checkBackupPaths
-# (BACKUP-PLAN.md §3.1, §3.3, P3).
+# (containers/README.md, Subject declarations and consistent data).
 #   nix eval --impure --expr 'import ./containers/tests/backup-schema.nix'
 let
   lib = import ../lib.nix;
@@ -147,9 +147,9 @@ assert builtins.all (s: !(s ? backupHook)) svcs;
 assert (builtins.head (builtins.filter (s: s.name == "forgejo") svcs)).backup.hooks.pre != null;
 assert
   (builtins.head (builtins.filter (s: s.name == "immich") svcs)).backup.exclude == [ "mlcache" ];
-# credentials come from h005 fleet-edge (§2.7): no sec registry key for a
-# backup subject is left, and neither the client nor the target takes
-# credential files any more
+# Credentials come from h005 fleet-edge (containers/README.md, Credentials,
+# policy and retention): no sec registry key for a backup subject is left,
+# and neither the client nor the target takes credential files any more.
 assert builtins.all (k: builtins.match "machines/backup/restic_svc-.*" k == null) (
   builtins.attrNames (import ../sec/registry.nix)
 );

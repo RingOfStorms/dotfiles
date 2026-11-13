@@ -78,6 +78,8 @@ func newBackup(path string, overrideWriters map[string]authority.Writer, v autho
 	}
 	owns := func(host, subject string) bool { return ownsSubject(owner, snap(), host, subject) }
 	return backup.New(backup.Config{StateDir: stateDir, Writers: wa, Targets: ta, Readers: ra, Subjects: subjects, Owns: owns,
+		HostTrust:        func(host string) string { return inv.Hosts[host].Trust },
+		LowTrustSubjects: func() map[string]bool { return snap().LowTrustSubjects },
 		Placement: func(subject string) (string, string) {
 			if h, ok := owner[subject]; ok {
 				return h, ""
@@ -87,7 +89,7 @@ func newBackup(path string, overrideWriters map[string]authority.Writer, v autho
 }
 
 // ownsSubject: host may read subject's backup policy. Same rule as credential
-// fetches (§2.7): the host subject's owner, else the committed host or the
+// fetches (containers/README.md, Credentials, policy and retention): the host subject's owner, else the committed host or the
 // destination of an in-flight move (its preflight resolves the policy).
 func ownsSubject(owner map[string]string, e placements.Export, host, subject string) bool {
 	if h, ok := owner[subject]; ok {
@@ -98,7 +100,7 @@ func ownsSubject(owner map[string]string, e placements.Export, host, subject str
 }
 
 // placementOf is subject's committed host and in-flight move destination
-// (BACKUP-PLAN.md §2.7). While a move is prepared (or fenced stale) the
+// (containers/README.md, Credentials, policy and retention). While a move is prepared (or fenced stale) the
 // source stays the committed host and the reserved destination is pending;
 // once committed (or retiring) the destination is the host.
 func placementOf(e placements.Export, subject string) (host, pending string) {

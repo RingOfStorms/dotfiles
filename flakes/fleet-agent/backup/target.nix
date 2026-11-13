@@ -1,4 +1,4 @@
-# Backup target tier (containers/BACKUP-PLAN.md §2.1, §2.5, §2.8, §4.3).
+# Backup target tier (containers/README.md, Nightly restic).
 #
 # rest-server on :8000 (socket activated), append-only, privateRepos, htpasswd
 # rendered into /run from fleet-edge's REST-login feed (heartbeat), a per-repo prune
@@ -20,6 +20,7 @@ let
     inherit hosts self;
     inherit (cfg) lowTrustClients;
   };
+  lowTrustHosts = builtins.attrNames (lib.filterAttrs (_: h: (h.trust or "") == "low") hosts);
   port = 8000;
   htDir = "/run/restic-rest-server";
   htFile = "${htDir}/htpasswd";
@@ -124,7 +125,7 @@ let
     ${lib.getExe config.ringofstorms.fleetAgent.package} containers backup-policy heartbeat \
       --id ${lib.escapeShellArg self} --url ${lib.escapeShellArg repoUrl} \
       --stats "$stats" --out ${policyFile} ${lib.optionalString pusher.enable "--pusher"} \
-      --creds-out ${credsFeed}.new --applied ${appliedFile}
+      --provenance ${stateDir}/written-by.json --creds-out ${credsFeed}.new --applied ${appliedFile}
     chown restic:restic ${policyFile}
     # New REST logins (rotation, new subject): re-render and SIGHUP rest-server.
     if [ -s ${credsFeed}.new ] && ! ${pkgs.diffutils}/bin/cmp -s ${credsFeed}.new ${credsFeed}; then
@@ -133,7 +134,7 @@ let
     else
       rm -f ${credsFeed}.new
     fi
-    # Repo passwords of the repos this target holds (§2.7), for prune/stats.
+    # Repo passwords of the repos this target holds, for prune/stats.
     ${lib.getExe config.ringofstorms.fleetAgent.package} containers backup-policy repo-keys \
       --id ${lib.escapeShellArg self} --dir ${repoKeysDir} >/dev/null
   '';
@@ -155,15 +156,29 @@ let
     }
   '';
 
-  # Runs as `restic`, hourly: raw size and newest snapshot per repo, as
-  # {subject: {localBytes, lastBackup, at}} (0600). A repo whose stats fail
-  # gets no entry, never a 0.
+  # Runs as `restic`, hourly: size, newest snapshot time and conservative
+  # provenance per repo (0600). All retained snapshots can add low evidence;
+  # hostnames are client-controlled and can never assert high trust. The
+  # authority's sticky history and the previous report survive moves/pruning,
+  # even before a heartbeat has delivered newly discovered snapshot evidence.
+  # Failed/missing measurements get no stats entry; written-by.json retains
+  # low history separately without claiming this target still holds a repo.
   statsScript = pkgs.writeShellScript "fleet-backup-target-stats" ''
     set -uo pipefail
     export RESTIC_CACHE_DIR=/var/cache/fleet-backup-target
     umask 0077
-    out='{}'
     now=$(${pkgs.coreutils}/bin/date +%s)
+    lowHosts=${lib.escapeShellArg (builtins.toJSON lowTrustHosts)}
+    history='{}'
+    [ ! -r ${policyFile} ] || history=$(${jq} -c '.writtenBy // {}' ${policyFile})
+    localHistory='{}'
+    [ ! -r ${stateDir}/written-by.json ] || localHistory=$(cat ${stateDir}/written-by.json)
+    previous='{}'
+    [ ! -r ${stateDir}/stats.json ] || previous=$(cat ${stateDir}/stats.json)
+    history=$(${jq} -cn --argjson history "$history" --argjson local "$localHistory" --argjson previous "$previous" '
+      ($history + $local | with_entries(select(.value == "low")))
+      + ($previous | with_entries(select(.value.writtenBy == "low") | .value = "low"))')
+    out='{}'
     shopt -s nullglob
     for repo in ${cfg.dataDir}/svc-*/; do
       repo=''${repo%/}
@@ -173,16 +188,31 @@ let
       pw=$(mktemp)
       ${pkgs.gnused}/bin/sed -n 's/^RESTIC_PASSWORD=//p' "$cred" | ${pkgs.coreutils}/bin/tail -n1 >"$pw"
       if size=$(${pkgs.restic}/bin/restic -r "$repo" --password-file "$pw" --no-lock stats --mode raw-data --json </dev/null | ${jq} -e '.total_size'); then
-        last=$(${pkgs.restic}/bin/restic -r "$repo" --password-file "$pw" --no-lock snapshots --latest 1 --json </dev/null | ${jq} -r '[.[].time] | max // empty' || true)
+        if ! snapshots=$(${pkgs.restic}/bin/restic -r "$repo" --password-file "$pw" --no-lock snapshots --json </dev/null); then
+          echo "stats: $name snapshots failed" >&2
+          rm -f "$pw"
+          continue
+        fi
+        last=$(${jq} -r '[.[].time] | max // empty' <<<"$snapshots")
         lastTs=0
         [ -n "$last" ] && lastTs=$(${pkgs.coreutils}/bin/date -d "$last" +%s)
-        out=$(${jq} -c --arg s "''${name#svc-}" --argjson b "$size" --argjson l "$lastTs" --argjson at "$now" \
-          '.[$s] = {localBytes: $b, lastBackup: $l, at: $at}' <<<"$out")
+        writtenBy=$(${jq} -r --arg s "''${name#svc-}" --argjson low "$lowHosts" --argjson history "$history" --argjson previous "$previous" '
+          if $history[$s] == "low" or $previous[$s].writtenBy == "low"
+            or any(.[]; .hostname as $h | $low | index($h) != null)
+          then "low" else "" end' <<<"$snapshots")
+        if [ "$writtenBy" = low ]; then
+          history=$(${jq} -c --arg s "''${name#svc-}" '.[$s] = "low"' <<<"$history")
+        fi
+        out=$(${jq} -c --arg s "''${name#svc-}" --argjson b "$size" --argjson l "$lastTs" --argjson at "$now" --arg writtenBy "$writtenBy" \
+          '.[$s] = ({localBytes: $b, lastBackup: $l, at: $at} + if $writtenBy == "low" then {writtenBy: "low"} else {} end)' <<<"$out")
       else
         echo "stats: $name failed" >&2
       fi
       rm -f "$pw"
     done
+    tmp=$(mktemp ${stateDir}/.written-by.XXXXXX)
+    printf '%s\n' "$history" >"$tmp"
+    mv -f "$tmp" ${stateDir}/written-by.json
     tmp=$(mktemp ${stateDir}/.stats.XXXXXX)
     printf '%s\n' "$out" >"$tmp"
     mv -f "$tmp" ${stateDir}/stats.json
@@ -364,7 +394,7 @@ in
       htpasswd-file = htFile;
     };
 
-    # dataDir is owned by the host's subvolume unit, not user activation (§4.3).
+    # dataDir is owned by the host's subvolume unit, not user activation (hosts/h004/nfs-data.nix).
     users.users.restic.createHome = lib.mkForce false;
 
     systemd.services.render-htpasswd = {

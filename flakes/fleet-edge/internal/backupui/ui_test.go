@@ -34,7 +34,7 @@ type fx struct {
 	dir string
 }
 
-func newFx(t *testing.T) *fx {
+func newFx(t *testing.T, lowTrust ...map[string]bool) *fx {
 	t.Helper()
 	now := time.Unix(2_000_000, 0)
 	nowf := func() time.Time { return now }
@@ -56,6 +56,12 @@ func newFx(t *testing.T) *fx {
 		Readers:  mk(map[string]authority.Writer{}),
 		Subjects: func() []string { return []string{"canary", "forgejo"} },
 		Now:      nowf,
+		LowTrustSubjects: func() map[string]bool {
+			if len(lowTrust) > 0 {
+				return lowTrust[0]
+			}
+			return nil
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -281,6 +287,62 @@ func TestUnlistedRepoReadOnly(t *testing.T) {
 	}
 	if strings.Contains(page, `action="/backup/retired/`) || !strings.Contains(page, `action="/backup/canary/policy"`) {
 		t.Fatalf("forms:\n%s", page)
+	}
+}
+
+func TestBackupEditorRendersLowTrustHistory(t *testing.T) {
+	f := newFx(t, map[string]bool{"canary": true, "retired": true})
+	r := httptest.NewRequest("GET", "/backup/", nil)
+	r.RemoteAddr = "127.0.0.1:1"
+	r = as(r, admin, "role:admin")
+	w := httptest.NewRecorder()
+	f.ui.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+	page := w.Body.String()
+	if !strings.Contains(page, `action="/backup/canary/policy"`) || !strings.Contains(page, `action="/backup/forgejo/policy"`) {
+		t.Fatalf("admin policy editor lacks controls:\n%s", page)
+	}
+	const warning = `<span class="warn" title="writtenBy: low; possible low-trust data in repository history">low-trust history</span>`
+	if strings.Count(page, warning) != 2 {
+		t.Errorf("want exactly two low-trust subject warnings:\n%s", page)
+	}
+	for _, tc := range []struct {
+		subject string
+		low     bool
+	}{
+		{"canary", true},
+		{"retired", true},
+		{"forgejo", false},
+	} {
+		var row string
+		for _, candidate := range strings.Split(page, "</tr>") {
+			if strings.Contains(candidate, "<td>"+tc.subject) {
+				row = candidate
+				break
+			}
+		}
+		if row == "" {
+			t.Fatalf("subject %q missing from rendered backup editor:\n%s", tc.subject, page)
+		}
+		if strings.Contains(row, warning) != tc.low {
+			t.Errorf("%s low-trust warning = %t, want %t:\n%s", tc.subject, strings.Contains(row, warning), tc.low, row)
+		}
+		if !tc.low && (strings.Contains(row, "writtenBy:") || strings.Contains(row, "low-trust history")) {
+			t.Errorf("unknown subject has a provenance warning:\n%s", row)
+		}
+		if tc.subject == "canary" && !strings.Contains(row, ">10 B</td>") {
+			t.Errorf("low-trust warning lost reported size:\n%s", row)
+		}
+		if tc.subject == "retired" {
+			if !strings.Contains(row, "not in inventory") || strings.Contains(row, `action="/backup/retired/`) {
+				t.Errorf("provenance-only retired subject is not read-only:\n%s", row)
+			}
+			if strings.Count(row, `<td title="">-</td>`) != 2 {
+				t.Errorf("provenance-only retired subject has invented sizes:\n%s", row)
+			}
+		}
 	}
 }
 
