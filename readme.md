@@ -144,6 +144,25 @@ nix run .#audit -- --stale-only # skip the (slow) CVE builds
 See [`scripts/audit/audit.sh`](scripts/audit/audit.sh) for details. `0` clean,
 `1` staleness warnings, `2` vulnerabilities found.
 
+## Terminal clipboard
+
+Kitty uses **Ctrl+V** for both text and clipboard images. The Home Manager
+module `flakes/common/hm_modules/kitty.nix` installs `kitty-smart-paste.py`:
+
+- Text keeps Kitty's native paste behavior, including bracketed-paste handling.
+- With an image MIME type on the clipboard, legacy terminal applications receive
+  the original Ctrl+V keypress so coding agents can attach the image themselves.
+- Applications that enable Kitty's enhanced paste protocol keep that native path.
+
+Image data takes precedence when the clipboard offers both text and an image.
+The agent must support clipboard images and have access to the clipboard, just as
+before; this does not transfer local images to an arbitrary remote SSH session.
+Other terminals and their shortcuts are unchanged by this Kitty-specific handler.
+
+Apply the updated common module through Home Manager/NixOS, then reload Kitty's
+configuration or open a new Kitty process. Hosts using a pinned common flake must
+update that input to the revision containing the change before rebuilding.
+
 ## References
 
 - Flakes: <https://nixos.wiki/wiki/Flakes>
