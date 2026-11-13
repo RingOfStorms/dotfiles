@@ -1,5 +1,7 @@
 { ... }:
 {
+  xdg.configFile."kitty/smart-paste.py".source = ./kitty-smart-paste.py;
+
   # Enable Kitty terminal
   programs.kitty = {
     enable = true;
@@ -46,9 +48,7 @@
       italic_bold_font = "auto";
     };
 
-    # If you want to include extra configuration this way instead of through the main `settings` attribute
-    extraConfig = ''
-      # You can add additional config here if needed
-    '';
+    # Text uses Kitty's native paste; images reach the agent's paste handler.
+    keybindings."ctrl+v" = "kitten smart-paste.py";
   };
 }
