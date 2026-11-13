@@ -85,9 +85,11 @@ Konsole, Kitty, and Foot. Existing **Ctrl+Shift+V** paste and **Ctrl+Shift+C**
 copy remain available; **Ctrl+C** still interrupts the foreground process
 (SIGINT). Kitty and Foot bindings are only added when those terminals are enabled.
 
-The terminal consumes Ctrl+V before the shell, tmux, SSH, or terminal editor
+The terminal consumes text paste before the shell, tmux, SSH, or terminal editor
 receives it. Literal insertion and Vim's visual-block shortcut therefore no
-longer use Ctrl+V in these terminals. Ordinary GUI shortcuts are unchanged.
+longer use Ctrl+V in these terminals. Kitty's desktop binding is a default that
+yields to the common module's [image-aware paste handler](#terminal-clipboard).
+Ordinary GUI shortcuts are unchanged.
 Embedded terminals in Dolphin/Kate retain their existing shortcuts; these need
 application changes, not just Konsole's configurable action binding.
 
@@ -160,8 +162,16 @@ before; this does not transfer local images to an arbitrary remote SSH session.
 Other terminals and their shortcuts are unchanged by this Kitty-specific handler.
 
 Apply the updated common module through Home Manager/NixOS, then reload Kitty's
-configuration or open a new Kitty process. Hosts using a pinned common flake must
-update that input to the revision containing the change before rebuilding.
+configuration or open a new Kitty process; tmux does not need restarting. Plasma
+hosts need both `common` and `de_plasma` updated so the generic paste binding yields
+to the image-aware handler. After committing and pushing, update both host inputs:
+
+```sh
+nix flake update common de_plasma --flake ./hosts/lio
+```
+
+Then deploy normally, or use the [working-tree overrides](#kde-terminal-clipboard-shortcuts)
+above to apply both local modules without updating locks.
 
 ## References
 
