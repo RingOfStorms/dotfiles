@@ -53,11 +53,11 @@
     "common": {
       "locked": {
         "dir": "flakes/common",
-        "lastModified": 1794457533,
-        "narHash": "sha256-35/Ux0lSoF6KS8ZDL+IijItViDW+fq/9cpLgZZlBKC0=",
+        "lastModified": 1794528772,
+        "narHash": "sha256-N9hgo38MZ538IE94RsfYUwvxI0xQnOACArosLaDakR0=",
         "ref": "refs/heads/master",
-        "rev": "d48d0c8d4c07cc4dbe8fbde1ccb49f9cbad37b3f",
-        "revCount": 2581,
+        "rev": "fa9c9de96b177429fc6d182ba2f2d9cfa97d4e82",
+        "revCount": 2586,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -213,11 +213,11 @@
       },
       "locked": {
         "dir": "flakes/fleet-agent",
-        "lastModified": 1794457533,
-        "narHash": "sha256-35/Ux0lSoF6KS8ZDL+IijItViDW+fq/9cpLgZZlBKC0=",
+        "lastModified": 1794528772,
+        "narHash": "sha256-N9hgo38MZ538IE94RsfYUwvxI0xQnOACArosLaDakR0=",
         "ref": "refs/heads/master",
-        "rev": "d48d0c8d4c07cc4dbe8fbde1ccb49f9cbad37b3f",
-        "revCount": 2581,
+        "rev": "fa9c9de96b177429fc6d182ba2f2d9cfa97d4e82",
+        "revCount": 2586,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -297,11 +297,11 @@
       },
       "locked": {
         "dir": "flakes/impermanence",
-        "lastModified": 1791929117,
-        "narHash": "sha256-MzURz9S6BQgndohpr3QdDIxDJaAyP7Qb0Yp5FGCDXAQ=",
+        "lastModified": 1794528772,
+        "narHash": "sha256-N9hgo38MZ538IE94RsfYUwvxI0xQnOACArosLaDakR0=",
         "ref": "refs/heads/master",
-        "rev": "c1b72f9e1ae319ba2b65e4d63e1041bcf7e2a0ab",
-        "revCount": 2293,
+        "rev": "fa9c9de96b177429fc6d182ba2f2d9cfa97d4e82",
+        "revCount": 2586,
         "type": "git",
         "url": "https://git.joshuabell.xyz/ringofstorms/dotfiles"
       },
@@ -317,11 +317,11 @@
         "nixpkgs": "nixpkgs_5"
       },
       "locked": {
-        "lastModified": 1769548169,
-        "narHash": "sha256-03+JxvzmfwRu+5JafM0DLbxgHttOQZkUtDWBmeUkN8Y=",
+        "lastModified": 1792739756,
+        "narHash": "sha256-s0TeXWG5Ci75Y/Hzon0Z7NrN/fG773Rc54/z6oPFszQ=",
         "owner": "nix-community",
         "repo": "impermanence",
-        "rev": "7b1d382faf603b6d264f58627330f9faa5cba149",
+        "rev": "fa627f4c8b8e92f58f58a73d99ee4e1304e64eb2",
         "type": "github"
       },
       "original": {
